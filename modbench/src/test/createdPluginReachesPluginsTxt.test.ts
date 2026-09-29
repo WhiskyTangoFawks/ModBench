@@ -23,7 +23,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
   const plugins = () => readFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), 'utf8');
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'new-plugin-destination-'));
+    dir = await mkdtemp(join(tmpdir(), 'create-plugin-handoff-'));
     await mkdir(join(dir, 'overwrite'), { recursive: true });
     await mkdir(join(dir, 'mods', 'Existing Mod'), { recursive: true });
     await mkdir(join(dir, 'profiles', PROFILE), { recursive: true });
@@ -50,9 +50,8 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
   });
 
   it.each(['overwrite', 'Existing Mod'])('in %s: the line lands at the end, disabled', async (origin) => {
-    const place = placeFolder(instance.value, origin);
-    if (!('folder' in place)) throw new Error(`Expected the value to name a folder for ${origin}.`);
-    await writeFile(join(place.folder, 'New.esp'), 'plugin');
+    const { folder } = placeFolder(instance.value, origin) as { folder: string };
+    await writeFile(join(folder, 'New.esp'), 'plugin');
 
     await instance.refresh();
     const { profile, provided, inData } = pluginSyncArguments(instance.value);

@@ -152,8 +152,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         plugin.IsSmallMaster = modKey.Type == ModType.Light;
 
         // NoModKeySync lifts Mutagen's file-name-matches-ModKey check, so the temp file needs no
-        // folder of its own to hold it — and so nothing here can create or resurrect one.
-        var tempPath = Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName());
+        // folder of its own — nothing here can create or resurrect one.
+        var tempPath = TempPluginPath(folder);
         try
         {
             await WriteAsync(plugin, tempPath, noModKeySync: true);
@@ -173,6 +173,11 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             if (File.Exists(tempPath)) File.Delete(tempPath);
         }
     }
+
+    // The fixed .tmp suffix keeps GetRandomFileName's own extension from ever landing on a
+    // plugin one, which isPluginFile and plugin sync would otherwise briefly see on disk.
+    public static string TempPluginPath(string folder) =>
+        Path.Combine(folder, ".medit_tmp_" + Path.GetRandomFileName() + ".tmp");
 
     /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
     /// <see cref="PluginWriter"/> adds to replace a plugin in place. Null takes Mutagen's

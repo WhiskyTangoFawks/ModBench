@@ -63,7 +63,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('a refusal does not block the next command: the write chain survives it', async () => {
-    await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' });
+    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
     expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });

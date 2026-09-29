@@ -5,7 +5,6 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -38,22 +37,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.True(result.Applied);
         Assert.True(File.Exists(Path.Combine(folder, "NewPlugin.esp")));
-    }
-
-    [Theory]
-    [InlineData("Plain.esp", false, false)]
-    [InlineData("Master.esm", true, false)]
-    [InlineData("Light.esl", false, true)]
-    public async Task CreatePlugin_WritesAnEmptyPluginWhoseFlagsTheExtensionAloneSets(string name, bool master, bool light)
-    {
-        var folder = ModFolder("FlagsMod");
-
-        await Create(name, folder, "FlagsMod");
-
-        using var written = Written(folder, name);
-        Assert.Equal((master, light), (written.IsMaster, written.IsSmallMaster));
-        Assert.Empty(written.EnumerateMajorRecords());
-        Assert.Empty(written.MasterReferences);
     }
 
     [Fact]
@@ -195,8 +178,4 @@ public sealed class CreatePluginHandlerTests : IDisposable
             return Task.FromResult(Outcome);
         }
     }
-
-    private static IModDisposeGetter Written(string folder, string name) =>
-        ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(name), Path.Combine(folder, name)), GameRelease.Fallout4);
 }

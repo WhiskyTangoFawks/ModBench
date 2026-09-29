@@ -121,6 +121,16 @@ public sealed class PluginAdapterTests
         }
     }
 
+    // Rival: GetRandomFileName's own 3-character extension, which lands on .esp/.esm/.esl about
+    // 1 in 15k calls — a temp file the watcher and plugin sync would briefly mistake for a plugin.
+    [Fact]
+    public void TempPluginPath_NeverCarriesAPluginExtension()
+    {
+        // A fixed suffix, not a sampled one: GetRandomFileName's own extension would still land on
+        // .esp/.esm/.esl about 1 in 15k calls, too rare for a sample to pin reliably.
+        Assert.Equal(".tmp", Path.GetExtension(MutagenPluginAdapter.TempPluginPath("/some/folder")));
+    }
+
     [Fact]
     public async Task CreateAndWriteAsync_IntoAFolderThatHasGone_AnswersFolderGone_AndMakesNoFolder()
     {
@@ -161,21 +171,25 @@ public sealed class PluginAdapterTests
         }
     }
 
+    // A directory already at the plugin's own name blocks the move that lands it — deterministic on
+    // every OS, unlike a permission denial (chmod is Unix-only, and a root-run process ignores it
+    // regardless of OS).
     [Fact]
-    public async Task CreateAndWriteAsync_WhoseWriteFails_LeavesNoFile()
+    public async Task CreateAndWriteAsync_WhoseMoveLandsOnAnExistingDirectory_LeavesNoTempFile()
     {
         var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-fails-").FullName;
-        FileModes.Set(scratch, "555");
         try
         {
-            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            Directory.CreateDirectory(Path.Combine(scratch, PluginName));
+
+            await Assert.ThrowsAsync<IOException>(
                 () => Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
 
-            Assert.Empty(Directory.EnumerateFileSystemEntries(scratch));
+            Assert.Equal([PluginName], Directory.EnumerateFileSystemEntries(scratch).Select(Path.GetFileName));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(scratch, PluginName)));
         }
         finally
         {
-            FileModes.Set(scratch, "755");
             Directory.Delete(scratch, recursive: true);
         }
     }

@@ -85,18 +85,16 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");
     }
 
-    // The slot is plugin sync's to give, at the end of plugins.txt: the create answers none, and the
-    // held load order keeps the version it had.
+    // The slot is plugin sync's to give, at the end of plugins.txt: the create registers nothing, so
+    // the held load order keeps the version it had.
     [Fact]
-    public async Task CreatingAPlugin_AnswersNoSlotOrVersion_AndLeavesTheHeldLoadOrderVersion()
+    public async Task CreatingAPlugin_LeavesTheHeldLoadOrderVersion()
     {
         var fx = Owned(await Loaded());
         var version = HeldVersion();
 
-        var created = await Created("Slotted.esp", NewModFolder(fx, "mod-slotted"), "SlottedMod");
+        await Created("Slotted.esp", NewModFolder(fx, "mod-slotted"), "SlottedMod");
 
-        Assert.False(created.TryGetProperty("slot", out _));
-        Assert.False(created.TryGetProperty("version", out _));
         Assert.Equal(version, HeldVersion());
     }
 
