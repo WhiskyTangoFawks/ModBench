@@ -383,13 +383,14 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** A plugin row's winning plugin, as the Instance value resolved it, or a locked row's copy in
-   *  the game folder (plugins.md, Menus and keys). `Promise`-wrapped only to keep the caller's
-   *  `await` unchanged. */
+  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1); the game folder's copy
+   *  when its origin is the game folder and the Instance value lists no file for it.
+   *  `Promise`-wrapped only to keep the caller's `await` unchanged. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    if (row.kind === 'implicitMaster') return Promise.resolve(this.dataFolderFile(row.name));
-    const folded = row.plugin.name.toLowerCase();
-    return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
+    const name = pluginFileOf(row);
+    const address = pluginAddressKey(name, row.origin);
+    const listed = this.instanceValue.plugins.find((p) => pluginAddressKey(p.name, p.origin) === address)?.path;
+    return Promise.resolve(listed ?? (row.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined));
   }
 
   // The copy the game loads: the one the Mod override order resolves the name to, else the game

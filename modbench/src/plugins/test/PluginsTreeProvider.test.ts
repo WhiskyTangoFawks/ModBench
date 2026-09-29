@@ -1028,32 +1028,41 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
 });
 
 describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () => {
-  const row = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
+  const lockedRowOf = async (tree: PluginsTreeProvider) =>
+    present((await tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
 
-  it('resolves a plugin row to the path of its winning plugin', async () => {
+  // ADR-0012 invariant 1: the row's own file, by (origin, filename), never the winning copy's.
+  it('resolves a plugin row to its own plugin\'s file, by origin and file name', async () => {
     const { tree } = makeTree([
-      plugin({ name: 'Base.esp', slot: 0, path: '/data/mods/Winner/Base.esp', winning: true }),
+      plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', path: '/data/mods/Winner/Base.esp', winning: true }),
       plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
     ]);
-    expect(await tree.resolvePluginPath(row('Base.esp'))).toBe('/data/mods/Winner/Base.esp');
+    expect(await tree.resolvePluginPath(new PluginNode({ name: 'base.esp', enabled: true }, 'Loser'))).toBe('/data/mods/Loser/Base.esp');
   });
 
-  it('returns undefined for a name with no winning plugin', async () => {
-    const { tree } = makeTree([plugin({ name: 'Base.esp', slot: 0, winning: false })]);
-    expect(await tree.resolvePluginPath(row('Base.esp'))).toBeUndefined();
-  });
-
-  it('returns undefined for an unknown name', async () => {
-    const { tree } = makeTree([plugin({ name: 'Base.esp', slot: 0 })]);
-    expect(await tree.resolvePluginPath(row('NoSuchPlugin.esp'))).toBeUndefined();
-  });
-
-  // plugins.md, Menus and keys: the locked row's reveal opens the game folder's copy.
-  it('resolves a locked row to the game folder\'s copy, even where a mod provides the name', async () => {
+  it('returns undefined when no plugin has the row\'s origin and file name', async () => {
     const { tree } = makeTree(
-      [plugin({ name: 'Fallout4.esm', slot: 0, path: '/data/mods/SomeMod/Fallout4.esm', winning: true })],
-      { dataFolderFile: (name) => `/game/Data/${name}` });
-    expect(await tree.resolvePluginPath(new ImplicitMasterNode('Fallout4.esm', 'Data'))).toBe('/game/Data/Fallout4.esm');
+      [plugin({ name: 'Base.esp', slot: 0, origin: 'OtherMod' })], { dataFolderFile: (name) => `/game/Data/${name}` });
+    expect(await tree.resolvePluginPath(new PluginNode({ name: 'Base.esp', enabled: true }, 'SomeMod'))).toBeUndefined();
+  });
+
+  // plugins.md, Menus and keys: reveal on a locked row opens that row's own file.
+  it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
+    const { tree } = makeTree(
+      [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
+      { dataFolderFile: (name) => `/game/Data/${name}`, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    const locked = await lockedRowOf(tree);
+
+    expect(locked.origin).toBe('SomeMod');
+    expect(await tree.resolvePluginPath(locked)).toBe('/instance/mods/SomeMod/Fallout4.esm');
+  });
+
+  it('resolves a locked row no mod provides to the game folder\'s copy', async () => {
+    const { tree } = makeTree(
+      [plugin({ name: 'Mod.esp', slot: 0 })],
+      { dataFolderFile: (name) => `/game/Data/${name}`, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+
+    expect(await tree.resolvePluginPath(await lockedRowOf(tree))).toBe('/game/Data/Fallout4.esm');
   });
 
   it('resolves a locked row to nothing while the game folder is not found', async () => {
