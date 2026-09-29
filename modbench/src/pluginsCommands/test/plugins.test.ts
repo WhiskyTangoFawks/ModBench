@@ -54,7 +54,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   it('two gestures fired without awaiting the first both survive: neither read-modify-write is lost', async () => {
     const [first, second] = await Promise.all([
       setPluginsEnabled(dir, PROFILE, ['Base.esp'], false),
-      reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'winningEnd' }),
+      reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' }),
     ]);
 
     expect(first).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
@@ -63,8 +63,8 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('a refusal does not block the next command: the write chain survives it', async () => {
-    await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'winningEnd' });
-    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'winningEnd' })).toEqual({ applied: true, wrote: true });
+    await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' });
+    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
