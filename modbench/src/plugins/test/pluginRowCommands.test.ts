@@ -430,6 +430,20 @@ describe('modbench.plugin.compile', () => {
     expect(compileCalls(client)).toEqual([]);
     expect(reporter.reports).toEqual([]);
   });
+
+  it('from the palette, reports at error when the plugins cannot be listed, and compiles nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, reporter } = registered(client);
+    client.setQueryFailure('getPlugins', new Error('fetch failed'));
+
+    await handler();
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(compileCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not list the plugins to compile.', detail: 'fetch failed' },
+    ]);
+  });
 });
 
 // ── publishCompileDiagnostics ──────────────────────────────────────────────

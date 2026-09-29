@@ -140,9 +140,14 @@ async function argumentOf(
 async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<PluginAddress[] | undefined> {
   const selected = compilableSelected(entry.selection);
   const isSelected = (p: PluginAddress) => selected !== undefined && p.name === selected.plugin.name && p.origin === selected.origin;
-  const compilable = (await deps.client.getPlugins())
+  const plugins = await deps.client.getPlugins().catch((err: unknown) => {
+    deps.reporter.report('error', 'Could not list the plugins to compile.', errorMessage(err));
+    return undefined;
+  });
+  if (plugins === undefined) return undefined;
+  const compilable = plugins
     .filter((p) => p.isTracked && !p.isImmutable)
-    .flatMap((p) => (p.origin ? [{ name: p.name, origin: p.origin }] : []))
+    .map((p) => ({ name: p.name, origin: p.origin }))
     .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
   const choice = await vscode.window.showQuickPick(
     compilable.map((p) => ({ label: p.name, description: p.origin })),

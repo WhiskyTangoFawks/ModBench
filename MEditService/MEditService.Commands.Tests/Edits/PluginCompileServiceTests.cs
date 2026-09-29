@@ -87,6 +87,22 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
+    // The Problems panel puts a diagnostic on the file it names, so the path is the record's own
+    // document, relative to the mod folder.
+    [Fact]
+    public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
+    {
+        var result = await CompileService().CompileAsync(_mod.Plugin);
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());
+        Assert.StartsWith(
+            SourceRepository.RootFor(CompileFixture.PluginName), diagnostic.SourceRelativePath, StringComparison.Ordinal);
+        var full = Path.Combine(_mod.ModFolder, diagnostic.SourceRelativePath);
+        Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
+        Assert.Contains(_mod.Race.ToString(), File.ReadAllText(full), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Compile_AfterDeletingTheFirstOfTwoSameTypeRecords_Succeeds_AndTheBinaryReflectsTheDelete()
     {
