@@ -236,29 +236,24 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
+    // ADR-0014 invariant 3: Queries are the Index's only caller, so a member no query service
     // calls is a widening nobody asked for — and every implementer, the Indexer and each query
     // test's stub alike, pays for it.
     [Fact]
-    public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
+    public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
             .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
             .Select(File.ReadAllText)
             .ToList();
         // Property getters travel as get_X methods; naming the property is what a caller does.
-        // IIndexMaintenance is IQueryIndex plus Queries' own filter-and-rebuild verbs, so both
-        // interfaces' doors are held to the same rule.
-        var members = new[] { typeof(IQueryIndex), typeof(IIndexMaintenance) }
-            .SelectMany(t => t.GetProperties().Select(m => m.Name)
-                .Concat(t.GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name)))
-            .Distinct(StringComparer.Ordinal);
+        var members = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
+            .Concat(typeof(IQueryIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name));
         var uncalled = members
             .Where(name => !queries.Exists(text => text.Contains($".{name}", StringComparison.Ordinal)))
             .ToList();
         Assert.True(uncalled.Count == 0,
-            $"{nameof(IQueryIndex)} or {nameof(IIndexMaintenance)} carries a member no query service calls:\n"
-            + string.Join("\n", uncalled));
+            $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
     // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second

@@ -135,8 +135,7 @@ public sealed class WriteSideIndexScanTests
     private const string DoorMappingFile = "MEditService.Http/Endpoints/IndexEndpoints.cs";
 
     // The Index's doors as the zoom-out captions them, by the member each route calls. Registers
-    // answers the 404 before validate is asked for a plugin nobody holds. The filter and rebuild
-    // are Queries' doors now, reached through IRecordQueryService.
+    // answers the 404 before validate is asked for a plugin nobody holds.
     private static readonly string[] IndexDoors =
     [
         "Status", "RequireReads", "ActiveFilter", "Sequence", "AwaitSequenceAsync", "Registers",
@@ -163,6 +162,17 @@ public sealed class WriteSideIndexScanTests
             + string.Join("\n", named));
     }
 
+    // Every member reached off a parameter declared Indexer, keyed on that declared type rather
+    // than on whatever a handler names the parameter.
+    private static List<string> IndexReceiverMembers(string text) =>
+        [.. Regex.Matches(text, @"\bIndexer\s+(\w+)\b")
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .SelectMany(name => Regex.Matches(text, $@"\b{Regex.Escape(name)}\.(\w+)")
+                .Select(m => m.Groups[1].Value))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+
     // A member outside the doors above is the watcher's signal or the projection's own machinery;
     // a door nobody maps is a route that went missing.
     [Fact]
@@ -172,14 +182,19 @@ public sealed class WriteSideIndexScanTests
         var text = File.ReadAllText(Path.Combine(root, DoorMappingFile.Replace('/', Path.DirectorySeparatorChar)));
 
         var named = References(text, EndpointSymbols).Select(r => r.Symbol).ToList();
-        var members = Regex.Matches(text, @"\bindex\.(\w+)")
-            .Select(m => m.Groups[1].Value)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToList();
 
         Assert.Equal(["Indexer"], named);
-        Assert.Equal(IndexDoors.Order(StringComparer.Ordinal), members);
+        Assert.Equal(IndexDoors.Order(StringComparer.Ordinal), IndexReceiverMembers(text));
+    }
+
+    // The rival a literal `index.` scan misses: the same call through a differently named
+    // Indexer parameter.
+    [Fact]
+    public void TheDoorScan_KeysOnTheIndexerType_NotTheParameterName()
+    {
+        var text = "private static IResult H(Indexer svc) => Results.Ok(svc.SetFilter(\"x\", \"y\"));";
+
+        Assert.Equal(["SetFilter"], IndexReceiverMembers(text));
     }
 
     // The endpoints reference the Source repository and the watcher as the composition root, and

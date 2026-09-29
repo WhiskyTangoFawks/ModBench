@@ -79,7 +79,6 @@ try
         sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<Indexer>());
-    builder.Services.AddSingleton<IIndexMaintenance>(sp => sp.GetRequiredService<Indexer>());
     builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<Indexer>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();

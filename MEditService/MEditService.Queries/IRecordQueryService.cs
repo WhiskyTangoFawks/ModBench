@@ -16,8 +16,6 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
-    // target-architecture.d2 medit_core.queries: set and clear the record filter, and rebuild the
-    // index. Both change only the derived store.
     void SetFilter(string sql, string source);
     void ClearFilter();
     Task RebuildStore(GameRelease gameRelease, string instanceRoot);

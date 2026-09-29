@@ -7,12 +7,12 @@ using Mutagen.Bethesda;
 namespace MEditService.Queries;
 
 public sealed class RecordQueryService(
-    IIndexMaintenance index,
+    IQueryIndex index,
     LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ConflictClassifier conflictClassifier) : IRecordQueryService
 {
-    private readonly IIndexMaintenance _index = index;
+    private readonly IQueryIndex _index = index;
     private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;

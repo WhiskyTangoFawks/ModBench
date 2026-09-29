@@ -90,9 +90,9 @@ internal sealed class FakeReads(
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
 }
 
-/// <summary>The IIndexMaintenance door over a FakeReads: a settable status and filter, since a hand
+/// <summary>The IQueryIndex door over a FakeReads: a settable status and filter, since a hand
 /// double states what it needs rather than computing it.</summary>
-internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IIndexMaintenance
+internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IQueryIndex
 {
     public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
     public string? FilterSql { get; set; }
@@ -101,8 +101,6 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
     public string? LastRebuildInstanceRoot { get; private set; }
     public IRecordReads RequireReads() => reads;
 
-    // Mirrors Indexer's own shape; a hand double states the filter directly rather than compiling
-    // SQL to evaluate it.
     public void SetFilter(string sql, string source)
     {
         FilterSql = sql;

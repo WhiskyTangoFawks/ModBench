@@ -10,9 +10,9 @@ namespace MEditService.Http.Endpoints;
 public sealed record ReconcileResponse(
     int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);
 
-/// <summary>The Index's doors, one route each — except the record filter and rebuild, which are
-/// Queries' own. A handler is one door call and the wire translation of its answer (ADR-0014
-/// invariant 1).</summary>
+/// <summary>The Index's doors, one route each — except setting/clearing the filter and rebuilding,
+/// which are Queries' own. A handler is one door call and the wire translation of its answer
+/// (ADR-0014 invariant 1).</summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
