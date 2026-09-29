@@ -3055,7 +3055,7 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
     expect((await rowItem(h, 1)).description).toBeUndefined();
   });
 
-  it('clears once a later settle of the mod no longer names it', async () => {
+  it('clears once a later settle of the mod leaves it out', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
     settled(h, 'SomeMod', 'A.esp');
