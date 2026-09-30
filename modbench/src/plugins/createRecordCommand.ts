@@ -34,7 +34,7 @@ export function registerRecordCreateCommand(
     const plugin = deps.pluginOf(row);
     if (plugin === undefined) {
       const name = row.kind === 'plugin' ? row.plugin.name : row.plugin;
-      deps.reporter.report('error', `Could not create a record in "${name}": the Plugins view no longer shows its plugin.`);
+      deps.reporter.report('error', `Could not create a record in "${name}": the Plugins view does not show its plugin.`);
       return;
     }
     const recordType = row.kind === 'recordType' ? row.recordType : await pickRecordType(deps);

@@ -138,14 +138,14 @@ describe('modbench.record.create', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('says so, and creates nothing, when the view no longer holds the group\'s plugin row', async () => {
+  it('says so, and creates nothing, when the view does not hold the group\'s plugin row', async () => {
     const { steps, reporter, create } = harness();
     const orphan = new RecordTypeNode('Gone.esp', 'npc_', 1, 'Non-Player Character', undefined, false, { tracked: true, editable: true });
 
     await create(orphan);
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not create a record in "Gone.esp": the Plugins view no longer shows its plugin.', detail: undefined },
+      { severity: 'error', message: 'Could not create a record in "Gone.esp": the Plugins view does not show its plugin.', detail: undefined },
     ]);
     expect(steps).toEqual([]);
   });
