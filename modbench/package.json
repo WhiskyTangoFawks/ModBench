@@ -929,7 +929,7 @@
         },
         {
           "command": "modbench.record.create",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\brecordType\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\brecordType\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/ && viewItem =~ /\\bcreatable\\b/",
           "group": "3_create@1"
         },
         {

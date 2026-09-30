@@ -73,12 +73,15 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly origin: string,
     hasParseFailure = false,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
+    // CreatableRecordTypes' own verdict (plugins.md, Create record, story 4): a container type, such
+    // as Quest, offers no create on its group.
+    creatable = true,
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
     super(displayName, collapsibleWhen(count > 0));
     this.description = count.toLocaleString();
-    this.contextValue = conditionedContextValue('recordType', conditions);
+    this.contextValue = conditionedContextValue('recordType', conditions) + (creatable ? ' creatable' : '');
     if (hasParseFailure) markFailure(this, failureNote(displayName, null));
   }
 }
@@ -441,7 +444,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const types = await this.repository.getRecordTypes(pluginName, origin);
       return types
         .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin, conditions)
-          ?? new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure, conditions));
+          ?? new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure, conditions, t.isCreatable));
     });
   }
 

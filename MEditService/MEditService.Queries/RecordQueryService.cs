@@ -133,12 +133,15 @@ public sealed class RecordQueryService(
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
+        var release = _loadOrder.Require().GameRelease;
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(new PluginAddress(plugin, origin))
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
-            .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
+            .Select(c => new PluginRecordTypeCount(
+                c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
+                CreatableRecordTypes.Includes(c.Type, release)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }

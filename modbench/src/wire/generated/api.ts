@@ -772,6 +772,7 @@ export interface components {
             count: number;
             displayName: string;
             hasParseFailure: boolean;
+            isCreatable: boolean;
         };
         PluginResponse: {
             name: string;

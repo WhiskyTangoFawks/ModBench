@@ -54,13 +54,14 @@ function makeRecord(
 }
 
 function makeClient(overrides: Partial<{
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
+    isCreatable: rt.isCreatable ?? true,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -121,6 +122,22 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 
     expect(typeNode.label).toBe('Activator');
     expect(typeNode.recordType).toBe('acti');
+  });
+
+  // plugins.md, Create record, story 4: the backend's own creatable verdict, not a second list here.
+  it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
+    const repo = makeClient({
+      recordTypes: [
+        { type: 'npc_', count: 1, isCreatable: true },
+        { type: 'qust', count: 1, isCreatable: false },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [npc, qust] = expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode);
+
+    expect(present(npc, 'the npc_ group').contextValue).toContain('creatable');
+    expect(present(qust, 'the qust group').contextValue).not.toContain('creatable');
   });
 });
 
@@ -259,6 +276,12 @@ describe('RecordTypeNode', () => {
 
   it('states no record edit when no one has described its plugin', () => {
     const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 10, 'WEAP', 'Data');
+    expect(node.contextValue).toBe('recordType untracked creatable');
+  });
+
+  // plugins.md, Create record, story 4: no create record on a group of container records.
+  it('states no create on a container type\'s group (a quest, say)', () => {
+    const node = new RecordTypeNode('MyPlugin.esp', 'qust', 3, 'Quest', 'Data', false, undefined, false);
     expect(node.contextValue).toBe('recordType untracked');
   });
 });
@@ -488,8 +511,8 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), TRACKED);
 
     expect(states).toEqual([
-      'recordType tracked editable', 'record tracked editable',
-      'recordType tracked editable', 'record tracked editable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable', 'record tracked editable',
       'worldspace tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
@@ -500,7 +523,10 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   it('states an untracked plugin untracked on every row beneath it', async () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), { tracked: false, editable: true });
 
-    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
+    // Conditions only: creatable is a per-type fact, not a plugin condition, so it is dropped here.
+    const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
+    const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
+    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['untracked editable']));
   });
 });
 
