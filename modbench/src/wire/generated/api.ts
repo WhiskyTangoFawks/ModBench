@@ -554,6 +554,7 @@ export interface components {
             isPartialFormable: boolean;
             parseDiagnosis?: string | null;
             conflictThis: components["schemas"]["ConflictThis"];
+            isInOverwrite: boolean;
         };
         CompareResult: {
             overrides: components["schemas"]["CompareOverride"][];

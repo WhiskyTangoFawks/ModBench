@@ -34,6 +34,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
     recordType: 'npc_',
     isPartialForm: false,
     isPartialFormable: false,
+    isInOverwrite: false,
     ...extra,
   };
 }
@@ -92,11 +93,35 @@ describe('columnStatus', () => {
     expect(columnStatus(false, true, true)).toBe('tracked');
   });
 
+  // editor.md, Columns, A column's header: Overwrite is not a mod (ADR-0012 invariant 2), so it
+  // can never be tracked — "untracked" would send the user to a Track item this column's header
+  // does not offer.
+  it('is "inOverwrite" for a column whose isInOverwrite is true, regardless of tracked state', () => {
+    expect(columnStatus(false, true, false, null, true)).toBe('inOverwrite');
+    expect(columnStatus(false, true, true, null, true)).toBe('inOverwrite');
+  });
+
+  // A 3- or 4-arg caller keeps its old tracked/untracked behaviour.
+  it('defaults isInOverwrite to false when the caller omits it', () => {
+    expect(columnStatus(false, true, false)).toBe('untracked');
+  });
+
+  it('is not "inOverwrite" when isInOverwrite is false', () => {
+    expect(columnStatus(false, true, false, null, false)).toBe('untracked');
+  });
+
   // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
   // "run Track on it" would send the user somewhere that leads nowhere.
   it('prefers the reason the user cannot fix over the one they can', () => {
     expect(columnStatus(true, true, false)).toBe('vanillaMaster');
     expect(columnStatus(true, false, false)).toBe('notInLoadOrder');
+  });
+
+  // editor.md's table takes the first row that applies: parse failure, then read-only, outrank
+  // "in Overwrite" — an unreadable or forced-immutable column names its own reason first.
+  it('prefers a parse failure or an immutable reason over "inOverwrite"', () => {
+    expect(columnStatus(false, true, false, 'diagnosis', true)).toBe('parseFailure');
+    expect(columnStatus(true, true, false, null, true)).toBe('vanillaMaster');
   });
 });
 

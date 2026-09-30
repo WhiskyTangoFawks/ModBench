@@ -113,7 +113,8 @@ public sealed class RecordQueryService(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
                 classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
                 Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
-                IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis));
+                IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis,
+                IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin)));
 
         return new CompareResult(annotated, classification.Diffs, conflictAll);
     }

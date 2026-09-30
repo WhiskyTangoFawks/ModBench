@@ -30,7 +30,7 @@ export const compareOverride = (
   o: Partial<CompareOverride> & Pick<CompareOverride, 'formKey' | 'plugin' | 'fields'>,
 ): CompareOverride => ({
   loadOrderIndex: 0, isWinner: false, origin: 'Data', recordType: '',
-  isPartialForm: false, isPartialFormable: false, conflictThis: 'OnlyOne', ...o,
+  isPartialForm: false, isPartialFormable: false, conflictThis: 'OnlyOne', isInOverwrite: false, ...o,
 });
 
 /** A compare result with every required wire member at its neutral value, so a fixture answers

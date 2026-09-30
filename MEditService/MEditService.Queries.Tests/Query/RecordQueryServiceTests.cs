@@ -354,6 +354,34 @@ public sealed class RecordQueryServiceTests
         Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
     }
 
+    // ADR-0012 invariant 2: Overwrite is a reserved origin, not a mod, compared ignoring case.
+    [Theory]
+    [InlineData("overwrite")]
+    [InlineData("Overwrite")]
+    [InlineData("OVERWRITE")]
+    public void GetCompare_OverwriteOriginColumn_CarriesIsInOverwriteTrue(string origin)
+    {
+        FormKey npcKey = default;
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin(PluginName, mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey, origin: origin)
+            .Build("Aggression");
+        var (_, svc) = Build(fixture);
+
+        var compare = svc.GetCompare(npcKey.ToString());
+
+        Assert.NotNull(compare);
+        Assert.True(Assert.Single(compare.Overrides).IsInOverwrite);
+    }
+
+    [Fact]
+    public void GetCompare_ModOriginColumn_CarriesIsInOverwriteFalse()
+    {
+        var compare = _svc.GetCompare(_npc01Key.ToString());
+
+        Assert.NotNull(compare);
+        Assert.All(compare.Overrides, o => Assert.False(o.IsInOverwrite));
+    }
+
     [Fact]
     public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
     {

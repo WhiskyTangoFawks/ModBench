@@ -24,16 +24,18 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 // immutable and named by the load order, while a plugin the load order doesn't name (ADR-0012) is
 // immutable *because* it isn't.
 export type ColumnStatus =
-  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
+  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'inOverwrite' | 'untracked' | 'tracked';
 
 /** Ordered by what the user can do about it: a parse failure and an immutable column come first,
- *  since nothing the user does about tracking lifts either — naming the wrong way out is worse
- *  than naming none. */
+ *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
+// isInOverwrite is mEdit's own fact (PluginOrigin.IsOverwrite) — never re-derived from Origin here.
 export function columnStatus(
   isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null,
+  isInOverwrite = false,
 ): ColumnStatus {
   if (parseDiagnosis != null) return 'parseFailure';
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+  if (isInOverwrite) return 'inOverwrite';
   return isTracked ? 'tracked' : 'untracked';
 }
 
