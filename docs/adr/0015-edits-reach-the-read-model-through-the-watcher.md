@@ -29,9 +29,10 @@ is worth more than either side's local optimum.
 6. **The instance value is whole and immutable.** Replaced whole by each recompute, with no
    partial update and no per-key invalidation, so a consumer never holds two facts from two
    generations. Recompute is whole, not incremental, while a full walk stays affordable.
-7. **The Instance loader owns every watcher on the instance, and a bad read keeps the last value.** A watcher
-   event, activation and refresh run the same whole recompute, debounced once. A read that throws
-   keeps the last value, and publishes the reason beside it until a read lands.
+7. **The Instance adapter owns the watch, the Instance loader owns the recompute, and a bad read
+   keeps the last value.** The adapter's signal, activation and refresh run the same whole
+   recompute, debounced once. A read that throws keeps the last value, and publishes the reason
+   beside it until a read lands.
 
 ## Alternatives rejected
 

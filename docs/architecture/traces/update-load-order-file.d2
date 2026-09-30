@@ -23,7 +23,8 @@ uninstall: "an uninstall, from a downloaded file" {
 }
 instanceadapter -> mo2: bytes {class: loadorder}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
-mo2 -> instanceloader: watch {class: signal}
+mo2 -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader -> cmds: "put load order: the snapshot" {class: loadorder}
 cmds."the rest is index-load-order"
