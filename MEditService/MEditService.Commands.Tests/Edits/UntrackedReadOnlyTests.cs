@@ -68,6 +68,22 @@ public sealed class UntrackedReadOnlyTests
         Assert.Contains("patch", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no mod folder either — the
+    // same refusal as a Data-directory master, but "author a patch" is not this one's way out.
+    [Fact]
+    public void EditingAPluginInOverwrite_IsRefused_NamingMO2sCreateModAsTheWayOut()
+    {
+        using var overwrite = SourceModFixture.OverwriteStray(out var strayNpc);
+
+        var result = overwrite.EditHandler
+            .Set(overwrite.Plugin, strayNpc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
+        Assert.Contains("Overwrite", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("base-game", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void TheTwoRefusalsAreDistinct_AndNeitherMessageOffersTheOthersWayOut()
     {

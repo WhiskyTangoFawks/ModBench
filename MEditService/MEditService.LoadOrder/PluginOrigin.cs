@@ -9,4 +9,8 @@ public static class PluginOrigin
     /// Data directory (ADR-0012). It cannot collide with an MO2 mod folder name: those live under
     /// `mods/`, never `Data`.</summary>
     public const string DataDirectory = "Data";
+
+    /// <summary>The other reserved origin (ADR-0012 invariant 1): MO2's own `overwrite/`, not a
+    /// mod's folder (invariant 2).</summary>
+    public const string Overwrite = "overwrite";
 }

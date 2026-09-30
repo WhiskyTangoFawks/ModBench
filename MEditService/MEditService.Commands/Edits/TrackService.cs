@@ -141,12 +141,16 @@ public sealed class TrackService(
         }
 
         // The load order is the one rule for a plugin's mod folder: null for the game's own Data
-        // directory (PluginOrigin.DataDirectory), where Track must not git-init.
+        // directory and MO2's Overwrite (ADR-0012 invariant 2), where Track must not git-init.
         if (LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) is not { } modFolder)
         {
-            return Refuse(TrackRefusal.DataDirectoryOrigin,
-                $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
-                "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
+            return string.Equals(plugin.Origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
+                ? Refuse(TrackRefusal.OverwriteOrigin,
+                    $"{plugin.Name} is loaded from Overwrite, which is not a mod and has no repository to " +
+                    "track into. In MO2, create a mod from Overwrite or move it into an existing mod, then track that.")
+                : Refuse(TrackRefusal.DataDirectoryOrigin,
+                    $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
+                    "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
         if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))
