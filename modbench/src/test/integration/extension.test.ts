@@ -101,11 +101,11 @@ const MOCK_PLUGINS: MockPlugin[] = [
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
-  // ADR-0017: a plugin the backend flags with a directly-missing master. Every other entry carries
-  // an empty `masterIssues`, which is what the backend sends when all masters resolved.
+  // ADR-0012 invariant 4: a plugin the backend flags with a master that is not active. Every other
+  // entry carries an empty `masterIssues`, which is what the backend sends when every master is active.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
-    masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
+    masterIssues: ['Ghost.esm'],
   }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
@@ -1789,8 +1789,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 });
 
 // ADR-0017: a plugin flagged with a missing master is decorated through the real wiring.
-// MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
-// with no `masterIssues` key, proves an absent field degrades to undecorated.
 describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1838,8 +1836,8 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
   });
 
-  // The negative case: `masterIssues` is non-nullable on the wire, so a plugin whose masters all
-  // resolved carries an empty array, and gets no decoration.
+  // The negative case: a plugin whose masters are all active carries an empty array, and gets no
+  // decoration.
   it('leaves a plugin whose masters all resolve undecorated', async () => {
     const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'TestMod.esp');

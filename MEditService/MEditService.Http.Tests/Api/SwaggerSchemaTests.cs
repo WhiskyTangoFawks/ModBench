@@ -178,13 +178,14 @@ public sealed class SwaggerSchemaTests
     // property lands in `required` and the whole wire types optional-and-nullable.
     [Theory]
     // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0013's
-    // honest null for a plugin no plugins.txt line names), which must stay optional.
+    // honest null for a plugin no plugins.txt line names) and MasterIssues (null: not yet checked),
+    // which must stay optional.
     [InlineData(
         "PluginResponse",
         new[]
         {
             "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
-            "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
+            "participates", "origin", "inLoadOrder", "enabled", "winning",
             "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must
@@ -209,7 +210,6 @@ public sealed class SwaggerSchemaTests
     [InlineData("PluginResponse", "name")]
     [InlineData("PluginResponse", "origin")]
     [InlineData("PluginResponse", "masters")]      // IReadOnlyList<string> — an array is a reference type too
-    [InlineData("PluginResponse", "masterIssues")] // IReadOnlyList<MasterIssue>
     [InlineData("RecordSummary", "plugin")]
     public async Task NonNullableReferenceProperty_IsNotDescribedAsNullable(string schemaName, string propertyName)
     {
@@ -229,6 +229,7 @@ public sealed class SwaggerSchemaTests
     [InlineData("CellSummary", "editorId")]        // string? EditorId
     [InlineData("RecordSummary", "editorId")]
     [InlineData("ChangedPlugin", "bytesSha256")]
+    [InlineData("PluginResponse", "masterIssues")] // null: not yet checked
     public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
     {
         var root = await GetSchemaAsync();

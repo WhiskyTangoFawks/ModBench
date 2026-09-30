@@ -80,6 +80,9 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
 
   const settle = (status: LoadOrderProgress, reconcileSeen: boolean): void => {
     if (status.refusal !== undefined) {
+      if (status.refusal.kind === 'failed' && status.version > settledVersion) {
+        deps.log(`Indexing failed: ${status.refusal.message}`);
+      }
       reportIndexRefusal(status, deps);
       deps.applyRefused(status.refusal);
       markSettled(status.version);

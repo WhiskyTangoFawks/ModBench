@@ -14,8 +14,6 @@ type Schemas = components['schemas'];
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
-export type MasterIssue = Schemas['MasterIssue'];
-
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackPhase = Schemas['TrackPhase'];
