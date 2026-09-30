@@ -132,6 +132,25 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
+    // create-plugin, story 1: the name prompt's own .esl refusal (Fallout4 supports light plugins;
+    // the release that lacks them is pinned at the Queries seam, RecordQueryServiceTests).
+    [Fact]
+    public async Task AQuestionAboutLightPluginsSupported_ForFallout4_IsTrue()
+    {
+        await Loaded();
+        var supported = await Client.GetFromJsonAsync<JsonElement>("/plugins/light-plugins-supported");
+
+        Assert.Equal(JsonValueKind.True, supported.ValueKind);
+    }
+
+    [Fact]
+    public async Task AQuestionAboutLightPluginsSupported_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    {
+        var response = await Client.GetAsync(new Uri("/plugins/light-plugins-supported", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
     [Fact]
     public async Task AGroupsRecords_CarryTheirNameWhenTheyHaveOne()
     {

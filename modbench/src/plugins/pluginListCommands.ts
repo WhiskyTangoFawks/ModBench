@@ -85,12 +85,17 @@ export function pluginsCopyValueText(
   };
 }
 
-function promptPluginName(): Thenable<string | undefined> {
+// The one source (create-plugin, story 1): CreatePluginHandler's server-side refusal reads the
+// same Mutagen release fact through Queries, so a game with no light plugins refuses .esl here
+// too, before any place pick.
+async function promptPluginName(client: Pick<MEditClient, 'getLightPluginsSupported'>): Promise<string | undefined> {
+  const lightPluginsSupported = await client.getLightPluginsSupported();
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
     validateInput: v => {
       if (!v) return 'Name is required';
       if (!/\.(esp|esm|esl)$/i.test(v)) return 'Extension must be .esp, .esm, or .esl';
+      if (!lightPluginsSupported && /\.esl$/i.test(v)) return 'This game has no light plugins';
       return undefined;
     },
   });
@@ -99,7 +104,7 @@ function promptPluginName(): Thenable<string | undefined> {
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
-  client: Pick<MEditClient, 'createPlugin'>,
+  client: Pick<MEditClient, 'createPlugin' | 'getLightPluginsSupported'>,
   mo2: { instance: Pick<Instance, 'value'> } | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
@@ -109,7 +114,7 @@ export function registerCreatePluginCommand(
       return;
     }
 
-    const name = await promptPluginName();
+    const name = await promptPluginName(client);
     if (!name) return;
 
     const places = pluginPlaces(mo2.instance.value, name);
