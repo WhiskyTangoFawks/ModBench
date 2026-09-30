@@ -7,15 +7,22 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fak
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-// Passthrough, so one test can block or hold a folder's move back.
-const real = vi.hoisted(() => ({ rename: undefined as typeof import('node:fs/promises').rename | undefined }));
+// Passthrough, so one test can block or hold a folder's move back, and one can fail a link's
+// stat with an error other than ENOENT: chmod denies nothing when the runner is root.
+const real = vi.hoisted(() => ({
+  rename: undefined as typeof import('node:fs/promises').rename | undefined,
+  stat: undefined as typeof import('node:fs/promises').stat | undefined,
+}));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
-  return { ...actual, rename: vi.fn(actual.rename) };
+  real.stat = actual.stat;
+  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat) };
 });
 
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
+const actualStat = present(real.stat, 'the real stat');
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { mo2InstanceAdapter } from '../mo2Instance';
@@ -63,6 +70,7 @@ describe('the MO2 Instance adapter', () => {
   });
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
+    vi.mocked(stat).mockImplementation(actualStat);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -444,6 +452,82 @@ describe('the MO2 Instance adapter', () => {
         expect(files.files.find((f) => f.relativePath === 'Linked.esp')?.path).toBe(await realpath(target));
         expect(relativePaths(files.files)).not.toContain('Broken.esp');
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
+      });
+
+      it('leaves out a dot file, and a dot folder below the root, and keeps what sits beside them', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await writeFile(join(folder, '.gitignore'), '*\n');
+        await mkdir(join(folder, 'Textures', '.thumbs'), { recursive: true });
+        await writeFile(join(folder, 'Textures', '.thumbs', 'cache.bin'), '');
+        await writeFile(join(folder, 'Textures', 'a.dds'), '');
+
+        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
+
+        expect(paths).toContain('Textures/a.dds');
+        expect(paths.filter((path) => path.split('/').some((segment) => segment.startsWith('.')))).toEqual([]);
+      });
+
+      it('leaves out a root source folder in any case, and keeps a root folder whose name only starts with source', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, 'SOURCE'), { recursive: true });
+        await writeFile(join(folder, 'SOURCE', 'stray.json'), '');
+        await mkdir(join(folder, 'sourceish'), { recursive: true });
+        await writeFile(join(folder, 'sourceish', 'note.txt'), '');
+
+        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
+
+        expect(paths).toContain('sourceish/note.txt');
+        expect(paths).not.toContain('SOURCE/stray.json');
+      });
+
+      it('follows a linked folder, its files keyed beneath the link\'s own name', async () => {
+        const shared = join(root, 'shared-textures');
+        await mkdir(shared);
+        await writeFile(join(shared, 'foo.dds'), '');
+        await symlink(shared, join(root, 'mods', 'Harder VATS', 'linked'));
+
+        const files = await adapter.originFiles(mod('Harder VATS'));
+
+        expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
+      });
+
+      it('notes a link cycle and walks each file once', async () => {
+        const folder = join(root, 'mods', 'Cycle');
+        await mkdir(folder);
+        await writeFile(join(folder, 'sibling.dds'), '');
+        await symlink(folder, join(folder, 'loop'));
+
+        const files = await adapter.originFiles(mod('Cycle'));
+
+        expect(relativePaths(files.files)).toEqual(['sibling.dds']);
+        expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
+      });
+
+      it('rejects when a link\'s target cannot be checked for a reason other than its absence', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await symlink(join(root, 'whatever.dds'), join(folder, 'restricted.dds'));
+        vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+          if (String(path).endsWith('restricted.dds')) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+          return actualStat(path, ...rest);
+        });
+
+        await expect(adapter.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
+      });
+
+      // mkfifo is POSIX: on Windows neither case can be built, and each fails there.
+      it('notes a FIFO and a link to one, and answers neither as a file', async () => {
+        const folder = join(root, 'mods', 'Pipes');
+        await mkdir(folder);
+        execFileSync('mkfifo', [join(folder, 'pipe')]);
+        execFileSync('mkfifo', [join(root, 'real-pipe')]);
+        await symlink(join(root, 'real-pipe'), join(folder, 'linked-pipe'));
+
+        const files = await adapter.originFiles(mod('Pipes'));
+
+        expect(files.files).toEqual([]);
+        expect(files.notes.join('\n')).toMatch(/pipe/);
+        expect(files.notes.join('\n')).toMatch(/linked-pipe/);
+        expect(files.notes).toHaveLength(2);
       });
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
