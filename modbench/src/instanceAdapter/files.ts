@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import {
-  isTempWrite, modsDir as modsDirOf, modGitDir, profilesDir, settingsFile, tempWritePath,
+  isTempWriteOf, modsDir as modsDirOf, modGitDir, profilesDir, settingsFile, tempWritePath,
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
@@ -122,7 +122,7 @@ async function modeOf(target: string): Promise<number | undefined> {
 // `target`'s name; the next write for that same target sweeps it before starting its own.
 async function removeStaleTempsFor(target: string): Promise<void> {
   const dir = dirname(target);
-  const prefix = `${basename(target)}.`;
+  const base = basename(target);
   let names: string[];
   try {
     names = await readdir(dir);
@@ -131,7 +131,7 @@ async function removeStaleTempsFor(target: string): Promise<void> {
     return;
   }
   await Promise.all(
-    names.filter((name) => name.startsWith(prefix) && isTempWrite(name))
+    names.filter((name) => isTempWriteOf(base, name))
       .map((name) => rm(join(dir, name), { force: true })),
   );
 }

@@ -180,6 +180,19 @@ describe('write', () => {
     expect(await readFile(path, 'utf8')).toBe('new');
     expect(await readdir(root)).toEqual(['meta.ini']);
   });
+
+  // Rival: match by prefix and suffix with the middle open, which also matches a sibling
+  // target's own temp — any name that happens to start with `path` and end in the temp suffix.
+  it('leaves a sibling target\'s own in-flight temp alone, even though its name starts the same way', async () => {
+    await writeFile(path, 'original');
+    const siblingTemp = `${path}.zip.meta.aaaaaaaaaaaa.tmp`;
+    await writeFile(siblingTemp, 'a sibling target\'s own in-flight write');
+
+    await write(path, 'new');
+
+    expect(await readFile(path, 'utf8')).toBe('new');
+    expect(await readFile(siblingTemp, 'utf8')).toBe('a sibling target\'s own in-flight write');
+  });
 });
 
 describe('putIfChanged', () => {
