@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
@@ -60,6 +61,7 @@ public sealed class ValidateUntrackedTests : IDisposable
         Validate();
 
         using var held = new FileStream(_mod.Path, FileMode.Open, FileAccess.Read, FileShare.None);
+        Assert.Null(PluginBinaryHash.OfFile(_mod.Path));
         var report = Validate();
 
         Assert.False(report.NeedsRebuild);

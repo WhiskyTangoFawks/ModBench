@@ -22,7 +22,7 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
-    // One per open, so an open hashes every file (ADR-0009).
+    // One per Store, so an open hashes every file (ADR-0009).
     private readonly PluginFileHashes _hashes;
 
     public DuckDBConnection Connection { get; private set; }

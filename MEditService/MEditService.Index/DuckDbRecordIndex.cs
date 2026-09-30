@@ -599,8 +599,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport(key, [], NeedsRebuild: true, []);
 
-        // A file that cannot be read is no evidence its rows are still true, so it counts as a
-        // mismatch — Store.ValidateAgainstDisk's own rule.
         return _store.FileContentHash(claim.FilePath) == claim.ContentHash
             ? ValidationReport.Clean(key)
             : new ValidationReport(key, [], NeedsRebuild: true, []);
