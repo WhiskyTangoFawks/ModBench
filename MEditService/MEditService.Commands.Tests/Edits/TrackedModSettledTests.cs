@@ -240,8 +240,7 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Empty(TheExternalChange().Plugins);
     }
 
-    // ADR-0003 invariant 3: once the new binary has landed, the old one is no longer what Modbench
-    // last wrote.
+    // ADR-0003 invariant 3: once the new binary has landed, it alone is what Modbench last wrote.
     [Fact]
     public async Task ASettle_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
     {
