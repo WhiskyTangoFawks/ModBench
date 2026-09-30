@@ -15,11 +15,11 @@ public sealed class SourceRepositoryInterfaceScanTests
 
     private const string RepositoryRoot = "MEditService.SourceAdapter";
 
-    // The git CLI and the object name it prints, the meta.ini reader, the unit a path resolves to and
-    // the resolver answering one, the tree reader, the writer, then the verbs beneath the documents.
+    // The git CLI and the object name it prints, the unit a path resolves to and the resolver
+    // answering one, the tree reader, the writer, then the verbs beneath the documents.
     private static readonly string[] HiddenMechanism =
     [
-        "GitCli", "GitBlobHash", "MetaIni", "SourceUnit", "Locate", "SourceTreeDocuments",
+        "GitCli", "GitBlobHash", "SourceUnit", "Locate", "SourceTreeDocuments",
         "PristineFileWriter", "WorkingTreeStatus", "ReadCommittedSourceText", "CommittedSourceHashes",
         "ParseDocumentPath", "RootStringIn", "RecordBodyFromOwnerBytes",
     ];

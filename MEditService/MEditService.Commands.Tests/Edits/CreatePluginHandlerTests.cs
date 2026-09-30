@@ -70,7 +70,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
             new RegisteredPlugin("First.esp", "TrackedMod", Path.Combine(folder, "First.esp"), Slot: 1, Enabled: true, Winning: true),
         ]));
         var tracked = await TestEditService.TrackHandler(_holder)
-            .TrackAsync([new PluginAddress("First.esp", "TrackedMod")], SourcePreset.Edits);
+            .TrackAsync([new PluginAddress("First.esp", "TrackedMod")], SourcePreset.Edits, new Dictionary<string, string>());
         Assert.True(tracked.AllApplied);
         var repository = TreeSnapshot.Of(Path.Combine(folder, ".git"));
 
