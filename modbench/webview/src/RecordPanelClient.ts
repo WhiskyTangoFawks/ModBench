@@ -1,8 +1,7 @@
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './columnKey';
 import { parseCompareResult } from './parseCompareResult';
-import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview } from './messages';
+import { requestRecordLoad } from './nativeBridge';
 
 // `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
 // the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
@@ -34,38 +33,22 @@ export interface RecordPanelClient {
   load: (formKey: string) => Promise<LoadResult>;
 }
 
-let requestSeq = 0;
-
 export function createRecordPanelClient(): RecordPanelClient {
   return {
-    load(formKey) {
-      const requestId = `record-load-${++requestSeq}`;
-      return new Promise<LoadResult>((resolve) => {
-        const handler = (event: MessageEvent) => {
-          let msg;
-          try {
-            msg = parseExtensionToWebview(event.data);
-          } catch {
-            return; // Not one of ours, or a stale/mismatched build.
-          }
-          if (msg.type !== EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED || msg.requestId !== requestId) return;
-          window.removeEventListener('message', handler);
-          if (!msg.ok) { resolve({ ok: false, error: msg.error }); return; }
-          // ADR-0012: keyed by compound identity — two entries sharing a filename but differing
-          // in origin must stay distinct Set members, or one origin's mutability wins for both.
-          const pluginList = msg.plugins;
-          resolve({
-            ok: true,
-            result: parseCompareResult(msg.compare),
-            immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
-            notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => !p.inLoadOrder).map(p => columnKey(p.name, p.origin))) : null,
-            trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
-            conflictsComputed: msg.conflictsComputed,
-          });
-        };
-        window.addEventListener('message', handler);
-        vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey });
-      });
+    async load(formKey) {
+      const answer = await requestRecordLoad(formKey);
+      if (!answer.ok) return { ok: false, error: answer.error };
+      // ADR-0012: keyed by compound identity — two entries sharing a filename but differing
+      // in origin must stay distinct Set members, or one origin's mutability wins for both.
+      const pluginList = answer.plugins;
+      return {
+        ok: true,
+        result: parseCompareResult(answer.compare),
+        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
+        notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => !p.inLoadOrder).map(p => columnKey(p.name, p.origin))) : null,
+        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
+        conflictsComputed: answer.conflictsComputed,
+      };
     },
   };
 }

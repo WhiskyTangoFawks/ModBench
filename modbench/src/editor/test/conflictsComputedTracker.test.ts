@@ -43,4 +43,29 @@ describe('trackConflictsComputed', () => {
 
     expect(tracker.current()).toBe(true);
   });
+
+  // ADR-0002: mEdit crashing and restarting starts a fresh reconcile, so a settled answer from the
+  // old process must not outlive it — reconcileNarrator's own detached() resets on the same two
+  // signals (toolbox.ts).
+  it('resets to false when the backend leaves attached, so a re-indexing process answers unsettled', () => {
+    const client = new InMemoryMEditClient();
+    const tracker = trackConflictsComputed(client);
+    client.emit(tick(true));
+    expect(tracker.current()).toBe(true);
+
+    client.setStatus('disconnected');
+
+    expect(tracker.current()).toBe(false);
+  });
+
+  it('resets to false on reconnect, since the stream may have reattached to another process', () => {
+    const client = new InMemoryMEditClient();
+    const tracker = trackConflictsComputed(client);
+    client.emit(tick(true));
+    expect(tracker.current()).toBe(true);
+
+    client.reconnected();
+
+    expect(tracker.current()).toBe(false);
+  });
 });

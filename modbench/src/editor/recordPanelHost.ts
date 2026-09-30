@@ -33,7 +33,7 @@ export interface EditorCommandDeps {
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
-    | 'getComparison' | 'subscribe'>;
+    | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
