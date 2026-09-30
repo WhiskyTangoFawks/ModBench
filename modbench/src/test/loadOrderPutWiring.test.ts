@@ -1,4 +1,4 @@
-// update-load-order-file: the load order is put on change and on connect. Wired as the root
+// commands.md, put load order: put at every recompute and when mEdit started. Wired as the root
 // wires it, through the real sender, so a put is a put the client actually receives.
 import { describe, it, expect, vi } from 'vitest';
 import type * as vscode from 'vscode';
@@ -12,7 +12,7 @@ import {
   createLoadOrderSender, InMemoryMEditClient, type LoadOrderOutcome, type LoadOrderPluginInput,
 } from '../client';
 import type { InstanceSubscriber, InstanceValue } from '../instanceLoader/instance';
-import { loadOrderChanged, putLoadOrder, type LoadOrderSource } from '../instanceCommands/loadOrder';
+import { putLoadOrder, type LoadOrderSource } from '../instanceCommands/loadOrder';
 import { registerLoadOrderPut } from '../toolbox';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 
@@ -55,12 +55,10 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
   const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
     (d) => { owned.push(d); return d; }, instance, client,
-    (value) => loadOrderChanged(sender, ROOT, sourceOf(value)),
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
     onConnect,
     channel,
   );
-  // After the trigger, so the trigger hears a reopen before the sender does.
   const sender = createLoadOrderSender(client);
   let sequence = 0;
   const land = (value: InstanceValue): void => {
@@ -82,26 +80,17 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('the load order is put on change', () => {
-  it('puts two instance values with an equal load order once', async () => {
+describe('the load order is put at every recompute', () => {
+  it('puts a load order equal to the last one put', async () => {
     const { puts, land, sent } = wired('attached', valueWith('A.esp'));
     await puts.putOnConnect();
 
-    land(valueWith('B.esp'));
-    land(valueWith('B.esp', { overwriteFileCount: 3 }));
-    await settled();
+    for (const value of [valueWith('A.esp'), valueWith('B.esp'), valueWith('B.esp', { overwriteFileCount: 3 })]) {
+      land(value);
+      await settled();
+    }
 
-    expect(sent()).toEqual(['A.esp', 'B.esp']);
-  });
-
-  it('puts nothing for a value whose load order is the one put on connect', async () => {
-    const { puts, land, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
-
-    land(valueWith('A.esp', { activeProfile: 'Other' }));
-    await settled();
-
-    expect(sent()).toEqual(['A.esp']);
+    expect(sent()).toEqual(['A.esp', 'A.esp', 'B.esp', 'B.esp']);
   });
 
   it('puts nothing without a game folder, and keeps what mEdit holds', async () => {
@@ -119,7 +108,7 @@ describe('the load order is put on change', () => {
     const instance = { subscribe: (s: InstanceSubscriber) => { land = s; return { dispose: () => {} }; } };
     const channel = { error: vi.fn() };
     const puts = registerLoadOrderPut(
-      (d) => d, instance, new InMemoryMEditClient(), () => true, () => Promise.reject(new Error('boom')), () => {},
+      (d) => d, instance, new InMemoryMEditClient(), () => Promise.reject(new Error('boom')), () => {},
       channel);
     await puts.putOnConnect().catch(() => {});
 
@@ -168,18 +157,6 @@ describe('the load order is put on connect', () => {
   });
 
   // A backend the client attached to without owning it can restart under a live status.
-  it('puts once on a stream reopen, and not again for a value with the same load order', async () => {
-    const { client, puts, land, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
-
-    client.reconnected();
-    await settled();
-    land(valueWith('A.esp', { overwriteFileCount: 3 }));
-    await settled();
-
-    expect(sent()).toEqual(['A.esp', 'A.esp']);
-  });
-
   it('puts on a stream reopen, with no value landing after it', async () => {
     const { client, puts, sent } = wired('attached', valueWith('A.esp'));
     await puts.putOnConnect();

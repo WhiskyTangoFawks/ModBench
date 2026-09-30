@@ -44,7 +44,7 @@ import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import {
-  loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
+  putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import {
@@ -121,14 +121,13 @@ export interface LoadOrderPuts {
   putOnConnect(): Promise<void>;
 }
 
-// update-load-order-file: put on change and on connect, running `onConnect` at each connect.
-// Nothing is put while detached; a stream reopen is a connect, the process behind it perhaps
-// another.
+// commands.md, put load order: put at every recompute and when mEdit started, running `onConnect`
+// at each start. Nothing is put while detached; a stream reopen is a start, the process behind it
+// perhaps another.
 export function registerLoadOrderPut(
   own: Own,
   instance: Pick<Instance, 'subscribe'>,
   client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
-  changed: (value: InstanceValue) => boolean,
   put: () => Promise<void>,
   onConnect: () => void,
   channel: { error(msg: string): void },
@@ -140,16 +139,13 @@ export function registerLoadOrderPut(
   own({ dispose: client.onStatusChanged((status) => {
     if (status !== 'attached') connectPutRan = false;
   }) });
-  // Deferred past the other reopen listeners, the sender's forgetting what it sent among them.
   own({ dispose: client.onReconnected(() => {
-    void Promise.resolve().then(() => {
-      if (!connectPutRan) return;
-      onConnect();
-      putLogged();
-    });
+    if (!connectPutRan) return;
+    onConnect();
+    putLogged();
   }) });
-  own(instance.subscribe((value) => {
-    if (connectPutRan && changed(value)) putLogged();
+  own(instance.subscribe(() => {
+    if (connectPutRan) putLogged();
   }));
   return {
     putOnConnect: () => {
@@ -492,8 +488,10 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     reporter: loadOrderReporter,
   });
   // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (value = instance.value): LoadOrderSource =>
-    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
+  const loadOrderSource = (): LoadOrderSource => {
+    const { plugins, gameFolder, gameName, gameRelease } = instance.value;
+    return { plugins, gameFolder, gameName, gameRelease };
+  };
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
@@ -534,8 +532,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   };
   // ADR-0013: a landed Instance recompute and a connect put the load order, never a gesture.
   const loadOrderPuts = registerLoadOrderPut(
-    own, instance, client, (value) => loadOrderChanged(sender, instanceRoot, loadOrderSource(value)),
-    putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
+    own, instance, client, putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
