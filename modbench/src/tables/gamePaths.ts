@@ -36,8 +36,7 @@ const RELEASE_BY_GAME_NAME: ReadonlyMap<string, string> = new Map(
 );
 
 /** Mutagen's release name for a game's own name, `undefined` when the table holds none. Never a
- *  guess: a wrong release makes the backend answer about another game, which reads as a
- *  confident wrong answer rather than an absent one. */
+ *  guess: a wrong release has the backend answer confidently about another game. */
 export function gameReleaseForGame(gameName: string): string | undefined {
   return RELEASE_BY_GAME_NAME.get(gameName);
 }
