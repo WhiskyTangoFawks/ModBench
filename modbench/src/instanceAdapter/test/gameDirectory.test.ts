@@ -3,8 +3,9 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  gameDirectoryResolver, normalizeGamePath, type GameDetectors, type GameDirectoryOverrides,
+  gameDirectoryResolver, normalizeGamePath, type GameDetectors,
 } from '../gameDirectory';
+import type { GameDirectoryOverrides } from '../instanceAdapter';
 
 const noDetectPrefix = () => Promise.resolve(null);
 

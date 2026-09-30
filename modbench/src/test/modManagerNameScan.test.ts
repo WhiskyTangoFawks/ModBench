@@ -1,6 +1,6 @@
 // target-architecture.md, Rules the Modbench column draws: only MO2's implementation of the Instance
-// adapter names MO2, and a source scan holds it as gameNameScan.test.ts holds game names. Both
-// production trees are scanned.
+// adapter names MO2, and a source scan holds it as gameNameScan.test.ts holds game names: in text,
+// identifiers and file names, across both production trees.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
@@ -16,15 +16,17 @@ const SRC_ROOTS = [SRC, WEBVIEW_SRC];
 const ADAPTER = 'instanceAdapter';
 // The adapter's interface is every mod manager's, so it names none.
 const ADAPTER_INTERFACE = join(ADAPTER, 'instanceAdapter.ts');
+// The composition root's file that constructs MO2's implementation, and so names it.
+const MO2_CONSTRUCTION = 'toolbox.ts';
 
-// Anywhere in a file's text, comments included.
-const MANAGER_NAMES = [/\bMO2\b/, /\bMod Organizer\b/];
+// Anywhere in a file's text or its path, comments and identifiers included.
+const MANAGER_NAMES = [/mo2/i, /\bMod Organizer\b/i];
 
 // Inside a string literal: the text a user reads.
 const MANAGER_FILES = ['modlist.txt', 'ModOrganizer.ini', 'meta.ini'];
 
 const isMo2Implementation = (relPath: string): boolean =>
-  relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE;
+  (relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE) || relPath === MO2_CONSTRUCTION;
 
 // A test builds a real MO2 instance, and names it; so does a fixture under a `test/` folder.
 const isTestSupport = (relPath: string): boolean =>
@@ -56,7 +58,8 @@ function findOffenders(roots: readonly string[]): Record<string, string[]> {
     for (const path of tsFiles(root, { exclude: ['generated'] })) {
       const relPath = relative(root, path);
       if (isMo2Implementation(relPath) || isTestSupport(relPath)) continue;
-      const found = managerMentions(readFileSync(path, 'utf8'), path);
+      const inPath = MANAGER_NAMES.some((name) => name.test(relPath)) ? ['file name'] : [];
+      const found = [...inPath, ...managerMentions(readFileSync(path, 'utf8'), path)];
       if (found.length > 0) offenders[relPath] = found;
     }
   }
@@ -91,6 +94,13 @@ describe('no extension file names MO2 outside its implementation of the Instance
     expect(isMo2Implementation(ADAPTER_INTERFACE)).toBe(false);
   });
 
+  // Rival: an exemption kept after its reason went.
+  it('the construction\'s exemption is load-bearing: the file names MO2\'s implementation', () => {
+    const text = readFileSync(join(SRC, MO2_CONSTRUCTION), 'utf8');
+    expect(managerMentions(text, MO2_CONSTRUCTION)).toContain('mo2');
+    expect(text).toContain('mo2InstanceAdapter(');
+  });
+
   // Rivals: a comment citing the manager by name, a tooltip spelling it, and a message spelling
   // its mod-order file, each in a nested production file, through the real walk.
   it('catches the name in a comment or a literal, and a file of the manager\'s in a message', async () => {
@@ -98,6 +108,8 @@ describe('no extension file names MO2 outside its implementation of the Instance
       [join('mods', 'comment.ts')]: '// MO2 sorts these by date.\nexport const x = 1;\n',
       [join('mods', 'tooltip.ts')]: "export const tooltip = 'The files tools wrote while Mod Organizer ran them.';\n",
       [join('mods', 'message.ts')]: 'export const say = (mod: string) => `"${mod}" was created, but its modlist.txt line could not be written.`;\n',
+      [join('plugins', 'command.ts')]: 'export const run = (mo2: { instance: unknown }) => mo2.instance;\n',
+      [join('views', 'mo2Trees.ts')]: 'export const trees = [];\n',
       [join('mods', 'clean.ts')]: 'export const say = (file: string) => `its ${file} line could not be written.`;\n',
       [join('mods', 'test', 'fixture.ts')]: "export const ini = 'ModOrganizer.ini';\n",
       [join(ADAPTER, 'mo2Instance.ts')]: "export const manager = 'MO2';\n",
@@ -105,17 +117,19 @@ describe('no extension file names MO2 outside its implementation of the Instance
     });
     try {
       expect(findOffenders([dir])).toEqual({
-        [join('mods', 'comment.ts')]: ['\\bMO2\\b'],
+        [join('mods', 'comment.ts')]: ['mo2'],
         [join('mods', 'tooltip.ts')]: ['\\bMod Organizer\\b'],
         [join('mods', 'message.ts')]: ['modlist.txt'],
-        [ADAPTER_INTERFACE]: ['\\bMO2\\b'],
+        [join('plugins', 'command.ts')]: ['mo2'],
+        [join('views', 'mo2Trees.ts')]: ['file name'],
+        [ADAPTER_INTERFACE]: ['mo2'],
       });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });
 
-  it('does not flag an identifier that only begins with the name, nor a file name in a comment', () => {
-    expect(managerMentions('import { mo2Watch } from "./mo2Watch";\n// reads modlist.txt\n', 'x.ts')).toEqual([]);
+  it('does not flag a file of the manager\'s named in a comment', () => {
+    expect(managerMentions('// reads modlist.txt\n', 'x.ts')).toEqual([]);
   });
 });

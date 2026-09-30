@@ -14,6 +14,12 @@ export { OVERWRITE_DIR_NAME as OVERWRITE_ORIGIN } from './codecs/modlistText';
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */
 export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
 
+/** What the user set, read fresh on each resolve by whoever built the resolver. */
+export interface GameDirectoryOverrides {
+  /** The game folder outright (`GAME_FOLDER_SETTING`). */
+  gameDirectory?: string;
+}
+
 /** One place Modbench looked for the game folder, and what it found there. */
 export interface GameFolderLook {
   readonly place: string;
@@ -225,7 +231,7 @@ export interface Written {
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
 /** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
-export const modNameTaken = (name: string): string =>
+export const modNameTakenRefusal = (name: string): string =>
   `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
 
 /** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, matched
@@ -233,7 +239,7 @@ export const modNameTaken = (name: string): string =>
 export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFolder'>, name: string): Promise<string | undefined> {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
-  return (await adapter.entryFolder({ kind: 'mod', name: trimmed })) === undefined ? undefined : modNameTaken(trimmed);
+  return (await adapter.entryFolder({ kind: 'mod', name: trimmed })) === undefined ? undefined : modNameTakenRefusal(trimmed);
 }
 
 /** The refusal of a mark on a downloaded file that is gone. */

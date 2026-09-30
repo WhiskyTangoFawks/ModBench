@@ -4,7 +4,7 @@
 import { join } from 'node:path';
 
 export interface GamePathInfo {
-  /** The game's own name. */
+  /** The game's name as an instance's settings spell it. */
   readonly gameName: string;
   /** The Nexus slug — the {game} segment of nexusmods.com/{game}/mods/{id}. */
   readonly nexusSlug: string;
@@ -35,17 +35,16 @@ const RELEASE_BY_GAME_NAME: ReadonlyMap<string, string> = new Map(
   Object.entries(GAME_PATHS).map(([release, info]) => [info.gameName, release]),
 );
 
-/** Mutagen's release name for a game's own name, `undefined` when the table holds none. Never a
- *  guess: a wrong release has the backend answer confidently about another game. */
+/** Mutagen's release name for a game's name as an instance's settings spell it, `undefined` when
+ *  the table holds none. Never a guess: a wrong release has the backend answer about another game. */
 export function gameReleaseForGame(gameName: string): string | undefined {
   return RELEASE_BY_GAME_NAME.get(gameName);
 }
 
-/** Nexus slug for a game's own name; unknown games fall back to the lowercased,
- *  space-stripped name (a best guess that matches most Nexus domains). */
-export function nexusSlugForGame(gameName: string): string {
-  const release = RELEASE_BY_GAME_NAME.get(gameName);
-  const info = release ? GAME_PATHS[release] : undefined;
+/** Nexus slug for a release; a game with none falls back to its lowercased, space-stripped name
+ *  (a best guess that matches most Nexus domains). */
+export function nexusSlugFor(gameRelease: string | undefined, gameName: string): string {
+  const info = gameRelease === undefined ? undefined : GAME_PATHS[gameRelease];
   return info?.nexusSlug ?? gameName.toLowerCase().replace(/\s+/g, '');
 }
 

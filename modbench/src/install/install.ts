@@ -9,7 +9,7 @@ import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
-  modNameTaken, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type StagingFolder, type Upgraded,
+  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type StagingFolder, type Upgraded,
 } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
@@ -111,7 +111,7 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
 // xEdit or the user own it too — so a claim that disagrees with disk is refused, never
 // reinterpreted.
 function mismatchRefusal(target: InstallTarget, targetExists: boolean): string | undefined {
-  if (target.kind === 'new' && targetExists) return modNameTaken(target.name);
+  if (target.kind === 'new' && targetExists) return modNameTakenRefusal(target.name);
   if (target.kind === 'upgrade' && !targetExists) {
     return `Cannot upgrade "${target.name}": there is no folder by that name under mods/.`;
   }

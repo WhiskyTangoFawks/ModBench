@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { dataFolderFile, gameReleaseForGame, nexusSlugForGame, gamePathInfoForRelease } from '../gamePaths';
+import { dataFolderFile, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease } from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
-  it('maps a known MO2 game name to Mutagen\'s release name', () => {
+  it('maps a game\'s name, as an instance\'s settings spell it, to Mutagen\'s release name', () => {
     // Each mapping is independent real data, so each earns its own assertion.
     expect(gameReleaseForGame('Fallout 4')).toBe('Fallout4');
     expect(gameReleaseForGame('Fallout 4 VR')).toBe('Fallout4VR');
@@ -33,28 +33,33 @@ describe('gameReleaseForGame', () => {
   });
 });
 
-describe('nexusSlugForGame', () => {
-  it('maps a known MO2 game name to its Nexus slug', () => {
-    expect(nexusSlugForGame('Fallout 4')).toBe('fallout4');
-    expect(nexusSlugForGame('Skyrim Special Edition')).toBe('skyrimspecialedition');
+describe('nexusSlugFor', () => {
+  it('maps a release to its Nexus slug', () => {
+    expect(nexusSlugFor('Fallout4', 'Fallout 4')).toBe('fallout4');
+    expect(nexusSlugFor('SkyrimSE', 'Skyrim Special Edition')).toBe('skyrimspecialedition');
     // Each mapping is independent real data, so each earns its own assertion.
-    expect(nexusSlugForGame('Fallout 3')).toBe('fallout3');
-    expect(nexusSlugForGame('Fallout New Vegas')).toBe('newvegas');
-    expect(nexusSlugForGame('Skyrim')).toBe('skyrim');
-    expect(nexusSlugForGame('Enderal')).toBe('enderal');
-    expect(nexusSlugForGame('Oblivion')).toBe('oblivion');
+    expect(nexusSlugFor('Fallout3', 'Fallout 3')).toBe('fallout3');
+    expect(nexusSlugFor('FalloutNV', 'Fallout New Vegas')).toBe('newvegas');
+    expect(nexusSlugFor('SkyrimLE', 'Skyrim')).toBe('skyrim');
+    expect(nexusSlugFor('EnderalLE', 'Enderal')).toBe('enderal');
+    expect(nexusSlugFor('Oblivion', 'Oblivion')).toBe('oblivion');
   });
 
   it('maps VR variants to their non-VR Nexus domain', () => {
-    expect(nexusSlugForGame('Fallout 4 VR')).toBe('fallout4');
-    expect(nexusSlugForGame('Skyrim VR')).toBe('skyrimspecialedition');
+    expect(nexusSlugFor('Fallout4VR', 'Fallout 4 VR')).toBe('fallout4');
+    expect(nexusSlugFor('SkyrimVR', 'Skyrim VR')).toBe('skyrimspecialedition');
   });
 
-  // Morrowind has no release (gameReleaseForGame is undefined for it), so this exercises the
-  // fallback path rather than a table row — the fallback happens to match Nexus's own slug.
-  it('falls back to a lowercased, space-stripped name for Morrowind and other unknown games', () => {
-    expect(nexusSlugForGame('Morrowind')).toBe('morrowind');
-    expect(nexusSlugForGame('Some Game')).toBe('somegame');
+  // Rival: keying on the name as the instance's settings spell it, beside the release answered.
+  it('keys on the release, not the name', () => {
+    expect(nexusSlugFor('SkyrimSE', 'Fallout 4')).toBe('skyrimspecialedition');
+  });
+
+  // Morrowind has no release, so this exercises the fallback path rather than a table row — the
+  // fallback happens to match Nexus's own slug.
+  it('falls back to a lowercased, space-stripped name for a game with no release', () => {
+    expect(nexusSlugFor(undefined, 'Morrowind')).toBe('morrowind');
+    expect(nexusSlugFor(undefined, 'Some Game')).toBe('somegame');
   });
 });
 

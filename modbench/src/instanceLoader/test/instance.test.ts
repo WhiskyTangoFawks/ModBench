@@ -936,8 +936,6 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
   });
 
-  // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
-  // keeps its folders.
   // Rival: names the value spells itself, which names one manager over any other's instance.
   it('names the mod manager and its mod-order file as the adapter does, before the first read too', () => {
     const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
@@ -947,6 +945,8 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
   });
 
+  // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
+  // keeps its folders.
   it('names no folder before the first read lands', () => {
     const instance = new Instance({
       adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),

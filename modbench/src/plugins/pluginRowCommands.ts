@@ -251,14 +251,20 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
+/** Where the tracked repositories come from, where they are held, and where a failure is told. */
+export interface TrackedRepositories {
+  readonly client: Pick<MEditClient, 'getPlugins'>;
+  readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
+  readonly setPluginRepositories: (repos: Map<string, MinimalRepository>) => void;
+  readonly trackedFolderOf: TrackedFolderOf;
+}
+
 // ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native Source
 // Control group. A logged no-op when `vscode.git` is unavailable: this only narrows the native UI,
 // never blocks reading or editing.
-async function registerHeldTrackedRepositories(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>,
-  setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
-  trackedFolderOf: TrackedFolderOf,
-): Promise<void> {
+async function registerHeldTrackedRepositories({
+  client, outputChannel, setPluginRepositories, trackedFolderOf,
+}: TrackedRepositories): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
     if (!gitExtension) {
@@ -280,12 +286,10 @@ async function registerHeldTrackedRepositories(
 
 /** A computed reconcile's notice, which a landed track gives too: tells the open record panels,
  *  then registers each tracked mod's repository with `vscode.git`, once per notice. */
-export function conflictsComputedOver(
-  announce: () => void, ...registration: Parameters<typeof registerHeldTrackedRepositories>
-): () => Promise<void> {
+export function conflictsComputedOver(announce: () => void, repositories: TrackedRepositories): () => Promise<void> {
   return async () => {
     announce();
-    await registerHeldTrackedRepositories(...registration);
+    await registerHeldTrackedRepositories(repositories);
   };
 }
 

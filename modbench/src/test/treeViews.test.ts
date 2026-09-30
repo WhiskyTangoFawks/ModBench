@@ -15,7 +15,7 @@ import {
 // A mod or a download landing on disk is a row change with no keystroke; Show excluded changes
 // rows with no new Instance value either. Real Instance and provider over the corpus fixture.
 
-// `../mo2TreeViews` reaches `vscode` before this file's own top-level code runs, so the state
+// `../treeViews` reaches `vscode` before this file's own top-level code runs, so the state
 // `vi.mock` closes over is built from literals here. `trees` is this file's own tracking of the
 // one view `registerDownloadsView` does not return.
 const h = vi.hoisted(() => ({
@@ -76,7 +76,7 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps } from '../mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps } from '../treeViews';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';

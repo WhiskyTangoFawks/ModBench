@@ -4,7 +4,7 @@
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
-import { nexusSlugForGame } from '../tables/gamePaths';
+import { nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
@@ -363,7 +363,7 @@ export class Instance implements Subscription {
       managerNames: adapter.names,
       gameName,
       gameRelease,
-      nexusSlug: nexusSlugForGame(gameName),
+      nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
       modStatuses: computeModStatuses(entries, index),

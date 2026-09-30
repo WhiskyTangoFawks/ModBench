@@ -146,7 +146,9 @@ describe('registerTrackCommand', () => {
     client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
     const announce = vi.fn();
     const channel = { warn: vi.fn(), error: vi.fn() };
-    const notice = conflictsComputedOver(announce, client, channel, () => {}, () => Promise.resolve('/mods/ModA'));
+    const notice = conflictsComputedOver(announce, {
+      client, outputChannel: channel, setPluginRepositories: () => {}, trackedFolderOf: () => Promise.resolve('/mods/ModA'),
+    });
     const { handler } = invokeTrack(client, vi.fn(notice));
 
     await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());

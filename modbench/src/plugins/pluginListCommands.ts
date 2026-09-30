@@ -105,11 +105,11 @@ function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
-  mo2: { instance: Pick<Instance, 'value'> } | undefined,
+  instance: Pick<Instance, 'value'> | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
-    if (!mo2) {
+    if (!instance) {
       reporter.report('error', 'Creating a plugin needs an open instance workspace.');
       return;
     }
@@ -117,7 +117,7 @@ export function registerCreatePluginCommand(
     const name = await promptPluginName();
     if (!name) return;
 
-    const places = pluginPlaces(mo2.instance.value, name);
+    const places = pluginPlaces(instance.value, name);
     if (places.length === 0) {
       reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
       return;
@@ -125,7 +125,7 @@ export function registerCreatePluginCommand(
     const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
     if (!picked) return;
 
-    const place = placeFolder(mo2.instance.value, picked.origin);
+    const place = placeFolder(instance.value, picked.origin);
     if ('lost' in place) {
       reporter.report('error', `${lostPlace(picked.origin, place.lost)}, so "${name}" was not created.`);
       return;

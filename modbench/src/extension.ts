@@ -111,9 +111,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Fires on every completed reconcile and on a landed Track (ADR-0007 — the one reliable point to
   // register the tracked repositories).
-  const conflictsComputed = conflictsComputedOver(
-    () => announceConflictsComputed(recordPanels, editsInFlight),
-    meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, (file) => toolbox.trackedFolderOf(file));
+  const conflictsComputed = conflictsComputedOver(() => announceConflictsComputed(recordPanels, editsInFlight), {
+    client: meditClient,
+    outputChannel,
+    setPluginRepositories: (repos) => { session.pluginRepositories = repos; },
+    trackedFolderOf: (file) => toolbox.trackedFolderOf(file),
+  });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —

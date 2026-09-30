@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
@@ -135,6 +135,32 @@ function drivenOffenders(): Record<string, string[]> {
         .filter((spec) => !isAllowedDrivenSpecifier(spec, path, box));
       if (bad.length > 0) found[relative(SRC, path)] = bad;
     }
+  }
+  return found;
+}
+
+// The composition root: the activation file and its wiring, as src/tsconfig.json includes them.
+const rootFiles = (): string[] => productionFiles(SRC).filter((path) => {
+  const rel = relative(SRC, path);
+  return !rel.includes(sep) || dirname(rel) === 'medit';
+});
+
+// The one construction of MO2's implementation, the root's by definition.
+const MO2_CONSTRUCTION = { file: join(SRC, 'toolbox.ts'), module: join(boxRoot('instanceAdapter'), 'mo2Instance') };
+
+// The root references every box, and reaches the Instance adapter through its interface alone.
+function isAllowedRootSpecifier(spec: string, fromFile: string): boolean {
+  if (!spec.startsWith('.')) return true;
+  const resolved = resolve(dirname(fromFile), spec);
+  if (!isIn(boxRoot('instanceAdapter'), resolved)) return true;
+  return resolved === ADAPTER_INTERFACE || (fromFile === MO2_CONSTRUCTION.file && resolved === MO2_CONSTRUCTION.module);
+}
+
+function rootOffenders(): Record<string, string[]> {
+  const found: Record<string, string[]> = {};
+  for (const path of rootFiles()) {
+    const bad = importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => !isAllowedRootSpecifier(spec, path));
+    if (bad.length > 0) found[relative(SRC, path)] = bad;
   }
   return found;
 }
@@ -311,5 +337,29 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
       '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',
     )).toBe(true);
     expect(isAllowedDrivenSpecifier('../instanceLoader/instance', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+  });
+});
+
+describe('the composition root reaches the Instance adapter through its interface', () => {
+  it('scans the activation file, its wiring and medit/', () => {
+    const files = rootFiles().map((path) => relative(SRC, path));
+    expect(files).toEqual(expect.arrayContaining(['extension.ts', 'toolbox.ts', join('medit', 'backendStatus.ts')]));
+    expect(files.filter((f) => f.startsWith('instanceAdapter'))).toEqual([]);
+  });
+
+  it('every root file imports only the adapter\'s interface, but where toolbox.ts constructs MO2\'s implementation', () => {
+    expect(rootOffenders()).toEqual({});
+  });
+
+  // Rival: the activation file taking a path function from the adapter's layout, or any root
+  // file but the one construction reaching MO2's implementation.
+  it('refuses the adapter\'s layout, files and codecs from any root file, and its implementation outside the construction', () => {
+    const extension = join(SRC, 'extension.ts');
+    expect(isAllowedRootSpecifier('./instanceAdapter/layout', extension)).toBe(false);
+    expect(isAllowedRootSpecifier('./instanceAdapter/files', MO2_CONSTRUCTION.file)).toBe(false);
+    expect(isAllowedRootSpecifier('./instanceAdapter/codecs/modlistText', MO2_CONSTRUCTION.file)).toBe(false);
+    expect(isAllowedRootSpecifier('./instanceAdapter/mo2Instance', extension)).toBe(false);
+    expect(isAllowedRootSpecifier('./instanceAdapter/mo2Instance', MO2_CONSTRUCTION.file)).toBe(true);
+    expect(isAllowedRootSpecifier('./instanceAdapter/instanceAdapter', extension)).toBe(true);
   });
 });

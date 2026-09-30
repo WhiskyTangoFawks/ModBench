@@ -79,7 +79,7 @@ const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod', path: '/instance/mod
 describe('registerCreatePluginCommand', () => {
   function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
     const reporter = recordingReporter();
-    registerCreatePluginCommand(client, mo2, reporter);
+    registerCreatePluginCommand(client, mo2?.instance, reporter);
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 

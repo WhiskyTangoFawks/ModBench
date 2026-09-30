@@ -54,7 +54,7 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   }
 }
 
-// MO2's `gameName=` is the game's own name, which the tables key each release on.
+// The tables key each release on the game's name as `gameName=` spells it.
 const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
 
 export function mo2Reads(context: Mo2Context): Mo2Reads {

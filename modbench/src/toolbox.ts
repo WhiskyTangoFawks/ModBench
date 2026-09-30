@@ -10,8 +10,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf } from './tables/gamePaths';
-import { isMo2Instance } from './instanceAdapter/files';
-import { mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
+import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
   PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
@@ -36,7 +35,7 @@ import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
@@ -502,7 +501,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const implicitMastersIn = (folder: string | undefined, gameRelease: string | undefined): Promise<string[] | undefined> =>
     implicitMastersFrom(client, folder, gameRelease);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
-  // Plugin load order sync through the plugins.txt watcher.
+  // Plugin load order sync through the Instance adapter's watch.
   const syncPluginsOver = pluginSyncOver(access, implicitMastersIn);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
@@ -613,7 +612,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
 
   const provider = own(new ToolboxProvider({ instance: mo2?.instance }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
-  own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
+  own(registerCreatePluginCommand(client, mo2?.instance, reporterFor('newPlugin')));
   // Registered here, not inside buildMo2Side: Referenced By's own copy reaches this regardless
   // of whether the folder is an instance.
   own(registerCopyValueCommand(
