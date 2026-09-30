@@ -28,6 +28,12 @@ describe('collidingModName', () => {
     expect(await collidingModName(accessTo(root), 'harder vats')).toMatch(/already exists/);
   });
 
+  // MO2 knows a mod by its folder's name, and this one is a separator's. Rival: asking for a mod
+  // of that name, which reads it as free.
+  it('names the collision for a name a separator\'s folder has', async () => {
+    expect(await collidingModName(accessTo(root), 'Unassigned (Modlist Development)_separator')).toMatch(/already exists/);
+  });
+
   it('is silent for a name no folder holds', async () => {
     expect(await collidingModName(accessTo(root), 'A New Mod')).toBeUndefined();
   });

@@ -39,10 +39,12 @@ import type { RefreshResult } from '../../instanceCommands/loadOrder';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
+const access = accessTo('/instance');
+
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
   registerToolboxCommands({
-    access: accessTo('/instance'),
+    access,
     instance: { value },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,
@@ -114,7 +116,7 @@ describe('Switch profile', () => {
     const { run } = register();
     await run('modbench.profile.switch');
 
-    expect(switchProfile).toHaveBeenCalledWith('/instance', 'Modding', ['Default', 'Modding', 'Survival']);
+    expect(switchProfile).toHaveBeenCalledWith(access, 'Modding', ['Default', 'Modding', 'Survival']);
   });
 
   it('reports a refused switch at error', async () => {
@@ -144,7 +146,7 @@ describe('Switch profile', () => {
       reports: reporter.reports,
       landings: reporter.landings,
     }).toEqual({
-      writes: [['/instance', 'Modding', ['Default', 'Modding', 'Survival']]],
+      writes: [[access, 'Modding', ['Default', 'Modding', 'Survival']]],
       commands: [],
       progress: [],
       reports: [],

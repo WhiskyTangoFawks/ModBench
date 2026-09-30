@@ -16,7 +16,7 @@ import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, pluginsFile, profilesDir, settingsFile,
 } from './layout';
-import { folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
+import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
 import { isPluginFile } from './pluginFile';
 
@@ -85,6 +85,10 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 
     async modOrder(profile) {
       return parseModlist(await get(modlistFile(instanceRoot, profile)));
+    },
+
+    async orderEntry(profile, entry) {
+      return listedAs(parseModlist(await get(modlistFile(instanceRoot, profile))), entry);
     },
 
     modMeta(mod) {
