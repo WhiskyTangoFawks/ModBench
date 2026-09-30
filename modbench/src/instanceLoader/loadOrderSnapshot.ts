@@ -110,10 +110,9 @@ function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, O
   return new Map(runtimeOutput.filter((file) => !file.relativePath.includes('/')).map((file) => [foldPath(file.relativePath), file]));
 }
 
-/** Every plugin in the instance, from one generation's reads: the plugin order, the enabled mods'
- *  files, and the files the game wrote at run time. A disabled plugins.txt line is still sent,
- *  `enabled: false` (ADR-0013). A listed name no mod or overwrite/ provides takes the Data folder's
- *  file of that name, and a line-only row, `path` undefined, when the game folder is not found. */
+/** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name no mod or
+ *  overwrite/ provides takes the Data folder's file of that name; with no Data folder, its row is
+ *  line-only, `path` undefined. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
   index: FileConflictIndex,
