@@ -246,7 +246,7 @@ A separator is a row in mod order.
 | compile | writes | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
-| reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
+| reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 
 ## Record
 
