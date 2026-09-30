@@ -16,7 +16,7 @@ public sealed class SourceRepositoryTrackBranchTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             var gitDir = Path.Combine(modFolder, ".git");

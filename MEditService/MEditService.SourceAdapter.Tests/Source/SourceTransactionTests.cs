@@ -83,14 +83,14 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_TakesBackEveryDirectoryTheBatchMinted_NotJustTheFile()
     {
-        // Nothing under source/ yet: the plugin's own root, its group folder and the file are all
+        // Nothing under plugin-source/ yet: the plugin's own root, its group folder and the file are all
         // minted in one put.
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
-        Assert.True(Directory.Exists(Path.Combine(_root, "source", PluginName, "Npcs")));
+        Assert.True(Directory.Exists(Path.Combine(_root, "plugin-source", PluginName, "Npcs")));
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
@@ -101,7 +101,7 @@ public sealed class SourceTransactionTests : IDisposable
         var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
-        var pluginRoot = Path.Combine(_root, "source", PluginName);
+        var pluginRoot = Path.Combine(_root, "plugin-source", PluginName);
         File.WriteAllText(Path.Combine(pluginRoot, "theirs.json"), "another tool's");
 
         Assert.Empty(transaction.Rollback());
@@ -145,7 +145,7 @@ public sealed class SourceTransactionTests : IDisposable
         var only = Assert.Single(unrestored);
         Assert.Equal(UnrestoredReason.ChangedByAnother, only.Reason);
         Assert.Equal(
-            "source/Fixture.esp/Npcs/Contested - 000800_Fixture.esp.json", only.RelativePath.Replace('\\', '/'));
+            "plugin-source/Fixture.esp/Npcs/Contested - 000800_Fixture.esp.json", only.RelativePath.Replace('\\', '/'));
         Assert.Equal("someone else's work", File.ReadAllText(contestedFile));
         Assert.Equal(Body(Fk("000801"), "Quiet"), File.ReadAllText(FlatFile(Fk("000801"), "npc_", "Quiet")));
     }

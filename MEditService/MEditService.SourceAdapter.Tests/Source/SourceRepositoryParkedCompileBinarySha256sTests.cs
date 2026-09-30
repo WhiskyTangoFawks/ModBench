@@ -13,7 +13,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256sTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
             SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234");
@@ -32,7 +32,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256sTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
             SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "FIRST");
             SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "SECOND");
@@ -54,7 +54,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256sTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             // Track parks a ref only for the plugins it tracks, which leaves "Other.esp" with none: the
             // orphaned-ref case must degrade, never throw.
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);

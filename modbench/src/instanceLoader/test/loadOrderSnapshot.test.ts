@@ -159,8 +159,8 @@ describe('originFiles', () => {
   it('names a file inside the folder the origin\'s plugin sits in, and holds only what is beneath it', () => {
     const files = present(originFiles(rows, 'TS Mod'), 'the TS Mod origin\'s files');
 
-    expect(files.file('source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'));
-    expect(files.holds(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'))).toBe(true);
+    expect(files.file('plugin-source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'));
+    expect(files.holds(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'))).toBe(true);
     expect(files.holds(join('/instance', 'mods', 'Other', 'x.json'))).toBe(false);
   });
 

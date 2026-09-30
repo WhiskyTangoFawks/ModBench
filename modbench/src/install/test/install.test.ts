@@ -315,25 +315,43 @@ describe('install commands', () => {
 
   // Rival: keep `.git` alone, as an upgrade once did. The repository's ignore rules and the
   // plugin source would then go with the release they have nothing to do with.
-  it('upgrades around the repository and the plugin source: .git, .gitignore and source/ survive', async () => {
+  it('upgrades around the repository and the plugin source: .git, .gitignore and plugin-source/ survive', async () => {
     const name = 'Tracked Target';
     const modDir = await makeExistingMod(root, name, true);
-    await writeFile(join(modDir, '.gitignore'), '*\n!source/\n');
-    await mkdir(join(modDir, 'source', 'Tracked.esp'), { recursive: true });
-    await writeFile(join(modDir, 'source', 'Tracked.esp', 'RecordData.json'), '{}');
+    await writeFile(join(modDir, '.gitignore'), '*\n!plugin-source/\n');
+    await mkdir(join(modDir, 'plugin-source', 'Tracked.esp'), { recursive: true });
+    await writeFile(join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json'), '{}');
 
     const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(
-      [...COMPLETE, '.git/HEAD', '.gitignore', 'source/Tracked.esp/RecordData.json'].sort(),
+      [...COMPLETE, '.git/HEAD', '.gitignore', 'plugin-source/Tracked.esp/RecordData.json'].sort(),
     );
-    expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!source/\n');
+    expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!plugin-source/\n');
   });
 
-  // Rival: a case-sensitive match. Windows would move Source/ onto the kept source/ part way;
-  // elsewhere it would land beside it and drop out of the mod's files.
-  it.each(['.GITIGNORE', 'Source'])(
+  // Rival: matching the old name "source". A release's root Source/ (Skyrim SE's Creation Kit
+  // script sources) is ordinary content now that the plugin source root is plugin-source/.
+  it('upgrades a release that ships a root Source folder, as ordinary content', async () => {
+    const name = 'Untracked Target';
+    const modDir = await makeExistingMod(root, name, false);
+    const shipsSource: Runner = async (bin, args) => {
+      await runnerFor()(bin, args);
+      const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
+      await mkdir(join(dest, 'Wrapper', 'Source'));
+      await writeFile(join(dest, 'Wrapper', 'Source', 'Script.psc'), '');
+    };
+
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsSource });
+
+    expect(outcome).toMatchObject({ applied: true });
+    expect(await treeOf(modDir)).toContain('Source/Script.psc');
+  });
+
+  // Rival: a case-sensitive match. Windows would move Plugin-Source/ onto the kept plugin-source/
+  // part way; elsewhere it would land beside it and drop out of the mod's files.
+  it.each(['.GITIGNORE', 'Plugin-Source'])(
     'refuses, before any write, a release that ships %s, naming it',
     async (entry) => {
       const name = 'Untracked Target';

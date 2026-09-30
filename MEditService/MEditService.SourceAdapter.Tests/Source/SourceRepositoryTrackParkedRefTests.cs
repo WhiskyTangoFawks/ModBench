@@ -19,8 +19,8 @@ public sealed class SourceRepositoryTrackParkedRefTests
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
                 [
-                    new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
-                    new TreeFile("source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray()),
+                    new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
+                    new TreeFile("plugin-source/Other.esp/npc_/Other.esp/000002.json", "{}"u8.ToArray()),
                 ]);
 
             var gitDir = Path.Combine(modFolder, ".git");

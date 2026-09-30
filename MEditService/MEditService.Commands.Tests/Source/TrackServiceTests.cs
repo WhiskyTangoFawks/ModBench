@@ -192,7 +192,7 @@ public sealed class TrackServiceTests
             // this test: only that its source root is committed does.
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits,
-                [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())]);
+                [new TreeFile("plugin-source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())]);
 
             // The load order already parsed a good plugin file; the file on disk is corrupted
             // afterward — exactly the state TrackService's own fresh deep parse must fail against if

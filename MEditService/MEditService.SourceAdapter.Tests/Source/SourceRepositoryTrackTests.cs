@@ -18,7 +18,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     [Fact]
     public void Track_CommitsEveryPristineFileToMain_WithItsExactBytes()
     {
-        var relativePath = Path.Combine("source", "StillHere.esp", "npc_", "StillHere.esp", "000800.json");
+        var relativePath = Path.Combine("plugin-source", "StillHere.esp", "npc_", "StillHere.esp", "000800.json");
         var content = "{\"formKey\":\"000800:StillHere.esp\"}"u8.ToArray();
 
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [new TreeFile(relativePath, content)]);
@@ -43,8 +43,8 @@ public sealed class SourceRepositoryTrackTests : IDisposable
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
         Assert.Equal([".gitignore"], PathsIn("main~2"));
-        Assert.Equal(["source/A.esp/npc_/A.esp/000001.json"], PathsIn("main~1"));
-        Assert.Equal(["source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main~1"));
+        Assert.Equal(["plugin-source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
 
         Assert.Equal("Track SomeMod", Git("log", "-1", "--format=%s", "main~1").Trim());
         Assert.Equal([".gitignore", "Textures/Thing.dds"], PathsIn("main~1"));
-        Assert.Equal(["source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(["plugin-source/A.esp/npc_/A.esp/000001.json"], PathsIn("main"));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
 
         Assert.Equal(["Track SomeMod", "Track A.esp", "Track B.esp"], SubjectsOnMain());
         Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main~1"));
-        Assert.Equal(["source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
+        Assert.Equal(["plugin-source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
         Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", SourceRepository.LastCompileRef("B.esp")));
         Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
         Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
@@ -87,7 +87,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     }
 
     private static List<TreeFile> SourceOf(string plugin) =>
-        [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
+        [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())];
 
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);

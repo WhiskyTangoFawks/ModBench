@@ -35,7 +35,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     // Spelled from the fixture's own constants rather than asked of the repository: Track needs the
     // path to seed the pristine commit before any repository exists to ask.
     private static string OriginalNpcPath(string pluginName) =>
-        Path.Combine("source", pluginName, "Npcs", $"Original - 000800_{pluginName}.json");
+        Path.Combine("plugin-source", pluginName, "Npcs", $"Original - 000800_{pluginName}.json");
 
     private static SourceRepository Track(string modFolder, string pluginName, params TreeFile[] alsoWrite)
     {

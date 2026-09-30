@@ -11,7 +11,7 @@ public sealed class SourcePathLiteralScanTests
     // The layout tokens, as C# string literals. A glob like "*.json" is a search filter rather than a
     // layout token and does not match: the needle carries the opening quote.
     private static readonly string[] Literals =
-        ["\"source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
+        ["\"plugin-source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
          "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
     private static readonly string[] ScannedRoots =
@@ -45,28 +45,28 @@ public sealed class SourcePathLiteralScanTests
             Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceAdapter", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "MEditService.SourceAdapter", "SourceRepositoryLayout.cs"),
-                "internal const string RootFolderName = \"source\";\n"
+                "internal const string RootFolderName = \"plugin-source\";\n"
                 + "internal const string RecordDataFileName = \"RecordData.json\";\n");
             Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "Layer", "EditService.cs"),
-                "var tree = Path.Combine(modFolder, \"source\", plugin);\n"
+                "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
                 + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"source\";");
+            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"plugin-source\";");
             // The same file name prefix, outside Source: not the repository, so it is counted.
             File.WriteAllText(
-                Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"source\";");
+                Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"plugin-source\";");
 
             var counts = Counts(root, ["MEditService.SourceAdapter", "Layer"]);
 
             Assert.Equal(
-                ["Layer/EditService.cs: \"source\": 1", "Layer/SourceRepositoryRival.cs: \"source\": 1"],
+                ["Layer/EditService.cs: \"plugin-source\": 1", "Layer/SourceRepositoryRival.cs: \"plugin-source\": 1"],
                 counts);
 
             var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains("Layer/EditService.cs: \"source\": 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("Layer/SourceRepositoryRival.cs: \"source\": 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("Layer/EditService.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("Layer/SourceRepositoryRival.cs: \"plugin-source\": 1", unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [.. counts, "Layer/Gone.cs: \".json\": 2"], AllowlistPath));

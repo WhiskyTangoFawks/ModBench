@@ -40,7 +40,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
 
     // Spelled out rather than asked of the repository: these are the paths the layout promises, and
     // asking would only echo the rule under test back at it.
-    private static string Under(params string[] segments) => Path.Combine(["source", Plugin, .. segments]);
+    private static string Under(params string[] segments) => Path.Combine(["plugin-source", Plugin, .. segments]);
 
     private static string Body(string formKey, string? editorId) =>
         editorId == null
