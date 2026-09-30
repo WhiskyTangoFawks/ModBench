@@ -7,7 +7,7 @@ interface InputBoxOptionsDouble {
   prompt?: string;
   value?: string;
   placeHolder?: string;
-  validateInput?: (value: string) => string | undefined;
+  validateInput?: (value: string) => Thenable<string | undefined> | string | undefined;
 }
 
 const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
@@ -27,16 +27,6 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
 }));
 
-const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
-  installFromArchive: vi.fn(),
-  installFromFolder: vi.fn(),
-}));
-
-vi.mock('../../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../install/install')>()),
-  installFromArchive, installFromFolder,
-}));
-
 const {
   uninstallMods, deleteSeparators, renameSeparator, insertSeparator, createEmptyMod, setModsEnabled, moveMods, moveSeparators,
 } = vi.hoisted(() => ({
@@ -51,19 +41,22 @@ vi.mock('../../modlist/modlist', async (importOriginal) => ({
 }));
 
 import {
-  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands, registerModInstallCommands,
+  registerCreateEmptyModCommand, registerModContextCommands, registerModEnableCommands,
   registerModMoveCommand,
   registerModListCoreCommands, registerOpenFolderCommand, registerSeparatorCommands, registerViewOnNexusCommand,
   modsCopyValueText,
-  type ModInstallDeps,
   type NexusModRow,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { MODS_KEY_ARGS } from '../gestureEntry';
-import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { accessTo } from '../../test/mo2/adapterOver';
+import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -71,29 +64,8 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(call[1](...args));
 }
 
-
-// Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
-// against Fallout 4 and reach meta.ini wrong for every other install.
-const GAME_RELEASE = 'Skyrim Special Edition';
-// Deliberately not the naive '/instance/downloads' join: a call site that re-derives the folder
-// instead of reading the value's own `paths.downloadsDir` would pass against that guess too.
-const DOWNLOADS_DIR = '/elsewhere/MyDownloads';
-
-function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
-  return {
-    instanceRoot: '/instance',
-    instance: {
-      value: instanceValueFixture({
-        gameRelease: GAME_RELEASE,
-        paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
-      }),
-    },
-    runModAction: async (_label, _fail, action) => action(),
-    promptModName: vi.fn(),
-    warnIfFomod: vi.fn(),
-    ...over,
-  };
-}
+// The access a gesture hands its command, so a test can see it arrive.
+const access = accessTo('/instance');
 
 describe('the sort direction', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -124,124 +96,6 @@ describe('the sort direction', () => {
   });
 });
 
-describe('modbench.mod.install: archive or folder, asked first', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('Esc at the archive-or-folder pick installs nothing', async () => {
-    showQuickPick.mockResolvedValueOnce(undefined);
-
-    registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(showOpenDialog).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
-  });
-
-  it('asks archive or folder before either OS picker opens', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce(undefined);
-
-    registerModInstallCommands(deps());
-    await invoke('modbench.mod.install');
-
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [expect.objectContaining({ sourceKind: 'archive' }), expect.objectContaining({ sourceKind: 'folder' })],
-      expect.anything(),
-    );
-    const [quickPickOrder] = showQuickPick.mock.invocationCallOrder;
-    const [openDialogOrder] = showOpenDialog.mock.invocationCallOrder;
-    if (quickPickOrder === undefined || openDialogOrder === undefined) {
-      throw new Error('expected both showQuickPick and showOpenDialog to have been called');
-    }
-    expect(quickPickOrder).toBeLessThan(openDialogOrder);
-  });
-
-  it('archive: Esc at the OS picker installs nothing', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce(undefined);
-
-    registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(installFromArchive).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
-  });
-
-  // The picker's filters name install's own extension list, never a copy of it: a rival that
-  // hardcodes its own array here would drift silently the day install's list changes.
-  it('archive: the OS picker offers install\'s own archive extensions', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-
-    registerModInstallCommands(deps({ promptModName }));
-    await invoke('modbench.mod.install');
-
-    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
-      filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
-    }));
-  });
-
-  it('archive: installs as a new mod under the name prompted, prefilled from the archive', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
-    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
-    expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', DOWNLOADS_DIR, { gameName: GAME_RELEASE },
-    );
-    expect(succeeded).toEqual({ installed: true });
-  });
-
-  it('archive: a cancelled name prompt installs nothing', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce(undefined);
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/archive/foo.7z' }]);
-
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(installFromArchive).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
-  });
-
-  it('folder: Esc at the OS picker installs nothing', async () => {
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
-    showOpenDialog.mockResolvedValueOnce(undefined);
-
-    registerModInstallCommands(deps());
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(installFromFolder).not.toHaveBeenCalled();
-    expect(succeeded).toEqual({ installed: false });
-  });
-
-  it('folder: installs as a new mod under the name prompted, prefilled from the folder', async () => {
-    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
-    showQuickPick.mockResolvedValueOnce({ sourceKind: 'folder' });
-    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
-    installFromFolder.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
-
-    registerModInstallCommands(deps({ promptModName }));
-    const succeeded = await invoke('modbench.mod.install');
-
-    expect(showOpenDialog).toHaveBeenCalledWith(expect.objectContaining({
-      canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
-    }));
-    expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
-    expect(installFromFolder).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
-    );
-    expect(succeeded).toEqual({ installed: true });
-  });
-});
-
 describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -251,22 +105,27 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     showInputBox.mockResolvedValueOnce(undefined);
     const reporter = recordingReporter();
 
-    registerCreateEmptyModCommand('/instance', instance, reporter);
+    registerCreateEmptyModCommand(access, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
     expect(createEmptyMod).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
   });
 
-  it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
-    registerCreateEmptyModCommand('/instance', instance, recordingReporter());
-    await invoke('modbench.mod.createEmpty');
+  it('the prompt\'s validateInput refuses a taken name, in the words install refuses it with', async () => {
+    const root = await cloneCorpusFixture();
+    try {
+      registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter());
+      await invoke('modbench.mod.createEmpty');
 
-    const [options] = showInputBox.mock.calls[0] ?? [];
-    const validateInput = options?.validateInput;
-    if (!validateInput) throw new Error('expected validateInput on the input box options');
-    expect(validateInput('Existing Mod')).toMatch(/"Existing Mod" already exists/);
-    expect(validateInput('A New Name')).toBeUndefined();
+      const [options] = showInputBox.mock.calls[0] ?? [];
+      const validateInput = options?.validateInput;
+      if (!validateInput) throw new Error('expected validateInput on the input box options');
+      expect(await validateInput('Harder VATS')).toMatch(/"Harder VATS" already exists/);
+      expect(await validateInput('A New Name')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('creates the folder and its line, and reports nothing when both land', async () => {
@@ -274,10 +133,10 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: true });
     const reporter = recordingReporter();
 
-    registerCreateEmptyModCommand('/instance', instance, reporter);
+    registerCreateEmptyModCommand(access, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
-    expect(createEmptyMod).toHaveBeenCalledWith('/instance', 'Default', 'New Mod', instance.value.modFolders ?? []);
+    expect(createEmptyMod).toHaveBeenCalledWith(access, 'Default', 'New Mod');
     expect(reporter.reports).toEqual([]);
   });
 
@@ -286,7 +145,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
     const reporter = recordingReporter();
 
-    registerCreateEmptyModCommand('/instance', instance, reporter);
+    registerCreateEmptyModCommand(access, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
     expect(reporter.reports).toEqual([{
@@ -296,12 +155,25 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     }]);
   });
 
+  // Rival: the mod-order file's name spelled here, which names MO2's file over another manager's.
+  it('names the file mod order is kept in as the value names it', async () => {
+    showInputBox.mockResolvedValueOnce('New Mod');
+    createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
+    const reporter = recordingReporter();
+    const another = { value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }) };
+
+    registerCreateEmptyModCommand(access, another, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(reporter.reports.map((r) => r.message)).toEqual(['"New Mod" was created, but its order.txt line could not be written.']);
+  });
+
   it('reports a name-collision refusal as a failed create', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: false, refusal: 'A mod named "New Mod" already exists.' });
     const reporter = recordingReporter();
 
-    registerCreateEmptyModCommand('/instance', instance, reporter);
+    registerCreateEmptyModCommand(access, instance, reporter);
     await invoke('modbench.mod.createEmpty');
 
     expect(reporter.reports).toEqual([{
@@ -320,8 +192,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   const instance = {
     value: instanceValueFixture({
       activeProfile: 'Default',
-      paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
-    }),
+          }),
   };
   const trash = vi.fn(() => Promise.resolve());
   const log = vi.fn();
@@ -332,7 +203,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(ask.asked).toEqual([{
@@ -341,7 +212,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
       buttons: ['Uninstall'],
     }]);
     expect(uninstallMods).toHaveBeenCalledWith(
-      '/instance', 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], DOWNLOADS_DIR, trash);
+      access, 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   it('asks one modal listing every mod, for a selection of several', async () => {
@@ -350,22 +221,22 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log);
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
     assertAskedOnce(ask, { messageContains: '"Mod A", "Mod B"', buttons: ['Uninstall'] });
     expect(ask.asked[0]?.message).toContain('Their folders will be moved to the system trash.');
     expect(uninstallMods).toHaveBeenCalledWith(
-      '/instance', 'Default',
+      access, 'Default',
       [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }, { name: 'Mod B', archiveFilename: undefined }],
-      DOWNLOADS_DIR, trash,
+      trash,
     );
   });
 
   it('uninstalls nothing when the modal is dismissed', async () => {
     uninstallMods.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 
-    registerModContextCommands('/instance', instance, () => [], recordingReporter(), scriptedDialog(undefined), trash, log);
+    registerModContextCommands(access, instance, () => [], recordingReporter(), scriptedDialog(undefined), trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(uninstallMods).not.toHaveBeenCalled();
@@ -374,17 +245,17 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
 
-    registerModContextCommands('/instance', instance, () => [modA], recordingReporter(), scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [modA], recordingReporter(), scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall');
 
     expect(uninstallMods).toHaveBeenCalledWith(
-      '/instance', 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], DOWNLOADS_DIR, trash);
+      access, 'Default', [{ name: 'Mod A', archiveFilename: 'mod-a.7z' }], trash);
   });
 
   it('an empty selection asks nothing and uninstalls nothing', async () => {
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands('/instance', instance, () => [], recordingReporter(), ask, trash, log);
+    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log);
     await invoke('modbench.mod.uninstall');
 
     expect(ask.asked).toEqual([]);
@@ -398,7 +269,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
     expect(reporter.reports).toEqual([{
@@ -410,7 +281,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([
@@ -422,7 +293,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const reporter = recordingReporter();
 
-    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -436,7 +307,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -451,7 +322,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands('/instance', instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
+    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log);
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([{
@@ -480,20 +351,20 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => []);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['/instance', 'Default', ['Group A', 'Group B'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A', 'Group B'], trash]]);
     expect(reporter.reports).toEqual([]);
   });
 
   it('takes only the separators of a selection mixing mods and separators', async () => {
     deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => []);
+    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => []);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
 
-    expect(deleteSeparators.mock.calls).toEqual([['/instance', 'Default', ['Group A'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A'], trash]]);
   });
 
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
@@ -501,16 +372,16 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
       applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
     });
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), trash, () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => [groupA, groupB]);
     await invoke('modbench.separator.delete');
 
-    expect(deleteSeparators.mock.calls).toEqual([['/instance', 'Default', ['Group A', 'Group B'], trash]]);
+    expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A', 'Group B'], trash]]);
   });
 
   it('calls nothing and reports nothing for a selection with no separator', async () => {
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, trash, () => [modA]);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [modA]);
     await invoke('modbench.separator.delete');
 
     expect(deleteSeparators).not.toHaveBeenCalled();
@@ -524,7 +395,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => []);
     await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
 
     expect(reporter.reports).toEqual([{
@@ -536,7 +407,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     deleteSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => []);
     await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
 
     expect(reporter.reports).toEqual([
@@ -550,7 +421,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => []);
     await invoke('modbench.separator.delete', groupA);
 
     expect(reporter.reports).toEqual([{
@@ -562,6 +433,20 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
 });
 
 const CLASH = 'A separator with this name already exists';
+
+// An instance whose folder for mods holds these folders, as another tool left them.
+// Its mod order lists `entries`, written through the adapter.
+async function instanceHolding(
+  folders: readonly string[], entries: readonly { kind: 'mod' | 'separator'; name: string }[] = [],
+): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'mod-folders-'));
+  for (const folder of folders) await mkdir(join(root, 'mods', folder), { recursive: true });
+  await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
+  await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '');
+  await accessTo(root).adapter.changeModOrder('Default', () =>
+    entries.map((entry) => ({ kind: 'addAtWinningEnd', entry })));
+  return root;
+}
 
 // The prompt's own options off the one showInputBox call a gesture made.
 function promptOptions(): InputBoxOptionsDouble {
@@ -589,23 +474,51 @@ describe('rename separator takes its separator through the gesture entry', () =>
     renameSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('Renamed');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
     await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
 
     expect(promptOptions()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
-    expect(renameSeparator.mock.calls).toEqual([['/instance', 'Default', 'Group B', 'Renamed']]);
+    expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
-  it('refuses in the prompt a name another separator has, and takes its own name or a mod\'s', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
+  // MO2 keys separators by name without case (modinfo.cpp, FileNameComparator). Rival: an exact
+  // match, letting two separators share a folder, or refusing a case-only rename.
+  it('refuses in the prompt a name another separator\'s folder holds, and takes its own name or a mod\'s', async () => {
+    const root = await instanceHolding(['Group A_separator', 'Group B_separator', 'Mod A']);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => []);
-    await invoke('modbench.separator.rename', groupB);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.rename', groupB);
 
-    const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
-    expect(validate('Group A')).toBe(CLASH);
-    expect(validate('Group B')).toBeUndefined();
-    expect(validate('Mod A')).toBeUndefined();
+      const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
+      expect(await validate('group a')).toBe(CLASH);
+      expect(await validate('GROUP B')).toBeUndefined();
+      expect(await validate('Mod A')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // mods.md, Rename separator: a line in mod order is a separator whose folder may be gone, named
+  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
+  it('refuses in the prompt a name a separator with no folder has, in any case, and takes its own', async () => {
+    const root = await instanceHolding([], [
+      { kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' },
+    ]);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
+
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.rename', groupB);
+
+      const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
+      expect(await validate('group a')).toBe(CLASH);
+      expect(await validate('GROUP B')).toBeUndefined();
+      expect(await validate('Mod A')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
@@ -613,7 +526,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     showInputBox.mockResolvedValueOnce('Taken Meanwhile');
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => []);
     await invoke('modbench.separator.rename', groupB);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename separator.', detail: CLASH }]);
@@ -622,7 +535,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
   it('renames nothing when the prompt is cancelled (Esc) or left empty', async () => {
     showInputBox.mockResolvedValueOnce(undefined).mockResolvedValueOnce('');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => []);
     await invoke('modbench.separator.rename', groupA);
     await invoke('modbench.separator.rename', groupA);
 
@@ -632,7 +545,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
   it('renames nothing when the prompt keeps the same name', async () => {
     showInputBox.mockResolvedValueOnce('Group A');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA]);
     await invoke('modbench.separator.rename', groupA);
 
     expect(renameSeparator).not.toHaveBeenCalled();
@@ -642,15 +555,15 @@ describe('rename separator takes its separator through the gesture entry', () =>
     renameSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('Renamed');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupB]);
     await invoke('modbench.separator.rename', ...args);
 
     expect(promptOptions()).toMatchObject({ value: 'Group B' });
-    expect(renameSeparator.mock.calls).toEqual([['/instance', 'Default', 'Group B', 'Renamed']]);
+    expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
   it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('asks nothing from %s while several rows are selected', async (_from, args) => {
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
     await invoke('modbench.separator.rename', ...args);
 
     expect(showInputBox).not.toHaveBeenCalled();
@@ -675,25 +588,47 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('New Section');
     const otherMod = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [otherMod, modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherMod, modA]);
     await invoke('modbench.separator.add', modA, [otherMod, modA]);
 
     expect(promptOptions()).toMatchObject({ prompt: 'Separator name', placeHolder: 'My Group' });
-    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
-  it('refuses in the prompt a name another separator has, and takes a mod\'s', async () => {
-    showInputBox.mockResolvedValueOnce(undefined);
+  it('refuses in the prompt a name another separator\'s folder holds, as MO2 would name it, and takes a mod\'s', async () => {
+    const root = await instanceHolding(['Group A_separator', 'Mod A']);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => []);
-    await invoke('modbench.separator.add', modA);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.add', modA);
 
-    const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
-    expect(validate('Group A')).toBe(CLASH);
-    expect(validate(' Group A ')).toBe(CLASH);
-    expect(validate('Mod A')).toBeUndefined();
-    expect(validate('')).toBeUndefined();
-    expect(validate('CON')).toBe('Not a valid separator name: "CON"');
+      const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
+      expect(await validate('Group A')).toBe(CLASH);
+      expect(await validate(' Group A. ')).toBe(CLASH);
+      expect(await validate('Mod A')).toBeUndefined();
+      expect(await validate('')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // mods.md, Add separator: a line in mod order is a separator whose folder may be gone, named
+  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
+  it('refuses in the prompt a name a separator with no folder has, in any case', async () => {
+    const root = await instanceHolding([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
+
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.add', modA);
+
+      const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
+      expect(await validate('group a')).toBe(CLASH);
+      expect(await validate('Mod A')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
@@ -701,7 +636,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('Taken Meanwhile');
     const reporter = recordingReporter();
 
-    registerSeparatorCommands('/instance', instance, reporter, vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => []);
     await invoke('modbench.separator.add', modA);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to add separator.', detail: CLASH }]);
@@ -712,16 +647,16 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('New Section');
     const otherGroup = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [otherGroup, groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherGroup, groupA]);
     await invoke('modbench.separator.add', groupA, [otherGroup, groupA]);
 
-    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', { kind: 'separator', name: 'Group A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'separator', name: 'Group A' }]]);
   });
 
   it('adds nothing when the prompt is cancelled (Esc)', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
     await invoke('modbench.separator.add', modA);
 
     expect(insertSeparator).not.toHaveBeenCalled();
@@ -730,7 +665,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   it('adds nothing for an empty name', async () => {
     showInputBox.mockResolvedValueOnce('');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
     await invoke('modbench.separator.add', modA);
 
     expect(insertSeparator).not.toHaveBeenCalled();
@@ -740,14 +675,14 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     insertSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('New Section');
 
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
     await invoke('modbench.separator.add');
 
-    expect(insertSeparator.mock.calls).toEqual([['/instance', 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
+    expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
   it('asks nothing and adds nothing from the palette while several rows are selected', async () => {
-    registerSeparatorCommands('/instance', instance, recordingReporter(), vi.fn(), () => [modA, groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA, groupA]);
     await invoke('modbench.separator.add');
 
     expect(showInputBox).not.toHaveBeenCalled();
@@ -768,43 +703,43 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   it('enable applies to every selected mod, whatever its own current state', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
 
-    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.mod.enable', modA, [modA, modB]);
 
-    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A', 'Mod B'], true);
+    expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A', 'Mod B'], true);
   });
 
   it('disable applies to every selected mod, whatever its own current state', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
 
-    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.mod.disable', modB, [modA, modB]);
 
-    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A', 'Mod B'], false);
+    expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A', 'Mod B'], false);
   });
 
   it('takes only the mods of a selection mixing mods and separators, anchored on the clicked mod', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
 
-    registerModEnableCommands('/instance', instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.mod.enable', modA, [modA, groupA]);
 
-    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A'], true);
+    expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A'], true);
   });
 
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
 
-    registerModEnableCommands('/instance', instance, () => [modA], recordingReporter());
+    registerModEnableCommands(access, instance, () => [modA], recordingReporter());
     await invoke('modbench.mod.enable');
 
-    expect(setModsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Mod A'], true);
+    expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A'], true);
   });
 
   it('calls nothing and reports nothing for an empty selection', async () => {
     const reporter = recordingReporter();
 
-    registerModEnableCommands('/instance', instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.mod.enable');
 
     expect(setModsEnabled).not.toHaveBeenCalled();
@@ -815,7 +750,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
     const reporter = recordingReporter();
 
-    registerModEnableCommands('/instance', instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.mod.enable', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -828,7 +763,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     });
     const reporter = recordingReporter();
 
-    registerModEnableCommands('/instance', instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.mod.enable', modA, [modA, modB]);
 
     expect(reporter.reports).toEqual([{
@@ -844,7 +779,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerModEnableCommands('/instance', instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.mod.disable', modB);
 
     expect(reporter.reports).toEqual([
@@ -887,12 +822,12 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     pickLabelled('Group B');
     moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod C'], refused: [] } });
 
-    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
     await invoke('modbench.mod.move', modA, [modA, groupB, modC]);
 
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group B', 'Group A']);
     expect(moveMods).toHaveBeenCalledWith(
-      '/instance', 'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
+      access, 'Default', ['Mod A', 'Mod C'], { kind: 'separator', name: 'Group B' }, 'losing');
     expect(moveSeparators).not.toHaveBeenCalled();
   });
 
@@ -900,11 +835,11 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     pickLabelled('Group A');
     moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
 
-    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
     await invoke('modbench.mod.move', groupB, [modA, groupB]);
 
     expect(pickedLabels()).toEqual(['Group A']);
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'losing');
+    expect(moveSeparators).toHaveBeenCalledWith(access, 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'losing');
     expect(moveMods).not.toHaveBeenCalled();
   });
 
@@ -913,33 +848,33 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod C'], refused: [] } });
     moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
 
-    registerModMoveCommand('/instance', instance, winningAtTop, recordingReporter());
+    registerModMoveCommand(access, instance, winningAtTop, recordingReporter());
     pickLabelled('Group A');
     await invoke('modbench.mod.move', modC);
     pickLabelled('Group A');
     await invoke('modbench.mod.move', groupB);
 
-    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveMods).toHaveBeenCalledWith(access, 'Default', ['Mod C'], { kind: 'separator', name: 'Group A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith(access, 'Default', ['Group B'], { kind: 'separator', name: 'Group A' }, 'winning');
   });
 
   it('handed a target, as a drop hands one, moves there without a pick', async () => {
     moveMods.mockResolvedValue({ applied: true, outcome: { landed: ['Mod C'], refused: [] } });
     moveSeparators.mockResolvedValue({ applied: true, outcome: { landed: ['Group B'], refused: [] } });
 
-    registerModMoveCommand('/instance', instance, losingAtTop, recordingReporter());
+    registerModMoveCommand(access, instance, losingAtTop, recordingReporter());
     await invoke('modbench.mod.move', modC, [modC], { place: { kind: 'mod', name: 'Mod A' }, end: 'winning' });
     await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'modOrder' }, end: 'winning' });
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(moveMods).toHaveBeenCalledWith('/instance', 'Default', ['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
-    expect(moveSeparators).toHaveBeenCalledWith('/instance', 'Default', ['Group B'], { kind: 'modOrder' }, 'winning');
+    expect(moveMods).toHaveBeenCalledWith(access, 'Default', ['Mod C'], { kind: 'mod', name: 'Mod A' }, 'winning');
+    expect(moveSeparators).toHaveBeenCalledWith(access, 'Default', ['Group B'], { kind: 'modOrder' }, 'winning');
   });
 
   it('handed a target no separator can take, refuses it once, saying why, and moves nothing', async () => {
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', groupB, [groupB], { place: { kind: 'mod', name: 'Mod A' }, end: 'losing' });
 
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -954,7 +889,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     showQuickPick.mockResolvedValueOnce(undefined);
 
     registerModMoveCommand(
-      '/instance', instance, { selection: () => [], direction: () => 'winningAtTop' }, recordingReporter());
+      access, instance, { selection: () => [], direction: () => 'winningAtTop' }, recordingReporter());
     await invoke('modbench.mod.move', modC);
 
     expect(pickedLabels()).toEqual(['Ungrouped', 'Group A', 'Group B']);
@@ -963,7 +898,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   it('from the palette over a selection mixing mods and separators, moves nothing and says nothing', async () => {
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, { ...losingAtTop, selection: () => [modA, groupA] }, reporter);
+    registerModMoveCommand(access, instance, { ...losingAtTop, selection: () => [modA, groupA] }, reporter);
     await invoke('modbench.mod.move');
 
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -976,7 +911,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     showQuickPick.mockResolvedValueOnce(undefined);
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', modA);
 
     expect(moveMods).not.toHaveBeenCalled();
@@ -987,7 +922,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     showQuickPick.mockResolvedValueOnce(undefined);
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', groupB);
 
     expect(showQuickPick).toHaveBeenCalledOnce();
@@ -1003,7 +938,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     });
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', modA, [modA, modC]);
 
     expect(reporter.reports).toEqual([{
@@ -1016,7 +951,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
     moveSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerModMoveCommand('/instance', instance, losingAtTop, reporter);
+    registerModMoveCommand(access, instance, losingAtTop, reporter);
     await invoke('modbench.mod.move', groupB);
 
     expect(reporter.reports).toEqual([
@@ -1043,9 +978,37 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     expect(revealed()).toEqual(['/instance/mods/My Mod']);
   });
 
+  // commands.md, A gone object is refused. Rival: returning in silence, which leaves the user
+  // clicking a menu item that does nothing.
+  it('refuses a mod no folder holds, naming it', async () => {
+    const reporter = recordingReporter();
+
+    registerOpenFolderCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openFolder', new ModNode({ kind: 'mod', name: 'Folderless Mod', enabled: true }));
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "Folderless Mod".', detail: 'No folder holds it.' },
+    ]);
+  });
+
+  // Rival: revealing an empty path while the value names no overwrite folder yet.
+  it('refuses the Overwrite row while the value names no folder for it', async () => {
+    const reporter = recordingReporter();
+    const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
+
+    registerOpenFolderCommand(unread, reporter, () => []);
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "Overwrite".', detail: 'No folder holds it.' },
+    ]);
+  });
+
   it('reveals the overwrite folder from the Overwrite row', async () => {
     registerOpenFolderCommand(instance, recordingReporter(), () => []);
-    await invoke('modbench.mod.openFolder', new OverwriteNode(3));
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
@@ -1053,7 +1016,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
   // commands.md, The surface supplies the Argument: a palette entry hands the gesture no row.
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
-    ['Overwrite', new OverwriteNode(3), '/instance/overwrite'],
+    ['Overwrite', new OverwriteNode(3, 'MO2'), '/instance/overwrite'],
   ])('reveals the one selected %s row\'s folder from the palette', async (_kind, selected, folder) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
     await invoke('modbench.mod.openFolder');
@@ -1062,7 +1025,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
   });
 
   it.each<[string, ModlistNode[]]>([
-    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3)]],
+    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3, 'MO2')]],
     ['a separator', [new SeparatorNode({ kind: 'separator', name: 'Group', enabled: true }, [])]],
   ])('reveals nothing from the palette over a selection of %s', async (_what, selection) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => selection);
@@ -1169,12 +1132,12 @@ describe('modsCopyValueText', () => {
   });
 
   it('excludes the Overwrite row from a selection that includes it', () => {
-    const withOverwrite = [alpha, new OverwriteNode(3)];
+    const withOverwrite = [alpha, new OverwriteNode(3, 'MO2')];
     expect(modsCopyValueText(noSelection)(alpha, withOverwrite)).toBe('Alpha');
   });
 
   it('is undefined for a row that is not a Mods row, so another surface\'s copy takes over', () => {
-    expect(modsCopyValueText(noSelection)(new OverwriteNode(0), undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)(new OverwriteNode(0, 'MO2'), undefined)).toBeUndefined();
     expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
   });
 
@@ -1184,7 +1147,7 @@ describe('modsCopyValueText', () => {
   });
 
   it('copies the view\'s selection for the Mods key\'s own args', () => {
-    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1)];
+    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1, 'MO2')];
     expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
   });
 

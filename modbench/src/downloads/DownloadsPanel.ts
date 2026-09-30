@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload } from '../downloadsCommands/downloads';
-import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
+import {
+  deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload, type DownloadsAccess,
+} from '../downloadsCommands/downloads';
+import {
+  defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
+} from '../install/install';
 import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { selectedFiles, singleSelectedFile } from './keyContext';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
@@ -87,7 +91,7 @@ async function resolveTarget(
 // The row holds the archive's path and its own mod id, file id and version, so the view re-reads
 // no sidecar; install is called for what it is, and install marks the download installed.
 async function installArchive(
-  row: DownloadFile, instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
   deps: DownloadInstallDeps,
 ): Promise<void> {
   const { name } = row;
@@ -102,8 +106,8 @@ async function installArchive(
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
     if (!target) return;
-    const outcome = await installFromArchive(instanceRoot, target, row.path, instance.value.paths.downloadsDir, {
-      gameName: instance.value.gameRelease, modID: row.modID, fileID: row.fileID, version: row.version,
+    const outcome = await installFromArchive(access, target, row.path, {
+      gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
     });
     applyOrThrow(outcome);
     deps.warnIfFomod(target.name, outcome.isFomod);
@@ -148,15 +152,13 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // A `.meta` left behind is not a failure (downloads.md, Reporting story 2): the delete already
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
-  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void,
 ): Promise<SelectionOutcome<DeletedDownload>> {
-  // Rows exist only once the folder resolves, so a selection is empty whenever downloadsDir is
-  // undefined — this guard is belt-and-suspenders for the type, not a reachable path.
-  if (downloadsDir === undefined || names.length === 0 || !(await confirmDelete(names, ask))) return { landed: [], refused: [] };
-  const outcome = await deleteDownloads(downloadsDir, names, trash);
+  if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
+  const outcome = await deleteDownloads(access, rows, trash);
   reporter.selectionOutcome(
-    `Could not delete ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (item) => item.name);
+    `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
   for (const item of outcome.landed) {
     if (item.metaLeftBehind !== undefined) {
       log(`"${item.name}" was deleted, but its ".meta" could not be moved to the trash and was left behind: ${item.metaLeftBehind}`);
@@ -168,37 +170,35 @@ async function deleteSelection(
 // No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
 // writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
 async function excludeSelection(
-  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter,
+  access: DownloadsAccess, names: readonly string[], reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  // Rows exist only once the folder resolves, so a selection is empty whenever downloadsDir is
-  // undefined — this guard is belt-and-suspenders for the type, not a reachable path.
-  if (downloadsDir === undefined || names.length === 0) return NOTHING_CHANGED;
-  const outcome = await excludeDownloads(downloadsDir, names);
+  if (names.length === 0) return NOTHING_CHANGED;
+  const outcome = await excludeDownloads(access, names);
   reporter.selectionOutcome(
     `Could not exclude ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
   return outcome;
 }
 
 async function includeSelection(
-  downloadsDir: string | undefined, names: readonly string[], reporter: Reporter,
+  access: DownloadsAccess, names: readonly string[], reporter: Reporter,
 ): Promise<SelectionOutcome<string>> {
-  if (downloadsDir === undefined || names.length === 0) return NOTHING_CHANGED;
-  const outcome = await includeDownloads(downloadsDir, names);
+  if (names.length === 0) return NOTHING_CHANGED;
+  const outcome = await includeDownloads(access, names);
   reporter.selectionOutcome(
     `Could not include ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
   return outcome;
 }
 
-/** Clicked row only, as MO2 batches no Install and five opened tabs help no one. The palette
- *  hands no row, so open and open .meta take the one selected row. */
+/** Clicked row only, as the reference tool batches no Install and five opened tabs help no one. The
+ *  palette hands no row, so open and open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
+  access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
   viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rowOf = (node?: DownloadNode) => (node ?? singleSelectedFile(viewSelection()))?.row;
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
+      if (node?.row.name) void installArchive(node.row, access, instance, reporter, install);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = rowOf(node);
@@ -219,28 +219,30 @@ export function registerDownloadsSingleRowCommands(
 
 // A host that supplies no selection array, and a single-row click, both fall back to the
 // clicked row alone.
-function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNode[] | undefined): string[] {
-  if (selected && selected.length > 0) return selected.map((n) => n.row.name);
-  return clicked ? [clicked.row.name] : [];
+function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode[] | undefined): DownloadFile[] {
+  if (selected && selected.length > 0) return selected.map((n) => n.row);
+  return clicked ? [clicked.row] : [];
 }
 
-/** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
- *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
+/** Acts on the whole selection, applying the clicked row's action to a mixed one (the reference
+ *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
+ *  argument. */
 export function registerDownloadsMultiRowCommands(
-  instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: DownloadsAccess, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
-  const names = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
-    const explicit = selectionNames(clicked, selected);
-    return explicit.length > 0 ? explicit : selectedFiles(viewSelection()).map((n) => n.row.name);
+  const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+    const explicit = selectionRows(clicked, selected);
+    return explicit.length > 0 ? explicit : selectedFiles(viewSelection()).map((n) => n.row);
   };
+  const names = (clicked?: DownloadNode, selected?: DownloadNode[]) => rows(clicked, selected).map((row) => row.name);
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter, ask, trash, log)),
+      deleteSelection(access, rows(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      excludeSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter)),
+      excludeSelection(access, names(clicked, selected), reporter)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      includeSelection(instance.value.paths.downloadsDir, names(clicked, selected), reporter)),
+      includeSelection(access, names(clicked, selected), reporter)),
   ];
 }
 

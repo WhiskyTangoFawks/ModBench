@@ -3,21 +3,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
-import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
-import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { pluginSyncArguments, registerPluginSync } from '../pluginSyncTrigger';
 import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
-import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
+import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
-import { syncMods } from '../modlist/modlist';
+import { modSyncOver } from '../modlist/modlist';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -63,7 +61,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   root: string;
   instance: Instance;
   syncs: Promise<PluginSyncResult>[];
-  games: string[];
+  games: (string | undefined)[];
   plugins: () => Promise<string>;
   pluginsOf: (profile: string) => Promise<string>;
 }> {
@@ -82,10 +80,8 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const resolveGameDirectory: GameDirectoryResolver = () =>
-    Promise.resolve({ kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
   const instance = new Instance({
-    instanceRoot: root, resolveGameDirectory, resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
     log: () => {}, logReadFailure: () => {},
   });
   instances.push(instance);
@@ -93,11 +89,11 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const syncs: Promise<PluginSyncResult>[] = [];
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
-  const games: string[] = [];
+  const games: (string | undefined)[] = [];
   const trigger = registerPluginSync(instance, (value) => {
-    games.push(value.gameRelease);
+    games.push(pluginSyncArguments(value).gameRelease);
     const { profile, provided, inData } = pluginSyncArguments(value);
-    const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
+    const run = syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
@@ -182,7 +178,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     await driveToQuiescence(instance, syncs, 8);
 
     expect(games.length).toBeGreaterThan(0);
-    expect([...new Set(games)]).toEqual(['Skyrim Special Edition']);
+    expect([...new Set(games)]).toEqual(['SkyrimSE']);
   });
 });
 
@@ -204,16 +200,15 @@ describe('the game folder not found, across the whole instance', () => {
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
     const instance = new Instance({
-      instanceRoot: root, resolveGameDirectory: resolvesNotFound,
-      resolveDownloadsDirectory: downloadsDirectoryResolver(), log: write, logReadFailure: write,
+      adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
     const pluginSync = registerPluginSync(instance, (value) => {
       const { profile, provided, inData } = pluginSyncArguments(value);
-      return syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined));
+      return syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve(undefined));
     }, channel);
-    const modSync = registerModSync(instance, (value) => syncMods(root, value.activeProfile, value.modFolders), channel);
+    const modSync = registerModSync(instance, modSyncOver(accessTo(root)), channel);
 
     await instance.refresh();
     pluginSync.runOnConnect();
@@ -242,13 +237,12 @@ describe('a gesture writes the profile the Instance last landed', () => {
     await instance.refresh();
     const before = instance.sequence;
 
-    const ini = join(root, 'ModOrganizer.ini');
-    await writeFile(ini, setSelectedProfileInText(await readFile(ini, 'utf8'), OTHER_PROFILE));
+    await adapterOver(root).selectProfile(OTHER_PROFILE);
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
     // Exactly what the composition root binds enable/disable to.
-    const result = await setPluginsEnabled(root, instance.value.activeProfile, ['Base.esp'], false);
+    const result = await setPluginsEnabled(accessTo(root), instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
@@ -470,7 +464,8 @@ describe('pluginSyncArguments', () => {
   it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the game', () => {
     const value = instanceValueFixture({
       activeProfile: 'Survival',
-      gameRelease: 'Skyrim Special Edition',
+      gameName: 'Skyrim Special Edition',
+      gameRelease: 'SkyrimSE',
       gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
       dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
       plugins: [
@@ -484,7 +479,7 @@ describe('pluginSyncArguments', () => {
       provided: new Map([['mine.esp', 'Mine.esp']]),
       inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
       dataFolder: '/game/Data',
-      gameName: 'Skyrim Special Edition',
+      gameRelease: 'SkyrimSE',
     });
   });
 });

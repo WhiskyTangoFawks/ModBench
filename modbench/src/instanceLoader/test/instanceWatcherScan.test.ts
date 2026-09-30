@@ -1,5 +1,5 @@
-// ADR-0015 invariant 7: the Instance owns every watcher on the instance. A view or command wiring its own
-// watcher would duplicate the Instance's recompute trigger instead of reading its value.
+// ADR-0015 invariant 7: the Instance adapter owns the watch. A view or command wiring its own watcher
+// would duplicate the recompute trigger instead of reading the Instance's value.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -8,17 +8,7 @@ import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 
-// instance.ts owns every watcher; each watcher module calls the factory one level down
-// (createDebouncedFsWatcher or vscode.workspace.createFileSystemWatcher) to define its own.
-const ALLOWED = new Set([
-  join('instanceLoader', 'instance.ts'),
-  join('instanceLoader', 'fsWatcher.ts'),
-  join('instanceLoader', 'modsWatcher.ts'),
-  join('instanceLoader', 'modlistWatcher.ts'),
-  join('instanceLoader', 'pluginsTxtWatcher.ts'),
-  join('instanceLoader', 'overwriteWatcher.ts'),
-  join('instanceLoader', 'downloadsWatcher.ts'),
-]);
+const ALLOWED = new Set([join('instanceAdapter', 'mo2Watch.ts')]);
 
 const WATCHER_FACTORY = /^create\w*Watcher$/;
 
@@ -47,7 +37,7 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
   return found;
 }
 
-describe('every watcher on the instance is created inside the Instance or a watcher module', () => {
+describe('every watcher on the instance is created inside the Instance adapter\'s watch', () => {
   it('scans a real body of files', () => {
     expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
   });

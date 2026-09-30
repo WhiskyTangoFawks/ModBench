@@ -100,6 +100,40 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.Equal(1, types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_").GetProperty("count").GetInt32());
     }
 
+    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
+    // filename, so both routes refuse rather than picking one of the two plugins for it.
+    [Fact]
+    public async Task BrowsingByPluginWithoutOrigin_ReturnsBadRequest()
+    {
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
+
+        var records = await _client.GetAsync("/records?plugin=Shared.esp&type=npc_&limit=10");
+        Assert.Equal(HttpStatusCode.BadRequest, records.StatusCode);
+        Assert.Equal(
+            "Name a plugin with both plugin and origin, or neither to browse every plugin.",
+            (await records.Body()).GetProperty("detail").GetString());
+
+        var types = await _client.GetAsync("/plugins/Shared.esp/record-types");
+        Assert.Equal(HttpStatusCode.BadRequest, types.StatusCode);
+        Assert.Equal("Origin is required.", (await types.Body()).GetProperty("detail").GetString());
+    }
+
+    // The other half of the same invariant: an origin with no plugin filter names half an
+    // identity just as much as a bare plugin filename does.
+    [Fact]
+    public async Task BrowsingByOriginWithoutPlugin_ReturnsBadRequest()
+    {
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
+
+        var records = await _client.GetAsync("/records?origin=ModB&type=npc_&limit=10");
+        Assert.Equal(HttpStatusCode.BadRequest, records.StatusCode);
+        Assert.Equal(
+            "Name a plugin with both plugin and origin, or neither to browse every plugin.",
+            (await records.Body()).GetProperty("detail").GetString());
+    }
+
     [Fact]
     public async Task OverriddenPlugin_IsNotACompareColumn()
     {

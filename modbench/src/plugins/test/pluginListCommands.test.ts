@@ -32,7 +32,7 @@ import {
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
-import { recordSummaryFixture } from '../../client/test/fixtures';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -77,11 +77,14 @@ function makeMo2() {
 const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod', path: '/instance/mods/Winning Mod/MyPatch.esp' };
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
+  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined, lightPluginsSupported = true) {
+    client.setQueryAnswer('getLightPluginsSupported', lightPluginsSupported);
     const reporter = recordingReporter();
-    registerCreatePluginCommand(client, mo2, reporter);
+    registerCreatePluginCommand(client, mo2?.instance, reporter);
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
+
+  const lightPluginsQuery = { method: 'getLightPluginsSupported', args: [] };
 
   type Place = { label: string; origin: string };
   const offering = (): { offered: Place[] } => {
@@ -105,6 +108,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(client.calls).toEqual([
+      lightPluginsQuery,
       { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod'] },
     ]);
     expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
@@ -128,6 +132,36 @@ describe('registerCreatePluginCommand', () => {
     expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
   });
 
+  // Rival: an extension check alone, which would let .esl through on a game with none.
+  it('refuses an .esl name inline when the game has no light plugins, leaving .esp and .esm alone', async () => {
+    type Validate = (v: string) => string | undefined;
+    const prompt: { validate?: Validate } = {};
+    showInputBox.mockImplementation((options: { validateInput: Validate }) => {
+      prompt.validate = options.validateInput;
+      return Promise.resolve(undefined);
+    });
+    const { run } = invoke(new InMemoryMEditClient(), makeMo2(), false);
+    await run();
+
+    const validate = present(prompt.validate, 'the name prompt\'s validator');
+    expect(validate('MyPatch.esl')).toBe('This game has no light plugins');
+    expect(['A.esp', 'B.ESM'].map(validate)).toEqual([undefined, undefined]);
+  });
+
+  it('reports why, and opens no prompt, when mEdit cannot say whether the game has light plugins', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('getLightPluginsSupported', new Error('No load order has been loaded.'));
+
+    const { run, reporter } = invoke(client, makeMo2());
+    await run();
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not look up whether this game has light plugins.', detail: 'No load order has been loaded.' },
+    ]);
+  });
+
   // Rival: checking the name across the whole load order, which would also leave out Overwrite
   // and the other enabled mods.
   it('picks the enabled mods first, then Overwrite, leaving out the place that holds the name', async () => {
@@ -148,7 +182,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -160,7 +194,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(client.calls).toEqual([]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
@@ -179,7 +213,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" is gone, so "MyPatch.esp" was not created.', detail: undefined },
     ]);
@@ -197,9 +231,26 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.', detail: undefined },
+    ]);
+  });
+
+  // Rival: handing mEdit an empty folder for Overwrite before the first read lands.
+  it('refuses Overwrite while the value names no folder for it, and creates nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const mo2 = makeMo2();
+    mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, overwriteDir: undefined } };
+    showInputBox.mockResolvedValue('New.esp');
+    showQuickPick.mockImplementation((places: Place[]) => Promise.resolve(places.find((p) => p.label === 'Overwrite')));
+
+    const { run, reporter } = invoke(client, mo2);
+    await run();
+
+    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Overwrite has no folder yet, so "New.esp" was not created.', detail: undefined },
     ]);
   });
 
@@ -274,7 +325,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Creating a plugin needs an open MO2 instance workspace.', detail: undefined },
+      { severity: 'error', message: 'Creating a plugin needs an open instance workspace.', detail: undefined },
     ]);
     expect(showInputBox).not.toHaveBeenCalled();
   });
@@ -387,7 +438,7 @@ describe('pluginsCopyValueText', () => {
   const placedRef = new PlacedNode('Alpha.esp', {
     formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
   }, 'ModA');
-  const group = new RecordTypeNode('Alpha.esp', 'weap', 2, 'Weapon', 'ModA');
+  const group = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 2, displayName: 'Weapon' }), 'ModA');
   const mixed = [plugin, record, locked, unnamed, worldspace, cell, placedRef, group];
   const LINES = [
     'Alpha.esp', 'Gun [000800:Alpha.esp]', 'Fallout4.esm', '000801:Alpha.esp',

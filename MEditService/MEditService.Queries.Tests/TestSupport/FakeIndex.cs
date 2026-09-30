@@ -90,24 +90,22 @@ internal sealed class FakeReads(
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
 }
 
-/// <summary>The IQueryIndex door over a FakeReads: a settable status and filter, since a hand
+/// <summary>The IQueryIndex door over a FakeReads: a settable status and sequence, since a hand
 /// double states what it needs rather than computing it.</summary>
 internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IQueryIndex
 {
     public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
-    public string? FilterSql { get; set; }
-    public string? LastFilterSource { get; private set; }
+    public (string Sql, string Source)? ActiveFilter { get; private set; }
+    public long Sequence { get; set; }
     public GameRelease? LastRebuildRelease { get; private set; }
     public string? LastRebuildInstanceRoot { get; private set; }
     public IRecordReads RequireReads() => reads;
 
-    public void SetFilter(string sql, string source)
-    {
-        FilterSql = sql;
-        LastFilterSource = source;
-    }
+    public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => Task.FromResult(Sequence >= atLeast);
 
-    public void ClearFilter() => FilterSql = null;
+    public void SetFilter(string sql, string source) => ActiveFilter = (sql, source);
+
+    public void ClearFilter() => ActiveFilter = null;
 
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
@@ -122,4 +120,21 @@ internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null)
         var holder = FakeLoadOrder.Of(fixture.Release, [.. fixture.Plugins]);
         return (new FakeIndex(new FakeReads(fixture.OpenedPlugins, fixture.Rows)), holder);
     }
+}
+
+/// <summary>The Index over any reads, never projected and unfiltered. The reads' presence is what
+/// "no load order" means for the Index side.</summary>
+internal sealed class StubIndex(IRecordReads? reads) : IQueryIndex
+{
+    public LoadOrderStatus Status => LoadOrderStatus.None;
+    public (string Sql, string Source)? ActiveFilter => null;
+    public long Sequence => 0;
+    public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
+
+    public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw ReadsOnly();
+    public void SetFilter(string sql, string source) => throw ReadsOnly();
+    public void ClearFilter() => throw ReadsOnly();
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) => throw ReadsOnly();
+
+    private NotSupportedException ReadsOnly() => new($"{GetType().Name} answers reads only.");
 }

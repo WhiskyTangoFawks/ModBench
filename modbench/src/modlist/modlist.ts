@@ -1,235 +1,128 @@
-// modlist.txt gesture commands (ADR-0015 invariant 2): a free function per gesture, taking the
-// instance root, the profile and its own inputs, returning applied or a refusal. No class,
-// no interface, no base type.
-
-import {
-  deleteSeparatorInText,
-  insertModAtWinningEnd,
-  modNameKey,
-  insertSeparatorAtIndexInText,
-  moveModsInText,
-  moveSeparatorsInText,
-  parseModlist,
-  removeModFromText,
-  renameSeparatorInText,
-  separatorModName,
-  setEnabledInText,
-  unlistedModNames,
-  type ModlistEntry,
-  type MovePlace,
-  type OrderEnd,
-  type SeparatorsPlace,
-} from '../mo2Codecs/modlistText';
-import { setUninstalledInText } from '../mo2Codecs/downloads';
-import {
-  downloadFile, mo2FolderName, modDir, modFolderName, modlistFile, modsDir, separatorDir,
-  separatorFolderName,
-} from '../instanceAdapter/layout';
-import { ensureDir, exists, get, listFolders, putIfChanged, rename } from '../instanceAdapter/files';
-import { spliceDownloadMeta } from '../instanceAdapter/downloadMeta';
-import { present } from '../ports/present';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
+import {
+  entryNotFound, newModNameRefusal, type DecideModOrder, type EntryRef, type InstanceAdapter, type ModFolder, type ModlistEntry,
+  type ModOrderChange, type MovePlace, type OrderEnd, type SeparatorsPlace,
+} from '../instanceAdapter/instanceAdapter';
 
-/** `wrote` is false when the gesture was already true of the file: a command that changes no
- *  byte writes none, so it never fires the modlist.txt watcher. */
+/** What a modlist command reaches the instance through. */
+export interface ModlistAccess {
+  readonly adapter: InstanceAdapter;
+}
+
+/** `wrote` is false when the gesture was already true of mod order. */
 export type ModlistCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
 
-// The one splice point every verb below goes through. A thrown "not found" becomes `refusal`
-// rather than an exception; unchanged text is not written, so a no-op never fires the watcher.
-async function spliceModlist(
-  instanceRoot: string,
-  profile: string,
-  transform: (text: string) => string | Promise<string>,
-): Promise<ModlistCommandResult> {
+async function changeModOrder(access: ModlistAccess, profile: string, decide: DecideModOrder): Promise<ModlistCommandResult> {
   try {
-    const { wrote } = await putIfChanged(modlistFile(instanceRoot, profile), transform);
+    const { wrote } = await access.adapter.changeModOrder(profile, decide);
     return { applied: true, wrote };
   } catch (err) {
     return refuse(err);
   }
 }
 
-/** A gesture over a selection, in one splice: each item landed or refused by name, or the whole
- *  selection refused once when modlist.txt cannot be read or written. */
+/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
+ *  selection refused once when mod order cannot be read or written. */
 export type ModlistSelectionResult =
   | { applied: true; outcome: SelectionOutcome<string> }
   | { applied: false; refusal: string };
 
-type EntryKind = 'mod' | 'separator';
+type EntryKind = EntryRef['kind'];
 
-// Read inside the write lock, so an item gone since the view last rendered is refused by name
-// while the rest land in the same write.
-async function spliceSelection(
-  instanceRoot: string, profile: string, kind: EntryKind, names: readonly string[],
-  transform: (text: string, found: readonly string[]) => string,
+// A command names an entry by the name the value listed it under.
+const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
+  order.some((e) => e.kind === entry.kind && e.name === entry.name);
+
+// Decided from mod order as it stands when the changes land, so an item gone since the view last
+// rendered is refused by name while the rest land in the same write.
+async function changeSelection(
+  access: ModlistAccess, profile: string, kind: EntryKind, names: readonly string[],
+  changesFor: (found: readonly string[]) => readonly ModOrderChange[],
 ): Promise<ModlistSelectionResult> {
-  const noun = kind === 'mod' ? 'Mod' : 'Separator';
-  let landed: string[] = [];
-  let refused: ItemRefusal<string>[] = [];
-  const outcome = await spliceModlist(instanceRoot, profile, (text) => {
-    const known = new Set(parseModlist(text).filter((e) => e.kind === kind).map((e) => e.name));
-    landed = names.filter((name) => known.has(name));
-    refused = names.filter((name) => !known.has(name))
-      .map((name) => ({ item: name, reason: `${noun} not found in modlist: ${name}` }));
-    return transform(text, landed);
+  let outcome: SelectionOutcome<string> = { landed: [], refused: [] };
+  const result = await changeModOrder(access, profile, (order) => {
+    const landed = names.filter((name) => isListed(order, { kind, name }));
+    const refused = names.filter((name) => !landed.includes(name)).map((name) => ({ item: name, reason: entryNotFound({ kind, name }) }));
+    outcome = { landed, refused };
+    return changesFor(landed);
   });
-  return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
+  return result.applied ? { applied: true, outcome } : result;
 }
 
-/** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one splice. */
+/** `modbench.mod.enable` / `modbench.mod.disable`, over the whole selection in one write. */
 export function setModsEnabled(
-  instanceRoot: string, profile: string, modNames: readonly string[], enabled: boolean,
+  access: ModlistAccess, profile: string, modNames: readonly string[], enabled: boolean,
 ): Promise<ModlistSelectionResult> {
-  return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
-    found.reduce((acc, name) => setEnabledInText(acc, name, enabled), text));
+  return changeSelection(access, profile, 'mod', modNames, (found) =>
+    found.map((mod) => ({ kind: 'enable', mod, enabled })));
 }
 
-export type { MovePlace, OrderEnd, SeparatorsPlace } from '../mo2Codecs/modlistText';
+export type { MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter/instanceAdapter';
 
 /** `modbench.mod.move` over mods (mods.md, Pickers, Move): they land as one block, in their own
  *  order, at the `end` of the place. A separator or mod that has gone refuses the whole move. */
 export function moveMods(
-  instanceRoot: string, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
+  access: ModlistAccess, profile: string, modNames: readonly string[], place: MovePlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
-  return spliceSelection(instanceRoot, profile, 'mod', modNames, (text, found) =>
-    moveModsInText(text, found, place, end));
+  return changeSelection(access, profile, 'mod', modNames, (found) => [{ kind: 'moveMods', mods: found, place, end }]);
 }
 
 /** `modbench.mod.move` over separators (mods.md, Pickers, Move): each brings every mod it holds,
  *  and they land on the `end` side of the place. A target that has gone refuses the whole move. */
 export function moveSeparators(
-  instanceRoot: string, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
+  access: ModlistAccess, profile: string, separatorNames: readonly string[], place: SeparatorsPlace, end: OrderEnd,
 ): Promise<ModlistSelectionResult> {
-  return spliceSelection(instanceRoot, profile, 'separator', separatorNames, (text, found) =>
-    moveSeparatorsInText(text, found, place, end));
+  return changeSelection(access, profile, 'separator', separatorNames, (found) =>
+    [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
-
-/** How MO2 compares mod and separator names: without case. */
-export { modNameKey };
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 
-/** Why `requested` cannot name a separator among `entries`, or `undefined` when it can. Its name
- *  is the one MO2 would give its folder, and `own` is the name of the separator being renamed. */
-export function separatorNameRefusal(
-  entries: readonly Pick<ModlistEntry, 'kind' | 'name'>[], requested: string, own?: string,
-): string | undefined {
-  const name = mo2FolderName(requested);
-  if (!name) return `Not a valid separator name: "${requested}"`;
-  const key = modNameKey(name);
-  const isOwn = own !== undefined && modNameKey(own) === key;
-  const clashes = !isOwn && entries.some((e) => e.kind === 'separator' && modNameKey(e.name) === key);
-  return clashes ? SEPARATOR_NAME_CLASH : undefined;
+/** Why `requested` cannot name a separator, or `undefined` when it can: the profile's mod order
+ *  lists one of that name, or a folder holds one, matched as the instance matches names. `own`, the
+ *  separator being renamed, is no clash. */
+export async function separatorNameRefusal(
+  access: ModlistAccess, profile: string, requested: string, own?: string,
+): Promise<string | undefined> {
+  const listed = await access.adapter.orderEntry(profile, { kind: 'separator', name: requested });
+  if (listed !== undefined && listed.name !== own) return SEPARATOR_NAME_CLASH;
+  const holding = await access.adapter.entryFolder({ kind: 'separator', name: requested });
+  if (holding === undefined) return undefined;
+  const ownFolder = own === undefined ? undefined : await access.adapter.entryFolder({ kind: 'separator', name: own });
+  return ownFolder?.path === holding.path ? undefined : SEPARATOR_NAME_CLASH;
 }
 
-function refuseSeparatorName(text: string, requested: string, own?: string): void {
-  const refusal = separatorNameRefusal(parseModlist(text), requested, own);
-  if (refusal !== undefined) throw new Error(refusal);
-}
-
-const folderOfFiltered = (instanceRoot: string, name: string): string =>
-  present(separatorDir(instanceRoot, name), `the folder of the filtered separator name "${name}"`);
-
-// A separator gesture writes its line, then makes or renames its folder. Until it is done, mod
-// sync leaves the folders it names alone: it neither drops their lines nor adds lines for them.
-const foldersInGesture = new Map<string, number>();
-const gestureKey = (instanceRoot: string, folder: string): string => modDir(instanceRoot, modNameKey(folder));
-
-async function whileInGesture<T>(
-  instanceRoot: string, folders: readonly (string | undefined)[], gesture: () => Promise<T>,
-): Promise<T> {
-  const held = folders.filter((f): f is string => f !== undefined).map((f) => gestureKey(instanceRoot, f));
-  for (const f of held) foldersInGesture.set(f, (foldersInGesture.get(f) ?? 0) + 1);
-  try {
-    return await gesture();
-  } finally {
-    for (const f of held) {
-      const left = (foldersInGesture.get(f) ?? 1) - 1;
-      if (left === 0) foldersInGesture.delete(f);
-      else foldersInGesture.set(f, left);
-    }
-  }
+// The first index of the run of mods directly on the winning side of the separator at `at`.
+function groupStartOf(order: readonly ModlistEntry[], at: number): number {
+  let start = at;
+  while (start > 0 && order[start - 1]?.kind === 'mod') start--;
+  return start;
 }
 
 /** Insert a new enabled separator next to the anchor (mods.md, Add separator): on a mod, directly
  *  after it; on a separator, before its own group's winning-most member. */
-export async function insertSeparator(
-  instanceRoot: string, profile: string, requested: string, anchor: Pick<ModlistEntry, 'kind' | 'name'>,
+export function insertSeparator(
+  access: ModlistAccess, profile: string, requested: string, anchor: EntryRef,
 ): Promise<ModlistCommandResult> {
-  const name = mo2FolderName(requested);
-  return whileInGesture(instanceRoot, [separatorFolderName(name)], () =>
-    insertSeparatorLineThenFolder(instanceRoot, profile, requested, name, anchor));
-}
-
-async function insertSeparatorLineThenFolder(
-  instanceRoot: string, profile: string, requested: string, name: string, anchor: Pick<ModlistEntry, 'kind' | 'name'>,
-): Promise<ModlistCommandResult> {
-  const line = await spliceModlist(instanceRoot, profile, (text) => {
-    refuseSeparatorName(text, requested);
-    const entries = parseModlist(text);
-    const entryIdx = entries.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
-    if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
-    const anchorEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
-    let afterIndex = entryIdx;
-    if (anchorEntry.kind === 'separator') {
-      let groupStart = entryIdx;
-      for (let i = entryIdx - 1; i >= 0; i--) {
-        const entry = entries[i];
-        if (!entry || entry.kind === 'separator') break;
-        groupStart = i;
-      }
-      afterIndex = groupStart - 1;
-    }
-    return insertSeparatorAtIndexInText(text, name, afterIndex);
+  return changeModOrder(access, profile, (order) => {
+    const at = order.findIndex((e) => e.kind === anchor.kind && e.name === anchor.name);
+    if (at === -1) throw new Error(`Entry not found in modlist: ${anchor.name}`);
+    const afterIndex = anchor.kind === 'separator' ? groupStartOf(order, at) - 1 : at;
+    return [{ kind: 'addSeparator', separator: requested, afterIndex }];
   });
-  return thenFolder(instanceRoot, profile, line, () => ensureDir(folderOfFiltered(instanceRoot, name)),
-    (text) => deleteSeparatorInText(text, name));
-}
-
-// A name is judged against modlist.txt as it is at write time (mods.md, Add separator), so the
-// line is written before the folder, and a folder that then fails takes its line back.
-async function thenFolder(
-  instanceRoot: string, profile: string, line: ModlistCommandResult,
-  folder: () => Promise<void>, undoLine: (text: string) => string,
-): Promise<ModlistCommandResult> {
-  if (!line.applied) return line;
-  try {
-    await folder();
-    return line;
-  } catch (err) {
-    const undone = await spliceModlist(instanceRoot, profile, undoLine);
-    const reason = errorMessage(err);
-    return { applied: false, refusal: undone.applied ? reason : `${reason}; its modlist.txt line could not be put back: ${undone.refusal}` };
-  }
 }
 
 /** Rename a separator in place, and its folder with it. */
-export async function renameSeparator(
-  instanceRoot: string, profile: string, oldName: string, requested: string,
+export function renameSeparator(
+  access: ModlistAccess, profile: string, oldName: string, requested: string,
 ): Promise<ModlistCommandResult> {
-  const newName = mo2FolderName(requested);
-  const oldFolder = separatorDir(instanceRoot, oldName);
-  return whileInGesture(instanceRoot, [separatorFolderName(oldName), separatorFolderName(newName)], async () => {
-    const line = await spliceModlist(instanceRoot, profile, (text) => {
-      refuseSeparatorName(text, requested, oldName);
-      return renameSeparatorInText(text, oldName, newName);
-    });
-    return thenFolder(instanceRoot, profile, line, async () => {
-      if (oldFolder !== undefined && await exists(oldFolder)) {
-        await rename(oldFolder, folderOfFiltered(instanceRoot, newName));
-      }
-    }, (text) => renameSeparatorInText(text, newName, oldName));
-  });
+  return changeModOrder(access, profile, () => [{ kind: 'renameSeparator', from: oldName, to: requested }]);
 }
-
-// Each listed name by its key, so a name asked for in another case finds the line's own.
-const entryNamesIn = (text: string, kind: EntryKind): ReadonlyMap<string, string> =>
-  new Map(parseModlist(text).filter((e) => e.kind === kind).map((e) => [modNameKey(e.name), e.name]));
 
 /** A landed entry. `lineRefusal` is set when its folder reached the trash but its line then
  *  could not go — the part that failed, not a refusal (common.md, Reporting). */
@@ -242,42 +135,34 @@ type TrashThenUnlistResult =
   | { applied: true; outcome: SelectionOutcome<TrashedEntry> }
   | { applied: false; refusal: string };
 
+const dropOf = (entry: EntryRef): ModOrderChange =>
+  (entry.kind === 'mod' ? { kind: 'dropMod', mod: entry.name } : { kind: 'dropSeparator', separator: entry.name });
+
 // `deleteSeparators` and `uninstallMods` share this shape: trash each entry's folder before its
 // line. An entry never trashed refuses outright on a line failure; a trashed one still lands,
 // carrying the failure rather than folding it into a refusal.
 async function trashThenUnlist(
-  instanceRoot: string, profile: string, kind: EntryKind, names: readonly string[],
-  folderOf: (name: string) => string | undefined, trash: MoveToTrash,
-  removeLine: (text: string, name: string) => string,
+  access: ModlistAccess, profile: string, kind: EntryKind, names: readonly string[], trash: MoveToTrash,
 ): Promise<TrashThenUnlistResult> {
-  const noun = kind === 'mod' ? 'Mod' : 'Separator';
-  let listed: ReadonlyMap<string, string>;
+  let order: readonly ModlistEntry[];
   try {
-    listed = entryNamesIn(await get(modlistFile(instanceRoot, profile)), kind);
+    order = await access.adapter.modOrder(profile);
   } catch (err) {
     return refuse(err);
   }
-  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !listed.has(modNameKey(name)))
-    .map((name) => ({ item: { name }, reason: `${noun} not found in modlist: ${name}` }));
+  const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(order, { kind, name }))
+    .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
-  for (const name of names.filter((n) => listed.has(modNameKey(n)))) {
-    const folder = folderOf(present(listed.get(modNameKey(name)), `the listed name of ${name}`));
+  for (const name of names.filter((n) => isListed(order, { kind, name: n }))) {
     try {
-      if (folder !== undefined && await exists(folder)) {
-        await trash(folder);
-        trashed.add(name);
-      }
+      if (await access.adapter.trashEntryFolder({ kind, name }, trash)) trashed.add(name);
       toUnlist.push(name);
     } catch (err) {
       refused.push({ item: { name }, reason: errorMessage(err) });
     }
   }
-  const lines = await spliceModlist(instanceRoot, profile, (text) => {
-    const stillListed = entryNamesIn(text, kind);
-    return toUnlist.flatMap((name) => stillListed.get(modNameKey(name)) ?? [])
-      .reduce((acc, listedName) => removeLine(acc, listedName), text);
-  });
+  const lines = await changeModOrder(access, profile, () => toUnlist.map((name) => dropOf({ kind, name })));
   if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => ({ name })), refused } };
   return {
     applied: true,
@@ -297,21 +182,9 @@ export type DeleteSeparatorsResult = TrashThenUnlistResult;
  *  before its line: a refused trash writes nothing for that separator (commands.md, *A failed
  *  gesture writes nothing*). */
 export function deleteSeparators(
-  instanceRoot: string, profile: string, names: readonly string[], trash: MoveToTrash,
+  access: ModlistAccess, profile: string, names: readonly string[], trash: MoveToTrash,
 ): Promise<DeleteSeparatorsResult> {
-  return trashThenUnlist(
-    instanceRoot, profile, 'separator', names,
-    (name) => separatorDir(instanceRoot, name), trash,
-    (text, name) => deleteSeparatorInText(text, name),
-  );
-}
-
-// A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no
-// archive is one MO2 never writes. `installed` stays, as MO2 leaves it — the codec resolves the
-// keys' precedence.
-async function unmarkDownload(downloadsDir: string, name: string): Promise<void> {
-  if (!(await exists(downloadFile(downloadsDir, name)))) return;
-  await spliceDownloadMeta(downloadsDir, name, setUninstalledInText);
+  return trashThenUnlist(access, profile, 'separator', names, trash);
 }
 
 /** A mod handed to `uninstallMods`: its own name, and the downloaded file it was installed from,
@@ -321,8 +194,9 @@ export interface ModToUninstall {
   archiveFilename?: string;
 }
 
-/** A landed mod. `markRefusal` is set when its `.meta` could not be marked uninstalled — the
- *  uninstall still stands. Never set alongside `lineRefusal`: a line not truly gone marks nothing. */
+/** A landed mod. `markRefusal` is set when its downloaded file could not be marked uninstalled,
+ *  and the uninstall still stands. A line not truly gone marks nothing, so never beside
+ *  `lineRefusal`. */
 export interface UninstalledMod extends TrashedEntry {
   markRefusal?: string;
 }
@@ -332,39 +206,25 @@ export type UninstallModsResult =
   | { applied: false; refusal: string };
 
 /** `modbench.mod.uninstall` over the selection: each mod's folder to the trash, then its line,
- *  then its downloaded file marked (mods.md, Reporting, story 4). An unresolved `downloadsDir`
- *  skips the mark; its reason was already logged once. */
+ *  then its downloaded file marked unless that file is gone (mods.md, Reporting, story 4). */
 export async function uninstallMods(
-  instanceRoot: string, profile: string, mods: readonly ModToUninstall[], downloadsDir: string | undefined,
-  trash: MoveToTrash,
+  access: ModlistAccess, profile: string, mods: readonly ModToUninstall[], trash: MoveToTrash,
 ): Promise<UninstallModsResult> {
   const archiveOf = new Map(mods.map((m) => [m.name, m.archiveFilename] as const));
-  const result = await trashThenUnlist(
-    instanceRoot, profile, 'mod', mods.map((m) => m.name),
-    (name) => {
-      const folder = modFolderName(name);
-      return folder === undefined ? undefined : modDir(instanceRoot, folder);
-    }, trash,
-    (text, name) => removeModFromText(text, name),
-  );
+  const result = await trashThenUnlist(access, profile, 'mod', mods.map((m) => m.name), trash);
   if (!result.applied) return result;
   const landed: UninstalledMod[] = [];
   for (const entry of result.outcome.landed) {
-    // The line is not truly gone, so its download is left for a later, clean uninstall to mark.
-    if (entry.lineRefusal !== undefined) {
+    const archiveFilename = archiveOf.get(entry.name);
+    if (entry.lineRefusal !== undefined || archiveFilename === undefined) {
       landed.push(entry);
       continue;
     }
-    const archiveFilename = archiveOf.get(entry.name);
-    if (archiveFilename === undefined || downloadsDir === undefined) {
-      landed.push({ name: entry.name });
-      continue;
-    }
     try {
-      await unmarkDownload(downloadsDir, archiveFilename);
-      landed.push({ name: entry.name });
+      await access.adapter.markDownloadedFile(archiveFilename, 'Uninstalled');
+      landed.push(entry);
     } catch (err) {
-      landed.push({ name: entry.name, markRefusal: errorMessage(err) });
+      landed.push({ ...entry, markRefusal: errorMessage(err) });
     }
   }
   return { applied: true, outcome: { landed, refused: result.outcome.refused } };
@@ -376,88 +236,58 @@ export type CreateEmptyModResult =
   | { applied: true; wrote: boolean; lineRefusal?: string }
   | { applied: false; refusal: string };
 
-// Matches install's modNameCollisionRefusal word for word (mods.md: one wording for create and
-// install). Not imported: modlist and install are sibling Core boxes with no reference between
-// them in target-architecture-references.d2.
-function nameCollisionRefusal(name: string): string {
-  return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
-}
-
-/** A folder under `mods/` plus a disabled modlist.txt line — nothing else. `modFolders` is the
- *  value's own listing of `mods/`, handed in rather than read here, and a name already among
- *  them is refused. */
-export async function createEmptyMod(
-  instanceRoot: string, profile: string, name: string, modFolders: readonly string[],
-): Promise<CreateEmptyModResult> {
-  const folder = modFolderName(name);
-  if (folder === undefined) return { applied: false, refusal: `Not a valid mod name: "${name}"` };
-  if (modFolders.some((f) => modNameKey(f) === modNameKey(folder))) {
-    return { applied: false, refusal: nameCollisionRefusal(name) };
+/** A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
+ *  folder already holds is refused. */
+export async function createEmptyMod(access: ModlistAccess, profile: string, name: string): Promise<CreateEmptyModResult> {
+  try {
+    const refusal = await newModNameRefusal(access.adapter, name);
+    if (refusal !== undefined) return { applied: false, refusal };
+    await access.adapter.createModFolder(name);
+  } catch (err) {
+    return refuse(err);
   }
-  await ensureDir(modDir(instanceRoot, folder));
-  // Read inside the write lock, so a line mod sync already added for this name is left alone
-  // rather than doubled.
-  const line = await spliceModlist(instanceRoot, profile, (text) => {
-    const alreadyListed = parseModlist(text).some((e) => e.kind === 'mod' && modNameKey(e.name) === modNameKey(name));
-    return alreadyListed ? text : insertModAtWinningEnd(text, name);
-  });
+  const line = await changeModOrder(access, profile, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
   if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };
-  return { applied: true, wrote: line.wrote };
+  return line;
 }
 
 export type ModSyncResult =
   | { applied: true; added: string[]; dropped: string[] }
   | { applied: false; refusal: string };
 
-// What a line carries after its prefix: a mod's name, or a separator's `<name>_separator`.
-const lineNameOf = (entry: ModlistEntry): string =>
-  (entry.kind === 'mod' ? entry.name : separatorModName(entry.name));
+const NO_MOD_FOLDERS = 'there is no folder for mods';
 
-// A separator whose name MO2 never gives a folder, or a mod whose name escapes mods/, names none:
-// MO2 has no mod by that name, so its line goes (ADR-0017), and no path is built from it.
-const listedFolderOf = (entry: ModlistEntry): string | undefined =>
-  (entry.kind === 'mod' ? modFolderName(entry.name) : separatorFolderName(entry.name));
+const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry.name : `${entry.name} (separator)`);
 
-async function keepWhere<T>(items: readonly T[], keep: (item: T) => Promise<boolean>): Promise<T[]> {
-  const kept = await Promise.all(items.map(keep));
-  return items.filter((_, i) => kept[i]);
-}
-
-/** `modbench.mod.sync`: a disabled line for each folder with none, and each line whose folder is
- *  gone dropped, in one write; `dropped` names those lines. No `mods/` to list is refused. */
-export async function syncMods(
-  instanceRoot: string, profile: string, modFolders: readonly string[] | undefined,
-): Promise<ModSyncResult> {
-  if (modFolders === undefined) {
-    return { applied: false, refusal: `${modsDir(instanceRoot)} does not exist` };
-  }
-  const listed = new Set(modFolders.map(modNameKey));
-  const inGesture = (folder: string) => foldersInGesture.has(gestureKey(instanceRoot, folder));
+/** `modbench.mod.sync`, in one write checked against the folders as they stand when it lands: a
+ *  disabled line for each of `modFolders` with none, and each line no folder holds dropped.
+ *  `added` and `dropped` describe those entries. */
+export async function syncMods(access: ModlistAccess, profile: string, modFolders: readonly ModFolder[]): Promise<ModSyncResult> {
+  const toSync = new Set(modFolders.map((folder) => folder.path));
   let added: string[] = [];
   let dropped: string[] = [];
-  const outcome = await spliceModlist(instanceRoot, profile, async (text) => {
-    // Matched by key, as MO2 matches a line to its folder, whatever case the disk keeps.
-    // A mods/ that cannot be listed, gone included, refuses the sync (mods.md, Reporting,
-    // story 2).
-    const onDiskNow = new Set((await listFolders(modsDir(instanceRoot))).map(modNameKey));
-    const onDisk = (folder: string) => Promise.resolve(onDiskNow.has(modNameKey(folder)));
-    // Under the write lock: each value lags the disk and the last write, so only the text about
-    // to be spliced and the disk as it is now say what is still to do.
-    const entries = parseModlist(text);
-    const gone = await keepWhere(entries, async (entry) => {
-      const folder = listedFolderOf(entry);
-      if (folder === undefined) return true;
-      return !listed.has(modNameKey(folder)) && !inGesture(folder) && !(await onDisk(folder));
-    });
-    added = await keepWhere(unlistedModNames([...modFolders], entries),
-      async (folder) => !inGesture(folder) && onDisk(folder));
-    dropped = gone.map(lineNameOf);
-    // insertModAtWinningEnd always lands its new line above whatever is currently first, so
-    // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
-    const withoutGone = gone.reduce((out, entry) => (entry.kind === 'separator'
-      ? deleteSeparatorInText(out, entry.name)
-      : removeModFromText(out, entry.name)), text);
-    return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);
+  const outcome = await changeModOrder(access, profile, (order, folders) => {
+    if (folders === undefined) throw new Error(NO_MOD_FOLDERS);
+    const gone = order.filter((entry) => folders.holding(entry) === undefined);
+    const held = new Set(order.flatMap((entry) => folders.holding(entry)?.path ?? []));
+    const unlisted = folders.all.filter((folder) => toSync.has(folder.path) && !held.has(folder.path))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    added = unlisted.map(describeEntry);
+    dropped = gone.map(describeEntry);
+    // Each line added lands above the one before it, so adding in reverse leaves the batch in
+    // order from the winning end.
+    return [
+      ...gone.map(dropOf),
+      ...[...unlisted].reverse().map((folder): ModOrderChange => ({ kind: 'addAtWinningEnd', entry: { kind: folder.kind, name: folder.name } })),
+    ];
   });
   return outcome.applied ? { applied: true, added, dropped } : outcome;
+}
+
+/** Mod sync on a landed value's own profile and mod folders. */
+export type ModSyncRun = (value: { readonly activeProfile: string; readonly modFolders: readonly ModFolder[] | undefined }) => Promise<ModSyncResult>;
+
+/** `syncMods` bound to one instance. */
+export function modSyncOver(access: ModlistAccess): ModSyncRun {
+  return (value) => syncMods(access, value.activeProfile, value.modFolders ?? []);
 }

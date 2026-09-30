@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { switchProfile } from '../profile';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 const INI = 'ModOrganizer.ini';
 
@@ -20,7 +25,7 @@ describe('switchProfile', () => {
   it('repoints ModOrganizer.ini and nothing else', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(root, 'Secondary', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Secondary', PROFILES);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await iniText(root)).toContain('Secondary');
@@ -32,7 +37,7 @@ describe('switchProfile', () => {
   it('writes nothing when the profile is already the selected one', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(root, 'Default', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Default', PROFILES);
 
     expect(outcome).toEqual({ applied: true, wrote: false });
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -43,7 +48,7 @@ describe('switchProfile', () => {
   it('refuses a name the value does not list, leaving the selection where it was', async () => {
     const before = await iniText(root);
 
-    const outcome = await switchProfile(root, 'No Such Profile', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'No Such Profile', PROFILES);
 
     expect(outcome).toEqual({ applied: false, refusal: 'No such profile: No Such Profile' });
     expect(await iniText(root)).toBe(before);
@@ -54,7 +59,7 @@ describe('switchProfile', () => {
   it('refuses on the list it is handed, never on what it finds under profiles/', async () => {
     const before = await iniText(root);
 
-    const outcome = await switchProfile(root, 'Secondary', ['Default']);
+    const outcome = await switchProfile(accessTo(root), 'Secondary', ['Default']);
 
     expect(outcome).toEqual({ applied: false, refusal: 'No such profile: Secondary' });
     expect(await iniText(root)).toBe(before);
@@ -63,7 +68,7 @@ describe('switchProfile', () => {
   it('refuses rather than throwing when ModOrganizer.ini cannot be read', async () => {
     await rm(join(root, INI));
 
-    const outcome = await switchProfile(root, 'Secondary', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Secondary', PROFILES);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/ENOENT/);
@@ -71,8 +76,8 @@ describe('switchProfile', () => {
 
   it('serializes concurrent switches — the last one issued is the selected one', async () => {
     const [first, second] = await Promise.all([
-      switchProfile(root, 'Secondary', PROFILES),
-      switchProfile(root, 'Default', PROFILES),
+      switchProfile(accessTo(root), 'Secondary', PROFILES),
+      switchProfile(accessTo(root), 'Default', PROFILES),
     ]);
 
     expect(first).toEqual({ applied: true, wrote: true });

@@ -1,12 +1,17 @@
 // Uninstall is a multi-file writer, so the composition risk is at its seams: one leg
 // succeeding while silently touching something it should not.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from './fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { uninstallMods } from '../../modlist/modlist';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
+import { accessTo, readModlistEntries } from './adapterOver';
 
 const PROFILE = 'Default';
 
@@ -28,8 +33,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods trashes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMods(
-      dir, PROFILE, [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], join(dir, 'downloads'), trash);
+    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -45,7 +49,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   it('uninstallMods marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
     const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMods(dir, PROFILE, [{ name: 'Unofficial Fallout 4 Patch' }], join(dir, 'downloads'), trash);
+    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Unofficial Fallout 4 Patch' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
@@ -56,7 +60,7 @@ describe('mod lifecycle corpus (uninstall)', () => {
   // or writes somewhere unexpected with none named, instead of skipping silently.
   it('uninstallMods on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await uninstallMods(dir, PROFILE, [{ name: 'Harder VATS' }], join(dir, 'downloads'), trash);
+    await uninstallMods(accessTo(dir), PROFILE, [{ name: 'Harder VATS' }], trash);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Harder VATS/meta.ini', MODLIST]));

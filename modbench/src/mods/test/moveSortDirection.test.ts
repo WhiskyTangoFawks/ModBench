@@ -33,8 +33,8 @@ import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } from '../ModListProvider';
 import { registerModMoveCommand } from '../modManagementCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
-import { resolvesNoDownloads } from '../../test/mo2/downloadsUnresolved';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { accessTo, adapterOver, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
 
 type RowName = { kind: 'mod' | 'separator'; name: string };
 
@@ -67,17 +67,16 @@ async function shownAfter(
 ): Promise<string[]> {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
-    instanceRoot: root, log: () => {}, logReadFailure: () => {},
-    resolveGameDirectory: resolvesNotFound,
-    resolveDownloadsDirectory: resolvesNoDownloads,
+    log: () => {}, logReadFailure: () => {},
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
   });
-  const provider = new ModListProvider({ instance, instanceRoot: root });
+  const provider = new ModListProvider({ instance, access: accessTo(root) });
   try {
     await instance.refresh();
     provider.setViewDirection(direction);
     registerCommand.mockClear();
     const reporter = recordingReporter();
-    registerModMoveCommand(root, instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter);
+    registerModMoveCommand(accessTo(root), instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter);
     await act(provider, (await shownRows(provider)).rows);
     expect(reporter.reports).toEqual([]);
     await instance.refresh();

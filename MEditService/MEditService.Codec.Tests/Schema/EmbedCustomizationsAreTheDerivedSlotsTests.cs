@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using MEditService.Codec.Serialization;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Customizations;
 
@@ -17,7 +18,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 
         // A build with no customization discovered would agree with an empty derivation.
         Assert.NotEmpty(customized);
-        Assert.Equal(ContainerChildFields.EmbeddedSlots.Order().ToList(), customized);
+        Assert.Equal(ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4).Order().ToList(), customized);
     }
 
     // Every ICustomize<T> in the serialization folder, played back through a builder that records the

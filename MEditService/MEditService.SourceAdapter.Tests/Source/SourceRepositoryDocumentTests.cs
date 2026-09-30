@@ -242,7 +242,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     {
         Track(
             new TreeFile(
-                Path.Combine("source", PluginName, "RecordData.json"),
+                Path.Combine("plugin-source", PluginName, "RecordData.json"),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));
         var repository = RequireOpened();
 

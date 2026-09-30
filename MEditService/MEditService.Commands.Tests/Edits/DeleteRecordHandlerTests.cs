@@ -202,7 +202,7 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(RecordEditRefusal.HeaderDeleteNotSupported, refused.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
         Assert.True(
-            Directory.Exists(Path.Combine(mod.ModFolder, "source", mod.ActualPluginName)),
+            Directory.Exists(Path.Combine(mod.ModFolder, "plugin-source", mod.ActualPluginName)),
             "the plugin's own tracked source tree must survive");
         Assert.NotNull(mod.Document(headerFormKey));
     }

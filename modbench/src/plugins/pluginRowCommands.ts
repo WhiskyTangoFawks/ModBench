@@ -3,7 +3,7 @@ import { isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcom
 import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
@@ -32,7 +32,7 @@ function rowName(row: PluginAddress): string {
 type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
 
 // plugins.md, Track, story 2: what each preset's repository tracks.
-const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps plugin-source/ and .gitignore' };
 const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
 
@@ -87,7 +87,7 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
+      // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
       if (result.landed.length > 0) await onTracked();
       const [only, ...more] = result.landed;
       if (result.refused.length > 0) report(result);
@@ -251,14 +251,20 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
-/** ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native
- *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
- *  narrows the native UI, never blocks reading or editing. */
-export async function registerHeldTrackedRepositories(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
-  setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
-  isTracked: IsTracked, pluginFolder: PluginFolder,
-): Promise<void> {
+/** Where the tracked repositories come from, where they are held, and where a failure is told. */
+export interface TrackedRepositories {
+  readonly client: Pick<MEditClient, 'getPlugins'>;
+  readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
+  readonly setPluginRepositories: (repos: Map<string, MinimalRepository>) => void;
+  readonly trackedFolderOf: TrackedFolderOf;
+}
+
+// ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native Source
+// Control group. A logged no-op when `vscode.git` is unavailable: this only narrows the native UI,
+// never blocks reading or editing.
+async function registerHeldTrackedRepositories({
+  client, outputChannel, setPluginRepositories, trackedFolderOf,
+}: TrackedRepositories): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
     if (!gitExtension) {
@@ -269,13 +275,22 @@ export async function registerHeldTrackedRepositories(
     const gitApi = exports.getAPI(1);
 
     const plugins = await client.getPlugins();
-    const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
+    const folders = await trackedFoldersOf(plugins, trackedFolderOf);
     const folderRepositories = await registerTrackedRepositories(
-      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories, pluginFolder));
+      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
+    setPluginRepositories(pluginRepositoriesOf(folders, folderRepositories));
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
   }
+}
+
+/** A computed reconcile's notice, which a landed track gives too: tells the open record panels,
+ *  then registers each tracked mod's repository with `vscode.git`, once per notice. */
+export function conflictsComputedOver(announce: () => void, repositories: TrackedRepositories): () => Promise<void> {
+  return async () => {
+    announce();
+    await registerHeldTrackedRepositories(repositories);
+  };
 }
 
 /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the

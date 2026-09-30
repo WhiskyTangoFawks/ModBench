@@ -215,7 +215,7 @@ describe('what the Mods keys read off the selection', () => {
 
   it('open folder sees exactly one selected row that has a folder: a mod, or Overwrite', () => {
     expect(modsKeyContext([enabledMod], byRow).singleFolder).toBe(true);
-    expect(modsKeyContext([new OverwriteNode(0)], byRow).singleFolder).toBe(true);
+    expect(modsKeyContext([new OverwriteNode(0, 'MO2')], byRow).singleFolder).toBe(true);
     expect(modsKeyContext([group], byRow).singleFolder).toBe(false);
     expect(modsKeyContext([enabledMod, disabledMod], byRow).singleFolder).toBe(false);
     expect(modsKeyContext([], byRow).singleFolder).toBe(false);

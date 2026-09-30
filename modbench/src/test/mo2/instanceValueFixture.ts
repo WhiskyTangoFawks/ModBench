@@ -14,13 +14,15 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     plugins: [],
     downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
+    managerNames: { manager: 'MO2', modOrderFile: 'modlist.txt' },
+    gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     nexusSlug: 'fallout4',
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
     modStatuses: new Map(),
     overwriteFileCount: 0,
-    paths: { overwriteDir: '', downloadsDir: '', modDirs: new Map() },
+    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
     ...overrides,
   };
 }

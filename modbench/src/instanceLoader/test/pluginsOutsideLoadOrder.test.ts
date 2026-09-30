@@ -57,6 +57,13 @@ describe('findPluginsOutsideLoadOrder', () => {
     expect(findPluginsOutsideLoadOrder(index, [{ name: 'mixed.esp', origin: 'moda' }])).toEqual([]);
   });
 
+  // Rival: a key joining the two halves with a character a Linux folder or file name may hold.
+  it('never mistakes one (origin, filename) pair for another whose halves join to the same text', () => {
+    const index = indexOf({ 'A|B': ['C.esp'] });
+
+    expect(findPluginsOutsideLoadOrder(index, [{ name: 'B|C.esp', origin: 'A' }]).map((p) => p.origin)).toEqual(['A|B']);
+  });
+
   it('finds .esm and .esl plugins too', () => {
     const index = indexOf({ ModA: ['Master.esm', 'Light.esl'] });
 

@@ -1,6 +1,10 @@
 // Each test drives the real write path and asserts over the WHOLE instance tree that only the
 // files it names changed — the composition-level guarantee a per-format test cannot give.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from './fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -14,8 +18,9 @@ import {
   syncMods,
 } from '../../modlist/modlist';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, snapshotTree,
 } from './corpusFixture';
+import { accessTo, adapterOver, readModlistEntries } from './adapterOver';
 import type { Mod } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
@@ -39,7 +44,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   // meaning".
   it('setModsEnabled on a selection already in that state is a byte-identical no-op over the whole instance', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await setModsEnabled(dir, PROFILE, ['Unofficial Fallout 4 Patch'], true);
+    const outcome = await setModsEnabled(accessTo(dir), PROFILE, ['Unofficial Fallout 4 Patch'], true);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set());
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
@@ -49,8 +54,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   // mod refused by name while the other lands.
   it('setModsEnabled flips only the mods asked for that are not already in that state, touching only modlist.txt, in one write', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await setModsEnabled(
-      dir, PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
+    const outcome = await setModsEnabled(accessTo(dir), PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -68,7 +72,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveMods moves a mod to the winning end of mod order, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveMods(dir, PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
+    await moveMods(accessTo(dir), PROFILE, ['ENBoost - 12k'], { kind: 'modOrder' }, 'winning');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -78,7 +82,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('insertSeparator adds a separator line and its empty mods/ folder, touching no other file', async () => {
     const before = await snapshotTree(dir);
-    await insertSeparator(dir, PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
+    await insertSeparator(accessTo(dir), PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const after = await snapshotTree(dir);
     // An empty directory holds no files, so the folder is asserted on its own below.
     assertOnlyChanged(before, after, new Set([MODLIST]));
@@ -91,7 +95,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const OLD_META = 'mods/Unassigned (Modlist Development)_separator/meta.ini';
     const NEW_META = 'mods/Renamed QA Group_separator/meta.ini';
     const before = await snapshotTree(dir);
-    await renameSeparator(dir, PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
+    await renameSeparator(accessTo(dir), PROFILE, 'Unassigned (Modlist Development)', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST, OLD_META, NEW_META]));
 
@@ -104,7 +108,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   // real MO2 shape: a separator can outlive the folder MO2 once made for it).
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
-    await renameSeparator(dir, PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
+    await renameSeparator(accessTo(dir), PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -115,7 +119,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   it('deleteSeparators of a separator with no folder removes its line alone, and trashes nothing', async () => {
     const trashed: string[] = [];
     const before = await snapshotTree(dir);
-    const outcome = await deleteSeparators(dir, PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
+    const outcome = await deleteSeparators(accessTo(dir), PROFILE, ['Radfall - All-In-One Survival Overhaul'], (path) => {
       trashed.push(path);
       return Promise.resolve();
     });
@@ -134,7 +138,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const trashed: string[] = [];
     const modsBefore = (await readModlistEntries(dir)).filter((e) => e.kind === 'mod');
     const before = await snapshotTree(dir);
-    await deleteSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
+    await deleteSeparators(accessTo(dir), PROFILE, ['Unassigned (Modlist Development)'], async (path) => {
       trashed.push(path);
       await rm(path, { recursive: true });
     });
@@ -148,8 +152,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveMods regroups mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveMods(
-      dir, PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
+    await moveMods(accessTo(dir), PROFILE, ['Cracked and Smudged Pip-Boy Screen'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -160,7 +163,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('moveSeparators moves a separator with its mods, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    await moveSeparators(dir, PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
+    await moveSeparators(accessTo(dir), PROFILE, ['Unassigned (Modlist Development)'], { kind: 'separator', name: 'Radfall - All-In-One Survival Overhaul' }, 'losing');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
@@ -169,7 +172,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {
     const before = await snapshotTree(dir);
-    await createEmptyMod(dir, PROFILE, 'QA Empty Mod', await modFolderNames(dir));
+    await createEmptyMod(accessTo(dir), PROFILE, 'QA Empty Mod');
     const after = await snapshotTree(dir);
     // An empty directory holds no files, so the whole change is visible in modlist.txt.
     assertOnlyChanged(before, after, new Set([MODLIST]));
@@ -182,13 +185,13 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   // line. Rival: a sync that also writes into the folder it lists, or rewrites the entries it keeps.
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await syncMods(dir, PROFILE, await modFolderNames(dir));
+    const outcome = await syncMods(accessTo(dir), PROFILE, (await adapterOver(dir).modFolders())?.all ?? []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     expect(outcome).toEqual({
       applied: true, added: ['DragIn Manual Extract'],
-      dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul_separator'],
+      dropped: ['[NODELETE] Radfall', 'Radfall - All-In-One Survival Overhaul (separator)'],
     });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
     expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');

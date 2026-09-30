@@ -8,11 +8,22 @@ http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
 commands: @../target-architecture.medit_core.commands
 commands.label: Commands
+queries: @../target-architecture.medit_core.queries
+queries.label: Queries
 sourceadapter: @../target-architecture.medit_driven.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
+
+create: "create, on a plugin: the type pick first" {
+  editor -> client: "the record types the game can create" {class: query}
+  client -> http: question {class: query}
+  http -> queries: question {class: query}
+  queries -> http: "answer: the creatable record types" {class: query}
+  http -> client: answer {class: query}
+  client -> editor: the creatable record types {class: query}
+}
 
 editor -> client: "the gesture: the records and its Options" {class: edit}
 client -> http: envelope {class: edit}

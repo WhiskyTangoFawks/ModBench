@@ -12,8 +12,7 @@ import { Instance } from '../instanceLoader/instance';
 import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
-import { resolvesNoDownloads } from './mo2/downloadsUnresolved';
-import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import { accessTo, adapterOver, NO_DOWNLOADS } from './mo2/adapterOver';
 
 const PROFILE = 'Default';
 
@@ -39,12 +38,11 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
     await writeFile(join(dir, 'profiles', PROFILE, 'modlist.txt'), '+Existing Mod\r\n');
     await writeFile(join(dir, 'mods', 'Existing Mod', 'Base.esp'), 'plugin');
     await writeFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-    const resolveGameDirectory: GameDirectoryResolver = () =>
-      Promise.resolve({ kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') });
     instance = new Instance({
-      instanceRoot: dir,
-      resolveGameDirectory,
-      resolveDownloadsDirectory: resolvesNoDownloads,
+      adapter: adapterOver(dir, {
+        gameFolder: { kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') },
+        downloadedFiles: NO_DOWNLOADS,
+      }),
       log: () => {},
       logReadFailure: () => {},
     });
@@ -62,7 +60,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
 
     await instance.refresh();
     const { profile, provided, inData } = pluginSyncArguments(instance.value);
-    const synced = await syncPlugins(dir, profile, provided, inData, () => Promise.resolve([]));
+    const synced = await syncPlugins(accessTo(dir), profile, provided, inData, () => Promise.resolve([]));
 
     expect(synced).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     expect(await plugins()).toBe('*Base.esp\r\nNew.esp\r\n');

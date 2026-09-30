@@ -25,8 +25,8 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
         Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, "source", "Bad.esp")));
-        Assert.True(File.Exists(Path.Combine(_modFolder, "source", "C.esp", "npc_", "C.esp", "000001.json")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "Bad.esp")));
+        Assert.True(File.Exists(Path.Combine(_modFolder, "plugin-source", "C.esp", "npc_", "C.esp", "000001.json")));
         Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
@@ -92,18 +92,18 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal("theirs\n", File.ReadAllText(Path.Combine(_modFolder, ".gitignore")));
         Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
-        Assert.False(Directory.Exists(Path.Combine(_modFolder, "source")));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source")));
     }
 
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
-        ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null));
+        ([new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null));
 
     // The first file lands where the second needs a directory, so the write fails after some of the
     // plugin's files are already on disk.
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) UnwritableBaseline(string plugin) =>
         ([
-            new TreeFile($"source/{plugin}/npc_", "{}"u8.ToArray()),
-            new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
+            new TreeFile($"plugin-source/{plugin}/npc_", "{}"u8.ToArray()),
+            new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
         ], new BaselineTrailers(plugin, null, null));
 
     private string[] SubjectsOnMain() =>

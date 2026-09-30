@@ -107,7 +107,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         var containers = new ContainerDocuments(release, _schemas);
         _pluginIngest = new PluginIngest(Connection, _logger, containers);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas, release);
         _sourceValidation = new SourceValidation(this, Connection, _logger);
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
@@ -1196,7 +1196,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
-        // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.
+        // This builder doesn't enforce invariant 1 itself; every live caller already passes both or
+        // neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,
             IReadOnlyList<string>? recordTypes = null, string? groupCondition = null)
@@ -1223,15 +1224,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             }
             if (search != null)
             {
-                // A FormKey-shaped query resolves against the exact stored form_key rather than an
-                // EditorID substring match; form_key values are stored via FormKey.ToString(), so
-                // round-tripping the query through TryFactory canonicalizes it.
+                // A FormKey-shaped query resolves against form_key rather than an EditorID substring
+                // match; form_key values are stored via FormKey.ToString(), so round-tripping the
+                // query through TryFactory canonicalizes its hex id.
                 if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
                 {
-                    // Case-insensitive: FormKey.TryFactory canonicalizes the hex id but does not
-                    // re-case the ModKey (plugin) portion against known data, so a user-typed
-                    // lowercase plugin name would otherwise miss an exact case-sensitive match.
-                    conditions.Add($"LOWER(form_key) = LOWER(${values.Count + 1})");
+                    conditions.Add($"form_key = ${values.Count + 1}");
                     values.Add(formKey.ToString());
                 }
                 else

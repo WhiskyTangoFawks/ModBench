@@ -2,23 +2,20 @@
 // plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
 // prepended by the backend, never listed here.
 
-import { basename, dirname, join } from 'node:path';
-import type { ModlistEntry } from '../mo2Codecs/modlistText';
-import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
-import { fileInFolder, isInFolder, overwriteDir } from '../instanceAdapter/layout';
-import { isPluginFile } from '../instanceAdapter/pluginFile';
+import { basename, dirname, join, sep } from 'node:path';
+import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
+import {
+  isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
+} from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import { pluginSlots } from '../mo2Codecs/pluginsText';
-import { listDir } from '../instanceAdapter/files';
-import type { GameFolder } from '../instanceAdapter/gameDirectory';
-import { errnoCode } from '../ports/errno';
-import { errorMessage } from '../ports/errorMessage';
+import { dataFolderFile } from '../tables/gamePaths';
 
-// Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
-// folder name: mod folders live under `mods/`.
+export { OVERWRITE_ORIGIN };
+export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';
+
+// The reserved origin of the game's own Data folder (ADR-0012). Never a real mod folder name: mod
+// folders live under `mods/`.
 export const DATA_DIRECTORY_ORIGIN = 'Data';
-export const OVERWRITE_ORIGIN = OVERWRITE_DIR_NAME;
 
 /** One plugin file in the snapshot — the boundary object (CONTEXT.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
@@ -68,14 +65,14 @@ export interface OriginFiles {
  *  its own. */
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
-/** The files of the folder `originFolder` answers, through the Instance adapter's path functions.
- *  `undefined` when no row for that origin has a plugin file on disk. */
+/** The files of the folder `originFolder` answers, a source tree's relative path joined beneath
+ *  it. `undefined` when no row for that origin has a plugin file on disk. */
 export function originFiles(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): OriginFiles | undefined {
   const folder = originFolder(plugins, origin);
   if (folder === undefined) return undefined;
-  return { file: (relativePath) => fileInFolder(folder, relativePath), holds: (file) => isInFolder(folder, file) };
+  return { file: (relativePath) => join(folder, relativePath), holds: (file) => file.startsWith(folder + sep) };
 }
 
 /** The plugin files this instance provides, keyed case-folded to the winning plugin's on-disk
@@ -94,96 +91,50 @@ export function providedPluginsOf(
 }
 
 /** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
- *  files only. A name with no mod winner and no `dataFolder` has no entry — nothing to fall
+ *  files only. A name with no mod winner and no game folder found has no entry — nothing to fall
  *  back to. */
 export function resolvePluginPaths(
-  names: string[],
+  names: readonly string[],
   index: FileConflictIndex,
-  dataFolder: string | undefined,
+  gameFolder: GameFolder,
 ): Map<string, string> {
   const winnerByName = rootLevelWinners(index);
   const entries = names
-    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? (dataFolder !== undefined ? join(dataFolder, name) : undefined)])
+    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? dataFolderFile(gameFolder, name)])
     .filter((entry): entry is [string, string] => entry[1] !== undefined);
   return new Map(entries);
 }
 
-/** What the game's Data folder holds at its root, as a command is handed it. A folder that never
- *  resolved and one that resolved unreadable are different answers: only the second is a run
- *  whose verdicts cannot be trusted. */
-export type DataFolderPlugins =
-  | { readonly kind: 'listed'; readonly names: ReadonlySet<string> }
-  | { readonly kind: 'unresolved' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
-
-/** A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent. An
- *  unreadable folder is an answer, never a throw: no MO2 file names it, and the whole value
- *  would otherwise go stale over it. */
-export async function readDataFolderPlugins(
-  dataFolder: string | undefined, log: (msg: string) => void,
-): Promise<DataFolderPlugins> {
-  if (dataFolder === undefined) return { kind: 'unresolved' };
-  try {
-    const dirents = await listDir(dataFolder);
-    const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => foldPath(d.name));
-    return { kind: 'listed', names: new Set(names) };
-  } catch (err) {
-    const reason = errorMessage(err);
-    log(`[instance] the game's Data folder could not be listed: ${reason}`);
-    return { kind: 'unreadable', reason };
-  }
+// The files the game wrote at run time win over every mod, so a plugin among them wins path
+// resolution too, not just origin classification. Only their root holds plugins.
+function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, OriginFile> {
+  return new Map(runtimeOutput.filter((file) => !file.relativePath.includes('/')).map((file) => [foldPath(file.relativePath), file]));
 }
 
-// MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
-// too, not just origin classification.
-async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
-  try {
-    const entries = await listDir(overwriteDir(instanceRoot));
-    return new Map(entries.filter((e) => e.isFile()).map((e) => [foldPath(e.name), e.name]));
-  } catch (err) {
-    if (errnoCode(err) === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it
-    throw err;
-  }
-}
-
-// The three reads a snapshot is built from. The caller reads MO2's files; this module never
-// opens one, so a snapshot can only ever be as fresh as the generation it was handed.
-type Source = {
-  readPluginOrder(): Promise<string[]>;
-  readEnabledPlugins(): Promise<string[]>;
-  readModlist(): Promise<ModlistEntry[]>;
-};
-type BuildIndex = (entries: ModlistEntry[], instanceRoot: string) => Promise<FileConflictIndex>;
-
-// Shared by both public entry points below: `dataFolder` optional yields a line-only row
-// (`path: undefined`) for a listed name neither a mod nor overwrite/ provides; a definite
-// `dataFolder` never does, since `resolvePluginPaths` then covers every name.
-async function buildRows(
-  source: Source,
-  instanceRoot: string,
-  dataFolder: string | undefined,
-  buildIndex: BuildIndex,
-): Promise<(LoadOrderPlugin | LoadOrderPluginLine)[]> {
-  const [names, enabled, index, overwriteFiles] = await Promise.all([
-    source.readPluginOrder(),
-    source.readEnabledPlugins(),
-    source.readModlist().then((entries) => buildIndex(entries, instanceRoot)),
-    overwritePluginFiles(instanceRoot),
-  ]);
-
-  const pathByName = resolvePluginPaths(names, index, dataFolder);
+/** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name no mod or
+ *  overwrite/ provides takes the Data folder's file of that name, or is line-only, `path`
+ *  undefined, with no game folder found. */
+export function buildLoadOrderRows(
+  pluginOrder: readonly PluginEntry[],
+  index: FileConflictIndex,
+  runtimeOutput: readonly OriginFile[],
+  gameFolder: GameFolder,
+): (LoadOrderPlugin | LoadOrderPluginLine)[] {
+  const names = pluginOrder.map((line) => line.name);
+  const overwriteFiles = overwriteRootFiles(runtimeOutput);
+  const pathByName = resolvePluginPaths(names, index, gameFolder);
   const winnerModByName = rootLevelWinnerMods(index);
   // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
   // and a case difference must not read as "disabled" or as "a second plugin".
-  const enabledNames = new Set(enabled.map((n) => foldPath(n)));
+  const enabledNames = new Set(pluginOrder.filter((line) => line.enabled).map((line) => foldPath(line.name)));
   const slotByName = new Map<string, number>();
-  for (const [name, slot] of pluginSlots(names)) slotByName.set(foldPath(name), slot);
+  names.forEach((name, slot) => slotByName.set(foldPath(name), slot));
 
   const listed = names.map((name, slot) => {
     const overwriteFile = overwriteFiles.get(foldPath(name));
     const enabledLine = enabledNames.has(foldPath(name));
     if (overwriteFile !== undefined) {
-      return { name, path: join(overwriteDir(instanceRoot), overwriteFile), origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
+      return { name, path: overwriteFile.path, origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
     }
     return {
       name,
@@ -212,25 +163,12 @@ async function buildRows(
 
   // overwrite/'s own unlisted plugins — winning-most, but no line names them.
   const strays = [...overwriteFiles]
-    .filter(([folded, real]) => !slotByName.has(folded) && isPluginFile(real))
-    .map(([, real]) => ({
-      name: real, path: join(overwriteDir(instanceRoot), real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
+    .filter(([folded, file]) => !slotByName.has(folded) && isPluginFile(file.relativePath))
+    .map(([, file]) => ({
+      name: file.relativePath, path: file.path, origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));
 
   return [...listed, ...outside, ...strays];
-}
-
-const defaultBuildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {});
-
-/** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name with no
- *  mod or overwrite/ plugin file still gets a row, its `path` undefined rather than a guess. */
-export async function buildLoadOrderRows(
-  source: Source,
-  instanceRoot: string,
-  dataFolder: string | undefined,
-  buildIndex: BuildIndex = defaultBuildIndex,
-): Promise<(LoadOrderPlugin | LoadOrderPluginLine)[]> {
-  return buildRows(source, instanceRoot, dataFolder, buildIndex);
 }
 
 /** ADR-0013's snapshot, read from the current value (ADR-0015) rather than a fresh walk.

@@ -11,6 +11,7 @@ import { PluginTreeProvider, RecordNode, RecordTypeNode } from '../../plugins/Pl
 import { subscribeRecordPanelsToNotifications, subscribeTreeToNotifications } from '../notificationWiring';
 import { InMemoryMEditClient, type RecordSummary } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { recordTypeCountFixture } from '../../client/test/fixtures';
 import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
@@ -65,7 +66,7 @@ describe('a write and the stream, together (ADR-0015 invariants 2 and 3)', () =>
     const tree = new PluginTreeProvider(meditClient);
     const badges = new RecordDecorationProvider(tree);
     subscribeTreeToNotifications(meditClient, tree, vi.fn());
-    const group = new RecordTypeNode('Test.esp', 'NPC_', 1, 'Non-Player Character', 'ModA');
+    const group = new RecordTypeNode('Test.esp', recordTypeCountFixture({ type: 'NPC_', displayName: 'Non-Player Character' }), 'ModA');
     const uri = present(expectInstanceOf((await tree.getChildren(group))[0], RecordNode).resourceUri, "the row's resource URI");
     let treeChanges = 0;
     tree.onDidChangeTreeData(() => { treeChanges++; });

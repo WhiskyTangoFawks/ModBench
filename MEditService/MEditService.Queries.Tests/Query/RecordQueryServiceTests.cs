@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -153,7 +154,7 @@ public sealed class RecordQueryServiceTests
 
     // Matching, sorting and paging are the real Index's own behaviour, covered at
     // Index.Tests/Query/RecordReadsTests.cs. This service's own job is building the RecordQuery,
-    // resolving type and origin, and returning reads.Search's answer untouched.
+    // resolving type, guarding plugin/origin together, and returning reads.Search's answer untouched.
 
     [Fact]
     public void GetRecords_KnownType_ForwardsSearchLimitOffsetUntouchedIntoTheQuery()
@@ -182,24 +183,43 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(expected, recordTypes.OrderBy(t => t, StringComparer.Ordinal));
     }
 
+    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that filename.
     [Fact]
-    public void GetRecords_WithPlugin_ResolvesOriginFromTheLoadOrder()
+    public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException()
     {
-        _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0);
+        Assert.Throws<ArgumentException>(
+            () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
+    }
+
+    // The other half of the same invariant: an origin names half an identity just as much as a
+    // bare plugin filename does.
+    [Fact]
+    public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(
+            () => _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0, origin: "Data"));
+    }
+
+    // A blank plugin must not reach the guard's throw: the endpoint's own check already treats a
+    // blank plugin the same as an absent one, so the service has to agree.
+    [Fact]
+    public void GetRecords_EmptyPluginAndNoOrigin_BrowsesEveryPluginRatherThanThrowing()
+    {
+        _svc.GetRecords(type: "npc_", plugin: "", search: null, limit: 10, offset: 0);
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
-        Assert.Equal(PluginName, query.Plugin);
-        Assert.Equal("Data", query.Origin);
+        Assert.Null(query.Plugin);
     }
 
     [Fact]
-    public void GetRecords_WithExplicitOrigin_SkipsLoadOrderResolution()
+    public void GetRecords_WithPluginAndOrigin_ForwardsBothUntouchedIntoTheQuery()
     {
         _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0, origin: "OtherOrigin");
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
+        Assert.Equal(PluginName, query.Plugin);
         Assert.Equal("OtherOrigin", query.Origin);
     }
 
@@ -658,7 +678,7 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal(RecordCount, npc.Count);
@@ -679,7 +699,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
         Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
@@ -695,10 +715,32 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal("Non-Player Character", npc.DisplayName);
+    }
+
+    // The group menu's create entry reads this instead of a second, package.json-side list
+    // (plugins.md, Menus and keys: no create on a group of container records).
+    [Fact]
+    public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint()
+    {
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] =
+            [
+                new RecordTypeCount("npc_", 1, HasParseFailure: false),
+                new RecordTypeCount("qust", 1, HasParseFailure: false),
+            ],
+        };
+
+        var creatable = _svc.GetCreatableRecordTypes().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
+
+        Assert.Contains("npc_", creatable);
+        Assert.DoesNotContain("qust", creatable);
+        foreach (var row in result) Assert.Equal(creatable.Contains(row.Type), row.IsCreatable);
     }
 
     [Fact]
@@ -715,7 +757,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         Assert.DoesNotContain(result, r => r.Type == "header");
     }
@@ -723,7 +765,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
     {
-        var result = _svc.GetPluginRecordTypes("DoesNotExist.esp");
+        var result = _svc.GetPluginRecordTypes("DoesNotExist.esp", "Data");
 
         Assert.Empty(result);
     }
@@ -745,6 +787,7 @@ public sealed class RecordQueryServiceTests
     [InlineData("refr")]
     [InlineData("dial")]
     [InlineData("info")]
+    [InlineData("qust")]
     public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryContainerOrHeldType(string recordType)
     {
         var result = _svc.GetCreatableRecordTypes();
@@ -766,6 +809,34 @@ public sealed class RecordQueryServiceTests
         var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
 
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
+    }
+
+    // --- GET /plugins/light-plugins-supported ---
+
+    private static RecordQueryService ServiceIn(GameRelease release) => new(
+        new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
+        FakeLoadOrder.Of(release), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+    [Fact]
+    public void GetLightPluginsSupported_AReleaseWithLightPlugins_IsTrue()
+    {
+        Assert.True(ServiceIn(GameRelease.Fallout4).GetLightPluginsSupported());
+    }
+
+    [Theory]
+    [InlineData(GameRelease.Oblivion)]
+    [InlineData(GameRelease.OblivionRE)]
+    public void GetLightPluginsSupported_AReleaseWithoutLightPlugins_IsFalse(GameRelease release)
+    {
+        Assert.False(ServiceIn(release).GetLightPluginsSupported());
+    }
+
+    [Fact]
+    public void GetLightPluginsSupported_NoLoadOrder_ThrowsNoLoadOrderException()
+    {
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        Assert.Throws<NoLoadOrderException>(() => unloaded.GetLightPluginsSupported());
     }
 
     // --- GET /records?type=unknown ---
@@ -846,8 +917,7 @@ public sealed class RecordQueryServiceTests
     {
         _svc.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
 
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", _manager.FilterSql);
-        Assert.Equal("npcs.sql", _manager.LastFilterSource);
+        Assert.Equal(("SELECT form_key FROM \"NPC_\"", "npcs.sql"), _manager.ActiveFilter);
     }
 
     [Fact]
@@ -857,7 +927,59 @@ public sealed class RecordQueryServiceTests
 
         _svc.ClearFilter();
 
-        Assert.Null(_manager.FilterSql);
+        Assert.Null(_manager.ActiveFilter);
+    }
+
+    [Fact]
+    public void GetFilter_IsTheFilterInForce_WithItsSource()
+    {
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        Assert.Equal(("SELECT form_key FROM \"NPC_\"", "npcs.sql"), _svc.GetFilter());
+    }
+
+    [Fact]
+    public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
+    {
+        var svc = new RecordQueryService(
+            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
+    }
+
+    // --- the load order's status and the projection's sequence (ADR-0013, ADR-0015 invariant 3) ---
+
+    [Fact]
+    public void GetStatus_IsTheIndexsStatus()
+    {
+        var reconciling = new LoadOrderStatus(LoadOrderState.Reconciling, 3, [], false, []);
+        _manager.Status = reconciling;
+
+        Assert.Equal(reconciling, _svc.GetStatus());
+    }
+
+    [Fact]
+    public void GetSequence_IsTheIndexsSequence()
+    {
+        _manager.Sequence = 7;
+
+        Assert.Equal(7, _svc.GetSequence());
+    }
+
+    [Fact]
+    public async Task AwaitSequence_Reached_AnswersTheSequenceObserved_NotTheBound()
+    {
+        _manager.Sequence = 7;
+
+        Assert.Equal(new SequenceAwaitResponse(true, 7), await _svc.AwaitSequence(5, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task AwaitSequence_NotReached_AnswersFalseAndTheSequenceObserved()
+    {
+        _manager.Sequence = 3;
+
+        Assert.Equal(new SequenceAwaitResponse(false, 3), await _svc.AwaitSequence(5, TimeSpan.FromSeconds(1)));
     }
 
     [Fact]

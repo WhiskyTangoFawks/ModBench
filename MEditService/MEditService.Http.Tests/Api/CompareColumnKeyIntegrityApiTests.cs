@@ -74,7 +74,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
             .WithPlugin("Patch.esp", (mod, masters) => mod.Perks.GetOrAddAsOverride(masters[0].Perks.Single()), origin: "ModB")
             .BuildScattered();
         (await Client.PutLoadOrder(_fixture)).EnsureSuccessStatusCode();
-        var perkKey = await Client.FirstFormKey("Shared.esp", "perk");
+        var perkKey = await Client.FirstFormKey("Shared.esp", "ModA", "perk");
 
         var compare = await Client.Compare(perkKey);
 

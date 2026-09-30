@@ -54,7 +54,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task EditingARecord_IsApplied_PushedAsRowsChanged_AndAnsweredByTheNextRead()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
 
         var applied = await Edit(formKey, "HeightMax", 0.75);
@@ -77,7 +77,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task DeletingARecord_IsApplied_PushedAsRowsChangedNamingIt_AndGoneFromTheNextRead()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
 
         var response = await Client.PostAsJsonAsync("/records/delete", new
@@ -92,7 +92,7 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());
         Assert.Equal(await Client.Sequence(), rows.GetProperty("sequence").GetInt64());
-        Assert.Empty(await NpcFormKeys(Plugin));
+        Assert.Empty(await NpcFormKeys(Plugin, Origin));
     }
 
     [Fact]
@@ -104,8 +104,8 @@ public sealed class EditRecordTraceTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-        var tracked = await NpcFormKeys(Plugin);
-        var untracked = await Client.FirstFormKey(OtherPlugin);
+        var tracked = await NpcFormKeys(Plugin, Origin);
+        var untracked = await Client.FirstFormKey(OtherPlugin, OtherOrigin);
         var before = await Client.Sequence();
 
         var response = await Client.PostAsJsonAsync("/records/delete", new
@@ -129,14 +129,14 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Contains("Track", refused.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
 
         await Client.SequenceReaches(before + 1);
-        var remaining = await NpcFormKeys(Plugin);
-        var untouched = await NpcFormKeys(OtherPlugin);
+        var remaining = await NpcFormKeys(Plugin, Origin);
+        var untouched = await NpcFormKeys(OtherPlugin, OtherOrigin);
         Assert.Empty(remaining);
         Assert.Equal([untracked], untouched);
     }
 
-    private async Task<string[]> NpcFormKeys(string plugin) =>
-        [.. (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type=npc_"))
+    private async Task<string[]> NpcFormKeys(string plugin, string origin) =>
+        [.. (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require())];
 
     private static string[] KeysOf(JsonElement rowsChanged) =>
@@ -192,7 +192,7 @@ public sealed class EditRecordTraceTests : HostedTests
         (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
         var targetFolder = OtherTool.ModFolderOf(fx, Origin);
         var target = new PluginAddress(Plugin, Origin);
-        var oldFormKey = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=race"))
+        var oldFormKey = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=race"))
             .GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey"))).Single();
         var targetBefore = TrackedTree.Document(targetFolder, target, oldFormKey).Require();
         var samePluginReferencer = OtherTool.SourceDocumentCarrying(targetFolder, Plugin, "SamePluginNpc");
@@ -229,7 +229,7 @@ public sealed class EditRecordTraceTests : HostedTests
     {
         using var fx = await Loaded();
 
-        var response = await Edit(await Client.FirstFormKey(Plugin), "HeightMax", 0.75);
+        var response = await Edit(await Client.FirstFormKey(Plugin, Origin), "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
@@ -241,7 +241,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task AnEnvelopeWithAnUnknownOperation_Is400_WithItsOwnRefusal()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
@@ -265,7 +265,7 @@ public sealed class EditRecordTraceTests : HostedTests
     {
         using var fx = await Loaded(Origin);
 
-        var response = await Edit(await Client.FirstFormKey(Plugin), "no_such_field", 1);
+        var response = await Edit(await Client.FirstFormKey(Plugin, Origin), "no_such_field", 1);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("FieldNotFound", (await Body(response)).GetProperty("refusal").GetString());
@@ -275,7 +275,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task AnEnvelopeWithoutAPlugin_Is400()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await Client.Edit(formKey, string.Empty, Origin, "HeightMax", 0.75);
 
@@ -292,7 +292,7 @@ public sealed class EditRecordTraceTests : HostedTests
         File.Delete(document);
         Directory.CreateDirectory(document);
 
-        var response = await Edit(await Client.FirstFormKey(Plugin), "HeightMax", 0.75);
+        var response = await Edit(await Client.FirstFormKey(Plugin, Origin), "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace((await Body(response)).GetProperty("detail").GetString()));
@@ -302,7 +302,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task EditingARecordTheCodecCannotRead_IsRefusedAsAParseFailure()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
         var response = await Edit(formKey, "HeightMax", 0.75);
@@ -314,7 +314,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingTwoRecordsAsOverrides_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
     {
         using var fx = await TwoRecordsAndTwoDestinations();
-        var records = await NpcFormKeys(Plugin);
+        var records = await NpcFormKeys(Plugin, Origin);
 
         var answer = await Body(await CopyBothIntoBoth(records, "Override"));
 
@@ -332,7 +332,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingTwoRecordsAsNew_IntoTwoDestinations_WhereOneIsUntracked_LandsBothInTheTrackedOne_AndAnswersPerItem()
     {
         using var fx = await TwoRecordsAndTwoDestinations();
-        var records = await NpcFormKeys(Plugin);
+        var records = await NpcFormKeys(Plugin, Origin);
 
         var answer = await Body(await CopyBothIntoBoth(records, "New"));
 
@@ -384,7 +384,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_IsRefusedNamingIt_WithoutTheReplaceOption()
     {
         using var fx = await Loaded(OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
         var held = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, formKey);
         (await Client.Edit(formKey, OtherPlugin, OtherOrigin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
@@ -403,7 +403,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingAsOverride_IntoADestinationThatHoldsTheRecord_ReplacesIt_WithTheReplaceOption()
     {
         using var fx = await Loaded(OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Client.Copy(formKey, (Plugin, Origin), "Override", (OtherPlugin, OtherOrigin))).EnsureSuccessStatusCode();
         var held = OtherTool.SourceDocumentCarrying(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin, formKey);
         var copied = File.ReadAllText(held);
@@ -422,7 +422,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingARecordTheCodecCannotRead_IsTheSameRefusal(string mode)
     {
         using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
         var response = await Client.Copy(formKey, (Plugin, Origin), mode, (OtherPlugin, OtherOrigin));
@@ -437,7 +437,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task CopyingARecordAsNew_LandsUnderADerivedEditorID_DifferentFromTheSources()
     {
         using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await Client.Copy(formKey, (Plugin, Origin), "New", (OtherPlugin, OtherOrigin));
 
@@ -483,7 +483,7 @@ public sealed class EditRecordTraceTests : HostedTests
     public async Task EditingTheFormIdToAMalformedFormKey_IsRefusedAsTheCodecsRejection_NamingTheField()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
 
         var response = await Edit(formKey, "FormKey", "not-a-formkey");
 

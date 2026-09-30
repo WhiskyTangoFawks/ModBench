@@ -133,7 +133,7 @@ function plantedTree(files: Record<string, string>): string {
 describe('a test reaches only its own box and the boxes that box references', () => {
   it('scans a real body of test files across every box', () => {
     expect(boxTests(SRC, boxesIn(SRC)).length).toBeGreaterThan(100);
-    expect(boxesIn(SRC).map((box) => box.name)).toContain('mo2Codecs');
+    expect(boxesIn(SRC).map((box) => box.name)).toContain('loadOrderFileCodec');
   });
 
   it('every test file imports only its own box, the boxes its tsconfig references and src/test', () => {

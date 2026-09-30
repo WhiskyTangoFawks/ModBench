@@ -246,7 +246,7 @@ A separator is a row in mod order.
 | compile | writes | `modbench.plugin.compile` | plugins | - | xEdit main menu | Write the plugin's binary from its plugin source. | compile-plugin |
 | decompile | writes | `modbench.plugin.decompile` | plugins | - | none | Read each plugin's bytes into its plugin source, in the working tree of the checked-out branch. It commits nothing. | decompile-plugin |
 | sort direction | reads | `modbench.plugin.sortWinningAtTop`, `modbench.plugin.sortLosingAtTop` | - | - | MO2 plugin list | List plugins with the winning end at the top or at the bottom. | none |
-| reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in VS Code's Explorer. | none |
+| reveal | reads | `modbench.plugin.reveal` | plugin | - | MO2 plugin list | Show a plugin file in the system's file manager. | none |
 
 ## Record
 
@@ -259,7 +259,7 @@ palette only while one has focus.
 | add element | writes | `modbench.record.addElement` | array | value (a drop supplies it; otherwise a new element) | xEdit View grid | Add an element to an array field. | edit-record |
 | remove element | writes | `modbench.record.removeElement` | element | - | xEdit View grid | Remove an element from an array field. | edit-record |
 | move element | writes | `modbench.record.moveElementUp`, `modbench.record.moveElementDown` | element | - | xEdit View grid | Move an element one step in an array field. | edit-record |
-| create | writes | `modbench.record.create` | plugin, or a container | record type; containment, for a container | xEdit navigator | Add a record to a plugin. | edit-record |
+| create | writes | `modbench.record.create` | plugin | record type | xEdit navigator | Add a record to a plugin. | edit-record |
 | delete | writes | `modbench.record.delete` | records | - | xEdit navigator, Referenced By, View header | Remove records from a plugin. The confirmation lists everything selected. | edit-record |
 | copy | writes | `modbench.record.copy` | records | mode: new or override; destination plugins; replace, for a destination that holds the record | xEdit navigator, Referenced By, View header; xEdit Inject Forms into master... | Copy records into other plugins. A picker asks for the mode and another for the destination. If a destination already holds a copy, a confirmation asks whether to replace it. | edit-record |
 | open | reads | `modbench.record.open` | records, or a reference field | placement: beside | xEdit navigator; xEdit Referenced By; xEdit Compare Selected; xEdit Ctrl + click | Open a record in an editor tab. Several records open each in a tab of their own. A plugin header is a record. The Go to Record menu item on a reference field opens the record it points to. With no Argument, a picker finds a record by EditorID, FormID or FormKey. | query-index |

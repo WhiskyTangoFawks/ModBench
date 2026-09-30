@@ -19,7 +19,7 @@ import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,13 +54,14 @@ function makeRecord(
 }
 
 function makeClient(overrides: Partial<{
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
+    isCreatable: rt.isCreatable ?? true,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -88,6 +89,23 @@ async function interiorCellsBeneath(provider: PluginTreeProvider, group: PluginT
   const [block] = await provider.getChildren(group);
   const [subBlock] = await provider.getChildren(present(block, 'the sole block'));
   return provider.getChildren(present(subBlock, 'the sole sub-block'));
+}
+
+// Every record row a plugin row expands into, at every depth: the nodes themselves, in DFS order,
+// so a caller reads a leaf's own contextValue and origin.
+async function rowsBeneath(
+  provider: PluginTreeProvider, pluginName: string, origin: string, told: PluginConditions,
+): Promise<PluginTreeNode[]> {
+  const states: PluginTreeNode[] = [];
+  const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
+    for (const node of nodes) {
+      if (['recordType', 'record', 'worldspace', 'cell', 'placed'].includes(node.kind)) states.push(node);
+      const leaf = node.kind === 'placed' || (node instanceof RecordNode && !node.hasContainerChildren);
+      if (!leaf) await walk(await provider.getChildren(node));
+    }
+  };
+  await walk(await provider.getPluginChildren(pluginName, origin, told));
+  return states;
 }
 
 // getPluginChildren(name, origin) is the one way into a plugin's children — there is no root listing
@@ -121,6 +139,22 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 
     expect(typeNode.label).toBe('Activator');
     expect(typeNode.recordType).toBe('acti');
+  });
+
+  // plugins.md, Create record, story 4.
+  it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
+    const repo = makeClient({
+      recordTypes: [
+        { type: 'npc_', count: 1, isCreatable: true },
+        { type: 'qust', count: 1, isCreatable: false },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [npc, qust] = expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode);
+
+    expect(present(npc, 'the npc_ group').contextValue).toContain('creatable');
+    expect(present(qust, 'the qust group').contextValue).not.toContain('creatable');
   });
 });
 
@@ -247,18 +281,24 @@ describe('RecordTypeNode', () => {
   it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
     // The tree must show "Weapon", not "weap" — but recordType (used for
     // caching, commands, contextValue) stays the raw signature.
-    const node = new RecordTypeNode('MyPlugin.esp', 'weap', 42, 'Weapon', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 42, displayName: 'Weapon' }), 'Data');
     expect(node.label).toBe('Weapon');
     expect(node.recordType).toBe('weap');
   });
 
   it('shows formatted count as description', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 1234, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 1234 }), 'Data');
     expect(node.description).toBe('1,234');
   });
 
   it('states no record edit when no one has described its plugin', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 10, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 10 }), 'Data');
+    expect(node.contextValue).toBe('recordType untracked creatable');
+  });
+
+  // plugins.md, Create record, story 4: no create record on a group of container records.
+  it('states no create on a container type\'s group (a quest, say)', () => {
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false }), 'Data');
     expect(node.contextValue).toBe('recordType untracked');
   });
 });
@@ -470,26 +510,13 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     return repo;
   }
 
-  // Every record row a plugin row expands into, at every depth, by its contextValue.
-  async function rowsBeneath(provider: PluginTreeProvider, told: PluginConditions): Promise<string[]> {
-    const states: string[] = [];
-    const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
-      for (const node of nodes) {
-        if (['recordType', 'record', 'worldspace', 'cell', 'placed'].includes(node.kind)) states.push(String(node.contextValue));
-        const leaf = node.kind === 'placed' || (node instanceof RecordNode && !node.hasContainerChildren);
-        if (!leaf) await walk(await provider.getChildren(node));
-      }
-    };
-    await walk(await provider.getPluginChildren('Plugin0.esp', 'Data', told));
-    return states;
-  }
-
   it('states a tracked, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
-    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), TRACKED);
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), 'Plugin0.esp', 'Data', TRACKED))
+      .map((n) => String(n.contextValue));
 
     expect(states).toEqual([
-      'recordType tracked editable', 'record tracked editable',
-      'recordType tracked editable', 'record tracked editable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable', 'record tracked editable',
       'worldspace tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
@@ -498,9 +525,13 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 
   it('states an untracked plugin untracked on every row beneath it', async () => {
-    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), { tracked: false, editable: true });
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), 'Plugin0.esp', 'Data', { tracked: false, editable: true }))
+      .map((n) => String(n.contextValue));
 
-    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
+    // Conditions only: creatable is a per-type fact, not a plugin condition, so it is dropped here.
+    const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
+    const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
+    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['untracked editable']));
   });
 });
 
@@ -644,8 +675,8 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 
   it('gives a group an expander only when it holds a record', () => {
-    expect(new RecordTypeNode('M.esp', 'weap', 1, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
-    expect(new RecordTypeNode('M.esp', 'weap', 0, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 1 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 0 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new WorldspacesNode('M.esp', 'Worldspace', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new InteriorCellsNode('M.esp', 'Cell', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
@@ -699,7 +730,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new RecordTypeNode('Plugin0.esp', 'WEAP', 5, 'WEAP', 'Data');
+    const node = new RecordTypeNode('Plugin0.esp', recordTypeCountFixture({ type: 'WEAP', count: 5 }), 'Data');
 
     const children = await provider.getChildren(node);
 
@@ -866,6 +897,46 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(fromB);
 
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
+  });
+
+  it('a cell row and a placed-reference row of a shared filename read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
+    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [{ formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }],
+      blocks: [],
+    });
+    repo.setQueryAnswer('getCellReferences', {
+      persistent: [{ formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+      temporary: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
+    const READ_ONLY: PluginConditions = { tracked: false, editable: false };
+
+    // Both expansions run concurrently, so a filename-keyed (rather than parameter-threaded)
+    // lookup of conditions would have B's write clobber A's read mid-flight.
+    const [fromA, fromB] = await Promise.all([
+      rowsBeneath(provider, 'Shared.esp', 'ModA', TRACKED_EDITABLE),
+      rowsBeneath(provider, 'Shared.esp', 'ModB', READ_ONLY),
+    ]);
+    const cellOf = (nodes: PluginTreeNode[]) =>
+      expectInstanceOf(present(nodes.find((n) => n.kind === 'cell'), 'the cell row'), CellNode);
+    const placedOf = (nodes: PluginTreeNode[]) =>
+      expectInstanceOf(present(nodes.find((n) => n.kind === 'placed'), 'the placed row'), PlacedNode);
+    const cellA = cellOf(fromA);
+    const placedA = placedOf(fromA);
+    const cellB = cellOf(fromB);
+    const placedB = placedOf(fromB);
+
+    expect(cellA.contextValue).toBe('cell tracked editable');
+    expect(cellA.origin).toBe('ModA');
+    expect(placedA.contextValue).toBe('placed tracked editable');
+    expect(placedA.origin).toBe('ModA');
+    expect(cellB.contextValue).toBe('cell untracked');
+    expect(cellB.origin).toBe('ModB');
+    expect(placedB.contextValue).toBe('placed untracked');
+    expect(placedB.origin).toBe('ModB');
   });
 
 });

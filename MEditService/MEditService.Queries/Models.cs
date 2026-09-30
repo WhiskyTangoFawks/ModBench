@@ -103,7 +103,12 @@ public record CompareResult(
     ConflictAll ConflictAll);
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
-// the failure prefix from the page it has instead of walking children.
-public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
+// the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
+public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable);
 
 public record CreatableRecordType(string Type, string DisplayName);
+
+/// <summary>ADR-0015 invariant 3: the answer to "did the projection reach at least N?" — Sequence
+/// is the value observed at the moment of that answer, not necessarily equal to the awaited
+/// bound.</summary>
+public record SequenceAwaitResponse(bool Reached, long Sequence);

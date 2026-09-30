@@ -1,7 +1,8 @@
 // The plugin-order rules a move keeps: masters above their dependants, blueprint plugins last
-// (plugins.md, Drag and drop, story 3; MO2's PluginList::setPluginPriority, pluginlist.cpp).
+// (plugins.md, Drag and drop, story 3; the reference tool's PluginList::setPluginPriority,
+// pluginlist.cpp).
 
-import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
+import { dropIndexIn, type Drop } from './dropIndex';
 
 /** What the order rules read of one plugin, as mEdit answers it. */
 export interface PluginOrderFacts {
@@ -33,7 +34,8 @@ function movesBehindIn(before: readonly string[], after: readonly string[]): Mov
     (was.get(first) ?? 0) < (was.get(second) ?? 0) && (is.get(first) ?? 0) > (is.get(second) ?? 0);
 }
 
-// MO2 holds master order only within one blueprint class; across the two, blueprint last decides.
+// The reference tool holds master order only within one blueprint class; across the two, blueprint
+// last decides.
 function sameClassMasters(order: readonly string[], factsOf: PluginOrderFactsOf): [master: string, plugin: string][] {
   const listedByFolded = new Map(order.map((name) => [name.toLowerCase(), name] as const));
   return order.flatMap((plugin) => {

@@ -23,7 +23,7 @@ public sealed class GitMissingApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-        var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_"))
+        var npcs = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("formKey").GetString().Require()).ToArray();
         Assert.Equal(2, npcs.Length);
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();

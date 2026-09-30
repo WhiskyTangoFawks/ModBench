@@ -18,7 +18,7 @@ public sealed class SourceRepositoryRefEncodingTests
         {
             const string plugin = "LitR - Settings Holotapes Sorting.esp";
             PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+                modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
             Assert.Equal("Track " + plugin, GitProbeSubject(modFolder));
         }
@@ -37,7 +37,7 @@ public sealed class SourceRepositoryRefEncodingTests
         try
         {
             PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+                modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
             SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
 

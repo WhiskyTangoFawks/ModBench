@@ -101,7 +101,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
 
         Assert.ThrowsAny<Exception>(() => _index.SetFilter("SELECT form_key FROM npc_ WHERE no_such_column = 1", "filter.sql"));
 
-        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.FilterSql);
+        Assert.Equal("SELECT form_key FROM npc_ WHERE plugin = 'Over.esp'", _index.ActiveFilter?.Sql);
         Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
     }
 }

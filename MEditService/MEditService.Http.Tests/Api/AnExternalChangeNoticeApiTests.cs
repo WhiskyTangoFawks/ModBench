@@ -49,7 +49,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     public async Task AnEdit_ToAPluginThatChangedOutsideModbench_Lands()
     {
         var fx = Owned(await Watched());
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
         ARelease(fx);
         await NoticesUntilOneNames(stream, Plugin);

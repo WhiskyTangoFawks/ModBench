@@ -2,23 +2,16 @@
 // `instanceadapter` box). A command splices a file's text through its own codec and puts the
 // result through here.
 
-import { constants, existsSync, type Dirent } from 'node:fs';
+import { constants, type Dirent } from 'node:fs';
 import {
   access, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import {
-  isTempWriteOf, modsDir as modsDirOf, modGitDir, profilesDir, settingsFile, tempWritePath,
+  isTempWriteOf, modGitDir, tempWritePath,
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
-
-/** Structural presence only, never file contents: an instance with a corrupt `modlist.txt` still
- *  reads `true` here, and surfaces that error elsewhere (ADR-0019). Synchronous: the composition
- *  root asks before an Instance exists. */
-export function isMo2Instance(root: string): boolean {
-  return existsSync(settingsFile(root)) && existsSync(modsDirOf(root)) && existsSync(profilesDir(root));
-}
 
 /** ADR-0007: tracked *is* the presence of `.git` in the mod's folder — no registry, no backend. */
 export function isTracked(modFolder: string): Promise<boolean> {
@@ -29,8 +22,9 @@ export function isTracked(modFolder: string): Promise<boolean> {
 // paths never serialize against each other. Module-level, so every command shares one adapter.
 const chains = new Map<string, Promise<unknown>>();
 
-// Runs `task` after every task already queued on `key`, and answers what it answered.
-function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+/** Runs `task` after every task already queued on `key`, holding the lock every write of that path
+ *  here takes until `task` settles, and answers what it answered. */
+export function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
   const prior = chains.get(key) ?? Promise.resolve();
   const next = prior.then(task, task);
   // The chain tail must never stay rejected, or a later write on this key queues behind a dead
@@ -118,9 +112,9 @@ async function modeOf(target: string): Promise<number | undefined> {
   }
 }
 
-// A crash between this write's own temp file landing and its rename leaves one behind under
-// `target`'s name; the next write for that same target sweeps it before starting its own.
-async function removeStaleTempsFor(target: string): Promise<void> {
+/** Removes the temp writes a crash left behind for `target`, between a temp landing and its
+ *  rename; a write for `target` sweeps them before starting its own. */
+export async function removeStaleTempsFor(target: string): Promise<void> {
   const dir = dirname(target);
   const base = basename(target);
   let names: string[];

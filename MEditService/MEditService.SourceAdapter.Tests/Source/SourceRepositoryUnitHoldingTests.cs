@@ -13,7 +13,7 @@ public sealed class SourceRepositoryUnitHoldingTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
-    private static readonly string HeaderPath = Path.Combine("source", PluginName, "RecordData.json");
+    private static readonly string HeaderPath = Path.Combine("plugin-source", PluginName, "RecordData.json");
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-unitholding-").FullName;
 

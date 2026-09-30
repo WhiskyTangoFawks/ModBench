@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { GameDirectoryOverrides } from './instanceAdapter/gameDirectory';
+import type { GameDirectoryOverrides } from './instanceAdapter/instanceAdapter';
 import { FOLDER_KEY, INSTANCE_READ_KEY, type FolderCheck } from './folderContext';
 import type { InstanceView } from './instanceLoader/instance';
 

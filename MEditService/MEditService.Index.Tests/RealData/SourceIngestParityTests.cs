@@ -104,7 +104,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         // The third arm: against the tracked plugin's own file on disk, as raw bytes. A document's
         // body is text, so this is the only comparison here that is genuinely about bytes.
-        var headerFile = Path.Combine(fixture.ModFolder, "source", RealDataPlugin.PluginFileName, "RecordData.json");
+        var headerFile = Path.Combine(fixture.ModFolder, "plugin-source", RealDataPlugin.PluginFileName, "RecordData.json");
         Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.BodyOf()));
     }

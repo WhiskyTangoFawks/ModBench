@@ -2,19 +2,21 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
 import { pluralArgument, registerPluginsGesture, type GestureEntry } from './gestureEntry';
-import { setPluginsEnabled, type PluginParticipation, type PluginsSelectionResult } from '../pluginsCommands/plugins';
+import {
+  setPluginsEnabled, type PluginParticipation, type PluginsAccess, type PluginsSelectionResult,
+} from '../pluginsCommands/plugins';
 import type { Reporter } from '../ports/reporter';
 
 // modbench.plugin.enable / modbench.plugin.disable: the whole selection through the entry
 // (plugins.md, Menus and keys, story 3 — behaves as in Mods).
 export function registerPluginEnableCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>,
+  access: PluginsAccess, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
     const names = pluralArgument(entry, 'plugin').map((n: PluginNode) => n.plugin.name);
     if (names.length === 0) return;
-    const result = await setPluginsEnabled(instanceRoot, instance.value.activeProfile, names, enabled);
+    const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
     reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
   };
   return [

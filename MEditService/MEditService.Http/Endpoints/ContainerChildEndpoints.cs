@@ -16,6 +16,7 @@ public static class ContainerChildEndpoints
             {
                 logger.LogInformation("Received GetContainerChildren for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -31,6 +32,7 @@ public static class ContainerChildEndpoints
         .WithName("GetContainerChildren")
         .WithTags("Records")
         .Produces<IReadOnlyList<ContainerChildSummary>>()
+        .ProducesProblem(400)
         .ProducesProblem(500);
 
         return app;

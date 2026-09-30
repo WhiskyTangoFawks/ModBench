@@ -21,6 +21,10 @@ public interface IRefreshIndex
     /// plugins indexed, one winner sweep. Runs on the caller's thread and never throws.</summary>
     void Reconcile(LoadOrderSnapshot snapshot, long version);
 
+    /// <summary>plugins.md, States, story 6: reconciles the held load order again when the last
+    /// reconcile failed, and does nothing otherwise. Never throws.</summary>
+    void RetryFailedReconcile();
+
     /// <summary>The narrow signal: re-project exactly these keys from the source tree.</summary>
     void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys);
 

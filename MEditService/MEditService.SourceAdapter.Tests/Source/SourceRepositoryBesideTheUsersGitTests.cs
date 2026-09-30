@@ -12,7 +12,7 @@ namespace MEditService.SourceAdapter.Tests.Source;
 public sealed class SourceRepositoryBesideTheUsersGitTests
 {
     private const string Plugin = "Test.esp";
-    private const string Document = "source/Test.esp/npc_/Test.esp/000001.json";
+    private const string Document = "plugin-source/Test.esp/npc_/Test.esp/000001.json";
 
     private static string TrackedMod()
     {

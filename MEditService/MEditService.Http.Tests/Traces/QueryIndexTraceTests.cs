@@ -64,7 +64,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AQuestionAboutAPluginsRecords_IsAnsweredWithTheRowsAndThenTheRecord()
     {
         await Loaded();
-        var page = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=npc_&limit=10");
+        var page = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=npc_&limit=10");
 
         Assert.Equal(1, page.GetProperty("total").GetInt32());
         var summary = page.GetProperty("items")[0];
@@ -92,7 +92,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AQuestionAboutOnePluginsRecordTypes_CountsWhatItHolds()
     {
         await Loaded();
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
 
         var counts = types.EnumerateArray().ToDictionary(
             t => t.GetProperty("type").GetString().Require(), t => t.GetProperty("count").GetInt32());
@@ -104,7 +104,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AQuestionAboutOnePluginsRecordTypes_NamesEveryTypeInNameOrder()
     {
         await Loaded();
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
 
         Assert.Equal(
             ["Activator", "Cell", "Keyword", "Non-Player Character", "Quest", "Worldspace"],
@@ -133,11 +133,28 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AQuestionAboutLightPluginsSupported_ForFallout4_IsTrue()
+    {
+        await Loaded();
+        var supported = await Client.GetFromJsonAsync<JsonElement>("/plugins/light-plugins-supported");
+
+        Assert.Equal(JsonValueKind.True, supported.ValueKind);
+    }
+
+    [Fact]
+    public async Task AQuestionAboutLightPluginsSupported_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    {
+        var response = await Client.GetAsync(new Uri("/plugins/light-plugins-supported", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AGroupsRecords_CarryTheirNameWhenTheyHaveOne()
     {
         await Loaded();
-        var activators = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=acti&limit=10");
-        var keywords = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=kywd&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=acti&limit=10");
+        var keywords = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=kywd&limit=10");
 
         Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
         Assert.Equal(JsonValueKind.Null, keywords.GetProperty("items")[0].GetProperty("fullName").ValueKind);
@@ -163,7 +180,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedLocalized();
 
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&origin=LocalizedMod&type=acti&limit=10");
 
         Assert.Equal("Lever", activators.GetProperty("items")[0].GetProperty("fullName").GetString());
     }
@@ -175,7 +192,7 @@ public sealed class QueryIndexTraceTests : HostedTests
 
         (await Client.PostAsJsonAsync("/load-order/filter",
             new { sql = "SELECT form_key FROM \"acti\" WHERE \"Name\" = 'Lever'", source = "lever.sql" })).EnsureSuccessStatusCode();
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&origin=LocalizedMod&type=acti&limit=10");
 
         Assert.Equal(1, activators.GetProperty("total").GetInt32());
     }
@@ -187,7 +204,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         (await Client.PostAsJsonAsync("/load-order/filter",
             new { sql = "SELECT 'NoSuchRecord:000000' AS form_key", source = "nothing.sql" })).EnsureSuccessStatusCode();
 
-        var listing = $"/records?plugin={UserPlugin}&type=npc_&limit=10";
+        var listing = $"/records?plugin={UserPlugin}&origin={UserMod}&type=npc_&limit=10";
         var filtered = await Client.GetFromJsonAsync<JsonElement>(listing);
         var unfiltered = await Client.GetFromJsonAsync<JsonElement>($"{listing}&unfiltered=true");
 
@@ -199,10 +216,10 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AContainersChildren_CarryTheirName()
     {
         await Loaded();
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=qust&limit=10");
+        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");
         var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
 
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children");
+        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children?origin={UserMod}");
 
         Assert.Equal("Greeting", children[0].GetProperty("fullName").GetString());
     }
@@ -211,11 +228,11 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AWorldspaceAndItsCells_CarryTheirNames()
     {
         await Loaded();
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces");
-        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
+        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
 
         var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks");
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
 
         Assert.Equal("Queried World", worldspaces[0].GetProperty("fullName").GetString());
         Assert.Equal(
@@ -228,25 +245,25 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task ACellsPlacedReferences_CarryTheirBaseRecordsEditorId()
     {
         await Loaded();
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces?origin={UserMod}");
         var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks");
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/worldspaces/{worldFk}/blocks?origin={UserMod}");
         var cellFk = Uri.EscapeDataString(
             blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require());
 
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/cells/{cellFk}/references");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/cells/{cellFk}/references?origin={UserMod}");
 
         var placed = references.GetProperty("temporary")[0];
         Assert.Equal(JsonValueKind.Null, placed.GetProperty("editorId").ValueKind);
         Assert.Equal("QueriedLever", placed.GetProperty("baseEditorId").GetString());
     }
 
-    private async Task<JsonElement> PlacedReferencesIn(string plugin)
+    private async Task<JsonElement> PlacedReferencesIn(string plugin, string origin)
     {
-        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/interior-cells");
+        var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/interior-cells?origin={origin}");
         var cellFk = Uri.EscapeDataString(
             interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require());
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/cells/{cellFk}/references");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/cells/{cellFk}/references?origin={origin}");
         return references.GetProperty("temporary")[0];
     }
 
@@ -284,7 +301,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedWithTwoCopiesOfABase();
 
-        var placed = await PlacedReferencesIn("Master.esm");
+        var placed = await PlacedReferencesIn("Master.esm", "MasterMod");
 
         Assert.Equal("MasterLever", placed.GetProperty("baseEditorId").GetString());
     }
@@ -294,7 +311,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedWithTwoCopiesOfABase();
 
-        var placed = await PlacedReferencesIn("Other.esp");
+        var placed = await PlacedReferencesIn("Other.esp", "OtherMod");
 
         Assert.Equal("PatchLever", placed.GetProperty("baseEditorId").GetString());
     }
@@ -353,13 +370,13 @@ public sealed class QueryIndexTraceTests : HostedTests
         rows.EnumerateArray().Select(r => r.GetProperty("editorId").GetString());
 
     private async Task<JsonElement> InteriorBlocks() =>
-        await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells");
+        await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin=ListedMod");
 
     private async Task<JsonElement> ExteriorSubBlockCells()
     {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
         var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces/{worldFk}/blocks");
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces/{worldFk}/blocks?origin=ListedMod");
         return blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells");
     }
 
@@ -394,7 +411,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedListings();
 
-        var activators = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&origin=ListedMod&type=acti&limit=10");
 
         Assert.Equal(["ZuluLever", "AlphaLever"], EditorIds(activators.GetProperty("items")));
     }
@@ -416,7 +433,7 @@ public sealed class QueryIndexTraceTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
 
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&origin=PatchMod&type=acti&limit=10");
 
         Assert.Equal(["MasterSecond", "APatchLever"], EditorIds(activators.GetProperty("items")));
     }
@@ -435,7 +452,7 @@ public sealed class QueryIndexTraceTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
 
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&origin=PatchMod&type=acti&limit=10");
 
         Assert.Equal(["ZFullLever", "ALightLever"], EditorIds(activators.GetProperty("items")));
     }
@@ -463,7 +480,7 @@ public sealed class QueryIndexTraceTests : HostedTests
             .BuildScattered());
         (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
 
-        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&origin=PatchMod&type=acti&limit=10");
 
         Assert.Equal(expected, EditorIds(activators.GetProperty("items")));
     }
@@ -473,7 +490,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedListings();
 
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
 
         Assert.Equal(["ZuluWorld", "AlphaWorld"], EditorIds(worldspaces));
     }
@@ -493,7 +510,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         var room = (await InteriorBlocks())[1].GetProperty("subBlocks")[0].GetProperty("cells")[0];
         var roomFk = Uri.EscapeDataString(room.GetProperty("formKey").GetString().Require());
 
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references?origin=ListedMod");
 
         Assert.Equal(["ZuluRef", "AlphaRef"], EditorIds(references.GetProperty("temporary")));
     }
@@ -502,10 +519,10 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AQuestsChildren_ListInFormIdOrder_WhateverTheirType()
     {
         await LoadedListings();
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&type=qust&limit=10");
+        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&origin=ListedMod&type=qust&limit=10");
         var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
 
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/records/{questFk}/children");
+        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/records/{questFk}/children?origin=ListedMod");
 
         Assert.Equal(["ZuluScene", "AlphaTopic"], EditorIds(children));
     }
@@ -515,7 +532,7 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedListings();
 
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
 
         Assert.Equal([true, false], worldspaces.EnumerateArray().Select(w => w.GetProperty("hasChildren").GetBoolean()));
     }
@@ -544,11 +561,11 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task ARecordItsQuestHolds_IsListedOnlyBeneathItsQuest()
     {
         await Loaded();
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=qust&limit=10");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
+        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");
         var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
 
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children");
+        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children?origin={UserMod}");
 
         Assert.DoesNotContain("dial", types.EnumerateArray().Select(t => t.GetProperty("type").GetString()));
         Assert.Equal(["QueriedTopic"], EditorIds(children));
@@ -558,8 +575,8 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task TheCellGroup_CountsTheInteriorCellsItLists()
     {
         await Loaded();
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/interior-cells?origin={UserMod}");
 
         var cellGroup = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "cell");
         var listed = blocks.EnumerateArray()
@@ -582,12 +599,12 @@ public sealed class QueryIndexTraceTests : HostedTests
         await LoadedListings();
         await Filtered("ZuluRef");
 
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/record-types");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/record-types?origin=ListedMod");
         var rooms = (await InteriorBlocks()).EnumerateArray()
             .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
             .SelectMany(s => s.GetProperty("cells").EnumerateArray()).ToList();
         var roomFk = Uri.EscapeDataString(rooms[0].GetProperty("formKey").GetString().Require());
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references?origin=ListedMod");
 
         Assert.Equal(["Cell"], GroupNames(types));
         Assert.Equal(["ZuluRoom"], rooms.Select(r => r.GetProperty("editorId").GetString()));
@@ -600,10 +617,10 @@ public sealed class QueryIndexTraceTests : HostedTests
         await Loaded();
         await Filtered("QueriedResponse");
 
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=qust&limit=10");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
+        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");
         var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children");
+        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/records/{questFk}/children?origin={UserMod}");
 
         Assert.Equal(["Quest"], GroupNames(types));
         Assert.Equal(["QueriedTopic"], EditorIds(children));
@@ -672,8 +689,8 @@ public sealed class QueryIndexTraceTests : HostedTests
         (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
         await Filtered("BaseRef");
 
-        var baseRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Base.esm/interior-cells");
-        var lightingRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Lighting.esp/interior-cells");
+        var baseRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Base.esm/interior-cells?origin=BaseMod");
+        var lightingRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Lighting.esp/interior-cells?origin=LightingMod");
 
         Assert.Equal(["BaseRoom"], InteriorEditorIds(baseRooms));
         Assert.Empty(InteriorEditorIds(lightingRooms));
@@ -689,8 +706,8 @@ public sealed class QueryIndexTraceTests : HostedTests
     public async Task AGroupsListing_HoldsAsManyRecordsAsItsCount()
     {
         await Loaded();
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
-        var cells = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=cell&limit=10");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types?origin={UserMod}");
+        var cells = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=cell&limit=10");
 
         var count = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "cell").GetProperty("count").GetInt32();
         Assert.Equal(count, cells.GetProperty("total").GetInt32());
@@ -736,9 +753,9 @@ public sealed class QueryIndexTraceTests : HostedTests
     {
         await LoadedHeldRecords();
 
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types");
-        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&limit=10");
-        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&search=Held&limit=10");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types?origin=HeldMod");
+        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin=HeldMod&type={type}&limit=10");
+        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin=HeldMod&type={type}&search=Held&limit=10");
 
         Assert.Equal(1, held.GetProperty("total").GetInt32());
         Assert.Equal(0, group.GetProperty("total").GetInt32());

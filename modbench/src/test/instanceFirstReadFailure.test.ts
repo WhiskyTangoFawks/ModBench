@@ -33,8 +33,8 @@ import { FakeLogOutputChannel } from './fakeOutputChannel';
 import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
-import { resolvesNotFound } from './mo2/gameFolderNotFound';
-import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 
 const roots: string[] = [];
 const disposables: { dispose(): void }[] = [];
@@ -58,11 +58,10 @@ async function fourViewsOverOneInstance() {
   const channel = new FakeLogOutputChannel();
   const log = (msg: string) => { channel.info(msg); };
   const instance = new Instance({
-    instanceRoot: root, log, logReadFailure: (line) => { channel.error(line); },
-    resolveGameDirectory: resolvesNotFound,
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    log, logReadFailure: (line) => { channel.error(line); },
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
-  const mods = new ModListProvider({ instance, instanceRoot: root });
+  const mods = new ModListProvider({ instance, access: accessTo(root) });
   const plugins = new PluginsTreeProvider({
     instance,
     source: { reorderPlugins: () => Promise.resolve() },
@@ -104,7 +103,7 @@ describe('a failed first read across the Toolbox, Mods, Plugins and Downloads vi
       expect(error.iconPath).toEqual(new ThemeIcon('error'));
     }
     expect(channelWrites(channel)).toHaveLength(1);
-    expect(channel.error.mock.calls).toEqual([[`[instance] Failed to read the MO2 instance: ${reason}`]]);
+    expect(channel.error.mock.calls).toEqual([[`[instance] Failed to read the instance: ${reason}`]]);
     expect(showErrorMessage).not.toHaveBeenCalled();
     expect(showWarningMessage).not.toHaveBeenCalled();
     expect(showInformationMessage).not.toHaveBeenCalled();

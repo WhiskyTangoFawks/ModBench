@@ -10,7 +10,7 @@ export function lockedRowUri(pluginFile: string): vscode.Uri {
   return vscode.Uri.from({ scheme: LOCKED_ROW_SCHEME, path: vscode.Uri.file(pluginFile).path });
 }
 
-/** Grays an implicit master's row as MO2 does for a `forceLoaded` row (ADR-0013);
+/** Grays an implicit master's row as the reference tool does for a `forceLoaded` row (ADR-0013);
  *  `TreeItem` has no label-color property, so row coloring must be a
  *  `FileDecorationProvider`. */
 export class ImplicitMasterDecorationProvider implements vscode.FileDecorationProvider {

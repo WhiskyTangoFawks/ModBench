@@ -33,9 +33,9 @@ public sealed class RegisteredPluginSpellingTests
         // git's index is case-sensitive on every platform, so the committed paths are the portable
         // statement of where a reader finds the tree.
         var committed = GitProbe.Run(scratch.GitDirectory, scratch.ModFolder, "ls-files").Split('\n');
-        Assert.Contains("source/Mixed.ESP/RecordData.json", committed);
+        Assert.Contains("plugin-source/Mixed.ESP/RecordData.json", committed);
         Assert.DoesNotContain(
-            committed, path => path.StartsWith("source/Mixed.esp/", StringComparison.Ordinal));
+            committed, path => path.StartsWith("plugin-source/Mixed.esp/", StringComparison.Ordinal));
     }
 
     [Fact]

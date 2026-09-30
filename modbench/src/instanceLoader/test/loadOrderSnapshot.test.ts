@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
+import type { GameFolder, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
@@ -25,64 +25,47 @@ function index(
   return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)) };
 }
 
-const source = (order: string[], enabled: string[] = order) => ({
-  readPluginOrder: () => Promise.resolve(order),
-  readEnabledPlugins: () => Promise.resolve(enabled),
-  readModlist: () => Promise.resolve([]),
-});
+const DATA_FOLDER = join('/game', 'Data');
+const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER };
+const OVERWRITE = join('/instance', 'overwrite');
+
+const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
+  order.map((name) => ({ name, enabled: enabled.includes(name) }));
+
+// A file the game wrote at run time, as the adapter lists it.
+const runtimeOutput = (relativePath: string): OriginFile => ({ relativePath, path: join(OVERWRITE, ...relativePath.split('/')) });
 
 describe('buildLoadOrderRows', () => {
-  let instanceRoot: string | undefined;
-  afterEach(async () => {
-    if (instanceRoot) await rm(instanceRoot, { recursive: true, force: true });
-    instanceRoot = undefined;
-  });
-  const root = async () => (instanceRoot = await mkdtemp(join(tmpdir(), 'medit-load-order-snapshot-')));
-
-  it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
 
-  it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', async () => {
-    const instanceDir = await root();
+  it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', () => {
+    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER);
 
-    const dataFolder = join(instanceDir, 'game', 'Data');
-
-    const result = await buildLoadOrderRows(source(['Fallout4.esm']), instanceDir, dataFolder, () => Promise.resolve(index({})));
-
-    expect(result).toEqual([{ name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: 'Data', slot: 0, enabled: true, winning: true }]);
+    expect(result).toEqual([{ name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data', slot: 0, enabled: true, winning: true }]);
   });
 
-  it('sends every plugins.txt line in slot order, the `*` prefix as enabled, matched case-insensitively', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('sends every plugins.txt line in slot order, the `*` prefix as enabled, matched case-insensitively', () => {
     const fakeIndex = index({ 'On.esp': { winner: '/mods/A/On.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderRows(
-      source(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'mixed.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'Mixed.ESP']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'On.esp', path: '/mods/A/On.esp', origin: 'A', slot: 0, enabled: true, winning: true },
-      { name: 'Off.esp', path: join(dataFolder, 'Off.esp'), origin: 'Data', slot: 1, enabled: false, winning: true },
-      { name: 'Mixed.ESP', path: join(dataFolder, 'Mixed.ESP'), origin: 'Data', slot: 2, enabled: true, winning: true },
+      { name: 'Off.esp', path: join(DATA_FOLDER, 'Off.esp'), origin: 'Data', slot: 1, enabled: false, winning: true },
+      { name: 'Mixed.ESP', path: join(DATA_FOLDER, 'Mixed.ESP'), origin: 'Data', slot: 2, enabled: true, winning: true },
     ]);
   });
 
   // ADR-0013: the overridden plugin is in the snapshot too — at the name's slot, carrying the
   // line's own `*`, and not winning. Editing registers it beside the winner; only the winner
   // participates.
-  it('an overridden plugin of a listed name is sent at that slot, enabled as its line says, not winning', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('an overridden plugin of a listed name is sent at that slot, enabled as its line says, not winning', () => {
     const fakeIndex = index(
       { 'Shared.esp': { winner: '/mods/A/Shared.esp', winnerMod: 'A', providers: ['A', 'B'] } },
       {
@@ -91,130 +74,78 @@ describe('buildLoadOrderRows', () => {
       },
     );
 
-    const result = await buildLoadOrderRows(source(['Other.esp', 'Shared.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['Other.esp', 'Shared.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/A/Shared.esp', origin: 'A', slot: 1, enabled: true, winning: true });
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/B/Shared.esp', origin: 'B', slot: 1, enabled: true, winning: false });
   });
 
-  it('a plugin file no plugins.txt line names is sent with no slot, not enabled, winning if it is the sole provider', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('a plugin file no plugins.txt line names is sent with no slot, not enabled, winning if it is the sole provider', () => {
     const fakeIndex = index(
       { 'Stray.esp': { winner: '/mods/C/Stray.esp', winnerMod: 'C' } },
       { C: [{ relativePath: 'Stray.esp', absolutePath: '/mods/C/Stray.esp' }, { relativePath: 'textures/x.dds', absolutePath: '/mods/C/textures/x.dds' }] },
     );
 
-    const result = await buildLoadOrderRows(source(['Listed.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
-      { name: 'Listed.esp', path: join(dataFolder, 'Listed.esp'), origin: 'Data', slot: 0, enabled: true, winning: true },
+      { name: 'Listed.esp', path: join(DATA_FOLDER, 'Listed.esp'), origin: 'Data', slot: 0, enabled: true, winning: true },
       { name: 'Stray.esp', path: '/mods/C/Stray.esp', origin: 'C', slot: null, enabled: false, winning: true },
     ]);
   });
 
-  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
-    await mkdir(join(instanceDir, 'overwrite'));
-    await writeFile(join(instanceDir, 'overwrite', 'Foo.esp'), 'overwrite-plugin');
+  it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', () => {
     const fakeIndex = index(
       { 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } },
       { A: [{ relativePath: 'Foo.esp', absolutePath: '/mods/A/Foo.esp' }] },
     );
 
-    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [runtimeOutput('Foo.esp')], GAME_FOLDER);
 
     expect(result).toEqual([
-      { name: 'Foo.esp', path: join(instanceDir, 'overwrite', 'Foo.esp'), origin: 'overwrite', slot: 0, enabled: true, winning: true },
+      { name: 'Foo.esp', path: join(OVERWRITE, 'Foo.esp'), origin: 'overwrite', slot: 0, enabled: true, winning: true },
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: false },
     ]);
   });
 
-  it('an unlisted plugin sitting in overwrite/ is sent with no slot, winning-most', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
-    await mkdir(join(instanceDir, 'overwrite'));
-    await writeFile(join(instanceDir, 'overwrite', 'New.esp'), '');
-    await writeFile(join(instanceDir, 'overwrite', 'notes.txt'), '');
-
-    const result = await buildLoadOrderRows(source([]), instanceDir, dataFolder, () => Promise.resolve(index({})));
+  it('an unlisted plugin sitting in overwrite/ is sent with no slot, winning-most', () => {
+    const result = buildLoadOrderRows(lines([]), index({}), [runtimeOutput('New.esp'), runtimeOutput('notes.txt')], GAME_FOLDER);
 
     expect(result).toEqual([
-      { name: 'New.esp', path: join(instanceDir, 'overwrite', 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
+      { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
     ]);
   });
 
-  it('no overwrite folder present at all falls through to mod/Data resolution unaffected', async () => {
-    const instanceDir = await root(); // overwrite/ never created
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('never takes a plugin file below overwrite/\'s root for a plugin, listed or not', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(
+      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], GAME_FOLDER,
+    );
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
 
-  it('a directory under overwrite/ sharing a plugin\'s name is not treated as that plugin\'s file', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
-    await mkdir(join(instanceDir, 'overwrite', 'Foo.esp'), { recursive: true }); // a directory, not a file
-    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
-
-    const result = await buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
-
-    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
-  });
-
-  it('a read failure under overwrite/ other than "missing folder" propagates rather than being swallowed', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
-    await writeFile(join(instanceDir, 'overwrite'), 'not a directory'); // readdir on this -> ENOTDIR, not ENOENT
-    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
-
-    await expect(
-      buildLoadOrderRows(source(['Foo.esp']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex)),
-    ).rejects.toThrow();
-  });
-
-  it('maps names to winner paths case-insensitively, never mistaking a nested file for the root-level plugin', async () => {
-    const instanceDir = await root();
-
-    const dataFolder = join(instanceDir, 'game', 'Data');
+  it('maps names to winner paths case-insensitively, never mistaking a nested file for the root-level plugin', () => {
     const fakeIndex = index({
       'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' },
       'bar.esp': { winner: '/mods/B/bar.esp', winnerMod: 'B' },
       'textures/Foo.esp': { winner: '/mods/C/textures/Foo.esp', winnerMod: 'C' },
     });
 
-    const result = await buildLoadOrderRows(
-      source(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), instanceDir, dataFolder, () => Promise.resolve(fakeIndex));
+    const result = buildLoadOrderRows(lines(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
       { name: 'Bar.esp', path: '/mods/B/bar.esp', origin: 'B', slot: 1, enabled: true, winning: true },
-      { name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: 'Data', slot: 2, enabled: true, winning: true },
+      { name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data', slot: 2, enabled: true, winning: true },
     ]);
   });
 });
 
 describe('resolvePluginPaths', () => {
-  // A defined-but-empty dataFolder is falsy but not undefined: the fallback branches on
-  // definedness, so it still resolves rather than dropping the name.
-  it('resolves the Data-folder fallback for an empty-string dataFolder', () => {
-    const result = resolvePluginPaths(['Fallout4.esm'], index({}), '');
-
-    expect(result.get('Fallout4.esm')).toBe('Fallout4.esm');
-  });
-
-  it('drops a name neither a mod winner nor a dataFolder can resolve', () => {
-    const result = resolvePluginPaths(['Fallout4.esm'], index({}), undefined);
+  it('drops a name neither a mod winner nor a game folder found can resolve', () => {
+    const result = resolvePluginPaths(['Fallout4.esm'], index({}), GAME_FOLDER_NOT_FOUND);
 
     expect(result.has('Fallout4.esm')).toBe(false);
   });
@@ -228,8 +159,8 @@ describe('originFiles', () => {
   it('names a file inside the folder the origin\'s plugin sits in, and holds only what is beneath it', () => {
     const files = present(originFiles(rows, 'TS Mod'), 'the TS Mod origin\'s files');
 
-    expect(files.file('source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'));
-    expect(files.holds(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'))).toBe(true);
+    expect(files.file('plugin-source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'));
+    expect(files.holds(join('/instance', 'mods', 'TS Mod', 'plugin-source', 'x.json'))).toBe(true);
     expect(files.holds(join('/instance', 'mods', 'Other', 'x.json'))).toBe(false);
   });
 

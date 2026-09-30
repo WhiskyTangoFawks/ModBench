@@ -20,7 +20,7 @@ source: @../target-architecture.medit_data.source
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 
-plugins -> client: "decompile plugin: track, with the preset · decompile" {class: edit}
+plugins -> client: "decompile plugin: track, with the preset and the upstream version · decompile" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}

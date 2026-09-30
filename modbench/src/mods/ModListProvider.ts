@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_DIR_NAME, type Mod, type ModlistEntry, type Separator } from '../instanceLoader/instance';
+import type { Mod, ModlistEntry, Separator } from '../instanceLoader/instance';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
 import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
-import { setModsEnabled as setModsEnabledCommand } from '../modlist/modlist';
+import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -14,8 +15,8 @@ export type SortDirection = 'losingAtTop' | 'winningAtTop';
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 /** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
- *  on: the row stands for MO2's folder, so it is named as the value names that folder. */
-export const OVERWRITE_NODE_KIND = OVERWRITE_DIR_NAME;
+ *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
+export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
@@ -28,7 +29,7 @@ export interface ModListProviderOptions {
    *  overwrite/ file count — the tree's only data input (ADR-0015). */
   instance: InstanceView;
   /** The instance the check box command writes to; never read by this provider. */
-  instanceRoot: string;
+  access: ModlistAccess;
 }
 
 function statusIconId(status?: ModStatusResult): string {
@@ -113,7 +114,7 @@ export class ModNode extends vscode.TreeItem {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(fileCount: number) {
+  constructor(fileCount: number, manager: string) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
     this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;
@@ -121,7 +122,7 @@ export class OverwriteNode extends vscode.TreeItem {
     this.iconPath = fileCount > 0
       ? new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.red'))
       : new vscode.ThemeIcon('folder');
-    this.tooltip = 'The files tools wrote while MO2 ran them, which win over every mod.';
+    this.tooltip = `The files tools wrote while ${manager} ran them, which win over every mod.`;
   }
 }
 
@@ -134,9 +135,9 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mods tree over an MO2 instance's active profile — rows, statuses and
+/** Sidebar Mods tree over the instance's active profile — rows, statuses and
  *  the overwrite count all read entirely from the Instance value (ADR-0015); this provider owns
- *  no cache or watcher over MO2's files itself. */
+ *  no cache or watcher over the instance's files itself. */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {
@@ -153,14 +154,14 @@ export class ModListProvider
   private filterLower = '';
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
-  private readonly instanceRoot: string;
+  private readonly access: ModlistAccess;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
-    this.instanceRoot = options.instanceRoot;
+    this.access = options.access;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
@@ -301,7 +302,7 @@ export class ModListProvider
   }
 
   private overwriteNode(): OverwriteNode {
-    return new OverwriteNode(this.instanceValue.overwriteFileCount);
+    return new OverwriteNode(this.instanceValue.overwriteFileCount, this.instanceValue.managerNames.manager);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));
@@ -335,7 +336,7 @@ export class ModListProvider
   // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const profile = this.instanceValue.activeProfile;
-    const result = await setModsEnabledCommand(this.instanceRoot, profile, [modName], enabled);
+    const result = await setModsEnabledCommand(this.access, profile, [modName], enabled);
     if (!result.applied) throw new Error(result.refusal);
     const refusal = result.outcome.refused[0];
     if (refusal) throw new Error(refusal.reason);

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { DOWNLOAD_SIDECAR_SUFFIX } from '../../mo2Codecs/downloads';
-import { MOD_META_FILE_NAME } from '../../mo2Codecs/metaIni';
-import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../../mo2Codecs/modlistText';
-import { SETTINGS_FILE_NAME } from '../../mo2Codecs/modOrganizerIni';
-import { PLUGINS_FILE_NAME } from '../../mo2Codecs/pluginsText';
+import { DOWNLOAD_SIDECAR_SUFFIX } from '../codecs/downloads';
+import { MOD_META_FILE_NAME } from '../codecs/metaIni';
+import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../codecs/modlistText';
+import { SETTINGS_FILE_NAME } from '../codecs/modOrganizerIni';
+import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import {
   DOWNLOADS_WATCH_GLOB,
   MODLIST_GLOB,
@@ -13,6 +13,7 @@ import {
   PLUGINS_GLOB,
   defaultDownloadsDir,
   downloadFile,
+  downloadNameAt,
   downloadSidecarFile,
   modDir,
   modGitDir,
@@ -32,6 +33,14 @@ import {
 const ROOT = join('/tmp', 'instance');
 
 describe('MO2 layout', () => {
+  // Rival: an exact comparison, which misses the path a Windows picker hands back in another case.
+  it('names the downloaded file at a path as the platform matches paths', () => {
+    expect(downloadNameAt('C:\\MO2\\downloads', 'c:\\mo2\\Downloads\\Foo.7z', 'win32')).toBe('Foo.7z');
+    expect(downloadNameAt('/mo2/downloads', '/mo2/downloads/Foo.7z', 'linux')).toBe('Foo.7z');
+    expect(downloadNameAt('/mo2/downloads', '/mo2/Downloads/Foo.7z', 'linux')).toBeUndefined();
+    expect(downloadNameAt('C:\\MO2\\downloads', 'C:\\Elsewhere\\Foo.7z', 'win32')).toBeUndefined();
+  });
+
   it('names the four directories under the instance root', () => {
     expect(profilesDir(ROOT)).toBe(join(ROOT, 'profiles'));
     expect(modsDir(ROOT)).toBe(join(ROOT, 'mods'));
@@ -44,13 +53,13 @@ describe('MO2 layout', () => {
   });
 
   it('names a file inside a folder by its relative path', () => {
-    expect(fileInFolder(join(ROOT, 'mods', 'SomeMod'), 'source/Some.esp/x.json'))
-      .toBe(join(ROOT, 'mods', 'SomeMod', 'source', 'Some.esp', 'x.json'));
+    expect(fileInFolder(join(ROOT, 'mods', 'SomeMod'), 'plugin-source/Some.esp/x.json'))
+      .toBe(join(ROOT, 'mods', 'SomeMod', 'plugin-source', 'Some.esp', 'x.json'));
   });
 
   it('holds a file anywhere beneath a folder, and never one in a sibling whose name it prefixes', () => {
     const folder = join(ROOT, 'mods', 'SomeMod');
-    expect(isInFolder(folder, join(folder, 'source', 'x.json'))).toBe(true);
+    expect(isInFolder(folder, join(folder, 'plugin-source', 'x.json'))).toBe(true);
     expect(isInFolder(folder, join(ROOT, 'mods', 'SomeMod2', 'x.json'))).toBe(false);
   });
 

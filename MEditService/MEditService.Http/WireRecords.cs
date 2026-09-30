@@ -7,11 +7,6 @@ namespace MEditService.Http;
 public record FilterRequest(string Sql, string Source);
 public record FilterResponse(string? Sql, string? Source);
 
-/// <summary>ADR-0015 invariant 3: the answer to "did the projection reach at least N?" — Sequence
-/// is the value observed at the moment of that answer, not necessarily equal to the awaited
-/// bound.</summary>
-public record SequenceAwaitResponse(bool Reached, long Sequence);
-
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);

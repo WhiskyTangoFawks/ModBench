@@ -9,23 +9,23 @@ import { tsFiles } from './tsFiles';
 
 const MODBENCH = join(__dirname, '..', '..');
 
-const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+const KERNEL_BOXES = ['loadOrderFileCodec', 'tables', 'wire', 'ports'];
 
 // The driven column, each with the reference list target-architecture-references.d2 draws for it:
 // the arrows that leave the box, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
-  instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
+  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
+  instanceLoader: ['instanceAdapter', 'ports', 'tables'],
 };
 
 // The core column, same rule. An arrow the diagram draws that the code has no use for is left
 // out here and reported, never referenced to make the picture symmetric.
 const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['mo2Codecs', 'instanceAdapter', 'ports'],
-  pluginsCommands: ['instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports'],
-  instanceCommands: ['client', 'instanceLoader', 'mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
-  downloadsCommands: ['mo2Codecs', 'instanceAdapter', 'ports'],
-  install: ['mo2Codecs', 'instanceAdapter', 'ports'],
+  modlist: ['instanceAdapter', 'ports'],
+  pluginsCommands: ['instanceLoader', 'loadOrderFileCodec', 'instanceAdapter', 'ports'],
+  instanceCommands: ['client', 'instanceLoader', 'instanceAdapter', 'ports', 'tables'],
+  downloadsCommands: ['instanceAdapter', 'ports'],
+  install: ['instanceAdapter', 'ports'],
   client: ['ports', 'wire'],
 };
 
@@ -114,16 +114,10 @@ describe('one composite project per box', () => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  // The Instance adapter holds the one file system door, so the same rule binds it: a VS Code
-  // type here would put the extension host behind that door.
-  it('instanceAdapter sees the Node types and no others', () => {
-    expect(parsed(boxProject('instanceAdapter')).options.types).toEqual(['node']);
-  });
-
-  // The Instance owns every watcher on the instance, and a watcher is VS Code's — the one driven box
-  // that sees the extension host.
-  it('instanceLoader sees the Node and VS Code types and no others', () => {
-    expect(parsed(boxProject('instanceLoader')).options.types).toEqual(['node', 'vscode']);
+  // The Instance adapter holds the one file system door and the Instance loader reads only through
+  // it: a VS Code type in either would put the extension host behind that door.
+  it.each(Object.keys(DRIVEN_BOXES))('%s sees the Node types and no others', (box) => {
+    expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
   // A command writes through the Instance adapter and forgets, and the client is the one seam a
@@ -142,7 +136,7 @@ describe('one composite project per box', () => {
   // tsconfig on disk, one assertion per box, so either box alone fails it.
   it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
     const references = referencePaths(boxProject(box));
-    expect(references).not.toContain(join('src', 'mo2Codecs'));
+    expect(references).not.toContain(join('src', 'loadOrderFileCodec'));
     expect(references).not.toContain(join('src', 'tables'));
   });
 

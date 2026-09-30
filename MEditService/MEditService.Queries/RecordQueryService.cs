@@ -33,7 +33,7 @@ public sealed class RecordQueryService(
             new(plugin, opened[plugin.Key], masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
-        if (_index.FilterSql is null)
+        if (_index.ActiveFilter is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];
 
         // plugins.md: a record filter prunes records and record types, never
@@ -56,17 +56,16 @@ public sealed class RecordQueryService(
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
+        // A plugin filter with no origin would match every plugin sharing that filename; an origin
+        // with no plugin filter names half an identity the same way (ADR-0012 invariant 1).
+        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
+            throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
+
         PluginName? pluginFilter = null;
-        string? resolvedOrigin = null;
-        if (plugin != null)
-        {
-            // The caller states which plugin when it knows (a tree row does); otherwise resolve from
-            // the load order, since a bare filename is all most callers have.
-            pluginFilter = plugin;
-            resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
-        }
+        if (!string.IsNullOrWhiteSpace(plugin)) pluginFilter = plugin;
+        var originFilter = string.IsNullOrWhiteSpace(origin) ? null : origin;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search, Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
@@ -130,19 +129,19 @@ public sealed class RecordQueryService(
         return (classification, classification.ConflictAll);
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin)
     {
         var reads = RequireReads();
-        // Stated by the caller when it knows which plugin it is browsing (a tree row does),
-        // else resolved server-side from the load order.
-        origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var schemas = RequireSchemas();
+        var release = _loadOrder.Require().GameRelease;
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
         return [.. reads.GetRecordTypeCounts(new PluginAddress(plugin, origin))
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
-            .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
+            .Select(c => new PluginRecordTypeCount(
+                c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure,
+                CreatableRecordTypes.Includes(c.Type, release)))
             .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
@@ -157,8 +156,26 @@ public sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
+    public bool GetLightPluginsSupported() => LightPluginSupport.Of(_loadOrder.Require().GameRelease);
+
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
+
+    public LoadOrderStatus GetStatus() => _index.Status;
+
+    public long GetSequence() => _index.Sequence;
+
+    public async Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout)
+    {
+        var reached = await _index.AwaitSequenceAsync(atLeast, timeout).ConfigureAwait(false);
+        return new SequenceAwaitResponse(reached, _index.Sequence);
+    }
+
+    public (string Sql, string Source)? GetFilter()
+    {
+        RequireReads();
+        return _index.ActiveFilter;
+    }
 
     public void SetFilter(string sql, string source) => _index.SetFilter(sql, source);
 

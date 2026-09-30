@@ -33,6 +33,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -52,7 +53,7 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 // provider reaching for `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths' | 'managerNames'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
@@ -60,6 +61,7 @@ function valueOf(
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFileCount: extra.overwriteFileCount ?? 0,
     ...(extra.paths ? { paths: extra.paths } : {}),
+    ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
   });
 }
 
@@ -112,7 +114,7 @@ const makeProvider = (
   extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
 ) => new ModListProvider({
   instance: extra.instance ?? new FakeInstance(valueOf(mods)),
-  instanceRoot: extra.instanceRoot ?? INSTANCE_ROOT,
+  access: accessTo(extra.instanceRoot ?? INSTANCE_ROOT),
 });
 
 // modlist.txt runs winning-first and a separator heads the lines above it: Late Section holds
@@ -297,7 +299,10 @@ describe('ModListProvider', () => {
   // Mod sync is what adds a line, so a folder with no line has no row until the line exists.
   // Rival: a tree that renders the value's folders rather than its lines.
   it('renders no row for a folder in mods/ with no modlist line', async () => {
-    const value = { ...valueOf([mod('Listed')]), modFolders: ['Listed', 'Dropped In'] } as InstanceValue;
+    const value = { ...valueOf([mod('Listed')]), modFolders: [
+      { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed' },
+      { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In' },
+    ] } as InstanceValue;
     const provider = makeProvider([], { instance: new FakeInstance(value) });
 
     const labels = (await provider.getChildren()).map((n) => n.label);
@@ -348,14 +353,15 @@ describe('ModListProvider', () => {
 
   // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's. The check
   // box reaches the same command a context-menu click or key does — one mod, through the entry.
-  it('setModEnabled calls the setModsEnabled command with the instance root, active profile and one-mod selection, and fires no refresh', async () => {
-    const provider = makeProvider([mod('A')]);
+  it('setModEnabled calls the setModsEnabled command with the access, active profile and one-mod selection, and fires no refresh', async () => {
+    const access = accessTo(INSTANCE_ROOT);
+    const provider = new ModListProvider({ instance: new FakeInstance(valueOf([mod('A')])), access });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
     await provider.setModEnabled('A', false);
 
-    expect(setModsEnabledMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, ['A'], false);
+    expect(setModsEnabledMock).toHaveBeenCalledWith(access, ACTIVE_PROFILE, ['A'], false);
     expect(fired).toBe(false);
   });
 
@@ -421,7 +427,7 @@ describe('ModListProvider', () => {
   // before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
-      const provider = new ModListProvider({ instance, instanceRoot: root });
+      const provider = new ModListProvider({ instance, access: accessTo(root) });
 
       const pending = provider.getChildren();
       await instance.refresh();
@@ -869,6 +875,14 @@ describe('ModListProvider', () => {
       const row = await overwriteRow(2);
 
       expect(row.tooltip).toBe('The files tools wrote while MO2 ran them, which win over every mod.');
+    });
+
+    // Rival: the manager's name spelled here, which names MO2 over another manager's instance.
+    it('names the mod manager the value names', async () => {
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } })) });
+      const row = expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
+
+      expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');
     });
 
     // A resourceUri would hand the label to every file decoration provider, git's included.

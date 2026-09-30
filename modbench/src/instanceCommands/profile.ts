@@ -1,14 +1,15 @@
-// The active-profile gesture (ADR-0015 invariant 2): a free function returning applied or a
-// refusal. It writes ModOrganizer.ini and forgets — the Instance's watcher over that file is
-// how the switch comes back.
+// The active-profile gesture (ADR-0015 invariant 2): it hands the Instance adapter the profile to
+// select and forgets, and the adapter's signal that the instance changed brings the switch back.
 
-import { settingsFile } from '../instanceAdapter/layout';
-import { readSelectedProfile, setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
-import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
-/** `wrote` is false when the profile was already selected: no byte changes, so the
- *  ModOrganizer.ini watcher never fires. */
+/** What switch profile reaches the instance through. */
+export interface ProfileAccess {
+  readonly adapter: InstanceAdapter;
+}
+
+/** `wrote` is false when the profile was already selected. */
 export type ProfileCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
@@ -17,16 +18,13 @@ export type ProfileCommandResult =
  *  not there points the whole instance at files that do not exist, which no later read can tell
  *  from a corrupt ini. */
 export async function switchProfile(
-  instanceRoot: string, profile: string, profiles: readonly string[],
+  access: ProfileAccess, profile: string, profiles: readonly string[],
 ): Promise<ProfileCommandResult> {
   if (!profiles.includes(profile)) {
     return { applied: false, refusal: `No such profile: ${profile}` };
   }
   try {
-    const { wrote } = await putIfChanged(
-      settingsFile(instanceRoot),
-      (before) => (readSelectedProfile(before) === profile ? before : setSelectedProfileInText(before, profile)),
-    );
+    const { wrote } = await access.adapter.selectProfile(profile);
     return { applied: true, wrote };
   } catch (err) {
     return refuse(err);

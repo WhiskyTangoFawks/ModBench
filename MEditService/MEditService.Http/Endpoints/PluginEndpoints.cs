@@ -40,12 +40,14 @@ public static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decoded = Uri.UnescapeDataString(plugin);
             return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<PluginRecordTypeCount>>();
+            .Produces<IReadOnlyList<PluginRecordTypeCount>>()
+            .ProducesProblem(400);
 
         app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
         {
@@ -61,6 +63,22 @@ public static class PluginEndpoints
             .WithName("GetCreatableRecordTypes")
             .WithTags(Tag)
             .Produces<IReadOnlyList<CreatableRecordType>>()
+            .ProducesProblem(503);
+
+        app.MapGet("/plugins/light-plugins-supported", (IRecordQueryService svc) =>
+        {
+            try
+            {
+                return Results.Ok(svc.GetLightPluginsSupported());
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetLightPluginsSupported")
+            .WithTags(Tag)
+            .Produces<bool>()
             .ProducesProblem(503);
 
         app.MapPost("/plugins/create", CreatePlugin)

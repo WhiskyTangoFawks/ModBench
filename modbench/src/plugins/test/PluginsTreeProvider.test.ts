@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reorderPlugins, type PluginsDrop } from '../../pluginsCommands/plugins';
+import { reorderOver, type PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
@@ -37,9 +37,9 @@ import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { readPluginLines } from '../../test/mo2/corpusFixture';
+import { accessTo, readPluginLines } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -85,12 +85,9 @@ class FakeSource implements PluginListSource {
   }
 }
 
-// What the composition root binds: the reorder command against one instance root and profile.
+// What the composition root binds: the reorder command against one instance and profile.
 const writesTo = (instanceRoot: string): PluginListSource => ({
-  reorderPlugins: async (names, drop) => {
-    const result = await reorderPlugins(instanceRoot, 'Default', names, drop);
-    if (!result.applied) throw new Error(result.refusal);
-  },
+  reorderPlugins: reorderOver(accessTo(instanceRoot), () => 'Default'),
 });
 
 // One `GET /plugins` row: held and unremarkable unless a test overrides it.
@@ -134,7 +131,7 @@ function diagnosis(pluginName: string, text: string, origin = 'SomeMod'): Plugin
 function makeClient(overrides: Partial<{
   plugins: PluginMetadata[];
   diagnoses: PluginDiagnosisReport[];
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
   records: RecordPage;
   worldspaces: WorldspaceSummary[];
   worldspaceBlocks: WorldspaceBlocks;
@@ -147,6 +144,7 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getDiagnoses', overrides.diagnoses ?? []);
   client.setQueryAnswer('getRecordTypes', (overrides.recordTypes ?? []).map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
+    isCreatable: rt.isCreatable ?? true,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
   client.setQueryAnswer('getWorldspaces', overrides.worldspaces ?? []);
@@ -727,7 +725,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon', 'SomeMod'), dt, NONE);
+    await tree.handleDrop(new RecordTypeNode('A.esp', recordTypeCountFixture({ type: 'weap', count: 5, displayName: 'Weapon' }), 'SomeMod'), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
@@ -783,6 +781,26 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     await tree.handleDrop(node('M3.esp'), dt, NONE);
 
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
+  });
+
+  // A row VS Code rendered before the watch read plugins.txt back without it.
+  it('refuses a drop on a row the order has since lost, naming it, and moves nothing', async () => {
+    const source = new FakeSource();
+    const reporter = recordingReporter();
+    const instance = new FakeInstance(valueOf(fixturePlugins()));
+    const tree = new PluginsTreeProvider({ instance, source, reporter });
+    await tree.getChildren();
+    instance.publish(valueOf(fixturePlugins(ORDER.filter((name) => name !== 'D.esp'))));
+    await tree.getChildren();
+
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
+    await tree.handleDrop(node('D.esp'), dt, NONE);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to move plugins.', detail: 'Plugin not found in plugins.txt: D.esp' },
+    ]);
+    expect(source.reorderPluginsCalls).toEqual([]);
   });
 
   it('surfaces a write failure via the reporter, naming why, and refreshes nothing (ADR-0019)', async () => {
@@ -1640,7 +1658,7 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     const [record] = await h.tree.getChildren(present(group, 'the Weapon group'));
 
     expect(expectInstanceOf(record, RecordNode).contextValue).toBe('record untracked editable');
-    expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked editable');
+    expect(expectInstanceOf(group, RecordTypeNode).contextValue).toBe('recordType untracked editable creatable');
   });
 });
 
@@ -1704,7 +1722,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
       const { group, record } = await firstRecordUnder(h, locked);
 
       expect(locked.origin).toBe('Data');
-      expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked', 'record untracked']);
+      expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked creatable', 'record untracked']);
     });
 
   it('expands a locked row mEdit names no plugin for at its origin as still indexing', async () => {
@@ -1726,7 +1744,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
       const { group, record } = await firstRecordUnder(h, locked);
 
       expect(locked.origin).toBe('ModA');
-      expect([group.contextValue, record.contextValue]).toEqual(['recordType tracked editable', 'record tracked editable']);
+      expect([group.contextValue, record.contextValue]).toEqual(['recordType tracked editable creatable', 'record tracked editable']);
     });
 });
 

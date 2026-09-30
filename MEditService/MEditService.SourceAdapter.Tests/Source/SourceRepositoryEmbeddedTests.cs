@@ -378,4 +378,20 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Null(repository.Get(Plugin, Identity(_exteriorCell, "cell")));
         Assert.NotNull(repository.Get(Plugin, Identity(_worldspace, "wrld")));
     }
+
+    // The embed-slot names this answers off of come from ContainerSlots.For(Release) — a placed
+    // reference, a dialog topic and a response, three different owners' slots, all resolved.
+    [Fact]
+    public void NativeFormKeysHeld_IncludesEveryEmbeddedChildsFormKey()
+    {
+        var held = Repository.NativeFormKeysHeld(Plugin);
+
+        Assert.Contains(_persistentRef.FormKey.ToString(), held);
+        Assert.Contains(_temporaryRef.FormKey.ToString(), held);
+        Assert.Contains(_topCellRef.FormKey.ToString(), held);
+        Assert.Contains(_exteriorRef.FormKey.ToString(), held);
+        Assert.Contains(_topic.FormKey.ToString(), held);
+        Assert.Contains(_response.FormKey.ToString(), held);
+        Assert.Contains(_response2.FormKey.ToString(), held);
+    }
 }

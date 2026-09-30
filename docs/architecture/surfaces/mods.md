@@ -168,18 +168,18 @@ As a user, I want:
    written, with one wording for create and install. Esc creates nothing. *MO2*
 2. Install from the Mods menu to ask first for an archive or a folder, then open a file picker or a
    folder picker.
-   *catalog `install`: the Mods menu asks for the source*
+   *catalog `install`, Argument: an archive or a folder*
 3. The name prompt filled with the archive's name without its extension, or the folder's name. *MO2*
 
 ### What install does
 
-Install is offered here and on Downloads (catalog `install`). As a user, I want:
+Install is offered here and on [Downloads](downloads.md#the-install-target). As a user, I want:
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`
    does.
 3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
-   its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
+   its plugin source (`.git`, `.gitignore` and `plugin-source/`). *ADR-0007*
 4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
    never blanks a known one. *ADR-0017, invariant 2*
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll

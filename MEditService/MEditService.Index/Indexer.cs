@@ -100,13 +100,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>Whether the store registers this plugin — an endpoint's 404 question, answered
-    /// without handing out the store.</summary>
-    public bool Registers(PluginAddress key)
-    {
-        lock (_lock) return _index?.RegisteredPlugins().Contains(key, PluginAddress.Comparer) == true;
-    }
-
     // ADR-0009 invariant 4: the hash the store's rows for this plugin were built from, or null when
     // it holds no validated rows for it.
     private string? IndexedContentHash(PluginAddress key)
@@ -544,7 +537,18 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
                     "{Plugin} ({Origin}) now reads from {Truth}; re-deriving it", plugin.Name, plugin.Origin,
                     holdsTree ? "its source tree" : "its binary");
             }
-            IndexOnePlugin(held, index, metadata, holdsTree, token);
+            try
+            {
+                IndexOnePlugin(held, index, metadata, holdsTree, token);
+            }
+            catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+            {
+                // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to
+                // read", never the whole index's failure.
+                _logger.LogWarning(ex, "Failed to re-derive {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                held.SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
+                PublishStatus();
+            }
         }
     }
 
@@ -918,6 +922,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        if (_heldPlugins?.ClearFailure(metadata.Key) == true) PublishStatus();
         AnnouncePluginChanged(index, metadata.Key);
     }
 
@@ -967,12 +972,21 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
         if (IndexedContentHash(key) is { } indexedHash)
         {
-            if (ContentHashOnDisk(path) == indexedHash) return false;
+            // A plugin whose last read failed is read whole again, which is what lifts the failure.
+            if (ContentHashOnDisk(path) == indexedHash && _heldPlugins?.IsHeldWithAFailure(key) != true) return false;
             ReindexHeldPlugin(key);
             return true;
         }
 
         return IndexNotYetHeld(key);
+    }
+
+    /// <summary>See <see cref="IRefreshIndex.RetryFailedReconcile"/>.</summary>
+    public void RetryFailedReconcile()
+    {
+        bool failed;
+        lock (_lock) failed = _failureMessage is not null;
+        if (failed) ReconcileHeld();
     }
 
     // A plugin the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
@@ -1014,9 +1028,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
         return true;
     }
-
-    /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
-    public string? FilterSql => ActiveFilter?.Sql;
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
     /// concurrent set never pairs one filter's SQL with another's source.</summary>
@@ -1090,14 +1101,15 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
 
         return Task.Factory.StartNew(
-            RefillUnlessDisposed, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
+            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
     }
 
-    private void RefillUnlessDisposed()
+    // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
+    // reconcile opens a store after Dispose.
+    private void ReconcileHeld() => Reconcile(() =>
     {
-        lock (_lock) if (_disposed) return;
-        Reconcile(() => _holder.Held);
-    }
+        lock (_lock) return _disposed ? null : _holder.Held;
+    });
 
     // Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
     // reconcile and waits for it to stop first. The kernel's load order is its own and is untouched.

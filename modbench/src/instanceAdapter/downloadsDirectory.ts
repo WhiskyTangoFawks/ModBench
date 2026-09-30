@@ -3,7 +3,7 @@
 // instance.
 
 import { isAbsolute, join } from 'node:path';
-import { readDownloadDirectory } from '../mo2Codecs/modOrganizerIni';
+import { readDownloadDirectory } from './codecs/modOrganizerIni';
 import { defaultDownloadsDir } from './layout';
 import { normalizeGamePath, winePrefixDetectorFor, type GameDetectors } from './gameDirectory';
 import { errorMessage } from '../ports/errorMessage';

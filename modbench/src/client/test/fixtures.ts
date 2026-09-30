@@ -1,4 +1,4 @@
-import type { CompiledPlugin, NotificationEvent, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
+import type { CompiledPlugin, NotificationEvent, PluginMetadata, PluginRecordTypeCount, RecordSummary, ReferenceResult } from '../index';
 import type { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
@@ -51,6 +51,17 @@ export function recordSummaryFixture(overrides: Partial<RecordSummary> = {}): Re
     workingTreeState: 'None',
     hasContainerChildren: false,
     hasParseFailure: false,
+    ...overrides,
+  };
+}
+
+/** A `PluginRecordTypeCount` with every required wire member at its neutral value. */
+export function recordTypeCountFixture(overrides: Partial<PluginRecordTypeCount> & { type: string }): PluginRecordTypeCount {
+  return {
+    count: 1,
+    displayName: overrides.type,
+    hasParseFailure: false,
+    isCreatable: true,
     ...overrides,
   };
 }

@@ -31,15 +31,17 @@ internal sealed class WorkingTreeOverlay
     private readonly RecordTextCodec _codec;
     private readonly ContainerDocuments _containers;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
+    private readonly GameCategory _category;
 
     public WorkingTreeOverlay(
         DuckDBConnection connection, ILogger logger, RecordTextCodec codec,
-        ContainerDocuments containers, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        ContainerDocuments containers, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         _connection = connection;
         _logger = logger;
         _codec = codec;
         _containers = containers;
+        _category = release.ToCategory();
         _schemas = schemas;
     }
 
@@ -385,7 +387,7 @@ internal sealed class WorkingTreeOverlay
         // A child absent from the document is gone at Effective, unless another container's document
         // holds it (a container whose FormID changed re-derives its children under the new identity first).
         var carriedNow = children
-            .Where(c => ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, c.SlotName)))
+            .Where(c => ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, c.SlotName)))
             .Select(c => c.FormKey)
             .ToHashSet(StringComparer.Ordinal);
         foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
@@ -419,7 +421,7 @@ internal sealed class WorkingTreeOverlay
         while (reader.Read())
         {
             var embedded = embeddedIn == null
-                || (reader.IsDBNull(1) || ContainerMembers.Derived.EmbeddedSlots.Contains((embeddedIn, reader.GetString(1))))
+                || (reader.IsDBNull(1) || ContainerChildFields.EmbeddedSlotsFor(_category).Contains((embeddedIn, reader.GetString(1))))
                     && reader.IsDBNull(2);
             if (embedded) recorded.Add(reader.GetString(0));
         }
@@ -448,7 +450,7 @@ internal sealed class WorkingTreeOverlay
     {
         foreach (var child in children)
         {
-            if (!ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, child.SlotName))) continue;
+            if (!ContainerChildFields.EmbeddedSlotsFor(_category).Contains((containerType, child.SlotName))) continue;
             if (!_schemas.ContainsKey(child.RecordType)) continue;
 
             var childBody = _containers.TextOf(_codec, child);
