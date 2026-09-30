@@ -1,4 +1,4 @@
-# Detect an external change, grey.
+# Detect an external change.
 ...@../styles
 shape: sequence_diagram
 tools: "MO2 · another tool · the user" {class: other}
@@ -10,14 +10,18 @@ instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-commands: @../target-architecture.medit_core.commands
-commands.label: Commands
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
-http: @../target-architecture.medit_driving.http
-http.label: HTTP endpoints
 client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter.label: Plugin adapter
+sourceadapter: @../target-architecture.medit_driven.sourceadapter
+sourceadapter.label: Source adapter
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
 
@@ -28,7 +32,9 @@ instanceloader -> instancecommands: "put load order: the snapshot" {class: loado
 instancecommands -> client: snapshot {class: loadorder}
 client -> http: snapshot {class: loadorder}
 http -> commands: put load order {class: loadorder}
-commands."each tracked plugin's bytes against what Modbench last wrote"
+pluginadapter -> commands: "each tracked plugin's hash" {class: query}
+sourceadapter -> commands: "what Modbench last wrote" {class: query}
+commands."each tracked plugin's hash against what Modbench last wrote"
 commands -> port: "external change: the mod, its changed plugins · untracked plugins" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}

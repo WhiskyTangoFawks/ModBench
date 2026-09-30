@@ -13,10 +13,6 @@ sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
-store: @../target-architecture.medit_driven.index.store
-store.label: Store
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 
 editor -> client: "the gesture: the records and its Options" {class: edit}
 client -> http: envelope {class: edit}
@@ -29,12 +25,6 @@ commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
 indexer."the next snapshot: index-load-order"
-sourceadapter -> indexer: documents (tracked) {class: query}
-indexer -> store: rows {class: query}
-store -> port: "rows changed: keys, sequence" {class: push}
-port -> http: publish {class: push}
-http -> client: stream {class: push}
-client -> editor: rows changed {class: push}
 
 refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}

@@ -8,12 +8,12 @@ instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
-toolbox: @../target-architecture.modbench_driving.toolbox
-toolbox.label: Toolbox
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
 client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
+toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
 
 mo2 -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}

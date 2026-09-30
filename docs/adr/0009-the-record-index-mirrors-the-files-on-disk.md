@@ -37,9 +37,12 @@ under a minute; only not redoing the work does.
 
 ## Derived tactical observations
 
-- A file's stamp is its size, modification time and change time. A file whose stamp matches its
-  last hash keeps that hash without a read. Change time is in the stamp because tools set
-  modification time. At open, the index hashes every file.
+- A plugin file's stamp is its size, modification time and change time. A file whose stamp
+  matches its last hash keeps that hash without a read. Change time is in the stamp because tools
+  set modification time. At open, the index hashes every file.
+- A tracked plugin's documents validate through git, whose index is already a stamp. While HEAD
+  holds, a document git reports clean has not changed. Only a dirty document is read, and a moved
+  HEAD names what changed.
 
 ## Alternatives rejected
 

@@ -36,8 +36,8 @@ it is handed and never reloads.
 
 ## Derived tactical observations
 
-- Opening the record index keeps the last active plugins it held. The snapshot sent on activation
-  corrects them.
+- Opening the record index keeps the last active plugins it held. The snapshot sent when mEdit
+  starts corrects them.
 
 ## Alternatives rejected
 

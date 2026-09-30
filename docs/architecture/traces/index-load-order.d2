@@ -1,4 +1,4 @@
-# Index the load order, purple.
+# Index the load order.
 ...@../styles
 shape: sequence_diagram
 instanceloader: @../target-architecture.modbench_driven.instanceloader
@@ -31,7 +31,7 @@ instanceloader -> instancecommands: "put load order: the snapshot" {class: loado
 instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
 client -> http: "snapshot: every plugin · the active plugins" {class: loadorder}
 http -> commands: put load order {class: loadorder}
-commands -> loadorder: snapshot {class: query}
+commands -> loadorder: snapshot {class: loadorder}
 commands -> http: "applied: the version" {class: loadorder}
 http -> client: the version {class: loadorder}
 loadorder -> indexer: "a snapshot arrived" {class: signal}
@@ -44,6 +44,7 @@ loadorder -> indexer: the active plugins {class: query}
 indexer."winners and conflicts"
 indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
+indexer -> port: "plugin changed: the plugin, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "index status · rows changed" {class: push}
+client -> views: "index status · rows changed · plugin changed" {class: push}
