@@ -7,8 +7,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
-import { providedPluginsIn } from '../../test/mo2/adapterOver';
-import { isPluginFile } from '../../instanceAdapter/pluginFile';
+import { accessTo, adapterOver, providedPluginsIn } from '../../test/mo2/adapterOver';
+import { isPluginFile, type PluginOrderChange } from '../../instanceAdapter/instanceAdapter';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 
 const PROFILE = 'Default';
@@ -38,18 +38,51 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('reorderPlugins writes the moved line at the losing end, first in the file', async () => {
-    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
+  // A drop names its target before the block leaves the order; the splice counts after.
+  it('reorderPlugins lands a block dragged down directly above the row it was dropped on', async () => {
+    await writeFile(pluginsPath(), '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n');
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['A.esp'], { kind: 'before', name: 'D.esp' }))
+      .toEqual({ applied: true, wrote: true });
+    expect(await plugins()).toBe('*B.esp\r\n*C.esp\r\n*A.esp\r\n*D.esp\r\n*E.esp\r\n');
+  });
+
+  // ADR-0012: the tree may hold a name in another case than plugins.txt writes it.
+  it('reorderPlugins counts a moved row named in another case, landing the block above the target', async () => {
+    await writeFile(pluginsPath(), '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n');
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['a.esp'], { kind: 'before', name: 'D.esp' }))
+      .toEqual({ applied: true, wrote: true });
+    expect(await plugins()).toBe('*B.esp\r\n*C.esp\r\n*A.esp\r\n*D.esp\r\n*E.esp\r\n');
+  });
+
+  it('reorderPlugins of a block dropped on one of its own rows writes nothing', async () => {
+    const order = '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n';
+    await writeFile(pluginsPath(), order);
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['B.esp', 'C.esp', 'D.esp'], { kind: 'before', name: 'C.esp' }))
+      .toEqual({ applied: true, wrote: false });
+    expect(await plugins()).toBe(order);
+  });
+
   it('reorderPlugins refuses a name with no line, naming it, and writes nothing', async () => {
-    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
+    assertRefusal(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
+    expect(await plugins()).toBe(INITIAL);
+    expect(await mtime()).toEqual(LONG_AGO);
+  });
+
+  // Rival: settling a drop on a row that has gone at the winning end, a place the user never chose.
+  it('reorderPlugins refuses a drop on a row plugins.txt does not list, naming it, and writes nothing', async () => {
+    assertRefusal(
+      await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'before', name: 'Gone.esp' }),
+      'Plugin not found in plugins.txt: Gone.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
   it('a profile with no plugins.txt refuses rather than creating one', async () => {
-    const result = await reorderPlugins(dir, 'NoSuchProfile', ['Base.esp'], { kind: 'winningEnd' });
+    const result = await reorderPlugins(accessTo(dir), 'NoSuchProfile', ['Base.esp'], { kind: 'winningEnd' });
     assertRefusal(result, 'ENOENT');
   });
 
@@ -57,8 +90,8 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   // second write lands on top of the first, losing it.
   it('two gestures fired without awaiting the first both survive: neither read-modify-write is lost', async () => {
     const [first, second] = await Promise.all([
-      setPluginsEnabled(dir, PROFILE, ['Base.esp'], false),
-      reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' }),
+      setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp'], false),
+      reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'losingEnd' }),
     ]);
 
     expect(first).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
@@ -67,20 +100,20 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('a refusal does not block the next command: the write chain survives it', async () => {
-    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
-    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
+    assertRefusal(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
   it('setPluginsEnabled(false) flips every named line in one splice', async () => {
-    expect(await setPluginsEnabled(dir, PROFILE, ['Base.esp', 'Other.esp'], false))
+    expect(await setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp', 'Other.esp'], false))
       .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
     expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
   });
 
   // The check box's own shape: several rows, each its own target state, in the one splice.
   it('setPluginsParticipation flips each named line to its own state, in one splice', async () => {
-    expect(await setPluginsParticipation(dir, PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]))
+    expect(await setPluginsParticipation(accessTo(dir), PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]))
       .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
     expect(await plugins()).toBe('# header\r\nBase.esp\r\n*Other.esp\r\n');
   });
@@ -88,7 +121,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   // commands.md, "A selection is one gesture": each item lands or is refused on its own, in the
   // one splice — a gone plugin never blocks the rest.
   it('setPluginsEnabled refuses a gone plugin by name, and the rest still land', async () => {
-    const result = await setPluginsEnabled(dir, PROFILE, ['Base.esp', 'No Such.esp'], false);
+    const result = await setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp', 'No Such.esp'], false);
     expect(result).toEqual({
       applied: true,
       outcome: { landed: ['Base.esp'], refused: [{ item: 'No Such.esp', reason: 'Plugin not found in plugins.txt: No Such.esp' }] },
@@ -97,7 +130,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('setPluginsEnabled to the state every line already has writes nothing', async () => {
-    expect(await setPluginsEnabled(dir, PROFILE, ['Base.esp'], true)).toEqual({
+    expect(await setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp'], true)).toEqual({
       applied: true, outcome: { landed: ['Base.esp'], refused: [] },
     });
     expect(await plugins()).toBe(INITIAL);
@@ -105,7 +138,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('setPluginsEnabled refuses the whole selection once when the profile has no plugins.txt', async () => {
-    assertRefusal(await setPluginsEnabled(dir, 'NoSuchProfile', ['Base.esp'], false), 'ENOENT');
+    assertRefusal(await setPluginsEnabled(accessTo(dir), 'NoSuchProfile', ['Base.esp'], false), 'ENOENT');
   });
 });
 
@@ -137,7 +170,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     inData?: DataFolderPlugins,
     implicit: readonly string[] | null = [],
   ) => syncPlugins(
-    dir, PROFILE, await providedPluginsIn(dir, PROFILE),
+    accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE),
     inData ?? await inDataOnDisk(),
     () => Promise.resolve(implicit ?? undefined));
 
@@ -247,7 +280,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     let asked = false;
 
     const result = await syncPlugins(
-      dir, PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' },
+      accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' },
       () => { asked = true; return Promise.resolve([]); });
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });
@@ -278,5 +311,49 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
 
     expect(await run()).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
     expect(await mtime()).toEqual(old);
+  });
+});
+
+// target-architecture.md, Rules the Modbench column draws: a command hands the Instance adapter the
+// change, and the adapter splices and writes it.
+describe('plugins commands hand the Instance adapter the change, decided on the order it holds', () => {
+  const ORDER = [{ name: 'Base.esp', enabled: true }, { name: 'Gone.esp', enabled: false }];
+
+  const adapterRecordingChanges = () => {
+    const handed: (readonly PluginOrderChange[])[] = [];
+    const access = {
+      adapter: {
+        ...adapterOver('/instance'),
+        changePluginOrder: (_profile: string, decide: (order: typeof ORDER) => readonly PluginOrderChange[]) => {
+          handed.push(decide(ORDER));
+          return Promise.resolve({ wrote: true });
+        },
+      },
+    };
+    return { access, handed };
+  };
+
+  it('a move is its plugins and the index the drop settles to against that order', async () => {
+    const { access, handed } = adapterRecordingChanges();
+    await reorderPlugins(access, PROFILE, ['Base.esp'], { kind: 'after', name: 'Gone.esp' });
+    expect(handed).toEqual([[{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]]);
+  });
+
+  it('enable is a change for each plugin the order lists; one it does not is refused by name', async () => {
+    const { access, handed } = adapterRecordingChanges();
+    const result = await setPluginsEnabled(access, PROFILE, ['Base.esp', 'No Such.esp'], false);
+    expect(handed).toEqual([[{ kind: 'enable', plugin: 'Base.esp', enabled: false }]]);
+    expect(result).toEqual({
+      applied: true,
+      outcome: { landed: ['Base.esp'], refused: [{ item: 'No Such.esp', reason: 'Plugin not found in plugins.txt: No Such.esp' }] },
+    });
+  });
+
+  it('plugin sync drops each line nothing provides and adds each provided plugin with none', async () => {
+    const { access, handed } = adapterRecordingChanges();
+    await syncPlugins(
+      access, PROFILE, new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
+      { kind: 'listed', names: new Set() }, () => Promise.resolve([]));
+    expect(handed).toEqual([[{ kind: 'drop', plugin: 'Gone.esp' }, { kind: 'add', plugin: 'New.esp' }]]);
   });
 });

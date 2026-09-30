@@ -15,6 +15,6 @@ export async function onPluginCheckboxChanged(
     .filter((item): item is [Extract<PluginsTreeNode, { kind: 'plugin' }>, vscode.TreeItemCheckboxState] => item[0].kind === 'plugin')
     .map(([node, state]) => ({ name: node.plugin.name, enabled: state === vscode.TreeItemCheckboxState.Checked }));
   if (entries.length === 0) return;
-  const result = await setPluginsParticipation(access.instanceRoot, profile(), entries);
+  const result = await setPluginsParticipation(access, profile(), entries);
   reportPluginsParticipation(result, entries, reporter);
 }

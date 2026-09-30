@@ -1,44 +1,40 @@
-// Every write to a profile's plugins.txt. Commands return applied-or-refusal, never throw
+// Every change to a profile's plugin order. Commands return applied-or-refusal, never throw
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import type { DataFolderPlugins } from '../instanceLoader/loadOrderSnapshot';
-import { pluginsFile } from '../instanceAdapter/layout';
-import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2Codecs/pluginsText';
-import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
-import { putIfChanged } from '../instanceAdapter/files';
+import { dropIndexIn, type Drop } from './dropIndex';
 import { refuse } from '../ports/refuse';
 import { applyOrThrow } from '../ports/applyOrThrow';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { DecidePluginOrder, InstanceAdapter, PluginOrderChange } from '../instanceAdapter/instanceAdapter';
 
 /** What a plugins command reaches the instance through. */
 export interface PluginsAccess {
-  readonly instanceRoot: string;
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture was already true of the file: a command that changes no
- *  byte writes none, so it never fires the plugins.txt watcher. */
+/** `wrote` is false when the gesture was already true of plugin order: a command that changes
+ *  nothing writes nothing, so it never fires the watch. */
 export type PluginsCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
 
-async function modifyPlugins(
-  instanceRoot: string, profile: string, edit: (text: string) => string,
+async function changePluginOrder(
+  access: PluginsAccess, profile: string, decide: DecidePluginOrder,
 ): Promise<PluginsCommandResult> {
   try {
-    // Unchanged text is not written: for `syncPlugins` that is the difference between a
-    // loop that settles and one that does not.
-    const { wrote } = await putIfChanged(pluginsFile(instanceRoot, profile), edit);
+    // A change already true of the order is not written: for `syncPlugins` that is the
+    // difference between a loop that settles and one that does not.
+    const { wrote } = await access.adapter.changePluginOrder(profile, decide);
     return { applied: true, wrote };
   } catch (err) {
     return refuse(err);
   }
 }
 
-/** A gesture over a selection, in one splice: each item landed or refused by name, or the whole
- *  selection refused once when plugins.txt cannot be read or written. */
+/** A gesture over a selection, in one write: each item landed or refused by name, or the whole
+ *  selection refused once when plugin order cannot be read or written. */
 export type PluginsSelectionResult =
   | { applied: true; outcome: SelectionOutcome<string> }
   | { applied: false; refusal: string };
@@ -51,20 +47,20 @@ export interface PluginParticipation {
 }
 
 /** `modbench.plugin.enable` / `modbench.plugin.disable` and the check box, over the whole
- *  selection in one splice (commands.md, "A selection is one gesture") — every entry lands or is
+ *  selection in one write (commands.md, "A selection is one gesture") — every entry lands or is
  *  refused by name, whatever state each one asks for. */
 export async function setPluginsParticipation(
-  instanceRoot: string, profile: string, entries: readonly PluginParticipation[],
+  access: PluginsAccess, profile: string, entries: readonly PluginParticipation[],
 ): Promise<PluginsSelectionResult> {
   let landed: string[] = [];
   let refused: ItemRefusal<string>[] = [];
-  const outcome = await modifyPlugins(instanceRoot, profile, (text) => {
-    const known = new Set(parsePlugins(text).map((entry) => entry.name));
+  const outcome = await changePluginOrder(access, profile, (order) => {
+    const known = new Set(order.map((entry) => entry.name));
     const found = entries.filter((entry) => known.has(entry.name));
     landed = found.map((entry) => entry.name);
     refused = entries.filter((entry) => !known.has(entry.name))
       .map((entry) => ({ item: entry.name, reason: `Plugin not found in plugins.txt: ${entry.name}` }));
-    return found.reduce((acc, entry) => setPluginEnabledInText(acc, entry.name, entry.enabled), text);
+    return found.map(({ name, enabled }) => ({ kind: 'enable', plugin: name, enabled }));
   });
   return outcome.applied ? { applied: true, outcome: { landed, refused } } : outcome;
 }
@@ -72,22 +68,21 @@ export async function setPluginsParticipation(
 /** `setPluginsParticipation`, one state for the whole selection — the menu and the key's own
  *  shape, which never mixes directions in one gesture. */
 export function setPluginsEnabled(
-  instanceRoot: string, profile: string, pluginNames: readonly string[], enabled: boolean,
+  access: PluginsAccess, profile: string, pluginNames: readonly string[], enabled: boolean,
 ): Promise<PluginsSelectionResult> {
-  return setPluginsParticipation(instanceRoot, profile, pluginNames.map((name) => ({ name, enabled })));
+  return setPluginsParticipation(access, profile, pluginNames.map((name) => ({ name, enabled })));
 }
 
-/** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without
- *  naming the codec that settles it into an index. */
-export type { Drop as PluginsDrop } from '../mo2Codecs/dropIndex';
+/** Where a drag landed in the Plugins tree. */
+export type { Drop as PluginsDrop } from './dropIndex';
 
 export function reorderPlugins(
-  instanceRoot: string, profile: string, pluginNames: string[], drop: Drop,
+  access: PluginsAccess, profile: string, pluginNames: string[], drop: Drop,
 ): Promise<PluginsCommandResult> {
-  // Settled against the text this splice is about to rewrite, so a tree a generation behind
-  // plugins.txt cannot land the block at a stale index.
-  return modifyPlugins(instanceRoot, profile, (text) =>
-    movePluginsInText(text, pluginNames, dropIndexIn(parsePlugins(text).map((p) => p.name), pluginNames, drop)));
+  // Settled against the order the change lands on, so a tree a generation behind plugins.txt
+  // cannot land the block at a stale index.
+  return changePluginOrder(access, profile, (order) =>
+    [{ kind: 'move', plugins: pluginNames, toIndex: dropIndexIn(order.map((p) => p.name), pluginNames, drop) }]);
 }
 
 interface PluginLinesDelta {
@@ -126,7 +121,7 @@ export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
  *  disagrees the file is updated. `provided` is the value's winners and `inData` its Data-folder
  *  presence, both handed in — this walks nothing. */
 export async function syncPlugins(
-  instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
+  access: PluginsAccess, profile: string, provided: ReadonlyMap<string, string>,
   inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
@@ -153,14 +148,14 @@ export async function syncPlugins(
   const inDataNames = inData.names;
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
-  const result = await modifyPlugins(instanceRoot, profile, (text) => {
-    // The delta is computed inside the write chain, from the text about to be spliced, so two
-    // overlapping runs can neither add a line twice nor drop one the other just wrote.
-    delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), addable, inDataNames);
-    let out = text;
-    for (const name of delta.dropped) out = removePluginFromText(out, name);
-    for (const name of delta.added) out = appendPluginInText(out, name);
-    return out;
+  const result = await changePluginOrder(access, profile, (order) => {
+    // The delta is decided from the order the change lands on, so two overlapping runs can
+    // neither add a line twice nor drop one the other just wrote.
+    delta = pluginLinesDelta(order.map((e) => e.name), addable, inDataNames);
+    return [
+      ...delta.dropped.map((plugin): PluginOrderChange => ({ kind: 'drop', plugin })),
+      ...delta.added.map((plugin): PluginOrderChange => ({ kind: 'add', plugin })),
+    ];
   });
   return result.applied ? { ...result, ...delta } : result;
 }
@@ -185,7 +180,7 @@ export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResu
  *  game. */
 export function pluginSyncOver(access: PluginsAccess, implicitMastersIn: ImplicitMastersIn): PluginSyncRun {
   return ({ profile, provided, inData, dataFolder, gameName }) =>
-    syncPlugins(access.instanceRoot, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
+    syncPlugins(access, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
 }
 
 /** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the
@@ -193,5 +188,5 @@ export function pluginSyncOver(access: PluginsAccess, implicitMastersIn: Implici
 export function reorderOver(
   access: PluginsAccess, profile: () => string,
 ): (pluginNames: string[], drop: Drop) => Promise<void> {
-  return async (pluginNames, drop) => applyOrThrow(await reorderPlugins(access.instanceRoot, profile(), pluginNames, drop));
+  return async (pluginNames, drop) => applyOrThrow(await reorderPlugins(access, profile(), pluginNames, drop));
 }

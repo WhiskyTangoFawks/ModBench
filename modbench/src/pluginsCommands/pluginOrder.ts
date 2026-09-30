@@ -1,7 +1,7 @@
 // The plugin-order rules a move keeps: masters above their dependants, blueprint plugins last
 // (plugins.md, Drag and drop, story 3; MO2's PluginList::setPluginPriority, pluginlist.cpp).
 
-import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
+import { dropIndexIn, type Drop } from './dropIndex';
 
 /** What the order rules read of one plugin, as mEdit answers it. */
 export interface PluginOrderFacts {

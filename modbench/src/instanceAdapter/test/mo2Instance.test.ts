@@ -989,8 +989,13 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    it('rejects adding a plugin plugin order already lists in another case', async () => {
-      await expect(change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).rejects.toThrow(/already in plugins\.txt/);
+    // commands.md, Principles: doing nothing is not an error. Rival: rejecting it, which fails a
+    // gesture that raced plugin sync to the same line.
+    it('writes nothing to add a plugin plugin order already lists in another case', async () => {
+      const before = await adapter.pluginOrder('Default');
+
+      expect(await change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).toEqual({ wrote: false });
+      expect(await adapter.pluginOrder('Default')).toEqual(before);
     });
 
     it('writes nothing when the changes are already true of plugin order', async () => {
@@ -1002,8 +1007,7 @@ describe('the MO2 Instance adapter', () => {
       ['enable', { kind: 'enable', plugin: 'No Such.esp', enabled: true }],
       ['move', { kind: 'move', plugins: ['No Such.esp'], toIndex: 0 }],
       ['drop', { kind: 'drop', plugin: 'No Such.esp' }],
-      ['add a listed plugin', { kind: 'add', plugin: 'Tracked Patch Mod.esp' }],
-    ])('rejects %s naming a plugin that is not there, or adding one that is, and writes nothing', async (_, bad) => {
+    ])('rejects %s naming a plugin that is not there, and writes nothing', async (_, bad) => {
       const before = await text(root, DEFAULT_PLUGINS);
 
       await expect(change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false }, bad]))

@@ -12,7 +12,7 @@ import { Instance } from '../instanceLoader/instance';
 import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
-import { adapterOver, NO_DOWNLOADS } from './mo2/adapterOver';
+import { accessTo, adapterOver, NO_DOWNLOADS } from './mo2/adapterOver';
 
 const PROFILE = 'Default';
 
@@ -61,7 +61,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
 
     await instance.refresh();
     const { profile, provided, inData } = pluginSyncArguments(instance.value);
-    const synced = await syncPlugins(dir, profile, provided, inData, () => Promise.resolve([]));
+    const synced = await syncPlugins(accessTo(dir), profile, provided, inData, () => Promise.resolve([]));
 
     expect(synced).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     expect(await plugins()).toBe('*Base.esp\r\nNew.esp\r\n');

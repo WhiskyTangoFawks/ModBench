@@ -2,7 +2,7 @@
 // separator's folder moves with its line, under the same lock.
 
 import {
-  appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText,
+  appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
   type PluginEntry,
 } from '../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../ports/errorMessage';
@@ -113,9 +113,6 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
   }
 }
 
-// Plugin filenames match as the game matches them, ignoring case (ADR-0012).
-const pluginKey = (name: string): string => name.toLowerCase();
-
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
   const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));
   if (listed === undefined) throw new Error(`Plugin not found in plugins.txt: ${plugin}`);
@@ -129,10 +126,7 @@ function splicePluginOrderChange(text: string, change: PluginOrderChange): strin
     case 'enable': return setPluginEnabledInText(text, listed(change.plugin), change.enabled);
     case 'move': return movePluginsInText(text, change.plugins.map(listed), change.toIndex);
     case 'add':
-      if (order.some((p) => pluginKey(p.name) === pluginKey(change.plugin))) {
-        throw new Error(`Plugin already in plugins.txt: ${change.plugin}`);
-      }
-      return appendPluginInText(text, change.plugin);
+      return order.some((p) => pluginKey(p.name) === pluginKey(change.plugin)) ? text : appendPluginInText(text, change.plugin);
     case 'drop': return removePluginFromText(text, listed(change.plugin));
   }
 }

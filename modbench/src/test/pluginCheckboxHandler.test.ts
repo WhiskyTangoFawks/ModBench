@@ -31,6 +31,7 @@ import { accessTo } from './mo2/adapterOver';
 beforeEach(() => { vi.clearAllMocks(); });
 
 const profile = () => 'Default';
+const access = accessTo('/instance');
 
 describe('onPluginCheckboxChanged', () => {
   it('enables the plugin and says nothing on a full landing', async () => {
@@ -39,10 +40,10 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'), 1]] },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
-    expect(setPluginsParticipation).toHaveBeenCalledWith('/instance', 'Default', [{ name: 'TestMod.esp', enabled: true }]);
+    expect(setPluginsParticipation).toHaveBeenCalledWith(access, 'Default', [{ name: 'TestMod.esp', enabled: true }]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -59,12 +60,12 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 1],
         ],
       },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
     expect(setPluginsParticipation).toHaveBeenCalledWith(
-      '/instance', 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: true }],
+      access, 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: true }],
     );
   });
 
@@ -81,12 +82,12 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
     expect(setPluginsParticipation).toHaveBeenCalledWith(
-      '/instance', 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }],
+      access, 'Default', [{ name: 'A.esp', enabled: true }, { name: 'B.esp', enabled: false }],
     );
   });
 
@@ -96,7 +97,7 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }, 'SomeMod'), 0]] },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'disk full' }]);
@@ -113,7 +114,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to update plugins.', detail: 'disk full' }]);
@@ -133,7 +134,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: false }, 'SomeMod'), 1],
         ],
       },
-      accessTo('/instance'), profile, reporter,
+      access, profile, reporter,
     );
 
     expect(reporter.reports).toEqual([
@@ -144,7 +145,7 @@ describe('onPluginCheckboxChanged', () => {
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
     const recordNode = new RecordNode(recordSummaryFixture(), 'Data');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, accessTo('/instance'), profile, recordingReporter());
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, access, profile, recordingReporter());
 
     expect(setPluginsParticipation).not.toHaveBeenCalled();
   });
@@ -171,7 +172,7 @@ describe('a check-box enable and the Plugins rows', () => {
     tree.onDidChangeTreeData(() => { changes++; });
 
     await onPluginCheckboxChanged(
-      { items: [[expectInstanceOf(row, PluginNode), TreeItemCheckboxState.Checked]] }, accessTo('/instance'), profile, recordingReporter());
+      { items: [[expectInstanceOf(row, PluginNode), TreeItemCheckboxState.Checked]] }, access, profile, recordingReporter());
 
     expect(changes).toBe(0);
     expect(await checkedState(tree)).toBe(TreeItemCheckboxState.Unchecked);

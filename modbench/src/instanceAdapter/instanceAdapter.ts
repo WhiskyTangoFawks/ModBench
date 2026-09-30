@@ -5,7 +5,7 @@
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
-export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
+export { pluginKey, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { isPluginFile } from './pluginFile';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
@@ -279,8 +279,8 @@ export interface InstanceAdapter {
    *  separator that is, rejects all of it. Adding at the winning end an entry there, or dropping
    *  one not there, changes nothing. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
-  /** Every change lands in one write. A change naming a plugin that is not there, or adding one
-   *  that is, rejects, and nothing is written. */
+  /** Every change lands in one write. A change naming a plugin that is not there rejects, and
+   *  nothing is written. Adding a plugin that is there changes nothing. */
   changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
