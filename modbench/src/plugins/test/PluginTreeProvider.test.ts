@@ -91,6 +91,23 @@ async function interiorCellsBeneath(provider: PluginTreeProvider, group: PluginT
   return provider.getChildren(present(subBlock, 'the sole sub-block'));
 }
 
+// Every record row a plugin row expands into, at every depth: the nodes themselves, in DFS order,
+// so a caller reads a leaf's own contextValue and origin.
+async function rowsBeneath(
+  provider: PluginTreeProvider, pluginName: string, origin: string, told: PluginConditions,
+): Promise<PluginTreeNode[]> {
+  const states: PluginTreeNode[] = [];
+  const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
+    for (const node of nodes) {
+      if (['recordType', 'record', 'worldspace', 'cell', 'placed'].includes(node.kind)) states.push(node);
+      const leaf = node.kind === 'placed' || (node instanceof RecordNode && !node.hasContainerChildren);
+      if (!leaf) await walk(await provider.getChildren(node));
+    }
+  };
+  await walk(await provider.getPluginChildren(pluginName, origin, told));
+  return states;
+}
+
 // getPluginChildren(name, origin) is the one way into a plugin's children — there is no root listing
 // (also true in production: PluginsTreeProvider always calls it directly, never
 // getChildren(undefined) — see the comment on getChildren itself).
@@ -493,22 +510,9 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     return repo;
   }
 
-  // Every record row a plugin row expands into, at every depth, by its contextValue.
-  async function rowsBeneath(provider: PluginTreeProvider, told: PluginConditions): Promise<string[]> {
-    const states: string[] = [];
-    const walk = async (nodes: readonly PluginTreeNode[]): Promise<void> => {
-      for (const node of nodes) {
-        if (['recordType', 'record', 'worldspace', 'cell', 'placed'].includes(node.kind)) states.push(String(node.contextValue));
-        const leaf = node.kind === 'placed' || (node instanceof RecordNode && !node.hasContainerChildren);
-        if (!leaf) await walk(await provider.getChildren(node));
-      }
-    };
-    await walk(await provider.getPluginChildren('Plugin0.esp', 'Data', told));
-    return states;
-  }
-
   it('states a tracked, editable plugin on its groups, records, a container\'s children, worldspace, cells and placed references', async () => {
-    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), TRACKED);
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), 'Plugin0.esp', 'Data', TRACKED))
+      .map((n) => String(n.contextValue));
 
     expect(states).toEqual([
       'recordType tracked editable creatable', 'record tracked editable',
@@ -521,7 +525,8 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   });
 
   it('states an untracked plugin untracked on every row beneath it', async () => {
-    const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), { tracked: false, editable: true });
+    const states = (await rowsBeneath(new PluginTreeProvider(spatialClient()), 'Plugin0.esp', 'Data', { tracked: false, editable: true }))
+      .map((n) => String(n.contextValue));
 
     // Conditions only: creatable is a per-type fact, not a plugin condition, so it is dropped here.
     const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
@@ -894,10 +899,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
-  // A row that read its facts by filename alone would show one plugin's conditions on the
-  // other's cell or placed-reference row.
   it('a cell row and a placed-reference row of a shared filename read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
-    const repo = makeClient();
+    const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }] });
     repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
     repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [{ formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }],
@@ -910,24 +913,30 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const provider = new PluginTreeProvider(repo);
     const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
     const READ_ONLY: PluginConditions = { tracked: false, editable: false };
-    const wsA = new WorldspacesNode('Shared.esp', 'Worldspace', 1, 'ModA', false, TRACKED_EDITABLE);
-    const wsB = new WorldspacesNode('Shared.esp', 'Worldspace', 1, 'ModB', false, READ_ONLY);
 
-    const expandToPlaced = async (ws: WorldspacesNode): Promise<{ cell: CellNode; placed: PlacedNode }> => {
-      const [worldspace] = expectInstancesOf(await provider.getChildren(ws), WorldspaceNode);
-      const [cell] = expectInstancesOf(await provider.getChildren(present(worldspace, 'the sole WorldspaceNode')), CellNode);
-      const [group] = expectInstancesOf(await provider.getChildren(present(cell, 'the sole CellNode')), PlacedGroupNode);
-      const [placed] = expectInstancesOf(await provider.getChildren(present(group, 'the sole PlacedGroupNode')), PlacedNode);
-      return { cell: present(cell, 'the sole CellNode'), placed: present(placed, 'the sole PlacedNode') };
-    };
+    // Both expansions run concurrently, so a filename-keyed (rather than parameter-threaded)
+    // lookup of conditions would have B's write clobber A's read mid-flight.
+    const [fromA, fromB] = await Promise.all([
+      rowsBeneath(provider, 'Shared.esp', 'ModA', TRACKED_EDITABLE),
+      rowsBeneath(provider, 'Shared.esp', 'ModB', READ_ONLY),
+    ]);
+    const cellOf = (nodes: PluginTreeNode[]) =>
+      expectInstanceOf(present(nodes.find((n) => n.kind === 'cell'), 'the cell row'), CellNode);
+    const placedOf = (nodes: PluginTreeNode[]) =>
+      expectInstanceOf(present(nodes.find((n) => n.kind === 'placed'), 'the placed row'), PlacedNode);
+    const cellA = cellOf(fromA);
+    const placedA = placedOf(fromA);
+    const cellB = cellOf(fromB);
+    const placedB = placedOf(fromB);
 
-    const fromA = await expandToPlaced(wsA);
-    const fromB = await expandToPlaced(wsB);
-
-    expect(fromA.cell.contextValue).toBe('cell tracked editable');
-    expect(fromA.placed.contextValue).toBe('placed tracked editable');
-    expect(fromB.cell.contextValue).toBe('cell untracked');
-    expect(fromB.placed.contextValue).toBe('placed untracked');
+    expect(cellA.contextValue).toBe('cell tracked editable');
+    expect(cellA.origin).toBe('ModA');
+    expect(placedA.contextValue).toBe('placed tracked editable');
+    expect(placedA.origin).toBe('ModA');
+    expect(cellB.contextValue).toBe('cell untracked');
+    expect(cellB.origin).toBe('ModB');
+    expect(placedB.contextValue).toBe('placed untracked');
+    expect(placedB.origin).toBe('ModB');
   });
 
 });

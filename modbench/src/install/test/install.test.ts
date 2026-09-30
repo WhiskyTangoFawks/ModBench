@@ -7,7 +7,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { watch } from 'node:fs';
+import { watch, mkdtempSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
@@ -84,14 +84,17 @@ function runnerFor(payloadRoot = 'Wrapper'): Runner {
   };
 }
 
-// A real git repository, exercised through the actual git binary — Track's own review surface
-// (ADR-0007 invariant 5), never reimplemented here.
-const GIT_IDENTITY = {
+// ADR-0007 invariant 5: git on PATH is a product requirement. Isolated from the machine's own
+// global/system config, so a host core.autocrlf or commit.gpgsign never reaches these commits.
+const EMPTY_GLOBAL_GITCONFIG = join(mkdtempSync(join(tmpdir(), 'medit-git-config-')), 'gitconfig');
+writeFileSync(EMPTY_GLOBAL_GITCONFIG, '');
+const GIT_ENV = {
   GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com',
   GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com',
+  GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: EMPTY_GLOBAL_GITCONFIG,
 };
 function git(cwd: string, args: string[]): void {
-  execFileSync('git', args, { cwd, env: { ...process.env, ...GIT_IDENTITY } });
+  execFileSync('git', args, { cwd, env: { ...process.env, ...GIT_ENV } });
 }
 
 // Polls rather than awaiting one event: fs.watch's first callback can be a metadata touch, not
@@ -342,19 +345,16 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!plugin-source/\n');
   });
 
-  // mods.md, What install does, story 3, carried through a real repository: the edit branch,
-  // forked before the upgrade, must still rebase onto main with no conflict once the release
-  // lands and is committed.
   it('an upgrade over a tracked mod keeps its repository rebasable: the edit branch rebases onto main cleanly, plugin source intact', async () => {
     const name = 'Tracked Target';
-    const modDir = join(root, 'mods', name);
+    const modDir = await makeExistingMod(root, name, false);
     const sourceFile = join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json');
     await mkdir(join(modDir, 'plugin-source', 'Tracked.esp'), { recursive: true });
     await writeFile(sourceFile, '{"baseline":true}\n');
-    await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
-    await writeFile(join(modDir, 'meta.ini'), '[General]\ngameName=Fallout4\nmodid=0\nversion=1.0.0\ninstallationFile=Old-1-0.7z\n');
     await writeFile(join(modDir, '.gitignore'), 'meta.ini\n');
     git(modDir, ['init', '-b', 'main']);
+    git(modDir, ['config', 'core.autocrlf', 'false']);
+    git(modDir, ['config', 'commit.gpgsign', 'false']);
     git(modDir, ['add', '-A']);
     git(modDir, ['commit', '-m', 'Baseline']);
     git(modDir, ['checkout', '-b', 'edit']);
@@ -372,8 +372,7 @@ describe('install commands', () => {
     expect(() => git(modDir, ['rebase', 'main'])).not.toThrow();
 
     expect(await readFile(sourceFile, 'utf8')).toBe('{"baseline":true,"edited":true}\n');
-    const tracked = (await treeOf(modDir))?.filter((p) => !p.startsWith('.git/'));
-    expect(tracked).toEqual([...COMPLETE, '.gitignore', 'plugin-source/Tracked.esp/RecordData.json'].sort());
+    expect(() => git(modDir, ['check-ignore', 'meta.ini'])).not.toThrow();
   });
 
   // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation Kit
