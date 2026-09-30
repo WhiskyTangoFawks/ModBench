@@ -106,7 +106,7 @@ async function installArchive(
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
     if (!target) return;
-    const outcome = await installFromArchive(access, target, row.path, [row], {
+    const outcome = await installFromArchive(access, target, row.path, {
       gameName: instance.value.gameRelease, modID: row.modID, fileID: row.fileID, version: row.version,
     });
     applyOrThrow(outcome);

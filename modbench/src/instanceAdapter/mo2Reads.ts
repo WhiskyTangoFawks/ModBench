@@ -13,7 +13,7 @@ import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -22,7 +22,8 @@ import { isPluginFile } from './pluginFile';
 
 export type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'stagingFolder' | 'landNewMod' | 'upgradeMod' | 'subscribe'>;
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'stagingFolder' | 'stagingFolderOf' | 'removeStagingFolder'
+  | 'stagedEntries' | 'landNewMod' | 'upgradeMod' | 'subscribe'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
@@ -100,6 +101,11 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     },
 
     gameFolderPlugins: listGameFolderPlugins,
+
+    async downloadedFileAt(path) {
+      const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));
+      return resolution.kind === 'resolved' ? downloadNameAt(resolution.downloadsDir, path, process.platform) : undefined;
+    },
 
     entryFolder: (entry) => folderHolding(context, entry),
 

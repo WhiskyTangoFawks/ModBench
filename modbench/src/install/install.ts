@@ -5,11 +5,10 @@ import { basename } from 'node:path';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
-import { copyTree, remove } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
-import type { DownloadedFile, InstalledFileId, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { InstalledFileId, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {
@@ -157,13 +156,23 @@ function landStagedMod(
   });
 }
 
-async function withStaging<T>(access: InstallAccess, use: (staging: string) => Promise<T>): Promise<T> {
-  const staging = await access.adapter.stagingFolder();
+// Landing renames the mod root out of the staging folder; whatever is left there goes.
+async function withStaging<T>(
+  access: InstallAccess, stage: () => Promise<string>, use: (staging: string) => Promise<T>,
+): Promise<T> {
+  const staging = await stage();
   try {
     return await use(staging);
   } finally {
-    await remove(staging);
+    await access.adapter.removeStagingFolder(staging);
   }
+}
+
+async function landDetected(
+  access: InstallAccess, target: InstallTarget, staging: string, meta: InstallMeta, gameName: string,
+): Promise<InstallCommandResult> {
+  const { sourceDir, isFomod } = await detectRoot(access.adapter, staging);
+  return landStagedMod(access, target, sourceDir, meta, isFomod, gameName);
 }
 
 function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
@@ -171,41 +180,38 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
 }
 
-/** Extracts into staging and moves the detected mod root in, then marks the downloaded file it
- *  is, if it is one of `downloadedFiles` — a failed mark is reported beside the landed install,
- *  never instead of it. */
+/** Extracts into staging and moves the detected mod root in, then marks the downloaded file the
+ *  archive is, if it is one — a failed mark is reported beside the landed install, never instead
+ *  of it. */
 export async function installFromArchive(
-  access: InstallAccess, target: InstallTarget, archivePath: string,
-  downloadedFiles: readonly Pick<DownloadedFile, 'name' | 'path'>[], opts: InstallOptions,
+  access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    const outcome = await withStaging(access, async (staging) => {
+    const meta = metaFor({ installationFile: basename(archivePath) }, opts);
+    const outcome = await withStaging(access, () => access.adapter.stagingFolder(), async (staging) => {
       await extractArchive(archivePath, staging, opts.run);
-      const { sourceDir, isFomod } = await detectRoot(staging);
-      return landStagedMod(
-        access, target, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod, opts.gameName);
+      return landDetected(access, target, staging, meta, opts.gameName);
     });
     if (!outcome.applied) return outcome;
-    const downloaded = downloadedFiles.find((file) => file.path === archivePath);
+    const downloaded = await access.adapter.downloadedFileAt(archivePath);
     if (downloaded === undefined) return outcome;
-    const marked = await markDownloadInstalled(access.adapter, downloaded.name);
+    const marked = await markDownloadInstalled(access.adapter, downloaded);
     return marked.applied ? outcome : { ...outcome, downloadRefusal: marked.refusal };
   } catch (err) {
     return refuse(err);
   }
 }
 
-/** Copies the folder into staging first: the source belongs to the user, so it is never the
- *  thing renamed away. */
+/** Stages a copy of the folder: the source belongs to the user, so it is never the thing renamed
+ *  away. */
 export async function installFromFolder(
   access: InstallAccess, target: InstallTarget, folderPath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    return await withStaging(access, async (staging) => {
-      const { sourceDir, isFomod } = await detectRoot(folderPath);
-      await copyTree(sourceDir, staging);
-      return landStagedMod(access, target, staging, metaFor({}, opts), isFomod, opts.gameName);
-    });
+    return await withStaging(
+      access, () => access.adapter.stagingFolderOf(folderPath),
+      (staging) => landDetected(access, target, staging, metaFor({}, opts), opts.gameName),
+    );
   } catch (err) {
     return refuse(err);
   }

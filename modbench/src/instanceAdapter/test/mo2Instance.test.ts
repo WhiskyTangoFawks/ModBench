@@ -1016,6 +1016,30 @@ describe('the MO2 Instance adapter', () => {
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
     });
 
+    it('names the downloaded file at a path, and none for a path outside the downloads folder', async () => {
+      expect(await adapter.downloadedFileAt(join(downloads(), 'manual.zip'))).toBe('manual.zip');
+      expect(await adapter.downloadedFileAt(join(root, 'manual.zip'))).toBeUndefined();
+    });
+
+    // Rival: fall back to the default downloads folder. Off Windows, a D: folder cannot be resolved;
+    // on Windows it is resolved, and elsewhere: either way the default folder's file is none.
+    it('names no downloaded file where the settings name another downloads folder', async () => {
+      await writeFile(join(root, INI), (await text(root, INI)).replace('language=en', 'language=en\ndownload_directory=D:\\Elsewhere'));
+
+      expect(await adapter.downloadedFileAt(join(downloads(), 'manual.zip'))).toBeUndefined();
+    });
+
+    // Rival: sweep only when the metadata is there. A crash during a first write leaves its temp
+    // beside no metadata at all.
+    it('sweeps its own leftover temp write when it trashes metadata, even for a file with none', async () => {
+      const leftover = join(downloads(), 'manual.zip.meta.0123456789ab.tmp');
+      await writeFile(leftover, 'half written');
+
+      expect(await adapter.trashDownloadedFileMeta('manual.zip', () => Promise.resolve())).toBe(false);
+
+      expect(await isThere(leftover)).toBe(false);
+    });
+
     it('moves a downloaded file\'s metadata to the trash, and answers false when it has none', async () => {
       const trashed: string[] = [];
       const trash = (path: string): Promise<void> => {
@@ -1027,6 +1051,40 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.trashDownloadedFileMeta('manual.zip', trash)).toBe(false);
 
       expect(trashed).toEqual([join(downloads(), `${DOWNLOAD}.meta`)]);
+    });
+  });
+
+  describe('staging', () => {
+    it('stages a copy of a folder, leaving the folder as it was', async () => {
+      const source = join(root, 'mods', 'Unofficial Fallout 4 Patch');
+      const before = await snapshotTree(source);
+
+      const staged = await adapter.stagingFolderOf(source);
+
+      expect(staged.startsWith(join(root, 'mods'))).toBe(false);
+      expect(await snapshotTree(staged)).toEqual(before);
+      expect(await snapshotTree(source)).toEqual(before);
+    });
+
+    it('lists a staged folder\'s entries, each a folder or a file', async () => {
+      const staged = await adapter.stagingFolder();
+      await mkdir(join(staged, 'Data'));
+      await writeFile(join(staged, 'readme.txt'), '');
+
+      const entries = await adapter.stagedEntries(staged);
+
+      expect([...entries].sort((a, b) => a.name.localeCompare(b.name))).toEqual([
+        { name: 'Data', kind: 'folder' }, { name: 'readme.txt', kind: 'file' },
+      ]);
+    });
+
+    it('removes a staging folder and what is left in it', async () => {
+      const staged = await adapter.stagingFolder();
+      await mkdir(join(staged, 'Wrapper'));
+
+      await adapter.removeStagingFolder(staged);
+
+      expect(await isThere(staged)).toBe(false);
     });
   });
 
@@ -1086,6 +1144,17 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
         expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+      });
+
+      // Rival: refuse only an entry the folder already has, so a first upgrade plants one that
+      // every later upgrade then refuses.
+      it('refuses a release holding a kept entry the folder has none of, naming it', async () => {
+        await rm(join(folder(), 'source'), { recursive: true });
+        await mkdir(join(staged, 'source'));
+
+        await expect(adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/"source"/);
+
+        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
       it('refuses a mod no folder holds', async () => {

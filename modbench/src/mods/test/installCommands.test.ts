@@ -40,7 +40,6 @@ vi.mock('../../install/install', async (importOriginal) => ({
 import { registerModInstallCommands, type ModInstallDeps } from '../installCommands';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
-import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
@@ -52,14 +51,12 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 // Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
 // against Fallout 4 and reach meta.ini wrong for every other install.
 const GAME_RELEASE = 'Skyrim Special Edition';
-// The downloaded files the value lists, which install matches the picked archive against.
-const DOWNLOADED = [downloadRowFixture('foo.7z')];
 const ACCESS = accessTo('/instance');
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE, downloads: { kind: 'listed', rows: DOWNLOADED } }) },
+    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -137,7 +134,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', DOWNLOADED, { gameName: GAME_RELEASE },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_RELEASE },
     );
     expect(succeeded).toEqual({ installed: true });
   });

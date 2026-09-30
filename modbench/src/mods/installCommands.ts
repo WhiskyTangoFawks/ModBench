@@ -38,10 +38,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     if (!name) return NOT_INSTALLED;
     let succeeded = false;
     await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-      const { downloads } = instance.value;
-      const outcome = await installFromArchive(
-        access, { kind: 'new', name }, archivePath, downloads.kind === 'listed' ? downloads.rows : [],
-        { gameName: instance.value.gameRelease });
+      const outcome = await installFromArchive(access, { kind: 'new', name }, archivePath, { gameName: instance.value.gameRelease });
       if (!outcome.applied) throw new Error(outcome.refusal);
       warnIfFomod(name, outcome.isFomod);
       succeeded = true;

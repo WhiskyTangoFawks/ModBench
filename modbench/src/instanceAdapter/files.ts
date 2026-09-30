@@ -119,9 +119,9 @@ async function modeOf(target: string): Promise<number | undefined> {
   }
 }
 
-// A crash between this write's own temp file landing and its rename leaves one behind under
-// `target`'s name; the next write for that same target sweeps it before starting its own.
-async function removeStaleTempsFor(target: string): Promise<void> {
+/** Removes the temp writes a crash left behind for `target`, between a temp landing and its
+ *  rename; a write for `target` sweeps them before starting its own. */
+export async function removeStaleTempsFor(target: string): Promise<void> {
   const dir = dirname(target);
   const base = basename(target);
   let names: string[];

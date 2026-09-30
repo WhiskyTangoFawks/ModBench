@@ -195,7 +195,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
   });
@@ -210,7 +210,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '123', fileID: '456', version: '2.0' });
     });
   });
@@ -233,7 +233,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(installFromArchive).toHaveBeenCalledTimes(1);
@@ -253,7 +253,7 @@ describe('registerDownloadsSingleRowCommands', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(await readFile(meta, 'utf8')).toBe(before);
@@ -276,7 +276,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(report.reports).toEqual([]);
     expect(report.dialogFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
   });
 
@@ -506,7 +506,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
         { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
       );
     });
@@ -528,7 +528,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
       );
     });
@@ -563,7 +563,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined },
       );
     });
@@ -581,7 +581,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive, [expect.objectContaining({ name: 'foo.7z', path: archive })],
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '222', fileID: undefined, version: undefined },
       );
     });

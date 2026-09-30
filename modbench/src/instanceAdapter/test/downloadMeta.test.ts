@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { access, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { downloadPaths, spliceDownloadMeta, trashDownloadMeta } from '../downloadMeta';
+import { spliceDownloadMeta, trashDownloadMeta } from '../downloadMeta';
 
 describe('spliceDownloadMeta', () => {
   let downloadsDir: string;
@@ -59,12 +59,6 @@ describe('spliceDownloadMeta', () => {
     const text = await readFile(metaPath('foo.7z'), 'utf8');
     expect(text).toContain('removed=true');
     expect(text).toContain('installed=true');
-  });
-});
-
-describe('a downloaded file\'s two paths', () => {
-  it('names the file and its .meta beside it', () => {
-    expect(downloadPaths('/downloads', 'foo.7z')).toEqual({ path: join('/downloads', 'foo.7z'), sidecarPath: join('/downloads', 'foo.7z.meta') });
   });
 });
 
