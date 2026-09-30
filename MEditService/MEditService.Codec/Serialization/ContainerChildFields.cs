@@ -9,9 +9,10 @@ namespace MEditService.Codec.Serialization;
 public static class ContainerChildFields
 {
     /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a
-    /// known container shape.</summary>
+    /// known container shape, or its assembly is outside every game this build references.</summary>
     public static IReadOnlyList<string>? EnumerateChildFieldsFor(Type recordType) =>
-        ContainerMembers.Derived.ChildFieldsByType.TryGetValue(NormalizedTypeName(recordType), out var fields)
+        ContainerMembers.CategoryOf(recordType.Assembly) is { } category
+        && ContainerMembers.Derived.ChildFieldsByType.TryGetValue((category, NormalizedTypeName(recordType)), out var fields)
             ? fields
             : null;
 

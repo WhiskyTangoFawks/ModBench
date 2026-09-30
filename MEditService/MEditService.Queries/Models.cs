@@ -103,8 +103,7 @@ public record CompareResult(
     ConflictAll ConflictAll);
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
-// the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict,
-// carried per row so the group menu needs no create list of its own.
+// the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable);
 
 public record CreatableRecordType(string Type, string DisplayName);

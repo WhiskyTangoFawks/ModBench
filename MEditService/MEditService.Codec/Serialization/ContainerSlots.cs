@@ -11,14 +11,16 @@ public sealed class ContainerSlots
     private static readonly ConcurrentDictionary<GameCategory, ContainerSlots> Readers = new();
 
     public static ContainerSlots For(GameRelease release) =>
-        Readers.GetOrAdd(release.ToCategory(), _ => new ContainerSlots());
+        Readers.GetOrAdd(release.ToCategory(), category => new ContainerSlots(category));
 
+    private readonly GameCategory _category;
     private readonly ContainerMembers _members;
     private readonly HashSet<string> _embeddedSlotNames;
     private readonly Dictionary<string, string> _elementTypeBySlotName;
 
-    private ContainerSlots()
+    private ContainerSlots(GameCategory category)
     {
+        _category = category;
         _members = ContainerMembers.Derived;
         _embeddedSlotNames = _members.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
         _elementTypeBySlotName = _members.EmbeddedSlots
@@ -30,7 +32,7 @@ public sealed class ContainerSlots
     /// <summary>Every member of <paramref name="containerTypeName"/> holding child records, empty for
     /// a type with none.</summary>
     internal IReadOnlyList<string> ChildSlotsOf(string containerTypeName) =>
-        _members.ChildFieldsByType.TryGetValue(containerTypeName, out var slots) ? slots : [];
+        _members.ChildFieldsByType.TryGetValue((_category, containerTypeName), out var slots) ? slots : [];
 
     /// <summary>The members of <paramref name="containerTypeName"/> serializing their children
     /// inline. A null type answers with every container's, since nothing narrows it.</summary>

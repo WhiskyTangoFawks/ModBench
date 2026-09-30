@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { InMemoryMEditClient } from '../../client';
-import { recordSummaryFixture } from '../../client/test/fixtures';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { registerRecordCreateCommand } from '../createRecordCommand';
@@ -32,8 +32,8 @@ import { RecordNode, RecordTypeNode } from '../PluginTreeProvider';
 
 const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
 const EDITABLE = { tracked: true, editable: true };
-const NPC_GROUP = new RecordTypeNode('MyPatch.esp', 'npc_', 3, 'Non-Player Character', 'ModA', false, EDITABLE);
-const OTHER_GROUP = new RecordTypeNode('Other.esp', 'weap', 1, 'Weapon', 'ModB', false, EDITABLE);
+const NPC_GROUP = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModA', EDITABLE);
+const OTHER_GROUP = new RecordTypeNode('Other.esp', recordTypeCountFixture({ type: 'weap', displayName: 'Weapon' }), 'ModB', EDITABLE);
 const RECORD_ROW = new RecordNode(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA');
 const CREATABLE = [
   { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
@@ -135,7 +135,7 @@ describe('modbench.record.create', () => {
   // ADR-0012 invariant 1: the overridden plugin of the name is indexed too.
   it('creates in the group\'s own plugin of a shared filename', async () => {
     const { steps, create } = harness();
-    const overriding = new RecordTypeNode('MyPatch.esp', 'npc_', 3, 'Non-Player Character', 'ModB', false, EDITABLE);
+    const overriding = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModB', EDITABLE);
 
     await create(overriding);
 

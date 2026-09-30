@@ -734,10 +734,12 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
+        var creatable = _svc.GetCreatableRecordTypes().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
         var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
-        Assert.True(Assert.Single(result, r => r.Type == "npc_").IsCreatable);
-        Assert.False(Assert.Single(result, r => r.Type == "qust").IsCreatable);
+        Assert.Contains("npc_", creatable);
+        Assert.DoesNotContain("qust", creatable);
+        foreach (var row in result) Assert.Equal(creatable.Contains(row.Type), row.IsCreatable);
     }
 
     [Fact]

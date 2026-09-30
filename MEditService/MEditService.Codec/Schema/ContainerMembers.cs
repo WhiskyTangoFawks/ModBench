@@ -5,10 +5,10 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
-/// <see cref="EmbeddedSlots"/> is the subset the embed customization accepts, and a container's
-/// document carries exactly those.</summary>
+/// <see cref="EmbeddedSlots"/> is the subset the embed customization accepts. ChildFieldsByType is
+/// keyed by game too: two games' classes can share a bare name.</summary>
 public sealed record ContainerMembers(
-    IReadOnlyDictionary<string, string[]> ChildFieldsByType,
+    IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
     IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlots,
     IReadOnlyDictionary<(string ParentType, string Slot), string> ElementTypeBySlot)
 {
@@ -16,13 +16,22 @@ public sealed record ContainerMembers(
 
     private static readonly Lazy<ContainerMembers> Instance = new(Derive);
 
+    // The fact GameRelease.ToCategory() gives a release, read off a type's own assembly instead, so
+    // a Type-keyed lookup needs no release passed to it. Null outside every referenced game.
+    internal static GameCategory? CategoryOf(Assembly assembly)
+    {
+        foreach (var category in Enum.GetValues<GameCategory>())
+            if (SchemaReflector.GameModule(category) == assembly) return category;
+        return null;
+    }
+
     private static ContainerMembers Derive()
     {
-        var childFields = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        var childFields = new Dictionary<(GameCategory, string), SortedSet<string>>();
         var embedded = new HashSet<(string ParentType, string Slot)>();
         var elementTypes = new Dictionary<(string ParentType, string Slot), string>();
 
-        foreach (var assembly in GameModules())
+        foreach (var (category, assembly) in GameModules())
         {
             foreach (var recordType in RecordTypes(assembly))
             {
@@ -31,8 +40,9 @@ public sealed record ContainerMembers(
                     var embeds = TypedAsChildMajor(property.PropertyType);
                     if (!embeds && !ReachesChildMajor(property.PropertyType, assembly, [])) continue;
 
-                    if (!childFields.TryGetValue(recordType.Name, out var members))
-                        childFields[recordType.Name] = members = new SortedSet<string>(StringComparer.Ordinal);
+                    var key = (category, recordType.Name);
+                    if (!childFields.TryGetValue(key, out var members))
+                        childFields[key] = members = new SortedSet<string>(StringComparer.Ordinal);
                     members.Add(property.Name);
                     if (embeds) embedded.Add((recordType.Name, property.Name));
                     if (ElementTypeOf(property.PropertyType) is { } element)
@@ -42,7 +52,7 @@ public sealed record ContainerMembers(
         }
 
         return new ContainerMembers(
-            childFields.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray(), StringComparer.Ordinal),
+            childFields.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray()),
             embedded,
             elementTypes);
     }
@@ -56,8 +66,12 @@ public sealed record ContainerMembers(
         ?? slotType;
 
     // Every game this build references, so a module added later needs no line here.
-    private static IEnumerable<Assembly> GameModules() =>
-        Enum.GetValues<GameCategory>().Select(SchemaReflector.GameModule).OfType<Assembly>();
+    private static IEnumerable<(GameCategory Category, Assembly Assembly)> GameModules()
+    {
+        foreach (var category in Enum.GetValues<GameCategory>())
+            if (SchemaReflector.GameModule(category) is { } assembly)
+                yield return (category, assembly);
+    }
 
     private static IEnumerable<Type> RecordTypes(Assembly assembly) =>
         assembly.GetTypes().Where(type => type.IsClass && !type.IsAbstract && type.IsPublic

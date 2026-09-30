@@ -32,7 +32,7 @@ public sealed class ContainerSlotElementTypesTests
     {
         var members = ContainerMembers.Derived;
         var missing = members.ChildFieldsByType
-            .SelectMany(entry => entry.Value.Select(slot => (entry.Key, slot)))
+            .SelectMany(entry => entry.Value.Select(slot => (entry.Key.Type, slot)))
             .Where(slot => !members.ElementTypeBySlot.ContainsKey(slot))
             .ToList();
 

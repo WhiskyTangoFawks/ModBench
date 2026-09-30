@@ -64,25 +64,21 @@ function conditionedContextValue(kind: string, conditions: PluginConditions): st
 
 export class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
+  readonly recordType: string;
   constructor(
     public readonly plugin: string,
-    public readonly recordType: string,
-    count: number,
-    displayName: string,
+    group: PluginRecordTypeCount,
     /** ADR-0012: which plugin named `plugin` this node browses. */
     public readonly origin: string,
-    hasParseFailure = false,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
-    // CreatableRecordTypes' own verdict (plugins.md, Create record, story 4): a container type, such
-    // as Quest, offers no create on its group.
-    creatable = true,
   ) {
     // Label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
-    super(displayName, collapsibleWhen(count > 0));
-    this.description = count.toLocaleString();
-    this.contextValue = conditionedContextValue('recordType', conditions) + (creatable ? ' creatable' : '');
-    if (hasParseFailure) markFailure(this, failureNote(displayName, null));
+    super(group.displayName, collapsibleWhen(group.count > 0));
+    this.recordType = group.type;
+    this.description = group.count.toLocaleString();
+    this.contextValue = conditionedContextValue('recordType', conditions) + (group.isCreatable ? ' creatable' : '');
+    if (group.hasParseFailure) markFailure(this, failureNote(group.displayName, null));
   }
 }
 
@@ -444,7 +440,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const types = await this.repository.getRecordTypes(pluginName, origin);
       return types
         .map(t => SPATIAL_GROUP_FACTORIES[t.type]?.(pluginName, t, origin, conditions)
-          ?? new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin, t.hasParseFailure, conditions, t.isCreatable));
+          ?? new RecordTypeNode(pluginName, t, origin, conditions));
     });
   }
 

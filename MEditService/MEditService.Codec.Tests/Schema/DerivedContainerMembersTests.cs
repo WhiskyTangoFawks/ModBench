@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -64,6 +65,19 @@ public sealed class DerivedContainerMembersTests
             Assert.False(EnumeratesAsMajorRecords(mod, ElementOf(parent, slot)),
                 $"{parent}.{slot} holds major records directly, so it belongs in the embedded slots.");
         }
+    }
+
+    // One game can only show the key carries a category and a lookup honors it, not that two games'
+    // same-named classes stay apart.
+    [Fact]
+    public void ChildFieldsByType_IsKeyedByGameAsWellAsName()
+    {
+        var quest = RecordTypes().First(t => t.Name == "Quest");
+
+        Assert.Contains((GameCategory.Fallout4, "Quest"), ContainerMembers.Derived.ChildFieldsByType.Keys);
+        Assert.NotNull(ContainerChildFields.EnumerateChildFieldsFor(quest));
+        // A type from no referenced game's assembly resolves to no category, and so no fields.
+        Assert.Null(ContainerChildFields.EnumerateChildFieldsFor(typeof(object)));
     }
 
     // Mutagen's own registration: it enumerates a type it knows as a major record and throws for

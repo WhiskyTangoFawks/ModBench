@@ -376,8 +376,7 @@ internal sealed class WriteTargets(
             : null;
 
     // CreateRecord and CopyAsNewRecord only: a brand-new record has no containment to resolve to, and
-    // choosing one is a UX decision. CreatableRecordTypes excludes both reasons, and the message
-    // names either.
+    // choosing one is a UX decision.
     internal static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
     {
         if (CreatableRecordTypes.Includes(recordType, release)) return null;
@@ -385,10 +384,9 @@ internal sealed class WriteTargets(
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
             $"'{recordType}' is a container record — it owns child records of its own (a cell, a " +
-            "worldspace, a quest), or has no source file of its own and exists only embedded in one " +
-            "(a placed reference, landscape, navmesh, dialog topic, branch, scene, response). Editing " +
-            "its fields and its FormID works, and so does deleting it; creating " +
-            "one from scratch is not supported — a brand-new record has no containment for anything to " +
-            "place it into.");
+            "worldspace, a quest) — or the game cannot create it (a placed reference, a landscape, a " +
+            "navmesh, a dialog topic, branch, scene or response, each held inside another record's " +
+            "document). Editing its fields and its FormID works, and so does deleting it; creating " +
+            "one from scratch is not supported.");
     }
 }

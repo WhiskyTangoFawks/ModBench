@@ -19,7 +19,7 @@ import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
     expect(typeNode.recordType).toBe('acti');
   });
 
-  // plugins.md, Create record, story 4: the backend's own creatable verdict, not a second list here.
+  // plugins.md, Create record, story 4.
   it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
     const repo = makeClient({
       recordTypes: [
@@ -264,24 +264,24 @@ describe('RecordTypeNode', () => {
   it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
     // The tree must show "Weapon", not "weap" — but recordType (used for
     // caching, commands, contextValue) stays the raw signature.
-    const node = new RecordTypeNode('MyPlugin.esp', 'weap', 42, 'Weapon', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 42, displayName: 'Weapon' }), 'Data');
     expect(node.label).toBe('Weapon');
     expect(node.recordType).toBe('weap');
   });
 
   it('shows formatted count as description', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 1234, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 1234 }), 'Data');
     expect(node.description).toBe('1,234');
   });
 
   it('states no record edit when no one has described its plugin', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 10, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 10 }), 'Data');
     expect(node.contextValue).toBe('recordType untracked creatable');
   });
 
   // plugins.md, Create record, story 4: no create record on a group of container records.
   it('states no create on a container type\'s group (a quest, say)', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'qust', 3, 'Quest', 'Data', false, undefined, false);
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false }), 'Data');
     expect(node.contextValue).toBe('recordType untracked');
   });
 });
@@ -670,8 +670,8 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 
   it('gives a group an expander only when it holds a record', () => {
-    expect(new RecordTypeNode('M.esp', 'weap', 1, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
-    expect(new RecordTypeNode('M.esp', 'weap', 0, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 1 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 0 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new WorldspacesNode('M.esp', 'Worldspace', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new InteriorCellsNode('M.esp', 'Cell', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
@@ -725,7 +725,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new RecordTypeNode('Plugin0.esp', 'WEAP', 5, 'WEAP', 'Data');
+    const node = new RecordTypeNode('Plugin0.esp', recordTypeCountFixture({ type: 'WEAP', count: 5 }), 'Data');
 
     const children = await provider.getChildren(node);
 

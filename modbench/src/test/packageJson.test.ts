@@ -703,9 +703,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('recordType tracked editable')).toEqual([]);
   });
 
-  // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records, and
-  // so does a flat one such as Quest — CreatableRecordTypes' own verdict, not a name here.
-  it.each(['worldspaces', 'interiorCells', 'recordType tracked editable'])('offers no create record on the %s group', (contextValue) => {
+  // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records.
+  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group', (contextValue) => {
     expect(menuOf(contextValue).map(([command]) => command)).not.toContain('modbench.record.create');
   });
 

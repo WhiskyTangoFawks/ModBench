@@ -32,7 +32,7 @@ import {
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
-import { recordSummaryFixture } from '../../client/test/fixtures';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -387,7 +387,7 @@ describe('pluginsCopyValueText', () => {
   const placedRef = new PlacedNode('Alpha.esp', {
     formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
   }, 'ModA');
-  const group = new RecordTypeNode('Alpha.esp', 'weap', 2, 'Weapon', 'ModA');
+  const group = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 2, displayName: 'Weapon' }), 'ModA');
   const mixed = [plugin, record, locked, unnamed, worldspace, cell, placedRef, group];
   const LINES = [
     'Alpha.esp', 'Gun [000800:Alpha.esp]', 'Fallout4.esm', '000801:Alpha.esp',

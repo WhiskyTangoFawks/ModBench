@@ -39,7 +39,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { readPluginLines } from '../../test/mo2/corpusFixture';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -728,7 +728,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon', 'SomeMod'), dt, NONE);
+    await tree.handleDrop(new RecordTypeNode('A.esp', recordTypeCountFixture({ type: 'weap', count: 5, displayName: 'Weapon' }), 'SomeMod'), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
