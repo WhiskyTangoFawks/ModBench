@@ -66,9 +66,9 @@ const node = (root: string, name: string, row: Partial<DownloadRow> = {}): Downl
 // No installed mods by default, so `selectUpgradeCandidates` finds none and the pick never
 // shows — the shape every install test not about the pick itself relies on.
 const fakeInstance = (
-  mods: InstanceValue['mods'] = [], downloads: readonly DownloadFile[] = [], gameRelease = 'Fallout4',
+  mods: InstanceValue['mods'] = [], downloads: readonly DownloadFile[] = [], gameName = 'Fallout 4',
 ): Pick<Instance, 'value'> => ({
-  value: instanceValueFixture({ mods, downloads: { kind: 'listed', rows: downloads }, gameRelease }),
+  value: instanceValueFixture({ mods, downloads: { kind: 'listed', rows: downloads }, gameName }),
 });
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
@@ -196,7 +196,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
+        { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
     });
   });
 
@@ -211,7 +211,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: '123', fileID: '456', version: '2.0' });
+        { gameName: 'Fallout 4', modID: '123', fileID: '456', version: '2.0' });
     });
   });
 
@@ -234,7 +234,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
+        { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(installFromArchive).toHaveBeenCalledTimes(1);
   });
@@ -254,7 +254,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
+        { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(await readFile(meta, 'utf8')).toBe(before);
   });
@@ -277,7 +277,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(report.dialogFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
       expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-      { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
+      { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined });
   });
 
   it('install: cancelling the name prompt installs nothing', async () => {
@@ -507,7 +507,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
-        { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
+        { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
       );
     });
     expect(nameNewMod).not.toHaveBeenCalled();
@@ -529,7 +529,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
+        { gameName: 'Fallout 4', modID: '111', fileID: '999', version: undefined },
       );
     });
   });
@@ -564,7 +564,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined },
+        { gameName: 'Fallout 4', modID: undefined, fileID: undefined, version: undefined },
       );
     });
     expect(createQuickPick).not.toHaveBeenCalled();
@@ -582,7 +582,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
-        { gameName: 'Fallout4', modID: '222', fileID: undefined, version: undefined },
+        { gameName: 'Fallout 4', modID: '222', fileID: undefined, version: undefined },
       );
     });
     expect(createQuickPick).not.toHaveBeenCalled();

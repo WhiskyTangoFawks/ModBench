@@ -61,7 +61,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   root: string;
   instance: Instance;
   syncs: Promise<PluginSyncResult>[];
-  games: string[];
+  games: (string | undefined)[];
   plugins: () => Promise<string>;
   pluginsOf: (profile: string) => Promise<string>;
 }> {
@@ -89,9 +89,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const syncs: Promise<PluginSyncResult>[] = [];
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
-  const games: string[] = [];
+  const games: (string | undefined)[] = [];
   const trigger = registerPluginSync(instance, (value) => {
-    games.push(value.gameRelease);
+    games.push(pluginSyncArguments(value).gameRelease);
     const { profile, provided, inData } = pluginSyncArguments(value);
     const run = syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
@@ -178,7 +178,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     await driveToQuiescence(instance, syncs, 8);
 
     expect(games.length).toBeGreaterThan(0);
-    expect([...new Set(games)]).toEqual(['Skyrim Special Edition']);
+    expect([...new Set(games)]).toEqual(['SkyrimSE']);
   });
 });
 
@@ -464,7 +464,8 @@ describe('pluginSyncArguments', () => {
   it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the game', () => {
     const value = instanceValueFixture({
       activeProfile: 'Survival',
-      gameRelease: 'Skyrim Special Edition',
+      gameName: 'Skyrim Special Edition',
+      gameRelease: 'SkyrimSE',
       gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
       dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
       plugins: [
@@ -478,7 +479,7 @@ describe('pluginSyncArguments', () => {
       provided: new Map([['mine.esp', 'Mine.esp']]),
       inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
       dataFolder: '/game/Data',
-      gameName: 'Skyrim Special Edition',
+      gameRelease: 'SkyrimSE',
     });
   });
 });

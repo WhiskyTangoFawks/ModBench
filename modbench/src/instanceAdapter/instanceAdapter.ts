@@ -165,7 +165,10 @@ export type Upgraded = { readonly refused: false } | { readonly refused: true; r
 /** One read of the instance's configuration. Both answers come from that same read. */
 export interface InstanceSettings {
   readonly profile: string;
+  /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
   gameFolder(): Promise<GameFolder>;
   downloadedFiles(): Promise<DownloadedFiles>;
 }

@@ -14,6 +14,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     plugins: [],
     downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
+    gameName: 'Fallout 4',
     gameRelease: 'Fallout4',
     nexusSlug: 'fallout4',
     gameFolder: GAME_FOLDER_NOT_FOUND,

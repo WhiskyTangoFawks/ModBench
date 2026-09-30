@@ -7,7 +7,7 @@ import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { dataFolderOf } from '../tables/gamePaths';
+import { dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
@@ -54,6 +54,9 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   }
 }
 
+// MO2's `gameName=` is the game's own name, which the tables key each release on.
+const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
+
 export function mo2Reads(context: Mo2Context): Mo2Reads {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
   return {
@@ -61,7 +64,7 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
       const iniText = await get(settingsFile(instanceRoot));
       return {
         profile: readSelectedProfile(iniText),
-        gameName: readGameName(iniText),
+        ...gameOf(readGameName(iniText)),
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(iniText);

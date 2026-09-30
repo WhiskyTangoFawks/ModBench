@@ -16,7 +16,6 @@ import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
   PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
 } from './plugins/PluginsTreeProvider';
-import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
@@ -491,17 +490,17 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   });
   // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (value = instance.value): LoadOrderSource =>
-    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
+    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
-  const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
+  const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
-  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> =>
-    implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
+  const implicitMastersIn = (folder: string | undefined, gameRelease: string | undefined): Promise<string[] | undefined> =>
+    implicitMastersFrom(client, folder, gameRelease);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const syncPluginsOver = pluginSyncOver(access, implicitMastersIn);

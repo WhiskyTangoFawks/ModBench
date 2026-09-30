@@ -698,7 +698,8 @@ describe('Instance — downloads, profile and game directory', () => {
       }),
     );
     expect(instance.value.activeProfile).toBe('Default');
-    expect(instance.value.gameRelease).toBe('Fallout 4');
+    expect(instance.value.gameName).toBe('Fallout 4');
+    expect(instance.value.gameRelease).toBe('Fallout4');
     expect(instance.value.nexusSlug).toBe('fallout4');
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
@@ -903,7 +904,7 @@ describe('Instance — downloads, profile and game directory', () => {
   it('builds one value from one generation of the ini, even when it is rewritten mid-recompute', async () => {
     const { root, instance, setResolver } = await realInstance();
     await instance.refresh();
-    const beforeRelease = instance.value.gameRelease;
+    const beforeName = instance.value.gameName;
     const ini = join(root, 'ModOrganizer.ini');
     setResolver(async () => {
       const text = await readFile(ini, 'utf8');
@@ -913,11 +914,11 @@ describe('Instance — downloads, profile and game directory', () => {
 
     await instance.refresh();
 
-    expect(instance.value.gameRelease).toBe(beforeRelease);
+    expect(instance.value.gameName).toBe(beforeName);
     // Positive control: the rewrite is real, and the next recompute does read it.
     setResolver(resolvesNotFound);
     await instance.refresh();
-    expect(instance.value.gameRelease).toBe('Rewritten Mid Recompute');
+    expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {

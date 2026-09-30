@@ -84,6 +84,17 @@ describe('the MO2 Instance adapter', () => {
 
       expect(settings.profile).toBe('Default');
       expect(settings.gameName).toBe('Fallout 4');
+      expect(settings.gameRelease).toBe('Fallout4');
+    });
+
+    // Rival: a release guessed from the name, which has the backend answer about another game.
+    it('answers no release for a game the tables hold none for', async () => {
+      await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
+
+      const settings = await adapter.settings();
+
+      expect(settings.gameName).toBe('Morrowind');
+      expect(settings.gameRelease).toBeUndefined();
     });
 
     it('rejects when the settings name no selected profile', async () => {

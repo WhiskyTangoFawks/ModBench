@@ -18,7 +18,7 @@ export interface PluginSyncArguments {
   provided: ReadonlyMap<string, string>;
   inData: DataFolderPlugins;
   dataFolder: string | undefined;
-  gameName: string;
+  gameRelease: string | undefined;
 }
 
 export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
@@ -27,7 +27,7 @@ export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
     provided: providedPluginsOf(value.plugins),
     inData: value.dataFolderPlugins,
     dataFolder: dataFolderOf(value.gameFolder),
-    gameName: value.gameRelease,
+    gameRelease: value.gameRelease,
   };
 }
 

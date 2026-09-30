@@ -166,12 +166,14 @@ export interface PluginSyncInputs {
   provided: ReadonlyMap<string, string>;
   inData: DataFolderPlugins;
   dataFolder: string | undefined;
-  gameName: string;
+  gameRelease: string | undefined;
 }
 
 /** The plugins the game loads with no line, for a Data folder and a game; undefined when mEdit
  *  cannot say. */
-export type ImplicitMastersIn = (dataFolder: string | undefined, gameName: string) => Promise<readonly string[] | undefined>;
+export type ImplicitMastersIn = (
+  dataFolder: string | undefined, gameRelease: string | undefined,
+) => Promise<readonly string[] | undefined>;
 
 /** Plugin sync on one run's inputs. */
 export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResult>;
@@ -179,8 +181,8 @@ export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResu
 /** `syncPlugins` bound to one instance, its implicit masters asked for each run's Data folder and
  *  game. */
 export function pluginSyncOver(access: PluginsAccess, implicitMastersIn: ImplicitMastersIn): PluginSyncRun {
-  return ({ profile, provided, inData, dataFolder, gameName }) =>
-    syncPlugins(access, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
+  return ({ profile, provided, inData, dataFolder, gameRelease }) =>
+    syncPlugins(access, profile, provided, inData, () => implicitMastersIn(dataFolder, gameRelease));
 }
 
 /** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the

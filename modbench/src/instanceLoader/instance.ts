@@ -65,8 +65,10 @@ export interface InstanceValue {
   readonly downloads: DownloadsResult;
   /** The profile the mod manager's configuration selects. */
   readonly activeProfile: string;
-  /** The game the mod manager's configuration names. */
-  readonly gameRelease: string;
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
   /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
   readonly nexusSlug: string;
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
@@ -124,7 +126,8 @@ const emptyValue = (): InstanceValue => ({
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
-  gameRelease: '',
+  gameName: '',
+  gameRelease: undefined,
   nexusSlug: '',
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
@@ -318,7 +321,7 @@ export class Instance implements Subscription {
     // The settings are read first and every later read is against the profile they name, so a
     // profile switch mid-recompute cannot mix one profile's mod order with another's plugin order.
     const settings = await adapter.settings();
-    const { profile, gameName } = settings;
+    const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
     const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, adapter, log),
@@ -352,7 +355,8 @@ export class Instance implements Subscription {
           rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto) : [],
         },
       activeProfile: profile,
-      gameRelease: gameName,
+      gameName,
+      gameRelease,
       nexusSlug: nexusSlugForGame(gameName),
       gameFolder,
       dataFolderPlugins,

@@ -9,14 +9,19 @@ import type { GameFolder } from '../instanceAdapter/instanceAdapter';
 import {
   loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../instanceLoader/loadOrderSnapshot';
-import { gameReleaseForGame } from '../tables/gamePaths';
+
+/** The game the instance is for. */
+export interface InstanceGame {
+  /** As the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
+}
 
 /** The slice of the instance value a load order is built from. */
-export interface LoadOrderSource {
+export interface LoadOrderSource extends InstanceGame {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
-  /** MO2's own name for the game. */
-  readonly gameName: string;
 }
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
@@ -24,15 +29,15 @@ export type PutLoadOrderResult =
   | { sent: false }
   | { sent: true; snapshot: LoadOrderSnapshot; outcome: LoadOrderOutcome };
 
-// A release the table can't translate is sent as MO2's own spelling rather than a guess: the
-// backend then rejects it visibly instead of quietly answering about the wrong game.
-const releaseOf = (gameName: string): string => gameReleaseForGame(gameName) ?? gameName;
+// A game with no release is sent as the mod manager names it rather than a guess: the backend then
+// rejects it visibly instead of quietly answering about the wrong game.
+const releaseOf = (game: InstanceGame): string => game.gameRelease ?? game.gameName;
 
 function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnapshot | undefined {
   const loaded = loadOrderSnapshotOf(value);
   if (!loaded) return undefined;
   return {
-    plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value.gameName),
+    plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value),
   };
 }
 
@@ -62,9 +67,9 @@ export type RefreshResult =
   | { applied: false; heldElsewhere: false; refusal: string };
 
 export async function refresh(
-  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, gameName: string,
+  client: Pick<MEditClient, 'rebuildIndex'>, instanceRoot: string, game: InstanceGame,
 ): Promise<RefreshResult> {
-  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(gameName));
+  const outcome = await client.rebuildIndex(instanceRoot, releaseOf(game));
   if (outcome.rebuilt) return { applied: true };
   return outcome.heldElsewhere
     ? { applied: false, heldElsewhere: true }

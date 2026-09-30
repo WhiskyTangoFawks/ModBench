@@ -61,7 +61,7 @@ describe('nexusSlugForGame', () => {
 describe('gamePathInfoForRelease', () => {
   it('answers Fallout 4\'s Steam install facts', () => {
     expect(gamePathInfoForRelease('Fallout4')).toEqual({
-      mo2Name: 'Fallout 4',
+      gameName: 'Fallout 4',
       nexusSlug: 'fallout4',
       steamAppId: '377160',
       steamFolderName: 'Fallout 4',
@@ -71,7 +71,7 @@ describe('gamePathInfoForRelease', () => {
   // A release the table only knows the Nexus slug for carries no Steam facts — the
   // autodetector's signal to give up rather than guess a folder.
   it('answers no Steam facts for a release the table cannot autodetect', () => {
-    expect(gamePathInfoForRelease('SkyrimSE')).toEqual({ mo2Name: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
+    expect(gamePathInfoForRelease('SkyrimSE')).toEqual({ gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
   });
 
   it('answers undefined for a release the table holds no row for', () => {
