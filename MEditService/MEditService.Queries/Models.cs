@@ -71,7 +71,10 @@ public record CompareOverride(
     string RecordType = "",
     bool IsPartialForm = false,
     bool IsPartialFormable = false,
-    string? ParseDiagnosis = null)
+    string? ParseDiagnosis = null,
+    // ADR-0012 invariant 2: Overwrite is an origin, not a mod. Computed here (PluginOrigin.
+    // IsOverwrite) so the webview never interprets Origin itself.
+    bool IsInOverwrite = false)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
         IsPartialFormable, ParseDiagnosis);

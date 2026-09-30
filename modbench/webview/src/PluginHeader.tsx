@@ -1,9 +1,9 @@
 import React from 'react';
-import type { RecordDetail } from './types';
+import type { CompareOverride } from './types';
 import { columnStatus, type ColumnStatus } from './recordUtils';
 
 interface PluginHeaderProps {
-  override: RecordDetail;
+  override: CompareOverride;
   isImmutable: boolean;
   // ADR-0013: whether the effective load order names this plugin — distinct from isImmutable (a
   // plugin outside the load order is immutable *because* this is false). Dimming is applied once
@@ -88,7 +88,7 @@ export function PluginHeader({
   override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
-  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis, o.origin);
+  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis, o.isInOverwrite);
   // Parse failure's reason ends with this column's own diagnosis, so it is composed rather than
   // tabled. Every other state's reason is the table's alone.
   const title = STATUS_TEXT[status].title + (o.parseDiagnosis == null ? '' : ` ${o.parseDiagnosis}`);

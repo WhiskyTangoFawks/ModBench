@@ -5,13 +5,14 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
 import { headerCellContext, combineVscodeContexts } from './recordUtils';
-import type { RecordDetail } from './types';
+import type { CompareOverride } from './types';
 
-function override(partial: Partial<RecordDetail> = {}): RecordDetail {
+function override(partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
     formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadOrderIndex: 1,
     isWinner: true, editorId: 'TestNPC', fields: [], origin: 'Data',
     recordType: 'npc_', isPartialForm: false, isPartialFormable: false,
+    conflictThis: 'OnlyOne', isInOverwrite: false,
     ...partial,
   };
 }
@@ -196,22 +197,25 @@ describe('PluginHeader — untracked signposting', () => {
 // invariant 2), so its column names its own reason rather than "(untracked)", which this header's
 // menu offers no Track or Decompile item for.
 describe('PluginHeader — Overwrite', () => {
-  it('shows "(in Overwrite)", not "(untracked)", for a column whose plugin is in Overwrite', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'overwrite' })} isTracked={false} />);
+  it('shows "(in Overwrite)", not "(untracked)", for a column whose isInOverwrite is true', () => {
+    render(<PluginHeader {...baseProps()} override={override({ isInOverwrite: true })} isTracked={false} />);
 
     expect(screen.queryByText('(untracked)')).toBeNull();
     expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
   });
 
-  // ADR-0012: origins compare ignoring case.
-  it('shows "(in Overwrite)" for a case-mismatched spelling of the origin', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'Overwrite' })} isTracked={false} />);
+  // The webview must not interpret Origin (mEdit already has, via isInOverwrite): an ordinary
+  // mod origin still reads as Overwrite once mEdit says so.
+  it('reads isInOverwrite alone, regardless of the origin string', () => {
+    render(
+      <PluginHeader {...baseProps()} override={override({ origin: 'ModA', isInOverwrite: true })} isTracked={false} />,
+    );
 
     expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
   });
 
   it('is exactly the table\'s tooltip, and never names Track Mod… or Decompile Plugin', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'overwrite' })} isTracked={false} />);
+    render(<PluginHeader {...baseProps()} override={override({ isInOverwrite: true })} isTracked={false} />);
 
     const title = screen.getByText('(in Overwrite)').getAttribute('title');
     expect(title).toBe('Overwrite is not a mod, and a plugin moved into a mod can be tracked.');
@@ -223,7 +227,7 @@ describe('PluginHeader — Overwrite', () => {
     render(
       <PluginHeader
         {...baseProps()}
-        override={override({ origin: 'overwrite', isPartialFormable: true, isPartialForm: true })}
+        override={override({ isInOverwrite: true, isPartialFormable: true, isPartialForm: true })}
         isTracked={false}
       />,
     );

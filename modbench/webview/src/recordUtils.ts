@@ -26,17 +26,16 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 export type ColumnStatus =
   'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'overwrite' | 'untracked' | 'tracked';
 
-// ADR-0012, invariant 2: Overwrite is an origin, not a mod. Origins compare ignoring case.
-const isOverwriteOrigin = (origin: string): boolean => origin.toLowerCase() === 'overwrite';
-
 /** Ordered by what the user can do about it: a parse failure and an immutable column come first,
  *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
+// isInOverwrite is mEdit's own fact (PluginOrigin.IsOverwrite) — never re-derived from Origin here.
 export function columnStatus(
-  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null, origin = '',
+  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null,
+  isInOverwrite = false,
 ): ColumnStatus {
   if (parseDiagnosis != null) return 'parseFailure';
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
-  if (isOverwriteOrigin(origin)) return 'overwrite';
+  if (isInOverwrite) return 'overwrite';
   return isTracked ? 'tracked' : 'untracked';
 }
 

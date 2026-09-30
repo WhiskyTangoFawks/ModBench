@@ -34,6 +34,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
     recordType: 'npc_',
     isPartialForm: false,
     isPartialFormable: false,
+    isInOverwrite: false,
     ...extra,
   };
 }
@@ -95,19 +96,18 @@ describe('columnStatus', () => {
   // editor.md, Columns, A column's header: Overwrite is not a mod (ADR-0012 invariant 2), so it
   // can never be tracked — "untracked" would send the user to a Track item this column's header
   // does not offer.
-  it('is "overwrite" for a column whose origin is Overwrite, regardless of tracked state', () => {
-    expect(columnStatus(false, true, false, null, 'overwrite')).toBe('overwrite');
-    expect(columnStatus(false, true, true, null, 'overwrite')).toBe('overwrite');
+  it('is "overwrite" for a column whose isInOverwrite is true, regardless of tracked state', () => {
+    expect(columnStatus(false, true, false, null, true)).toBe('overwrite');
+    expect(columnStatus(false, true, true, null, true)).toBe('overwrite');
   });
 
-  // ADR-0012: origin compares ignoring case, as the load order does.
-  it('is "overwrite" for a case-mismatched spelling of the reserved origin', () => {
-    expect(columnStatus(false, true, false, null, 'Overwrite')).toBe('overwrite');
-    expect(columnStatus(false, true, false, null, 'OVERWRITE')).toBe('overwrite');
+  // A 3- or 4-arg caller keeps its old tracked/untracked behaviour.
+  it('defaults isInOverwrite to false when the caller omits it', () => {
+    expect(columnStatus(false, true, false)).toBe('untracked');
   });
 
-  it('is not "overwrite" for an ordinary mod origin', () => {
-    expect(columnStatus(false, true, false, null, 'SomeMod')).toBe('untracked');
+  it('is not "overwrite" when isInOverwrite is false', () => {
+    expect(columnStatus(false, true, false, null, false)).toBe('untracked');
   });
 
   // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
@@ -120,8 +120,8 @@ describe('columnStatus', () => {
   // editor.md's table takes the first row that applies: parse failure, then read-only, outrank
   // "in Overwrite" — an unreadable or forced-immutable column names its own reason first.
   it('prefers a parse failure or an immutable reason over "overwrite"', () => {
-    expect(columnStatus(false, true, false, 'diagnosis', 'overwrite')).toBe('parseFailure');
-    expect(columnStatus(true, true, false, null, 'overwrite')).toBe('vanillaMaster');
+    expect(columnStatus(false, true, false, 'diagnosis', true)).toBe('parseFailure');
+    expect(columnStatus(true, true, false, null, true)).toBe('vanillaMaster');
   });
 });
 
