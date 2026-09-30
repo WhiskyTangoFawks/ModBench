@@ -90,9 +90,9 @@ export function moveSeparators(
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 
-/** Why `requested` cannot name a separator, or `undefined` when it can: another separator in
- *  `order` has that name, or a folder holds a separator of that name, matched as the instance
- *  matches names. `own` is the separator being renamed, and is no clash. */
+/** Why `requested` cannot name a separator, or `undefined` when it can: a separator in `order`
+ *  has that name, or a folder holds one, matched as the instance matches names. `own`, the
+ *  separator being renamed, is no clash. */
 export async function separatorNameRefusal(
   access: ModlistAccess, order: readonly EntryRef[], requested: string, own?: string,
 ): Promise<string | undefined> {
