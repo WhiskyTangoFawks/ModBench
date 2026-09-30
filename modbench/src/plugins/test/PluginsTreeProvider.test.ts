@@ -1859,7 +1859,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe(failed.message);
   });
 
-  // plugins.md, States 6.
   it("a failed refusal names the failure on the view's message line until the next reconcile ticks", async () => {
     const h = makeTree([A_ROW()]);
     await h.tree.getChildren();
@@ -1871,12 +1870,22 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     expect(h.tree.viewMessage()).toBeUndefined();
   });
 
-  it('a failed refusal leaves the message line once a reconcile lands with no tick of its own', async () => {
+  it('a reconcile that lands with no tick of its own clears a failed refusal from the message line', async () => {
     const h = makeTree([A_ROW()]);
     await h.tree.getChildren();
     h.tree.applyRefused(failed);
 
     await reconcile(h, [held('A.esp')]);
+
+    expect(h.tree.viewMessage()).toBeUndefined();
+  });
+
+  it('a heldElsewhere refusal clears an earlier failed refusal from the message line', async () => {
+    const h = makeTree([A_ROW()]);
+    await h.tree.getChildren();
+    h.tree.applyRefused(failed);
+
+    h.tree.applyRefused(heldElsewhere);
 
     expect(h.tree.viewMessage()).toBeUndefined();
   });
@@ -2788,7 +2797,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
     // The same red the Problems panel uses, not the plain foreground color a colorless
     // ThemeIcon renders in — otherwise indistinguishable at a glance in a large load order.
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.tooltip).toContain('Missing master: Ghost.esm');
+    expect(item.tooltip).toContain('Missing masters: Ghost.esm');
   });
 
   it('matches the plugin key case-insensitively, like the load order set itself', async () => {
@@ -2858,14 +2867,13 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
     expect((await rowItem(h)).description).toBe('1 master issue');
   });
 
-  it('names each master that is not active, once, with a count', async () => {
+  it('counts the masters that are not active, and names them on one tooltip line in MO2 words', async () => {
     const h = makeTree([A_ROW()]);
     await withIssues(h, ['Ghost.esm', 'Disabled.esm']);
 
     const item = await rowItem(h);
     expect(item.description).toBe('2 master issues');
-    expect(item.tooltip).toContain('Missing master: Ghost.esm');
-    expect(item.tooltip).toContain('Missing master: Disabled.esm');
+    expect(item.tooltip).toBe('A.esp\nSomeMod\nMissing masters: Ghost.esm, Disabled.esm');
   });
 
   it('leaves a row the backend flags nothing on undecorated', async () => {
@@ -3149,7 +3157,7 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
     expect(item.description).toBe('failed to read, 1 master issue, unreadable records, changed outside Modbench, malformed');
     const tooltip = expectString(item.tooltip);
     expect(tooltip).toContain('Failed to read: Malformed record');
-    expect(tooltip).toContain('Missing master: Ghost.esm');
+    expect(tooltip).toContain('Missing masters: Ghost.esm');
     expect(tooltip).toContain('could not be read');
     expect(tooltip).toContain('Changed outside Modbench');
     expect(tooltip).toContain('some diagnosis');
@@ -3189,7 +3197,7 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
     const item = await rowItem(h);
     expect(item.description).toBe('1 master issue');
     expect(item.tooltip).toContain('read-only');
-    expect(item.tooltip).toContain('Missing master: Ghost.esm');
+    expect(item.tooltip).toContain('Missing masters: Ghost.esm');
   });
 });
 
@@ -3243,7 +3251,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     ]);
 
     const tooltip = expectString((await rowItem(h)).tooltip);
-    expect(tooltip).toContain('Missing master: AMaster.esm');
+    expect(tooltip).toContain('Missing masters: AMaster.esm');
     expect(tooltip).not.toContain('BMaster.esm');
   });
 

@@ -1825,7 +1825,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const item = tree.getTreeItem(row);
 
-    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing masters: Ghost.esm'),
       `expected a missing-master tooltip, got: ${describeTooltip(item.tooltip)}`);
     // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
@@ -1926,7 +1926,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const beforeTooltip = tree.getTreeItem(before).tooltip;
-    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing masters: Ghost.esm'),
       `expected the row to carry the master-issue tooltip before the reconcile, got: ${describeTooltip(beforeTooltip)}`);
 
     // The next reconcile reports the same plugin with its master issue resolved.
@@ -2307,7 +2307,7 @@ describe('Progressive load', () => {
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
-      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm'),
+      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
@@ -2315,7 +2315,7 @@ describe('Progressive load', () => {
     await launch;
 
     const loaded = await itemFor('MissingMaster.esp');
-    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),

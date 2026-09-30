@@ -233,9 +233,8 @@ function failedToReadStatus(failure: string | undefined): PluginStatus | undefin
 // "Missing" is MO2's word for a master that is not active, file present or not.
 function masterIssuesStatus(inactiveMasters: string[]): PluginStatus | undefined {
   if (inactiveMasters.length === 0) return undefined;
-  const reasons = inactiveMasters.map((master) => `Missing master: ${master}`);
   const words = inactiveMasters.length === 1 ? '1 master issue' : `${inactiveMasters.length} master issues`;
-  return { kind: 'masterIssues', words, tooltipLine: `${words}: ${reasons.join('; ')}` };
+  return { kind: 'masterIssues', words, tooltipLine: `Missing masters: ${inactiveMasters.join(', ')}` };
 }
 
 function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undefined {

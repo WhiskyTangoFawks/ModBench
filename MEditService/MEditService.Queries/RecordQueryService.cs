@@ -24,7 +24,6 @@ public sealed class RecordQueryService(
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        // plugins.md: master issues are checked once the snapshot is indexed, and null until then.
         var masterIssues = _index.Status.State == LoadOrderState.Ready
             ? MasterResolution.Classify(_loadOrder.Require(), opened)
             : null;

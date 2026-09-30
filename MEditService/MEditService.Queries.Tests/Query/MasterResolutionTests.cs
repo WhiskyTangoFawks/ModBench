@@ -20,7 +20,6 @@ public class MasterResolutionTests
         return (registered with { Enabled = false }, content);
     }
 
-    // Active in the load order, but mEdit never read its header.
     private static (RegisteredPlugin Registered, PluginContent? Content) Unread(string name) => (Plugin(name).Registered, null);
 
     private static IReadOnlyList<PluginRow> GetPlugins(
@@ -48,7 +47,7 @@ public class MasterResolutionTests
             .ToDictionary(row => row.Name, row => row.Issues, StringComparer.OrdinalIgnoreCase);
 
     [Fact]
-    public void Classify_MasterAbsentFromTheLoadOrder_IsAMasterIssue()
+    public void MasterAbsentFromTheLoadOrder_IsAMasterIssue()
     {
         var result = Classify(Plugin("Patch.esp", "Ghost.esm"));
 
@@ -57,7 +56,7 @@ public class MasterResolutionTests
 
     // MO2's testMasters: a master counts only while it is enabled itself.
     [Fact]
-    public void Classify_MasterIndexedButDisabled_IsAMasterIssue()
+    public void MasterIndexedButDisabled_IsAMasterIssue()
     {
         var result = Classify(Disabled("Base.esm"), Plugin("Patch.esp", "Base.esm"));
 
@@ -66,7 +65,7 @@ public class MasterResolutionTests
 
     // The game loads what mEdit cannot read, so the master is there for it.
     [Fact]
-    public void Classify_ActiveMasterMEditCouldNotRead_IsNoIssue()
+    public void ActiveMasterMEditCouldNotRead_IsNoIssue()
     {
         var result = Classify(Unread("Broken.esm"), Plugin("Patch.esp", "Broken.esm"));
 
@@ -75,7 +74,7 @@ public class MasterResolutionTests
 
     // MO2's testMasters: a plugin the game does not load gets no flag.
     [Fact]
-    public void Classify_DisabledPluginWithAMasterAbsent_IsNoIssue()
+    public void DisabledPluginWithAMasterAbsent_IsNoIssue()
     {
         var result = Classify(Disabled("Patch.esp", "Ghost.esm"));
 
@@ -86,19 +85,20 @@ public class MasterResolutionTests
     [Fact]
     public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
     {
-        var missingAMaster = (new RegisteredPlugin("Patch.esp", "WinningMod", "Patch.esp", Slot: 0, Enabled: true, Winning: true),
-            (PluginContent?)new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, ["Ghost.esm"], RecordCount: 0));
-        var complete = (new RegisteredPlugin("Patch.esp", "LosingMod", "Patch.esp", Slot: 0, Enabled: true, Winning: false),
-            (PluginContent?)new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, [], RecordCount: 0));
+        var (winning, missingAMaster) = Plugin("Patch.esp", "Ghost.esm");
+        var (losing, complete) = Plugin("Patch.esp");
 
-        var rows = GetPlugins([missingAMaster, complete]);
+        var rows = GetPlugins([
+            (winning with { Origin = "WinningMod" }, missingAMaster),
+            (losing with { Origin = "LosingMod", Winning = false }, complete),
+        ]);
 
         Assert.Equal(["Ghost.esm"], rows.Single(r => r.Plugin.Origin == "WinningMod").MasterIssues);
         Assert.Equal([], rows.Single(r => r.Plugin.Origin == "LosingMod").MasterIssues);
     }
 
     [Fact]
-    public void Classify_MasterActive_IsNoIssue()
+    public void MasterActive_IsNoIssue()
     {
         var result = Classify(Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm"));
 
@@ -113,14 +113,14 @@ public class MasterResolutionTests
         Assert.False(result.ContainsKey("Patch.esp"));
     }
 
-    // No transitive cascade. B masters A (A loaded fine); A itself masters missing C.
+    // No transitive cascade. B masters A, which is active; A itself masters missing C.
     // B's own declared-masters list is just [A] — B must not be flagged over C.
     [Fact]
     public void Classify_MastersMasterIsMissing_DoesNotCascadeToDependent()
     {
         var result = Classify(
             Plugin("A.esm", "C.esm"), // A itself has a missing master C
-            Plugin("B.esp", "A.esm")); // B masters A only — A loaded fine
+            Plugin("B.esp", "A.esm")); // B masters A only, which is active
 
         Assert.True(result.ContainsKey("A.esm"));
         Assert.False(result.ContainsKey("B.esp"));
@@ -139,7 +139,7 @@ public class MasterResolutionTests
     [Theory]
     [InlineData(LoadOrderState.Reconciling)]
     [InlineData(LoadOrderState.Failed)]
-    public void GetPlugins_SnapshotNotIndexed_MasterIssuesAreNotYetChecked(LoadOrderState state)
+    public void SnapshotNotIndexed_MasterIssuesAreNotYetChecked(LoadOrderState state)
     {
         var rows = GetPlugins([Plugin("A.esp", "Ghost.esm")], state);
 
