@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
-import { providedPluginsIn } from '../../test/mo2/corpusFixture';
+import { providedPluginsIn } from '../../test/mo2/adapterOver';
 import { isPluginFile } from '../../instanceAdapter/pluginFile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 
@@ -133,7 +137,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     inData?: DataFolderPlugins,
     implicit: readonly string[] | null = [],
   ) => syncPlugins(
-    dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()),
+    dir, PROFILE, await providedPluginsIn(dir, PROFILE),
     inData ?? await inDataOnDisk(),
     () => Promise.resolve(implicit ?? undefined));
 
@@ -243,7 +247,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     let asked = false;
 
     const result = await syncPlugins(
-      dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()), { kind: 'unresolved' },
+      dir, PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' },
       () => { asked = true; return Promise.resolve([]); });
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });

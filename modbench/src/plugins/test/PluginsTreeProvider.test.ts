@@ -37,7 +37,7 @@ import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { readPluginLines } from '../../test/mo2/corpusFixture';
+import { readPluginLines } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { listsForThePluginAsked } from '../../client/test/fixtures';
 

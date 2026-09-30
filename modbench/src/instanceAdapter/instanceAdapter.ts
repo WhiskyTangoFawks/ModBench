@@ -4,12 +4,37 @@
 
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
-import type { GameFolder } from './gameDirectory';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
+export { isPluginFile } from './pluginFile';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
 export { OVERWRITE_DIR_NAME as OVERWRITE_ORIGIN } from './codecs/modlistText';
+
+/** The setting that names the game folder outright, and so the one that fixes a folder not found. */
+export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
+
+/** One place Modbench looked for the game folder, and what it found there. */
+export interface GameFolderLook {
+  readonly place: string;
+  readonly answer: string;
+}
+
+/** Where the game is, or each place Modbench looked for it and why none answered. Not finding it
+ *  is an answer, never a failed read: every row that does not need the game folder still shows. */
+export type GameFolder =
+  | {
+    readonly kind: 'found';
+    /** Folder containing the game executable and Data/. */
+    readonly root: string;
+    readonly dataFolder: string;
+  }
+  | {
+    readonly kind: 'notFound';
+    /** In the order Modbench looked; a place after one that refused to fall through is absent. */
+    readonly looked: readonly GameFolderLook[];
+    readonly setting: string;
+  };
 
 /** A Nexus mod and file id pair recorded as installed into a mod. */
 export interface InstalledFileId {
@@ -212,7 +237,7 @@ export interface InstanceAdapter {
   // Get in mods/.
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolder[] | undefined>;
+  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
   /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
