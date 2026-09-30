@@ -52,11 +52,6 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
         ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         inner.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
-    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        inner.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
-
     public string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 

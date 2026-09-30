@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -37,8 +38,10 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
             fx.Plugins.Single(p => p.Origin == Origin).Path,
             mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
 
-        var change = Assert.Single(await stream.EventsUntil("question-open"));
+        var change = (await stream.EventsUntil("external-change", NamesThePlugin))[^1];
         Assert.Equal(Origin, change.GetProperty("origin").GetString());
-        Assert.Contains(Plugin, change.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
     }
+
+    private static bool NamesThePlugin(JsonElement change) =>
+        change.GetProperty("changedPlugins").EnumerateArray().Any(p => p.GetProperty("name").GetString() == Plugin);
 }

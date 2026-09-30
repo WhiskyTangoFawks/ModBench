@@ -8,10 +8,8 @@ namespace MEditService.Commands;
 public sealed record CompiledPlugin(
     PluginAddress Plugin, IReadOnlyList<string> Masters, IReadOnlyList<CompileDiagnostic> Diagnostics);
 
-/// <summary>A plugin of the selection that wrote nothing, and the message naming the way out.
-/// <see cref="Refusal"/> is the shared door's kind when the door refused it, and None when compile
-/// itself did.</summary>
-public sealed record CompileRefused(PluginAddress Plugin, RecordEditRefusal Refusal, string Message);
+/// <summary>A plugin of the selection that wrote nothing, and the message naming the way out.</summary>
+public sealed record CompileRefused(PluginAddress Plugin, string Message);
 
 /// <summary>Compile over a selection answers per plugin (ADR-0019 invariant 4): each plugin compiles on
 /// its own, so one refused never stops the others.</summary>

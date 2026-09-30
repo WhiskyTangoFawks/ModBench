@@ -7,8 +7,8 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileOutcome,
-  type ContainerChildSummary, type ExternalChangeActionResult, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
+  type BackendStatus, type CellReferences, type CompileOutcome,
+  type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
@@ -382,35 +382,6 @@ export class HttpMEditClient implements MEditClient {
       landed: answer.applied,
       refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
     };
-  }
-
-  /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A plugin that
-   *  cannot be read or parsed refuses the whole answer, which arrives as a WriteRefused. */
-  async absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused> {
-    const failMsg = `Could not absorb the upstream update for "${origin}"`;
-    const answer = await this.mutate({
-      op: `absorbUpstreamUpdate(${origin})`,
-      failMsg,
-      post: () => this.apiClient.POST('/plugins/external-change/absorb', { body: { origin } }),
-    });
-    if (answer === undefined) return { refused: true, message: `${failMsg} — no answer` };
-    if (isRefused(answer)) return answer;
-    return {
-      landed: answer.applied,
-      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
-      trackedFilesRefusal: answer.trackedFilesRefusal ?? null,
-    };
-  }
-
-  /** Origin-scoped. A collision (a record or an already-staged tracked file) with existing
-   *  working-tree dirt is a typed refusal (`succeeded === false`, `refusalReason` naming it),
-   *  never an HTTP error. */
-  async keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
-    return this.mutate<ExternalChangeActionResult>({
-      op: `keepAsMyEdit(${origin})`,
-      failMsg: `Could not keep "${origin}" as your own edit`,
-      post: () => this.apiClient.POST('/plugins/external-change/keep', { body: { origin } }),
-    });
   }
 
   /** ADR-0007: the single write path. A refusal (untracked plugin, a link that would dangle) is

@@ -2,14 +2,10 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Commands.Tests.Source;
@@ -141,139 +137,5 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Npc.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
-    }
-
-    // ---- External-change exits ----
-
-    [Fact]
-    public async Task AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
-    {
-        var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
-        MutateExternalBinary(Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), mod => mod.Cells.Records
-            .SelectMany(block => block.SubBlocks)
-            .SelectMany(sub => sub.Cells)
-            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
-
-        await TestEditService.AbsorbHandler(_fixture.Holder).AbsorbAsync(ContainerModFixture.ModFolderOrigin);
-
-        var afterMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
-        Assert.NotEqual(beforeMain, afterMain);
-
-        var tree = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "ls-tree", "-r", "--name-only", "main")
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Trim())
-            .ToList();
-        var root = SourceRepository.RootFor(ContainerModFixture.PluginName).Replace('\\', '/');
-        Assert.Contains($"{root}/RecordData.json", tree);
-        // The Cell, written as its own directory-per-record unit.
-        Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void KeepingAnExternalChange_OnAnUnchangedCell_LandsNothing()
-    {
-        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
-
-        Assert.True(result.Applied, result.RefusalReason);
-        Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
-    }
-
-    [Fact]
-    public void KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson()
-    {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.CellEditorId);
-        Assert.Contains("\"WaterHeight\": 100.0", File.ReadAllText(file), StringComparison.Ordinal);
-
-        MutateExternalBinary(pluginPath, mod => mod.Cells.Records
-            .SelectMany(block => block.SubBlocks)
-            .SelectMany(sub => sub.Cells)
-            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
-
-        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
-
-        Assert.True(result.Applied, result.RefusalReason);
-        Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
-        Assert.Contains("\"WaterHeight\": 250.0", File.ReadAllText(file), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void KeepingAnExternalChangeOnAnEmbeddedChild_LandsViaTheOwningCellsDocument()
-    {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
-        Assert.Contains("\"Position\": \"11, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
-
-        MutateExternalBinary(pluginPath, mod =>
-        {
-            var cell = mod.Cells.Records.SelectMany(block => block.SubBlocks).SelectMany(sub => sub.Cells)
-                .Single(c => c.FormKey == _fixture.EmbedCell);
-            var placedRef = (PlacedObject)cell.Temporary.Single(r => r.FormKey == _fixture.TemporaryRef);
-            placedRef.Position = new P3Float(999f, 22f, 33f);
-        });
-
-        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
-
-        Assert.True(result.Applied, result.RefusalReason);
-        Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
-        Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), result.LandedFormKeys);
-        Assert.Contains("\"Position\": \"999, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void KeepingAnExternalChange_CollidingWithACellsOwnWorkingTreeEdit_RefusesTheWholeGesture()
-    {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var editResult = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("500.0"));
-        Assert.True(editResult.Applied, editResult.Message);
-        var myOwnEditText = File.ReadAllText(CellSourceFile);
-
-        MutateExternalBinary(pluginPath, mod => mod.Cells.Records
-            .SelectMany(block => block.SubBlocks)
-            .SelectMany(sub => sub.Cells)
-            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
-
-        var result = TestEditService.KeepHandler(_fixture.Holder).Keep(ContainerModFixture.ModFolderOrigin).Require();
-
-        Assert.False(result.Applied);
-        Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
-        Assert.Equal(myOwnEditText, File.ReadAllText(CellSourceFile));
-    }
-
-    [Fact]
-    public void KeepingAnExternalChange_OnABrandNewNeverTrackedCell_SkipsItWithoutFailing()
-    {
-        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var brandNewCellKey = FormKey.Factory($"{0xD00:X6}:{ContainerModFixture.PluginName}");
-
-        MutateExternalBinary(pluginPath, mod =>
-        {
-            var brandNewCell = new Cell(brandNewCellKey, Fallout4Release.Fallout4) { EditorID = "BrandNewCell" };
-            var subBlock = new CellSubBlock { BlockNumber = 9, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(brandNewCell);
-            var block = new CellBlock { BlockNumber = 9, GroupType = GroupTypeEnum.InteriorCellBlock };
-            block.SubBlocks.Add(subBlock);
-            mod.Cells.Records.Add(block);
-        });
-
-        var entries = new List<LogEntry>();
-        var handler = TestEditService.KeepHandler(
-            _fixture.Holder, b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
-
-        var result = handler.Keep(ContainerModFixture.ModFolderOrigin).Require();
-
-        Assert.True(result.Applied, result.RefusalReason);
-        Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);
-        Assert.Contains(entries, e => e.Message.Contains(brandNewCellKey.ToString(), StringComparison.Ordinal));
-    }
-
-    // Loads the plugin mutably, applies the mutation to the live object graph, then writes it back over
-    // the same path: the shape an external tool's own save takes, not a from-scratch reconstruction.
-    private static void MutateExternalBinary(string pluginPath, Action<Fallout4Mod> mutate)
-    {
-        var mod = (Fallout4Mod)ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
-        mutate(mod);
-        mod.WriteToBinary(pluginPath);
     }
 }

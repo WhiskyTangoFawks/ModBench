@@ -133,18 +133,6 @@ public sealed class CreateRecordHandlerTests
     }
 
     [Fact]
-    public void CreateRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        mod.RaiseExternalChange();
-
-        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-    }
-
-    [Fact]
     public void CreateRecord_Refuses_ForAnUnknownRecordType()
     {
         using var mod = SourceEditFixture.Tracked();

@@ -26,36 +26,7 @@ internal sealed class WatcherSinks
     /// thread.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => _index.Reconcile(snapshot, version);
 
-    /// <summary>"A tracked mod settled" (ADR-0015 invariant 2) at load, over the bytes the
-    /// readability probe already read. Logging only: whichever question or warning Commands found, it
-    /// already published.</summary>
-    public void SettleAtLoad(
-        LoadOrderSnapshot order, string modFolder, IReadOnlyList<(string PluginName, byte[] ObservedBytes)> plugins) =>
-        LogAtLoad(modFolder, _settled.Handle(order, modFolder, plugins));
-
-    /// <summary>The same verb at load when one of the mod's tracked binaries could not be read: no
-    /// verdict on the question, but an interrupted compile's mark is still published.</summary>
-    public void SettleAtLoadUnreadable(LoadOrderSnapshot order, string modFolder) =>
-        LogAtLoad(modFolder, _settled.HandleUnreadable(order, modFolder));
-
-    private void LogAtLoad(string modFolder, TrackedModSettledOutcome outcome)
-    {
-        switch (outcome)
-        {
-            case TrackedModSettledOutcome.QuestionOpened:
-                if (_logger.IsEnabled(LogLevel.Information))
-                    _logger.LogInformation("External change detected at load for {ModFolder}", modFolder);
-                break;
-
-            case TrackedModSettledOutcome.CompileUnfinished:
-                if (_logger.IsEnabled(LogLevel.Information))
-                    _logger.LogInformation("Interrupted compile detected at load for {ModFolder}", modFolder);
-                break;
-        }
-    }
-
-    /// <summary>The same verb for a live settle, where Commands reads the mod's binaries itself: a
-    /// plugin caught mid-write is no verdict.</summary>
+    /// <summary>"A tracked mod settled" (ADR-0015 invariant 2), at load and live alike.</summary>
     public void Settle(LoadOrderSnapshot order, string modFolder) => _settled.Handle(order, modFolder);
 
     /// <summary>ADR-0009's runtime half: key and path only, never a locally remembered hash. The

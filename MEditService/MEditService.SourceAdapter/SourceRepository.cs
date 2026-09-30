@@ -354,47 +354,18 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>Stages every changed tracked file on the real repo — index matches working tree —
-    /// so the same bytes cannot re-raise the question once answered (ADR-0003).</summary>
-    public static void StageTrackedFileChanges(string modFolder, IReadOnlyList<TrackedFileChange> changes)
-    {
-        if (changes.Count == 0) return;
-        var gitDir = Path.Combine(modFolder, ".git");
-        var paths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
-        GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. paths]);
-    }
-
     /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
     /// clean.</summary>
-    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
-        [.. ParseStatus(modFolder).Select(e => e.Path)];
-
-    /// <summary>"Changed tracked files" (ADR-0003 invariant 3): every path outside the source
-    /// root whose working tree differs from the index, git's view; a change staged and untouched
-    /// since is an answer, not a question. Assets under Everything.</summary>
-    public static IReadOnlyList<TrackedFileChange> ChangedTrackedFilesOutsideSource(string modFolder)
-    {
-        var sourcePrefix = ToGitPath(RootFolderName) + "/";
-        return [.. ParseStatus(modFolder)
-            .Where(e => !e.Path.StartsWith(sourcePrefix, StringComparison.Ordinal) && e.WorktreeStatus != ' ')
-            .Select(e => new TrackedFileChange(
-                e.Path,
-                e.IndexStatus == 'D' || e.WorktreeStatus == 'D' ? TrackedFileChangeKind.Deleted : TrackedFileChangeKind.Modified,
-                e.IndexStatus is not (' ' or '?')))];
-    }
-
-    // A rename/copy's old path rides a second NUL-terminated token with no code of its own — dropped
-    // below rather than misread as an unrelated entry.
-    private readonly record struct StatusEntry(string Path, char IndexStatus, char WorktreeStatus);
-
-    private static List<StatusEntry> ParseStatus(string modFolder)
+    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
     {
         if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "status", "--porcelain=v1", "-z")) return [];
 
-        var entries = new List<StatusEntry>();
+        // A rename/copy's old path rides a second NUL-terminated token with no code of its own —
+        // skipped rather than misread as an unrelated entry.
+        var paths = new List<string>();
         var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var i = 0;
         while (i < tokens.Length)
@@ -402,14 +373,14 @@ public sealed partial class SourceRepository
             var entry = tokens[i];
             i++;
             if (entry.Length < 4) continue;
-            entries.Add(new StatusEntry(entry[3..], entry[0], entry[1]));
+            paths.Add(entry[3..]);
             if (entry[0] is 'R' or 'C') i++;
         }
-        return entries;
+        return paths;
     }
 
     /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref, a baseline or a compile
-    /// snapshot, each holding one plugin. Null degrades to asking the dialog.</summary>
+    /// snapshot, each holding one plugin. Null when the ref or its trailer is missing.</summary>
     public static string? ParkedCompileBinarySha256(string modFolder, string plugin)
     {
         if (!IsTracked(modFolder)) return null;
@@ -419,16 +390,6 @@ public sealed partial class SourceRepository
             return null;
 
         return ReadTrailer(body, "Binary-SHA256");
-    }
-
-    /// <summary>Whether <paramref name="observedBytes"/> is the exact binary Modbench's own last
-    /// compile parked for <paramref name="plugin"/>. A missing parked ref is never a match.</summary>
-    public static bool MatchesParkedCompileBinary(string modFolder, string plugin, byte[] observedBytes)
-    {
-        var observedSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(observedBytes));
-        var parkedSha256 = ParkedCompileBinarySha256(modFolder, plugin);
-        return parkedSha256 != null
-            && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
@@ -493,14 +454,3 @@ public enum SourceRemoval
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
 /// (ADR-0007).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
-
-/// <summary>One tracked file outside the source root that git status finds dirty — the asset half of
-/// an external change (ADR-0003). <see cref="StagedAlready"/> is Keep's own collision
-/// signal: a path a prior answer already staged.</summary>
-public sealed record TrackedFileChange(string RelativePath, TrackedFileChangeKind Kind, bool StagedAlready);
-
-public enum TrackedFileChangeKind
-{
-    Modified,
-    Deleted,
-}

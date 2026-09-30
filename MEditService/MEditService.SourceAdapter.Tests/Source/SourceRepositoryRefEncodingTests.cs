@@ -49,30 +49,6 @@ public sealed class SourceRepositoryRefEncodingTests
         }
     }
 
-    [Fact]
-    public void CommitBaselinesToMain_Succeeds_ForASpaceNamedPlugin()
-    {
-        var modFolder = NewModFolder();
-        const string plugin = "LitR - Settings Holotapes Sorting.esp";
-        var relativePath = $"source/{plugin}/npc_/{plugin}/000001.json";
-        try
-        {
-            SourceRepository.Track(
-                modFolder, SourcePreset.Edits,
-                [([new TreeFile(relativePath, "{\"old\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "OLDBIN"))]);
-
-            PluginBaselines.CommitToMain(
-                modFolder,
-                [([new TreeFile(relativePath, "{\"new\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "NEWBIN"))]);
-
-            Assert.Equal("NEWBIN", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
     private static string GitProbeSubject(string modFolder) =>
         GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "log", "-1", "--format=%s", "main").Trim();
 }

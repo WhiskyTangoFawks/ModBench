@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type {
   MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
+  NotificationEvent,
 } from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
@@ -45,7 +46,7 @@ export interface PluginListSource {
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
  *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
  *  locked plugins askable. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'subscribe'>;
 
 /** The record browser a row's children are delegated to (ADR-0002). `PluginTreeProvider`
  *  satisfies it. */
@@ -61,6 +62,9 @@ export interface PluginMatch {
   hasMatchingRecords: boolean;
 }
 
+/** A warning on one plugin's file, as the Problems panel shows it. */
+export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
+
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin — the row input (ADR-0015). */
   instance: InstanceView;
@@ -72,6 +76,9 @@ export interface PluginsTreeProviderOptions {
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
   publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
+   *  such plugin. */
+  publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   /** ADR-0019: this provider states the severity, so a background blip and a failed read do not
    *  land on the same channel level. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -202,17 +209,17 @@ type RowDecoration = {
 // window (ADR-0009 point 5). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-// plugins.md, A row: the four statuses, in the order that sets the icon. `words` is the
+// plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
 // description's vocabulary; `tooltipLine` is that status's one tooltip line.
 interface PluginStatus {
-  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'malformed';
+  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
   words: string;
   tooltipLine: string;
 }
 
-// The Malformed status's icon (ADR-0019's warning tier): a malformed plugin still loads and
-// plays, unlike the other three, which are all `failurePrefixIcon()`'s error tier.
-function malformedIcon(): vscode.ThemeIcon {
+// The warning tier's icon (ADR-0019): a plugin changed outside Modbench or malformed still loads and
+// plays, unlike the other three statuses, which are all `failurePrefixIcon()`'s error tier.
+function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
 
@@ -245,6 +252,17 @@ function factFlags(facts: PluginFacts | undefined): string[] {
   return flags;
 }
 
+// The status's words beyond the row, in its tooltip and the Problems panel.
+const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
+
+function changedOutsideStatus(changed: boolean): PluginStatus | undefined {
+  if (!changed) return undefined;
+  return {
+    kind: 'changedOutside', words: 'changed outside Modbench',
+    tooltipLine: CHANGED_OUTSIDE_TEXT,
+  };
+}
+
 function malformedStatus(diagnosisTexts: string[]): PluginStatus | undefined {
   if (diagnosisTexts.length === 0) return undefined;
   return { kind: 'malformed', words: 'malformed', tooltipLine: `Malformed: ${diagnosisTexts.join('; ')}` };
@@ -270,6 +288,7 @@ export class PluginsTreeProvider
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -303,6 +322,7 @@ export class PluginsTreeProvider
     this.records = options.records;
     this.client = options.client;
     this.publishDiagnoses = options.publishDiagnoses;
+    this.publishChangedOutside = options.publishChangedOutside;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
@@ -316,6 +336,19 @@ export class PluginsTreeProvider
     // attaches after the rows were built rebuilds them.
     const unsubscribe = options.client?.onStatusChanged((status) => { if (status === 'attached') this.invalidate(); });
     if (unsubscribe) this.subscriptions.push({ dispose: unsubscribe });
+    const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
+    if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
+  }
+
+  // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
+  // Modbench, so it replaces what the mod's last settle named.
+  private applyExternalChange(event: NotificationEvent): void {
+    this.changedOutsideByMod.set(event.origin, (event.changedPlugins ?? []).map(({ name }) => ({ name, origin: event.origin })));
+    const changed = [...this.changedOutsideByMod.values()].flat();
+    this.changedOutside = new ByPluginAddress<true>();
+    for (const { name, origin } of changed) this.changedOutside.set(name, origin, true);
+    this.publishChangedOutside?.(changed.map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })));
+    this._onDidChangeTreeData.fire(undefined);
   }
 
   dispose(): void {
@@ -545,7 +578,7 @@ export class PluginsTreeProvider
     const statuses = this.statusesOf(row, joinedOrigin);
     const [first] = statuses;
     if (first !== undefined) {
-      row.iconPath = first.kind === 'malformed' ? malformedIcon() : failurePrefixIcon();
+      row.iconPath = first.kind === 'changedOutside' || first.kind === 'malformed' ? warningIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
     const lines = [file, row.origin];
@@ -597,6 +630,7 @@ export class PluginsTreeProvider
       failedToLoadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
+      changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),
       malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
     ];
     return statuses.filter((s): s is PluginStatus => s !== undefined);
@@ -609,6 +643,8 @@ export class PluginsTreeProvider
   private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
   private diagnoses?: ByPluginAddress<string[]>;
+  private readonly changedOutsideByMod = new Map<string, readonly PluginAddress[]>();
+  private changedOutside = new ByPluginAddress<true>();
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
   // persists until `applyReconciled` lands the new answer.
   private loadFailures = new ByPluginAddress<string>();

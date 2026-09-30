@@ -32,7 +32,7 @@ import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnaps
 import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
-import { wireQuestionOpen } from './plugins/externalChangeWiring';
+import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { errorMessage } from './ports/errorMessage';
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
@@ -159,13 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(
     toolbox,
-    {
-      dispose: wireQuestionOpen({
-        client: meditClient, outputChannel,
-        askQuestion,
-        reporter: makeReporter(outputChannel, 'externalChange'),
-      }),
-    },
+    { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     { dispose: warnCompileUnfinished(makeReporter(outputChannel, 'compile'), meditClient) },
     referencedByTreeView,
     activeRecordSubscription,

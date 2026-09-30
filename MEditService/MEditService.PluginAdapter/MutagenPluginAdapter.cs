@@ -119,14 +119,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         CancellationToken cancel = default) =>
         PluginTrees.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
-    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath,
-        GameRelease gameRelease,
-        PluginStrings strings,
-        RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        PluginTrees.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
-
     public string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         PluginTrees.DivergenceBetween(modPath, recompiledPath, gameRelease, strings)?.Describe();

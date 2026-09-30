@@ -284,38 +284,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/external-change/absorb": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AbsorbExternalChange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/external-change/keep": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["KeepExternalChange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/records": {
         parameters: {
             query?: never;
@@ -537,6 +505,10 @@ export interface components {
             parseDiagnosis?: string | null;
             hasChildren: boolean;
         };
+        ChangedPlugin: {
+            name: string;
+            bytesSha256?: string | null;
+        };
         CompareOverride: {
             formKey: string;
             plugin: string;
@@ -564,7 +536,6 @@ export interface components {
         };
         CompileRefused: {
             plugin: components["schemas"]["PluginAddress"];
-            refusal: components["schemas"]["RecordEditRefusal"];
             message: string;
         };
         CompileRequest: {
@@ -609,13 +580,6 @@ export interface components {
             value: string;
             bitValue?: string | null;
             label?: string | null;
-        };
-        ExternalChangeActionRequest: {
-            origin: string;
-        };
-        ExternalChangeActionResponse: {
-            succeeded: boolean;
-            refusalReason?: string | null;
         };
         FieldDiff: {
             fieldName: string;
@@ -741,10 +705,7 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
-            externalChangeMetaChanged?: boolean | null;
-            externalChangeOldVersion?: string | null;
-            externalChangeNewVersion?: string | null;
-            externalChangeTrackedFiles?: string[] | null;
+            changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
         };
         PathHop: {
             kind: string;
@@ -909,7 +870,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -966,7 +927,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "ExternalChangeUnanswered" | "CommitFailed" | "GitUnavailable" | "StoppedByEarlierFailure";
+        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
         TrackRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             preset: string;
@@ -974,7 +935,6 @@ export interface components {
         TrackResponse: {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginAddressRefusal"][];
-            trackedFilesRefusal?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -1711,117 +1671,6 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    AbsorbExternalChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExternalChangeActionRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrackResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    KeepExternalChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExternalChangeActionRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExternalChangeActionResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -76,7 +76,7 @@ public sealed class ModFolderWatcher : IDisposable
                     CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
 
-            foreach (var mod in tracked) RaiseSafely(() => SettleAtLoad(snapshot, mod));
+            foreach (var modFolder in tracked) RaiseSafely(() => SettleAtLoad(snapshot, modFolder));
         }
         finally
         {
@@ -86,7 +86,7 @@ public sealed class ModFolderWatcher : IDisposable
 
     // Null when a newer change was armed already; empty when arming failed, which the log carries,
     // since no status of its own carries an unknown failure as data (unlike the Index).
-    private IReadOnlyList<TrackedMod>? Armed(LoadOrderSnapshot snapshot, long version)
+    private IReadOnlyList<string>? Armed(LoadOrderSnapshot snapshot, long version)
     {
         try
         {
@@ -99,34 +99,14 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    // One read of each tracked binary serves the readability probe and the classification. An
-    // unreadable binary is the reconcile's "failed to load"; a partial set would classify as the
-    // whole mod, so that mod's sink classifies no bytes.
-    private void SettleAtLoad(LoadOrderSnapshot order, TrackedMod mod)
+    private void SettleAtLoad(LoadOrderSnapshot order, string modFolder)
     {
-        var observed = new List<(string PluginName, byte[] ObservedBytes)>();
-        var allRead = true;
-        foreach (var plugin in mod.Plugins)
-        {
-            try
-            {
-                observed.Add((plugin.Name, File.ReadAllBytes(plugin.Path)));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
-                allRead = false;
-            }
-        }
-
-        if (allRead) _sinks.SettleAtLoad(order, mod.ModFolder, observed);
-        else _sinks.SettleAtLoadUnreadable(order, mod.ModFolder);
-
-        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", mod.ModFolder);
+        _sinks.Settle(order, modFolder);
+        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", modFolder);
     }
 
-    // Fired by either of the mod's own timers. A tracked mod's binaries and other files are
-    // Commands' question; an untracked mod's binaries are the Index's own comparison.
+    // Fired by either of the mod's own timers. A tracked mod's binaries are Commands' comparison; an
+    // untracked mod's binaries are the Index's own.
     private void OnSettle(ModWatch mod)
     {
         if (!TryEnter()) return;

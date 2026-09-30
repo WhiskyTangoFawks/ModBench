@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -59,6 +60,24 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.Equal("npc_", only.RecordType);
         Assert.True(only.InWorkingTree);
         Assert.Equal(NpcBody, only.CommittedText);
+        Assert.False(dirt.NeedsStructuralPass);
+    }
+
+    // git status lists a staged rename as its new path, then its old path as a bare token with no
+    // status code; read as an entry, "xyzsource/…" loses three characters and lands in the tree.
+    [Fact]
+    public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile()
+    {
+        var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, "xyzsource", PluginName)).FullName;
+        File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
+        PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
+        var repository = SourceRepository.Open(_modFolder, Release)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv", $"xyzsource/{PluginName}/notes.txt", "notes.txt");
+
+        var dirt = repository.DirtOf(Plugin);
+
+        Assert.Empty(dirt.Documents);
         Assert.False(dirt.NeedsStructuralPass);
     }
 

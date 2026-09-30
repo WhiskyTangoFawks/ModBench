@@ -13,7 +13,6 @@ export const REREAD_AFTER_WRITE_MESSAGE =
 export const WRITES = new Set([
     'setPluginsParticipation', 'setPluginsEnabled', 'reorderPlugins', 'appendPlugin', 'onPluginCheckboxChanged',
     'createPlugin', 'track', 'createRecord', 'deleteRecords', 'copyRecords', 'editRecord',
-    'keepAsMyEdit', 'absorbUpstreamUpdate',
 ]);
 
 export const VIEW_REREADS = new Set([

@@ -97,28 +97,6 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin in it.
-        app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
-            .WithName("AbsorbExternalChange")
-            .WithTags(Tag)
-            .Produces<TrackResponse>()
-            .ProducesProblem(400)
-            // A plugin that cannot be read or parsed refuses the whole answer before anything is
-            // written; every other refusal but git missing (500) is an item of the answer.
-            .ProducesProblem(422)
-            .ProducesProblem(500)
-            .ProducesProblem(503);
-
-        // Keep, origin-scoped. A collision (a record or an already-staged tracked file)
-        // is ExternalChangeActionResponse.Succeeded == false naming it — never an HTTP error.
-        app.MapPost("/plugins/external-change/keep", KeepExternalChange)
-            .WithName("KeepExternalChange")
-            .WithTags(Tag)
-            .Produces<ExternalChangeActionResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(500)
-            .ProducesProblem(503);
-
         return app;
     }
 
@@ -281,61 +259,6 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.NoLoadOrder(ex);
             });
     }
-
-    // Absorb, origin-scoped: the question it answers covers the whole mod.
-    internal static async Task<IResult> AbsorbExternalChange(
-        ExternalChangeActionRequest req, AbsorbExternalChangeHandler handler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        try
-        {
-            if (await handler.AbsorbAsync(req.Origin) is not { } result)
-                return NotATrackedMod(req.Origin, logger);
-            if (result.AnswerRefusal is { } answerRefusal)
-                return WriteEndpointMapping.Refusal(answerRefusal);
-            return Results.Ok(new TrackResponse(
-                result.Landed,
-                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
-                result.TrackedFilesRefusal));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not absorb upstream update for {Origin}", req.Origin);
-            return WriteEndpointMapping.WriteFailure($"Could not absorb upstream update for {req.Origin}: {ex.Message}");
-        }
-    }
-
-    // Keep, origin-scoped. A collision (a record or an already-staged tracked file) is a
-    // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
-    internal static IResult KeepExternalChange(
-        ExternalChangeActionRequest req, KeepExternalChangeHandler handler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        try
-        {
-            if (handler.Keep(req.Origin) is not { } result)
-                return NotATrackedMod(req.Origin, logger);
-            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not keep external change for {Origin}", req.Origin);
-            return WriteEndpointMapping.WriteFailure($"Could not keep external change for {req.Origin}: {ex.Message}");
-        }
-    }
-
-    // Untracked or unknown: the handler's one null answer, the caller's single refusal path for both.
-    private static IResult NotATrackedMod(string origin, ILogger logger)
-    {
-        logger.LogWarning("No tracked mod in the load order has origin {Origin}", origin);
-        return WriteEndpointMapping.NotTrackedMod(origin);
-    }
 }
 
 /// <summary>The origin and the file name are the plugin (ADR-0012 invariant 1); the folder is where
@@ -354,19 +277,10 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 // already stands keeps its own .gitignore.
 public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.
-/// Only Absorb sets <see cref="TrackedFilesRefusal"/>: its tracked-files commit is no plugin's,
-/// and can fail after every plugin landed.</summary>
-public record TrackResponse(
-    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
 
 public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
 public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);
-
-// Absorb / Keep are origin-scoped — the mod, not one plugin in it, is
-// the unit of a baseline.
-public record ExternalChangeActionRequest(string Origin);
-
-public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);

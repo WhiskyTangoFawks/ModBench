@@ -172,6 +172,7 @@ function makeTree(
     instance: FakeInstance;
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
+    publishChangedOutside: PluginsTreeProviderOptions['publishChangedOutside'];
     dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
@@ -186,6 +187,7 @@ function makeTree(
     instance, source, client, records,
     log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: extra.publishDiagnoses,
+    publishChangedOutside: extra.publishChangedOutside,
     dataFolderFile: extra.dataFolderFile,
     implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
@@ -3030,10 +3032,74 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
   });
 });
 
+// plugins.md, A row: a tracked mod's settle names each of its plugins whose bytes differ from what
+// Modbench last wrote, and the row and the Problems panel say so until a settle names it no more.
+describe('PluginsTreeProvider — changed outside Modbench', () => {
+  function settled(h: Harness, origin: string, ...changed: string[]): void {
+    h.client.emit({
+      kind: 'external-change', plugin: '', origin, keys: [], sequence: 0,
+      changedPlugins: changed.map((name) => ({ name, bytesSha256: 'ab12' })),
+    });
+  }
+
+  it('shows the status on a plugin its mod\'s settle names, at warning tier', async () => {
+    const h = makeTree([A_ROW(), B_ROW()]);
+    await reconcile(h, [held('A.esp'), held('B.esp')]);
+
+    settled(h, 'SomeMod', 'A.esp');
+
+    const item = await rowItem(h);
+    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsWarningIcon.foreground'));
+    expect(item.description).toBe('changed outside Modbench');
+    expect(expectString(item.tooltip)).toContain('Changed outside Modbench');
+    expect((await rowItem(h, 1)).description).toBeUndefined();
+  });
+
+  it('clears once a later settle of the mod leaves it out', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+    settled(h, 'SomeMod', 'A.esp');
+
+    settled(h, 'SomeMod');
+
+    const item = await rowItem(h);
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBe('A.esp\nSomeMod');
+  });
+
+  // ADR-0012 invariant 1: the same file name in another mod is another plugin.
+  it('leaves the same file name in another mod alone', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+
+    settled(h, 'OtherMod', 'A.esp');
+
+    expect((await rowItem(h)).description).toBeUndefined();
+  });
+
+  it('publishes a warning on every plugin that changed outside Modbench for the Problems panel, each mod\'s settle replacing its own', () => {
+    const published: string[][] = [];
+    const h = makeTree([A_ROW()], {
+      publishChangedOutside: (warnings) => published.push(warnings.map((w) => `${w.origin}/${w.plugin}: ${w.text}`)),
+    });
+
+    settled(h, 'SomeMod', 'A.esp');
+    settled(h, 'OtherMod', 'C.esp');
+    settled(h, 'SomeMod');
+
+    const said = ': Changed outside Modbench: its bytes differ from what Modbench last wrote.';
+    expect(published).toEqual([
+      [`SomeMod/A.esp${said}`],
+      [`SomeMod/A.esp${said}`, `OtherMod/C.esp${said}`],
+      [`OtherMod/C.esp${said}`],
+    ]);
+  });
+});
+
 // plugins.md, A row: every status a plugin carries shows at once. The first in spec order sets
 // the icon; the description carries every status's words, the tooltip a line for each.
 describe('PluginsTreeProvider — several statuses on one row', () => {
-  it('shows all four statuses: the first status\'s icon, every status\'s words, one tooltip line each', async () => {
+  it('shows all five statuses: the first status\'s icon, every status\'s words, one tooltip line each', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
     await reconcile(
@@ -3041,16 +3107,21 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
       [held('A.esp', { hasParseFailure: true, masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }] })],
       [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }],
     );
+    h.client.emit({
+      kind: 'external-change', plugin: '', origin: 'SomeMod', keys: [], sequence: 0,
+      changedPlugins: [{ name: 'A.esp', bytesSha256: null }],
+    });
 
     const item = await rowItem(h);
     // Failed to load is first in spec order, so it sets the icon — error tier, not the
     // Malformed status's warning tier.
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.description).toBe('failed to load, 1 master issue, unreadable records, malformed');
+    expect(item.description).toBe('failed to load, 1 master issue, unreadable records, changed outside Modbench, malformed');
     const tooltip = expectString(item.tooltip);
     expect(tooltip).toContain('Failed to load: Malformed record');
     expect(tooltip).toContain('Missing master: Ghost.esm');
     expect(tooltip).toContain('could not be read');
+    expect(tooltip).toContain('Changed outside Modbench');
     expect(tooltip).toContain('some diagnosis');
   });
 

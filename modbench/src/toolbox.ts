@@ -7,7 +7,7 @@ import {
 } from './medit/reconcileNarrator';
 import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { publishLoadDiagnoses } from './medit/loadDiagnostics';
+import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
@@ -223,13 +223,16 @@ function registerPluginListView(
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
+  const changedOutsideDiagnostics = own(vscode.languages.createDiagnosticCollection('modbench-changed-outside'));
   const pluginsTree = own(new PluginsTreeProvider({
     instance, source, log, reporter: reporterFor('pluginList'), implicitMasters,
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
-    publishDiagnoses: (reports) => publishLoadDiagnoses(
+    publishDiagnoses: (reports) => publishPluginWarnings(
       deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
+    publishChangedOutside: (warnings) => publishPluginWarnings(
+      changedOutsideDiagnostics, (origin) => originFolder(instance.value.plugins, origin), warnings),
   }));
   session.pluginsTree = pluginsTree;
   const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {

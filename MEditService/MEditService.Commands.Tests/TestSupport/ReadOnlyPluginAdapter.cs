@@ -61,14 +61,6 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         CancellationToken cancel = default) =>
         Real.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
-    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath,
-        GameRelease gameRelease,
-        PluginStrings strings,
-        RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        Real.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
-
     public string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         Real.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);

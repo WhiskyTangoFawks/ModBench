@@ -87,10 +87,10 @@ public sealed class TrackService(
         string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
         List<PluginAddress> landed, List<TrackRefused> refused)
     {
-        var meta = SourceRepository.MetaFactsIn(modFolder);
+        var upstreamVersion = SourceRepository.UpstreamVersionIn(modFolder);
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
         [
-            .. plugins.Select(v => (v.Files, new BaselineTrailers(v.Plugin.Name, meta.UpstreamVersion, meta.MetaSha256, v.BinarySha256))),
+            .. plugins.Select(v => (v.Files, new BaselineTrailers(v.Plugin.Name, upstreamVersion, v.BinarySha256))),
         ];
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -155,9 +155,6 @@ public sealed class TrackService(
         // ADR-0003: a repository with history but no main is someone else's, never written to.
         if (SourceRepository.HoldsAnotherRepository(modFolder))
             return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
-
-        if (WriteTargets.BlockingQuestion(loadOrder, modFolder) is { } question)
-            return Refuse(TrackRefusal.ExternalChangeUnanswered, question);
 
         if (!Readable(plugin))
         {

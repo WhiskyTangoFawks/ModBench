@@ -3,8 +3,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The write side's four shared concerns have one implementation each, in the module the
-/// gestures share (ADR-0014). A gesture resolving its own target, deferral, rename or FormKey fails
+/// <summary>The write side's three shared concerns have one implementation each, in the module the
+/// gestures share (ADR-0014). A gesture resolving its own target, rename or FormKey fails
 /// here.</summary>
 public sealed class SharedConcernScanTests
 {
@@ -13,7 +13,6 @@ public sealed class SharedConcernScanTests
     private static readonly (string Concern, string Needle)[] Concerns =
     [
         ("target resolution", @"\bUnreadableDocumentFor\b"),
-        ("the pre-write open-question check", @"\bSourceRepository\.UnansweredExternalChange\b"),
         ("rename on an EditorID change", @"\bRename\("),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
@@ -23,7 +22,7 @@ public sealed class SharedConcernScanTests
     private static readonly string[] ScannedRoots =
         ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
 
-    // The module itself, which is where all five needles belong.
+    // The module itself, which is where all four needles belong.
     private const string SharedModuleFileName = "WriteTargets.cs";
 
     private const string AllowlistPath = "MEditService.Http.Tests/Architecture/shared-concern-allowlist.txt";
