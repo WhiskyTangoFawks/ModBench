@@ -102,7 +102,7 @@ describe('a running say() statement survives a background row change', () => {
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
 
     say({ pluginsTreeView: view, pluginsNameFilter: filter }, 'Starting backend…');
-    provider.applyIndexed(['TestMod.esp'], []);
+    provider.applyIndexed([{ name: 'TestMod.esp', origin: 'SomeMod' }], []);
     await flush();
     expect(view.message).toBe('Starting backend…');
   });

@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
-import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
-import { resolveOrigin } from './resolveOrigin';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -13,7 +11,7 @@ import { errorMessage } from '../ports/errorMessage';
 export interface RecordIdentity {
   formKey: string;
   plugin: string;
-  origin?: string;
+  origin: string;
   editorId?: string;
 }
 
@@ -23,6 +21,7 @@ export function recordIdentity(arg: unknown): RecordIdentity | undefined {
     record?: { formKey?: string; plugin?: string; editorId?: string | null };
     origin?: string; formKey?: string; plugin?: string; editorId?: string;
   };
+  if (!n.origin) return undefined;
   if (n.record) {
     if (!n.record.formKey || !n.record.plugin) return undefined;
     return { formKey: n.record.formKey, plugin: n.record.plugin, origin: n.origin, editorId: n.record.editorId ?? undefined };
@@ -38,8 +37,7 @@ function recordName(formKey: string, editorId: string | undefined): string {
 // The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
 // share a filename (ADR-0012), and the question must say which.
 function recordLabel(record: RecordIdentity): string {
-  const where = record.origin ? `${record.plugin} (${record.origin})` : record.plugin;
-  return `${recordName(record.formKey, record.editorId)} in ${where}`;
+  return `${recordName(record.formKey, record.editorId)} in ${record.plugin} (${record.origin})`;
 }
 
 function askToDelete(records: readonly RecordIdentity[], ask: AskQuestion): PromiseLike<string | undefined> {
@@ -61,28 +59,15 @@ function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefi
   return nodes.map(recordIdentity).filter((i): i is RecordIdentity => i !== undefined);
 }
 
-const UNRESOLVED_ORIGIN = 'could not resolve which mod it belongs to';
-
-// A record whose mod cannot be named is refused here and writes nothing; the rest still go.
-async function addressRecords(
-  records: readonly RecordIdentity[], resolve: (plugin: string) => Promise<string | undefined>,
-): Promise<{ addressed: { record: RecordIdentity; address: RecordAddress }[]; unaddressed: ItemRefusal<RecordIdentity>[] }> {
-  const addressed: { record: RecordIdentity; address: RecordAddress }[] = [];
-  const unaddressed: ItemRefusal<RecordIdentity>[] = [];
-  for (const record of records) {
-    const origin = record.origin ?? await resolve(record.plugin);
-    if (origin) addressed.push({ record, address: { formKey: record.formKey, plugin: record.plugin, origin } });
-    else unaddressed.push({ item: record, reason: UNRESOLVED_ORIGIN });
-  }
-  return { addressed, unaddressed };
+function addressOf({ formKey, plugin, origin }: RecordIdentity): RecordAddress {
+  return { formKey, plugin, origin };
 }
 
-type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords' | 'getPlugins'>;
+type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 
 /** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
-  client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
+  client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so delete takes the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
@@ -93,16 +78,10 @@ export function registerRecordLifecycleCommands(
       if (identities.length === 0) return;
       if (await askToDelete(identities, ask) !== 'Delete') return;
 
-      const { addressed, unaddressed } = await addressRecords(
-        identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
-      const answer = addressed.length > 0
-        ? await client.deleteRecords(addressed.map((a) => a.address)) : { landed: [], refused: [] };
+      const answer = await client.deleteRecords(identities.map(addressOf));
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      const outcome: SelectionOutcome<RecordIdentity> = {
-        landed: answer.landed, refused: [...unaddressed, ...answer.refused],
-      };
       reporter.selectionOutcome(
-        `Could not delete ${outcome.refused.length} of ${identities.length} records.`, outcome, recordLabel);
+        `Could not delete ${answer.refused.length} of ${identities.length} records.`, answer, recordLabel);
     }),
   ];
 }
@@ -192,8 +171,7 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
 /** plugins.md, Pickers, Copy: the mode, then the destinations, then one question when an override
  *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
-  client: RecordCopyClient, outputChannel: vscode.LogOutputChannel,
-  reporter: Reporter, ask: AskQuestion,
+  client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so copy takes the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
@@ -201,12 +179,7 @@ export function registerRecordCopyCommands(
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
       const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
       if (identities.length === 0) return;
-      const { addressed, unaddressed } = await addressRecords(
-        identities, (plugin) => resolveOrigin(client, plugin, (msg) => outputChannel.info(msg)));
-      const reportUnaddressed = () => reporter.selectionOutcome(
-        `Could not copy ${unaddressed.length} of ${identities.length} records.`, { landed: [], refused: unaddressed }, recordLabel);
-      const records = addressed.map((a) => a.address);
-      if (records.length === 0) { reportUnaddressed(); return; }
+      const records = identities.map(addressOf);
       const editorIds = new Map(identities.map((i) => [i.formKey, i.editorId]));
 
       const mode = await pickCopyMode();
@@ -228,7 +201,6 @@ export function registerRecordCopyCommands(
       reporter.selectionOutcome(
         `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
         answer, into);
-      reportUnaddressed();
     }),
   ];
 }

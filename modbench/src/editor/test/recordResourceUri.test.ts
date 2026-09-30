@@ -19,12 +19,6 @@ describe('recordResourceUri / parseRecordResourceUri', () => {
     expect(parsed).toEqual({ plugin: 'Fallout4.esm', origin: 'ModA', formKey: '000001:Fallout4.esm' });
   });
 
-  it('round-trips an undefined origin (an ordinary load-order plugin) as an empty segment', () => {
-    const uri = recordResourceUri('Fallout4.esm', undefined, '000001:Fallout4.esm');
-    const parsed = parseRecordResourceUri(uri);
-    expect(parsed).toEqual({ plugin: 'Fallout4.esm', origin: '', formKey: '000001:Fallout4.esm' });
-  });
-
   it('survives identity components that themselves contain "/" (percent-encoded per segment)', () => {
     const uri = recordResourceUri('Weird/Plugin.esp', 'Mod/Folder', '01:Weird/Plugin.esp');
     const parsed = parseRecordResourceUri(uri);

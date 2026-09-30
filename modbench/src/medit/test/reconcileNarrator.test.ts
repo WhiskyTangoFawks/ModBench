@@ -6,7 +6,7 @@ const tick = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress => ({
   totalPlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, ...over,
 });
 const dropped = (version = 3) => tick({ holdsNone: true, totalPlugins: 0, version });
-const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: ['A.esp', 'B.esp'], version });
+const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }], version });
 
 function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => Promise.resolve()) {
   const progress: { closed: boolean }[] = [];
@@ -39,10 +39,10 @@ describe('the reconcile narrator', () => {
     narrator.hear(dropped());
     expect(deps.applyIndexed).toHaveBeenLastCalledWith([], []);
     narrator.hear(tick());
-    narrator.hear(tick({ indexedPlugins: ['A.esp'] }));
+    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
     await flushed();
     expect(progress).toEqual([{ closed: false }]);
-    expect(deps.applyIndexed).toHaveBeenLastCalledWith(['A.esp'], []);
+    expect(deps.applyIndexed).toHaveBeenLastCalledWith([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     narrator.hear(ready());
     await flushed();
@@ -55,8 +55,8 @@ describe('the reconcile narrator', () => {
     const { progress, narrator } = narrated();
 
     narrator.hear(tick());
-    narrator.hear(tick({ indexedPlugins: ['A.esp'] }));
-    narrator.hear(tick({ indexedPlugins: ['A.esp', 'B.esp'] }));
+    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
+    narrator.hear(tick({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }] }));
     await flushed();
 
     expect(progress).toHaveLength(1);

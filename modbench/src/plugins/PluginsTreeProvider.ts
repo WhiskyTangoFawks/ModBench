@@ -462,8 +462,7 @@ export class PluginsTreeProvider
     return children;
   }
 
-  /** The plugin row a row sits under, or is: the rows beneath it are read without its origin. */
-  pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
+  private pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
     let current: PluginsTreeNode | undefined = node;
     while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
     return current && { name: pluginFileOf(current), origin: current.origin };
@@ -482,11 +481,8 @@ export class PluginsTreeProvider
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
     if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
-    if (this.heldFiles?.has(file.toLowerCase()) === true) {
-      // Deliberately not the row's own `origin`: a stated origin means "the plugin the load order
-      // does not name" downstream, which would make every record row read-only. The backend
-      // resolves a load-order filename itself.
-      return this.records?.getPluginChildren(file, undefined, this.conditionsOf(element, file)) ?? noRecordBrowser();
+    if (this.held?.has(file, element.origin) === true) {
+      return this.records?.getPluginChildren(file, element.origin, this.conditionsOf(element, file)) ?? noRecordBrowser();
     }
     // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
     const failure = this.reachableFailureOf(element);
@@ -660,7 +656,7 @@ export class PluginsTreeProvider
 
   // ── the load order and its facts ──────────────────────────────────────────
 
-  private heldFiles?: Set<string>;
+  private held?: ByPluginAddress<true>;
   private facts?: ByPluginAddress<PluginFacts>;
   private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
@@ -688,11 +684,11 @@ export class PluginsTreeProvider
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
    *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
    *  this reload's own ticks. */
-  applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
+  applyIndexed(indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
+    this.held = heldSet(indexedPlugins);
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
     this._onDidChangeTreeData.fire(undefined);
@@ -725,7 +721,7 @@ export class PluginsTreeProvider
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
+    this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
@@ -751,8 +747,8 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0013: keyed by filename, reading the `inLoadOrder` plugins — two held plugins can share
-  // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
+  // ADR-0013: the `inLoadOrder` plugins, two of which can share a filename. A failed read is
+  // never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
@@ -899,6 +895,12 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
   if (!isRecordRow(row)) return undefined;
   return row.kind === 'record' ? row.record.formKey : row.formKey;
+}
+
+function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
+  const held = new ByPluginAddress<true>();
+  for (const { name, origin } of plugins) held.set(name, origin, true);
+  return held;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

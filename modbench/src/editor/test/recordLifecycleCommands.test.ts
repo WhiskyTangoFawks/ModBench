@@ -26,7 +26,6 @@ vi.mock('vscode', () => ({
 import { registerRecordLifecycleCommands, registerRecordCopyCommands, recordIdentity } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
-import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
@@ -62,6 +61,12 @@ describe('recordIdentity — structural, not node-typed', () => {
   it('is undefined for neither shape', () => {
     expect(recordIdentity({ nothing: true })).toBeUndefined();
   });
+
+  // ADR-0012 invariant 1: a filename alone names no one plugin.
+  it.each([['a RecordNode-shaped row', { ...RECORD_NODE, origin: undefined }], ['a plain identity literal', { ...RECORD_IDENTITY, origin: undefined }]])(
+    'is undefined for %s that states no origin', (_label, arg) => {
+      expect(recordIdentity(arg)).toBeUndefined();
+    });
 });
 
 describe('registerRecordLifecycleCommands', () => {
@@ -69,7 +74,7 @@ describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordLifecycleCommands(client, new FakeLogOutputChannel(), reporter, ask, () => viewSelection);
+    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection);
     return { reporter, ask };
   }
 
@@ -208,22 +213,6 @@ describe('registerRecordLifecycleCommands', () => {
         { severity: 'error', message: 'Could not delete 2 records — boom', detail: undefined },
       ]);
     });
-
-    it('refuses a record whose mod cannot be resolved, and still sends the rest', async () => {
-      const client = new InMemoryMEditClient();
-      client.setQueryAnswer('getPlugins', []);
-      client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
-      const { reporter } = invoke(client, 'Delete');
-
-      await deleteRecords(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
-
-      expect(deleteCalls(client)).toEqual([[[FIRST]]]);
-      expect(reporter.reports).toEqual([{
-        severity: 'error',
-        message: 'Could not delete 1 of 2 records.',
-        detail: '"000700:Lost.esp in Lost.esp" (could not resolve which mod it belongs to)',
-      }]);
-    });
   });
 });
 
@@ -248,7 +237,7 @@ describe('modbench.record.copy', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, ask, () => viewSelection);
+    registerRecordCopyCommands(client, reporter, ask, () => viewSelection);
     return { reporter, ask };
   }
 

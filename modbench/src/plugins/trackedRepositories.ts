@@ -36,8 +36,8 @@ export async function registerTrackedRepositories<T>(
 }
 
 /** ADR-0012 invariant 1: a plugin is `(origin, filename)` on every map key. */
-export function pluginAddressKey(name: string, origin: string | undefined): string {
-  return `${(origin ?? '').toLowerCase()}|${name.toLowerCase()}`;
+export function pluginAddressKey(name: string, origin: string): string {
+  return `${origin.toLowerCase()}|${name.toLowerCase()}`;
 }
 
 /** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */

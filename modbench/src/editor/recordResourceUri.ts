@@ -6,8 +6,8 @@ const SCHEME = 'medit-record';
 /** Identity only, never working-tree state: a URI changing on every dirty/clean transition
  *  would churn VS Code's tree identity. Synthetic rather than the real source path, which
  *  `vscode.git` decorates with its own answer. */
-export function recordResourceUri(plugin: string, origin: string | undefined, formKey: string): vscode.Uri {
-  const path = ['', plugin, origin ?? '', formKey].map((s, i) => (i === 0 ? s : encodeURIComponent(s))).join('/');
+export function recordResourceUri(plugin: string, origin: string, formKey: string): vscode.Uri {
+  const path = ['', plugin, origin, formKey].map((s, i) => (i === 0 ? s : encodeURIComponent(s))).join('/');
   return vscode.Uri.from({ scheme: SCHEME, path });
 }
 

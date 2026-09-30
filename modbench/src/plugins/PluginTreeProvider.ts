@@ -68,10 +68,9 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly plugin: string,
     public readonly recordType: string,
     count: number,
-    displayName: string = recordType,
-    /** ADR-0012: which plugin named `plugin` this node browses, or undefined for an ordinary
-     *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
-    public readonly origin?: string,
+    displayName: string,
+    /** ADR-0012: which plugin named `plugin` this node browses. */
+    public readonly origin: string,
     hasParseFailure = false,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
@@ -90,7 +89,7 @@ export class RecordNode extends vscode.TreeItem {
   // which copy it is (plugin via record, origin — ADR-0012).
   constructor(
     public readonly record: RecordSummary,
-    public readonly origin?: string,
+    public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
     // Set for a Quest or Dialog Topic — this same row type expands into their children rather
     // than forking a wrapper node the way WorldspacesNode/CellNode do, so a container's own row
@@ -124,7 +123,7 @@ export class RecordNode extends vscode.TreeItem {
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
   constructor(
-    public readonly plugin: string, typeName: string, count: number, public readonly origin?: string,
+    public readonly plugin: string, typeName: string, count: number, public readonly origin: string,
     hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     super(typeName, collapsibleWhen(count > 0));
@@ -139,7 +138,7 @@ export class WorldspaceNode extends vscode.TreeItem {
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
-    public readonly plugin: string, public readonly worldspace: WorldspaceSummary, public readonly origin?: string,
+    public readonly plugin: string, public readonly worldspace: WorldspaceSummary, public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     const label = worldspace.editorId ?? worldspace.formKey;
@@ -159,7 +158,7 @@ const BLOCK_LEVEL_WORDS = { block: 'Block', subBlock: 'Sub-Block' } as const;
 abstract class BlockLevelNode extends vscode.TreeItem {
   constructor(
     level: keyof typeof BLOCK_LEVEL_WORDS, label: string, hasParseFailure: boolean,
-    public readonly plugin: string, public readonly origin: string | undefined, public readonly conditions: PluginConditions,
+    public readonly plugin: string, public readonly origin: string, public readonly conditions: PluginConditions,
   ) {
     super(`${BLOCK_LEVEL_WORDS[level]} ${label}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = level;
@@ -169,28 +168,28 @@ abstract class BlockLevelNode extends vscode.TreeItem {
 
 export class BlockNode extends BlockLevelNode {
   readonly kind = 'block' as const;
-  constructor(plugin: string, public readonly block: WorldspaceBlock, origin?: string, conditions: PluginConditions = NOT_EDITABLE) {
+  constructor(plugin: string, public readonly block: WorldspaceBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('block', `${block.x}, ${block.y}`, block.hasParseFailure, plugin, origin, conditions);
   }
 }
 
 export class SubBlockNode extends BlockLevelNode {
   readonly kind = 'subBlock' as const;
-  constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin?: string, conditions: PluginConditions = NOT_EDITABLE) {
+  constructor(plugin: string, public readonly subBlock: WorldspaceSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('subBlock', `${subBlock.x}, ${subBlock.y}`, subBlock.hasParseFailure, plugin, origin, conditions);
   }
 }
 
 export class InteriorBlockNode extends BlockLevelNode {
   readonly kind = 'interiorBlock' as const;
-  constructor(plugin: string, public readonly block: InteriorCellBlock, origin?: string, conditions: PluginConditions = NOT_EDITABLE) {
+  constructor(plugin: string, public readonly block: InteriorCellBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('block', String(block.number), block.hasParseFailure, plugin, origin, conditions);
   }
 }
 
 export class InteriorSubBlockNode extends BlockLevelNode {
   readonly kind = 'interiorSubBlock' as const;
-  constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin?: string, conditions: PluginConditions = NOT_EDITABLE) {
+  constructor(plugin: string, public readonly subBlock: InteriorCellSubBlock, origin: string, conditions: PluginConditions = NOT_EDITABLE) {
     super('subBlock', String(subBlock.number), subBlock.hasParseFailure, plugin, origin, conditions);
   }
 }
@@ -207,7 +206,7 @@ export class CellNode extends vscode.TreeItem {
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
-    public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string,
+    public readonly plugin: string, public readonly cell: CellSummary, public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     const label = cell.editorId
@@ -228,7 +227,7 @@ export class PlacedGroupNode extends vscode.TreeItem {
     public readonly cellFormKey: string,
     public readonly group: 'persistent' | 'temporary',
     public readonly placed: PlacedSummary[],
-    public readonly origin?: string,
+    public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
@@ -247,7 +246,7 @@ export class PlacedNode extends vscode.TreeItem {
   constructor(
     public readonly plugin: string,
     public readonly placed: PlacedSummary,
-    public readonly origin?: string,
+    public readonly origin: string,
     conditions: PluginConditions = NOT_EDITABLE,
   ) {
     const label = placed.editorId ?? placed.baseEditorId ?? placed.formKey;
@@ -263,7 +262,7 @@ export class PlacedNode extends vscode.TreeItem {
 export class InteriorCellsNode extends vscode.TreeItem {
   readonly kind = 'interiorCells' as const;
   constructor(
-    public readonly plugin: string, typeName: string, count: number, public readonly origin?: string,
+    public readonly plugin: string, typeName: string, count: number, public readonly origin: string,
     hasParseFailure = false, public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     super(typeName, collapsibleWhen(count > 0));
@@ -292,7 +291,7 @@ export type PluginTreeNode =
 
 const SPATIAL_GROUP_FACTORIES: Record<
   string,
-  (pluginName: string, group: PluginRecordTypeCount, origin: string | undefined, conditions: PluginConditions) => PluginTreeNode
+  (pluginName: string, group: PluginRecordTypeCount, origin: string, conditions: PluginConditions) => PluginTreeNode
 > = {
   wrld: (pluginName, g, origin, conditions) =>
     new WorldspacesNode(pluginName, g.displayName, g.count, origin, g.hasParseFailure, conditions),
@@ -344,7 +343,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  private cachedRecord(plugin: string, origin: string | undefined, formKey: string): RecordSummary | undefined {
+  private cachedRecord(plugin: string, origin: string, formKey: string): RecordSummary | undefined {
     const prefix = `${pluginAddressKey(plugin, origin)}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
@@ -356,7 +355,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   /** Undefined when nothing has cached this record yet, which the decoration provider reads the
    *  same as 'None': nothing to badge. */
-  workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): RecordSummary['workingTreeState'] | undefined {
+  workingTreeStateOf(plugin: string, origin: string, formKey: string): RecordSummary['workingTreeState'] | undefined {
     return this.cachedRecord(plugin, origin, formKey)?.workingTreeState;
   }
 
@@ -433,12 +432,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return value;
   }
 
-  /** Keyed by filename rather than by a node this provider built: `PluginsTreeProvider` expands
-   *  its own load-order rows, whose whole knowledge of this side is a plugin filename
-   *  (ADR-0002), and the conditions that row states. */
-  async getPluginChildren(pluginName: string, origin?: string, told: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
-    // ADR-0012: a plugin outside the load order is read-only by construction.
-    const conditions = origin === undefined ? told : { ...told, editable: false };
+  /** Keyed by the plugin rather than by a node this provider built: `PluginsTreeProvider` expands
+   *  its own rows, whose whole knowledge of this side is the plugin (ADR-0002), and the
+   *  conditions that row states. */
+  async getPluginChildren(pluginName: string, origin: string, conditions: PluginConditions = NOT_EDITABLE): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);
       return types

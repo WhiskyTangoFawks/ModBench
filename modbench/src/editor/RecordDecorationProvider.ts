@@ -5,7 +5,7 @@ import { parseRecordResourceUri } from './recordResourceUri';
 /** Editor's own view of the tree whose rows it badges: a structural shape, not
  *  `PluginTreeProvider` itself, since Editor names no Plugins-view type. */
 export interface RecordBadgeSource {
-  workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): WorkingTreeState | undefined;
+  workingTreeStateOf(plugin: string, origin: string, formKey: string): WorkingTreeState | undefined;
   /** The rows a read from mEdit just answered, so their badges follow that read. */
   onDidReadRecords(listener: (uris: readonly vscode.Uri[]) => void): vscode.Disposable;
 }
