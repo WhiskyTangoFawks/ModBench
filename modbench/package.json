@@ -529,7 +529,7 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsModWithPlugin && modbench.mod.trackRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod && modbench.mod.trackRowsIn == modbench.pluginListTree"
         },
         {
           "command": "modbench.plugin.compile",

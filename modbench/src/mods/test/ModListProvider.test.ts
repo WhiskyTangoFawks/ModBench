@@ -26,7 +26,7 @@ vi.mock('../../modlist/modlist', () => ({
   setModsEnabled: (...args: Parameters<typeof setModsEnabledMock>) => setModsEnabledMock(...args),
 }));
 
-import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { ModListProvider, SeparatorNode, ModNode, OverwriteNode, modOfRow, type ModlistNode } from '../ModListProvider';
 import { ErrorNode } from '../errorNode';
 import { onModCheckboxChanged } from '../modCheckboxHandler';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -364,6 +364,21 @@ describe('ModListProvider', () => {
       ['Textures', 'mod enabled'],
       ['Patch', 'mod enabled holdsPlugin'],
     ]);
+  });
+
+  it('names the mod a mod row stands for, and no mod for any other row or value', async () => {
+    const provider = makeProvider([mod('Patch'), sep('Tools')]);
+    const roots = await provider.getChildren();
+    const separator = present(roots.find((n) => n instanceof SeparatorNode), 'the separator row');
+    const rows = [...roots, ...await provider.getChildren(separator)];
+    const patch = present(rows.find((n) => n instanceof ModNode), 'the mod row');
+    const overwrite = present(roots.find((n) => n instanceof OverwriteNode), 'the Overwrite row');
+
+    expect(modOfRow(patch)).toBe('Patch');
+    expect(modOfRow(separator)).toBeUndefined();
+    expect(modOfRow(overwrite)).toBeUndefined();
+    expect(modOfRow({ kind: 'mod', mod: { name: 'Patch' } })).toBeUndefined();
+    expect(modOfRow(undefined)).toBeUndefined();
   });
 
   // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's. The check

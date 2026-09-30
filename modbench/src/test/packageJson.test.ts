@@ -906,6 +906,22 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
+// commands.md, Principles: a palette entry takes the focused view's selection. Track is offered from
+// Mods and from Plugins, each only while it is the view last selected in, whose selection the
+// command takes.
+describe('package.json track\'s palette entry', () => {
+  it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what track acts on', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.mod.track');
+    expect(entries.map((e) => e.when)).toEqual([
+      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.holdsModWithPlugin`
+      + ' && modbench.mod.trackRowsIn == modbench.modList'
+      + ` || focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && modbench.plugin.allUntrackedInMod`
+      + ' && modbench.mod.trackRowsIn == modbench.pluginListTree',
+    ]);
+  });
+});
+
 // editor.md, Menus and keys: the column header offers track on an untracked plugin's mod, before
 // compile.
 describe('package.json track on the record tab', () => {
@@ -943,7 +959,6 @@ describe('package.json compile\'s palette entry', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
-    ['modbench.mod.track', 'modbench.plugin.allUntrackedInMod'],
     ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
     ['modbench.record.copy', 'modbench.plugin.allRecords'],

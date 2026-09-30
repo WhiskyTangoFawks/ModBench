@@ -109,7 +109,7 @@ describe('modbench.mod.track', () => {
 
   function invokeTrack(
     client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined),
-    viewSelection: () => readonly PluginNode[] = () => [],
+    paletteSelection: () => readonly unknown[] = () => [],
   ) {
     const said: (string | undefined)[] = [];
     const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
@@ -118,7 +118,7 @@ describe('modbench.mod.track', () => {
       progress, client, reporter, onTracked,
       plugins: () => INSTANCE_PLUGINS,
       modOfRow: (value) => (value instanceof ModRow ? value.modName : undefined),
-    }, viewSelection);
+    }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.track'), 'the track command registerTrackCommand registers'),
       onTracked, reporter, said,
@@ -195,8 +195,19 @@ describe('modbench.mod.track', () => {
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
   });
 
-  // The palette hands the command no row: it falls back to the Plugins view's own selection.
-  it('from the palette, tracks the mod of the Plugins view\'s selection', async () => {
+  // The palette hands the command no row: it takes the selection of the view last selected in.
+  it('from the palette, tracks the mods of a Mods selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [OTHER], refused: [] });
+    const { handler, reporter } = invokeTrack(client, undefined, () => [new ModRow('ModB')]);
+
+    await runTrackedWithPreset(handler, EDITS_ITEM);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', expect.anything()] }]);
+    expect(reporter.landings).toEqual(['Tracked "ModB".']);
+  });
+
+  it('from the palette, tracks the mod of a Plugins selection', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [OTHER], refused: [] });
     const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
@@ -236,12 +247,57 @@ describe('modbench.mod.track', () => {
 
     await runTrackedWithPreset(handler, EDITS_ITEM, new ModRow('ModA'));
 
-    expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not track 1 of 2 plugins.', outcome }]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModA)" (Second.esp does not round-trip.)' },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  // principles.md, Never silently wrong: a mod that provides no plugin is named, never dropped.
+  it('on Mods rows where one provides no plugin, tracks the rest and names the one left out', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
+    const { handler, onTracked, reporter } = invokeTrack(client);
+    const mods = [new ModRow('ModA'), new ModRow('ModC'), new ModRow('ModB')];
+
+    const qp = await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Edits', expect.anything()] }]);
+    expect(qp.placeholder).toBe('Track 2 mods');
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not track 1 of 3 mods.', detail: '"ModC" (it provides no plugin)' },
+    ]);
+    expect(reporter.landings).toEqual([]);
+    expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  it('names a mod that provides no plugin and a refused plugin in one notification', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST], refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }] });
+    const { handler, reporter } = invokeTrack(client);
+    const mods = [new ModRow('ModA'), new ModRow('ModC')];
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
+
+    expect(reporter.reports).toEqual([{
+      severity: 'error', message: 'Could not track 1 of 2 mods and 1 of 2 plugins.',
+      detail: '"ModC" (it provides no plugin), "Second.esp (ModA)" (Second.esp does not round-trip.)',
+    }]);
+  });
+
+  it('on a Mods row that provides no plugin, asks nothing and says why', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, onTracked, reporter } = invokeTrack(client);
+
+    await handler(new ModRow('ModC'));
+
+    expect(createQuickPick).not.toHaveBeenCalled();
+    expect(trackCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not track 1 of 1 mods.', detail: '"ModC" (it provides no plugin)' },
+    ]);
+    expect(onTracked).not.toHaveBeenCalled();
   });
 
   // The rival: landing the toast on a refusal too would tell the user a track landed when the

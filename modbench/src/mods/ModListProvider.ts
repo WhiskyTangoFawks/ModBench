@@ -88,7 +88,7 @@ function separatorExpander(mods: readonly Mod[], shown: 'allMods' | 'matchingMod
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly nexusModId: string | undefined;
-  constructor(public readonly mod: Mod, status?: ModStatusResult, holdsPlugin = false) {
+  constructor(public readonly mod: Mod, status?: ModStatusResult, public readonly holdsPlugin = false) {
     super(mod.name, vscode.TreeItemCollapsibleState.None);
     this.id = rowIdentity(this.kind, mod.name);
     this.nexusModId = mod.nexusId;
@@ -108,6 +108,11 @@ export class ModNode extends vscode.TreeItem {
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
   }
+}
+
+/** The mod a value stands for when it is a mod row. */
+export function modOfRow(value: unknown): string | undefined {
+  return value instanceof ModNode ? value.mod.name : undefined;
 }
 
 /** Pinned leaf over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no

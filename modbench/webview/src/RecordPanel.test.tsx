@@ -469,6 +469,32 @@ describe('RecordPanel — column header native right-click menu', () => {
       expect({ compilable, trackable }).toEqual(applies);
     });
   });
+
+  // commands.md, No dead entries: when /plugins fails, a column is neither tracked nor untracked.
+  it('offers neither compile nor track on a column whose tracked state is unknown', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = compareResultFixture({
+      conflictAll: 'OnlyOne',
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      })],
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', cellStates: {},
+      })],
+    });
+    const load = vi.fn().mockResolvedValue({
+      ok: true, result: compare, immutableSet: null, notInLoadOrderSet: null, trackedSet: null, conflictsComputed: true,
+    });
+    const { container } = renderPanel(compare, { load });
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    const headerContext = container.querySelector('th > div')?.getAttribute('data-vscode-context') ?? '{}';
+    const { compilable, trackable } = parseJsonRecord(headerContext);
+    expect({ compilable, trackable }).toEqual({ compilable: false, trackable: false });
+  });
 });
 
 describe('RecordPanel — a plugin the load order does not name (ADR-0013)', () => {

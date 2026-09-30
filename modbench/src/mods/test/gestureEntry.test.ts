@@ -192,6 +192,13 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod], () => false).selectionToggle).toBe('enable');
   });
 
+  it('the palette\'s track sees a selection that holds a mod providing a plugin', () => {
+    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, undefined, true);
+    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsModWithPlugin).toBe(true);
+    expect(modsKeyContext([enabledMod, group], byRow).holdsModWithPlugin).toBe(false);
+    expect(modsKeyContext([], byRow).holdsModWithPlugin).toBe(false);
+  });
+
   it('Space does nothing over a selection with no mod', () => {
     expect(modsKeyContext([group], byRow).selectionToggle).toBeUndefined();
     expect(modsKeyContext([], byRow).selectionToggle).toBeUndefined();
