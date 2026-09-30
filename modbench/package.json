@@ -122,8 +122,8 @@
     ],
     "commands": [
       {
-        "command": "modbench.openEditor",
-        "title": "Open Editor",
+        "command": "modbench.record.open",
+        "title": "Open Record",
         "category": "Modbench"
       },
       {
@@ -753,7 +753,7 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.openEditor",
+          "command": "modbench.record.open",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@1"
         },

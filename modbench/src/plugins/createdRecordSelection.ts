@@ -36,7 +36,7 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
   const selectAndOpen = async (group: RecordGroup, formKey: string): Promise<void> => {
     const row = await deps.rowOf(group, formKey);
     if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
-    void vscode.commands.executeCommand('modbench.openEditor', { formKey, label: formKey });
+    void vscode.commands.executeCommand('modbench.record.open', { formKey, label: formKey });
   };
 
   return {

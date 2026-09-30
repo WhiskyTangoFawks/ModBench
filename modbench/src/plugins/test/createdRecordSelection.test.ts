@@ -42,7 +42,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   return { client, selection, revealed, settle, opened };
 }
 
-const OPEN_NEW = ['modbench.openEditor', { formKey: NEW, label: NEW }];
+const OPEN_NEW = ['modbench.record.open', { formKey: NEW, label: NEW }];
 
 beforeEach(() => { executeCommand.mockReset(); });
 

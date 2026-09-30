@@ -94,7 +94,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
-    vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
+    vscode.commands.registerCommand('modbench.record.open', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),

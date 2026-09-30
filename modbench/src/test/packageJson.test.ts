@@ -1230,7 +1230,7 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
   {
     gesture: 'record open', removedBy: '#963',
-    ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
+    ids: ['modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
     outOfPalette: ['modbench.openHeader'],
   },
   { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },

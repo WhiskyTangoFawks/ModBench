@@ -200,7 +200,7 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
     const pluginName = node && pluginFileOf(node);
     if (!pluginName) return;
-    void vscode.commands.executeCommand('modbench.openEditor', {
+    void vscode.commands.executeCommand('modbench.record.open', {
       formKey: headerFormKeyFor(pluginName), label: pluginName,
     });
   });

@@ -116,7 +116,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     provider.showFor('000001:Fallout4.esm');
     const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
     expect(present(group, 'the single referencer group').command).toEqual({
-      command: 'modbench.openEditor',
+      command: 'modbench.record.open',
       title: 'Open Record',
       arguments: [{ formKey: '000002:Fallout4.esm', label: 'TestNPC' }],
     });
