@@ -83,6 +83,10 @@ public sealed partial class SourceRepository
     public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginAddress plugin) =>
         loadOrder.ModFolderOf(plugin) is { } modFolder && IsTracked(modFolder) ? modFolder : null;
 
+    /// <summary>The folder a plugin's own file sits in, every origin alike — unlike ModFolderOf,
+    /// Data and Overwrite answer too (ADR-0012 invariant 2).</summary>
+    public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
+
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>

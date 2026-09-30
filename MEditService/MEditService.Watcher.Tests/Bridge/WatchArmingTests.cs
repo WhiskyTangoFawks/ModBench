@@ -29,6 +29,23 @@ public sealed class WatchArmingTests
         Assert.Empty(tree.Notifications.Published);
     }
 
+    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it is watched like Data — never
+    // recursive, never tracked — and not lost from the watch outright.
+    [Fact]
+    public async Task AnOverwriteStray_IsWatched_ThoughNeverTracked()
+    {
+        using var tree = new WatchedTree();
+        var overwriteDir = Directory.CreateDirectory(Path.Combine(tree.InstanceRoot, "overwrite")).FullName;
+        tree.AddPlugin(PluginOrigin.Overwrite, overwriteDir, "Stray.esp");
+        await tree.ApplyLoadOrder();
+
+        await tree.Observes(() =>
+            tree.WriteFile(WatchedTree.PluginPath(overwriteDir, "Stray.esp"), "changed-by-mo2"u8.ToArray()));
+
+        Assert.True(await tree.Settles(() => tree.Index.BinaryPokes.Count > 0), "Overwrite's binary never reached the Index");
+        Assert.Empty(tree.Notifications.Published);
+    }
+
     // The rival this pins: a Subscribe that never wires Changed, leaving every plugin unwatched
     // when a load order arrives through Apply.
     [Fact]

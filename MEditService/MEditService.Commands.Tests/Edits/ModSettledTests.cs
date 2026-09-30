@@ -160,6 +160,26 @@ public sealed class ModSettledTests : IDisposable
         Assert.Empty(notice.Plugins);
     }
 
+    // The Watcher settles Overwrite by its own folder too; ModFolderOf answers null for it
+    // (ADR-0012 invariant 2), so Handle must find the plugin by its file's folder instead.
+    [Fact]
+    public void ASettle_NamesAnOverwriteStray_AsAnUntrackedPlugin()
+    {
+        var overwriteDir = Directory.CreateDirectory(Path.Combine(_instanceRoot, "overwrite")).FullName;
+        var strayPath = Path.Combine(overwriteDir, "Stray.esp");
+        File.WriteAllBytes(strayPath, "anything"u8.ToArray());
+        var loadOrder = new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
+        [
+            new RegisteredPlugin("Stray.esp", PluginOrigin.Overwrite, strayPath, 0, Enabled: true, Winning: true),
+        ]);
+
+        Settled.Handle(loadOrder, overwriteDir);
+
+        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
+        Assert.Equal(PluginOrigin.Overwrite, notice.Origin);
+        Assert.Empty(notice.Plugins);
+    }
+
     // ADR-0003 invariant 3: Modbench keeps nothing about the change.
     [Fact]
     public void ASettle_WritesNothing_IntoTheMod()
