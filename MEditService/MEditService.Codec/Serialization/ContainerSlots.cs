@@ -22,8 +22,9 @@ public sealed class ContainerSlots
     {
         _category = category;
         _members = ContainerMembers.Derived;
-        _embeddedSlotNames = _members.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
-        _elementTypeBySlotName = _members.EmbeddedSlots
+        var embeddedSlots = _members.EmbeddedSlots.Where(slot => slot.Game == category).ToList();
+        _embeddedSlotNames = embeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
+        _elementTypeBySlotName = embeddedSlots
             .GroupBy(slot => slot.Slot, slot => _members.ElementTypeBySlot[slot], StringComparer.Ordinal)
             .Where(group => group.Distinct(StringComparer.Ordinal).Count() == 1)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -39,19 +40,19 @@ public sealed class ContainerSlots
     public IEnumerable<string> EmbeddedSlotsOf(string? containerTypeName) =>
         containerTypeName is null
             ? _embeddedSlotNames
-            : _members.EmbeddedSlots.Where(slot => slot.ParentType == containerTypeName).Select(slot => slot.Slot);
+            : _members.EmbeddedSlots.Where(slot => slot.Game == _category && slot.ParentType == containerTypeName).Select(slot => slot.Slot);
 
     /// <summary>Whether a member serializes its children inline. A container whose text names no type
     /// of its own accepts any container's embedded slot name, since nothing narrows it.</summary>
     internal bool IsEmbeddedSlot(string? containerTypeName, string member) =>
         containerTypeName is null
             ? _embeddedSlotNames.Contains(member)
-            : _members.EmbeddedSlots.Contains((containerTypeName, member));
+            : _members.EmbeddedSlots.Contains((_category, containerTypeName, member));
 
     /// <summary>What a slot holds, for a document that does not spell its child's type. Falls back to
     /// the slot name alone when the owner's own type is not known.</summary>
     internal string? ElementTypeOf(string? containerTypeName, string slot) =>
-        containerTypeName is { } owner && _members.ElementTypeBySlot.TryGetValue((owner, slot), out var element)
+        containerTypeName is { } owner && _members.ElementTypeBySlot.TryGetValue((_category, owner, slot), out var element)
             ? element
             : _elementTypeBySlotName.GetValueOrDefault(slot);
 }

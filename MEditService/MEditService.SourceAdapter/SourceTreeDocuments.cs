@@ -210,7 +210,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
         foreach (var child in children)
         {
-            if (!ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, child.SlotName))) continue;
+            if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
 
             // ADR-0003: the tree is the system of record for a record's content, so a hand edit the
             // codec would respell reaches the index as the file spells it.

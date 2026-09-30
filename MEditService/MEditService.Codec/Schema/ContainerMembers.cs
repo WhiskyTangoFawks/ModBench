@@ -5,12 +5,12 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
-/// <see cref="EmbeddedSlots"/> is the subset the embed customization accepts. ChildFieldsByType is
-/// keyed by game too: two games' classes can share a bare name.</summary>
+/// EmbeddedSlots is the subset the embed customization accepts. Every dictionary is keyed by game
+/// too: two games' classes can share a bare name.</summary>
 public sealed record ContainerMembers(
     IReadOnlyDictionary<(GameCategory Game, string Type), string[]> ChildFieldsByType,
-    IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlots,
-    IReadOnlyDictionary<(string ParentType, string Slot), string> ElementTypeBySlot)
+    IReadOnlySet<(GameCategory Game, string ParentType, string Slot)> EmbeddedSlots,
+    IReadOnlyDictionary<(GameCategory Game, string ParentType, string Slot), string> ElementTypeBySlot)
 {
     public static ContainerMembers Derived => Instance.Value;
 
@@ -28,8 +28,8 @@ public sealed record ContainerMembers(
     private static ContainerMembers Derive()
     {
         var childFields = new Dictionary<(GameCategory, string), SortedSet<string>>();
-        var embedded = new HashSet<(string ParentType, string Slot)>();
-        var elementTypes = new Dictionary<(string ParentType, string Slot), string>();
+        var embedded = new HashSet<(GameCategory Game, string ParentType, string Slot)>();
+        var elementTypes = new Dictionary<(GameCategory Game, string ParentType, string Slot), string>();
 
         foreach (var (category, assembly) in GameModules())
         {
@@ -44,9 +44,9 @@ public sealed record ContainerMembers(
                     if (!childFields.TryGetValue(key, out var members))
                         childFields[key] = members = new SortedSet<string>(StringComparer.Ordinal);
                     members.Add(property.Name);
-                    if (embeds) embedded.Add((recordType.Name, property.Name));
+                    if (embeds) embedded.Add((category, recordType.Name, property.Name));
                     if (ElementTypeOf(property.PropertyType) is { } element)
-                        elementTypes[(recordType.Name, property.Name)] = element.Name;
+                        elementTypes[(category, recordType.Name, property.Name)] = element.Name;
                 }
             }
         }

@@ -107,7 +107,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         var containers = new ContainerDocuments(release, _schemas);
         _pluginIngest = new PluginIngest(Connection, _logger, containers);
-        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas, release);
         _sourceValidation = new SourceValidation(this, Connection, _logger);
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so

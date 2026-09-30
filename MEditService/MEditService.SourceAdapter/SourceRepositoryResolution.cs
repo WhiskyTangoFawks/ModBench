@@ -586,8 +586,10 @@ public sealed partial class SourceRepository
         return false;
     }
 
+    // Every game's, unscoped: nothing here narrows to one, matching ContainerSlots' own fallback for
+    // a container whose text names no type of its own.
     private static readonly HashSet<string> EmbedSlotNames =
-        ContainerChildFields.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
+        ContainerMembers.Derived.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
 
     private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
 }

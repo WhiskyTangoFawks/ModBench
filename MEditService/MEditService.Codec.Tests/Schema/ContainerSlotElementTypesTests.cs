@@ -17,7 +17,7 @@ public sealed class ContainerSlotElementTypesTests
         // A derivation that stored nothing would agree with every assertion below.
         Assert.NotEmpty(members.ElementTypeBySlot);
 
-        foreach (var ((parentType, slot), element) in members.ElementTypeBySlot)
+        foreach (var ((_, parentType, slot), element) in members.ElementTypeBySlot)
         {
             var property = RecordTypes().First(type => type.Name == parentType).GetProperty(slot)
                 ?? throw new InvalidOperationException($"Expected '{parentType}' to declare property '{slot}'.");
@@ -32,8 +32,8 @@ public sealed class ContainerSlotElementTypesTests
     {
         var members = ContainerMembers.Derived;
         var missing = members.ChildFieldsByType
-            .SelectMany(entry => entry.Value.Select(slot => (entry.Key.Type, slot)))
-            .Where(slot => !members.ElementTypeBySlot.ContainsKey(slot))
+            .SelectMany(entry => entry.Value.Select(slot => (entry.Key.Game, entry.Key.Type, Slot: slot)))
+            .Where(key => !members.ElementTypeBySlot.ContainsKey(key))
             .ToList();
 
         Assert.Empty(missing);

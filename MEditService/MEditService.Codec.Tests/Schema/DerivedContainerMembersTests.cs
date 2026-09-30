@@ -21,7 +21,7 @@ public sealed class DerivedContainerMembersTests
 
         // A sweep that found nothing would agree with an empty derivation.
         Assert.NotEmpty(expected);
-        Assert.Equal(expected, ContainerChildFields.EmbeddedSlots.Order().ToList());
+        Assert.Equal(expected, ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4).Order().ToList());
     }
 
     [Fact]
@@ -53,12 +53,12 @@ public sealed class DerivedContainerMembersTests
     {
         var mod = ModFactory.Activator(ModKey.FromFileName("Sweep.esp"), GameRelease.Fallout4);
 
-        foreach (var (parent, slot) in ContainerChildFields.EmbeddedSlots)
+        foreach (var (parent, slot) in ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4))
             Assert.True(EnumeratesAsMajorRecords(mod, ElementOf(parent, slot)), $"{parent}.{slot} holds no major record.");
 
         // The same oracle, negatively: what a child field names beyond an embedded slot is a nested
         // group, which Mutagen refuses to enumerate as a record.
-        var nested = DerivedChildFields().Where(row => !ContainerChildFields.EmbeddedSlots.Contains(row)).ToList();
+        var nested = DerivedChildFields().Where(row => !ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4).Contains(row)).ToList();
         Assert.NotEmpty(nested);
         foreach (var (parent, slot) in nested)
         {
@@ -78,6 +78,19 @@ public sealed class DerivedContainerMembersTests
         Assert.NotNull(ContainerChildFields.EnumerateChildFieldsFor(quest));
         // A type from no referenced game's assembly resolves to no category, and so no fields.
         Assert.Null(ContainerChildFields.EnumerateChildFieldsFor(typeof(object)));
+    }
+
+    // Same root as ChildFieldsByType_IsKeyedByGameAsWellAsName: EmbeddedSlots and ElementTypeBySlot
+    // carry the same three-part key.
+    [Fact]
+    public void EmbeddedSlotsAndElementTypeBySlot_AreKeyedByGameAsWellAsName()
+    {
+        var quest = RecordTypes().First(t => t.Name == "Quest");
+
+        Assert.Contains((GameCategory.Fallout4, "Quest", "Scenes"), ContainerMembers.Derived.EmbeddedSlots);
+        Assert.Contains((GameCategory.Fallout4, "Quest", "Scenes"), ContainerMembers.Derived.ElementTypeBySlot.Keys);
+        Assert.Contains(("Quest", "Scenes"), ContainerChildFields.EmbeddedSlotsFor(quest));
+        Assert.Empty(ContainerChildFields.EmbeddedSlotsFor(typeof(object)));
     }
 
     // Mutagen's own registration: it enumerates a type it knows as a major record and throws for
