@@ -64,15 +64,15 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
         var before = File.ReadAllBytes(pluginPath);
         _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
-        var parkedRefs = Path.Combine(GitDir, "refs", "medit", "last-compile");
-        FileModes.Set(parkedRefs, "500");
+        var refLock = Path.Combine(GitDir, "refs", "medit", "last-compile", CompileFixture.PluginName + ".lock");
+        File.WriteAllText(refLock, "");
         try
         {
-            await Assert.ThrowsAnyAsync<Exception>(() => CompileService().CompileAsync(_mod.Plugin));
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileService().CompileAsync(_mod.Plugin));
         }
         finally
         {
-            FileModes.Set(parkedRefs, "700");
+            File.Delete(refLock);
         }
 
         Assert.Equal(before, File.ReadAllBytes(pluginPath));

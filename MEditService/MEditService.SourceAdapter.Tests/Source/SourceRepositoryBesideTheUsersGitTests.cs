@@ -57,7 +57,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
             var usersLock = IndexOf(modFolder) + ".lock";
             File.WriteAllText(usersLock, "");
 
-            SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF", writeBinary: () => { });
+            SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF");
 
             var parked = GitProbe.Run(
                 Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",

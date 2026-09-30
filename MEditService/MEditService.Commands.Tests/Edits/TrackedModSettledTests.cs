@@ -43,11 +43,14 @@ public sealed class TrackedModSettledTests : IDisposable
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
+    // The commit trailers spell a hash upper-cased.
+    private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
     // Track as the Source adapter records it: a baseline whose trailer names the bytes it was taken from.
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile($"source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
-            new BaselineTrailers(p.Plugin, null, Convert.ToHexString(SHA256.HashData(p.Bytes)))))]);
+            new BaselineTrailers(p.Plugin, null, TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
@@ -188,16 +191,6 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal(notices[0].Plugins, notices[1].Plugins);
     }
 
-    private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
-
-    // A compile whose write never returned: the record was parked, the binary may or may not be down.
-    private void AnInterruptedCompile(byte[] compiled, Action write) =>
-        Assert.Throws<IOException>(() => SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash(compiled), () =>
-        {
-            write();
-            throw new IOException("the compile was interrupted");
-        }));
-
     // plugins.md, Compile, story 5: a compile records what it writes before it writes it.
     [Fact]
     public void ASettle_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
@@ -205,7 +198,7 @@ public sealed class TrackedModSettledTests : IDisposable
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        AnInterruptedCompile("the compiled binary"u8.ToArray(), () => { });
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
@@ -218,8 +211,8 @@ public sealed class TrackedModSettledTests : IDisposable
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        AnInterruptedCompile("the first compile"u8.ToArray(), () => { });
-        AnInterruptedCompile("the second compile"u8.ToArray(), () => { });
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
@@ -233,7 +226,8 @@ public sealed class TrackedModSettledTests : IDisposable
         var compiled = "the compiled binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
-        AnInterruptedCompile(compiled, () => File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash(compiled));
+        File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled);
 
         Settled.Handle(loadOrder, ModFolder);
 

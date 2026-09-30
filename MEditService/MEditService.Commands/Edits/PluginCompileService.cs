@@ -113,7 +113,11 @@ public sealed class PluginCompileService(
                 $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
         }
         using (save)
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, save.BinarySha256(), save.Commit);
+        {
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, save.BinarySha256());
+            save.Commit();
+            SourceRepository.NarrowCompileSnapshot(modFolder, plugin.Name);
+        }
 
         if (logger.IsEnabled(LogLevel.Information))
         {

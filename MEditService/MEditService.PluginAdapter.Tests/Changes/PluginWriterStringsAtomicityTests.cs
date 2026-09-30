@@ -1,4 +1,3 @@
-using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -99,15 +98,13 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     public async Task Commit_ThatCannotWriteTheStrings_LeavesTheOldBinary()
     {
         var before = File.ReadAllBytes(_pluginPath);
-        FileModes.Set(_stringsDir, "500");
-        try
+
+        using (var prep = await PluginWriter.PrepareFromModAsync(BuildModifiedMod(), _pluginPath))
         {
-            using var prep = await PluginWriter.PrepareFromModAsync(BuildModifiedMod(), _pluginPath);
-            Assert.ThrowsAny<Exception>(prep.Commit);
-        }
-        finally
-        {
-            FileModes.Set(_stringsDir, "700");
+            var tempDir = Assert.Single(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
+            File.Delete(Directory.GetFiles(Path.Combine(tempDir, "Strings"))[0]);
+
+            Assert.ThrowsAny<IOException>(prep.Commit);
         }
 
         Assert.Equal(before, File.ReadAllBytes(_pluginPath));

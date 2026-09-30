@@ -322,26 +322,39 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Parks the working tree just compiled from, then writes the binary. Until the write
-    /// returns, the binaries the ref already names count too (plugins.md, Compile, story 5). Moves no
-    /// HEAD, branch or index (ADR-0007).</summary>
-    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256, Action writeBinary)
+    /// <summary>Parks the working tree about to be compiled, naming its binary beside every binary the
+    /// ref already names, so an interrupted write leaves one it names (plugins.md, Compile, story 5).
+    /// Moves no HEAD, branch or index.</summary>
+    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256)
     {
         var gitDir = Path.Combine(modFolder, ".git");
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
         var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
         var earlier = ParkedCompileBinarySha256s(modFolder, plugin);
+        Repark(gitDir, modFolder, plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+            .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
+    }
 
-        // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written.
-        string Snapshot(IEnumerable<string> earlierBinaries) => GitCli.Run(
-            gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m",
-            string.Join('\n', [$"Compile: {plugin}", "", $"{BinaryTrailer}: {binarySha256}",
-                .. earlierBinaries.Select(sha => $"{EarlierBinaryTrailer}: {sha}")])).Trim();
-        var landed = Snapshot([]);
+    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003,
+    /// invariant 3).</summary>
+    public static void NarrowCompileSnapshot(string modFolder, string plugin)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        var parked = LastCompileRef(plugin);
+        var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", parked);
+        var tree = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
+        var parent = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^").Trim();
+        Repark(gitDir, modFolder, plugin, tree, parent,
+            [.. ReadTrailers(body, BinaryTrailer).Select(sha => $"{BinaryTrailer}: {sha}")]);
+    }
 
-        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), Snapshot(earlier));
-        writeBinary();
-        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), landed);
+    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written.
+    private static void Repark(
+        string gitDir, string modFolder, string plugin, string tree, string parent, IEnumerable<string> trailers)
+    {
+        var message = string.Join('\n', [$"Compile: {plugin}", "", .. trailers]);
+        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", parent, "-m", message).Trim();
+        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
 
     private const string BinaryTrailer = "Binary-SHA256";

@@ -16,9 +16,31 @@ public sealed class SourceRepositoryParkedCompileBinarySha256sTests
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234", writeBinary: () => { });
+            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234");
 
             Assert.Equal(["DEADBEEF1234"], SourceRepository.ParkedCompileBinarySha256s(modFolder, "Test.esp"));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ParkedCompileBinarySha256s_NameEveryParkedBinary_UntilTheSnapshotIsNarrowed()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
+            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "FIRST");
+            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "SECOND");
+            Assert.Equal(["SECOND", "FIRST"], SourceRepository.ParkedCompileBinarySha256s(modFolder, "Test.esp"));
+
+            SourceRepository.NarrowCompileSnapshot(modFolder, "Test.esp");
+
+            Assert.Equal(["SECOND"], SourceRepository.ParkedCompileBinarySha256s(modFolder, "Test.esp"));
         }
         finally
         {
