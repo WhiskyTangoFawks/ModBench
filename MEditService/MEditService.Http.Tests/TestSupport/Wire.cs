@@ -44,6 +44,10 @@ internal static class Wire
             upstreamVersionByOrigin = upstreamVersionByOrigin ?? new Dictionary<string, string>(),
         });
 
+    internal static Task<HttpResponseMessage> Decompile(
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
+        client.PostAsJsonAsync("/plugins/decompile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
+
     internal static Task<HttpResponseMessage> Compile(
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
         client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });

@@ -43,7 +43,7 @@ internal static class GitCli
     }
 
     /// <summary>Against a scratch index instead of <c>$GIT_DIR/index</c>: building a tree object must not
-    /// disturb the edit branch's real index, which may carry the user's own staged dirt.</summary>
+    /// disturb the checked-out branch's real index, which may carry the user's own staged dirt.</summary>
     internal static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, indexFile, args);

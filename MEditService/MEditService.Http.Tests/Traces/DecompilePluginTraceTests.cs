@@ -7,18 +7,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>decompile-plugin to the repository, fired by track: each plugin applied or refused on
-/// its own, progress per plugin, and a hand edit reaching the answers. The destinations main and
-/// the working tree are debt #966.</summary>
+/// <summary>decompile-plugin, fired by track into a new repository and by decompile into a tracked
+/// mod's working tree: each plugin applied or refused on its own, and the source reaching the
+/// answers.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
     private const string Origin = "TrackedMod";
     private const string Npc = "TrackedNpc";
+    private const string UntrackedOrigin = "UntrackedMod";
 
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-decompile-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
+        .WithPlugin("Other.esp", mod => mod.Npcs.AddNew("OtherNpc"), origin: UntrackedOrigin)
         .BuildScattered();
 
     protected override void DisposeFixtures() => _instance.Dispose();
@@ -112,6 +114,54 @@ public sealed class DecompilePluginTraceTests : HostedTests
         again.EnsureSuccessStatusCode();
         var refused = Assert.Single((await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
         Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
+    }
+
+    // Decompile's working-tree write reaches the answers through the watch, with no load order put in
+    // between. The new bytes alone do not: a tracked plugin reads from its source (ADR-0007
+    // invariant 3).
+    [Fact]
+    public async Task DecompilingATrackedPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
+    {
+        await Loaded();
+        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+        OtherTool.WritesThePlugin(Path.Combine(OtherTool.ModFolderOf(_instance, Origin), Plugin), mod => mod.Npcs.AddNew("UpgradedNpc"));
+
+        var decompiled = await Client.Decompile([(Plugin, Origin)]);
+
+        decompiled.EnsureSuccessStatusCode();
+        var body = await decompiled.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal([Plugin], body.GetProperty("applied").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+        Assert.Empty(body.GetProperty("refused").EnumerateArray());
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while ((await Client.Record(formKey)).GetProperty("editorId").GetString() != "UpgradedNpc")
+        {
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(20), "The decompiled source never reached the answers.");
+            await Task.Delay(50);
+        }
+    }
+
+    [Fact]
+    public async Task DecompilingAPluginInAModWithNoRepository_AnswersItRefused()
+    {
+        await Loaded();
+
+        var response = await Client.Decompile([("Other.esp", UntrackedOrigin)]);
+
+        response.EnsureSuccessStatusCode();
+        var refused = Assert.Single((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
+        Assert.Equal("NotInTrackedMod", refused.GetProperty("refusal").GetString());
+        Assert.Equal("Other.esp", refused.GetProperty("plugin").GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task DecompilingNoPlugin_Is400()
+    {
+        await Loaded();
+
+        var response = await Client.Decompile([]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // The hand-off: the Mod watcher sees the source tree Track wrote, and the Indexer reads the

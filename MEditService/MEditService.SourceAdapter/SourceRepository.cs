@@ -160,36 +160,81 @@ public sealed partial class SourceRepository
     // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
     private void DeleteWholeOrNotAtAll(string directory)
     {
-        var directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
-            .Prepend(directory)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
-            .ToList();
+        var before = PreImageOf(directory);
         try
         {
             Directory.Delete(directory, recursive: true);
         }
         catch (Exception cause) when (cause is IOException or UnauthorizedAccessException)
         {
-            var unrestored = PutBack(directories, files);
+            var unrestored = PutBack(before);
             if (unrestored.Count == 0) throw;
             throw new IOException(
                 $"{cause.Message} Everything it removed is back except: {string.Join(" ", unrestored)}", cause);
         }
     }
 
+    /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
+    /// last-compile ref names only the binary they were read from. A failure leaves both as they
+    /// were.</summary>
+    public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
+    {
+        // A mod folder another tool removed is not written back into being.
+        if (!IsTracked(_modFolder))
+            throw new InvalidOperationException($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+
+        var root = RootIn(_modFolder, pluginFileName);
+        var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
+        try
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            PristineFileWriter.WriteAll(files, _modFolder);
+            ParkDecompiled(pluginFileName, binarySha256);
+        }
+        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            var unrestored = new List<string>();
+            TryPutBack(root, () => { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }, unrestored);
+            unrestored.AddRange(PutBack(before));
+            if (unrestored.Count == 0) throw;
+            throw new IOException(
+                $"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
+        }
+        finally
+        {
+            Forget();
+        }
+    }
+
+    // What the working tree now holds was made from this binary, as a landed compile's is. The
+    // snapshot takes the plugin's whole source, which git may not track yet.
+    private void ParkDecompiled(string plugin, string binarySha256)
+    {
+        var gitDir = Path.Combine(_modFolder, ".git");
+        var headSha = GitCli.Run(gitDir, _modFolder, "rev-parse", "HEAD").Trim();
+        var tree = WorkingTreeSnapshotTree(gitDir, _modFolder, LiteralPathspec(RootFor(plugin)));
+        Repark(gitDir, _modFolder, "Decompile", plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}"]);
+    }
+
+    private sealed record PreImage(List<string> Directories, List<(string Path, byte[] Bytes)> Files);
+
+    private static PreImage PreImageOf(string directory) => new(
+        [.. Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
+            .Prepend(directory)
+            .Order(StringComparer.Ordinal)],
+        [.. Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
+
     // One path that cannot be written never stops the pass (ADR-0019): every other one is still put back.
-    private List<string> PutBack(List<string> directories, List<(string Path, byte[] Bytes)> files)
+    private List<string> PutBack(PreImage before)
     {
         var unrestored = new List<string>();
-        foreach (var level in directories)
+        foreach (var level in before.Directories)
         {
             TryPutBack(level, () => Directory.CreateDirectory(level), unrestored);
         }
-        foreach (var (path, bytes) in files.Where(file => !File.Exists(file.Path)))
+        foreach (var (path, bytes) in before.Files.Where(file => !File.Exists(file.Path)))
         {
             TryPutBack(path, () => File.WriteAllBytes(path, bytes), unrestored);
         }
@@ -331,7 +376,7 @@ public sealed partial class SourceRepository
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
         var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
         var earlier = ParkedCompileBinarySha256s(modFolder, plugin);
-        Repark(gitDir, modFolder, plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+        Repark(gitDir, modFolder, "Compile", plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
     }
 
@@ -344,15 +389,16 @@ public sealed partial class SourceRepository
         var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", parked);
         var tree = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
         var parent = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^").Trim();
-        Repark(gitDir, modFolder, plugin, tree, parent,
+        Repark(gitDir, modFolder, "Compile", plugin, tree, parent,
             [.. ReadTrailers(body, BinaryTrailer).Select(sha => $"{BinaryTrailer}: {sha}")]);
     }
 
-    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written.
+    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written. The
+    // subject names the gesture that made the snapshot.
     private static void Repark(
-        string gitDir, string modFolder, string plugin, string tree, string parent, IEnumerable<string> trailers)
+        string gitDir, string modFolder, string gesture, string plugin, string tree, string parent, IEnumerable<string> trailers)
     {
-        var message = string.Join('\n', [$"Compile: {plugin}", "", .. trailers]);
+        var message = string.Join('\n', [$"{gesture}: {plugin}", "", .. trailers]);
         var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", parent, "-m", message).Trim();
         GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
@@ -360,15 +406,16 @@ public sealed partial class SourceRepository
     private const string BinaryTrailer = "Binary-SHA256";
     private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
 
-    // The index and every tracked file's working-tree bytes, built on a copy of the index: git stash
-    // create would take index.lock, which the user's own commit or rebase may be holding.
-    private static string WorkingTreeSnapshotTree(string gitDir, string workTree)
+    // The index, every tracked file's working-tree bytes and every file under the pathspecs, on a copy
+    // of the index: git stash create would take index.lock, which the user's commit may hold.
+    private static string WorkingTreeSnapshotTree(string gitDir, string workTree, params string[] alsoTaking)
     {
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-snapshot-index-{Guid.NewGuid():N}");
         try
         {
             File.Copy(Path.Combine(gitDir, "index"), scratchIndex);
             GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "add", "-u");
+            if (alsoTaking.Length > 0) GitCli.RunWithIndex(gitDir, workTree, scratchIndex, ["add", "-A", "--", .. alsoTaking]);
             return GitCli.RunWithIndex(gitDir, workTree, scratchIndex, "write-tree").Trim();
         }
         finally

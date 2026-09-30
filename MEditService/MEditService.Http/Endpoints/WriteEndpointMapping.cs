@@ -67,6 +67,18 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
 
+    /// <summary>Decompile's refusal of a whole selection: the refusal extension says which cause no
+    /// plugin escaped (ADR-0019).</summary>
+    internal static IResult Refusal(DecompileSelectionRefusal refusal) => Results.Problem(
+        detail: refusal.Message,
+        statusCode: refusal.Refusal switch
+        {
+            // The request is sound; the machine lacks git.
+            DecompileRefusal.GitUnavailable => 500,
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.Refusal.ToString() });
+
     /// <summary>Create plugin's own refusal, each found before any write: the status says what kind
     /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
