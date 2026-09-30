@@ -6,9 +6,9 @@ export type Drop =
   | { kind: 'winningEnd' }
   | { kind: 'losingEnd' };
 
-/** Where a block of dragged names lands once its own lines are gone: a drop names the
- *  *pre-removal* target, while every move counts its index among the lines that remain. An
- *  absent or unknown target is the winning end. */
+// Where a block of dragged names lands once its own lines are gone: a drop names the
+// *pre-removal* target, while every move counts its index among the lines that remain. An absent
+// or unknown target is the winning end.
 function dropIndexForMove(
   order: readonly string[],
   movedNames: readonly string[],
