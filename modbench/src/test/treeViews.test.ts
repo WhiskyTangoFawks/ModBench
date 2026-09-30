@@ -85,7 +85,7 @@ import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
-import { accessTo, adapterOver } from './mo2/adapterOver';
+import { accessTo, adapterOver, STEADY_FOCUS } from './mo2/adapterOver';
 import { syncMessageDouble } from './syncMessageDouble';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
@@ -99,7 +99,7 @@ const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
 async function makeInstance(root: string): Promise<Instance> {
-  const instance = new Instance({
+  const instance = new Instance({ windowFocus: STEADY_FOCUS,
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },

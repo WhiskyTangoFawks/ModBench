@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
-import { accessTo, adapterOver } from './mo2/adapterOver';
+import { accessTo, adapterOver, STEADY_FOCUS } from './mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -80,7 +80,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const instance = new Instance({
+  const instance = new Instance({ windowFocus: STEADY_FOCUS,
     adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
     log: () => {}, logReadFailure: () => {},
   });
@@ -199,7 +199,7 @@ describe('the game folder not found, across the whole instance', () => {
     const output: string[] = [];
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
-    const instance = new Instance({
+    const instance = new Instance({ windowFocus: STEADY_FOCUS,
       adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);

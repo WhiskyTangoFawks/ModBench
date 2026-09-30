@@ -4,6 +4,7 @@ import type {
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
+import type { InstanceOptions } from '../../instanceLoader/instance';
 import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
@@ -15,6 +16,9 @@ export interface AdapterAnswers {
 
 /** The downloaded files' answer for a test whose subject holds none: listed nowhere, watched never. */
 export const NO_DOWNLOADS: DownloadedFiles = { kind: 'unresolved', reason: 'this test reads no downloads' };
+
+/** A window whose focus never changes, for a test whose subject is not the recompute's triggers. */
+export const STEADY_FOCUS: InstanceOptions['windowFocus'] = () => ({ dispose: () => {} });
 
 /** What every command family reaches the instance through, over `root`. */
 export function accessTo(root: string, answers: AdapterAnswers = {}): { instanceRoot: string; adapter: InstanceAdapter } {

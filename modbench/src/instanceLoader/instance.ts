@@ -1,5 +1,6 @@
 // The Instance: one read model over the instance (ADR-0015). It recomputes one whole value from the
-// Instance adapter's parsed reads whenever the adapter signals that the instance changed.
+// Instance adapter's parsed reads whenever the adapter signals that the instance changed, and
+// whenever the window regains focus.
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -98,9 +99,15 @@ export type ReadFailureListener = () => void;
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
+/** As much of VS Code's window state as the recompute reads. */
+export interface WindowFocus {
+  readonly focused: boolean;
+}
+
 export interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
+  windowFocus: (listener: (state: WindowFocus) => void) => Subscription;
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
@@ -159,12 +166,17 @@ export class Instance implements Subscription {
 
   private readonly changes: Subscription;
 
+  private readonly focus: Subscription;
+
   // The mod folder links already told as skipped, so each is one Output line until it changes.
   private linksTold: ReadonlySet<string> = new Set();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter.names);
     this.changes = options.adapter.subscribe(() => this.schedule());
+    this.focus = options.windowFocus(({ focused }) => {
+      if (focused) this.schedule();
+    });
   }
 
   /** Never undefined and never partial: before the first read it is the empty value at
@@ -216,6 +228,7 @@ export class Instance implements Subscription {
   dispose(): void {
     clearTimeout(this.timer);
     this.changes.dispose();
+    this.focus.dispose();
     this.subscribers = [];
     this.failureListeners = [];
   }

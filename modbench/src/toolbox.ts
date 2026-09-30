@@ -460,7 +460,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
   // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
-  const instance = own(new Instance({ adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
+  const instance = own(new Instance({
+    adapter, windowFocus: vscode.window.onDidChangeWindowState, log, logReadFailure: (line) => outputChannel.error(line),
+  }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
