@@ -404,8 +404,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.plugin.track",
-        "title": "Track Plugin…",
+        "command": "modbench.mod.track",
+        "title": "Track Mod…",
         "category": "Modbench"
       },
       {
@@ -528,7 +528,7 @@
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.plugin.track",
+          "command": "modbench.mod.track",
           "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod"
         },
         {
@@ -813,6 +813,11 @@
           "group": "6_destroy@1"
         },
         {
+          "command": "modbench.mod.track",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/",
+          "group": "4_sourceControl@1"
+        },
+        {
           "command": "modbench.record.copyValue",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "5_copy@1"
@@ -903,7 +908,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.plugin.track",
+          "command": "modbench.mod.track",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\buntracked\\b/ && viewItem =~ /\\binMod\\b/",
           "group": "4_sourceControl@1"
         },
@@ -973,6 +978,11 @@
           "command": "modbench.record.moveElementDown",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
           "group": "modbench@4"
+        },
+        {
+          "command": "modbench.mod.track",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && trackable",
+          "group": "modbench@9"
         },
         {
           "command": "modbench.plugin.compile",

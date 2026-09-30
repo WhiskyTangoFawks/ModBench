@@ -414,7 +414,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(
                             col.override.formKey, col.override.plugin, col.override.origin,
-                            trackedSet.has(col.key) && !isImmutable,
+                            { compilable: trackedSet.has(col.key) && !isImmutable, trackable: !trackedSet.has(col.key) && !isImmutable },
                           ),
                         )}
                         // The annotated synthetic member is the one sanctioned header-flag write —

@@ -8,9 +8,8 @@ import {
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {
-  compilableSelected, pluginsGestureEntry, pluralArgument, registerPluginsGesture, selectionArgument, type GestureEntry,
+  compilableSelected, pluginsGestureEntry, pluralArgument, selectionArgument, type GestureEntry,
 } from './gestureEntry';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -59,40 +58,66 @@ function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined>
   });
 }
 
+export interface TrackDeps {
+  progress: PluginsViewProgress;
+  client: Pick<MEditClient, 'track'>;
+  reporter: Reporter;
+  onTracked: () => Promise<void>;
+  /** The instance value's plugins, where a mod's plugins are read. */
+  plugins: () => readonly PluginAddress[];
+  /** The mod a Mods row stands for, `undefined` for any other value. */
+  modOfRow: (value: unknown) => string | undefined;
+}
+
+/** commands.md, `track`: the mods, from a Mods row, a plugin row or a record tab's column header,
+ *  each sent to mEdit as its plugins, in one call and one pick. */
+export function registerTrackCommand(deps: TrackDeps, viewSelection: () => readonly PluginsTreeNode[]): vscode.Disposable {
+  return vscode.commands.registerCommand(
+    'modbench.mod.track',
+    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
+      await trackMods(deps, modsArgumentOf(deps, clicked, selected, viewSelection));
+    },
+  );
+}
+
+function modsArgumentOf(
+  deps: TrackDeps, clicked: unknown, selected: readonly PluginsTreeNode[] | undefined, viewSelection: () => readonly PluginsTreeNode[],
+): string[] {
+  if (deps.modOfRow(clicked) !== undefined) {
+    return (selected ?? [clicked]).map(deps.modOfRow).filter((mod) => mod !== undefined);
+  }
+  const header = columnHeaderOf(clicked);
+  if (header) return [header.origin];
+  const rows = pluralArgument(pluginsGestureEntry(clicked, selected, viewSelection), 'plugin');
+  return [...new Set(rows.map((row) => row.origin))];
+}
+
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
-export function registerTrackCommand(
-  progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
-  reporter: Reporter, onTracked: () => Promise<void>,
-  viewSelection: () => readonly PluginsTreeNode[],
-): vscode.Disposable {
-  // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
-  // that row is one of several selected, in one call and one pick.
-  return registerPluginsGesture('modbench.plugin.track', viewSelection, async (entry) => {
-    const nodes = pluralArgument(entry, 'plugin');
-    const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
-    const [first] = addressed;
-    if (!first) return;
-    const report = (outcome: SelectionOutcome<PluginAddress>) => {
-      reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
-    };
+async function trackMods({ progress, client, reporter, onTracked, plugins }: TrackDeps, mods: readonly string[]): Promise<void> {
+  const [firstMod] = mods;
+  const instancePlugins = plugins();
+  const addressed: PluginAddress[] = mods.flatMap((mod) => instancePlugins
+    .filter((p) => p.origin === mod)
+    .map(({ name, origin }) => ({ name, origin })));
+  if (firstMod === undefined || addressed.length === 0) return;
+  const what = mods.length === 1 ? `"${firstMod}"` : `${mods.length} mods`;
 
-    const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
-    if (!choice) return;
+  const choice = await pickTrackPreset(`Track ${what}`);
+  if (!choice) return;
 
-    await progress.while(async () => {
-      progress.say(trackProgressMessage(first.origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(addressed, choice.label, {
-        onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
-      });
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
-      if (result.landed.length > 0) await onTracked();
-      const [only, ...more] = result.landed;
-      if (result.refused.length > 0) report(result);
-      else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${result.landed.length} plugins.`);
+  await progress.while(async () => {
+    progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+    const result = await client.track(addressed, choice.label, {
+      onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
     });
+    if (isRefused(result)) { reporter.report('error', result.message); return; }
+    // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
+    if (result.landed.length > 0) await onTracked();
+    if (result.refused.length > 0) {
+      reporter.selectionOutcome(`Could not track ${result.refused.length} of ${addressed.length} plugins.`, result, rowName);
+    } else if (result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
   });
 }
 

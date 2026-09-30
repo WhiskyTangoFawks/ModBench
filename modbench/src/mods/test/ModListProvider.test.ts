@@ -351,6 +351,21 @@ describe('ModListProvider', () => {
     expect(disabled.contextValue).toBe('mod disabled');
   });
 
+  // mods.md, Menus and keys: track on a mod that holds a plugin.
+  it('a mod row states in its contextValue whether the instance value holds a plugin of it', async () => {
+    const value = instanceValueFixture({
+      mods: [mod('Patch'), mod('Textures')],
+      plugins: [{ name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', slot: 0, enabled: true, winning: true }],
+    });
+    const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
+      .filter((n): n is ModNode => n instanceof ModNode);
+
+    expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
+      ['Textures', 'mod enabled'],
+      ['Patch', 'mod enabled holdsPlugin'],
+    ]);
+  });
+
   // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's. The check
   // box reaches the same command a context-menu click or key does — one mod, through the entry.
   it('setModEnabled calls the setModsEnabled command with the access, active profile and one-mod selection, and fires no refresh', async () => {

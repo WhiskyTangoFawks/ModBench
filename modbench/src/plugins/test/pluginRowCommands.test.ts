@@ -54,10 +54,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function pluginNode(name = 'MyMod.esp'): PluginNode {
-  return new PluginNode({ name, enabled: true }, 'ModA');
-}
-
 function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name, origin, inLoadOrder: true })]);
@@ -94,9 +90,23 @@ function makeFakeQuickPick() {
   };
 }
 
-// ── registerTrackCommand ──────────────────────────────────────────────────
+// ── modbench.mod.track ─────────────────────────────────────────────────────
 
-describe('registerTrackCommand', () => {
+describe('modbench.mod.track', () => {
+  const FIRST = { name: 'First.esp', origin: 'ModA' };
+  const SECOND = { name: 'Second.esp', origin: 'ModA' };
+  const OTHER = { name: 'Other.esp', origin: 'ModB' };
+  const INSTANCE_PLUGINS = [FIRST, OTHER, { name: 'Loose.esp', origin: 'overwrite' }, SECOND];
+
+  // Stands for a Mods row, whose type this box does not import.
+  class ModRow extends TreeItem {
+    constructor(readonly modName: string) { super(modName); }
+  }
+
+  function row(plugin: { name: string; origin: string }): PluginNode {
+    return new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
+  }
+
   function invokeTrack(
     client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined),
     viewSelection: () => readonly PluginNode[] = () => [],
@@ -104,9 +114,13 @@ describe('registerTrackCommand', () => {
     const said: (string | undefined)[] = [];
     const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
     const reporter = recordingReporter();
-    registerTrackCommand(progress, client, reporter, onTracked, viewSelection);
+    registerTrackCommand({
+      progress, client, reporter, onTracked,
+      plugins: () => INSTANCE_PLUGINS,
+      modOfRow: (value) => (value instanceof ModRow ? value.modName : undefined),
+    }, viewSelection);
     return {
-      handler: present(handlers.get('modbench.plugin.track'), 'the track command registerTrackCommand registers'),
+      handler: present(handlers.get('modbench.mod.track'), 'the track command registerTrackCommand registers'),
       onTracked, reporter, said,
     };
   }
@@ -125,59 +139,106 @@ describe('registerTrackCommand', () => {
     return qp;
   }
 
-  it('tracks the right-clicked plugin alone and lands the tracked toast', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    const plugin = { name: 'MyMod.esp', origin: 'ModA' };
-    client.setCommandResult('track', { landed: [plugin], refused: [] });
+  const trackCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'track');
+
+  it('on a plugin row, tracks the plugin\'s mod: every plugin of it, in one call', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
     const { handler, onTracked, reporter } = invokeTrack(client);
 
-    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
+    const qp = await runTrackedWithPreset(handler, EDITS_ITEM, row(FIRST));
 
-    expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
-    expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+    expect(qp.placeholder).toBe('Track "ModA"');
+    expect(reporter.landings).toEqual(['Tracked "ModA".']);
     expect(reporter.reports).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  it('on selected plugin rows of one mod, tracks that mod once', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
+    const { handler } = invokeTrack(client);
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, row(SECOND), [row(FIRST), row(SECOND)]);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+  });
+
+  // commands.md, "A selection is one gesture": one call with the whole selection, asked once.
+  it('on selected Mods rows, tracks every plugin of each mod in one call and asks the preset once', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
+    const { handler, reporter } = invokeTrack(client);
+    const mods = [new ModRow('ModA'), new ModRow('ModB')];
+
+    const qp = await runTrackedWithPreset(handler, EVERYTHING_ITEM, mods[1], mods);
+
+    expect(createQuickPick).toHaveBeenCalledOnce();
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Everything', expect.anything()] }]);
+    expect(qp.placeholder).toBe('Track 2 mods');
+    expect(reporter.landings).toEqual(['Tracked 2 mods.']);
+  });
+
+  // editor.md, Menus and keys, story 5: track on a column acts on its plugin's mod.
+  it('on an Editor column header, tracks the column plugin\'s mod', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
+    const { handler } = invokeTrack(client);
+    const header = {
+      webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Second.esp', origin: 'ModA',
+      compilable: false, trackable: true, preventDefaultContextMenuItems: true,
+    };
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, header);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+  });
+
+  // The palette hands the command no row: it falls back to the Plugins view's own selection.
+  it('from the palette, tracks the mod of the Plugins view\'s selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [OTHER], refused: [] });
+    const { handler, reporter } = invokeTrack(client, undefined, () => [row(OTHER)]);
+
+    await runTrackedWithPreset(handler, EDITS_ITEM);
+
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', expect.anything()] }]);
+    expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
   // ADR-0007: a landed track tells the record panels, and registers each tracked mod's repository
   // with vscode.git once. Rival: registering before the notice that registers again.
   it('a landed track, through the conflicts-computed notice, registers the tracked repository once', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
+    const client = clientWithOrigin('Other.esp', 'ModB');
+    client.setCommandResult('track', { landed: [OTHER], refused: [] });
     const announce = vi.fn();
     const channel = { warn: vi.fn(), error: vi.fn() };
     const notice = conflictsComputedOver(announce, {
-      client, outputChannel: channel, setPluginRepositories: () => {}, trackedFolderOf: () => Promise.resolve('/mods/ModA'),
+      client, outputChannel: channel, setPluginRepositories: () => {}, trackedFolderOf: () => Promise.resolve('/mods/ModB'),
     });
     const { handler } = invokeTrack(client, vi.fn(notice));
 
-    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
+    await runTrackedWithPreset(handler, EDITS_ITEM, row(OTHER));
 
     expect(announce).toHaveBeenCalledOnce();
     expect(openRepository).toHaveBeenCalledOnce();
     expect(channel.error).not.toHaveBeenCalled();
   });
 
-  // commands.md, "A selection is one gesture": one call with the whole selection, asked once, and
-  // one notification naming each refused plugin and why.
-  it('tracks the whole selection in one call, asks the preset once, and reports each refused plugin once while the rest land', async () => {
+  // commands.md, "each item lands on its own": one notification naming each refused plugin and
+  // why, while the rest land.
+  it('reports each refused plugin once while the rest land', async () => {
     const client = new InMemoryMEditClient();
-    const first = { name: 'First.esp', origin: 'ModA' };
-    const second = { name: 'Second.esp', origin: 'ModB' };
-    const outcome = { landed: [first], refused: [{ item: second, reason: 'Second.esp does not round-trip.' }] };
+    const outcome = { landed: [FIRST], refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }] };
     client.setCommandResult('track', outcome);
     const { handler, onTracked, reporter } = invokeTrack(client);
-    const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
 
-    await runTrackedWithPreset(handler, EVERYTHING_ITEM, nodes[0], nodes);
+    await runTrackedWithPreset(handler, EDITS_ITEM, new ModRow('ModA'));
 
-    expect(createQuickPick).toHaveBeenCalledOnce();
-    expect(client.calls.filter((c) => c.method === 'track')).toEqual([
-      { method: 'track', args: [[first, second], 'Everything', expect.anything()] },
-    ]);
     expect(reporter.selectionOutcomeCalls).toEqual([{ message: 'Could not track 1 of 2 plugins.', outcome }]);
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModB)" (Second.esp does not round-trip.)' },
+      { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModA)" (Second.esp does not round-trip.)' },
     ]);
     expect(reporter.landings).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
@@ -186,11 +247,11 @@ describe('registerTrackCommand', () => {
   // The rival: landing the toast on a refusal too would tell the user a track landed when the
   // backend refused the whole selection.
   it('reports the ready-to-show message at error when the backend refuses the whole selection', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    const client = new InMemoryMEditClient();
     client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
     const { handler, onTracked, reporter } = invokeTrack(client);
 
-    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
+    await runTrackedWithPreset(handler, EDITS_ITEM, row(OTHER));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 plugin — git was not found on PATH.', detail: undefined },
@@ -199,57 +260,38 @@ describe('registerTrackCommand', () => {
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  // The palette hands the command no row: it falls back to the view's own selection, the same
-  // as every other plural gesture the entry builds.
-  it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    const plugin = { name: 'MyMod.esp', origin: 'ModA' };
-    client.setCommandResult('track', { landed: [plugin], refused: [] });
-    const { handler, reporter } = invokeTrack(client, undefined, () => [pluginNode()]);
-
-    await runTrackedWithPreset(handler, EDITS_ITEM);
-
-    expect(client.calls).toContainEqual({ method: 'track', args: [[plugin], 'Edits', expect.anything()] });
-    expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
-  });
-
   it('offers Edits first and pre-selected, then Everything, each in plugins.md\'s own words for what it keeps', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('track', { landed: [OTHER], refused: [] });
     const { handler } = invokeTrack(client);
 
-    const qp = await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
+    const qp = await runTrackedWithPreset(handler, EDITS_ITEM, row(OTHER));
 
     expect(qp.items).toEqual([EDITS_ITEM, EVERYTHING_ITEM]);
     expect(qp.activeItems).toEqual([EDITS_ITEM]);
-    expect(qp.placeholder).toBe('Track "MyMod.esp"');
   });
 
   it('shows the preset pick and tracks nothing on Esc', async () => {
-    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    const client = new InMemoryMEditClient();
     const { handler, reporter, onTracked } = invokeTrack(client);
 
-    const qp = await runTrackedWithPreset(handler, undefined, pluginNode());
+    const qp = await runTrackedWithPreset(handler, undefined, row(OTHER));
 
     expect(qp.show).toHaveBeenCalledOnce();
-    expect(client.calls.filter((c) => c.method === 'track')).toEqual([]);
+    expect(trackCalls(client)).toEqual([]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  it('names the plugin it is about to track before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
+  it('names the mod it is about to track before mEdit answers, then the mod mEdit reports progress on, phase included', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [
-      pluginMetadataFixture({ name: 'First.esp', origin: 'ModA', inLoadOrder: true }),
-      pluginMetadataFixture({ name: 'Second.esp', origin: 'ModB', inLoadOrder: true }),
-    ]);
-    client.setCommandResult('track', { landed: [{ name: 'First.esp', origin: 'ModA' }, { name: 'Second.esp', origin: 'ModB' }], refused: [] });
+    client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
     const trackSpy = vi.spyOn(client, 'track');
     const { handler, said } = invokeTrack(client);
-    const nodes = [new PluginNode({ name: 'First.esp', enabled: true }, 'ModA'), new PluginNode({ name: 'Second.esp', enabled: true }, 'ModB')];
+    const mods = [new ModRow('ModA'), new ModRow('ModB')];
 
-    await runTrackedWithPreset(handler, EDITS_ITEM, nodes[0], nodes);
+    await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
 
     expect(said).toContain('Tracking "ModA"…');
 

@@ -435,16 +435,18 @@ describe('RecordPanel — column header native right-click menu', () => {
     if (!headerContext) throw new Error('expected the PluginHeader root to carry a data-vscode-context attribute');
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: false, preventDefaultContextMenuItems: true,
+      compilable: false, trackable: true, preventDefaultContextMenuItems: true,
     });
   });
 
-  // commands.md, compile: Editor, context menu (plugin tracked and editable).
+  // editor.md, Menus and keys: compile on a tracked column, track on an untracked one, neither on
+  // a read-only one.
   it.each([
-    ['a tracked, editable', { isTracked: true, isImmutable: false }, true],
-    ['an untracked', { isTracked: false, isImmutable: false }, false],
-    ['a read-only', { isTracked: true, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it', async (_what, facts, compilable) => {
+    ['a tracked, editable', { isTracked: true, isImmutable: false }, { compilable: true, trackable: false }],
+    ['an untracked', { isTracked: false, isImmutable: false }, { compilable: false, trackable: true }],
+    ['a read-only', { isTracked: true, isImmutable: true }, { compilable: false, trackable: false }],
+    ['an untracked read-only', { isTracked: false, isImmutable: true }, { compilable: false, trackable: false }],
+  ])('the header of %s plugin says whether compile or track applies to it', async (_what, facts, applies) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -463,7 +465,8 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th > div')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext).compilable).toBe(compilable);
+      const { compilable, trackable } = parseJsonRecord(headerContext);
+      expect({ compilable, trackable }).toEqual(applies);
     });
   });
 });
