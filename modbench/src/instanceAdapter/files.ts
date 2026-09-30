@@ -6,6 +6,7 @@ import { existsSync, type Dirent } from 'node:fs';
 import {
   access, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { join, relative, sep } from 'node:path';
 import { modsDir as modsDirOf, modGitDir, profilesDir, settingsFile } from './layout';
 import { errnoCode } from '../ports/errno';
@@ -95,10 +96,23 @@ export function get(path: string, ifMissing?: string): Promise<string> {
   return readOr(path, ifMissing);
 }
 
+// A temp file beside `path` and one rename: a reader never sees a partial file, and a refused
+// rename leaves the old one intact with the temp file removed.
+async function writeAtomic(path: string, text: string): Promise<void> {
+  const tmp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    await writeFile(tmp, text);
+    await fsRename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+
 /** Writes `text` to `path` outright — no read-back, no splice, no lock: a landing mod's own
  *  meta.ini, written once into a staged tree nothing else can see yet. */
 export function write(path: string, text: string): Promise<void> {
-  return writeFile(path, text);
+  return writeAtomic(path, text);
 }
 
 /** Moves `from` to `to` in one filesystem step — a staged tree landing in `mods/`, or an
@@ -161,7 +175,7 @@ export function putIfChanged(
     const before = await readOr(path, opts.ifMissing);
     const after = await edit(before);
     if (after === before) return { wrote: false };
-    await writeFile(path, after);
+    await writeAtomic(path, after);
     return { wrote: true };
   });
 }
