@@ -65,6 +65,22 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<CreatableRecordType>>()
             .ProducesProblem(503);
 
+        app.MapGet("/plugins/light-plugins-supported", (IRecordQueryService svc) =>
+        {
+            try
+            {
+                return Results.Ok(svc.GetLightPluginsSupported());
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetLightPluginsSupported")
+            .WithTags(Tag)
+            .Produces<bool>()
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
             .WithTags(Tag)

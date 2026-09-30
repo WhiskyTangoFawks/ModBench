@@ -450,6 +450,14 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
+  async getLightPluginsSupported(): Promise<boolean> {
+    return this.withTimeout('getLightPluginsSupported', async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/light-plugins-supported', { signal });
+      this.ensureOk('getLightPluginsSupported', response, error);
+      return data ?? false;
+    });
+  }
+
   async getRecords(
     plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
   ): Promise<RecordPage> {
