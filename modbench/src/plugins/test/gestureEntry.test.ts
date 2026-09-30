@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PLUGINS_KEY_ARGS, compilableSelected, pluginsCreateTarget, pluginsKeyContext, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument,
+  PLUGINS_KEY_ARGS, compilableSelected, pluginsKeyContext, pluralArgument, registerPluginsGesture, selectionArgument, singularArgument,
   type GestureEntry,
 } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
@@ -247,36 +247,5 @@ describe('what the Plugins palette entries and keys read off the selection', () 
 
   it('Space does nothing over a selection with no plugin', () => {
     expect(context([own, lockedRow('Fallout4.esm')]).selectionToggle).toBeUndefined();
-  });
-});
-
-// plugins.md, Pickers, Create record: on a plugin the type is asked for; a group names it.
-describe('create\'s Argument from the Plugins rows', () => {
-  const alpha = pluginRow('Alpha.esp', 'ModA');
-  const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
-  const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
-  const target = (viewSelection: readonly PluginsTreeNode[], clicked?: unknown, selected?: readonly unknown[]) =>
-    pluginsCreateTarget(() => viewSelection)(clicked, selected);
-
-  it('a plugin row gives the plugin and no record type', () => {
-    expect(target([], alpha)).toEqual({ plugin: 'Alpha.esp', origin: 'ModA' });
-  });
-
-  it('a group gives its plugin and its record type', () => {
-    expect(target([], weapons)).toEqual({ plugin: 'Alpha.esp', origin: 'ModA', recordType: 'weap' });
-  });
-
-  it('the palette gives the one selected plugin', () => {
-    expect(target([alpha])).toEqual({ plugin: 'Alpha.esp', origin: 'ModA' });
-  });
-
-  it('a record row, a locked row or a selection of several gives nothing', () => {
-    expect(target([], record)).toBeUndefined();
-    expect(target([], lockedRow('Fallout4.esm'))).toBeUndefined();
-    expect(target([alpha, weapons])).toBeUndefined();
-  });
-
-  it('the right-clicked row wins over the selection it sits in', () => {
-    expect(target([alpha, weapons], weapons, [alpha, weapons])).toEqual({ plugin: 'Alpha.esp', origin: 'ModA', recordType: 'weap' });
   });
 });

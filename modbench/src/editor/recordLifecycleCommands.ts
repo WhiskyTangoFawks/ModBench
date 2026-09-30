@@ -31,41 +31,6 @@ export function recordIdentity(arg: unknown): RecordIdentity | undefined {
   return { formKey: n.formKey, plugin: n.plugin, origin: n.origin, editorId: n.editorId };
 }
 
-/** What create is invoked on: a plugin, and the record type when the caller names it. */
-export interface CreateTarget {
-  plugin: string;
-  origin?: string;
-  recordType?: string;
-}
-
-/** A group row, or a literal an agent or a key passes. A plugin row states its plugin as an
- *  entry, not a name, so its surface reads it. */
-export function createTargetOf(arg: unknown): CreateTarget | undefined {
-  if (!arg || typeof arg !== 'object') return undefined;
-  const n = arg as { plugin?: unknown; origin?: string; recordType?: string };
-  if (typeof n.plugin !== 'string' || !n.plugin) return undefined;
-  return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
-}
-
-/** The view create is offered on: its own rows as the Argument. */
-export interface CreateSurface {
-  surfaceTarget(clicked: unknown, selected: readonly unknown[] | undefined): CreateTarget | undefined;
-}
-
-// A node's own `origin` when the row already carries it (ADR-0012), else derived from
-// `getPlugins()`; reports and returns undefined when neither answers.
-function makeResolveOriginOrReport(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
-  return async (node) => {
-    const origin = node.origin ?? await resolveOrigin(client, node.pluginName, (msg) => outputChannel.info(msg));
-    if (!origin) {
-      reporter.report('error', `Could not resolve which mod "${node.pluginName}" belongs to.`);
-    }
-    return origin;
-  };
-}
-
 function recordName(formKey: string, editorId: string | undefined): string {
   return editorId ? `${editorId} [${formKey}]` : formKey;
 }
@@ -110,40 +75,6 @@ async function addressRecords(
     else unaddressed.push({ item: record, reason: UNRESOLVED_ORIGIN });
   }
   return { addressed, unaddressed };
-}
-
-type RecordCreateClient = Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes' | 'getPlugins'>;
-
-// Esc on the pick is a pick left with nothing: nothing is created and nothing said.
-async function pickRecordType(client: RecordCreateClient, reporter: Reporter): Promise<string | undefined> {
-  let items: (vscode.QuickPickItem & { type: string })[];
-  try {
-    items = (await client.getCreatableRecordTypes()).map(({ type, displayName }) => ({ label: displayName, description: type, type }));
-  } catch (error) {
-    reporter.report('error', 'Could not look up the record types to create.', errorMessage(error));
-    return undefined;
-  }
-  return (await vscode.window.showQuickPick(items, { placeHolder: 'Record type' }))?.type;
-}
-
-/** ADR-0018: xEdit hosts its Add in its tree's context menu. As xEdit's, the new record is blank
- *  and named afterward by editing its EditorID. */
-export function registerRecordCreateCommand(
-  client: RecordCreateClient, outputChannel: vscode.LogOutputChannel, reporter: Reporter, surface: CreateSurface,
-): vscode.Disposable {
-  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-  return vscode.commands.registerCommand('modbench.record.create', async (clicked?: unknown, selected?: readonly unknown[]) => {
-    const target = createTargetOf(clicked) ?? surface.surfaceTarget(clicked, selected);
-    if (!target) return;
-    const origin = await resolveOriginOrReport({ origin: target.origin, pluginName: target.plugin });
-    if (!origin) return;
-    const recordType = target.recordType ?? await pickRecordType(client, reporter);
-    if (!recordType) return;
-
-    const result = await client.createRecord(target.plugin, origin, recordType);
-    if (isRefused(result)) { reporter.report('error', result.message); return; }
-    reporter.landed(`Created ${result.formKey}.`);
-  });
 }
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords' | 'getPlugins'>;

@@ -23,10 +23,7 @@ vi.mock('vscode', () => ({
   window: { showQuickPick },
 }));
 
-import {
-  registerRecordLifecycleCommands, registerRecordCopyCommands, registerRecordCreateCommand, recordIdentity, createTargetOf,
-  type CreateTarget,
-} from '../recordLifecycleCommands';
+import { registerRecordLifecycleCommands, registerRecordCopyCommands, recordIdentity } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
@@ -38,11 +35,6 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// A RecordTypeNode-shaped tree row and its plain-identity equivalent — the two shapes
-// `modbench.record.create` must resolve to the same call.
-const RECORD_TYPE_NODE = { kind: 'recordType', plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
-const RECORD_TYPE_IDENTITY = { plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
-
 // A RecordNode-shaped tree row and its plain-identity equivalent — what `modbench.record.delete`
 // and `.copy` must both resolve to the same call from.
 const RECORD_NODE = {
@@ -51,19 +43,7 @@ const RECORD_NODE = {
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 
-describe('recordTypeIdentity / recordIdentity — structural, not node-typed', () => {
-  it('reads a RecordTypeNode-shaped row', () => {
-    expect(createTargetOf(RECORD_TYPE_NODE)).toEqual({ plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' });
-  });
-
-  it('reads a plain identity literal the same way', () => {
-    expect(createTargetOf(RECORD_TYPE_IDENTITY)).toEqual({ plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' });
-  });
-
-  it('reads a plain plugin literal with no record type', () => {
-    expect(createTargetOf({ plugin: 'MyPatch.esp', origin: 'ModA' })).toEqual({ plugin: 'MyPatch.esp', origin: 'ModA', recordType: undefined });
-  });
-
+describe('recordIdentity — structural, not node-typed', () => {
   it('reads a RecordNode-shaped row', () => {
     expect(recordIdentity(RECORD_NODE)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
   });
@@ -81,142 +61,6 @@ describe('recordTypeIdentity / recordIdentity — structural, not node-typed', (
 
   it('is undefined for neither shape', () => {
     expect(recordIdentity({ nothing: true })).toBeUndefined();
-    expect(createTargetOf(undefined)).toBeUndefined();
-  });
-});
-
-// plugins.md, Pickers, Create record: on a group, a record of that type with no prompt; on a
-// plugin, a pick of the record type first.
-describe('registerRecordCreateCommand', () => {
-  const NEW_NPC = { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' };
-  const CREATABLE = [
-    { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
-  ];
-  // What the Plugins view gives for its own rows, and for the palette its selection.
-  let fromTheView: CreateTarget | undefined;
-  beforeEach(() => { fromTheView = undefined; showQuickPick.mockReset(); });
-
-  function invoke(client: InMemoryMEditClient) {
-    const reporter = recordingReporter();
-    const surfaceTarget = vi.fn((_clicked: unknown, _selected: readonly unknown[] | undefined) => fromTheView);
-    registerRecordCreateCommand(client, new FakeLogOutputChannel(), reporter, {
-      surfaceTarget,
-    });
-    const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-    return { reporter, surfaceTarget, create };
-  }
-  const creates = (client: InMemoryMEditClient) => client.calls.filter(c => c.method === 'createRecord').map(c => c.args);
-
-  it.each([['a group row', RECORD_TYPE_NODE], ['a plain identity literal', RECORD_TYPE_IDENTITY]])(
-    'creates a record of the type %s names, asking nothing, whatever the view has selected', async (_label, arg) => {
-      const client = new InMemoryMEditClient();
-      client.setCommandResult('createRecord', NEW_NPC);
-      fromTheView = { plugin: 'Other.esp', origin: 'ModB' };
-      const { create } = invoke(client);
-
-      await create(arg);
-
-      expect(showQuickPick).not.toHaveBeenCalled();
-      expect(creates(client)).toEqual([['MyPatch.esp', 'ModA', 'npc_']]);
-    });
-
-  it('on a plugin, picks the record type from the types the game can create, then creates one', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
-    client.setCommandResult('createRecord', { applied: true, formKey: '000901:MyPatch.esp', recordType: 'acti' });
-    fromTheView = { plugin: 'MyPatch.esp', origin: 'ModA' };
-    showQuickPick.mockImplementation((items) => Promise.resolve(items[0]));
-    const { create } = invoke(client);
-
-    await create({ kind: 'plugin' });
-
-    expect(showQuickPick.mock.calls[0]?.[0].map((item) => [item.label, item.description])).toEqual([
-      ['Activator', 'acti'], ['Non-Player Character', 'npc_'],
-    ]);
-    expect(creates(client)).toEqual([['MyPatch.esp', 'ModA', 'acti']]);
-  });
-
-  it('hands the view the row it was invoked on and the selection with it', async () => {
-    const client = new InMemoryMEditClient();
-    const row = { kind: 'plugin' };
-    const { create, surfaceTarget } = invoke(client);
-
-    await create(row, [row]);
-
-    expect(surfaceTarget).toHaveBeenCalledWith(row, [row]);
-  });
-
-  it('creates nothing and says nothing when the type pick is left with Esc', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getCreatableRecordTypes', CREATABLE);
-    fromTheView = { plugin: 'MyPatch.esp', origin: 'ModA' };
-    showQuickPick.mockResolvedValue(undefined);
-    const { create, reporter } = invoke(client);
-
-    await create();
-
-    expect(creates(client)).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('says why when mEdit cannot name the types, and creates nothing', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryFailure('getCreatableRecordTypes', new Error('mEdit is not running'));
-    fromTheView = { plugin: 'MyPatch.esp', origin: 'ModA' };
-    const { create, reporter } = invoke(client);
-
-    await create();
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not look up the record types to create.', detail: 'mEdit is not running' },
-    ]);
-    expect(creates(client)).toEqual([]);
-  });
-
-  it('does nothing when neither the invocation nor the view names a plugin', async () => {
-    const client = new InMemoryMEditClient();
-    const { create, reporter } = invoke(client);
-
-    await create();
-
-    expect(creates(client)).toEqual([]);
-    expect(reporter.reports).toEqual([]);
-  });
-
-  it('lands the new record\'s FormKey', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createRecord', NEW_NPC);
-    const { create, reporter } = invoke(client);
-
-    await create(RECORD_TYPE_NODE);
-
-    expect(reporter.landings).toEqual(['Created 000900:MyPatch.esp.']);
-  });
-
-  it('reports a refusal as mEdit words it and asks nothing', async () => {
-    const client = new InMemoryMEditClient();
-    const message = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
-    client.setCommandResult('createRecord', { refused: true, message });
-    const { create, reporter } = invoke(client);
-
-    await create(RECORD_TYPE_NODE);
-
-    expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
-    expect(reporter.landings).toEqual([]);
-  });
-
-  it('reports an unresolvable origin at error and never reaches the backend', async () => {
-    const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', []);
-    const { create, reporter } = invoke(client);
-
-    await create({ plugin: 'MyPatch.esp', recordType: 'npc_' });
-
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not resolve which mod "MyPatch.esp" belongs to.', detail: undefined },
-    ]);
-    expect(creates(client)).toEqual([]);
   });
 });
 

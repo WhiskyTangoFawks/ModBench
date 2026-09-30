@@ -1,74 +1,65 @@
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import type { MEditClient, NotificationEvent } from '../client';
 import { pluginAddressKey } from './trackedRepositories';
+import { UNLIMITED_RECORDS } from './PluginTreeProvider';
 
-/** A record create wrote: its plugin as (origin, filename), its type and its FormKey. */
-export interface CreatedRecord {
+/** A plugin's group of one record type: the plugin as (origin, filename). */
+export interface RecordGroup {
   plugin: string;
   origin: string;
   recordType: string;
-  formKey: string;
 }
 
-export interface CreatedRecordSelectionDeps<Row extends vscode.TreeItem> {
-  subscribe: MEditClient['subscribe'];
-  recordRow(record: CreatedRecord): Promise<Row | undefined>;
-  reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void>;
-  fire(command: string, ...args: unknown[]): unknown;
+export interface CreatedRecordSelectionDeps<Row> {
+  client: Pick<MEditClient, 'subscribe' | 'getRecords' | 'getActiveFilter'>;
+  rowOf(group: RecordGroup, formKey: string): Promise<Row | undefined>;
+  view: { reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void> };
 }
 
-function brings(event: NotificationEvent, record: CreatedRecord): boolean {
-  return pluginAddressKey(event.plugin, event.origin) === pluginAddressKey(record.plugin, record.origin)
-    && event.keys.includes(record.formKey);
-}
-
-/** plugins.md, Pickers, Create record: the view selects the new record once the watch lists it,
- *  then fires its row's click as the entry point, using no result (commands.md). A row not shown
- *  then is dropped. */
-export function selectCreatedRecords<Row extends vscode.TreeItem>(deps: CreatedRecordSelectionDeps<Row>): {
-  selectWhenListed(record: CreatedRecord): void;
-  dispose(): void;
+/** rows-changed names no type and no addition. A record the record filter hides is listed by no
+ *  group, so it is the one key the change names beyond the group's listing. */
+export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row>): {
+  selectWhenListed(group: RecordGroup): Promise<() => void>;
 } {
-  let awaited: CreatedRecord | undefined;
+  let forgetLatest: (() => void) | undefined;
 
-  const selectAndOpen = async (row: Row): Promise<void> => {
-    await deps.reveal(row, { select: true, focus: true });
-    if (row.command === undefined) return;
-    const args: readonly unknown[] = row.command.arguments ?? [];
-    void deps.fire(row.command.command, ...args);
+  const listing = async (group: RecordGroup): Promise<string[]> =>
+    (await deps.client.getRecords(group.plugin, group.recordType, 0, UNLIMITED_RECORDS, group.origin)).items.map((r) => r.formKey);
+
+  const created = async (group: RecordGroup, before: ReadonlySet<string>, event: NotificationEvent): Promise<string | undefined> => {
+    const listed = (await listing(group)).find((formKey) => !before.has(formKey));
+    if (listed !== undefined) return listed;
+    const [only, ...more] = event.keys.filter((formKey) => !before.has(formKey));
+    return more.length === 0 && (await deps.client.getActiveFilter()) !== null ? only : undefined;
   };
 
-  // The tree's own listener to the same notification re-reads mEdit first.
-  const listedRow = async (record: CreatedRecord): Promise<Row | undefined> => {
-    await Promise.resolve();
-    return deps.recordRow(record);
+  const selectAndOpen = async (group: RecordGroup, formKey: string): Promise<void> => {
+    const row = await deps.rowOf(group, formKey);
+    if (row !== undefined) await deps.view.reveal(row, { select: true, focus: true });
+    void vscode.commands.executeCommand('modbench.openEditor', { formKey, label: formKey });
   };
-
-  // The watch can bring the record before create's own answer does.
-  const selectIfAlreadyListed = async (record: CreatedRecord): Promise<void> => {
-    const row = await listedRow(record);
-    if (row === undefined || awaited !== record) return;
-    awaited = undefined;
-    await selectAndOpen(row);
-  };
-
-  const selectOnceListed = async (record: CreatedRecord): Promise<void> => {
-    const row = await listedRow(record);
-    if (row !== undefined) await selectAndOpen(row);
-  };
-
-  const unsubscribe = deps.subscribe('rows-changed', (event) => {
-    const record = awaited;
-    if (record === undefined || !brings(event, record)) return;
-    awaited = undefined;
-    void selectOnceListed(record);
-  });
 
   return {
-    selectWhenListed: (record) => {
-      awaited = record;
-      void selectIfAlreadyListed(record);
+    async selectWhenListed(group) {
+      forgetLatest?.();
+      const listed = await listing(group).catch(() => undefined);
+      if (listed === undefined) return () => {};
+      const before = new Set(listed);
+      const address = pluginAddressKey(group.plugin, group.origin);
+      const unsubscribe = deps.client.subscribe('rows-changed', (event) => {
+        if (pluginAddressKey(event.plugin, event.origin) !== address) return;
+        void created(group, before, event).catch(() => undefined).then(async (formKey) => {
+          if (formKey === undefined || forgetLatest !== forget) return;
+          forget();
+          await selectAndOpen(group, formKey);
+        });
+      });
+      const forget = () => {
+        unsubscribe();
+        if (forgetLatest === forget) forgetLatest = undefined;
+      };
+      forgetLatest = forget;
+      return forget;
     },
-    dispose: unsubscribe,
   };
 }

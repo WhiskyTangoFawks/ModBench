@@ -651,7 +651,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  it('plugin menu: reveal, enable or disable, create record, track, compile, compile from main, copy value', () => {
+  it('plugin menu: reveal, enable or disable, create record, track, compile, copy value', () => {
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
@@ -700,6 +700,11 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable')).toEqual([]);
     expect(menuOf('recordType tracked')).toEqual([]);
+  });
+
+  // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records.
+  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group', (contextValue) => {
+    expect(menuOf(contextValue).map(([command]) => command)).not.toContain('modbench.record.create');
   });
 
   it.each(['record', 'worldspace', 'cell', 'placed'])(

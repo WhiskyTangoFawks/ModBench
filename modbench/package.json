@@ -415,7 +415,7 @@
       },
       {
         "command": "modbench.record.create",
-        "title": "Create Record",
+        "title": "Create Record…",
         "category": "Modbench"
       },
       {

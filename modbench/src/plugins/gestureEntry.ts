@@ -105,20 +105,6 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
   return hasFlags(only, 'tracked', 'editable') ? only : undefined;
 }
 
-/** The plugin create adds a record to, and the record type when a group names it: create's
- *  Argument from a Plugins row or, from the palette, the one selected. */
-export function pluginsCreateTarget(
-  viewSelection: () => readonly PluginsTreeNode[],
-): (clicked: unknown, selected: readonly unknown[] | undefined) => { plugin: string; origin?: string; recordType?: string } | undefined {
-  return (clicked, selected) => {
-    const row = singularArgument(pluginsGestureEntry(clicked, selected?.filter(isRow), viewSelection), 'plugin', 'recordType');
-    if (row === undefined) return undefined;
-    return row.kind === 'plugin'
-      ? { plugin: row.plugin.name, origin: row.origin }
-      : { plugin: row.plugin, origin: row.origin, recordType: row.recordType };
-  };
-}
-
 /** What the Plugins palette entries' and keys' `when` clauses read off the selection, since
  *  neither is handed a row. */
 export interface PluginsKeyContext {

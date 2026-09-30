@@ -10,7 +10,6 @@ import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecor
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { pluginsCreateTarget } from './plugins/gestureEntry';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -33,6 +32,8 @@ import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
+import { registerRecordCreateCommand } from './plugins/createRecordCommand';
+import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { errorMessage } from './ports/errorMessage';
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
@@ -177,9 +178,6 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      createSurface: {
-        surfaceTarget: pluginsCreateTarget(() => session.pluginsTreeView?.selection ?? []),
-      },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
@@ -224,7 +222,7 @@ interface PluginRowCommandDeps {
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands (create/delete/copy — Editor's own registration).
+// editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, outputChannel, notifyConflictsComputed } = deps;
   return [
@@ -239,6 +237,14 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
+    registerRecordCreateCommand({
+      client, reporter: makeReporter(outputChannel, 'record.create'),
+      createdRecords: createdRecordSelection({
+        client,
+        rowOf: (group, formKey) => session.pluginsTree?.recordRow({ ...group, formKey }) ?? Promise.resolve(undefined),
+        view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
+      }),
+    }, () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
 }

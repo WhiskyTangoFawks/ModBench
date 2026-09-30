@@ -1,145 +1,200 @@
-import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState } from '../../test/vscodeMock';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
-vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState }));
+const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
+vi.mock('vscode', () => ({ commands: { executeCommand }, TreeItem, TreeItemCollapsibleState, ThemeIcon, Uri: { from: uriFrom } }));
 
-import * as vscode from 'vscode';
 import { InMemoryMEditClient } from '../../client';
-import { selectCreatedRecords } from '../createdRecordSelection';
+import { recordSummaryFixture } from '../../client/test/fixtures';
+import { createdRecordSelection } from '../createdRecordSelection';
 
-const NEW_NPC = { plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_', formKey: '000900:MyPatch.esp' };
-const OPEN = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: NEW_NPC.formKey, label: '000900:MyPatch.esp' }] };
+const NPCS = { plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
+const OLD = '000800:MyPatch.esp';
+const NEW = '000900:MyPatch.esp';
+const OTHER_TYPE = '000901:MyPatch.esp';
 
-function rowsChanged(keys: string[], plugin = NEW_NPC.plugin, origin = NEW_NPC.origin) {
-  return { kind: 'rows-changed', plugin, origin, keys, sequence: 1 };
+function rowsChanged(keys: string[], origin = NPCS.origin) {
+  return { kind: 'rows-changed', plugin: NPCS.plugin, origin, keys, sequence: 1 };
 }
 
-// The Plugins tree as the selection reads it: the row is listed once the tree's own listener to
-// the same notification has re-read mEdit.
-function harness() {
+const page = (...formKeys: string[]) => ({
+  items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: NPCS.plugin })), total: formKeys.length,
+});
+
+// The Plugins view as the selection reads it: a row for each record the tree shows.
+function harness(shown: (formKey: string) => boolean = () => true) {
   const client = new InMemoryMEditClient();
-  const row = new vscode.TreeItem('000900:MyPatch.esp');
-  row.id = 'the new row';
-  row.command = OPEN;
-  const tree = { listed: false };
-  const seen: string[] = [];
-  const selection = selectCreatedRecords({
-    subscribe: (kind, listener) => client.subscribe(kind, listener),
-    recordRow: (record) => {
-      seen.push(`looked up ${record.formKey}`);
-      return Promise.resolve(tree.listed && record.formKey === NEW_NPC.formKey ? row : undefined);
+  client.setQueryAnswer('getRecords', page(OLD));
+  client.setQueryAnswer('getActiveFilter', null);
+  const revealed: string[] = [];
+  const selection = createdRecordSelection<string>({
+    client,
+    rowOf: (group, formKey) => Promise.resolve(group.recordType === NPCS.recordType && shown(formKey) ? `row ${formKey}` : undefined),
+    view: {
+      reveal: (row, options) => {
+        revealed.push(`${row} ${JSON.stringify(options)}`);
+        return Promise.resolve();
+      },
     },
-    reveal: (revealed, options) => {
-      seen.push(`revealed ${revealed.id} ${JSON.stringify(options)}`);
-      return Promise.resolve();
-    },
-    fire: (command, ...args) => {
-      seen.push(`fired ${command} ${JSON.stringify(args)}`);
-    },
-  });
-  // Subscribed after the selection, as the record browser's refresh may be.
-  client.subscribe('rows-changed', (event) => {
-    tree.listed = tree.listed || (event.origin === NEW_NPC.origin && event.keys.includes(NEW_NPC.formKey));
   });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  return { client, selection, seen, settle };
+  const opened = () => executeCommand.mock.calls;
+  return { client, selection, revealed, settle, opened };
 }
 
-describe('selectCreatedRecords', () => {
-  it('selects the new record\'s row once the watch brings it, then fires open as a click does', async () => {
-    const { client, selection, seen, settle } = harness();
-    selection.selectWhenListed(NEW_NPC);
-    await settle();
-    expect(seen).toEqual(['looked up 000900:MyPatch.esp']);
+const OPEN_NEW = ['modbench.openEditor', { formKey: NEW, label: NEW }];
 
-    client.emit(rowsChanged(['000800:MyPatch.esp', NEW_NPC.formKey]));
+beforeEach(() => { executeCommand.mockReset(); });
+
+// plugins.md, Pickers, Create record, story 1: the new record is selected and opens in the record
+// panel. The view finds it from the watch, and uses no result of create.
+describe('createdRecordSelection', () => {
+  it('selects the record its group newly lists at the plugin\'s next change, then opens it as a click does', async () => {
+    const { client, selection, revealed, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
+
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
     await settle();
 
-    expect(seen).toEqual([
-      'looked up 000900:MyPatch.esp',
-      'looked up 000900:MyPatch.esp',
-      'revealed the new row {"select":true,"focus":true}',
-      `fired modbench.openEditor ${JSON.stringify(OPEN.arguments)}`,
-    ]);
+    expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
+    expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('waits past a change that does not name the record, or names it in a plugin of the same name from another origin', async () => {
-    const { client, selection, seen, settle } = harness();
-    selection.selectWhenListed(NEW_NPC);
+  it('reads the group it waits on, by (origin, filename)', async () => {
+    const { client, selection } = harness();
 
-    client.emit(rowsChanged(['000800:MyPatch.esp']));
-    client.emit(rowsChanged([NEW_NPC.formKey], NEW_NPC.plugin, 'ModB'));
-    await settle();
-    expect(seen).toEqual(['looked up 000900:MyPatch.esp']);
+    await selection.selectWhenListed(NPCS);
 
-    client.emit(rowsChanged([NEW_NPC.formKey]));
-    await settle();
-    expect(seen).toContain(`fired modbench.openEditor ${JSON.stringify(OPEN.arguments)}`);
+    expect(client.calls.filter((c) => c.method === 'getRecords').map((c) => c.args))
+      .toEqual([['MyPatch.esp', 'npc_', 0, expect.any(Number), 'ModA']]);
   });
 
-  it('selects and opens nothing when the row is not shown once the record arrives, and forgets it', async () => {
-    const { client, selection, seen, settle } = harness();
-    selection.selectWhenListed({ ...NEW_NPC, formKey: '000901:MyPatch.esp' });
+  it('waits past a change to a plugin of the same name from another origin', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
 
-    client.emit(rowsChanged(['000901:MyPatch.esp']));
+    client.emit(rowsChanged([NEW], 'ModB'));
     await settle();
-    client.emit(rowsChanged(['000901:MyPatch.esp']));
-    await settle();
+    expect(opened()).toEqual([]);
 
-    expect(seen).toEqual(['looked up 000901:MyPatch.esp', 'looked up 000901:MyPatch.esp']);
+    client.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  // The watch can bring the record before create's own answer does.
-  it('selects a record the watch brought before the view was asked to wait for it', async () => {
-    const { client, selection, seen, settle } = harness();
-    client.emit(rowsChanged([NEW_NPC.formKey]));
+  it('waits past a change after which the group lists nothing new', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
 
-    selection.selectWhenListed(NEW_NPC);
+    client.emit(rowsChanged([OLD, OTHER_TYPE]));
     await settle();
+    expect(opened()).toEqual([]);
 
-    expect(seen).toEqual([
-      'looked up 000900:MyPatch.esp',
-      'revealed the new row {"select":true,"focus":true}',
-      `fired modbench.openEditor ${JSON.stringify(OPEN.arguments)}`,
-    ]);
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('opens a record it found already listed once, though the watch names it again', async () => {
-    const { client, selection, seen, settle } = harness();
-    client.emit(rowsChanged([NEW_NPC.formKey]));
+  it('opens the record, selecting nothing, when the view shows no row for it', async () => {
+    const { client, selection, revealed, settle, opened } = harness(() => false);
+    await selection.selectWhenListed(NPCS);
 
-    selection.selectWhenListed(NEW_NPC);
-    await settle();
-    client.emit(rowsChanged([NEW_NPC.formKey]));
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
     await settle();
 
-    expect(seen).toEqual([
-      'looked up 000900:MyPatch.esp',
-      'revealed the new row {"select":true,"focus":true}',
-      `fired modbench.openEditor ${JSON.stringify(OPEN.arguments)}`,
-    ]);
+    expect(revealed).toEqual([]);
+    expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('selects only the latest record created', async () => {
-    const { client, selection, seen, settle } = harness();
-    selection.selectWhenListed({ ...NEW_NPC, formKey: '000800:MyPatch.esp' });
-    selection.selectWhenListed(NEW_NPC);
+  it('opens the one record the change names that the group did not list, when the record filter hides it', async () => {
+    const { client, selection, revealed, settle, opened } = harness(() => false);
+    await selection.selectWhenListed(NPCS);
 
-    client.emit(rowsChanged(['000800:MyPatch.esp', NEW_NPC.formKey]));
+    client.setQueryAnswer('getActiveFilter', { sql: 'SELECT 1', source: 'weapons.sql' });
+    client.emit(rowsChanged([OLD, NEW]));
     await settle();
 
-    expect(seen.filter((line) => line.startsWith('fired'))).toEqual([`fired modbench.openEditor ${JSON.stringify(OPEN.arguments)}`]);
+    expect(revealed).toEqual([]);
+    expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('hears nothing once disposed', async () => {
-    const { client, selection, seen, settle } = harness();
-    selection.selectWhenListed(NEW_NPC);
-    await settle();
-    selection.dispose();
+  it('opens nothing for a record the group does not list while no record filter is in force', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
 
-    client.emit(rowsChanged([NEW_NPC.formKey]));
+    client.emit(rowsChanged([OTHER_TYPE]));
     await settle();
 
-    expect(seen).toEqual(['looked up 000900:MyPatch.esp']);
+    expect(opened()).toEqual([]);
+  });
+
+  it('opens once, though the watch names the record again', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+
+    client.emit(rowsChanged([NEW]));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+    client.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('waits only for the latest create', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed({ ...NPCS, recordType: 'acti' });
+    await selection.selectWhenListed(NPCS);
+
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('awaits nothing, and lets create go on, when mEdit cannot list the group', async () => {
+    const { client, selection, settle, opened } = harness();
+    client.setQueryFailureOnce('getRecords', new Error('mEdit is not running'));
+
+    const forget = await selection.selectWhenListed(NPCS);
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(forget).toEqual(expect.any(Function));
+    expect(opened()).toEqual([]);
+  });
+
+  it('waits past a change after which mEdit cannot list the group', async () => {
+    const { client, selection, settle, opened } = harness();
+    await selection.selectWhenListed(NPCS);
+
+    client.setQueryFailureOnce('getRecords', new Error('mEdit is not running'));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([]);
+
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+    expect(opened()).toEqual([OPEN_NEW]);
+  });
+
+  it('hears nothing once forgotten', async () => {
+    const { client, selection, settle, opened } = harness();
+    const forget = await selection.selectWhenListed(NPCS);
+    forget();
+
+    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    client.emit(rowsChanged([NEW]));
+    await settle();
+
+    expect(opened()).toEqual([]);
   });
 });
