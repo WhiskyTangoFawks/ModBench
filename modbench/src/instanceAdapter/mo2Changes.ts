@@ -163,7 +163,6 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
     return folder;
   };
 
-  // A separator's folder moves with its line; anything else in mod order is a line alone.
   // The folder a separator added or renamed would take; a rename within one name's case takes its
   // own folder, which is never in the way.
   const folderTaken = (change: ModOrderChange): string | undefined => {
@@ -183,6 +182,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
     if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
   };
 
+  // A separator's folder moves with its line; anything else in mod order is a line alone.
   const moveFolders = async (change: ModOrderChange): Promise<Undo | undefined> => {
     if (change.kind === 'addSeparator') {
       const folder = separatorFolderOf(change.separator);
