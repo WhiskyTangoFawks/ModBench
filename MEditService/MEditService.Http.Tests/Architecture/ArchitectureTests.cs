@@ -298,11 +298,10 @@ public sealed class ArchitectureTests
     private static bool IsALoadOrder(Type? type) =>
         type is not null && (type == typeof(LoadOrderSnapshot) || type == typeof(LoadOrderHolder));
 
-    // ADR-0013: participation is derived — enabled, winning, and named by a plugins.txt line — and
-    // the load order value is the one place that rule is spelled. A second spelling is how two
-    // answers start disagreeing.
+    // ADR-0013 invariant 3: Mod Management alone decides the active plugins, so Editing spells the
+    // rule nowhere — enabled, winning, and named by a plugins.txt line.
     [Fact]
-    public void TheParticipationRule_IsSpelledOnceInProduction()
+    public void TheActivePluginRule_IsSpelledNowhereInProduction()
     {
         var root = SolutionDirectory();
         var spellings = Projects
@@ -312,7 +311,7 @@ public sealed class ArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["MEditService.LoadOrder/Registration.cs"], spellings);
+        Assert.Empty(spellings);
     }
 
     // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning

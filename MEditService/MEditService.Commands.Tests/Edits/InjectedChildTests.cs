@@ -81,12 +81,12 @@ public sealed class InjectedChildTests : IDisposable
         (_injectedTopic, _injectedBranch, _injectedScene, _injectedResponse) =
             (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
-        _loadOrder = new LoadOrderSnapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotPlugins.Of(
+        _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, _instanceRoot, GameRelease.Fallout4,
+
             [
                 new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(InjectorPluginName, injectorPath, InjectorOrigin, Slot: 1, Enabled: true, Winning: true),
-            ]));
+            ]);
 
         var track = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         foreach (var origin in new[] { BaseOrigin, InjectorOrigin })

@@ -30,8 +30,10 @@ function valueWith(name: string, overrides: Partial<InstanceValue> = {}): Instan
   });
 }
 
-const sourceOf = (value: InstanceValue): LoadOrderSource =>
-  ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
+const sourceOf = (value: InstanceValue): LoadOrderSource => ({
+  plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease,
+  pluginsLoadedWithNoLine: value.pluginsLoadedWithNoLine,
+});
 
 function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
@@ -51,12 +53,10 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     },
   };
   const channel = { error: vi.fn() };
-  const onMEditStarted = vi.fn();
   const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
     (d) => { owned.push(d); return d; }, instance, client,
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
-    onMEditStarted,
     channel,
   );
   const sender = createLoadOrderSender(client);
@@ -75,7 +75,7 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
       return plugins.map((p) => p.name).join(',');
     });
   const dispose = (): void => { for (const d of owned) d.dispose(); };
-  return { client, puts, land, sent, channel, onMEditStarted, dispose };
+  return { client, puts, land, sent, channel, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -108,8 +108,7 @@ describe('the load order is put at every recompute', () => {
     const instance = { subscribe: (s: InstanceSubscriber) => { land = s; return { dispose: () => {} }; } };
     const channel = { error: vi.fn() };
     const puts = registerLoadOrderPut(
-      (d) => d, instance, new InMemoryMEditClient(), () => Promise.reject(new Error('boom')), () => {},
-      channel);
+      (d) => d, instance, new InMemoryMEditClient(), () => Promise.reject(new Error('boom')), channel);
     await puts.putOnMEditStarted().catch(() => {});
 
     land(valueWith('B.esp'), 1);
@@ -186,34 +185,5 @@ describe('the load order is put when mEdit started', () => {
     await settled();
 
     expect(sent()).toEqual(['A.esp']);
-  });
-});
-
-// Plugin sync asks mEdit which plugins load with no line, so it runs again at the same moment.
-describe('mEdit starting runs what waits on mEdit', () => {
-  // Rival: a second attach detector of its own, which runs on an `attached` status alone.
-  it('when mEdit started and on a stream reopen after it, never on a reopen before it', async () => {
-    const { client, puts, onMEditStarted } = wired('attached', valueWith('A.esp'));
-    client.reconnected();
-    await settled();
-    expect(onMEditStarted).not.toHaveBeenCalled();
-
-    await puts.putOnMEditStarted();
-    expect(onMEditStarted).toHaveBeenCalledTimes(1);
-
-    client.reconnected();
-    await settled();
-    expect(onMEditStarted).toHaveBeenCalledTimes(2);
-  });
-
-  it('not on a status change alone', async () => {
-    const { client, puts, onMEditStarted } = wired('attached', valueWith('A.esp'));
-    await puts.putOnMEditStarted();
-
-    client.setStatus('disconnected');
-    client.setStatus('attached');
-    await settled();
-
-    expect(onMEditStarted).toHaveBeenCalledTimes(1);
   });
 });

@@ -32,7 +32,7 @@ public sealed class IndexerTests
             .BuildScattered();
 
     private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(plugins ?? fx.Plugins));
+        SnapshotPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
     private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>

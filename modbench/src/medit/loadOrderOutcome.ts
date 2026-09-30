@@ -1,30 +1,11 @@
-import type {
-  LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress, PluginLoadFailure, RecordFilter,
-} from '../client';
+import type { LoadOrderOutcome, LoadOrderProgress, PluginLoadFailure, RecordFilter } from '../client';
 import { reportSkippedPlugins } from './pluginFailures';
 import { errorMessage } from '../ports/errorMessage';
 
-/** What a put's own answer says apart from the reconcile it started: a send that failed, and a
- *  snapshot with nothing that participates. `abandoned` says nothing: a superseded or closed send
- *  owns no view. */
-export function reportPutOutcome(
-  plugins: LoadOrderPluginInput[],
-  result: LoadOrderOutcome,
-  deps: { warn: (msg: string) => void; error: (msg: string) => void },
-): void {
-  if (result.outcome === 'failed') {
-    deps.error(result.message);
-    return;
-  }
-  if (result.outcome !== 'applied' || result.status.refusal !== undefined) return;
-  // Participation is derived — enabled AND winning AND listed — and the snapshot is every plugin,
-  // so a non-empty one can still have nothing that participates (ADR-0013).
-  if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
-    deps.warn(
-      'The active profile has no enabled plugins — only base-game masters are held. ' +
-        'Enable plugins in the mod list (or check the profile\'s plugins.txt).',
-    );
-  }
+/** What a put's own answer says apart from the reconcile it started: a send that failed.
+ *  `abandoned` says nothing: a superseded or closed send owns no view. */
+export function reportPutOutcome(result: LoadOrderOutcome, deps: { error: (msg: string) => void }): void {
+  if (result.outcome === 'failed') deps.error(result.message);
 }
 
 /** Each callback is exactly one ADR-0019 surface — `warn` toasts, `log` writes the channel,

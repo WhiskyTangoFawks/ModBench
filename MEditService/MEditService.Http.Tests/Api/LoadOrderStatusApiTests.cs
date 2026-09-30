@@ -41,7 +41,8 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var load = await _client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fx.Plugins),
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
@@ -73,7 +74,8 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var load = await _client.PutAsJsonAsync("/load-order", new
         {
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fx.Plugins),
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",

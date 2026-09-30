@@ -70,7 +70,7 @@ public sealed class TwoModReferenceFixture : IDisposable
             new LoadOrderEntry(TargetPluginName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
             new LoadOrderEntry(ReferencerPluginName, referencerPath, ReferencerOrigin, Slot: 1, Enabled: true, Winning: true),
         ];
-        LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotPlugins.Of(Entries));
+        LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
 
         Track(TargetOrigin);
         if (trackReferencer) Track(ReferencerOrigin);

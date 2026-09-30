@@ -13,7 +13,7 @@ internal static class SnapshotReconcile
         this Indexer index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
-        var snapshot = new LoadOrderSnapshot(gameDirectory, instanceRoot, gameRelease, SnapshotPlugins.Of(plugins));
+        var snapshot = SnapshotPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
         var version = holder.Apply(snapshot);
         index.Reconcile(snapshot, version);
         return holder;

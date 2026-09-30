@@ -26,7 +26,8 @@ public sealed class ProjectionSequenceApiTests : IDisposable
 
     private static object LoadOrderBody(PluginFixtureData fx) => new
     {
-        plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+        plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+        active = SnapshotPlugins.Active(fx.Plugins),
         gameDirectory = fx.DataFolder,
         instanceRoot = fx.InstanceRoot,
         gameRelease = "Fallout4",

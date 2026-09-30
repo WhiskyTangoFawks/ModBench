@@ -11,7 +11,7 @@ internal static class MasterResolution
     public static IReadOnlyDictionary<PluginAddress, IReadOnlyList<string>> Classify(
         LoadOrderSnapshot loadOrder, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
-        var active = loadOrder.Participating;
+        var active = loadOrder.Active;
         var activeNames = active.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var result = new Dictionary<PluginAddress, IReadOnlyList<string>>(PluginAddress.Comparer);

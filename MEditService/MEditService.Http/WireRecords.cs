@@ -10,14 +10,12 @@ public record FilterResponse(string? Sql, string? Source);
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
-// ADR-0013: Mod Management's snapshot. InstanceRoot (ADR-0009) must be the MO2 instance rather
-// than anything wider, because Origin is a mod folder name unique only within one.
+// ADR-0013: Mod Management's snapshot, every plugin and the active ones in load order. InstanceRoot
+// (ADR-0009) must be the MO2 instance, because Origin is a mod folder name unique only within one.
 public record LoadOrderRequest(
-    IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
-// Slot is null when no plugins.txt line names it. Enabled and Winning are nullable only so an
-// omitted field is detectable: a plain bool would bind a missing property to false, quietly
-// making every plugin non-participating.
-public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
+    IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active, string GameDirectory,
+    string InstanceRoot, string GameRelease = "Fallout4");
+public record LoadOrderPlugin(string Name, string Path, string Origin);
 
 // ADR-0009 invariant 5: the Refresh rebuild's own request, keyed on the instance as
 // LoadOrderRequest is.

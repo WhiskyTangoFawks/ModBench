@@ -5,7 +5,10 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
+  type LoadOrderPluginLine,
 } from '../loadOrderSnapshot';
+
+type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { present } from '../../ports/present';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
@@ -251,21 +254,77 @@ describe('providedPluginsOf', () => {
 describe('loadOrderSnapshotOf', () => {
   const GAME_FOLDER = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
   const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
-  const resolved: LoadOrderPlugin = { name: 'a.esp', path: '/mods/A/a.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
-  const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };
+  const row = (name: string, origin: string, slot: number | null, facts: Partial<LoadOrderPlugin> = {}): LoadOrderPlugin =>
+    ({ name, path: `/mods/${origin}/${name}`, origin, slot, enabled: true, winning: true, ...facts });
+  const sent = ({ name, path, origin }: LoadOrderPlugin) => ({ name, path, origin });
+  const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
+  const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly string[] = []) =>
+    loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine });
 
   it('is undefined — no put at all — when the game folder is not found', () => {
-    expect(loadOrderSnapshotOf({ plugins: [resolved], gameFolder: NOT_FOUND })).toBeUndefined();
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [] }))
+      .toBeUndefined();
   });
 
-  it('carries the game folder\'s dataFolder and every resolved plugin once it is found', () => {
-    expect(loadOrderSnapshotOf({ plugins: [resolved], gameFolder: GAME_FOLDER }))
-      .toEqual({ dataFolder: '/game/Data', plugins: [resolved] });
+  it('carries the game folder\'s dataFolder, and every plugin with its origin and path', () => {
+    const a = row('a.esp', 'ModA', 0);
+    const stray = row('stray.esp', 'ModS', null);
+
+    expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: '/game/Data', plugins: [sent(a), sent(stray)] });
+  });
+
+  // ADR-0013 invariant 3: Mod Management alone decides the active plugins. The rivals: the value's
+  // row order standing in for the line order, and a disabled or overridden row slipping in.
+  it('sends as active the winning plugin of each enabled line, in line order', () => {
+    const first = row('first.esp', 'ModF', 0);
+    const second = row('second.esp', 'ModS', 1);
+    const disabled = row('disabled.esp', 'ModD', 2, { enabled: false });
+    const overridden = row('second.esp', 'ModO', 1, { winning: false });
+    const unlisted = row('unlisted.esp', 'ModU', null, { enabled: false });
+
+    expect(snapshotOf([second, disabled, overridden, unlisted, first])?.active).toEqual([address(first), address(second)]);
+  });
+
+  it('loads the plugins the game loads with no line first, from the game folder, in the order given', () => {
+    const a = row('a.esp', 'ModA', 0);
+
+    const snapshot = snapshotOf([a], ['Master.esm', 'cc.esl']);
+
+    expect(snapshot?.active).toEqual([
+      { name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }, address(a),
+    ]);
+    expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data', path: join('/game/Data', 'Master.esm') });
+  });
+
+  // The file the game reads is the one the Mod override order resolves the name to.
+  it('sends a plugin the game loads with no line as the mod that provides it, once', () => {
+    const provided = row('Master.esm', 'ModM', null, { enabled: false });
+
+    const snapshot = snapshotOf([provided], ['Master.esm']);
+
+    expect(snapshot?.active).toEqual([address(provided)]);
+    expect(snapshot?.plugins).toEqual([sent(provided)]);
+  });
+
+  // The game loads it first whatever its line says, and one file is never active twice.
+  it('places a plugin the game loads with no line once, first, when a line names it too', () => {
+    const a = row('a.esp', 'ModA', 0);
+    const lined = { ...row('master.esm', 'Data', 1, { enabled: false }), path: join('/game/Data', 'master.esm') };
+
+    const snapshot = snapshotOf([a, lined], ['Master.esm']);
+
+    expect(snapshot?.active).toEqual([address(lined), address(a)]);
+    expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);
   });
 
   // Rival: casting the union blind and sending `path: undefined` to the backend.
   it('omits a line-only row rather than sending it with path: undefined', () => {
-    const snapshot = loadOrderSnapshotOf({ plugins: [resolved, unresolved], gameFolder: GAME_FOLDER });
-    expect(snapshot?.plugins).toEqual([resolved]);
+    const a = row('a.esp', 'ModA', 0);
+    const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };
+
+    const snapshot = snapshotOf([a, unresolved]);
+
+    expect(snapshot?.plugins).toEqual([sent(a)]);
+    expect(snapshot?.active).toEqual([address(a)]);
   });
 });

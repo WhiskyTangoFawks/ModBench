@@ -127,7 +127,7 @@
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": false,
+      "isImmutable": true,
       "isLight": false,
       "isMaster": true,
       "loadOrderIndex": 0,
@@ -135,13 +135,12 @@
       "masters": [],
       "name": "Base.esm",
       "origin": "Data",
-      "participates": true,
       "recordCount": 4
     },
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": false,
+      "isImmutable": true,
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 1,
@@ -151,13 +150,12 @@
       ],
       "name": "Mid.esp",
       "origin": "Data",
-      "participates": true,
       "recordCount": 3
     },
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": false,
+      "isImmutable": true,
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 2,
@@ -167,7 +165,6 @@
       ],
       "name": "Top.esp",
       "origin": "Data",
-      "participates": true,
       "recordCount": 2
     }
   ],

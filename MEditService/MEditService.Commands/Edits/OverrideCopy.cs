@@ -157,17 +157,15 @@ internal sealed class OverrideCopy
     // beaten at runtime. A plugin the load order does not place passes.
     private RecordEditResult? RefuseIfUnderride(string formKey, PluginAddress destinationPlugin)
     {
-        var plugins = _loadOrder.Current.Plugins;
+        var loadOrder = _loadOrder.Current;
 
         // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
-        // winning one is the origin.
+        // active one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
-        var sameNamed = plugins.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();
-        var originIndex = (sameNamed.FirstOrDefault(p => p.Winning) ?? sameNamed.FirstOrDefault())?.Slot;
-        var destinationIndex = plugins.FirstOrDefault(
-            p => p.Name.Equals(destinationPlugin.Name, StringComparison.OrdinalIgnoreCase)
-                && p.Origin.Equals(destinationPlugin.Origin, StringComparison.Ordinal))?.Slot;
-        if (originIndex is not { } origin || destinationIndex is not { } destination || destination >= origin)
+        var origin = loadOrder.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));
+        var originIndex = origin is null ? null : loadOrder.LoadOrderIndex(origin.Key);
+        var destinationIndex = loadOrder.LoadOrderIndex(destinationPlugin);
+        if (originIndex is not { } originAt || destinationIndex is not { } destinationAt || destinationAt >= originAt)
             return null;
 
         return RecordEditResult.Refused(

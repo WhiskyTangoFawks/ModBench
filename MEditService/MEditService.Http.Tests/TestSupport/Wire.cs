@@ -18,13 +18,7 @@ internal static class Wire
 
     internal static Task<HttpResponseMessage> PutLoadOrder(
         this HttpClient client, ScatteredFixtureData fx, IEnumerable<LoadOrderEntry> plugins) =>
-        client.PutLoadOrderAndAwaitReady(new
-        {
-            gameDirectory = fx.GameDirectory,
-            instanceRoot = fx.InstanceRoot,
-            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
-            gameRelease = "Fallout4",
-        });
+        client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
     /// validates every file (ADR-0009 invariant 4).</summary>
@@ -43,10 +37,11 @@ internal static class Wire
         }
     }
 
+    // The game folder's plugins load whatever mods a snapshot names.
     private static IEnumerable<LoadOrderEntry> Listed(ScatteredFixtureData fx, string[] origins) =>
         origins.Length == 0
             ? fx.Plugins
-            : fx.Plugins.Where(p => origins.Contains(p.Origin, StringComparer.Ordinal));
+            : fx.Plugins.Where(p => PluginOrigin.IsDataDirectory(p.Origin) || origins.Contains(p.Origin, StringComparer.Ordinal));
 
     internal static Task<HttpResponseMessage> Track(this HttpClient client, string plugin, string origin, string preset = "Edits") =>
         client.Track([(plugin, origin)], preset);

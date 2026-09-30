@@ -3,6 +3,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Queries.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
@@ -21,13 +22,14 @@ public sealed class MalformedPluginQueryServiceTests
     private static readonly PluginDiagnosis Trailing = new(
         "NPC_ 00012345 (Sierra)", "trailing-bytes", "repairable (lossless)", "3 bytes past the last subrecord");
 
-    private static RegisteredPlugin Plugin(string name, string origin = "SomeMod", bool isForced = false, int? slot = 0) =>
-        new(name, origin, $@"C:\mods\{origin}\{name}", slot, Enabled: true, Winning: true, IsForced: isForced);
+    private static LoadOrderEntry Plugin(
+        string name, string origin = "SomeMod", int? slot = 0, bool enabled = true, bool winning = true) =>
+        new(name, $@"C:\mods\{origin}\{name}", origin, slot, enabled, winning);
 
-    private static PluginDiagnosisRow Row(RegisteredPlugin plugin, PluginDiagnosis diagnosis) => new(plugin.Key, diagnosis);
+    private static PluginDiagnosisRow Row(LoadOrderEntry plugin, PluginDiagnosis diagnosis) => new(plugin.Key, diagnosis);
 
     private static PluginDiagnosisReport[] Diagnose(
-        IReadOnlyList<PluginDiagnosisRow> rows, params RegisteredPlugin[] plugins) =>
+        IReadOnlyList<PluginDiagnosisRow> rows, params LoadOrderEntry[] plugins) =>
         [.. new MalformedPluginQueryService(
             new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = rows }),
             FakeLoadOrder.Of(GameRelease.Fallout4, plugins))
@@ -54,22 +56,25 @@ public sealed class MalformedPluginQueryServiceTests
             report.Text);
     }
 
-    // Immutable plugins are the proof set the tables were built from, so a hit there
-    // is a table bug. The Index stamps every plugin it hashes, so the load order drops these.
+    // The game folder's plugins are the proof set the tables were built from, so a hit there is a
+    // table bug. The Index stamps every plugin it hashes, so the load order drops these.
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAForcedPlugin_AreNeverReported()
+    public void GetLoadOrderDiagnoses_RowsOfAGameFolderPlugin_AreNeverReported()
     {
-        var forced = Plugin("Fallout4.esm", origin: "Data", isForced: true);
+        var master = Plugin("Fallout4.esm", origin: PluginOrigin.DataDirectory);
 
-        Assert.Empty(Diagnose([Row(forced, Short)], forced));
+        Assert.Empty(Diagnose([Row(master, Short)], master));
     }
 
-    [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginNoListLineNames_AreNeverReported()
+    // ADR-0012 invariant 5: the game does not load a plugin that is not active.
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(0, false)]
+    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreNeverReported(int? slot, bool enabled)
     {
-        var unlisted = Plugin(Malformed, slot: null);
+        var inactive = Plugin(Malformed, slot: slot, enabled: enabled);
 
-        Assert.Empty(Diagnose([Row(unlisted, Short)], unlisted));
+        Assert.Empty(Diagnose([Row(inactive, Short)], inactive));
     }
 
     // A plugin the Index never opened stamps no rows, and neither does a clean one; a plugin that
@@ -94,11 +99,12 @@ public sealed class MalformedPluginQueryServiceTests
     public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins()
     {
         var winner = Plugin(Malformed, origin: "WinningMod");
-        var loser = Plugin(Malformed, origin: "LosingMod", slot: 1);
+        var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
 
-        var reports = Diagnose([Row(loser, Short)], winner, loser);
+        var reports = Diagnose([Row(overridden, Short), Row(winner, Trailing)], winner, overridden);
 
-        Assert.Equal("LosingMod", Assert.Single(reports).Origin);
+        var report = Assert.Single(reports);
+        Assert.Equal(("WinningMod", "trailing-bytes"), (report.Origin, report.DefectClass));
     }
 
     // The load order is the order, and within one plugin the rows keep the order the binary proved

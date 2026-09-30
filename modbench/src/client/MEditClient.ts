@@ -53,15 +53,11 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
 export type LoadOrderProgress = LoadOrderStatus;
 
 /** Restated rather than imported from Mod Management's own snapshot type: this module belongs
- *  to Editing, which imports nothing from Mod Management. `slot` is null when no plugins.txt
- *  line names this plugin. */
+ *  to Editing, which imports nothing from Mod Management. */
 export interface LoadOrderPluginInput {
   name: string;
   path: string;
   origin: string;
-  slot: number | null;
-  enabled: boolean;
-  winning: boolean;
 }
 
 /** A tagged union, not a sentinel value. `abandoned`: a newer snapshot replaced this one before
@@ -159,8 +155,8 @@ export interface MEditClient {
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
-  // Queries — the read verbs, by their current names, plus implicit masters and the filter
-  // facet (set filter, clear filter, active filter).
+  // Queries — the read verbs, by their current names, plus the filter facet (set filter, clear
+  // filter, active filter).
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]>;
@@ -181,7 +177,6 @@ export interface MEditClient {
   getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]>;
   getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]>;
-  implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
   /** Null when mEdit dropped the filter, or the reason it did not. */
@@ -191,10 +186,11 @@ export interface MEditClient {
   // Subscribe by kind (ADR-0014 invariant 2) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
-  // The load-order snapshot — today's own signature and return, unchanged.
+  // The load-order snapshot (ADR-0013): every plugin in the instance, and the active plugins in
+  // load order.
   putLoadOrder(
-    plugins: LoadOrderPluginInput[], gameDirectory: string, instanceRoot: string, gameRelease: string,
-    options?: LoadOrderOptions,
+    plugins: LoadOrderPluginInput[], active: PluginAddress[], gameDirectory: string, instanceRoot: string,
+    gameRelease: string, options?: LoadOrderOptions,
   ): Promise<LoadOrderOutcome>;
 
   // The backend process: today's four values, read as a current value and observed through a

@@ -1,6 +1,7 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -30,8 +31,8 @@ public sealed class TrackHandlerTests : IDisposable
         mod.Npcs.AddNew("FixtureNpc");
         mod.WriteToBinary(pluginPath);
 
-        Snapshot = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredPlugin(PluginName, Origin, pluginPath, 0, Enabled: true, Winning: true)]);
+        Snapshot = SnapshotPlugins.Snapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, 0, Enabled: true, Winning: true)]);
     }
 
     private LoadOrderSnapshot Snapshot { get; }

@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>The plugins the Index has open (ADR-0013), keyed by identity: what the adapter read out
-/// of each file. Not a load order — who wins and who participates is the kernel's value. Reconcile
+/// of each file. Not a load order — which plugins are active is the kernel's value. Reconcile
 /// mutates it in place.</summary>
 internal sealed class HeldPlugins
 {
@@ -65,7 +65,7 @@ internal sealed class HeldPlugins
     /// <summary>A plugin that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
     /// earlier failure for the same plugin.</summary>
-    public PluginMetadata? Open(RegisteredPlugin plugin)
+    public PluginMetadata? Open(RegisteredPlugin plugin, Registration registration)
     {
         if (!File.Exists(plugin.Path))
         {
@@ -76,8 +76,8 @@ internal sealed class HeldPlugins
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Opening binary overlay: {FileName} ({Origin}, slot={Slot}, enabled={Enabled}, winning={Winning})",
-                plugin.Name, plugin.Origin, plugin.Registration.LoadOrderIndex, plugin.Registration.Enabled, plugin.Registration.Winning);
+            _logger.LogInformation("Opening binary overlay: {FileName} ({Origin}, load index {LoadOrderIndex})",
+                plugin.Name, plugin.Origin, registration.LoadOrderIndex);
         }
 
         try
@@ -100,7 +100,7 @@ internal sealed class HeldPlugins
                     plugin.Name, content.RecordCount);
             }
 
-            var metadata = BuildPluginMetadata(content, plugin);
+            var metadata = BuildPluginMetadata(content, plugin, registration);
             Hold(metadata);
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -162,17 +162,11 @@ internal sealed class HeldPlugins
         }
     }
 
-    /// <summary>Nothing here opens or re-reads the file: none of the three registration facts is a
-    /// property of its content, and re-deriving anything else would let a reconcile silently
-    /// re-read.</summary>
+    /// <summary>Nothing here opens or re-reads the file: the load index is no property of its
+    /// content, and re-deriving anything else would let a reconcile silently re-read.</summary>
     public PluginMetadata Update(PluginMetadata previous, Registration registration)
     {
-        var metadata = previous with
-        {
-            LoadOrderIndex = registration.LoadOrderIndex,
-            Enabled = registration.Enabled,
-            Winning = registration.Winning,
-        };
+        var metadata = previous with { LoadOrderIndex = registration.LoadOrderIndex };
 
         lock (_mutation)
         {
@@ -186,8 +180,8 @@ internal sealed class HeldPlugins
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Updated {FileName} ({Origin}): slot={Slot}, enabled={Enabled}, winning={Winning}",
-                previous.Name, previous.Origin, registration.LoadOrderIndex, registration.Enabled, registration.Winning);
+            _logger.LogInformation("Updated {FileName} ({Origin}): load index {LoadOrderIndex}",
+                previous.Name, previous.Origin, registration.LoadOrderIndex);
         }
         return metadata;
     }
@@ -230,18 +224,15 @@ internal sealed class HeldPlugins
         }
     }
 
-    private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredPlugin plugin) =>
+    private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredPlugin plugin, Registration registration) =>
         new(
             Name: plugin.Name,
             Path: plugin.Path,
-            LoadOrderIndex: plugin.Registration.LoadOrderIndex,
+            LoadOrderIndex: registration.LoadOrderIndex,
             IsLight: content.IsLight,
             IsMaster: content.IsMaster,
             IsBlueprint: content.IsBlueprint,
             Masters: content.Masters,
             RecordCount: content.RecordCount,
-            IsForced: plugin.IsForced,
-            Origin: plugin.Origin,
-            Enabled: plugin.Registration.Enabled,
-            Winning: plugin.Registration.Winning);
+            Origin: plugin.Origin);
 }

@@ -7,7 +7,7 @@ import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
+import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
@@ -52,6 +52,14 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   } catch (err) {
     return { kind: 'unreadable', reason: errorMessage(err) };
   }
+}
+
+// The game writes its Creation Club list in plugins.txt's own line format.
+async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
+  const file = gameFolder.kind === 'found' ? creationClubListFile(gameFolder.root, gameRelease) : undefined;
+  if (file === undefined) return [];
+  const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
+  return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
 }
 
 // The tables key each release on the game's name as `gameName=` spells it.
@@ -108,6 +116,8 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     },
 
     gameFolderPlugins: listGameFolderPlugins,
+
+    creationClubList: readCreationClubList,
 
     async downloadedFileAt(path) {
       const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));

@@ -61,10 +61,13 @@ function plugin(
 
 // Every origin these fixtures name, but Data and Overwrite, is one of the instance's mods, and
 // the game folder is found, so the message line says only what the rows do.
-function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue {
+function valueOf(
+  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly string[],
+): InstanceValue {
   const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data' && origin !== 'overwrite');
   return instanceValueFixture({
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+    pluginsLoadedWithNoLine,
     plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
   });
 }
@@ -102,12 +105,9 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
     masters: [],
     recordCount: 0,
     isImmutable: false,
-    participates: true,
     origin: 'SomeMod',
     masterIssues: [],
     inLoadOrder: true,
-    enabled: true,
-    winning: true,
     hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
@@ -173,11 +173,11 @@ function makeTree(
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: PluginsTreeProviderOptions['publishChangedOutside'];
     dataFolderFile: (name: string) => string | undefined;
-    implicitMasters: () => Promise<readonly string[] | undefined>;
+    loadedWithNoLine: readonly string[];
     reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
 ): Harness {
-  const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
+  const instance = extra.instance ?? new FakeInstance(valueOf(plugins, extra.loadedWithNoLine));
   const source = extra.source ?? new FakeSource();
   const client = extra.client ?? makeClient();
   const records = new PluginTreeProvider(client);
@@ -188,7 +188,6 @@ function makeTree(
     publishDiagnoses: extra.publishDiagnoses,
     publishChangedOutside: extra.publishChangedOutside,
     dataFolderFile: extra.dataFolderFile,
-    implicitMasters: extra.implicitMasters,
     reporter: extra.reporter,
   });
   return { tree, client, records, instance, source, logged };
@@ -310,7 +309,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 
   it('says nothing about an empty list while the game loads a plugin on its own', async () => {
-    const { tree } = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    const { tree } = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
 
     expect(await tree.getChildren()).toHaveLength(1);
     expect(tree.viewMessage()).toBeUndefined();
@@ -522,7 +521,7 @@ describe('PluginsTreeProvider — a plugin row is identified by its kind and (or
 
   it('gives a locked row an identity of its own kind, never a plugin row\'s', async () => {
     const withLine = makeTree([plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' })]).tree;
-    const locked = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) }).tree;
+    const locked = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] }).tree;
 
     const [lineId] = await idsOf(withLine);
     const [lockedId] = await idsOf(locked);
@@ -689,7 +688,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
 
   it('a drop on a locked row asks for the losing end', async () => {
     const source = new FakeSource();
-    const { tree } = makeTree(fixturePlugins(), { source, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    const { tree } = makeTree(fixturePlugins(), { source, loadedWithNoLine: ['Fallout4.esm'] });
     await tree.getChildren();
     const dt = new DataTransfer();
     tree.handleDrag([node('B.esp')], dt, NONE);
@@ -843,6 +842,14 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
     }]);
   });
 
+  // mEdit says a disabled plugin is not in the load order, yet its line keeps master order all the
+  // same. The rival: reading facts only for the plugins mEdit calls in the load order.
+  it('refuses a drop that puts a master below a disabled plugin that depends on it', async () => {
+    const { calls } = await dropAfterReconcile(
+      ['A.esp'], node('D.esp'), heldAll({ 'B.esp': { masters: ['A.esp'], inLoadOrder: false } }));
+    expect(calls).toEqual([]);
+  });
+
   // Winning at the top, a row shown above another loads after it: the check reads the order the
   // write lands, never the order the rows are drawn in.
   describe('with winning at the top', () => {
@@ -950,7 +957,7 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
       plugin({ name: 'DLCRobot.esm', slot: 0, origin: 'Data' }),
       plugin({ name: 'A.esp', slot: 1 }),
       plugin({ name: 'X.esp', slot: 2 }),
-    ], { source, reporter, implicitMasters: () => Promise.resolve(['Fallout4.esm', 'DLCRobot.esm']) });
+    ], { source, reporter, loadedWithNoLine: ['Fallout4.esm', 'DLCRobot.esm'] });
     await reconcile(h, [
       held('DLCRobot.esm', { origin: 'Data' }), held('A.esp'), held('X.esp', { masters: ['Fallout4.esm', 'DLCRobot.esm'] }),
     ]);
@@ -1020,8 +1027,7 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
 
   it('a drop on a locked row lands the block first in plugins.txt, its losing end', async () => {
     const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), source,
-      implicitMasters: () => Promise.resolve(['Fallout4.esm']),
+      instance: new FakeInstance(valueOf(fixturePlugins(), ['Fallout4.esm'])), source,
     });
     await tree.getChildren();
     const dt = new DataTransfer();
@@ -1090,7 +1096,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
     const { tree } = makeTree(
       [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
-      { dataFolderFile: (name) => `/game/Data/${name}`, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: ['Fallout4.esm'] });
     const locked = await lockedRowOf(tree);
 
     expect(locked.origin).toBe('SomeMod');
@@ -1100,7 +1106,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   it('resolves a locked row no mod provides to the game folder\'s copy', async () => {
     const { tree } = makeTree(
       [plugin({ name: 'Mod.esp', slot: 0 })],
-      { dataFolderFile: (name) => `/game/Data/${name}`, implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: ['Fallout4.esm'] });
 
     expect(await tree.resolvePluginPath(await lockedRowOf(tree))).toBe('/game/Data/Fallout4.esm');
   });
@@ -1111,20 +1117,20 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   });
 });
 
-// Implicit masters render as forced-on rows ahead of plugins.txt lines. The backend names
-// them (ADR-0016); this tree only places them.
+// The plugins the game loads with no line render as forced-on rows ahead of plugins.txt lines.
+// The instance value names them (ADR-0013 invariant 3); this tree only places them.
 describe('PluginsTreeProvider — implicit master rows', () => {
   // The Instance adapter's answer, which the tree takes rather than builds.
   const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
-  // `null` stands for the absence in both slots: a backend that could not answer, and an
-  // unresolved Data folder. An explicit `undefined` would select the default instead.
+  // `null` stands for the absence in both slots: a value that cannot say, and an unresolved Data
+  // folder. An explicit `undefined` would select the default instead.
   const treeFor = (
     plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
     implicit: readonly string[] | null = [],
     dataFolderFile: ((name: string) => string | undefined) | null = ADAPTER_ANSWER,
   ) => makeTree(plugins, {
     dataFolderFile: dataFolderFile ?? (() => undefined),
-    implicitMasters: () => Promise.resolve(implicit ?? undefined),
+    ...(implicit === null ? {} : { loadedWithNoLine: implicit }),
   }).tree;
 
   it('renders the backend names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, with no checkbox and contextValue pluginImplicit', async () => {
@@ -1170,10 +1176,9 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     expect([...tree.lockedRowUris()]).toEqual([rowUri.toString()]);
   });
 
-  // The rival: treating an unreachable backend as "no implicit masters" here would be harmless,
-  // but it must not invent rows either — an unknown answer renders nothing, and the tree still
-  // renders every plugins.txt line.
-  it('renders no implicit row, and every plugins.txt line, when the backend cannot be reached', async () => {
+  // An unknown answer must not invent rows: it renders nothing, and the tree still renders every
+  // plugins.txt line.
+  it('renders no implicit row, and every plugins.txt line, when the value cannot say', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], null).getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
@@ -1204,18 +1209,18 @@ describe('PluginsTreeProvider — implicit master rows', () => {
 // plugins.md, Order and view state, story 1: the direction flips the plugin rows and never which
 // plugin wins, so the locked plugins stay at the losing end.
 describe('PluginsTreeProvider — the sort direction', () => {
-  const LOCKED = () => Promise.resolve(['Fallout4.esm', 'DLCRobot.esm']);
+  const LOCKED = ['Fallout4.esm', 'DLCRobot.esm'];
   const LINES = () => [plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 }), plugin({ name: 'C.esp', slot: 2 })];
   const labelsOf = async (tree: PluginsTreeProvider) => (await tree.getChildren()).map((row) => row.label);
 
   it('lists losing at the top until told otherwise', async () => {
-    const { tree } = makeTree(LINES(), { implicitMasters: LOCKED });
+    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
 
     expect(await labelsOf(tree)).toEqual(['Fallout4.esm', 'DLCRobot.esm', 'A.esp', 'B.esp', 'C.esp']);
   });
 
   it('lists winning at the top with the locked plugins at the bottom, and back again', async () => {
-    const { tree } = makeTree(LINES(), { implicitMasters: LOCKED });
+    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
 
     tree.setViewDirection('winningAtTop');
     expect(await labelsOf(tree)).toEqual(['C.esp', 'B.esp', 'A.esp', 'DLCRobot.esm', 'Fallout4.esm']);
@@ -1226,7 +1231,7 @@ describe('PluginsTreeProvider — the sort direction', () => {
 
   // Render-only, as the name filter is: a flip rebuilds nothing.
   it('flips the very rows it had, rebuilding none', async () => {
-    const { tree } = makeTree(LINES(), { implicitMasters: LOCKED });
+    const { tree } = makeTree(LINES(), { loadedWithNoLine: LOCKED });
     const before = await tree.getChildren();
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
@@ -1302,9 +1307,8 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
     { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, onDisk: ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp'] },
   ] as const)('$direction: $moved dropped on $where lands as shown', async ({ direction, moved, target, onDisk }) => {
     const tree = new PluginsTreeProvider({
-      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })))),
+      instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })), ['Fallout4.esm'])),
       source: writesTo(dir),
-      implicitMasters: () => Promise.resolve(['Fallout4.esm']),
     });
     tree.setViewDirection(direction);
     await tree.getChildren();
@@ -1317,75 +1321,21 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
   });
 });
 
-// plugins.md, The tree, story 2: the locked plugins appear once mEdit names them, and mEdit may
-// attach after the rows are first built.
-describe('PluginsTreeProvider — the locked plugins arrive with mEdit', () => {
+// plugins.md, The tree, story 2: the locked plugins are the instance value's, so each value that
+// lands rebuilds them.
+describe('PluginsTreeProvider — the locked plugins follow the instance value', () => {
   const LINES = () => [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data' }), plugin({ name: 'Mod.esp', slot: 1 })];
   const shapeOf = async (tree: PluginsTreeProvider) => (await tree.getChildren())
     .map((row) => (row instanceof PluginNode || row instanceof ImplicitMasterNode ? `${row.kind} ${pluginFileOf(row)}` : row.kind));
 
-  // Each ask takes the next answer; the last one repeats.
-  function answering(...answers: (readonly string[] | undefined)[]): () => Promise<readonly string[] | undefined> {
-    let asked = 0;
-    return () => Promise.resolve(answers[Math.min(asked++, answers.length - 1)]);
-  }
-
-  it('shows a line naming a locked plugin as an ordinary row until mEdit answers, then rebuilds with it locked at the losing end', async () => {
-    const h = makeTree(LINES(), { implicitMasters: answering(undefined, ['Fallout4.esm', 'DLCRobot.esm']) });
+  it('shows a line naming a locked plugin as an ordinary row while the value cannot say, then locks it at the losing end', async () => {
+    const instance = new FakeInstance(valueOf(LINES()));
+    const h = makeTree([], { instance });
     expect(await shapeOf(h.tree)).toEqual(['plugin Fallout4.esm', 'plugin Mod.esp']);
 
-    h.client.setStatus('attached');
+    instance.publish(valueOf(LINES(), ['Fallout4.esm', 'DLCRobot.esm']));
 
     expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'implicitMaster DLCRobot.esm', 'plugin Mod.esp']);
-  });
-
-  it('keeps the locked rows mEdit named when a later rebuild finds mEdit gone', async () => {
-    const instance = new FakeInstance(valueOf(LINES()));
-    const h = makeTree([], { instance, implicitMasters: answering(['Fallout4.esm'], undefined) });
-    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-
-    instance.publish(valueOf([...LINES(), plugin({ name: 'New.esp', slot: 2 })]));
-
-    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp', 'plugin New.esp']);
-  });
-
-  // The first ask is held until the test answers it; every later ask names Fallout4.esm.
-  function staleFirstAnswer() {
-    let answerTheFirstAsk: (names: readonly string[]) => void = () => {};
-    let asked = 0;
-    const implicitMasters = (): Promise<readonly string[] | undefined> => (asked++ === 0
-      ? new Promise((resolve) => { answerTheFirstAsk = resolve; })
-      : Promise.resolve(['Fallout4.esm']));
-    const h = makeTree(LINES(), { implicitMasters });
-    const beforeAttach = h.tree.getChildren();
-    return { h, beforeAttach, asked: () => asked, answerTheFirstAsk: (names: readonly string[]) => answerTheFirstAsk(names) };
-  }
-
-  it('never shows an answer asked for before mEdit attached, landing before the fresh one is asked for', async () => {
-    const { h, beforeAttach, asked, answerTheFirstAsk } = staleFirstAnswer();
-    await vi.waitFor(() => expect(asked()).toBe(1));
-
-    h.client.setStatus('attached');
-    answerTheFirstAsk(['Stale.esm']);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const afterAttach = shapeOf(h.tree);
-    await beforeAttach;
-
-    expect(await afterAttach).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-  });
-
-  it('never shows an answer asked for before mEdit attached, landing after the fresh one is asked for', async () => {
-    const { h, beforeAttach, asked, answerTheFirstAsk } = staleFirstAnswer();
-    await vi.waitFor(() => expect(asked()).toBe(1));
-
-    h.client.setStatus('attached');
-    const afterAttach = shapeOf(h.tree);
-    answerTheFirstAsk(['Stale.esm']);
-    await beforeAttach;
-
-    expect(await afterAttach).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
   });
 });
 
@@ -1710,7 +1660,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
     { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' })),
-      implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+      loadedWithNoLine: ['Fallout4.esm'] });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
     'states a locked row the game folder provides by the game folder\'s copy, with the mod\'s copy listed %s',
@@ -2027,7 +1977,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
   // A locked row is as filterable as any other row, not exempt.
   it('hides an implicit master row the record filter matches no records of', async () => {
-    const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
     await reconcile(h, [held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: false })]);
 
     expect(await h.tree.getChildren()).toEqual([]);
@@ -2045,7 +1995,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
   ] as const)('%s a locked row whose own copy %s, with its own copy listed %s', async (_verb, _match, _order, answer, rows) => {
     const h = makeTree(
       [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: false })],
-      { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+      { loadedWithNoLine: ['Fallout4.esm'] });
     await reconcile(h, [...answer]);
 
     expect(await h.tree.getChildren()).toHaveLength(rows);
@@ -2737,7 +2687,7 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
 
   it('states a disabled line', async () => {
     const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
-    await reconcile(h, [held('A.esp', { enabled: false })]);
+    await reconcile(h, [held('A.esp')]);
 
     expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked', 'editable']);
   });
@@ -2753,10 +2703,11 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     expect(h.tree.anyCompilable()).toBe(false);
 
-    await reconcile(h, [held('A.esp'), held('B.esp', { isTracked: true, isImmutable: true })]);
+    await reconcile(h, [held('A.esp'), held('B.esp')]);
     expect(h.tree.anyCompilable()).toBe(false);
 
-    await reconcile(h, [held('A.esp', { isTracked: true }), held('B.esp')]);
+    // plugins.md, Menus and keys: compile (tracked), read-only or not.
+    await reconcile(h, [held('A.esp'), held('B.esp', { isTracked: true, isImmutable: true })]);
     expect(h.tree.anyCompilable()).toBe(true);
   });
 });
@@ -2825,7 +2776,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
   // plugins.md, A plugin the game loads with no line: the locked row's tooltip is MO2's one
   // sentence alone — no file name, no mod, no read-only line, whatever the backend answers.
   it('never adds a read-only line to the locked row — its tooltip is the one sentence alone', async () => {
-    const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
+    const h = makeTree([], { loadedWithNoLine: ['Fallout4.esm'] });
     await reconcile(h, [held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
 
     expect((await rowItem(h)).tooltip).toBe(

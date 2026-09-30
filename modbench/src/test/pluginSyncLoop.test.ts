@@ -61,7 +61,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   root: string;
   instance: Instance;
   syncs: Promise<PluginSyncResult>[];
-  games: (string | undefined)[];
+  loadedWithNoLine: (readonly string[] | undefined)[];
   plugins: () => Promise<string>;
   pluginsOf: (profile: string) => Promise<string>;
 }> {
@@ -88,23 +88,20 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   instances.push(instance);
 
   const syncs: Promise<PluginSyncResult>[] = [];
-  // The game each run was handed — the backend answers a different implicit-master set per game,
-  // so a run that assumed one would ask about the wrong install.
-  const games: (string | undefined)[] = [];
-  const trigger = registerPluginSync(instance, (value) => {
-    games.push(pluginSyncArguments(value).gameRelease);
-    const { profile, provided, inData } = pluginSyncArguments(value);
-    const run = syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve([]));
+  // What each run was handed of the plugins the game loads with no line.
+  const loadedWithNoLine: (readonly string[] | undefined)[] = [];
+  registerPluginSync(instance, (value) => {
+    const args = pluginSyncArguments(value);
+    loadedWithNoLine.push(args.loadedWithNoLine);
+    const run = syncPlugins(accessTo(root), args.profile, args.provided, args.inData, args.loadedWithNoLine);
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
-  // mEdit attached on the first value, so every value after it runs plugin sync.
   await instance.refresh();
-  trigger.runOnConnect();
   await syncs[syncs.length - 1];
 
   const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
-  return { root, instance, syncs, games, plugins: () => pluginsOf(PROFILE), pluginsOf };
+  return { root, instance, syncs, loadedWithNoLine, plugins: () => pluginsOf(PROFILE), pluginsOf };
 }
 
 // Drives the loop the way the platform does: a plugins.txt write comes back as the watcher event
@@ -169,17 +166,17 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 
-  // The implicit-master set is per game, and only the Instance knows which game this is. A run
-  // handed a hardcoded one would ask the backend about another install.
-  it('hands each run the game the Instance read, not an assumed one', async () => {
+  // The game's masters are per release, and only the Instance knows which game this is. A run
+  // handed a hardcoded list would judge the lines against another install.
+  it('hands each run the plugins the game the Instance read loads with no line', async () => {
     // Deliberately not Fallout 4: a run that hardcoded the fixture's usual game would pass.
-    const { instance, syncs, games } = await wiredInstance('Skyrim Special Edition');
+    const { root, instance, syncs, loadedWithNoLine } = await wiredInstance('Skyrim Special Edition');
+    await writeFile(join(root, 'Game', 'Data', 'Skyrim.esm'), 'vanilla');
 
     watcherFor('mods/**').fireChange();
     await driveToQuiescence(instance, syncs, 8);
 
-    expect(games.length).toBeGreaterThan(0);
-    expect([...new Set(games)]).toEqual(['SkyrimSE']);
+    expect(loadedWithNoLine.at(-1)).toEqual(['Skyrim.esm']);
   });
 });
 
@@ -187,7 +184,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
 // Every Instance-driven writer to the Output is wired onto one channel, as the root wires them.
 describe('the game folder not found, across the whole instance', () => {
   // Rival: plugin sync refusing with its own reason, a second Output line for the same cause.
-  it('is exactly one Output line, however many values land after mEdit has attached', async () => {
+  it('is exactly one Output line, however many values land', async () => {
     const root = await mkdtemp(join(tmpdir(), 'game-not-found-'));
     roots.push(root);
     await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
@@ -207,13 +204,12 @@ describe('the game folder not found, across the whole instance', () => {
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
     const pluginSync = registerPluginSync(instance, (value) => {
-      const { profile, provided, inData } = pluginSyncArguments(value);
-      return syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve(undefined));
+      const { profile, provided, inData, loadedWithNoLine } = pluginSyncArguments(value);
+      return syncPlugins(accessTo(root), profile, provided, inData, loadedWithNoLine);
     }, channel);
     const modSync = registerModSync(instance, modSyncOver(accessTo(root)), channel);
 
     await instance.refresh();
-    pluginSync.runOnConnect();
     for (const glob of ['profiles/*/plugins.txt', 'mods/**', 'profiles/*/plugins.txt']) {
       const before = instance.sequence;
       watcherFor(glob).fireChange();
@@ -252,7 +248,7 @@ describe('a gesture writes the profile the Instance last landed', () => {
   });
 });
 
-// The Instance as the trigger reads it: a current value, and each landed value handed on.
+// The Instance as the trigger reads it: each landed value handed on.
 function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
   return firedAnswering((_profile, call) => present(outcomes[call], 'an outcome for this run')());
 }
@@ -261,7 +257,6 @@ function firedAnswering(answer: (profile: string, call: number) => Promise<Plugi
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
   let seq = 0;
   const instance = {
-    value: instanceValueFixture({ activeProfile: 'Before' }),
     subscribe: (cb: (value: InstanceValue, seq: number) => void) => {
       subscriber = cb;
       return { dispose: () => { subscriber = undefined; } };
@@ -280,26 +275,15 @@ function firedAnswering(answer: (profile: string, call: number) => Promise<Plugi
   trigger.onMessageChanged(messageChanged);
   const settled = (): Promise<void> => trigger.settled();
   const land = async (value = instanceValueFixture()): Promise<void> => {
-    instance.value = value;
     seq += 1;
     expect(() => subscriber?.(value, seq)).not.toThrow();
     await settled();
   };
-  const connect = async (): Promise<void> => {
-    trigger.runOnConnect();
-    await settled();
-  };
-  return { instance, channel, messageChanged, trigger, profiles, land, connect };
-}
-
-// mEdit attached once, on a run that landed, so every value after it runs plugin sync.
-async function firedAttached(...outcomes: (() => Promise<PluginSyncResult>)[]) {
-  const harness = fired(landed, ...outcomes);
-  await harness.connect();
-  return harness;
+  return { channel, messageChanged, trigger, profiles, land };
 }
 
 const DATA_UNLISTABLE = "the game's Data folder cannot be listed: EACCES";
+const OTHER_REASON = 'plugins.txt cannot be written: EACCES';
 const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: false, toldAsInstanceState: true });
 
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
@@ -309,7 +293,13 @@ const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: f
 describe('registerPluginSync — settled', () => {
   // Rival: resolving once the command answers, before the trigger has written its Output line.
   it('resolves once every run begun has written its Output', async () => {
-    const instance = { value: instanceValueFixture(), subscribe: () => ({ dispose: () => {} }) };
+    let land = (): void => {};
+    const instance = {
+      subscribe: (subscriber: (value: InstanceValue, seq: number) => void) => {
+        land = () => subscriber(instanceValueFixture(), 1);
+        return { dispose: () => {} };
+      },
+    };
     const channel = { error: vi.fn(), info: vi.fn() };
     let answer = (): void => {};
     const answered = new Promise<PluginSyncResult>((resolve) => {
@@ -317,7 +307,7 @@ describe('registerPluginSync — settled', () => {
     });
     const trigger = registerPluginSync(instance, () => answered, channel);
 
-    trigger.runOnConnect();
+    land();
     const settled = trigger.settled();
     answer();
     await settled;
@@ -328,7 +318,7 @@ describe('registerPluginSync — settled', () => {
 
 describe('registerPluginSync — outcome handling', () => {
   it('logs the lines it added and dropped, one Output line each way', async () => {
-    const { channel, land } = await firedAttached(() => Promise.resolve<PluginSyncResult>(
+    const { channel, land } = fired(() => Promise.resolve<PluginSyncResult>(
       { applied: true, wrote: true, added: ['New.esp'], dropped: ['Gone.esp'] }));
     await land();
 
@@ -338,7 +328,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 
   it('logs nothing when the file already agrees', async () => {
-    const { channel, land } = await firedAttached(landed);
+    const { channel, land } = fired(landed);
     await land();
 
     expect(channel.info).not.toHaveBeenCalled();
@@ -346,7 +336,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 
   it('says the command\'s own refusal in the Output and the Plugins view\'s message line', async () => {
-    const { channel, trigger, messageChanged, land } = await firedAttached(refused(DATA_UNLISTABLE));
+    const { channel, trigger, messageChanged, land } = fired(refused(DATA_UNLISTABLE));
     await land();
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining(DATA_UNLISTABLE));
@@ -356,7 +346,7 @@ describe('registerPluginSync — outcome handling', () => {
 
   // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.
   it('says a thrown sync error the same way', async () => {
-    const { channel, trigger, land } = await firedAttached(() => Promise.reject(new Error('disk unplugged')));
+    const { channel, trigger, land } = fired(() => Promise.reject(new Error('disk unplugged')));
     await land();
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
@@ -365,8 +355,8 @@ describe('registerPluginSync — outcome handling', () => {
 
   // Rival: log every refused run, which fills the Output with one line per recompute.
   it('reports the same refusal once, and clears the message line when a run lands', async () => {
-    const reason = 'mEdit cannot say which plugins the game loads with no line';
-    const { channel, trigger, land } = await firedAttached(refused(reason), refused(reason), landed);
+    const reason = OTHER_REASON;
+    const { channel, trigger, land } = fired(refused(reason), refused(reason), landed);
     await land();
     await land();
     expect(channel.error).toHaveBeenCalledTimes(1);
@@ -375,17 +365,16 @@ describe('registerPluginSync — outcome handling', () => {
     expect(trigger.message()).toBeUndefined();
   });
 
-  // Rival: report only the first refusal, so a Data folder listed after mEdit went quiet keeps
-  // showing the listing.
+  // Rival: report only the first refusal, so a Data folder listed since keeps showing the listing.
   it('reports again when the reason changes', async () => {
-    const { channel, trigger, messageChanged, land } = await firedAttached(
-      refused(DATA_UNLISTABLE), refused('mEdit cannot say which plugins the game loads with no line'));
+    const { channel, trigger, messageChanged, land } = fired(
+      refused(DATA_UNLISTABLE), refused(OTHER_REASON));
     await land();
     await land();
 
     expect(channel.error).toHaveBeenCalledTimes(2);
-    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining('mEdit cannot say'));
-    expect(trigger.message()).toBe('plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.');
+    expect(channel.error).toHaveBeenLastCalledWith(expect.stringContaining(OTHER_REASON));
+    expect(trigger.message()).toBe(`plugins.txt is not synced: ${OTHER_REASON}.`);
     expect(messageChanged).toHaveBeenCalledTimes(2);
   });
 });
@@ -395,7 +384,7 @@ describe('registerPluginSync — outcome handling', () => {
 describe('registerPluginSync — the game folder not found', () => {
   // Rival: report it as the command's own refusal, a second telling beside the instance's state.
   it('reports nothing of its own: no Output line and no message line', async () => {
-    const { channel, trigger, messageChanged, land } = await firedAttached(toldAsInstanceState);
+    const { channel, trigger, messageChanged, land } = fired(toldAsInstanceState);
     await land();
 
     expect(channel.error).not.toHaveBeenCalled();
@@ -407,7 +396,7 @@ describe('registerPluginSync — the game folder not found', () => {
   // Rival: leave the standing refusal alone, so the message line keeps a cause plugin sync no
   // longer has beside the instance's own.
   it('takes its own standing refusal off the message line', async () => {
-    const { trigger, land } = await firedAttached(refused(DATA_UNLISTABLE), toldAsInstanceState);
+    const { trigger, land } = fired(refused(DATA_UNLISTABLE), toldAsInstanceState);
     await land();
 
     await land();
@@ -416,60 +405,31 @@ describe('registerPluginSync — the game folder not found', () => {
   });
 });
 
-// Before mEdit first attaches, plugin sync waits and runs on attach, so a launch reports nothing.
-describe('registerPluginSync — before mEdit first attaches', () => {
-  // Rival: run on every landed value from the start, which tells every launch that mEdit cannot say.
-  it('a launch then an attach reports nothing, and the attach runs on the current value', async () => {
-    const { channel, trigger, messageChanged, profiles, land, connect } = firedAnswering((profile) =>
-      (profile === 'Current' ? landed() : refused('mEdit cannot say which plugins the game loads with no line')()));
-    await land(instanceValueFixture({ activeProfile: 'Launched' }));
-    await land(instanceValueFixture({ activeProfile: 'Current' }));
+// ADR-0013 invariant 3: Mod Management reads the plugins the game loads with no line itself, so
+// plugin sync waits on nothing but the value.
+describe('registerPluginSync — every value', () => {
+  // Rival: waiting for mEdit to attach before the first run.
+  it('runs on every value that lands, from the first', async () => {
+    const { profiles, land } = fired(landed, landed);
 
-    await connect();
+    await land(instanceValueFixture({ activeProfile: 'First' }));
+    await land(instanceValueFixture({ activeProfile: 'Second' }));
 
-    expect(profiles).toEqual(['Current']);
-    expect(channel.error).not.toHaveBeenCalled();
-    expect(trigger.message()).toBeUndefined();
-    expect(messageChanged).not.toHaveBeenCalled();
-  });
-
-  // Rival: run only on connect, so a value landing between connects waits for the next one.
-  it('runs on every value that lands once mEdit has attached', async () => {
-    const { profiles, land, connect } = fired(landed, landed);
-    await connect();
-
-    await land(instanceValueFixture({ activeProfile: 'Landed' }));
-
-    expect(profiles).toEqual(['Before', 'Landed']);
-  });
-});
-
-// mEdit answers which plugins load with no line, so a connect after it went away is a moment
-// plugin sync runs again.
-describe('registerPluginSync — on connect', () => {
-  // Rival: no run on connect, so the refusal from while mEdit was away stands until a file changes.
-  it('runs again with the current value, and a run that lands clears the refusal before it', async () => {
-    const { instance, trigger, profiles, land, connect } = await firedAttached(refused('mEdit cannot say'), landed);
-    await land(instanceValueFixture({ activeProfile: 'Landed' }));
-    instance.value = instanceValueFixture({ activeProfile: 'Current' });
-
-    await connect();
-
-    expect(profiles).toEqual(['Before', 'Landed', 'Current']);
-    expect(trigger.message()).toBeUndefined();
+    expect(profiles).toEqual(['First', 'Second']);
   });
 });
 
 // commands.md, The system commands: plugin sync's Argument is the instance value, projected here
 // once for the command and every test that runs it.
 describe('pluginSyncArguments', () => {
-  it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the game', () => {
+  it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the plugins the game loads with no line', () => {
     const value = instanceValueFixture({
       activeProfile: 'Survival',
       gameName: 'Skyrim Special Edition',
       gameRelease: 'SkyrimSE',
       gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
       dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
+      pluginsLoadedWithNoLine: ['Skyrim.esm'],
       plugins: [
         { name: 'Mine.esp', path: join('/instance', 'mods', 'My Mod', 'Mine.esp'), origin: 'My Mod', slot: 0, enabled: true, winning: true },
         { name: 'Skyrim.esm', path: join('/game', 'Data', 'Skyrim.esm'), origin: 'Data', slot: 1, enabled: true, winning: true },
@@ -480,8 +440,7 @@ describe('pluginSyncArguments', () => {
       profile: 'Survival',
       provided: new Map([['mine.esp', 'Mine.esp']]),
       inData: { kind: 'listed', names: new Set(['skyrim.esm']) },
-      dataFolder: '/game/Data',
-      gameRelease: 'SkyrimSE',
+      loadedWithNoLine: ['Skyrim.esm'],
     });
   });
 });

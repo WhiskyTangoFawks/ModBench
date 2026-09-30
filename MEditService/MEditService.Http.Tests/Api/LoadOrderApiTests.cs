@@ -19,7 +19,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     {
         var response = await _client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
@@ -36,7 +37,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     {
         var load = await _client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
@@ -61,7 +63,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fx.Plugins),
             gameRelease = "Fallout4",
         });
 
@@ -80,16 +83,9 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var badPath = System.IO.Path.Combine(fx.Root, "Bad.esp");
         await System.IO.File.WriteAllTextAsync(badPath, "this is not a plugin");
 
-        var plugins = fx.Plugins.Append(new LoadOrderEntry("Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true))
-            .Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning });
+        var plugins = fx.Plugins.Append(new LoadOrderEntry("Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true));
 
-        var response = await _client.PutLoadOrderAndAwaitReady(new
-        {
-            gameDirectory = fx.GameDirectory,
-            instanceRoot = fx.InstanceRoot,
-            plugins,
-            gameRelease = "Fallout4",
-        });
+        var response = await _client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await _client.GetFromJsonAsync<LoadOrderStatusDto>("/load-order/status");
@@ -115,7 +111,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = new[] { winner, overridden }.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = new[] { winner, overridden }.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(new[] { winner, overridden }),
             gameRelease = "Fallout4",
         });
 
@@ -129,6 +126,55 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
     private sealed record LoadOrderStatusDto(IReadOnlyList<PluginLoadFailureDto> Failures);
     private sealed record PluginLoadFailureDto(string Name, string Origin, string Reason);
+
+    // ADR-0013 invariant 3: which plugins are active is Mod Management's to state.
+    [Fact]
+    public async Task PutLoadOrder_ThatStatesNoActivePlugins_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_AnActivePluginThatIsNoPluginInTheSnapshot_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = new[] { new { name = "Stray.esp", origin = "StrayMod" } },
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Stray.esp", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    // ADR-0012: the game loads one file per name.
+    [Fact]
+    public async Task PutLoadOrder_TwoActivePluginsOfOneFilename_Returns400()
+    {
+        var plugin = _fixture.Plugins[0];
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = new[] { new { plugin.Name, plugin.Path, plugin.Origin }, new { plugin.Name, plugin.Path, Origin = "OtherMod" } },
+            active = new[] { new { name = plugin.Name, origin = plugin.Origin }, new { name = plugin.Name, origin = "OtherMod" } },
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("OtherMod", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task PutLoadOrder_MissingGameDirectory_Returns400()

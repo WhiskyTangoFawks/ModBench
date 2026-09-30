@@ -35,14 +35,15 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     private async Task PutBothPlugins(ScatteredFixtureData fx)
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
-        // same slot; only the winning, enabled, listed one participates.
+        // same slot; only the winning, enabled, listed one is active.
         var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(plugins),
             gameRelease = "Fallout4",
         });
         put.EnsureSuccessStatusCode();
@@ -170,7 +171,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = fx.Plugins.Where(p => p.Origin != "ModB").Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fx.Plugins.Where(p => p.Origin != "ModB").Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fx.Plugins.Where(p => p.Origin != "ModB")),
             gameRelease = "Fallout4",
         });
         without.EnsureSuccessStatusCode();
@@ -216,17 +218,10 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var overridden = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
 
-        // ADR-0012: read-only, because an edit to a file the game does not load produces no
-        // observable change anywhere. ADR-0013: non-participating, so it can never take a winner
-        // from the plugin that overrides it.
+        // ADR-0012: read-only, because an edit to a file the game does not load changes nothing.
+        // ADR-0013: not active, so it has no load index and never takes a winner.
         Assert.True(overridden.GetProperty("isImmutable").GetBoolean());
-        Assert.False(overridden.GetProperty("participates").GetBoolean());
         Assert.False(overridden.GetProperty("inLoadOrder").GetBoolean());
-        // It shares the winning plugin's slot — the registration fact a future
-        // show-overridden-plugins toggle would render the pair adjacent from (the grid itself
-        // excludes it today).
-        Assert.Equal(
-            plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModA").GetProperty("loadOrderIndex").GetInt32(),
-            overridden.GetProperty("loadOrderIndex").GetInt32());
+        Assert.Equal(JsonValueKind.Null, overridden.GetProperty("loadOrderIndex").ValueKind);
     }
 }

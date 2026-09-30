@@ -10,20 +10,20 @@ namespace MEditService.Queries.Tests.Query;
 // active, as MO2's PluginList::testMasters flags it. Driven through GetPlugins, the one public door.
 public class MasterResolutionTests
 {
-    private static (RegisteredPlugin Registered, PluginContent? Content) Plugin(string name, params string[] masters) =>
-        (new RegisteredPlugin(name, "Data", name, Slot: 0, Enabled: true, Winning: true),
+    private static (LoadOrderEntry Registered, PluginContent? Content) Plugin(string name, params string[] masters) =>
+        (new LoadOrderEntry(name, name, "Data", Slot: 0, Enabled: true, Winning: true),
             new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, masters, RecordCount: 0));
 
-    private static (RegisteredPlugin Registered, PluginContent? Content) Disabled(string name, params string[] masters)
+    private static (LoadOrderEntry Registered, PluginContent? Content) Disabled(string name, params string[] masters)
     {
         var (registered, content) = Plugin(name, masters);
         return (registered with { Enabled = false }, content);
     }
 
-    private static (RegisteredPlugin Registered, PluginContent? Content) Unread(string name) => (Plugin(name).Registered, null);
+    private static (LoadOrderEntry Registered, PluginContent? Content) Unread(string name) => (Plugin(name).Registered, null);
 
     private static IReadOnlyList<PluginRow> GetPlugins(
-        (RegisteredPlugin Registered, PluginContent? Content)[] plugins, LoadOrderState state = LoadOrderState.Ready)
+        (LoadOrderEntry Registered, PluginContent? Content)[] plugins, LoadOrderState state = LoadOrderState.Ready)
     {
         var opened = new Dictionary<PluginAddress, PluginContent>(PluginAddress.Comparer);
         foreach (var (plugin, content) in plugins)
@@ -40,7 +40,7 @@ public class MasterResolutionTests
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Classify(
-        params (RegisteredPlugin Registered, PluginContent? Content)[] plugins) =>
+        params (LoadOrderEntry Registered, PluginContent? Content)[] plugins) =>
         GetPlugins(plugins)
             .Select(row => (row.Plugin.Name, Issues: Assert.IsAssignableFrom<IReadOnlyList<string>>(row.MasterIssues)))
             .Where(row => row.Issues.Count > 0)

@@ -38,7 +38,8 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fx.Plugins),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();

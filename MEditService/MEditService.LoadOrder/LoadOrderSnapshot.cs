@@ -2,39 +2,21 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One registered plugin (ADR-0013): a plugin file in the instance, its <c>plugins.txt</c> slot —
-/// null when no line names it — and the booleans Mod Management resolves for it. IsForced: loaded
-/// regardless of that list.</summary>
-public sealed record RegisteredPlugin(
-    string Name, string Origin, string Path, int? Slot, bool Enabled, bool Winning, bool IsForced = false)
+/// <summary>One plugin file in the instance (ADR-0013 invariant 2): origin, filename and path.</summary>
+public sealed record RegisteredPlugin(string Name, string Origin, string Path)
 {
     public PluginAddress Key => new(Name, Origin);
-
-    public Registration Registration => new(Slot, Enabled, Winning);
-
-    /// <summary>Read-only for editing: a forced master (ADR-0012 — the game's own files are never
-    /// a write target), or a plugin the load order does not name, where editing changes nothing.
-    /// </summary>
-    public bool IsImmutable => IsForced || !Registration.InLoadOrder;
-
-    public static RegisteredPlugin Of(LoadOrderEntry entry, int slotOffset = 0) =>
-        new(entry.Name, entry.Origin, entry.Path,
-            entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);
-
-    /// <summary>A plugin the install loads with no list line of its own (ADR-0013 invariant 2): in
-    /// the game's own Data directory, enabled, winning and forced, at the slot the game gives it.
-    /// </summary>
-    public static RegisteredPlugin Forced(string dataFolder, string name, int slot) =>
-        new(name, PluginOrigin.DataDirectory, System.IO.Path.Combine(dataFolder, name), slot, Enabled: true, Winning: true, IsForced: true);
 }
 
 /// <summary>ADR-0013 invariant 4: the load order is state, sent by Mod Management, held in the
-/// shared kernel with ADR-0013's rules, read by both sides. Immutable — nothing here opens, holds or
-/// disposes a plugin file.</summary>
+/// shared kernel, read by both sides. Immutable — nothing here opens, holds or disposes a plugin
+/// file.</summary>
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    public static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, []);
+    public static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], []);
+
+    private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
 
     public string DataFolderPath { get; }
 
@@ -44,38 +26,41 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public GameRelease GameRelease { get; }
 
-    /// <summary>Every plugin file in the instance, in the order it was given (ADR-0013: overridden
-    /// and unlisted plugins are registered like any other).</summary>
+    /// <summary>Every plugin file in the instance, in the order it was given.</summary>
     public IReadOnlyList<RegisteredPlugin> Plugins { get; }
 
+    /// <summary>ADR-0013 invariant 3: the active plugins, in load order, as Mod Management decided
+    /// them. A plugin's place here is its load index.</summary>
+    public IReadOnlyList<RegisteredPlugin> Active { get; }
+
     public LoadOrderSnapshot(
-        string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins)
+        string dataFolderPath, string? instanceRoot, GameRelease gameRelease,
+        IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active)
     {
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
         // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
         Plugins = [.. plugins];
+        Active = [.. active.Select(address => Plugin(address) ?? throw new ArgumentException(
+            $"The active plugin {address.Name} from {address.Origin} is not a plugin in the instance."))];
+        _loadOrderIndex = new Dictionary<PluginAddress, int>(PluginAddress.Comparer);
+        foreach (var (plugin, index) in Active.Select((plugin, index) => (plugin, index)))
+            _loadOrderIndex.TryAdd(plugin.Key, index);
     }
 
-    /// <summary>ADR-0013: participation is derived, never stored — enabled, winning, and named by a
-    /// <c>plugins.txt</c> line. Only a participating plugin competes for winner or counts in a
-    /// conflict.</summary>
-    public bool Participates(PluginAddress address) => Plugin(address)?.Registration.Participates ?? false;
+    public bool IsActive(PluginAddress address) => _loadOrderIndex.ContainsKey(address);
 
-    /// <summary>The plugin the Mod override order resolves <paramref name="name"/> to, or null when no
-    /// registered plugin of that name wins.</summary>
-    public RegisteredPlugin? WinningPlugin(PluginName name) =>
-        Plugins.FirstOrDefault(c => c.Winning && c.Name.Equals(name.Name, StringComparison.OrdinalIgnoreCase));
+    /// <summary>The plugin's place among the active plugins, or null when it is not active.</summary>
+    public int? LoadOrderIndex(PluginAddress address) =>
+        _loadOrderIndex.TryGetValue(address, out var index) ? index : null;
 
-    /// <summary>The participating plugins in slot order — the load order the game actually has.</summary>
-    public IReadOnlyList<RegisteredPlugin> Participating =>
-        [.. Plugins.Where(c => c.Registration.Participates).OrderBy(c => c.Slot
-            ?? throw new InvalidOperationException(
-                $"Expected participating plugin '{c.Name}' from '{c.Origin}' to carry a load-order slot."))];
+    public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
-    /// <summary>The three facts one plugin is registered with, or null when it is not registered.</summary>
-    public Registration? Registration(PluginAddress address) => Plugin(address)?.Registration;
+    /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012 invariant 5)
+    /// and a plugin in the game folder, the game's own.</summary>
+    public bool IsImmutable(PluginAddress address) =>
+        !IsActive(address) || PluginOrigin.IsDataDirectory(address.Origin);
 
     /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
     /// Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
@@ -85,8 +70,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>The same rule for a caller already holding a plugin's origin and path.</summary>
     public static string? ModFolderOf(string origin, string pluginPath) =>
-        string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase)
-        || string.Equals(origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
+        PluginOrigin.IsDataDirectory(origin) || PluginOrigin.IsOverwrite(origin)
             ? null
             : Path.GetDirectoryName(pluginPath);
 
@@ -94,22 +78,20 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// and Overwrite answer their own folder rather than null.</summary>
     public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
-    /// <summary>ADR-0012: origin is required, not optional — the load order can register two plugins
-    /// that share a filename, so the filename alone does not say which.</summary>
-    public RegisteredPlugin? Plugin(PluginAddress address) => Plugins.FirstOrDefault(c => SameAddress(c, address));
+    /// <summary>ADR-0012: origin is required, not optional — the instance can hold two plugins that
+    /// share a filename, so the filename alone does not say which.</summary>
+    public RegisteredPlugin? Plugin(PluginAddress address) =>
+        Plugins.FirstOrDefault(c => PluginAddress.Comparer.Equals(c.Key, address));
 
-    private static bool SameAddress(RegisteredPlugin plugin, PluginAddress address) =>
-        plugin.Name.Equals(address.Name, StringComparison.OrdinalIgnoreCase)
-        && plugin.Origin.Equals(address.Origin, StringComparison.OrdinalIgnoreCase);
-
-    // Structural, not a record's default: Plugins is interface-typed, and its reference equality would
-    // make two values built from one snapshot unequal.
+    // Structural, not a record's default: the lists are interface-typed, and their reference
+    // equality would make two values built from one snapshot unequal.
     public bool Equals(LoadOrderSnapshot? other) =>
         other is not null
         && GameRelease == other.GameRelease
         && string.Equals(DataFolderPath, other.DataFolderPath, StringComparison.OrdinalIgnoreCase)
         && string.Equals(InstanceRoot, other.InstanceRoot, StringComparison.OrdinalIgnoreCase)
-        && Plugins.SequenceEqual(other.Plugins);
+        && Plugins.SequenceEqual(other.Plugins)
+        && Active.SequenceEqual(other.Active);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 
@@ -118,5 +100,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         StringComparer.OrdinalIgnoreCase.GetHashCode(DataFolderPath),
         InstanceRoot is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(InstanceRoot),
         GameRelease,
-        Plugins.Count);
+        Plugins.Count,
+        Active.Count);
 }

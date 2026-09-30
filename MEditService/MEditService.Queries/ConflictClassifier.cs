@@ -12,21 +12,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // resolveFormKey (ADR-0005): the O(1) lookup, batched once per Classify so every formKey leaf's
-    // Resolutions is populated in this pass; null leaves Resolutions empty. pluginParticipates
-    // (ADR-0013) is keyed by ColumnKey.Of; null means every plugin participates.
+    // Resolutions is populated in this pass; null leaves Resolutions empty.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
         GameRelease release,
-        Func<string, RecordLookupEntry?>? resolveFormKey = null,
-        IReadOnlyDictionary<string, bool>? pluginParticipates = null)
+        Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
-        // ADR-0013: a non-participating plugin's override never contributes to conflict
-        // classification — filtered out before OnlyOne/winner/diff computation below, not just
-        // masked in the result, so it can't leak into pluginMasters/IsInjected either.
-        conflictingRecords = ConflictRules.FilterParticipating(
-            conflictingRecords, r => ColumnKey.Of(r.Plugin, r.Origin), pluginParticipates);
-
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
 

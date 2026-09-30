@@ -28,7 +28,7 @@ public sealed class TrackServiceTests
         var gameDir = Directory.CreateTempSubdirectory("medit-track-noorigin-game-").FullName;
         try
         {
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, []);
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits, new Dictionary<string, string>());
@@ -60,10 +60,10 @@ public sealed class TrackServiceTests
             var heldElsewhere = Path.Combine(modFolder, "Locked.esp");
             new Fallout4Mod(ModKey.FromFileName("Locked.esp"), Fallout4Release.Fallout4).WriteToBinary(heldElsewhere);
 
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [
-                new RegisteredPlugin("Fixture.esp", "FixtureMod", pluginPath, 0, Enabled: true, Winning: true),
-                new RegisteredPlugin("Locked.esp", "FixtureMod", heldElsewhere, 1, Enabled: true, Winning: true),
+                new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Locked.esp", heldElsewhere, "FixtureMod", 1, Enabled: true, Winning: true),
             ]);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, new LockedPluginAdapter("Locked.esp"))
@@ -115,9 +115,9 @@ public sealed class TrackServiceTests
             var npc2 = mod.Npcs.AddNew("SecondNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
             await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
@@ -183,9 +183,9 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             // Track the plugin once, for real, before corrupting anything — a dummy path shaped like
             // what TrackAsync would actually have written, though the content doesn't matter for
@@ -226,9 +226,9 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [
-                new RegisteredPlugin("Fixture.esp", PluginOrigin.DataDirectory, pluginPath, 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Fixture.esp", pluginPath, PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true),
             ]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
@@ -259,9 +259,9 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [
-                new RegisteredPlugin("Stray.esp", PluginOrigin.Overwrite, pluginPath, 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Stray.esp", pluginPath, PluginOrigin.Overwrite, 0, Enabled: true, Winning: true),
             ]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
@@ -299,10 +299,10 @@ public sealed class TrackServiceTests
             trackableMod.Npcs.AddNew("OnlyNpc");
             trackableMod.WriteToBinary(trackablePath);
 
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = SnapshotPlugins.Snapshot(gameDir, null, GameRelease.Fallout4,
             [
-                new RegisteredPlugin("Stray.esp", PluginOrigin.Overwrite, strayPath, 0, Enabled: true, Winning: true),
-                new RegisteredPlugin("Fixture.esp", "FixtureMod", trackablePath, 1, Enabled: true, Winning: true),
+                new LoadOrderEntry("Stray.esp", strayPath, PluginOrigin.Overwrite, 0, Enabled: true, Winning: true),
+                new LoadOrderEntry("Fixture.esp", trackablePath, "FixtureMod", 1, Enabled: true, Winning: true),
             ]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
@@ -346,12 +346,12 @@ public sealed class TrackServiceTests
             for (var i = 0; i < 400; i++) secondMod.Npcs.AddNew($"Npc{i}");
             secondMod.WriteToBinary(secondPluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([
+                [
                     new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true),
                     new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Slot: 1, Enabled: true, Winning: true),
-                ]));
+                ]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
@@ -387,9 +387,9 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var deserializeCalls = 0;
             async Task<IMod> CountingDeserialize(string folder, CancellationToken ct)
@@ -426,9 +426,9 @@ public sealed class TrackServiceTests
             var npc = mod.Npcs.AddNew("OriginalName");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
             {
@@ -472,9 +472,9 @@ public sealed class TrackServiceTests
             npc.HeightMin = 1.5f;
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
             {
@@ -525,9 +525,9 @@ public sealed class TrackServiceTests
             mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
 
@@ -572,9 +572,9 @@ public sealed class TrackServiceTests
             setBaseline(mod.ModHeader);
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
             {
@@ -614,9 +614,9 @@ public sealed class TrackServiceTests
             mod.WriteToBinary(pluginPath);
             await File.WriteAllBytesAsync(pluginPath, StripFnamAndMnamFromTheOnlyFurnRecord(await File.ReadAllBytesAsync(pluginPath)));
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
             var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();
@@ -699,9 +699,9 @@ public sealed class TrackServiceTests
             // every ".ba2" the scan finds, before asking whether the file applies to this ModKey.
             File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
             await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
@@ -741,9 +741,9 @@ public sealed class TrackServiceTests
             // with the download, or was deleted by hand.
             Directory.Delete(Path.Combine(modFolder, "Strings"), recursive: true);
 
-            var loadOrder = new LoadOrderSnapshot(
+            var loadOrder = SnapshotPlugins.Snapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
             var result = (await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits)).Only();

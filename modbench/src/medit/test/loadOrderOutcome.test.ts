@@ -3,76 +3,36 @@ import { reportPutOutcome, settleReconciled, syncActiveFilter } from '../loadOrd
 import type { LoadOrderProgress } from '../../client';
 import type { components } from '../../wire/generated/api';
 
-function plugin(over: Partial<{ enabled: boolean; winning: boolean; slot: number | null }> = {}) {
-  return { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true, ...over };
-}
-
 const readyStatus: LoadOrderProgress = {
   totalPlugins: 2, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const applied = { outcome: 'applied' as const, status: readyStatus };
 type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
 
-const putDeps = () => ({ warn: vi.fn(), error: vi.fn() });
 
 describe('reportPutOutcome', () => {
-  it('shows a failed send\'s ready-to-show message verbatim, and nothing else', () => {
-    const deps = putDeps();
+  it('shows a failed send\'s ready-to-show message verbatim', () => {
+    const error = vi.fn();
 
-    reportPutOutcome([plugin()], { outcome: 'failed', message: 'Failed to send the load order — bad dir' }, deps);
+    reportPutOutcome({ outcome: 'failed', message: 'Failed to send the load order — bad dir' }, { error });
 
-    expect(deps.error).toHaveBeenCalledWith('Failed to send the load order — bad dir');
-    expect(deps.warn).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith('Failed to send the load order — bad dir');
   });
 
   it('says nothing for an abandoned send — a superseded or closed send owns no view', () => {
-    const deps = putDeps();
+    const error = vi.fn();
 
-    reportPutOutcome([], { outcome: 'abandoned' }, deps);
+    reportPutOutcome({ outcome: 'abandoned' }, { error });
 
-    expect(deps.error).not.toHaveBeenCalled();
-    expect(deps.warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
   });
 
-  it('warns when the active profile has zero enabled plugins', () => {
-    const deps = putDeps();
+  it('says nothing for an applied send, whose reconcile is the narrator\'s to show', () => {
+    const error = vi.fn();
 
-    reportPutOutcome([], applied, deps);
+    reportPutOutcome(applied, { error });
 
-    expect(deps.warn).toHaveBeenCalledWith(
-      'The active profile has no enabled plugins — only base-game masters are held. '
-        + 'Enable plugins in the mod list (or check the profile\'s plugins.txt).',
-    );
-  });
-
-  // ADR-0013: every plugin is sent, so a non-empty snapshot does not mean the profile has anything
-  // enabled — participation is enabled AND winning AND listed, derived.
-  it('warns when plugins were sent but none of them participate', () => {
-    const deps = putDeps();
-
-    reportPutOutcome([plugin({ enabled: false })], applied, deps);
-
-    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
-  });
-
-  it('does not warn when at least one plugin participates', () => {
-    const deps = putDeps();
-
-    reportPutOutcome([plugin({ enabled: false }), plugin()], applied, deps);
-
-    expect(deps.warn).not.toHaveBeenCalled();
-  });
-
-  it('does not warn over a terminal refusal, which is the index status\'s to say', () => {
-    const deps = putDeps();
-    const heldElsewhere = {
-      outcome: 'applied' as const,
-      status: { ...readyStatus, conflictsComputed: false, refusal: { kind: 'heldElsewhere' as const, message: 'another window' } },
-    };
-
-    reportPutOutcome([], heldElsewhere, deps);
-
-    expect(deps.warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
   });
 });
 

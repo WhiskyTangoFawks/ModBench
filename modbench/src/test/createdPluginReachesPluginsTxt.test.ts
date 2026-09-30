@@ -60,8 +60,8 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
     await writeFile(join(folder, 'New.esp'), 'plugin');
 
     await instance.refresh();
-    const { profile, provided, inData } = pluginSyncArguments(instance.value);
-    const synced = await syncPlugins(accessTo(dir), profile, provided, inData, () => Promise.resolve([]));
+    const { profile, provided, inData, loadedWithNoLine } = pluginSyncArguments(instance.value);
+    const synced = await syncPlugins(accessTo(dir), profile, provided, inData, loadedWithNoLine);
 
     expect(synced).toEqual({ applied: true, wrote: true, added: ['New.esp'], dropped: [] });
     expect(await plugins()).toBe('*Base.esp\r\nNew.esp\r\n');

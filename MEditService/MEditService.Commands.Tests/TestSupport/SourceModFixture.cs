@@ -45,9 +45,9 @@ internal sealed class SourceModFixture : IDisposable
         build(mod);
         mod.WriteToBinary(pluginPath);
 
-        LoadOrder = new LoadOrderSnapshot(
+        LoadOrder = SnapshotPlugins.Snapshot(
             GameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotPlugins.Of([new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]));
+            [new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]);
 
         if (tracked)
         {

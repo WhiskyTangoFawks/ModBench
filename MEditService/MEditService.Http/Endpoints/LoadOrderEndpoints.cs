@@ -1,6 +1,5 @@
 using MEditService.Commands;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 
 namespace MEditService.Http.Endpoints;
 
@@ -17,29 +16,15 @@ public static class LoadOrderEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
-                "the instance — winning and overridden, listed and unlisted — each with its " +
-                "plugins.txt slot (null when no line names it), its * prefix and whether the Mod " +
-                "override order resolves the name to it. Plugins new to the load order are opened " +
-                "and registered (indexed only if never seen), plugins absent from the snapshot are " +
-                "unregistered, moved plugins are re-registered SQL-only; then one winner sweep. " +
-                "Vanilla masters are prepended by the backend and need not be listed. Answers as " +
-                "soon as the snapshot is applied; the sweep runs after, reported on " +
+                "the instance, each with its origin and path, and the active plugins in load order, " +
+                "as Mod Management decided them. Plugins new to the snapshot are opened and " +
+                "registered (indexed only if never seen), plugins absent from it are unregistered, " +
+                "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
+                "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
                 "GET /load-order/status and the load-order-status notification.")
             .Produces<LoadOrderResponse>()
             .ProducesProblem(400)
             .ProducesProblem(500);
-
-        // ADR-0013 invariant 2: answered from the game directory alone, with no load order held.
-        // Mod Management asks it while reconciling plugins.txt, which is what a PUT is built from.
-        app.MapGet("/implicit-masters", GetImplicitMasters)
-            .WithName("GetImplicitMasters")
-            .WithTags(Tag)
-            .WithDescription(
-                "The plugin filenames this install loads without a plugins.txt line of their own: " +
-                "the release's implicit masters present in the given Data folder, then that " +
-                "folder's Creation Club catalog. Load order.")
-            .Produces<IReadOnlyList<string>>()
-            .ProducesProblem(400);
 
         return app;
     }
@@ -61,22 +46,23 @@ public static class LoadOrderEndpoints
 
         if (WriteEndpointMapping.ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        // Every registration fact is Mod Management's to state, never defaulted here: a missing
-        // bool silently bound to false would make every plugin non-participating.
         if (req.Plugins is not { } plugins
-            || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null))
+            || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)))
         {
-            return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
+            return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin.", statusCode: 400);
         }
+        // ADR-0013 invariant 3: which plugins are active is Mod Management's to state, never
+        // defaulted here.
+        if (req.Active is not { } active)
+            return Results.Problem("The snapshot must state its active plugins.", statusCode: 400);
+        if (ActiveRefusal(plugins, active) is { } refusal)
+            return Results.Problem(refusal, statusCode: 400);
 
         try
         {
-            var entries = plugins
-                .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot,
-                    p.Enabled ?? throw new InvalidOperationException("Expected a validated plugin to state Enabled."),
-                    p.Winning ?? throw new InvalidOperationException("Expected a validated plugin to state Winning.")))
-                .ToList();
-            var result = handler.Put(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
+            var result = handler.Put(
+                req.GameDirectory, req.InstanceRoot, gameRelease,
+                [.. plugins.Select(p => new RegisteredPlugin(p.Name, p.Origin, p.Path))], active);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -86,13 +72,20 @@ public static class LoadOrderEndpoints
         }
     }
 
-    // An absent directory is a bad request, not an empty answer: "no implicit masters" and "that
-    // folder isn't there" want opposite responses from the caller.
-    internal static IResult GetImplicitMasters(string gameDirectory, string gameRelease, IPluginAdapter adapter)
+    // ADR-0012: the game loads one file per name, so an active list naming two answers wrong
+    // everywhere a FormID or a winner is read by filename.
+    private static string? ActiveRefusal(IReadOnlyList<LoadOrderPlugin> plugins, IReadOnlyList<PluginAddress> active)
     {
-        if (!Directory.Exists(gameDirectory))
-            return Results.Problem($"Game directory not found: {gameDirectory}", statusCode: 400);
-        if (WriteEndpointMapping.ParseGameRelease(gameRelease, out var release) is { } releaseErr) return releaseErr;
-        return Results.Ok(adapter.ImplicitPluginsIn(gameDirectory, release));
+        var sent = plugins.Select(p => new PluginAddress(p.Name, p.Origin)).ToHashSet(PluginAddress.Comparer);
+        var stray = active.Where(a => !sent.Contains(a)).Select(a => $"{a.Name} from {a.Origin}").FirstOrDefault();
+        if (stray is not null) return $"The active plugin {stray} is not a plugin in the snapshot.";
+
+        var contested = active
+            .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        return contested is null
+            ? null
+            : $"The snapshot names more than one active {contested.Key}: " +
+              $"{string.Join(", ", contested.Select(a => a.Origin))}. The game loads one file per name.";
     }
 }

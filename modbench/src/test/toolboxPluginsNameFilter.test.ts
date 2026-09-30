@@ -251,8 +251,8 @@ describe('the Plugins view, given no lines and no locked plugins', () => {
 function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
   return {
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
-    isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
-    winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
+    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isTracked: false,
+    hasParseFailure: false,
   };
 }
 

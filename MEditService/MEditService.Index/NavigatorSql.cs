@@ -35,13 +35,13 @@ internal static class NavigatorSql
             WHERE held.child = {alias}.form_key AND held.plugin = {alias}.plugin AND held.origin = {alias}.origin)
         """;
 
-    /// <summary>A FormID is the load position of the winning registration of the FormKey's
-    /// filename, then its ID; a light plugin's FormIDs take the FE prefix, so they follow every full
-    /// plugin's.</summary>
+    /// <summary>A FormID is its filename's active load index, then its ID; a light plugin's take the
+    /// FE prefix, so follow every full plugin's. Read off registrations, which land before the
+    /// sweep.</summary>
     internal static string FormIdOrder(string formKey) => $"""
         (SELECT row(fo.is_light, fo.load_order_idx)
          FROM {TableDdlBuilder.RegistrationsRelation} fo
-         WHERE fo.winning AND fo.plugin = split_part({formKey}, ':', 2)) NULLS LAST,
+         WHERE fo.load_order_idx IS NOT NULL AND fo.plugin = split_part({formKey}, ':', 2)) NULLS LAST,
         lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)
         """;
 }

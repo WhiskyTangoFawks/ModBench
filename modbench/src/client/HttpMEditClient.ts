@@ -146,11 +146,11 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** `gameDirectory` must be the resolved Data folder — the backend prepends implicit masters
-   *  from it. The backend keys its persistent index on `instanceRoot` (ADR-0009) because `origin`
-   *  is a folder *name*, unique only within one instance. */
+  /** The backend keys its persistent index on `instanceRoot` (ADR-0009) because `origin` is a
+   *  folder *name*, unique only within one instance. */
   async putLoadOrder(
     plugins: LoadOrderPluginInput[],
+    active: PluginAddress[],
     gameDirectory: string,
     instanceRoot: string,
     gameRelease: string,
@@ -175,7 +175,7 @@ export class HttpMEditClient implements MEditClient {
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
-        body: { plugins, gameDirectory, instanceRoot, gameRelease },
+        body: { plugins, active, gameDirectory, instanceRoot, gameRelease },
         // Aborts the request itself rather than leaving it to notice a dead socket.
         ...(options.signal ? { signal: options.signal } : {}),
       });
@@ -607,22 +607,5 @@ export class HttpMEditClient implements MEditClient {
       this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
       return data ?? [];
     });
-  }
-
-  /** The plugins this install loads with no plugins.txt line, in load order. `undefined` on any
-   *  failure: "unknown" and "none" are different answers, and plugin sync writes on one. */
-  async implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined> {
-    let result;
-    try {
-      result = await this.apiClient.GET('/implicit-masters', { params: { query: { gameDirectory, gameRelease } } });
-    } catch (e) {
-      this.log(`[HttpMEditClient] implicitMasters failed: ${errorMessage(e)}`);
-      return undefined;
-    }
-    if (!result.response.ok || result.data === undefined) {
-      this.log(`[HttpMEditClient] implicitMasters failed (${result.response.status}): ${errorText(result.error)}`);
-      return undefined;
-    }
-    return result.data;
   }
 }

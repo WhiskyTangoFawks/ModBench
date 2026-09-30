@@ -209,22 +209,19 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0013: one row per registered plugin. ADR-0013: participation is derived from the three facts
-    // here by Registration.Participates, never a column.
+    // ADR-0013: one row per registered plugin, carrying its load index.
     private void UpsertRegistration(string plugin, string origin, Registration registration)
     {
         DeleteRegistration(plugin, origin);
         using var cmd = Connection.CreateCommand();
         cmd.CommandText =
-            $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, enabled, winning, is_light) VALUES ($1, $2, $3, $4, $5, $6)";
+            $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, is_light) VALUES ($1, $2, $3, $4)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter
         {
             Value = registration.LoadOrderIndex is { } loadOrderIndex ? (object)loadOrderIndex : DBNull.Value,
         });
-        cmd.Parameters.Add(new DuckDBParameter { Value = registration.Enabled });
-        cmd.Parameters.Add(new DuckDBParameter { Value = registration.Winning });
         cmd.Parameters.Add(new DuckDBParameter
         {
             Value = _openedPlugins().TryGetValue(new PluginAddress(plugin, origin), out var content) && content.IsLight,
@@ -280,17 +277,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
     /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
     /// both refs on a 48,000-record, 60-plugin fixture.</summary>
-    public void UpdateWinners(IReadOnlyList<RegisteredPlugin> participating)
+    public void UpdateWinners(IReadOnlyList<RegisteredPlugin> active)
     {
         using var tx = Connection.BeginTransaction();
-        ReplaceParticipating(participating);
+        ReplaceActive(active);
         UpdateWinnersCore();
         _store.BumpSequence();
         tx.Commit();
     }
 
-    // The same sweep for a projection that moved rows without moving the load order: who
-    // participates cannot change here, so the set the last sweep was handed still holds.
+    // The same sweep for a projection that moved rows without moving the load order: which plugins
+    // are active cannot change here, so the set the last sweep was handed still holds.
     private void ResweepWinners()
     {
         using var tx = Connection.BeginTransaction();
@@ -299,23 +296,18 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0013: replaced whole, never diffed. The rule that decided membership ran in the load order
-    // value (Registration.Participates); nothing here re-asks it.
-    private void ReplaceParticipating(IReadOnlyList<RegisteredPlugin> participating)
+    // ADR-0013 invariant 3: replaced whole, never diffed. Mod Management decided which plugins are
+    // active; nothing here re-asks it.
+    private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
-        Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
-        foreach (var plugin in participating)
+        Execute($"DELETE FROM {TableDdlBuilder.ActiveRelation}");
+        foreach (var (plugin, loadOrderIndex) in active.Select((plugin, index) => (plugin, index)))
         {
             using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
+            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ActiveRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-            cmd.Parameters.Add(new DuckDBParameter
-            {
-                Value = plugin.Slot
-                    ?? throw new InvalidOperationException(
-                        $"Expected participating plugin '{plugin.Name}' from '{plugin.Origin}' to carry a load-order slot."),
-            });
+            cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIndex });
             cmd.ExecuteNonQuery();
         }
     }
@@ -337,15 +329,15 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
     }
 
-    // The participating plugin latest in the load order wins its FormKey. The join is
-    // `participating` alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin)
+    // The active plugin latest in the load order wins its FormKey. The join is
+    // `active_plugins` alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin)
     // tiebreak make a load_order_idx tie deterministic.
     private void InsertWinners(RecordRef @ref, string rowsSql) =>
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
             SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
             FROM ({rowsSql}) r
-            JOIN {TableDdlBuilder.ParticipatingRelation} p
+            JOIN {TableDdlBuilder.ActiveRelation} p
               ON p.plugin = r.plugin AND p.origin = r.origin
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
@@ -537,19 +529,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return hashes;
     }
 
-    // The three facts the plugin's registration row carries (ADR-0013), read back for a re-ingest that
-    // must not change what the load order said about this plugin.
+    // What the plugin's registration row carries (ADR-0013), read back for a re-ingest that must not
+    // change what the load order said about this plugin.
     private Registration? RegistrationOf(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText =
-            $"SELECT load_order_idx, enabled, winning FROM {TableDdlBuilder.RegistrationsRelation} " +
-            "WHERE plugin = $1 AND origin = $2";
+            $"SELECT load_order_idx FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2";
         DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
-        return new Registration(
-            reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.GetBoolean(1), reader.GetBoolean(2));
+        return new Registration(reader.IsDBNull(0) ? null : reader.GetInt32(0));
     }
 
     // --- Validate ---

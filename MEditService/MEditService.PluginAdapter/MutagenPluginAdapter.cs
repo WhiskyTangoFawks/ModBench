@@ -76,9 +76,6 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         }
     }
 
-    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
-        ImplicitPlugins.In(dataFolder, gameRelease);
-
     public (PluginContent Content, Exception? Unreachable) ReadContent(
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
     {

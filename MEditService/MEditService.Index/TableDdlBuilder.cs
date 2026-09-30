@@ -53,15 +53,13 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// state, not a file mirror: it lives in <c>main</c> beside <c>registrations</c>.</summary>
     internal const string WinnersRelation = "winners";
 
-    /// <summary>One row per plugin file the load order holds, carrying ADR-0013's three
-    /// facts. Registration is visibility (ADR-0009): every registered view joins it. Participation
-    /// is never a column here.</summary>
+    /// <summary>One row per plugin file the load order holds, carrying its load index (ADR-0013).
+    /// Registration is visibility (ADR-0009): every registered view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>ADR-0013: who competes for winner, as the load order value answered it, with each
-    /// plugin's slot so the sweep can order by it. Load-order-owned state, so it lives in
-    /// <c>main</c>.</summary>
-    internal const string ParticipatingRelation = "participating";
+    /// <summary>ADR-0013 invariant 3: the active plugins, who compete for winner, each with its load
+    /// index so the sweep can order by it. Load-order-owned state, so it lives in <c>main</c>.</summary>
+    internal const string ActiveRelation = "active_plugins";
 
     // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per (ref, form_key), so
     // the join cannot duplicate a row, and a hash join beats EXISTS on the full-scan reads that
@@ -79,7 +77,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
         CreateRegistrationsTable(connection);
-        CreateParticipatingTable(connection);
+        CreateActiveTable(connection);
         CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
@@ -122,7 +120,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // ADR-0009: the one "registered" predicate — a row answers iff a registrations row names its
     // (plugin, origin) — so C# reads and the SQL door cannot scope differently. Registered, not
-    // participating: an overridden or disabled plugin stays visible (ADR-0013).
+    // active (ADR-0013).
     private static void CreateRegisteredViews(DuckDBConnection connection)
     {
         foreach (var relation in RegisteredRelations)
@@ -231,9 +229,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
     // ADR-0013: replaced whole by each sweep, never diffed — the load order value decides who is in
     // it, and this table only remembers the answer for the re-sweeps a working-tree write triggers.
-    private static void CreateParticipatingTable(DuckDBConnection connection) =>
+    private static void CreateActiveTable(DuckDBConnection connection) =>
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {ParticipatingRelation} (
+            CREATE TABLE IF NOT EXISTS {ActiveRelation} (
                 plugin VARCHAR {FilenameIdentity} NOT NULL,
                 origin VARCHAR {FilenameIdentity} NOT NULL,
                 load_order_idx INTEGER NOT NULL,
@@ -255,17 +253,14 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0013: one row per plugin file, carrying the three facts participation derives
-    // from; participation itself is never a column here. ADR-0009: not cleared at open — the first
-    // reconcile corrects these rows.
+    // ADR-0013: one row per plugin file, carrying its load index, null when it is not active.
+    // ADR-0009: not cleared at open — the first reconcile corrects these rows.
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
                 plugin VARCHAR {FilenameIdentity} NOT NULL,
                 origin VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 load_order_idx INTEGER,
-                enabled BOOLEAN NOT NULL,
-                winning BOOLEAN NOT NULL,
                 is_light BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )

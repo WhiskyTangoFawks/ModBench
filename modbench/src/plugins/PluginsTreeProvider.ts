@@ -6,7 +6,7 @@ import type {
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
-import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
+import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { lockedRowUri } from './ImplicitMasterDecorationProvider';
@@ -36,7 +36,6 @@ const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
-const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
 
 /** `reorderPlugins`, bound to the instance and the active profile by the composition root;
  *  a refused command reaches this provider as a rejection. Enable/disable reaches its own core
@@ -89,9 +88,6 @@ export interface PluginsTreeProviderOptions {
    *  call: the game folder setting is editable while Modbench runs. `undefined` while the folder
    *  is not found. */
   dataFolderFile?: (name: string) => string | undefined;
-  /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
-   *  could not be reached — renders no implicit row rather than a guessed one. */
-  implicitMasters?: ImplicitMasterSource;
 }
 
 
@@ -284,7 +280,6 @@ export class PluginsTreeProvider
   private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolderFile: (name: string) => string | undefined;
-  private readonly implicitMasters: ImplicitMasterSource;
   private readonly instance: InstanceView;
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
@@ -304,11 +299,6 @@ export class PluginsTreeProvider
   // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
   // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
-  // Bumped by `invalidate()`, so a build that asked mEdit before it cannot cache over a newer one.
-  private rowsGeneration = 0;
-  // plugins.md, States, story 3: once mEdit names the locked plugins, an unreachable mEdit does not
-  // unlock them.
-  private lockedNames: readonly string[] | undefined;
   private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
@@ -317,7 +307,6 @@ export class PluginsTreeProvider
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.dataFolderFile = options.dataFolderFile ?? NO_DATA_FOLDER_FILE;
-    this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
     this.instance = options.instance;
     this.records = options.records;
     this.client = options.client;
@@ -332,10 +321,6 @@ export class PluginsTreeProvider
     if (options.records) {
       this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     }
-    // plugins.md, The tree, story 2: the locked plugins are mEdit's answer, so an mEdit that
-    // attaches after the rows were built rebuilds them.
-    const unsubscribe = options.client?.onStatusChanged((status) => { if (status === 'attached') this.invalidate(); });
-    if (unsubscribe) this.subscriptions.push({ dispose: unsubscribe });
     const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
     if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
   }
@@ -364,7 +349,6 @@ export class PluginsTreeProvider
   invalidate(): void {
     this.instanceValue = this.instance.value;
     this.cache = undefined;
-    this.rowsGeneration++;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -495,7 +479,7 @@ export class PluginsTreeProvider
     await this.firstRead.settled; // never claim "No plugins" before the Instance has actually read one
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
-    const losingFirst = await this.builtRows();
+    const losingFirst = this.builtRows();
     const built = this.direction === 'winningAtTop' ? [...losingFirst].reverse() : losingFirst;
     const named = this.filterText
       ? built.filter((n) => pluginFileOf(n).toLowerCase().includes(this.filterLower))
@@ -505,29 +489,22 @@ export class PluginsTreeProvider
     return named.filter((row) => !this.isHiddenByFilter(row));
   }
 
-  private async builtRows(): Promise<PluginListNode[]> {
-    while (!this.cache) {
-      const generation = this.rowsGeneration;
-      this.settleRowsUnlessInvalidatedSince(generation, await this.implicitMasters());
+  private builtRows(): PluginListNode[] {
+    if (!this.cache) {
+      const rows = this.buildRows();
+      this.cache = { rows };
+      if ((rows.length === 0) !== this.lastBuildHadNoRows) {
+        this.lastBuildHadNoRows = rows.length === 0;
+        this.render();
+      }
     }
     return this.cache.rows;
   }
 
-  private settleRowsUnlessInvalidatedSince(generation: number, lockedAnswer: readonly string[] | undefined): void {
-    if (generation !== this.rowsGeneration) return;
-    const rows = this.buildRows(lockedAnswer);
-    this.cache = { rows };
-    if ((rows.length === 0) !== this.lastBuildHadNoRows) {
-      this.lastBuildHadNoRows = rows.length === 0;
-      this.render();
-    }
-  }
-
-  private buildRows(lockedAnswer: readonly string[] | undefined): PluginListNode[] {
-    // Until mEdit names the locked plugins, a plugins.txt line for one of them renders as an
-    // ordinary row, which is what the file says, rather than a guessed lock.
-    this.lockedNames = lockedAnswer ?? this.lockedNames;
-    const implicitNames = this.lockedNames ?? [];
+  private buildRows(): PluginListNode[] {
+    // ADR-0013 invariant 3: Mod Management names the plugins the game loads with no line. While it
+    // cannot, a plugins.txt line for one renders as an ordinary row, which is what the file says.
+    const implicitNames = this.instanceValue.pluginsLoadedWithNoLine ?? [];
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
     // One entry per plugins.txt line: the winning plugin of every listed name, in file order
@@ -636,9 +613,10 @@ export class PluginsTreeProvider
   }
 
   // plugins.md, Menus and keys: compile on a tracked, editable plugin.
+  // plugins.md, Menus and keys: compile (tracked). A plugin that is not active has no record to
+  // edit, yet its source still compiles.
   private compilable(file: string, origin: string): boolean {
-    const facts = this.facts?.get(file, origin);
-    return facts?.tracked === true && facts.readOnly !== true;
+    return this.facts?.get(file, origin)?.tracked === true;
   }
 
   // plugins.md, A row: every status the plugin carries, spec order.
@@ -748,12 +726,13 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0013: the `inLoadOrder` plugins, two of which can share a filename. A failed read is
-  // never swallowed into an empty list, which would read as "nothing held".
+  // The plugins of the rows the tree shows, joined by (origin, filename). A failed read is never
+  // swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
-      return (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
+      const shown = new Set(this.builtRows().map((row) => pluginAddressKey(pluginFileOf(row), row.origin)));
+      return (await this.client.getPlugins()).filter((p) => shown.has(pluginAddressKey(p.name, p.origin)));
     } catch (err) {
       const message = errorMessage(err);
       this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message}`);

@@ -42,13 +42,13 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
         var destinationPath = Path.Combine(_destinationModFolder, DestinationPluginName);
         destinationMod.WriteToBinary(destinationPath);
 
-        var loadOrder = new LoadOrderSnapshot(
+        var loadOrder = SnapshotPlugins.Snapshot(
             _gameDir, _gameDir, GameRelease.Fallout4,
-            SnapshotPlugins.Of(
+
             [
                 new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
-            ]));
+            ]);
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(loadOrder, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 

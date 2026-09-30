@@ -341,8 +341,8 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
             Plugin = fixture.Plugin;
 
-            var loadOrder = new LoadOrderSnapshot(fixture.GameDirectory, instanceRoot: null, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+            var loadOrder = SnapshotPlugins.Snapshot(fixture.GameDirectory, instanceRoot: null, GameRelease.Fallout4,
+                [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
             Holder.Apply(loadOrder);
         }
 

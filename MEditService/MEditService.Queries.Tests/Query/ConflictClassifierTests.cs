@@ -13,9 +13,8 @@ public class ConflictClassifierTests
     private static readonly ConflictClassifier Classifier = new ConflictClassifier();
 
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null,
-        IReadOnlyDictionary<string, bool>? participation = null) =>
-        Classifier.Classify(records, masters ?? NoMasters, GameRelease.Fallout4, pluginParticipates: participation);
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null) =>
+        Classifier.Classify(records, masters ?? NoMasters, GameRelease.Fallout4);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -249,66 +248,6 @@ public class ConflictClassifierTests
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Bob"), ("Level", 10));
         var result = Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
-    }
-
-    // --- Participation (ADR-0013) ---
-
-    [Fact]
-    public void Classify_OneEnabledOneDisabled_ReturnsOnlyOne_NotConflict()
-    {
-        var enabled = MakeOverride("A.esp", 0, true, ("Name", "Alice"));
-        var disabled = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
-        var participation = new Dictionary<string, bool> { ["A.esp"] = true, ["B.esp"] = false };
-
-        var result = Classify([enabled, disabled], participation: participation);
-
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
-        Assert.Equal(ConflictThis.OnlyOne, result.PluginStates["A.esp"]);
-        Assert.DoesNotContain("B.esp", result.PluginStates.Keys);
-    }
-
-    [Fact]
-    public void Classify_AllDisabled_ReturnsOnlyOne_NoDiffs()
-    {
-        var a = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
-        var b = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
-        var participation = new Dictionary<string, bool> { ["A.esp"] = false, ["B.esp"] = false };
-
-        var result = Classify([a, b], participation: participation);
-
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
-        Assert.Empty(result.Diffs);
-    }
-
-    // ADR-0013: an overridden plugin is registered beside the winner and reaches the classifier as
-    // a second column with the same name. Keyed by ColumnKey, so the two are distinct
-    // and the overridden one is filtered out first.
-    [Fact]
-    public void Classify_OverriddenPluginOfTheSameFilename_IsExcluded_NotAConflictWithTheWinner()
-    {
-        var winning = MakeOverrideWithOrigin("Shared.esp", "ModA", 3, true, ("Name", "FromModA"));
-        var losing = MakeOverrideWithOrigin("Shared.esp", "ModB", 3, false, ("Name", "FromModB"));
-        var participation = new Dictionary<string, bool>
-        {
-            [ColumnKey.Of("Shared.esp", "ModA")] = true,
-            [ColumnKey.Of("Shared.esp", "ModB")] = false,
-        };
-
-        var result = Classify([winning, losing], participation: participation);
-
-        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
-        Assert.Equal(ConflictThis.OnlyOne, result.PluginStates[ColumnKey.Of("Shared.esp", "ModA")]);
-        Assert.DoesNotContain(ColumnKey.Of("Shared.esp", "ModB"), result.PluginStates.Keys);
-    }
-
-    [Fact]
-    public void Classify_NoParticipationSupplied_BehavesAsBefore()
-    {
-        // Default (null participation) = every plugin participates.
-        var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
-        var winner = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
-        var result = Classify([master, winner]);
-        Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
     // --- Winner ConflictThis ---

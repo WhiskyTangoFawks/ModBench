@@ -13,8 +13,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
-/// validation of every plugin, deciding nothing — the load order value answers who participates and
-/// wins, the schema where a field goes.</summary>
+/// validation of every plugin, deciding nothing — the load order value answers which plugins are
+/// active, the schema where a field goes.</summary>
 public sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
@@ -27,8 +27,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly TimeProvider _timeProvider;
     // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
     private readonly TaskScheduler _refillScheduler;
-    // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for who
-    // participates and for a plugin's mod folder; it never writes it and keeps no view of its own.
+    // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for which plugins
+    // are active and for a plugin's mod folder; it never writes it and keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
@@ -290,8 +290,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 _heldElsewhereMessage = null;
                 _failureMessage = null;
             }
-            RequireOneWinnerPerFilename(snapshot);
-
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
             return ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
@@ -403,21 +401,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // The diff is computed first and without side effects — one stamp read and a folder probe per
     // plugin — so a snapshot that moves nothing writes nothing and publishes no status.
 
-    // ADR-0012: the game loads one file per name. A load order naming two answers wrong everywhere
-    // a FormID or a winner is read by filename, so it is refused before anything registers.
-    private static void RequireOneWinnerPerFilename(LoadOrderSnapshot snapshot)
-    {
-        var contested = snapshot.Plugins
-            .Where(p => p.Winning)
-            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault(g => g.Count() > 1);
-        if (contested is null) return;
-
-        throw new InvalidOperationException(
-            $"The load order names more than one winning {contested.Key}: " +
-            $"{string.Join(", ", contested.Select(p => p.Origin))}. The game loads one file per name.");
-    }
-
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible. False when the
     // snapshot moved nothing.
@@ -439,7 +422,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
             .Distinct(PluginAddress.Comparer)
             .ToList();
         var moved = resolved
-            .Where(r => open.TryGetValue(r.Key, out var h) && h.Registration != r.Registration)
+            .Select(r => r.Key)
+            .Where(key => open.TryGetValue(key, out var h) && h.Registration != snapshot.RegistrationOf(key))
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
@@ -479,12 +463,12 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
         if (leaving.Count > 0) PublishStatus();
 
-        foreach (var plugin in moved)
+        foreach (var key in moved)
         {
             // ADR-0009 invariant 1: a reorder, an enable, a change of which plugin wins — all the
             // same SQL-only move: no re-read, no re-index, so it is safe to apply live and
             // unprompted.
-            var metadata = held.Update(open[plugin.Key], plugin.Registration);
+            var metadata = held.Update(open[key], snapshot.RegistrationOf(key));
             index.Register(metadata.Key, metadata.Registration);
         }
 
@@ -504,7 +488,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             // transactions, so abandoning it partway would leave some committed and others not.
             token.ThrowIfCancellationRequested();
 
-            if (held.Open(plugin) is not { } metadata)
+            if (held.Open(plugin, snapshot.RegistrationOf(plugin.Key)) is not { } metadata)
             {
                 RecordFailedRead(index, plugin.Key, plugin.Path);
                 continue;
@@ -523,7 +507,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         // invariant 1).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
-        index.UpdateWinners(snapshot.Participating);
+        index.UpdateWinners(snapshot.Active);
         lock (_lock) _conflictsComputed = true;
         // Ready itself publishes from the reconcile door, once this version is stamped in.
         ReapplyFilter();
@@ -936,9 +920,9 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0013 invariant 3: the sweep is handed who competes, read from the kernel's load order —
-    // the rule is Registration.Participates and runs there. Read whole, not per plugin.
-    private IReadOnlyList<RegisteredPlugin> Participating() => _holder.Current.Participating;
+    // ADR-0013 invariant 3: the sweep is handed who competes, the active plugins the kernel's load
+    // order holds. Read whole, not per plugin.
+    private IReadOnlyList<RegisteredPlugin> Active() => _holder.Current.Active;
 
     // Which truth it reads is the plugin's: an untracked plugin from its binary, a tracked plugin
     // from its source tree (ADR-0007 invariant 3), because reading a tracked plugin's binary would
@@ -1008,7 +992,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 throw;
             }
 
-            index.UpdateWinners(Participating());
+            index.UpdateWinners(Active());
             ReapplyFilter();
         }
         lock (_lock) _failedReads.Remove(key);
@@ -1037,7 +1021,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             lock (_lock)
             {
                 index.Index(documents, metadata.Registration, metadata.Key, metadata.Path, DerivedFrom.Binary);
-                index.UpdateWinners(Participating());
+                index.UpdateWinners(Active());
                 ReapplyFilter();
             }
         }
@@ -1075,7 +1059,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             }
             index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as a re-index does.
-            index.UpdateWinners(Participating());
+            index.UpdateWinners(Active());
             ReapplyFilter();
         }
         AnnouncePluginChanged(index, key);

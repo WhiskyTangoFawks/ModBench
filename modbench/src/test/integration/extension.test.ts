@@ -85,26 +85,26 @@ function awaitStatus(client: MEditClient, status: BackendStatus, label: string, 
 
 // The load order holds every plugins.txt line, so a disabled one is browsable but never wins.
 type MockPlugin = PluginMetadata;
-function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'participates'>): MockPlugin {
+function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'inLoadOrder'>): MockPlugin {
   return {
     isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0, isImmutable: false,
-    inLoadOrder: true, enabled: true, winning: true, masterIssues: [], hasMatchingRecords: true,
+    masterIssues: [], hasMatchingRecords: true,
     isTracked: false,
     hasParseFailure: false,
     ...over,
   };
 }
 const MOCK_PLUGINS: MockPlugin[] = [
-  mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true }),
-  mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true }),
-  mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false }),
+  mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', inLoadOrder: true }),
+  mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', inLoadOrder: true }),
+  mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', inLoadOrder: false }),
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
-  mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
+  mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', inLoadOrder: true, isImmutable: true }),
   // ADR-0012 invariant 4: a plugin the backend flags with a master that is not active. Every other
   // entry carries an empty `masterIssues`, which is what the backend sends when every master is active.
   mockPlugin({
-    name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
+    name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', inLoadOrder: true,
     masterIssues: ['Ghost.esm'],
   }),
 ];
@@ -125,11 +125,6 @@ function pluginNamesOf(body: string): string[] {
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same load order.
 let mockPluginsOverride: MockPlugin[] | null = null;
-// GET /implicit-masters: the plugins this install loads with no plugins.txt line. Empty by
-// default, so a suite's Data/ stubs are presence without being forced on.
-let mockImplicitMasters: string[] = [];
-// Makes GET /implicit-masters fail, so the client answers that mEdit cannot say.
-let implicitMastersShouldFail = false;
 // Makes the next PUT /load-order fail the way a bad game directory would. ADR-0013's contract
 // disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
@@ -201,8 +196,6 @@ function resetMockBackend(): void {
   putLoadOrders.length = 0;
   recordEdits.length = 0;
   mockPluginsOverride = null;
-  mockImplicitMasters = [];
-  implicitMastersShouldFail = false;
   putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
@@ -343,18 +336,6 @@ function createMockBackend(): http.Server {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
-      return;
-    }
-    // Answered from the game directory alone, with no load order held — the Plugins rows and
-    // plugin sync both ask it before any PUT (ADR-0016).
-    if (url.startsWith('/implicit-masters')) {
-      if (implicitMastersShouldFail) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'simulated implicit-masters failure' }));
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(mockImplicitMasters));
       return;
     }
     const edit = /^\/records\/([^/]+)\/edit$/.exec(url);
@@ -1539,12 +1520,10 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// plugins.md, Reporting, story 2: once mEdit has attached, plugin sync's refusal reaches the
-// Plugins view's message line, and a connect runs plugin sync again.
-describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
+// commands.md, The system commands: plugin sync takes the instance value as its Argument.
+describe('Plugin sync takes the instance value', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const messageLine = (): string | undefined => ext?.exports.pluginListView?.message;
   let gameDir = '';
 
   before(async () => {
@@ -1554,40 +1533,15 @@ describe('Plugin sync says why it wrote nothing, and runs again on connect', () 
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
     await setGameDirectory(gameDir);
-    // Before mEdit first attaches, plugin sync waits; this suite's refusal comes after that.
-    await enterEditing();
-    await resetMockBackendDetached();
   });
 
   after(async () => {
     if (!root) return;
-    exitEditing();
-    implicitMastersShouldFail = false;
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('says mEdit cannot answer in the message line, and clears it once the connect\'s run lands', async () => {
-    implicitMastersShouldFail = true;
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
-    await waitFor('the refusal in the Plugins view\'s message line', () =>
-      messageLine()?.includes('plugins.txt is not synced: mEdit cannot say'));
-    // Past every recompute the write queued, only the connect runs plugin sync again.
-    const instance = present(instanceExport(), "the activated extension's instance export");
-    for (let landed = instance.sequence; ; landed = instance.sequence) {
-      await nextLandingWithin(instance, PROBE_SPACING_MS);
-      if (instance.sequence === landed) break;
-    }
-
-    implicitMastersShouldFail = false;
-    await enterEditing();
-
-    await waitFor('the refusal to leave the message line', () =>
-      !(messageLine()?.includes('plugins.txt is not synced') ?? false));
-  });
-
-  // commands.md, The system commands: plugin sync takes the instance value as its Argument.
   it('modbench.plugin.sync syncs the instance value it is handed: a Data folder it lists empty drops the line', async () => {
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n'));
     const instance = present(instanceExport(), "the activated extension's instance export");
@@ -1633,24 +1587,23 @@ describe('Plugin load-order rows expand into records', () => {
     assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
-  // The extension parses no plugin binary (ADR-0016), so the forced-on rows can only be the
-  // backend's answer — nothing here discovers them from the Data folder.
-  it('renders the implicit masters the backend names, ahead of the plugins.txt rows', async () => {
+  // ADR-0013 invariant 3: Mod Management takes the game's masters from the per-release table,
+  // each only where the game folder holds it.
+  it('renders the game\'s master the game folder holds, ahead of the plugins.txt rows', async () => {
     const tree = pluginsTree();
-    mockImplicitMasters = ['Fallout4.esm'];
+    const master = path.join(gameDir, 'Data', 'Fallout4.esm');
     try {
-      pluginsTree().invalidate();
+      await writeAndAwaitInstance(() => fs.writeFileSync(master, ''));
       const rows = await tree.getChildren();
 
-      assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the backend-named implicit master leads the rows');
+      assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the game\'s master leads the rows');
       assert.strictEqual(tree.getTreeItem(present(rows[0], 'the first row')).contextValue, 'pluginImplicit');
     } finally {
-      mockImplicitMasters = [];
-      pluginsTree().invalidate();
+      await writeAndAwaitInstance(() => fs.rmSync(master));
     }
   });
 
-  it('renders no implicit row when the backend names none', async () => {
+  it('renders no implicit row when the game folder holds none of the game\'s masters', async () => {
     const tree = pluginsTree();
     pluginsTree().invalidate();
     const rows = await tree.getChildren();

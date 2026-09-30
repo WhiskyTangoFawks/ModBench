@@ -35,7 +35,8 @@ public sealed class PluginHeaderRecordApiTests
         {
             gameDirectory = fixture.DataFolder,
             instanceRoot = fixture.InstanceRoot,
-            plugins = fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fixture.Plugins),
             gameRelease = "Fallout4",
         })).EnsureSuccessStatusCode();
 
@@ -64,7 +65,8 @@ public sealed class PluginHeaderRecordApiTests
         {
             gameDirectory = fixture.DataFolder,
             instanceRoot = fixture.InstanceRoot,
-            plugins = fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(fixture.Plugins),
             gameRelease = "Fallout4",
         })).EnsureSuccessStatusCode();
 

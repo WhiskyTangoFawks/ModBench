@@ -289,6 +289,9 @@ export interface InstanceAdapter {
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+  /** The plugins the game folder's Creation Club list names, in its order; none when the release
+   *  has no Creation Club, the game folder is not found, or it holds no list. */
+  creationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]>;
   /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
    *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
   downloadedFileAt(path: string): Promise<string | undefined>;
