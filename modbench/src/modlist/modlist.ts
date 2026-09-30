@@ -35,7 +35,7 @@ export type ModlistSelectionResult =
 type EntryKind = EntryRef['kind'];
 
 // A command names an entry by the name the value listed it under.
-const isListed = (order: readonly EntryRef[], entry: EntryRef): boolean =>
+const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
   order.some((e) => e.kind === entry.kind && e.name === entry.name);
 
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
@@ -83,13 +83,14 @@ export function moveSeparators(
 
 const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
 
-/** Why `requested` cannot name a separator, or `undefined` when it can: a separator in `order`
- *  has that name, or a folder holds one, matched as the instance matches names. `own`, the
+/** Why `requested` cannot name a separator, or `undefined` when it can: the profile's mod order
+ *  lists one of that name, or a folder holds one, matched as the instance matches names. `own`, the
  *  separator being renamed, is no clash. */
 export async function separatorNameRefusal(
-  access: ModlistAccess, order: readonly EntryRef[], requested: string, own?: string,
+  access: ModlistAccess, profile: string, requested: string, own?: string,
 ): Promise<string | undefined> {
-  if (requested !== own && isListed(order, { kind: 'separator', name: requested })) return SEPARATOR_NAME_CLASH;
+  const listed = await access.adapter.orderEntry(profile, { kind: 'separator', name: requested });
+  if (listed !== undefined && listed.name !== own) return SEPARATOR_NAME_CLASH;
   const holding = await access.adapter.entryFolder({ kind: 'separator', name: requested });
   if (holding === undefined) return undefined;
   const ownFolder = own === undefined ? undefined : await access.adapter.entryFolder({ kind: 'separator', name: own });

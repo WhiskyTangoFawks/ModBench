@@ -53,8 +53,9 @@ import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/s
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
+import type { EntryRef } from '../../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -422,9 +423,14 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
 const CLASH = 'A separator with this name already exists';
 
 // An instance whose folder for mods holds these folders, as another tool left them.
-async function instanceHolding(folders: readonly string[]): Promise<string> {
+// Its mod order lists `entries`, written through the adapter.
+async function instanceHolding(folders: readonly string[], entries: readonly EntryRef[] = []): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'mod-folders-'));
   for (const folder of folders) await mkdir(join(root, 'mods', folder), { recursive: true });
+  await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
+  await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '');
+  await accessTo(root).adapter.changeModOrder('Default', () =>
+    entries.map((entry) => ({ kind: 'addAtWinningEnd', entry })));
   return root;
 }
 
@@ -480,10 +486,12 @@ describe('rename separator takes its separator through the gesture entry', () =>
     }
   });
 
-  // mods.md, Rename separator: a separator is a line in mod order, so one whose folder is gone
-  // still has its name. Rival: asking the folders alone.
-  it('refuses in the prompt a name a separator with no folder has, and takes its own', async () => {
-    const root = await instanceHolding([]);
+  // mods.md, Rename separator: a line in mod order is a separator whose folder may be gone, named
+  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
+  it('refuses in the prompt a name a separator with no folder has, in any case, and takes its own', async () => {
+    const root = await instanceHolding([], [
+      { kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' },
+    ]);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
@@ -491,8 +499,8 @@ describe('rename separator takes its separator through the gesture entry', () =>
       await invoke('modbench.separator.rename', groupB);
 
       const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
-      expect(await validate('Group A')).toBe(CLASH);
-      expect(await validate('Group B')).toBeUndefined();
+      expect(await validate('group a')).toBe(CLASH);
+      expect(await validate('GROUP B')).toBeUndefined();
       expect(await validate('Mod A')).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -591,10 +599,10 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     }
   });
 
-  // mods.md, Add separator: a separator is a line in mod order, so one whose folder is gone still
-  // has its name. Rival: asking the folders alone.
-  it('refuses in the prompt a name a separator with no folder has', async () => {
-    const root = await instanceHolding([]);
+  // mods.md, Add separator: a line in mod order is a separator whose folder may be gone, named
+  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
+  it('refuses in the prompt a name a separator with no folder has, in any case', async () => {
+    const root = await instanceHolding([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
@@ -602,7 +610,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
       await invoke('modbench.separator.add', modA);
 
       const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
-      expect(await validate('Group A')).toBe(CLASH);
+      expect(await validate('group a')).toBe(CLASH);
       expect(await validate('Mod A')).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });

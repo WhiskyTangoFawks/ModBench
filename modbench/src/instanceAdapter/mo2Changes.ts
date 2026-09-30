@@ -20,7 +20,7 @@ import {
 } from './instanceAdapter';
 import { downloadFile, mo2FolderName, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
 import {
-  currentDownloadsDir, entryKey, folderHolding, listModFolders, modFoldersOf, newModFolder, type Mo2Context,
+  currentDownloadsDir, entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, newModFolder, type Mo2Context,
 } from './mo2Context';
 
 export type Mo2Changes = Pick<InstanceAdapter,
@@ -28,10 +28,6 @@ export type Mo2Changes = Pick<InstanceAdapter,
   | 'trashDownloadedFileMeta' | 'selectProfile'>;
 
 type Undo = () => Promise<void>;
-
-// The entry of `entry`'s kind mod order lists it as, matched as MO2 matches names.
-const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
-  order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
   const listed = listedAs(order, entry);

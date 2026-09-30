@@ -178,6 +178,14 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
+    // Rival: an exact match, which reads a line another tool recased as no entry.
+    it('answers the entry of a kind mod order lists, matched as MO2 matches names, or none', async () => {
+      expect(await adapter.orderEntry('Default', { kind: 'mod', name: 'harder vats' })).toMatchObject({ kind: 'mod', name: 'Harder VATS' });
+      expect(await adapter.orderEntry('Default', { kind: 'separator', name: ' unassigned (modlist development). ' }))
+        .toMatchObject({ kind: 'separator', name: 'Unassigned (Modlist Development)' });
+      expect(await adapter.orderEntry('Default', { kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
+    });
+
     it('rejects a profile with no mod order to read', async () => {
       await expect(adapter.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
     });

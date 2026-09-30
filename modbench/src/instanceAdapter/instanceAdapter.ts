@@ -233,6 +233,9 @@ export interface InstanceAdapter {
   /** Every profile's name; none when the instance has no profiles. */
   profiles(): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
+  /** The entry of `entry`'s kind mod order lists, matched as the manager matches names; undefined
+   *  when it lists none. */
+  orderEntry(profile: string, entry: EntryRef): Promise<ModlistEntry | undefined>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;

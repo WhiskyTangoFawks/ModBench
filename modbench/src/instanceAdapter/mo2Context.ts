@@ -6,7 +6,7 @@ import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { get, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
-import type { EntryRef, ModFolder, ModFolders } from './instanceAdapter';
+import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import { entryDir, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
 import type { Mo2Watch } from './mo2Watch';
 
@@ -31,6 +31,10 @@ export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promis
  *  as MO2 names it. A mod named as a separator's folder is that separator. */
 export const entryKey = (entry: EntryRef): string =>
   modNameKey(entry.kind === 'separator' ? separatorModName(mo2FolderName(entry.name)) : entry.name);
+
+/** The entry of `entry`'s kind `order` lists, matched as MO2 matches names. */
+export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
+  order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
 /** The mod folders as entries; the reserved overwrite name holds none. */
 export async function listModFolders(

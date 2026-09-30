@@ -160,7 +160,7 @@ export function registerModContextCommands(
 function separatorNamePrompt(
   access: ModlistAccess, instance: Pick<Instance, 'value'>, own?: string,
 ): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.mods, value, own));
+  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.activeProfile, value, own));
 }
 
 export function registerSeparatorCommands(
