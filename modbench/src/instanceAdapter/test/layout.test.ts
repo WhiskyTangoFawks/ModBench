@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import { DOWNLOAD_SIDECAR_SUFFIX } from '../../mo2Codecs/downloads';
-import { MOD_META_FILE_NAME } from '../../mo2Codecs/metaIni';
-import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../../mo2Codecs/modlistText';
-import { SETTINGS_FILE_NAME } from '../../mo2Codecs/modOrganizerIni';
-import { PLUGINS_FILE_NAME } from '../../mo2Codecs/pluginsText';
+import { DOWNLOAD_SIDECAR_SUFFIX } from '../codecs/downloads';
+import { MOD_META_FILE_NAME } from '../codecs/metaIni';
+import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME } from '../codecs/modlistText';
+import { SETTINGS_FILE_NAME } from '../codecs/modOrganizerIni';
+import { PLUGINS_FILE_NAME } from '../../loadOrderFileCodec/pluginsText';
 import {
   DOWNLOADS_WATCH_GLOB,
   MODLIST_GLOB,

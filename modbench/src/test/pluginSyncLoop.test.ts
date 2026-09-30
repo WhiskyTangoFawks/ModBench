@@ -3,8 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
-import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
-import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -14,10 +13,10 @@ import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../plugin
 import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import { resolvesNotFound } from '../test/mo2/gameFolderNotFound';
+import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
-import { syncMods } from '../modlist/modlist';
+import { modSyncOver } from '../modlist/modlist';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -82,10 +81,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const resolveGameDirectory: GameDirectoryResolver = () =>
-    Promise.resolve({ kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') });
   const instance = new Instance({
-    instanceRoot: root, resolveGameDirectory, resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    instanceRoot: root,
+    adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
     log: () => {}, logReadFailure: () => {},
   });
   instances.push(instance);
@@ -204,8 +202,7 @@ describe('the game folder not found, across the whole instance', () => {
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
     const instance = new Instance({
-      instanceRoot: root, resolveGameDirectory: resolvesNotFound,
-      resolveDownloadsDirectory: downloadsDirectoryResolver(), log: write, logReadFailure: write,
+      instanceRoot: root, adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
@@ -213,7 +210,7 @@ describe('the game folder not found, across the whole instance', () => {
       const { profile, provided, inData } = pluginSyncArguments(value);
       return syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined));
     }, channel);
-    const modSync = registerModSync(instance, (value) => syncMods(root, value.activeProfile, value.modFolders), channel);
+    const modSync = registerModSync(instance, modSyncOver(accessTo(root)), channel);
 
     await instance.refresh();
     pluginSync.runOnConnect();

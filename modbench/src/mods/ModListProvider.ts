@@ -6,7 +6,7 @@ import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
-import { setModsEnabled as setModsEnabledCommand } from '../modlist/modlist';
+import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -28,7 +28,7 @@ export interface ModListProviderOptions {
    *  overwrite/ file count — the tree's only data input (ADR-0015). */
   instance: InstanceView;
   /** The instance the check box command writes to; never read by this provider. */
-  instanceRoot: string;
+  access: ModlistAccess;
 }
 
 function statusIconId(status?: ModStatusResult): string {
@@ -153,14 +153,14 @@ export class ModListProvider
   private filterLower = '';
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
-  private readonly instanceRoot: string;
+  private readonly access: ModlistAccess;
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
-    this.instanceRoot = options.instanceRoot;
+    this.access = options.access;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
@@ -335,7 +335,7 @@ export class ModListProvider
   // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const profile = this.instanceValue.activeProfile;
-    const result = await setModsEnabledCommand(this.instanceRoot, profile, [modName], enabled);
+    const result = await setModsEnabledCommand(this.access.instanceRoot, profile, [modName], enabled);
     if (!result.applied) throw new Error(result.refusal);
     const refusal = result.outcome.refused[0];
     if (refusal) throw new Error(refusal.reason);

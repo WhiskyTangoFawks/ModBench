@@ -29,8 +29,9 @@ export function isTracked(modFolder: string): Promise<boolean> {
 // paths never serialize against each other. Module-level, so every command shares one adapter.
 const chains = new Map<string, Promise<unknown>>();
 
-// Runs `task` after every task already queued on `key`, and answers what it answered.
-function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+/** Runs `task` after every task already queued on `key`, holding the lock every write of that path
+ *  here takes until `task` settles, and answers what it answered. */
+export function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
   const prior = chains.get(key) ?? Promise.resolve();
   const next = prior.then(task, task);
   // The chain tail must never stay rejected, or a later write on this key queues behind a dead

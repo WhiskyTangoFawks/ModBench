@@ -26,6 +26,7 @@ import { recordSummaryFixture } from '../client/test/fixtures';
 import { FakeInstance } from './mo2/fakeInstance';
 import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { expectInstanceOf } from './expectInstanceOf';
+import { accessTo } from './mo2/adapterOver';
 
 beforeEach(() => { vi.clearAllMocks(); });
 
@@ -38,7 +39,7 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'), 1]] },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledWith('/instance', 'Default', [{ name: 'TestMod.esp', enabled: true }]);
@@ -58,7 +59,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 1],
         ],
       },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
@@ -80,7 +81,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(setPluginsParticipation).toHaveBeenCalledOnce();
@@ -95,7 +96,7 @@ describe('onPluginCheckboxChanged', () => {
 
     await onPluginCheckboxChanged(
       { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }, 'SomeMod'), 0]] },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'disk full' }]);
@@ -112,7 +113,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: true }, 'SomeMod'), 0],
         ],
       },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to update plugins.', detail: 'disk full' }]);
@@ -132,7 +133,7 @@ describe('onPluginCheckboxChanged', () => {
           [new PluginNode({ name: 'B.esp', enabled: false }, 'SomeMod'), 1],
         ],
       },
-      '/instance', profile, reporter,
+      accessTo('/instance'), profile, reporter,
     );
 
     expect(reporter.reports).toEqual([
@@ -143,7 +144,7 @@ describe('onPluginCheckboxChanged', () => {
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
     const recordNode = new RecordNode(recordSummaryFixture(), 'Data');
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, '/instance', profile, recordingReporter());
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, accessTo('/instance'), profile, recordingReporter());
 
     expect(setPluginsParticipation).not.toHaveBeenCalled();
   });
@@ -170,7 +171,7 @@ describe('a check-box enable and the Plugins rows', () => {
     tree.onDidChangeTreeData(() => { changes++; });
 
     await onPluginCheckboxChanged(
-      { items: [[expectInstanceOf(row, PluginNode), TreeItemCheckboxState.Checked]] }, '/instance', profile, recordingReporter());
+      { items: [[expectInstanceOf(row, PluginNode), TreeItemCheckboxState.Checked]] }, accessTo('/instance'), profile, recordingReporter());
 
     expect(changes).toBe(0);
     expect(await checkedState(tree)).toBe(TreeItemCheckboxState.Unchecked);

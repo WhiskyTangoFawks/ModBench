@@ -27,7 +27,7 @@ import {
   registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps,
   registerOpenHeaderCommand, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
-import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
@@ -140,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     notifyConflictsComputed,
-    originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
+    originFiles: (origin) => toolbox.originFiles(origin),
   };
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({

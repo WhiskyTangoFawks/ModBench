@@ -7,9 +7,9 @@ import { present } from '../../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
-import type { GameDirectoryResolver } from '../../instanceAdapter/gameDirectory';
-import { downloadsDirectoryResolver, type DownloadsDirectoryResolution } from '../../instanceAdapter/downloadsDirectory';
-import { GAME_FOLDER_NOT_FOUND, resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
+import type { GameFolder } from '../../instanceAdapter/gameDirectory';
+import type { DownloadedFiles, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
@@ -20,6 +20,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { Instance, type InstanceValue } from '../instance';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -32,12 +33,20 @@ afterEach(async () => {
 
 const DATA_FOLDER = '/game/Data';
 
+type ResolveGameFolder = () => Promise<GameFolder>;
+
 // The Instance adapter's own answer is doubled: where the game is is its question, not the Instance's.
-const resolvesDataFolder: GameDirectoryResolver = () =>
+const resolvesDataFolder: ResolveGameFolder = () =>
   Promise.resolve({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
+const resolvesNotFound: ResolveGameFolder = () => Promise.resolve(GAME_FOLDER_NOT_FOUND);
 
 interface Hooks {
-  resolveGameDirectory?: GameDirectoryResolver;
+  resolveGameFolder?: ResolveGameFolder;
+}
+
+// Counts the adapter's reads of the settings, the one read a recompute starts from.
+function countingSettings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
+  return { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
 }
 
 async function realInstance(hooks: Hooks = {}): Promise<{
@@ -45,28 +54,24 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   instance: Instance;
   logs: string[];
   readFailureLines: string[];
-  iniTextsResolved: string[];
-  setResolver: (resolve: GameDirectoryResolver) => void;
+  settingsReads: { count: number };
+  setResolver: (resolve: ResolveGameFolder) => void;
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const logs: string[] = [];
   const readFailureLines: string[] = [];
-  const iniTextsResolved: string[] = [];
-  let resolve = hooks.resolveGameDirectory ?? resolvesDataFolder;
+  const settingsReads = { count: 0 };
+  let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: (iniText) => {
-      iniTextsResolved.push(iniText);
-      return resolve(iniText);
-    },
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
   instances.push(instance);
   return {
-    root, instance, logs, readFailureLines, iniTextsResolved,
+    root, instance, logs, readFailureLines, settingsReads,
     setResolver: (next) => { resolve = next; },
   };
 }
@@ -216,7 +221,7 @@ describe('Instance — the value', () => {
 
     await instance.refresh();
 
-    expect(instance.value.modFolders).toContain('Hand Extracted Mod');
+    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
   });
 
@@ -232,8 +237,8 @@ describe('Instance — the value', () => {
 
       await instance.refresh();
 
-      expect(instance.value.modFolders).toContain('Linked Mod');
-      expect(instance.value.modFolders).not.toContain('Linked File');
+      expect(instance.value.modFolders?.map((f) => f.name)).toContain('Linked Mod');
+      expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Linked File');
     } finally {
       await rm(target, { recursive: true, force: true });
     }
@@ -250,8 +255,8 @@ describe('Instance — the value', () => {
     await instance.refresh();
 
     expect(readFailureLines).toEqual([]);
-    expect(instance.value.modFolders).toContain('Real Mod');
-    expect(instance.value.modFolders).not.toContain('Loop');
+    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Real Mod');
+    expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Loop');
     expect(logs.filter((line) => line.includes('Loop'))).toHaveLength(1);
   });
 
@@ -263,7 +268,7 @@ describe('Instance — the value', () => {
 
     await instance.refresh();
 
-    expect(instance.value.modFolders).not.toContain('Thumbs.db');
+    expect(instance.value.modFolders?.map((f) => f.name)).not.toContain('Thumbs.db');
   });
 
   it('carries the winner of a path two enabled mods provide, and each enabled mod\'s own files', async () => {
@@ -408,19 +413,18 @@ describe('Instance — built by watching', () => {
   it('a rebind that lands after dispose() creates no orphan downloads watcher', async () => {
     const root = await cloneCorpusFixture();
     roots.push(root);
-    let resolveDownloadsDir: ((resolution: DownloadsDirectoryResolution) => void) | undefined;
-    const pending = new Promise<DownloadsDirectoryResolution>((resolve) => { resolveDownloadsDir = resolve; });
+    let resolveDownloadsDir: ((files: DownloadedFiles) => void) | undefined;
+    const pending = new Promise<DownloadedFiles>((resolve) => { resolveDownloadsDir = resolve; });
     const instance = new Instance({
       instanceRoot: root,
-      resolveGameDirectory: resolvesDataFolder,
-      resolveDownloadsDirectory: () => pending,
+      adapter: adapterOver(root, { gameFolder: resolvesDataFolder, downloadedFiles: () => pending }),
       log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
     const refreshed = instance.refresh(); // recompute begins, blocked on the pending resolver
     instance.dispose();
-    present(resolveDownloadsDir, 'the captured resolver')({ kind: 'resolved', downloadsDir: join(root, 'downloads') });
+    present(resolveDownloadsDir, 'the captured resolver')({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: [] });
     await refreshed;
 
     expect(watchers.some((w) => !w.disposed)).toBe(false);
@@ -799,7 +803,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
 
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
-    expect(instance.value.modFolders).toContain('Off Profile Mod');
+    expect(instance.value.modFolders?.map((f) => f.name)).toContain('Off Profile Mod');
     const download = downloadsOf(instance.value).find((d) => d.name === 'Off-Profile-1.7z');
     expect(download?.status).toBe('Installed');
   });
@@ -951,16 +955,14 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') });
   });
 
-  // The Instance's whole input: the instance directory it was given, and the resolver's answer
-  // for the ini text this recompute read.
-  it('hands the resolver this recompute’s own ini text, once', async () => {
-    const { root, instance, iniTextsResolved } = await realInstance();
+  // Rival: a recompute reading the settings again for the game or the downloads, landing one value
+  // built from two reads.
+  it('reads the settings once per recompute', async () => {
+    const { instance, settingsReads } = await realInstance();
 
     await instance.refresh();
 
-    expect(iniTextsResolved).toHaveLength(1);
-    expect(present(iniTextsResolved[0], 'the ini text handed to the resolver'))
-      .toBe(await readFile(join(root, 'ModOrganizer.ini'), 'utf8'));
+    expect(settingsReads.count).toBe(1);
   });
 
   // Rival: re-reading the ini for the game release, landing one value holding two generations
@@ -1002,8 +1004,8 @@ describe('Instance — downloads, profile and game directory', () => {
   // activation joining its own. downloadsDir needs a read first, so it carries no guess.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', resolveGameDirectory: resolvesNotFound,
-      resolveDownloadsDirectory: downloadsDirectoryResolver(), log: () => {}, logReadFailure: () => {},
+      instanceRoot: '/an/instance', adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
+      log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
@@ -1017,7 +1019,7 @@ describe('Instance — downloads, profile and game directory', () => {
 // what the test wrote — real xEdit-produced corpus bytes carry unknown master lists of their own.
 async function minimalInstance(): Promise<{
   root: string; instance: Instance; logs: string[]; readFailureLines: string[];
-  setResolver: (resolve: GameDirectoryResolver) => void;
+  setResolver: (resolve: ResolveGameFolder) => void;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
   roots.push(root);
@@ -1028,11 +1030,10 @@ async function minimalInstance(): Promise<{
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
   const logs: string[] = [];
   const readFailureLines: string[] = [];
-  let resolve: GameDirectoryResolver = resolvesNotFound;
+  let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: (iniText) => resolve(iniText),
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    adapter: adapterOver(root, { gameFolder: () => resolve() }),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
@@ -1123,7 +1124,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     await instance.refresh();
 
-    expect([...present(instance.value.modFolders, 'the listed mods/ folders')].sort()).toEqual(['Consumer', 'Unlisted Folder']);
+    expect(present(instance.value.modFolders, 'the listed mods/ folders').map((f) => f.name).sort()).toEqual(['Consumer', 'Unlisted Folder']);
   });
 
   it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {

@@ -2,7 +2,7 @@
 // The user's overrides arrive from the composition root as values; nothing here reads a setting itself.
 
 import { dirname, join } from 'node:path';
-import { readGameName, readGamePath } from '../mo2Codecs/modOrganizerIni';
+import { readGameName, readGamePath } from './codecs/modOrganizerIni';
 import { gamePathInfoForRelease, gameReleaseForGame } from '../tables/gamePaths';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths } from './gamePathDetector';
 import { factsOf } from './files';
