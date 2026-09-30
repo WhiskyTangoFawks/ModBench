@@ -109,6 +109,21 @@ export function nexusRowInLastSelectedView(
   return nexusRow;
 }
 
+/** No stable API names the focused view, so a palette gesture two views offer takes the selection
+ *  of the view last selected in, and `contextKey` names that view. */
+export function lastSelectedViewSelection(
+  own: Own, views: readonly { id: string; view: SelectableView }[], contextKey: string,
+): () => readonly unknown[] {
+  let last: SelectableView | undefined;
+  for (const { id, view } of views) {
+    own(view.onDidChangeSelection(() => {
+      last = view;
+      void vscode.commands.executeCommand('setContext', contextKey, id);
+    }));
+  }
+  return () => last?.selection ?? [];
+}
+
 export interface DownloadsViewDeps {
   own: Own;
   access: DownloadsAccess & InstallAccess;
