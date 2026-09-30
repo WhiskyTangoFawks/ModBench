@@ -36,4 +36,7 @@ public sealed record DecompileRefused(PluginAddress Plugin, DecompileRefusal Ref
 /// <summary>Decompile over a selection answers per plugin (ADR-0019 invariant 4), except when git
 /// cannot be run: <see cref="GitUnavailable"/> says why, and nothing was written.</summary>
 public sealed record DecompileSelectionResult(
-    IReadOnlyList<PluginAddress> Landed, IReadOnlyList<DecompileRefused> Refused, string? GitUnavailable = null);
+    IReadOnlyList<PluginAddress> Landed, IReadOnlyList<DecompileRefused> Refused, string? GitUnavailable = null)
+{
+    public bool AllApplied => Refused.Count == 0 && GitUnavailable is null;
+}
