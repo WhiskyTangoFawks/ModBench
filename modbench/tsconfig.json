@@ -1,7 +1,6 @@
 {
   "files": [],
   "references": [
-    { "path": "./src/mo2Codecs" },
     { "path": "./src/loadOrderFileCodec" },
     { "path": "./src/tables" },
     { "path": "./src/wire" },
