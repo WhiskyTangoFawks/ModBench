@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// The registration lookup and the held-plugins lookup share one name comparison, the kernel's
+// The opened-plugins read and the held-plugins lookup share one name comparison, the kernel's
 // PluginAddress.Comparer: a key that differs only in case names the same plugin at both doors.
 public sealed class PluginAddressComparisonTests : IDisposable
 {
@@ -34,9 +34,9 @@ public sealed class PluginAddressComparisonTests : IDisposable
 
     // The rival this pins: the record struct's own equality, which is case-sensitive.
     [Fact]
-    public void Registers_AnswersTheSamePlugin_WhateverTheCase()
+    public void TheOpenedPlugins_AnswerTheSamePlugin_WhateverTheCase()
     {
-        Assert.True(_index.Registers(OtherCase));
+        Assert.True(_index.RequireReads().OpenedPlugins.ContainsKey(OtherCase));
     }
 
     // The rival this pins: a held-plugins lookup comparing name and origin its own way, which would

@@ -1,6 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Ports;
+using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -55,20 +55,6 @@ public class ContainerChildQueryServiceTests
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
-    }
-
-    // The reads' presence is what "no load order" means for the Index side.
-    private sealed class StubIndex(IRecordReads? reads) : IQueryIndex
-    {
-        // These stubs never project, so they are always in the no-load-order state and unfiltered.
-        public LoadOrderStatus Status => LoadOrderStatus.None;
-        public string? FilterSql => null;
-        public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
-
-        public void SetFilter(string sql, string source) => throw new NotSupportedException($"{GetType().Name} answers reads only.");
-        public void ClearFilter() => throw new NotSupportedException($"{GetType().Name} answers reads only.");
-        public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
-            throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
 
     [Fact]

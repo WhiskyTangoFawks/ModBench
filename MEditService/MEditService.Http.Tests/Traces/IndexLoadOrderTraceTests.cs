@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
@@ -21,9 +20,6 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         new PluginFixtureBuilder("trace-project")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
             .BuildScattered();
-
-    private Task<HttpResponseMessage> Reconcile(string? query = null) =>
-        Client.PostAsync(new Uri($"/index/reconcile{query}", UriKind.Relative), content: null);
 
     [Fact]
     public async Task PuttingALoadOrder_ReportsReconcilingThenReady_AndTheRowsAnswerAfterwards()
@@ -68,71 +64,4 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         (await put.EnsureSuccessStatusCode().Content.ReadFromJsonAsync<JsonElement>()).GetProperty("version").GetInt64();
 
     private static JsonElement StatusOf(JsonElement frame) => frame.GetProperty("loadOrderStatus");
-
-    // A binary has no smaller unit than itself, so the plugin the reconcile names is re-derived whole
-    // rather than by key.
-    [Fact]
-    public async Task ReconcilingOnePlugin_RederivesThePluginWhoseBytesMoved_AndTheAnswerFollows()
-    {
-        using var fx = OneMod();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        var before = await Client.Sequence();
-
-        OtherTool.WritesThePlugin(
-            fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
-        Assert.NotEqual(0.9, await HeightMaxOf(formKey), 3);
-
-        var reconciled = await Reconcile($"?plugin={Plugin}&origin={Origin}");
-
-        reconciled.EnsureSuccessStatusCode();
-        var body = await reconciled.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, body.GetProperty("plugins").GetInt32());
-        Assert.Equal(1, body.GetProperty("pluginsRebuilt").GetInt32());
-        Assert.True(body.GetProperty("sequence").GetInt64() > before);
-
-        Assert.Equal(0.9, await HeightMaxOf(formKey), 3);
-    }
-
-    private async Task<double> HeightMaxOf(string formKey) =>
-        (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
-            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
-            .GetProperty("value").GetDouble();
-
-    [Fact]
-    public async Task ReconcilingEveryPlugin_ReportsHowManyPluginsItCheckedAndHowManyRowsChanged()
-    {
-        using var fx = OneMod();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        var reconciled = await Reconcile();
-
-        reconciled.EnsureSuccessStatusCode();
-        var body = await reconciled.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("plugins").GetInt32() >= 1);
-        Assert.Equal(0, body.GetProperty("rowsChanged").GetInt32());
-        Assert.Empty(body.GetProperty("failures").EnumerateArray());
-    }
-
-    [Fact]
-    public async Task ReconcilingAPluginTheLoadOrderDoesNotHold_Is404()
-    {
-        using var fx = OneMod();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        var reconciled = await Reconcile("?plugin=NoSuch.esp&origin=Nowhere");
-
-        Assert.Equal(HttpStatusCode.NotFound, reconciled.StatusCode);
-    }
-
-    [Fact]
-    public async Task ReconcilingAPluginWithoutNamingItsOrigin_Is400()
-    {
-        using var fx = OneMod();
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        var reconciled = await Reconcile($"?plugin={Plugin}");
-
-        Assert.Equal(HttpStatusCode.BadRequest, reconciled.StatusCode);
-    }
 }

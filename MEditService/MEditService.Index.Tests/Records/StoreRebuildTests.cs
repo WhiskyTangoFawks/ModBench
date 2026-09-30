@@ -177,7 +177,7 @@ public sealed class StoreRebuildTests : IDisposable
 
         Assert.Equal(version, index.Status.Version);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.True(index.Registers(data.Plugins[1].KeyOf()), "the refill filled the load order the rebuild started with");
+        Assert.True(index.RequireReads().OpenedPlugins.ContainsKey(data.Plugins[1].KeyOf()), "the refill filled the load order held when it ran");
     }
 
     // The process may already have answered a caller with a sequence value the fresh file's own

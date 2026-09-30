@@ -5,18 +5,11 @@ using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>What one reconcile request found. PluginsRebuilt names the plugins that had moved too
-/// far for a per-key refresh and were re-derived whole, whose rows RowsChanged cannot name.</summary>
-public sealed record ReconcileResponse(
-    int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);
-
-/// <summary>The Index's doors, one route each — except setting/clearing the filter and rebuilding,
-/// which are Queries' own. A handler is one door call and the wire translation of its answer
-/// (ADR-0014 invariant 1).</summary>
+/// <summary>The load order's status, sequence and record filter, and the index's rebuild, each one
+/// Queries call and the wire translation of its answer (ADR-0014 invariant 3).</summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
-    private const string IndexTag = "Index";
 
     public static IEndpointRouteBuilder MapIndexEndpoints(this IEndpointRouteBuilder app)
     {
@@ -60,23 +53,6 @@ public static class IndexEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
-        // ADR-0015 invariants 2 and 4: the Index's second way of learning of change. POST because it
-        // is a gesture with an effect, not state.
-        app.MapPost("/index/reconcile", Reconcile)
-            .WithName("ReconcileIndex")
-            .WithTags(IndexTag)
-            .WithDescription(
-                "Validates the index by content hash against the systems of record its rows came " +
-                "from — each source document at both refs for a tracked plugin, the binary for an " +
-                "untracked one — and refreshes what differs. Name one plugin with plugin and origin " +
-                "together, or omit both to check every registered plugin. Rows it changes are " +
-                "published on /notifications/stream as they land.")
-            .Produces<ReconcileResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(503)
-            .ProducesProblem(500);
-
         // ADR-0009 invariant 5: Refresh's own first step. The PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds the
         // file.
@@ -94,21 +70,20 @@ public static class IndexEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(Indexer index, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(IndexEndpoints)).LogTrace("Received GetLoadOrderStatus");
-        return Results.Ok(index.Status);
+        return Results.Ok(svc.GetStatus());
     }
 
-    private static IResult GetSequence(Indexer index) => Results.Ok(index.Sequence);
+    private static IResult GetSequence(IRecordQueryService svc) => Results.Ok(svc.GetSequence());
 
-    private static async Task<IResult> AwaitSequence(Indexer index, long atLeast, int timeoutMs = 5000)
+    private static async Task<IResult> AwaitSequence(IRecordQueryService svc, long atLeast, int timeoutMs = 5000)
     {
         if (timeoutMs <= 0)
             return Results.Problem("timeoutMs must be positive.", statusCode: 400);
 
-        var reached = await index.AwaitSequenceAsync(atLeast, TimeSpan.FromMilliseconds(timeoutMs));
-        return Results.Ok(new SequenceAwaitResponse(reached, index.Sequence));
+        return Results.Ok(await svc.AwaitSequence(atLeast, TimeSpan.FromMilliseconds(timeoutMs)));
     }
 
     private static IResult SetFilter(FilterRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
@@ -160,60 +135,19 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult GetFilter(Indexer index, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
         try
         {
-            index.RequireReads();
-            var filter = index.ActiveFilter;
+            var filter = svc.GetFilter();
             return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
         }
         catch (NoLoadOrderException ex)
         {
             logger.LogError(ex, "No load order when getting filter");
             return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-    }
-
-    private static IResult Reconcile(
-        Indexer index, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received ReconcileIndex for {Plugin} ({Origin})", plugin ?? "every plugin", origin);
-        }
-
-        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
-            return Results.Problem("Name a plugin with both plugin and origin, or neither to check every plugin.", statusCode: 400);
-
-        PluginAddress? key = !string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin)
-            ? new PluginAddress(plugin, origin)
-            : null;
-        if (key is { } named && !index.Registers(named))
-            return Results.Problem($"No registered plugin '{plugin}' from '{origin}'.", statusCode: 404);
-
-        try
-        {
-            var reports = index.ValidateIndex(key);
-            return Results.Ok(new ReconcileResponse(
-                reports.Count,
-                reports.Sum(r => r.ChangedKeys.Count),
-                reports.Count(r => r.NeedsRebuild),
-                index.Sequence,
-                [.. reports.SelectMany(r => r.Failures)]));
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogWarning(ex, "No load order when reconciling the index");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to reconcile the index");
-            return Results.Problem(ex.Message, statusCode: 500);
         }
     }
 
