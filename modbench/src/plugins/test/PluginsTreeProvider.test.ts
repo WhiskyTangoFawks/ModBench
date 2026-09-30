@@ -783,6 +783,26 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
   });
 
+  // A row VS Code rendered before the watch read plugins.txt back without it.
+  it('refuses a drop on a row the order has since lost, naming it, and moves nothing', async () => {
+    const source = new FakeSource();
+    const reporter = recordingReporter();
+    const instance = new FakeInstance(valueOf(fixturePlugins()));
+    const tree = new PluginsTreeProvider({ instance, source, reporter });
+    await tree.getChildren();
+    instance.publish(valueOf(fixturePlugins(ORDER.filter((name) => name !== 'D.esp'))));
+    await tree.getChildren();
+
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
+    await tree.handleDrop(node('D.esp'), dt, NONE);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to move plugins.', detail: 'Plugin not found in plugins.txt: D.esp' },
+    ]);
+    expect(source.reorderPluginsCalls).toEqual([]);
+  });
+
   it('surfaces a write failure via the reporter, naming why, and refreshes nothing (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');

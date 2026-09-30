@@ -2,7 +2,7 @@
 // separator's folder moves with its line, under the same lock.
 
 import {
-  appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText,
+  appendPluginInText, movePluginsInText, parsePlugins, pluginKey, removePluginFromText, setPluginEnabledInText,
   type PluginEntry,
 } from '../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../ports/errorMessage';
@@ -112,9 +112,6 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
     case 'dropSeparator': return deleteSeparatorInText(text, change.separator);
   }
 }
-
-// Plugin filenames match as the game matches them, ignoring case (ADR-0012).
-const pluginKey = (name: string): string => name.toLowerCase();
 
 function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
   const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));

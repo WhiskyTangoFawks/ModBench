@@ -835,12 +835,12 @@ export class PluginsTreeProvider
     const { names } = payload.value;
     const drop = this.dropFor(target, names);
     if (drop === undefined) return;
-    const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
-    if (refusal !== undefined) {
-      this.reporter?.report('error', 'Could not move plugins.', refusal);
-      return;
-    }
     try {
+      const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
+      if (refusal !== undefined) {
+        this.reporter?.report('error', 'Could not move plugins.', refusal);
+        return;
+      }
       await this.source.reorderPlugins(names, drop);
     } catch (e) {
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);

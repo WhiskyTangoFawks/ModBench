@@ -50,6 +50,14 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     expect(await plugins()).toBe('*B.esp\r\n*C.esp\r\n*A.esp\r\n*D.esp\r\n*E.esp\r\n');
   });
 
+  // ADR-0012: the tree may hold a name in another case than plugins.txt writes it.
+  it('reorderPlugins counts a moved row named in another case, landing the block above the target', async () => {
+    await writeFile(pluginsPath(), '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n');
+    expect(await reorderPlugins(accessTo(dir), PROFILE, ['a.esp'], { kind: 'before', name: 'D.esp' }))
+      .toEqual({ applied: true, wrote: true });
+    expect(await plugins()).toBe('*B.esp\r\n*C.esp\r\n*A.esp\r\n*D.esp\r\n*E.esp\r\n');
+  });
+
   it('reorderPlugins of a block dropped on one of its own rows writes nothing', async () => {
     const order = '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n';
     await writeFile(pluginsPath(), order);
@@ -311,7 +319,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
 describe('plugins commands hand the Instance adapter the change, decided on the order it holds', () => {
   const ORDER = [{ name: 'Base.esp', enabled: true }, { name: 'Gone.esp', enabled: false }];
 
-  const handing = () => {
+  const adapterRecordingChanges = () => {
     const handed: (readonly PluginOrderChange[])[] = [];
     const access = {
       adapter: {
@@ -325,14 +333,14 @@ describe('plugins commands hand the Instance adapter the change, decided on the 
     return { access, handed };
   };
 
-  it('a move is its plugins and the index the drop settles to', async () => {
-    const { access, handed } = handing();
-    await reorderPlugins(access, PROFILE, ['Gone.esp'], { kind: 'losingEnd' });
-    expect(handed).toEqual([[{ kind: 'move', plugins: ['Gone.esp'], toIndex: 0 }]]);
+  it('a move is its plugins and the index the drop settles to against that order', async () => {
+    const { access, handed } = adapterRecordingChanges();
+    await reorderPlugins(access, PROFILE, ['Base.esp'], { kind: 'after', name: 'Gone.esp' });
+    expect(handed).toEqual([[{ kind: 'move', plugins: ['Base.esp'], toIndex: 1 }]]);
   });
 
   it('enable is a change for each plugin the order lists; one it does not is refused by name', async () => {
-    const { access, handed } = handing();
+    const { access, handed } = adapterRecordingChanges();
     const result = await setPluginsEnabled(access, PROFILE, ['Base.esp', 'No Such.esp'], false);
     expect(handed).toEqual([[{ kind: 'enable', plugin: 'Base.esp', enabled: false }]]);
     expect(result).toEqual({
@@ -342,7 +350,7 @@ describe('plugins commands hand the Instance adapter the change, decided on the 
   });
 
   it('plugin sync drops each line nothing provides and adds each provided plugin with none', async () => {
-    const { access, handed } = handing();
+    const { access, handed } = adapterRecordingChanges();
     await syncPlugins(
       access, PROFILE, new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
       { kind: 'listed', names: new Set() }, () => Promise.resolve([]));

@@ -7,6 +7,9 @@ import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLines
 /** The plugin order, one line per plugin file. */
 export const PLUGINS_FILE_NAME = 'plugins.txt';
 
+/** A plugin's filename as the game compares it, ignoring case (ADR-0012). */
+export const pluginKey = (name: string): string => name.toLowerCase();
+
 /** A single plugins.txt line (a plugin file), in plugin order. The `*` prefix, the enabled
  *  marker, is modelled as `enabled`; the marker itself is never surfaced in `name`. Distinct
  *  from a Mod: plugins.txt has no separators. */
