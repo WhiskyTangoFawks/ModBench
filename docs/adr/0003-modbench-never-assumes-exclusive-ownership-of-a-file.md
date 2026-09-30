@@ -11,7 +11,7 @@ every file Modbench reads or writes, and to the state Modbench derives from them
    the instance value whole from the mod manager's files
    ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench compares a tracked
    plugin's bytes with what it last wrote.
-2. **Watchers are never trusted alone.** Every watched state also validates by content, as
+2. **The watch is never trusted alone.** Every watched state also validates by content, as
    [ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md) invariant 4 says.
 3. **Modbench tells the user when a tracked plugin changes outside it, and the user owns what
    follows.** A tracked plugin exists twice: the binary, and its plugin source, which git versions.
