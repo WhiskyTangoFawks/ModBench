@@ -41,6 +41,19 @@ describe('scanDownloads', () => {
     expect(entries?.map((e) => e.name)).toEqual(['Real-1-0.zip']);
   });
 
+  // A crash before files.ts's own rename lands leaves one of its temp files sitting beside a
+  // real download.
+  it('never lists a write\'s own leftover temp file', async () => {
+    const downloadsDir = join(root, 'downloads');
+    await mkdir(downloadsDir, { recursive: true });
+    await writeFile(join(downloadsDir, 'Real-1-0.zip'), 'bytes');
+    await writeFile(join(downloadsDir, 'Real-1-0.zip.meta.a1b2c3d4e5f6.tmp'), 'stale');
+
+    const entries = await scanDownloads(downloadsDir);
+
+    expect(entries?.map((e) => e.name)).toEqual(['Real-1-0.zip']);
+  });
+
   // downloads.md, Which files are rows, story 1: a folder MO2's configuration points at, even
   // when it lies entirely outside the instance the caller happens to be scanning.
   it('lists a folder outside any instance root, since the scan takes it as given', async () => {
