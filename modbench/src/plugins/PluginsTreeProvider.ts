@@ -214,7 +214,7 @@ type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 // plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
 // description's vocabulary; `tooltipLine` is that status's one tooltip line.
 interface PluginStatus {
-  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
+  kind: 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
   words: string;
   tooltipLine: string;
 }
@@ -225,9 +225,9 @@ function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
 
-function failedToLoadStatus(failure: string | undefined): PluginStatus | undefined {
+function failedToReadStatus(failure: string | undefined): PluginStatus | undefined {
   if (failure === undefined) return undefined;
-  return { kind: 'failedToLoad', words: 'failed to load', tooltipLine: `Failed to load: ${failure}` };
+  return { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${failure}` };
 }
 
 // "Missing" is MO2's word for a master that is not active, file present or not.
@@ -650,7 +650,7 @@ export class PluginsTreeProvider
     const file = row.plugin.name;
     const facts = this.facts?.get(file, joinedOrigin);
     const statuses = [
-      failedToLoadStatus(this.loadFailures.get(file, row.origin)),
+      failedToReadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
       changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),

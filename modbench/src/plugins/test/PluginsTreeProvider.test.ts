@@ -2879,7 +2879,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
 // ADR-0017: a plugin that fails to open or parse still has a row — rows come from plugins.txt,
 // not from the load order — so this decorates an existing row with its recorded reason.
 describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () => {
-  it('flags a row whose plugin failed to load, with the reason', async () => {
+  it('flags a row whose plugin failed to read, with the reason', async () => {
     const h = makeTree([A_ROW()]);
     // The reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
     // joins outer through innermost message) — the tooltip must carry every line, readably.
@@ -2889,8 +2889,8 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
     const item = await rowItem(h);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.description).toBe('failed to load');
-    expect(item.tooltip).toContain('Failed to load: InvalidOperationException: Malformed record');
+    expect(item.description).toBe('failed to read');
+    expect(item.tooltip).toContain('Failed to read: InvalidOperationException: Malformed record');
     expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
   });
 
@@ -2911,20 +2911,20 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.ESP', origin: 'SOMEMOD', reason: 'Malformed record' }]);
 
-    expect((await rowItem(h)).tooltip).toContain('Failed to load');
+    expect((await rowItem(h)).tooltip).toContain('Failed to read');
   });
 
   // plugins.md, States 2: a plugin not yet reached in a fresh reload reads "still indexing",
   // never an error — even one that failed in the reconcile before this one started.
-  it('keeps the failed-to-load status (no blink) while expansion still reads "still indexing" for an unreached plugin', async () => {
+  it('keeps the failed-to-read status (no blink) while expansion still reads "still indexing" for an unreached plugin', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
-    expect((await rowItem(h)).description).toBe('failed to load');
+    expect((await rowItem(h)).description).toBe('failed to read');
 
     // A fresh reload begins; this tick has not reached A.esp yet.
     h.tree.applyIndexed([], []);
 
-    expect((await rowItem(h)).description).toBe('failed to load');
+    expect((await rowItem(h)).description).toBe('failed to read');
     const [row] = await h.tree.getChildren();
     expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
@@ -2932,7 +2932,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
   it('clears the failed tooltip once a later reconcile reports the plugin loaded', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
-    expect((await rowItem(h)).tooltip).toContain('Failed to load');
+    expect((await rowItem(h)).tooltip).toContain('Failed to read');
 
     await reconcile(h, [held('A.esp')]);
 
@@ -3143,12 +3143,12 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
     });
 
     const item = await rowItem(h);
-    // Failed to load is first in spec order, so it sets the icon — error tier, not the
+    // Failed to read is first in spec order, so it sets the icon — error tier, not the
     // Malformed status's warning tier.
     expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
-    expect(item.description).toBe('failed to load, 1 master issue, unreadable records, changed outside Modbench, malformed');
+    expect(item.description).toBe('failed to read, 1 master issue, unreadable records, changed outside Modbench, malformed');
     const tooltip = expectString(item.tooltip);
-    expect(tooltip).toContain('Failed to load: Malformed record');
+    expect(tooltip).toContain('Failed to read: Malformed record');
     expect(tooltip).toContain('Missing master: Ghost.esm');
     expect(tooltip).toContain('could not be read');
     expect(tooltip).toContain('Changed outside Modbench');
@@ -3291,7 +3291,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
   // A load failure names the plugin that failed. The overridden plugin is not a row (rows are the
   // winning plugin of every plugins.txt line), so its failure lands on no row rather than on the
   // plugin that loaded.
-  it('leaves the winning row clean when the other plugin is the one that failed to load', async () => {
+  it('leaves the winning row clean when the other plugin is the one that failed to read', async () => {
     const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB', winning: false })]);
     await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
       [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
@@ -3312,12 +3312,12 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
 
-  it('flags the row when its own plugin failed to load and the other plugin loaded', async () => {
+  it('flags the row when its own plugin failed to read and the other plugin loaded', async () => {
     const h = makeTree([SHARED_ROW()]);
     await reconcile(h, [held('Shared.esp', { origin: 'ModB' })],
       [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
 
-    expect((await rowItem(h)).description).toBe('failed to load');
+    expect((await rowItem(h)).description).toBe('failed to read');
   });
 
   it('joins case-insensitively on the origin as well as the name', async () => {
