@@ -4,8 +4,9 @@
 import type { DownloadRow } from '../instanceLoader/instance';
 import { isArchiveName } from '../install/install';
 
-/** The columns MO2's own Downloads pane sorts by. `name` means the label (downloads.md, Order
- *  and view state, story 2), so it reads `displayName`, not the row's `name` field. */
+/** The columns the reference tool's own Downloads pane sorts by. `name` means the label
+ *  (downloads.md, Order and view state, story 2), so it reads `displayName`, not the row's `name`
+ *  field. */
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
 function sortValue(row: DownloadRow, column: DownloadSortColumn): string | number {

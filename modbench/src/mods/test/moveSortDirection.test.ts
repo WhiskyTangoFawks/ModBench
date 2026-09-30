@@ -67,7 +67,7 @@ async function shownAfter(
 ): Promise<string[]> {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
-    instanceRoot: root, log: () => {}, logReadFailure: () => {},
+    log: () => {}, logReadFailure: () => {},
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
   });
   const provider = new ModListProvider({ instance, access: accessTo(root) });

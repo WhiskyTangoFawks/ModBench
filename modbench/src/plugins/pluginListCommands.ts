@@ -27,7 +27,7 @@ export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider
   ];
 }
 
-// The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin
+// The row's own reveal-in-Explorer gesture — an instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
   pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,
@@ -96,23 +96,28 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
+function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string {
+  if (lost === 'unread') return 'Overwrite has no folder yet';
+  return `The mod "${origin}" ${lost === 'gone' ? 'is gone' : 'was disabled'}`;
+}
+
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
-  mo2: { instance: Pick<Instance, 'value'> } | undefined,
+  instance: Pick<Instance, 'value'> | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
-    if (!mo2) {
-      reporter.report('error', 'Creating a plugin needs an open MO2 instance workspace.');
+    if (!instance) {
+      reporter.report('error', 'Creating a plugin needs an open instance workspace.');
       return;
     }
 
     const name = await promptPluginName();
     if (!name) return;
 
-    const places = pluginPlaces(mo2.instance.value, name);
+    const places = pluginPlaces(instance.value, name);
     if (places.length === 0) {
       reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
       return;
@@ -120,10 +125,9 @@ export function registerCreatePluginCommand(
     const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
     if (!picked) return;
 
-    const place = placeFolder(mo2.instance.value, picked.origin);
+    const place = placeFolder(instance.value, picked.origin);
     if ('lost' in place) {
-      const became = place.lost === 'gone' ? 'is gone' : 'was disabled';
-      reporter.report('error', `The mod "${picked.origin}" ${became}, so "${name}" was not created.`);
+      reporter.report('error', `${lostPlace(picked.origin, place.lost)}, so "${name}" was not created.`);
       return;
     }
 

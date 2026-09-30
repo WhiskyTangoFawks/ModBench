@@ -112,7 +112,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     expect(reporter.reports).toEqual([]);
   });
 
-  it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
+  it('the prompt\'s validateInput refuses a taken name, in the words install refuses it with', async () => {
     const root = await cloneCorpusFixture();
     try {
       registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter());
@@ -153,6 +153,19 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
       message: '"New Mod" was created, but its modlist.txt line could not be written.',
       detail: 'disk full',
     }]);
+  });
+
+  // Rival: the mod-order file's name spelled here, which names MO2's file over another manager's.
+  it('names the file mod order is kept in as the value names it', async () => {
+    showInputBox.mockResolvedValueOnce('New Mod');
+    createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
+    const reporter = recordingReporter();
+    const another = { value: instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }) };
+
+    registerCreateEmptyModCommand(access, another, reporter);
+    await invoke('modbench.mod.createEmpty');
+
+    expect(reporter.reports.map((r) => r.message)).toEqual(['"New Mod" was created, but its order.txt line could not be written.']);
   });
 
   it('reports a name-collision refusal as a failed create', async () => {
@@ -979,9 +992,23 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     ]);
   });
 
+  // Rival: revealing an empty path while the value names no overwrite folder yet.
+  it('refuses the Overwrite row while the value names no folder for it', async () => {
+    const reporter = recordingReporter();
+    const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
+
+    registerOpenFolderCommand(unread, reporter, () => []);
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "Overwrite".', detail: 'No folder holds it.' },
+    ]);
+  });
+
   it('reveals the overwrite folder from the Overwrite row', async () => {
     registerOpenFolderCommand(instance, recordingReporter(), () => []);
-    await invoke('modbench.mod.openFolder', new OverwriteNode(3));
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3, 'MO2'));
 
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
@@ -989,7 +1016,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
   // commands.md, The surface supplies the Argument: a palette entry hands the gesture no row.
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
-    ['Overwrite', new OverwriteNode(3), '/instance/overwrite'],
+    ['Overwrite', new OverwriteNode(3, 'MO2'), '/instance/overwrite'],
   ])('reveals the one selected %s row\'s folder from the palette', async (_kind, selected, folder) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
     await invoke('modbench.mod.openFolder');
@@ -998,7 +1025,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
   });
 
   it.each<[string, ModlistNode[]]>([
-    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3)]],
+    ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode(3, 'MO2')]],
     ['a separator', [new SeparatorNode({ kind: 'separator', name: 'Group', enabled: true }, [])]],
   ])('reveals nothing from the palette over a selection of %s', async (_what, selection) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => selection);
@@ -1105,12 +1132,12 @@ describe('modsCopyValueText', () => {
   });
 
   it('excludes the Overwrite row from a selection that includes it', () => {
-    const withOverwrite = [alpha, new OverwriteNode(3)];
+    const withOverwrite = [alpha, new OverwriteNode(3, 'MO2')];
     expect(modsCopyValueText(noSelection)(alpha, withOverwrite)).toBe('Alpha');
   });
 
   it('is undefined for a row that is not a Mods row, so another surface\'s copy takes over', () => {
-    expect(modsCopyValueText(noSelection)(new OverwriteNode(0), undefined)).toBeUndefined();
+    expect(modsCopyValueText(noSelection)(new OverwriteNode(0, 'MO2'), undefined)).toBeUndefined();
     expect(modsCopyValueText(noSelection)({ formKey: 'Fallout4.esm:000001' }, undefined)).toBeUndefined();
   });
 
@@ -1120,7 +1147,7 @@ describe('modsCopyValueText', () => {
   });
 
   it('copies the view\'s selection for the Mods key\'s own args', () => {
-    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1)];
+    const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode(1, 'MO2')];
     expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
   });
 

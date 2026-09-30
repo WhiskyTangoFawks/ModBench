@@ -18,7 +18,7 @@ export interface PluginSyncArguments {
   provided: ReadonlyMap<string, string>;
   inData: DataFolderPlugins;
   dataFolder: string | undefined;
-  gameName: string;
+  gameRelease: string | undefined;
 }
 
 export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
@@ -27,7 +27,7 @@ export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
     provided: providedPluginsOf(value.plugins),
     inData: value.dataFolderPlugins,
     dataFolder: dataFolderOf(value.gameFolder),
-    gameName: value.gameRelease,
+    gameRelease: value.gameRelease,
   };
 }
 
@@ -38,9 +38,8 @@ export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage, SyncR
   runOnConnect(): void;
 }
 
-// Termination: a write re-enters through this subscription, since the Instance watches
-// plugins.txt and its value runs plugin sync. The next run changes nothing, writes nothing,
-// and the loop stops; a sync that wrote unconditionally would never end it.
+// Termination: a write re-enters here through the Instance adapter's signal. The next run changes
+// nothing, writes nothing, and the loop stops; a sync that wrote unconditionally never would.
 export function registerPluginSync(
   instance: Pick<Instance, 'subscribe' | 'value'>,
   sync: (value: InstanceValue) => Promise<PluginSyncOutcome>,

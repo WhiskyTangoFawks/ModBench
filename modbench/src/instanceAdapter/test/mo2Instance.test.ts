@@ -1,31 +1,34 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  access, chmod, mkdir, mkdtemp, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
+  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-// Passthrough, so one test can block or hold a folder's move back, and one can fail a link's
+// Passthrough, so a test can hold a folder's move back, remove a folder mid-walk, or fail a link's
 // stat with an error other than ENOENT: chmod denies nothing when the runner is root.
 const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
   stat: undefined as typeof import('node:fs/promises').stat | undefined,
+  readdir: undefined as typeof import('node:fs/promises').readdir | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
   real.stat = actual.stat;
-  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat) };
+  real.readdir = actual.readdir;
+  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir) };
 });
 
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 const actualStat = present(real.stat, 'the real stat');
+const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
-import { mo2InstanceAdapter } from '../mo2Instance';
+import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { OVERWRITE_ORIGIN } from '../instanceAdapter';
 import type { GameDetectors } from '../gameDirectory';
 import type {
@@ -71,6 +74,7 @@ describe('the MO2 Instance adapter', () => {
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
     vi.mocked(stat).mockImplementation(actualStat);
+    vi.mocked(readdir).mockImplementation(actualReaddir);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -80,6 +84,21 @@ describe('the MO2 Instance adapter', () => {
 
       expect(settings.profile).toBe('Default');
       expect(settings.gameName).toBe('Fallout 4');
+      expect(settings.gameRelease).toBe('Fallout4');
+    });
+
+    it('names MO2 and the file it keeps mod order in', () => {
+      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt' });
+    });
+
+    // Rival: a release guessed from the name, which has the backend answer about another game.
+    it('answers no release for a game the tables hold none for', async () => {
+      await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
+
+      const settings = await adapter.settings();
+
+      expect(settings.gameName).toBe('Morrowind');
+      expect(settings.gameRelease).toBeUndefined();
     });
 
     it('rejects when the settings name no selected profile', async () => {
@@ -572,10 +591,57 @@ describe('the MO2 Instance adapter', () => {
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
       });
 
+      // Rival: one catch around the whole walk, which reads a folder removed mid-walk as an empty
+      // origin.
+      it.each([
+        ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite', 'F4SE/Plugins/SomePlugin.log'],
+        ['a mod\'s folder', mod('Harder VATS'), join('mods', 'Harder VATS'), 'Kept.esp'],
+      ])('skips a subfolder of %s removed mid-walk, and notes it', async (_, origin, folder, kept) => {
+        await writeFile(join(root, folder, 'Kept.esp'), '');
+        await mkdir(join(root, folder, 'Gone'));
+        await writeFile(join(root, folder, 'Gone', 'Lost.esp'), '');
+        vi.mocked(readdir).mockImplementation(async (path, options) => {
+          if (String(path) === join(root, folder, 'Gone')) await rm(path, { recursive: true });
+          return actualReaddir(path, options);
+        });
+
+        const files = await adapter.originFiles(origin);
+
+        expect(relativePaths(files.files)).toContain(kept);
+        expect(relativePaths(files.files)).not.toContain('Gone/Lost.esp');
+        expect(files.notes).toEqual([expect.stringMatching(/Gone/)]);
+      });
+
+      // Rival: skipping a link in overwrite/ with no word, which drops its file from the picture.
+      it('notes a link in the overwrite folder, which it does not follow', async () => {
+        const target = join(root, 'elsewhere.esp');
+        await writeFile(target, '');
+        await symlink(target, join(root, 'overwrite', 'Linked.esp'));
+
+        const files = await adapter.originFiles({ kind: 'runtimeOutput' });
+
+        expect(relativePaths(files.files)).not.toContain('Linked.esp');
+        expect(files.notes).toEqual([expect.stringMatching(/Linked\.esp/)]);
+      });
+
       it('answers no files when there is no overwrite folder', async () => {
         await rm(join(root, 'overwrite'), { recursive: true });
 
         expect((await adapter.originFiles({ kind: 'runtimeOutput' })).files).toEqual([]);
+      });
+    });
+
+    // ADR-0007: tracked is the presence of `.git` in the mod's folder.
+    describe('a plugin file\'s tracked folder', () => {
+      it('answers the mod folder a plugin file sits in when it holds a repository', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, '.git'));
+
+        expect(await adapter.trackedFolderOf(join(folder, 'Harder VATS.esp'))).toBe(folder);
+      });
+
+      it('answers none for a plugin file in a folder with no repository', async () => {
+        expect(await adapter.trackedFolderOf(join(root, 'mods', 'Harder VATS', 'Harder VATS.esp'))).toBeUndefined();
       });
     });
   });
@@ -1240,5 +1306,61 @@ describe('the MO2 Instance adapter', () => {
 
       expect(await text(root, INI)).toBe(before);
     });
+  });
+});
+
+describe('isMo2Instance', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'medit-detect-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const layInstance = async () => {
+    await writeFile(join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\n');
+    await mkdir(join(root, 'mods'));
+    await mkdir(join(root, 'profiles'));
+  };
+
+  it('is true when ModOrganizer.ini, mods/, and profiles/ are all present', async () => {
+    await layInstance();
+    expect(isMo2Instance(root)).toBe(true);
+  });
+
+  it('is false when ModOrganizer.ini is missing', async () => {
+    await mkdir(join(root, 'mods'));
+    await mkdir(join(root, 'profiles'));
+    expect(isMo2Instance(root)).toBe(false);
+  });
+
+  it('is false when mods/ is missing', async () => {
+    await writeFile(join(root, 'ModOrganizer.ini'), '[General]\n');
+    await mkdir(join(root, 'profiles'));
+    expect(isMo2Instance(root)).toBe(false);
+  });
+
+  it('is false when profiles/ is missing', async () => {
+    await writeFile(join(root, 'ModOrganizer.ini'), '[General]\n');
+    await mkdir(join(root, 'mods'));
+    expect(isMo2Instance(root)).toBe(false);
+  });
+
+  it('is false for a completely empty folder', () => {
+    expect(isMo2Instance(root)).toBe(false);
+  });
+
+  it('is false for a nonexistent path, without throwing', () => {
+    expect(isMo2Instance(join(root, 'does-not-exist'))).toBe(false);
+  });
+
+  it('does not read modlist.txt content — a corrupt-but-present instance still reads true (ADR-0019 boundary)', async () => {
+    await layInstance();
+    await mkdir(join(root, 'profiles', 'Default'));
+    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');
+    expect(isMo2Instance(root)).toBe(true);
   });
 });

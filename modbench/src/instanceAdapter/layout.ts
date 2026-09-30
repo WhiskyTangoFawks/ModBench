@@ -1,5 +1,5 @@
 // MO2's directory structure: the directory names under an instance root, the path functions
-// built from them, and the Instance's watcher globs. Each file's own name is its codec's, and
+// built from them, and the adapter's watch globs. Each file's own name is its codec's, and
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';

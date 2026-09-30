@@ -15,7 +15,7 @@ export type SortDirection = 'losingAtTop' | 'winningAtTop';
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 /** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
- *  on: the row stands for MO2's folder, so it is named as the value names that folder. */
+ *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
 export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
@@ -114,7 +114,7 @@ export class ModNode extends vscode.TreeItem {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(fileCount: number) {
+  constructor(fileCount: number, manager: string) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
     this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;
@@ -122,7 +122,7 @@ export class OverwriteNode extends vscode.TreeItem {
     this.iconPath = fileCount > 0
       ? new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.red'))
       : new vscode.ThemeIcon('folder');
-    this.tooltip = 'The files tools wrote while MO2 ran them, which win over every mod.';
+    this.tooltip = `The files tools wrote while ${manager} ran them, which win over every mod.`;
   }
 }
 
@@ -135,9 +135,9 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mods tree over an MO2 instance's active profile — rows, statuses and
+/** Sidebar Mods tree over the instance's active profile — rows, statuses and
  *  the overwrite count all read entirely from the Instance value (ADR-0015); this provider owns
- *  no cache or watcher over MO2's files itself. */
+ *  no cache or watcher over the instance's files itself. */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {
@@ -302,7 +302,7 @@ export class ModListProvider
   }
 
   private overwriteNode(): OverwriteNode {
-    return new OverwriteNode(this.instanceValue.overwriteFileCount);
+    return new OverwriteNode(this.instanceValue.overwriteFileCount, this.instanceValue.managerNames.manager);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));

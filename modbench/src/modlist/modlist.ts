@@ -3,7 +3,7 @@ import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
 import {
-  entryNotFound, type DecideModOrder, type EntryRef, type InstanceAdapter, type ModFolder, type ModlistEntry,
+  entryNotFound, newModNameRefusal, type DecideModOrder, type EntryRef, type InstanceAdapter, type ModFolder, type ModlistEntry,
   type ModOrderChange, type MovePlace, type OrderEnd, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 
@@ -230,29 +230,18 @@ export async function uninstallMods(
   return { applied: true, outcome: { landed, refused: result.outcome.refused } };
 }
 
-/** Whether the folder a mod named `name` would take is already there, holding a mod or a separator,
- *  matched as the instance matches names. */
-export async function modNameTaken(access: ModlistAccess, name: string): Promise<boolean> {
-  return (await access.adapter.entryFolder({ kind: 'mod', name })) !== undefined;
-}
-
 /** `lineRefusal` is set only when the folder landed and the line did not: the folder stays, and
  *  `mod sync` adopts it next (common.md, Reporting: "A gesture landed, but part of it failed"). */
 export type CreateEmptyModResult =
   | { applied: true; wrote: boolean; lineRefusal?: string }
   | { applied: false; refusal: string };
 
-// Install's modNameCollisionRefusal word for word (mods.md: one wording for create and install),
-// not imported: modlist and install are sibling Core boxes with no reference between them.
-function nameCollisionRefusal(name: string): string {
-  return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
-}
-
 /** A mod's folder plus a disabled line at the winning end of mod order — nothing else. A name a
  *  folder already holds is refused. */
 export async function createEmptyMod(access: ModlistAccess, profile: string, name: string): Promise<CreateEmptyModResult> {
   try {
-    if (await modNameTaken(access, name)) return { applied: false, refusal: nameCollisionRefusal(name) };
+    const refusal = await newModNameRefusal(access.adapter, name);
+    if (refusal !== undefined) return { applied: false, refusal };
     await access.adapter.createModFolder(name);
   } catch (err) {
     return refuse(err);

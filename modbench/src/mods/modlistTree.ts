@@ -1,5 +1,5 @@
-// `modlist.txt` is winning-first while MO2's authoring view is losing-at-top, so a separator is
-// written after the mods it heads, and wraps the entries preceding it. vscode-free, so
+// `modlist.txt` is winning-first while the reference tool's authoring view is losing-at-top, so a
+// separator is written after the mods it heads, and wraps the entries preceding it. vscode-free, so
 // unit-testable.
 
 import type { Mod, ModlistEntry, Separator } from '../instanceLoader/instance';
@@ -25,7 +25,8 @@ export function groupModlist(entries: ModlistEntry[]): ModlistTree {
 
   const read = new Set<string>();
   for (const entry of entries) {
-    // MO2 skips a line whose name it has already read (profile.cpp), so the first line holds.
+    // The reference tool skips a line whose name it has already read (profile.cpp), so the first
+    // line holds.
     const key = `${entry.kind}:${entry.name}`;
     if (read.has(key)) continue;
     read.add(key);

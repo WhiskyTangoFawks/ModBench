@@ -1,5 +1,5 @@
 // Pure: which installed mods a download upgrades, and which tier of evidence each one carries.
-// Two tiers, each a fact MO2 itself recorded — never a guess from the file's name.
+// Two tiers, each a fact the mod manager itself recorded — never a guess from the file's name.
 
 import type { DownloadRow, InstanceValue, Mod } from '../instanceLoader/instance';
 

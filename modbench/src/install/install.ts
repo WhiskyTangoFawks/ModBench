@@ -8,7 +8,9 @@ import { markDownloadInstalled } from './installedMark';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
-import type { InstalledFileId, InstanceAdapter, StagingFolder, Upgraded } from '../instanceAdapter/instanceAdapter';
+import {
+  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type StagingFolder, type Upgraded,
+} from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {
@@ -48,20 +50,9 @@ export function defaultModNameForFolder(folder: string): string {
   return basename(folder);
 }
 
-/** Install's refusal when a new mod's folder is already there, shared with the name prompt so
- *  both readings of the same collision say the same thing. */
-export function modNameCollisionRefusal(name: string): string {
-  return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
-}
-
-/** Why a new mod may not take `name`: a folder already holds a mod of that name, matched as the
- *  instance matches names. Undefined for a free name, or a blank one. */
-export async function installNameRefusal(access: InstallAccess, name: string): Promise<string | undefined> {
-  const trimmed = name.trim();
-  if (!trimmed) return undefined;
-  const holding = await access.adapter.entryFolder({ kind: 'mod', name: trimmed });
-  return holding === undefined ? undefined : modNameCollisionRefusal(trimmed);
-}
+/** Why a new mod may not take `name`, in the words install refuses it with. */
+export const installNameRefusal = (access: Pick<InstallAccess, 'adapter'>, name: string): Promise<string | undefined> =>
+  newModNameRefusal(access.adapter, name);
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */
@@ -116,10 +107,11 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
   return refuse(err);
 }
 
-// The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
-// the user own it too — so a claim that disagrees with disk is refused, never reinterpreted.
+// The folder can appear or vanish between the caller's decision and this check — the mod manager,
+// xEdit or the user own it too — so a claim that disagrees with disk is refused, never
+// reinterpreted.
 function mismatchRefusal(target: InstallTarget, targetExists: boolean): string | undefined {
-  if (target.kind === 'new' && targetExists) return modNameCollisionRefusal(target.name);
+  if (target.kind === 'new' && targetExists) return modNameTakenRefusal(target.name);
   if (target.kind === 'upgrade' && !targetExists) {
     return `Cannot upgrade "${target.name}": there is no folder by that name under mods/.`;
   }

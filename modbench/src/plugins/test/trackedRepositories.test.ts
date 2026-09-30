@@ -1,14 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as path from 'node:path';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
-  type IsTracked, type PluginFolder,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
 } from '../trackedRepositories';
 import type { PluginMetadata } from '../../client';
 
-// The Instance adapter's two answers, doubled at the ports this box declares for them.
-const pluginFolder: PluginFolder = (pluginFile) => path.dirname(pluginFile);
-const trackedAmong = (tracked: readonly string[]): IsTracked => (modFolder) => Promise.resolve(tracked.includes(modFolder));
+// The Instance adapter's answer, doubled at the port this box declares for it.
+const trackedAmong = (tracked: readonly string[]): TrackedFolderOf => (pluginFile) =>
+  Promise.resolve(tracked.find((folder) => path.dirname(pluginFile) === folder));
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
   return {
@@ -29,10 +28,10 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
   };
 }
 
-// ── trackedModFoldersOf ────────────────────────────────────────────────────
+// ── trackedFoldersOf ────────────────────────────────────────────────────
 
-describe('trackedModFoldersOf', () => {
-  it('finds the mod folder the Instance adapter answers tracked, and not its untracked sibling', async () => {
+describe('trackedFoldersOf', () => {
+  it('answers the folder the Instance adapter answers tracked, and none for its untracked sibling', async () => {
     const plugins = [
       makePlugin({ path: '/mods/TrackedMod/Tracked.esp', origin: 'TrackedMod' }),
       // Positive control, checked through the identical function call: the untracked sibling
@@ -40,20 +39,22 @@ describe('trackedModFoldersOf', () => {
       makePlugin({ path: '/mods/UntrackedMod/Untracked.esp', origin: 'UntrackedMod' }),
     ];
 
-    const folders = await trackedModFoldersOf(plugins, trackedAmong(['/mods/TrackedMod']), pluginFolder);
+    const folders = await trackedFoldersOf(plugins, trackedAmong(['/mods/TrackedMod']));
 
-    expect(folders).toEqual(['/mods/TrackedMod']);
+    expect(folders).toEqual(new Map([[pluginAddressKey('Tracked.esp', 'TrackedMod'), '/mods/TrackedMod']]));
   });
 
-  it('deduplicates two plugins sharing one tracked mod folder', async () => {
+  // ADR-0012 invariant 1: two plugins that share a filename each have their own folder.
+  it('keeps two same-name plugins from different mods apart', async () => {
     const plugins = [
-      makePlugin({ path: '/mods/SharedMod/A.esp', origin: 'SharedMod' }),
-      makePlugin({ path: '/mods/SharedMod/B.esp', origin: 'SharedMod' }),
+      makePlugin({ path: '/mods/ModA/Shared.esp', origin: 'ModA' }),
+      makePlugin({ path: '/mods/ModB/Shared.esp', origin: 'ModB' }),
     ];
 
-    const folders = await trackedModFoldersOf(plugins, trackedAmong(['/mods/SharedMod']), pluginFolder);
+    const folders = await trackedFoldersOf(plugins, trackedAmong(['/mods/ModA', '/mods/ModB']));
 
-    expect(folders).toEqual(['/mods/SharedMod']);
+    expect(folders.get(pluginAddressKey('Shared.esp', 'ModA'))).toBe('/mods/ModA');
+    expect(folders.get(pluginAddressKey('Shared.esp', 'ModB'))).toBe('/mods/ModB');
   });
 });
 
@@ -73,9 +74,7 @@ describe('registerTrackedRepositories', () => {
   it('never calls openRepository twice for the same folder', async () => {
     const openRepository = vi.fn().mockResolvedValue(undefined);
 
-    // trackedModFoldersOf already dedupes, but "no duplicate SCM registration" is this
-    // function's own contract too — it must not re-introduce a duplicate even if handed
-    // one, e.g. by a caller that merged two plugin lists without re-deduping.
+    // The caller hands one folder per tracked plugin, so two plugins sharing a folder hand it twice.
     await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/A']);
 
     expect(openRepository).toHaveBeenCalledTimes(1);
@@ -107,66 +106,31 @@ describe('registerTrackedRepositories', () => {
 // ── pluginRepositoriesOf (extension.ts carries no business logic) ──────────────────────────────
 
 describe('pluginRepositoriesOf', () => {
-  it("maps each plugin to the repository resolved for its mod folder", () => {
+  it('maps each plugin to the repository resolved for its tracked folder', () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
-    const plugins = [
-      makePlugin({ path: '/mods/ModA/A.esp', origin: 'ModA' }),
-      makePlugin({ path: '/mods/ModB/B.esp', origin: 'ModB' }),
-    ];
+    const folders = new Map([[pluginAddressKey('A.esp', 'ModA'), '/mods/ModA'], [pluginAddressKey('B.esp', 'ModB'), '/mods/ModB']]);
     const folderRepositories = new Map([['/mods/ModA', repoA], ['/mods/ModB', repoB]]);
 
-    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
+    const byPlugin = pluginRepositoriesOf(folders, folderRepositories);
 
     expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'ModA'), repoA], [pluginAddressKey('B.esp', 'ModB'), repoB]]));
   });
 
-  it("takes each plugin's mod folder from the Instance adapter's answer", () => {
+  it('gives two plugins sharing one folder the same repository', () => {
     const repo = { name: 'repo' };
-    const plugins = [makePlugin({ path: '/mods/ModA/A.esp', origin: 'ModA' })];
+    const folders = new Map([[pluginAddressKey('A.esp', 'SharedMod'), '/mods/SharedMod'], [pluginAddressKey('B.esp', 'SharedMod'), '/mods/SharedMod']]);
 
-    const byPlugin = pluginRepositoriesOf(plugins, new Map([['/answered', repo]]), () => '/answered');
-
-    expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'ModA'), repo]]));
-  });
-
-  it('gives two plugins sharing one mod folder the same repository', () => {
-    const repo = { name: 'repo' };
-    const plugins = [
-      makePlugin({ path: '/mods/SharedMod/A.esp', origin: 'SharedMod' }),
-      makePlugin({ path: '/mods/SharedMod/B.esp', origin: 'SharedMod' }),
-    ];
-    const folderRepositories = new Map([['/mods/SharedMod', repo]]);
-
-    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
+    const byPlugin = pluginRepositoriesOf(folders, new Map([['/mods/SharedMod', repo]]));
 
     expect(byPlugin).toEqual(new Map([[pluginAddressKey('A.esp', 'SharedMod'), repo], [pluginAddressKey('B.esp', 'SharedMod'), repo]]));
   });
 
-  // ADR-0012 invariant 1: two plugins that share a filename each have their own repository.
-  it('keeps two same-name plugins from different mods apart', () => {
-    const repoA = { name: 'repoA' };
-    const repoB = { name: 'repoB' };
-    const plugins = [
-      makePlugin({ path: '/mods/ModA/Shared.esp', origin: 'ModA' }),
-      makePlugin({ path: '/mods/ModB/Shared.esp', origin: 'ModB' }),
-    ];
-    const folderRepositories = new Map([['/mods/ModA', repoA], ['/mods/ModB', repoB]]);
+  it('omits a plugin whose folder has no entry in folderRepositories', () => {
+    // A folder whose openRepository call declined (registerTrackedRepositories already dropped it
+    // from the map) — never a null-valued entry a later `.status()` call would crash on.
+    const folders = new Map([[pluginAddressKey('U.esp', 'Declined'), '/mods/Declined']]);
 
-    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories, pluginFolder);
-
-    expect(byPlugin.get(pluginAddressKey('Shared.esp', 'ModA'))).toBe(repoA);
-    expect(byPlugin.get(pluginAddressKey('Shared.esp', 'ModB'))).toBe(repoB);
-  });
-
-  it('omits a plugin whose own mod folder has no entry in folderRepositories', () => {
-    // e.g. an untracked plugin, or one whose openRepository call declined (registerTrackedRepositories
-    // already dropped that folder from the map) — never a null-valued entry a later `.status()` call
-    // would crash on.
-    const plugins = [makePlugin({ path: '/mods/Untracked/U.esp', origin: 'Untracked' })];
-
-    const byPlugin = pluginRepositoriesOf(plugins, new Map(), pluginFolder);
-
-    expect(byPlugin.size).toBe(0);
+    expect(pluginRepositoriesOf(folders, new Map()).size).toBe(0);
   });
 });

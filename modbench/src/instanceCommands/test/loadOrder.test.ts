@@ -19,6 +19,7 @@ const LINE_WITHOUT_A_FILE = {
 
 const VALUE: LoadOrderSource = {
   gameName: 'Fallout 4',
+  gameRelease: 'Fallout4',
   gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
   plugins: [PLUGIN, LINE_WITHOUT_A_FILE],
 };
@@ -43,6 +44,24 @@ describe('put load order', () => {
       snapshot: { plugins: [PLUGIN], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
       outcome: APPLIED,
     });
+  });
+
+  // Rival: looking the release up from the game's name here, beside the Instance adapter's answer.
+  it('sends the release the value holds', async () => {
+    const client = attachedClient();
+
+    await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameRelease: 'Fallout4VR' });
+
+    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[3])).toEqual(['Fallout4VR']);
+  });
+
+  // A guessed release would answer about another game; the name is refused visibly instead.
+  it('sends the game as the instance names it when the value holds no release', async () => {
+    const client = attachedClient();
+
+    await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined });
+
+    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[3])).toEqual(['Morrowind']);
   });
 
   it('sends nothing while the game directory is unresolved', async () => {
@@ -90,7 +109,7 @@ describe('refresh', () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });
 
-    const result = await refresh(client, '/instance', 'Fallout 4');
+    const result = await refresh(client, '/instance', VALUE);
 
     expect(client.calls.map((c) => [c.method, ...c.args])).toEqual([['rebuildIndex', '/instance', 'Fallout4']]);
     expect(result).toEqual({ applied: true });
@@ -102,7 +121,7 @@ describe('refresh', () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });
 
-    const result = await refresh(client, '/instance', 'Fallout 4');
+    const result = await refresh(client, '/instance', VALUE);
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, heldElsewhere: true });
@@ -112,7 +131,7 @@ describe('refresh', () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: false, detail: 'Failed to rebuild the store.' });
 
-    const result = await refresh(client, '/instance', 'Fallout 4');
+    const result = await refresh(client, '/instance', VALUE);
 
     expect(client.calls.map((c) => c.method)).toEqual(['rebuildIndex']);
     expect(result).toEqual({ applied: false, heldElsewhere: false, refusal: 'Failed to rebuild the store.' });
