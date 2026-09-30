@@ -69,6 +69,10 @@ export type ModlistEntry = Mod | Separator;
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
+/** Why a change naming an entry mod order does not list is refused. */
+export const entryNotFound = (entry: EntryRef): string =>
+  `${entry.kind === 'mod' ? 'Mod' : 'Separator'} not found in modlist: ${entry.name}`;
+
 /** A folder that holds a mod or a separator, decoded into the entry it holds. */
 export interface ModFolder {
   readonly kind: ModlistEntry['kind'];
@@ -250,6 +254,9 @@ export interface InstanceAdapter {
   /** Every profile's name; none when the instance has no profiles. */
   profiles(): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
+  /** The entry of `entry`'s kind mod order lists, matched as the manager matches names; undefined
+   *  when it lists none. */
+  orderEntry(profile: string, entry: EntryRef): Promise<ModlistEntry | undefined>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
@@ -268,8 +275,9 @@ export interface InstanceAdapter {
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
 
   // Changes.
-  /** Every change lands in one write, its folders with it. A change naming an entry that is not
-   *  there, or adding one that is, rejects, and nothing changes. */
+  /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a
+   *  separator that is, rejects all of it. Adding at the winning end an entry there, or dropping
+   *  one not there, changes nothing. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
   /** Every change lands in one write. A change naming a plugin that is not there, or adding one
    *  that is, rejects, and nothing is written. */
@@ -283,6 +291,7 @@ export interface InstanceAdapter {
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.
+  /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;

@@ -178,6 +178,14 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
+    // Rival: an exact match, which reads a line another tool recased as no entry.
+    it('answers the entry of a kind mod order lists, matched as MO2 matches names, or none', async () => {
+      expect(await adapter.orderEntry('Default', { kind: 'mod', name: 'harder vats' })).toMatchObject({ kind: 'mod', name: 'Harder VATS' });
+      expect(await adapter.orderEntry('Default', { kind: 'separator', name: ' unassigned (modlist development). ' }))
+        .toMatchObject({ kind: 'separator', name: 'Unassigned (Modlist Development)' });
+      expect(await adapter.orderEntry('Default', { kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
+    });
+
     it('rejects a profile with no mod order to read', async () => {
       await expect(adapter.modOrder('No Such Profile')).rejects.toThrow(/ENOENT/);
     });
@@ -417,6 +425,14 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.entryFolder({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
     });
 
+    // MO2 knows a mod by its folder's name, and a folder named for a separator holds that
+    // separator. Rival: matching the kind first, so the name reads as free.
+    it('answers a mod named as a separator\'s folder with that separator\'s folder', async () => {
+      expect(await adapter.entryFolder({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
+        kind: 'separator', name: 'Unassigned (Modlist Development)',
+      });
+    });
+
     // A separator is named as MO2 names its folder, so a name asked for loosely finds it too.
     it('finds a separator\'s folder by the name MO2 would give it', async () => {
       expect(await adapter.entryFolder({ kind: 'separator', name: '  unassigned  (Modlist Development)..' })).toMatchObject({
@@ -572,6 +588,19 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.createModFolder('../escape')).rejects.toThrow(/Not a valid mod name/);
     });
 
+    // Rival: making the folder whatever is there, which adopts another mod's folder, or a
+    // separator's, in silence.
+    it.each([
+      ['a mod\'s, in another case', 'harder vats', 'Harder VATS'],
+      ['a separator\'s, whose name it decodes to', 'unassigned (modlist development)_SEPARATOR', 'Unassigned (Modlist Development)_separator'],
+    ])('refuses a folder already there as %s, naming it', async (_, mod, folder) => {
+      const before = await snapshotTree(root);
+
+      await expect(adapter.createModFolder(mod)).rejects.toThrow(`The folder "${join(root, 'mods', folder)}" is in the way`);
+
+      assertOnlyChanged(before, await snapshotTree(root), new Set());
+    });
+
     it('moves the folder that holds a mod or a separator to the trash, and answers false when none does', async () => {
       const trashed: string[] = [];
       const trash = (path: string): Promise<void> => {
@@ -689,17 +718,29 @@ describe('the MO2 Instance adapter', () => {
       ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
       ['moveSeparators', { kind: 'moveSeparators', separators: ['No Such Sep'], place: { kind: 'modOrder' }, end: 'winning' }],
       ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
-      ['dropMod', { kind: 'dropMod', mod: 'No Such Mod' }],
-      ['dropSeparator', { kind: 'dropSeparator', separator: 'No Such Sep' }],
-      ['addAtWinningEnd a listed mod', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Harder VATS' } }],
       ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', afterIndex: 0 }],
       ['renameSeparator onto a listed separator', {
         kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Radfall - All-In-One Survival Overhaul',
       }],
-    ])('rejects %s naming an entry that is not there, or adding one that is, and writes nothing', async (_, bad) => {
+    ])('rejects %s naming an entry that is not there, or adding a separator that is, and writes nothing', async (_, bad) => {
       const before = await text(root, DEFAULT_MODLIST);
 
       await expect(change([{ kind: 'enable', mod: 'Harder VATS', enabled: true }, bad])).rejects.toThrow(/modlist/);
+
+      expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+    });
+
+    // An entry already added, or already dropped, is already as the change would leave it. Rival:
+    // rejecting it, which fails a gesture that raced mod sync to the same line.
+    it.each<[string, ModOrderChange]>([
+      ['adding a mod listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
+      ['adding a separator listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'separator', name: 'radfall - all-in-one survival overhaul' } }],
+      ['dropping a mod not listed', { kind: 'dropMod', mod: 'No Such Mod' }],
+      ['dropping a separator not listed', { kind: 'dropSeparator', separator: 'No Such Sep' }],
+    ])('writes nothing for %s, and says so', async (_, already) => {
+      const before = await text(root, DEFAULT_MODLIST);
+
+      expect(await change([already])).toEqual({ wrote: false });
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
@@ -880,7 +921,6 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it.each<[string, ModOrderChange]>([
-        ['a mod', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
         ['a separator', { kind: 'addSeparator', separator: 'unassigned (modlist development)', afterIndex: 0 }],
         ['a rename', { kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'radfall - all-in-one survival overhaul' }],
       ])('rejects adding %s mod order already lists in another case', async (_, bad) => {
