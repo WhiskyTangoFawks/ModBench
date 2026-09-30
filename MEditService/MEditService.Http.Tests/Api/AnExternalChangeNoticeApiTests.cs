@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>ADR-0003 invariant 3 on the wire: at each settle and at load, the stream names each
+/// <summary>ADR-0003 invariant 3 on the wire: each time the snapshot arrives, the stream names each
 /// tracked plugin whose bytes differ from what Modbench last wrote, and each untracked plugin of a
 /// tracked mod.</summary>
 [Collection(WebHostCollection.Name)]
@@ -29,6 +29,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;
     }
@@ -52,6 +53,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         var formKey = await Client.FirstFormKey(Plugin, Origin);
         using var stream = await Client.NotificationStream();
         ARelease(fx);
+        await Client.NextSnapshot(fx);
         await NoticesUntilOneNames(stream, Plugin);
 
         var response = await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25);
@@ -110,6 +112,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
             [.. fx.Plugins, new LoadOrderEntry(SecondPlugin, second, Origin, fx.Plugins.Count, Enabled: true, Winning: true)];
         (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
         await Client.PluginReportsTracked(Plugin);
         Restart();
         using var stream = await Client.NotificationStream();

@@ -1,6 +1,3 @@
-using MEditService.Watcher;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace MEditService.Http.Tests.TestSupport;
 
 /// <summary>A class whose subject is the running service: one host, one client for it, and the
@@ -25,8 +22,8 @@ public abstract class HostedTests : IDisposable
     // instance) overrides this so Restart() rebuilds that same shape, not a bare one.
     protected virtual MEditHost CreateHost() => new();
 
-    // A test-local fixture, disposed after the host rather than by its own "using": disposing a
-    // watched .git tree while the host's watcher still holds a settle in flight is the known flake.
+    // A test-local fixture, disposed after the host rather than by its own "using": the host's
+    // reconcile may still be reading its .git tree.
     protected T Owned<T>(T fixture) where T : IDisposable
     {
         _owned.Add(fixture);
@@ -46,13 +43,11 @@ public abstract class HostedTests : IDisposable
     protected virtual void DisposeFixtures() { }
 
     // The entry point's own RunAsync disposes the host too, and whichever disposal comes second
-    // returns at once; the watcher's Dispose returns only once no settle is still writing.
+    // returns at once; the Index's Dispose returns only once no reconcile is still reading.
     private void StopTheService()
     {
-        var watcher = _app.Services.GetRequiredService<ModFolderWatcher>();
         Client.Dispose();
         _app.Dispose();
-        watcher.Dispose();
     }
 
     public void Dispose()

@@ -24,7 +24,7 @@ public sealed class WriteSideIndexScanTests
     ];
 
     // Whole projects, not folders inside them: a folder literal means a new folder joins the write
-    // side unguarded. The composition root and the watcher are not the write side and are not here.
+    // side unguarded. The composition root is not the write side and is not here.
     private static readonly string[] ProductionRoots =
     [
         "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
@@ -169,13 +169,12 @@ public sealed class WriteSideIndexScanTests
             + string.Join("\n", named));
     }
 
-    // The endpoints reference the Source repository and the watcher as the composition root, and
-    // call neither: a route's one call is to a handler or a query service.
-    private static readonly string[] UndrawnCallees =
-        ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch"];
+    // The endpoints reference the Source repository as the composition root, and call it not: a
+    // route's one call is to a handler or a query service.
+    private static readonly string[] UndrawnCallees = ["SourceRepository"];
 
     [Fact]
-    public void NoEndpoint_NamesTheSourceRepositoryOrTheWatcher()
+    public void NoEndpoint_NamesTheSourceRepository()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
@@ -185,9 +184,8 @@ public sealed class WriteSideIndexScanTests
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
         Assert.True(
             named.Count == 0,
-            "An endpoint names the Source repository or the Mod watcher. Neither arrow is drawn from "
-            + "the HTTP endpoints; resolution under the load order is Commands' to hide, and the "
-            + "watcher is told nothing:\n"
+            "An endpoint names the Source repository. No arrow is drawn from the HTTP endpoints to "
+            + "it; resolution under the load order is Commands' to hide:\n"
             + string.Join("\n", named));
     }
 

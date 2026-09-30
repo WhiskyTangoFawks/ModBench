@@ -174,10 +174,9 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
     }
 
-    // Committed, so git names it only once: a validation that reported it vouches for nothing, and
-    // the next reads the whole tree again.
+    // Committed, so git names it only once: the plugin's failure stands until the tree changes.
     [Fact]
-    public void ACommittedDocumentDeclaringNoRecord_IsReportedByEveryValidation()
+    public void ACommittedDocumentDeclaringNoRecord_FailsThePlugin_ThroughEveryValidation()
     {
         var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
         File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
@@ -185,7 +184,9 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod.Git("commit", "-q", "-m", "a document declaring no FormKey");
         Assert.NotEmpty(Validate().Failures);
 
-        Assert.NotEmpty(Validate().Failures);
+        Validate();
+
+        Assert.Contains(_index.Status.Failures, f => f.Name == _mod.Name);
     }
 
     // The tree gone, the rows come from the binary; the tree back at the same HEAD reads clean to

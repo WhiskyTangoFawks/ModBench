@@ -60,18 +60,6 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public async Task RefreshBinary_OfAGoneFile_AdvancesTheSequence()
-    {
-        Reconcile(_fixture.Plugins);
-        var before = _index.Sequence;
-
-        File.Delete(_base.Path);
-        Assert.True(await _index.RefreshBinary(_baseKey, _base.Path));
-
-        Assert.True(_index.Sequence > before);
-    }
-
-    [Fact]
     public void Reconcile_ARegistrationMove_AdvancesTheSequence()
     {
         Reconcile(_fixture.Plugins);
@@ -94,7 +82,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void RefreshKeys_TwoKeysInOneCall_AdvancesTheSequenceOnce()
+    public void Validate_TwoChangedDocuments_AdvanceTheSequenceOnce()
     {
         Reconcile(_fixture.Plugins);
         var reads = _index.RequireReads();
@@ -109,7 +97,7 @@ public sealed class ProjectionSequenceTests : IDisposable
             formKey2, document2.RecordType, document2.EditorId, document2.BodyOf().Replace("Second", "SecondEdited", StringComparison.Ordinal)));
 
         var before = _index.Sequence;
-        _index.RefreshKeys(_baseKey, [formKey1, formKey2]);
+        _index.ValidateIndex(_baseKey);
 
         Assert.Equal(before + 1, _index.Sequence);
         Assert.Equal("FirstEdited", reads.DocumentOf(formKey1, _baseKey).EditorId);
@@ -117,23 +105,12 @@ public sealed class ProjectionSequenceTests : IDisposable
     }
 
     [Fact]
-    public void RefreshKeys_WithNoKeys_DoesNotAdvanceTheSequence()
+    public void Validate_WithUnchangedBytes_DoesNotAdvanceTheSequence()
     {
         Reconcile(_fixture.Plugins);
         var before = _index.Sequence;
 
-        _index.RefreshKeys(_baseKey, []);
-
-        Assert.Equal(before, _index.Sequence);
-    }
-
-    [Fact]
-    public void RefreshKeys_WithUnchangedBytes_DoesNotAdvanceTheSequence()
-    {
-        Reconcile(_fixture.Plugins);
-        var before = _index.Sequence;
-
-        _index.RefreshKeys(_baseKey, [_npc1.ToString()]);
+        _index.ValidateIndex(_baseKey);
 
         Assert.Equal(before, _index.Sequence);
     }

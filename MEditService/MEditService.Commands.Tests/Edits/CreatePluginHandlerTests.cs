@@ -46,7 +46,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var before = _holder.Current;
         var version = _holder.Version;
         var changes = 0;
-        _holder.Changed += (_, _) => changes++;
+        _holder.Arrived += (_, _) => changes++;
 
         await Create("NewPlugin.esp", folder, "QuietMod");
 

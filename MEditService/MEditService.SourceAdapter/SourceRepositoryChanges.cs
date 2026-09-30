@@ -63,7 +63,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Which of <paramref name="formKeys"/> HEAD holds, as a document or as a child another
     /// document embeds; null when git cannot say. One git grep finds the committed files naming any
-    /// of them, and only those are read.</summary>
+    /// of them, and those are read first.</summary>
     public IReadOnlySet<string>? HeldAtHead(PluginAddress plugin, IReadOnlyCollection<string> formKeys)
     {
         var held = new HashSet<string>(StringComparer.Ordinal);
@@ -90,30 +90,44 @@ public sealed partial class SourceRepository
             "HEAD", "--", LiteralPathspec(RootFor(plugin.Name)),
         ];
         // git grep exits 1 when nothing matched.
-        switch (GitCli.RunForExitCode(gitDir, _modFolder, out var files, args))
-        {
-            case 1: return held;
-            case not 0: return null;
-        }
+        if (GitCli.RunForExitCode(gitDir, _modFolder, out var files, args) is not (0 or 1)) return null;
 
         const string treePrefix = "HEAD:";
-        foreach (var hit in files.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var gitPath = hit[treePrefix.Length..];
-            if (ReadCommittedSourceText(_modFolder, gitPath) is not { } text) return null;
+        var hits = files.Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(hit => hit[treePrefix.Length..]).ToList();
+        if (!CreditCommitted(gitDir, plugin, hits, wanted, held)) return null;
+        if (wanted.Values.All(held.Contains)) return held;
 
-            if (FormKeyDeclaredIn(text, gitPath, plugin.Name) is { } declared
+        // A FormKey written through a JSON escape escapes the search, so a miss reads the rest of HEAD's
+        // tree before it counts as gone.
+        if (CommittedSourceTree(_modFolder, plugin.Name) is not { } listing) return null;
+        var rest = listing.Keys.Except(hits, StringComparer.Ordinal).Where(path => !CarriesNoRecord(path)).ToList();
+        return CreditCommitted(gitDir, plugin, rest, wanted, held) ? held : null;
+    }
+
+    // One cat-file for every path. False when git cannot read one of them.
+    private bool CreditCommitted(
+        string gitDir, PluginAddress plugin, List<string> gitPaths, Dictionary<FormKey, string> wanted, HashSet<string> held)
+    {
+        if (gitPaths.Count == 0) return true;
+        if (GitCli.CatFileBatch(gitDir, _modFolder, [.. gitPaths.Select(path => $"HEAD:{path}")]) is not { } contents)
+            return false;
+
+        foreach (var (gitPath, content) in gitPaths.Zip(contents))
+        {
+            if (content is null) return false;
+            var bytes = StripUtf8Bom(content);
+            if (FormKeyDeclaredIn(Encoding.UTF8.GetString(bytes), gitPath, plugin.Name) is { } declared
                 && FormKey.TryFactory(declared, out var own) && wanted.TryGetValue(own, out var document))
             {
                 held.Add(document);
             }
-            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(text), _release))
+            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(bytes, _release))
             {
                 if (inAnEmbedSlot && FormKey.TryFactory(formKey, out var parsed) && wanted.TryGetValue(parsed, out var child))
                     held.Add(child);
             }
         }
-        return held;
+        return true;
     }
 
     // Each named path, and whether the validated HEAD held nothing at it.

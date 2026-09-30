@@ -133,6 +133,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginAddress key) => _store.IndexedContentHash(key);
 
+    /// <summary>See <see cref="IRecordIndex.FileContentHash"/>.</summary>
+    public string? FileContentHash(string path) => _store.FileContentHash(path);
+
     /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
     public long Sequence => _store.CurrentSequence();
 
@@ -462,13 +465,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var workingTreeText = repository.Get(key, identity)?.Body;
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
-        // something that is not a document. Rows stay as they stand until it reads as one again.
+        // something that is not a document. Rows stay as they stand until it reads as one again, and
+        // the caller says why.
         if (workingTreeText != null && !IsDocument(workingTreeText))
         {
-            _logger.LogWarning(
-                "{Plugin} ({Origin})'s source for {FormKey} is not a readable document, so its rows were left as " +
-                "they stand", key.Name, key.Origin, formKey);
-            return;
+            throw new UnreadableSourceDocumentException(
+                $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
         }
 
         if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
@@ -555,12 +557,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Validate"/>.</summary>
     public ValidationReport Validate(PluginAddress key, string? modFolder)
     {
-        if (modFolder != null && SourceRepository.IsTracked(modFolder))
-        {
-            return (_sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository."))
-                .Validate(key, modFolder);
-        }
+        var sourceValidation = _sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository.");
+        if (modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name))
+            return sourceValidation.Validate(key, modFolder);
 
+        // Whatever HEAD vouched for is gone with the tree, so a tree that returns is read whole.
+        sourceValidation.Forget(key);
         return ValidateAgainstBinary(key);
     }
 

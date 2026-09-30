@@ -3,21 +3,11 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>Two captions the code contradicts: the Mod watcher announces nothing and tells the
-/// Index and Commands, and Queries hide the Index's reads and draw no arrow to a store.</summary>
-public sealed class WatcherAndQueriesScanTests
+/// <summary>A caption the code contradicts: Queries hide the Index's reads and draw no arrow to a
+/// store.</summary>
+public sealed class QueriesScanTests
 {
-    private const string WatcherRoot = "MEditService.Watcher";
-
     private const string QueriesRoot = "MEditService.Queries";
-
-    // The port and the verb it is held for: either one is a second answer to "what changed", beside
-    // the read model's own.
-    private static readonly (string Label, string Pattern)[] PublisherNeedles =
-    [
-        ("INotificationPublisher", @"\bINotificationPublisher\b"),
-        (".Publish(", @"\.Publish\("),
-    ];
 
     // Every spelling of the file system a core module reaches for. The three statics are anchored
     // against a member access, since a receiver's own Path or File property is the caller's data.
@@ -31,25 +21,6 @@ public sealed class WatcherAndQueriesScanTests
         ("DirectoryInfo", @"\bDirectoryInfo\b"),
         ("System.IO", @"\bSystem\.IO\b"),
     ];
-
-    // ADR-0015 invariant 3: when a projection lands, the read model publishes which rows changed.
-    // The watcher tells the Index and the Index announces, so a publish here is a second voice.
-    [Fact]
-    public void TheModWatcher_NamesNoNotificationPublisher()
-    {
-        var root = ArchitectureTests.SolutionDirectory();
-
-        var walked = ScannedFiles(root, WatcherRoot);
-        var named = Sites(root, walked, PublisherNeedles);
-
-        Assert.Contains("ModFolderWatcher.cs", walked.Select(Path.GetFileName));
-        Assert.True(
-            named.Count == 0,
-            "The Mod watcher publishes. It announces nothing and tells the Index and Commands, and "
-            + "the read model is what says which rows changed and at which sequence (ADR-0015 "
-            + "invariant 3):\n"
-            + string.Join("\n", named));
-    }
 
     // ADR-0014 invariant 1: the core knows no path and no byte format. Queries hide the Index's
     // reads, so a disk read here answers from a file the Index never saw.
@@ -86,31 +57,6 @@ public sealed class WatcherAndQueriesScanTests
             Assert.Equal(
                 ["Q/Reads.cs: Directory.: 1", "Q/Reads.cs: File.: 2"],
                 Sites(root, ScannedFiles(root, "Q"), FileSystemNeedles));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void ThePublisherScan_CountsTheHeldPortAndTheCall_AndNotAnAnnounceOrAPublishedType()
-    {
-        var root = Directory.CreateTempSubdirectory("medit-watcher-scan-").FullName;
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(root, "W"));
-            File.WriteAllText(
-                Path.Combine(root, "W", "Holds.cs"),
-                "private readonly INotificationPublisher _notifications;\n_notifications.Publish(new PluginChangedNotification(key));\n");
-            // Telling the Index is the drawn arrow; the type's name travels in the Index's own call.
-            File.WriteAllText(
-                Path.Combine(root, "W", "Tells.cs"),
-                "_index.Announce(() => _index.RefreshBinary(key, path));\nvar n = typeof(PluginChangedNotification);\n");
-
-            Assert.Equal(
-                ["W/Holds.cs: .Publish(: 1", "W/Holds.cs: INotificationPublisher: 1"],
-                Sites(root, ScannedFiles(root, "W"), PublisherNeedles));
         }
         finally
         {

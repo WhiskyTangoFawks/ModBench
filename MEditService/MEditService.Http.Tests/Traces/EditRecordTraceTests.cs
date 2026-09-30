@@ -10,9 +10,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>edit-record: the envelope goes down to the source tree and the projection comes back
-/// up, so the editor sees an applied reply or a typed refusal, then a rows-changed push, then its
-/// own re-read.</summary>
+/// <summary>edit-record: the envelope goes down to the source tree and the next snapshot's
+/// projection comes back up, so the editor sees an applied reply or a typed refusal, then a
+/// rows-changed push, then its own re-read.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class EditRecordTraceTests : HostedTests
 {
@@ -35,6 +35,10 @@ public sealed class EditRecordTraceTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         foreach (var origin in tracked)
             (await Client.Track(fx.Plugins.Where(p => p.Origin == origin).Select(p => (p.Name, p.Origin)))).EnsureSuccessStatusCode();
+        if (tracked.Length == 0) return fx;
+
+        await Client.NextSnapshot(fx);
+        foreach (var plugin in fx.Plugins.Where(p => tracked.Contains(p.Origin))) await Client.PluginReportsTracked(plugin.Name);
         return fx;
     }
 
@@ -61,6 +65,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         applied.EnsureSuccessStatusCode();
         Assert.True((await Body(applied)).GetProperty("applied").GetBoolean());
+        await Client.NextSnapshot(fx);
 
         var rows = Assert.Single(await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
@@ -87,6 +92,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         response.EnsureSuccessStatusCode();
         Assert.Single((await Body(response)).GetProperty("applied").EnumerateArray());
+        await Client.NextSnapshot(fx);
         var rows = Assert.Single(await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
@@ -104,9 +110,10 @@ public sealed class EditRecordTraceTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
         var tracked = await NpcFormKeys(Plugin, Origin);
         var untracked = await Client.FirstFormKey(OtherPlugin, OtherOrigin);
-        var before = await Client.Sequence();
 
         var response = await Client.PostAsJsonAsync("/records/delete", new
         {
@@ -128,11 +135,9 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal("PluginNotTracked", refused.GetProperty("refusal").GetString());
         Assert.Contains("Track", refused.GetProperty("message").GetString().Require(), StringComparison.Ordinal);
 
-        await Client.SequenceReaches(before + 1);
-        var remaining = await NpcFormKeys(Plugin, Origin);
-        var untouched = await NpcFormKeys(OtherPlugin, OtherOrigin);
-        Assert.Empty(remaining);
-        Assert.Equal([untracked], untouched);
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => (await NpcFormKeys(Plugin, Origin)).Length == 0, "the deletes reached the read");
+        Assert.Equal([untracked], await NpcFormKeys(OtherPlugin, OtherOrigin));
     }
 
     private async Task<string[]> NpcFormKeys(string plugin, string origin) =>
@@ -153,6 +158,7 @@ public sealed class EditRecordTraceTests : HostedTests
 
         created.EnsureSuccessStatusCode();
         var formKey = (await Body(created)).GetProperty("formKey").GetString().Require();
+        await Client.NextSnapshot(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(formKey)))[^1];
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());
@@ -190,6 +196,9 @@ public sealed class EditRecordTraceTests : HostedTests
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
         (await Client.Track(OtherPlugin, OtherOrigin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
+        await Client.PluginReportsTracked(Plugin);
+        await Client.PluginReportsTracked(OtherPlugin);
         var targetFolder = OtherTool.ModFolderOf(fx, Origin);
         var target = new PluginAddress(Plugin, Origin);
         var oldFormKey = (await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=race"))
@@ -216,6 +225,7 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(samePluginBefore, File.ReadAllText(samePluginReferencer));
         Assert.Equal(trackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OtherOrigin)));
         Assert.Equal(untrackedBefore, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UntrackedOrigin)));
+        await Client.NextSnapshot(fx);
         var rows = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))[^1];
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());

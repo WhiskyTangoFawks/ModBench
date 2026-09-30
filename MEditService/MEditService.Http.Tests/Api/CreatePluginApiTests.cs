@@ -200,11 +200,12 @@ public sealed class CreatePluginApiTests : HostedTests
         (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
         var formKey = await Client.FirstFormKey(Held, Origin);
         await Created("Minted.esp", modFolder);
-        var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(modFolder, Held, Npc, "RenamedByHand");
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal("RenamedByHand", (await Client.Record(formKey)).GetProperty("editorId").GetString());
+        await Wire.Eventually(
+            async () => (await Client.Record(formKey)).GetProperty("editorId").GetString() == "RenamedByHand",
+            "the hand edit reached the read");
     }
 }

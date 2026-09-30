@@ -16,10 +16,6 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// <see cref="SourceRepository.PlacementFor"/> is the only thing that computes one.</summary>
 internal readonly record struct SourcePlacement(string RelativePath);
 
-/// <summary>A mod folder's git watch targets, as <see cref="SourceRepository.GitWatchPathsIn"/>
-/// answers them — the paths a watcher compares against, never spells itself.</summary>
-public sealed record GitWatchPaths(string GitDirectory, string Head, string PackedRefs, string RefsDirectory);
-
 /// <summary>The source tree's layout: the only type spelling the root folder, the door's file names
 /// and the JSON suffix. Everything else asks for a path rather than composing one.</summary>
 public sealed partial class SourceRepository
@@ -76,18 +72,6 @@ public sealed partial class SourceRepository
         || (IsTracked(modFolder) && GitCli.TryRun(
             Path.Combine(modFolder, ".git"), modFolder, out _,
             "cat-file", "-e", $"refs/heads/main:{ToGitPath(RootFor(pluginFileName))}"));
-
-    /// <summary>The mod folder's git internals for the watcher (ADR-0014): the directory, and the ref
-    /// paths whose change means a commit, checkout or reset.</summary>
-    public static GitWatchPaths GitWatchPathsIn(string modFolder)
-    {
-        var gitDirectory = Path.Combine(modFolder, ".git");
-        return new GitWatchPaths(
-            gitDirectory,
-            Path.Combine(gitDirectory, "HEAD"),
-            Path.Combine(gitDirectory, "packed-refs"),
-            Path.Combine(gitDirectory, "refs"));
-    }
 
     /// <summary>The plugin header's own document: the whole-mod door's root RecordData.json.</summary>
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>

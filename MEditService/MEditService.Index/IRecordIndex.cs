@@ -43,6 +43,10 @@ internal interface IRecordIndex : IDisposable
     /// switch is cheap (ADR-0009).</summary>
     string? IndexedContentHash(PluginAddress key);
 
+    /// <summary>The hash of the file at <paramref name="path"/> now, kept without a read while its
+    /// stamp holds (ADR-0009). Null when the file cannot be read.</summary>
+    string? FileContentHash(string path);
+
     /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009:
     /// the file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
@@ -94,7 +98,7 @@ internal interface IRecordIndex : IDisposable
     void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys);
 
     /// <summary>ADR-0015 invariant 4: compares <paramref name="key"/>'s rows against the system of
-    /// record they came from — source documents at both refs for a tracked
-    /// <paramref name="modFolder"/>, the binary otherwise — and refreshes what differs.</summary>
+    /// record they came from — source documents at both refs when <paramref name="modFolder"/> holds
+    /// its tree, the binary otherwise — and refreshes what differs.</summary>
     ValidationReport Validate(PluginAddress key, string? modFolder);
 }

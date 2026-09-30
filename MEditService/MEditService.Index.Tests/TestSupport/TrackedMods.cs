@@ -78,16 +78,16 @@ internal static class TrackedMods
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
-    /// <paramref name="body"/>, then the narrow signal a Source watcher would send.</summary>
+    /// <paramref name="body"/>, then the next snapshot's validation of the plugin.</summary>
     internal static void Edit(this Indexer index, LoadOrderEntry entry, RecordDocument document, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, document.EditorId, body));
-        index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
+        index.ValidateIndex(entry.KeyOf());
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> moved to the name
-    /// <paramref name="newEditorId"/> computes and rewritten there, then the narrow signal for
-    /// it.</summary>
+    /// <paramref name="newEditorId"/> computes and rewritten there, then the next snapshot's
+    /// validation of the plugin.</summary>
     internal static void Rename(
         this Indexer index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
     {
@@ -96,18 +96,19 @@ internal static class TrackedMods
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId), newEditorId);
         repository.Put(
             entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
-        index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
+        index.ValidateIndex(entry.KeyOf());
     }
 
-    /// <summary>A document the working tree gains, then the narrow signal for it.</summary>
+    /// <summary>A document the working tree gains, then the next snapshot's validation of the
+    /// plugin.</summary>
     internal static void Create(this Indexer index, LoadOrderEntry entry, string formKey, string recordType, string? editorId, string body)
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body));
-        index.RefreshKeys(entry.KeyOf(), [formKey]);
+        index.ValidateIndex(entry.KeyOf());
     }
 
-    /// <summary>Several working-tree changes made the Source repository's own way, then the one
-    /// narrow signal a settled Source batch sends for them (ADR-0015 invariant 2). A null body is
+    /// <summary>Several working-tree changes made the Source repository's own way, then the next
+    /// snapshot's one validation of the plugin (ADR-0009 invariant 4). A null body is
     /// the document taken out.</summary>
     internal static void Project(
         this Indexer index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
@@ -122,7 +123,7 @@ internal static class TrackedMods
             else
                 repository.Put(entry.KeyOf(), new SourceDocument(formKey, current.RecordType, current.EditorId, body));
         }
-        index.RefreshKeys(entry.KeyOf(), [.. deltas.Select(d => d.FormKey)]);
+        index.ValidateIndex(entry.KeyOf());
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the narrow
@@ -133,7 +134,7 @@ internal static class TrackedMods
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
         if (removed != SourceRemoval.Removed)
             throw new InvalidOperationException($"The tree did not give up '{document.FormKey}': {removed}.");
-        index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
+        index.ValidateIndex(entry.KeyOf());
     }
 
     internal static string BodyOf(this RecordDocument document) =>

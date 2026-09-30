@@ -51,7 +51,7 @@ public sealed class TrackedPluginDerivationTests : IDisposable
         Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
-        _index.RefreshKeys(_mod.KeyOf(), [_npc]);
+        _index.ValidateIndex(_mod.KeyOf());
 
         Assert.True(ReadsAsTracked());
     }

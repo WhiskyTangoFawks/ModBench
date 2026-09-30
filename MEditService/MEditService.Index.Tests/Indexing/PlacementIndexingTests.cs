@@ -149,7 +149,7 @@ public class PlacementIndexingTests
         var key = new PluginAddress("ReindexPlacement.esp", "Data");
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        Assert.True(await index.RefreshBinary(key, fixture.Plugins.Single().Path));
+        Assert.True(index.Revalidate(key));
 
         var reads = index.RequireReads();
         Assert.Single(reads.GetWorldspaceCells(key, wrld.ToString()), c => c.FormKey == cell.ToString());

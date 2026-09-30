@@ -216,7 +216,7 @@ public class RegistrationScopingTests
         var opened = fx.Opens.OpenedTotal;
 
         File.Delete(betaPath);
-        Assert.True(await fx.Index.RefreshBinary(BetaKey, betaPath));
+        Assert.True(fx.Index.Revalidate(BetaKey));
 
         Assert.Empty(fx.Reads.GetDocuments(BetaKey));
 

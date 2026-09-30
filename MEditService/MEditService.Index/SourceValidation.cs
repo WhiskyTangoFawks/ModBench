@@ -26,14 +26,10 @@ internal sealed class SourceValidation(
         return report;
     }
 
+    internal void Forget(PluginAddress key) => _validatedHeads.Remove(key);
+
     private ValidationReport ValidateAgainstGit(PluginAddress key, string modFolder, out string? head)
     {
-        head = null;
-        // Tracked but holding no tree for this plugin: nothing here can say what its rows should be,
-        // and the caller's whole-plugin path falls back to the binary, which no HEAD vouches for.
-        if (!Directory.Exists(SourceRepository.RootIn(modFolder, key.Name)))
-            return new ValidationReport(key, [], NeedsRebuild: true, []);
-
         _validatedHeads.TryGetValue(key, out var validatedHead);
         var changes = SourceRepository.Over(modFolder, release).ChangesSince(key, validatedHead);
         head = changes.Head;

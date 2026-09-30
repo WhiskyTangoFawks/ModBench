@@ -212,7 +212,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
         PluginBinaries.Touch(_entry.Path);
-        Assert.True(await index.RefreshBinary(Plugin, _entry.Path));
+        Assert.True(index.Revalidate(Plugin));
 
         Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
     }
@@ -237,7 +237,7 @@ public sealed class SourceIngestTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUnreadableSourceTree_AtReindex_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
+    public void AnUnreadableSourceDocument_AtValidation_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
     {
         using var index = Opened();
         var document = index.RequireReads().DocumentOf(_npc, Plugin);
@@ -246,11 +246,7 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        // The half-written root document surfaces as the JSON reader's own failure, propagated
-        // rather than swallowed into a null downstream. Its subclass is not public, so the base
-        // is what a caller can match.
-        PluginBinaries.Touch(_entry.Path);
-        await Assert.ThrowsAnyAsync<JsonException>(() => index.RefreshBinary(Plugin, _entry.Path));
+        index.ValidateIndex(Plugin);
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
@@ -302,7 +298,7 @@ public sealed class SourceIngestTests : IDisposable
         using var index = Opened();
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
 
-        index.RefreshKeys(Plugin, [_npc]);
+        index.ValidateIndex(Plugin);
     }
 
     [Fact]

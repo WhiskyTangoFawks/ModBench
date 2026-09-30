@@ -69,10 +69,6 @@ public static class CommandHandlers
             sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
-        // The watcher's verb, not a gesture: built here so the port it publishes through is the
-        // composition root's, never borrowed from the watcher that calls it.
-        services.AddSingleton(sp => new ModSettled(sp.GetRequiredService<INotificationPublisher>()));
-
         services.AddSingleton(sp => new CompilePluginHandler(
             sp.GetRequiredService<PluginCompileService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
@@ -84,7 +80,10 @@ public static class CommandHandlers
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IPluginAdapter>()));
+            sp.GetRequiredService<IPluginAdapter>(),
+            new ExternalChangeCheck(
+                sp.GetRequiredService<INotificationPublisher>(),
+                new PluginFileHashes(sp.GetRequiredService<TimeProvider>()))));
 
         return services;
     }

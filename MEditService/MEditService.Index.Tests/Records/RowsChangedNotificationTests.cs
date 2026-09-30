@@ -27,7 +27,7 @@ public sealed class RowsChangedNotificationTests
         var formKey = npc.ToString();
         entry.HandEdit(index.RequireReads().DocumentOf(formKey, entry.KeyOf()), "\"FixtureNpc\"", "\"EditedName\"");
 
-        index.RefreshKeys(entry.KeyOf(), [formKey]);
+        index.ValidateIndex(entry.KeyOf());
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.KeyOf(), notification.Plugin);
@@ -71,7 +71,7 @@ public sealed class RowsChangedNotificationTests
         var gained = GainARecord(entry, index, moved.ToString());
         entry.HandEdit(index.RequireReads().DocumentOf(moved.ToString(), entry.KeyOf()), "\"MovedNpc\"", "\"EditedNpc\"");
 
-        index.RefreshKeys(entry.KeyOf(), [gained]);
+        index.ValidateIndex(entry.KeyOf());
 
         var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
         Assert.Equal(entry.KeyOf(), notification.Plugin);
@@ -148,7 +148,7 @@ public sealed class RowsChangedNotificationTests
             File.ReadAllText(document).Replace(
                 $"\"{ContainerModPlugin.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        fixture.Index.RefreshKeys(fixture.Plugin, [fixture.EmbedCell]);
+        fixture.Index.ValidateIndex(fixture.Plugin);
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(fixture.EmbedCell, rowsChanged.Keys);

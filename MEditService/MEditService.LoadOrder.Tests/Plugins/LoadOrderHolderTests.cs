@@ -38,29 +38,28 @@ public sealed class LoadOrderHolderTests
         Assert.Throws<NoLoadOrderException>(() => holder.Require());
     }
 
-    // The Index and the watcher each subscribe at composition rather than being called by name
-    // from a write endpoint — Apply is the one signal both react to.
+    // The Index subscribes at composition rather than being called by name from a write endpoint.
     [Fact]
-    public void Apply_RaisesChanged_WithTheAppliedSnapshot()
+    public void Apply_RaisesArrived_WithTheAppliedSnapshot()
     {
         var holder = new LoadOrderHolder();
         var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
         LoadOrderSnapshot? seen = null;
-        holder.Changed += (snapshot, _) => seen = snapshot;
+        holder.Arrived += (snapshot, _) => seen = snapshot;
 
         holder.Apply(applied);
 
         Assert.Same(applied, seen);
     }
 
-    // A client waits for the Index's status to reach the version this call answers with — Changed
+    // A client waits for the Index's status to reach the version this call answers with — Arrived
     // must carry the same number Apply itself returns, not a separately counted one.
     [Fact]
-    public void Apply_ReturnsAMonotonicVersion_MatchingWhatChangedCarries()
+    public void Apply_ReturnsAMonotonicVersion_MatchingWhatArrivedCarries()
     {
         var holder = new LoadOrderHolder();
         var seen = new List<long>();
-        holder.Changed += (_, version) => seen.Add(version);
+        holder.Arrived += (_, version) => seen.Add(version);
 
         var first = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
         var second = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Registered("A.esp", 0)]));
@@ -72,14 +71,14 @@ public sealed class LoadOrderHolderTests
     // The rival: a single subscriber field (rather than a multicast event) would let a second
     // subscription silently replace the first instead of adding to it.
     [Fact]
-    public void Apply_RaisesChanged_OnEverySubscriber()
+    public void Apply_RaisesArrived_OnEverySubscriber()
     {
         var holder = new LoadOrderHolder();
         var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
         var firstSeen = false;
         var secondSeen = false;
-        holder.Changed += (_, _) => firstSeen = true;
-        holder.Changed += (_, _) => secondSeen = true;
+        holder.Arrived += (_, _) => firstSeen = true;
+        holder.Arrived += (_, _) => secondSeen = true;
 
         holder.Apply(applied);
 
@@ -87,30 +86,30 @@ public sealed class LoadOrderHolderTests
         Assert.True(secondSeen);
     }
 
-    // ADR-0013 invariant 1: an identical snapshot is a no-op at the door. Changed is what re-arms the
-    // watcher and reconciles the Index, so neither runs.
+    // ADR-0013 invariant 1: every recompute sends the snapshot, changed or not, because the snapshot
+    // is also the signal that a file may have changed. The version moves only with the load order.
     [Fact]
-    public void Apply_ASnapshotEqualToTheCurrentOne_RaisesNoChanged_AndAnswersTheCurrentVersion()
+    public void Apply_ASnapshotEqualToTheCurrentOne_Arrives_WithTheCurrentVersion()
     {
         var holder = new LoadOrderHolder();
         var applied = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [Registered("A.esp", 0)]));
-        var changes = 0;
-        holder.Changed += (_, _) => changes++;
+        var arrivals = new List<long>();
+        holder.Arrived += (_, version) => arrivals.Add(version);
 
         var again = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, [Registered("A.esp", 0)]));
 
-        Assert.Equal(0, changes);
+        Assert.Equal([applied], arrivals);
         Assert.Equal(applied, again);
         Assert.Equal(applied, holder.Version);
     }
 
     [Fact]
-    public void Apply_ASnapshotThatMovedAPlugin_RaisesChanged()
+    public void Apply_ASnapshotThatMovedAPlugin_Arrives()
     {
         var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Registered("A.esp", 0), Registered("B.esp", 1)]));
         var changes = 0;
-        holder.Changed += (_, _) => changes++;
+        holder.Arrived += (_, _) => changes++;
 
         holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, [Registered("A.esp", 1), Registered("B.esp", 0)]));
 
@@ -133,7 +132,7 @@ public sealed class LoadOrderHolderTests
         new(name, "ModA", $@"C:\MO2\Fallout4\mods\ModA\{name}", slot, Enabled: true, Winning: true);
 
     // A subscriber with nothing registered is Apply's ordinary case (every test elsewhere in this
-    // file), so raising Changed must never require one.
+    // file), so raising Arrived must never require one.
     [Fact]
     public void Apply_WithNoSubscribers_DoesNotThrow()
     {

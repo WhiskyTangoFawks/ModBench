@@ -5,18 +5,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2) and
-/// applies the result to Load order state. Reconciling into the Index and re-arming the watcher
-/// are subscriptions wired at composition.</summary>
+/// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2), applies
+/// the result to Load order state and checks it for external changes (ADR-0003 invariant 3). The
+/// Index's reconcile is a subscription wired at composition.</summary>
 public sealed class PutLoadOrderHandler
 {
     private readonly LoadOrderHolder _holder;
     private readonly SchemaReflector _schemaReflector;
     private readonly IPluginAdapter _adapter;
+    private readonly ExternalChangeCheck _externalChanges;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal PutLoadOrderHandler(LoadOrderHolder holder, SchemaReflector schemaReflector, IPluginAdapter adapter) =>
-        (_holder, _schemaReflector, _adapter) = (holder, schemaReflector, adapter);
+    internal PutLoadOrderHandler(
+        LoadOrderHolder holder, SchemaReflector schemaReflector, IPluginAdapter adapter, ExternalChangeCheck externalChanges) =>
+        (_holder, _schemaReflector, _adapter, _externalChanges) = (holder, schemaReflector, adapter, externalChanges);
 
     public PutLoadOrderResult Put(
         string dataFolder, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
@@ -34,6 +36,7 @@ public sealed class PutLoadOrderHandler
 
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, WithForcedFirst(dataFolder, gameRelease, entries));
         var version = _holder.Apply(snapshot);
+        _externalChanges.Check(snapshot);
         return PutLoadOrderResult.Success(version);
     }
 

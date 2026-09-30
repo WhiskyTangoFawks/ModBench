@@ -114,32 +114,36 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
     }
 
-    // The hand-off: the Mod watcher sees the source tree Track wrote, and the Indexer reads the
-    // plugin's documents from then on. The load order did not change, so nothing is put.
+    // The hand-off: the next snapshot, the same load order, finds the source tree Track wrote, and
+    // the Indexer reads the plugin's documents from then on.
     [Fact]
-    public async Task AfterTrack_ThePluginListReportsThePluginTracked_WithNoLoadOrderInBetween()
+    public async Task AfterTrack_TheNextSnapshotReportsThePluginTracked()
     {
         await Loaded();
         Assert.False((await Client.Plugin(Plugin)).GetProperty("isTracked").GetBoolean());
 
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsTracked(Plugin);
     }
 
-    // ADR-0015 invariant 2: no load order is put between the Track and the hand edit, so the tracked
-    // plugin can only have reached the answers through the watch Track's own write armed.
+    // ADR-0015 invariant 2: a hand edit reaches the answers the way Modbench's own write does, at
+    // the next snapshot.
     [Fact]
-    public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheNextQuery_WithNoLoadOrderInBetween()
+    public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheQueryAfterTheNextSnapshot()
     {
         await Loaded();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(_instance);
+        await Client.PluginReportsTracked(Plugin);
         var formKey = await Client.FirstFormKey(Plugin, Origin);
-        var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(_instance, Origin), Plugin, Npc, "RenamedByHand");
+        await Client.NextSnapshot(_instance);
 
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal("RenamedByHand", (await Client.Record(formKey)).GetProperty("editorId").GetString());
+        await Wire.Eventually(
+            async () => (await Client.Record(formKey)).GetProperty("editorId").GetString() == "RenamedByHand",
+            "the hand edit reached the read");
     }
 }

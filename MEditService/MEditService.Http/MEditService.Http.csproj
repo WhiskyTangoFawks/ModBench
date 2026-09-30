@@ -21,8 +21,6 @@
 
   <ItemGroup>
     <!-- The composition root references every box below it by definition (ADR-0014). -->
-    <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
-    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
     <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
