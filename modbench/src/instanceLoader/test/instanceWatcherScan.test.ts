@@ -1,5 +1,5 @@
-// ADR-0015 invariant 7: the Instance owns every watcher on the instance. A view or command wiring its own
-// watcher would duplicate the Instance's recompute trigger instead of reading its value.
+// ADR-0015 invariant 7: the Instance adapter owns the watch. A view or command wiring its own watcher
+// would duplicate the recompute trigger instead of reading the Instance's value.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -8,9 +8,10 @@ import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 
-// instance.ts owns every watcher; each watcher module calls the factory one level down
-// (createDebouncedFsWatcher or vscode.workspace.createFileSystemWatcher) to define its own.
+// The Instance adapter's watch, and the Instance's own watcher modules, each calling the factory
+// one level down.
 const ALLOWED = new Set([
+  join('instanceAdapter', 'mo2Watch.ts'),
   join('instanceLoader', 'instance.ts'),
   join('instanceLoader', 'fsWatcher.ts'),
   join('instanceLoader', 'modsWatcher.ts'),

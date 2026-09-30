@@ -13,12 +13,12 @@ import { tsFiles } from './tsFiles';
 const SRC = join(__dirname, '..');
 
 // One directory per kernel box, as the zoom-out draws the Modbench kernel band.
-const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+const KERNEL_BOXES = ['mo2Codecs', 'loadOrderFileCodec', 'tables', 'wire', 'ports'];
 
 // The driven column, each with the boxes target-architecture-references.d2 lets it reach: the
 // arrows that leave it, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
+  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
   instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
 };
 
@@ -105,12 +105,16 @@ function offenders(): Record<string, string[]> {
 // adapter is the one place a dependency of the wire lives.
 const PACKAGE_IMPORTERS = new Set(['client']);
 
+// The Instance adapter's watch is VS Code's file watcher; every other file of the adapter, and the
+// interface commands import, stays free of the extension host.
+const ADAPTER_WATCH = join(boxRoot('instanceAdapter'), 'mo2Watch.ts');
+
 // A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
 // including the file system — the Instance adapter is the one door onto the instance, and it is
 // one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES;
+  if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
@@ -144,7 +148,7 @@ async function plantedSpecifiers(source: string): Promise<string[]> {
 
 describe('a kernel box references nothing', () => {
   it('names every box the kernel band draws', () => {
-    expect(KERNEL_BOXES).toEqual(['mo2Codecs', 'tables', 'wire', 'ports']);
+    expect(KERNEL_BOXES).toEqual(['mo2Codecs', 'loadOrderFileCodec', 'tables', 'wire', 'ports']);
   });
 
   it('every box is a real directory holding production files', () => {
@@ -229,10 +233,12 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
   });
 
-  // Rival: the Instance adapter taking a VS Code type, which puts the extension host behind the
-  // one door onto the instance. The Instance owns the watchers, so vscode is its alone.
-  it('allows vscode in the Instance and refuses it in the Instance adapter', () => {
+  // Rival: the Instance adapter taking a VS Code type beyond its watch, which puts the extension
+  // host behind the interface every command imports (ADR-0002).
+  it('allows vscode in the Instance and in the Instance adapter\'s watch alone', () => {
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', ADAPTER_WATCH, 'instanceAdapter')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'instanceAdapter.ts'), 'instanceAdapter')).toBe(false);
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
   });
 
@@ -275,9 +281,18 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });
 
+  // Rival: the Instance adapter taking MO2's codecs from the kernel again, which puts the mod
+  // manager's formats outside its implementation (target-architecture.md, Rules the Modbench
+  // column draws).
+  it('refuses the kernel MO2 codecs in the Instance adapter', () => {
+    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(false);
+  });
+
   it('allows the boxes each one does reference', () => {
     expect(isAllowedDrivenSpecifier('../instanceAdapter/layout', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
-    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
+    expect(isAllowedDrivenSpecifier(
+      '../loadOrderFileCodec/pluginsText', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter',
+    )).toBe(true);
     expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
     expect(isAllowedDrivenSpecifier(
       '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',

@@ -13,6 +13,13 @@ import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename,
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+/** What install reaches the instance through. */
+export interface InstallAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** For a manual local install only `installationFile` is typically known; the rest arrives from a
  *  Nexus archive's download identity. */
@@ -50,6 +57,15 @@ export function defaultModNameForFolder(folder: string): string {
  *  both readings of the same collision say the same thing. */
 export function modNameCollisionRefusal(name: string): string {
   return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
+}
+
+/** Why a new mod may not take `name`: a folder already holds a mod of that name, matched as the
+ *  instance matches names. Undefined for a free name, or a blank one. */
+export async function installNameRefusal(access: InstallAccess, name: string): Promise<string | undefined> {
+  const trimmed = name.trim();
+  if (!trimmed) return undefined;
+  const holding = await access.adapter.entryFolder({ kind: 'mod', name: trimmed });
+  return holding === undefined ? undefined : modNameCollisionRefusal(trimmed);
 }
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this

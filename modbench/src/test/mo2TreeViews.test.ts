@@ -82,14 +82,14 @@ import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
-import { resolvesNotFound } from './mo2/gameFolderNotFound';
-import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 import { syncMessageDouble } from './syncMessageDouble';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 
 const downloadsViewDeps = (instanceRoot: string, instance: Instance): DownloadsViewDeps => ({
-  own, instanceRoot, instance, reporter: recordingReporter(),
+  own, access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
   install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ } },
 });
@@ -99,8 +99,7 @@ const currentBox = currentBoxOf(h.state);
 async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: resolvesNotFound,
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });
@@ -127,7 +126,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     await provider.getChildren();
 
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
@@ -154,7 +153,7 @@ describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
     expect(modListView.description).toBe('7 / 8');
 
@@ -166,7 +165,7 @@ describe('the Mods view\'s description counts the mods', () => {
   it('follows a new instance value, with nothing pushed', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
 
     const modlistPath = join(root, DEFAULT_MODLIST);
@@ -187,7 +186,7 @@ describe('the Mods view tells its keys what the selection holds', () => {
   it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
@@ -212,7 +211,7 @@ describe('the Mods view tells its keys what the selection holds', () => {
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
@@ -230,7 +229,7 @@ describe('the Mods view expands a separator a filter shows for its matching mods
   const mountFiltered = async (term: string, log: (line: string) => void = () => { /* no-op */ }) => {
     const root = await cloneCorpusFixture();
     const instance = await makeInstance(root);
-    const provider = new ModListProvider({ instance, instanceRoot: root });
+    const provider = new ModListProvider({ instance, access: accessTo(root) });
     createModListView(own, provider, log, syncMessageDouble());
     await command('modbench.mod.filter')();
     currentBox().type(term);
@@ -280,7 +279,7 @@ describe('the Mods view says when the list is empty', () => {
   it('says nothing before the first read, says so once an empty list lands, and gives way to the no-match message', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const provider = new ModListProvider({ instance, instanceRoot: root });
+      const provider = new ModListProvider({ instance, access: accessTo(root) });
       const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
       expect(modListView.message).toBeUndefined();
       expect(modListView.description).toBeUndefined();
@@ -302,7 +301,7 @@ describe('the Mods view says when the list is empty', () => {
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
-      const provider = new ModListProvider({ instance, instanceRoot: root });
+      const provider = new ModListProvider({ instance, access: accessTo(root) });
       const modSync = syncMessageDouble();
       const { modListView } = createModListView(own, provider, () => { /* no-op */ }, modSync);
       // The first read binds the downloads watcher and schedules one more read; a refresh runs

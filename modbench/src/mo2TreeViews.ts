@@ -13,6 +13,8 @@ import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downl
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
 import { downloadsKeyContext } from './downloads/keyContext';
 import type { InstanceView } from './instanceLoader/instance';
+import type { DownloadsAccess } from './downloadsCommands/downloads';
+import type { InstallAccess } from './install/install';
 import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
@@ -109,7 +111,7 @@ export function nexusRowInLastSelectedView(
 
 export interface DownloadsViewDeps {
   own: Own;
-  instanceRoot: string;
+  access: DownloadsAccess & InstallAccess;
   instance: InstanceView;
   reporter: Reporter;
   ask: AskQuestion;
@@ -120,7 +122,7 @@ export interface DownloadsViewDeps {
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
-  { own, instanceRoot, instance, reporter, ask, trash, install }: DownloadsViewDeps,
+  { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
 ): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode> } {
   const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
@@ -156,8 +158,8 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsExcludedToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install, () => downloadsView.selection),
-    ...registerDownloadsMultiRowCommands(instance, reporter, ask, trash, install.log, () => downloadsView.selection),
+    ...registerDownloadsSingleRowCommands(access, instance, reporter, install, () => downloadsView.selection),
+    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, install.log, () => downloadsView.selection),
   ]) own(disposable);
   return { downloadsProvider, downloadsView };
 }

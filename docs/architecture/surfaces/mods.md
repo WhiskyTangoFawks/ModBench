@@ -168,12 +168,12 @@ As a user, I want:
    written, with one wording for create and install. Esc creates nothing. *MO2*
 2. Install from the Mods menu to ask first for an archive or a folder, then open a file picker or a
    folder picker.
-   *catalog `install`: the Mods menu asks for the source*
+   *catalog `install`, Argument: an archive or a folder*
 3. The name prompt filled with the archive's name without its extension, or the folder's name. *MO2*
 
 ### What install does
 
-Install is offered here and on Downloads (catalog `install`). As a user, I want:
+Install is offered here and on [Downloads](downloads.md#the-install-target). As a user, I want:
 
 1. Install never to merge into an existing folder, or to replace one I did not confirm.
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`

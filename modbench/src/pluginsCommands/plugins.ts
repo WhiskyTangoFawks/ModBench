@@ -8,7 +8,15 @@ import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromTe
 import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import { applyOrThrow } from '../ports/applyOrThrow';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+/** What a plugins command reaches the instance through. */
+export interface PluginsAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -155,4 +163,35 @@ export async function syncPlugins(
     return out;
   });
   return result.applied ? { ...result, ...delta } : result;
+}
+
+/** Plugin sync's inputs, as the composition root projects them off a landed value. */
+export interface PluginSyncInputs {
+  profile: string;
+  provided: ReadonlyMap<string, string>;
+  inData: DataFolderPlugins;
+  dataFolder: string | undefined;
+  gameName: string;
+}
+
+/** The plugins the game loads with no line, for a Data folder and a game; undefined when mEdit
+ *  cannot say. */
+export type ImplicitMastersIn = (dataFolder: string | undefined, gameName: string) => Promise<readonly string[] | undefined>;
+
+/** Plugin sync on one run's inputs. */
+export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResult>;
+
+/** `syncPlugins` bound to one instance, its implicit masters asked for each run's Data folder and
+ *  game. */
+export function pluginSyncOver(access: PluginsAccess, implicitMastersIn: ImplicitMastersIn): PluginSyncRun {
+  return ({ profile, provided, inData, dataFolder, gameName }) =>
+    syncPlugins(access.instanceRoot, profile, provided, inData, () => implicitMastersIn(dataFolder, gameName));
+}
+
+/** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the
+ *  shape ADR-0019's notify-and-log path is written against. */
+export function reorderOver(
+  access: PluginsAccess, profile: () => string,
+): (pluginNames: string[], drop: Drop) => Promise<void> {
+  return async (pluginNames, drop) => applyOrThrow(await reorderPlugins(access.instanceRoot, profile(), pluginNames, drop));
 }
