@@ -1025,7 +1025,7 @@ describe('package.json Move on the mod menu and the separator menu', () => {
     expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
     expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
     expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
-    expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
+    expect(offeredOn(new OverwriteNode(0, 'MO2').contextValue)).toBe(false);
   });
 });
 
@@ -1050,7 +1050,7 @@ describe('package.json Mods row menu — copy value', () => {
     expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: true }).contextValue)).toBe(true);
     expect(offeredOn(new ModNode({ kind: 'mod', name: 'X', enabled: false, nexusId: '1' }).contextValue)).toBe(true);
     expect(offeredOn(new SeparatorNode({ kind: 'separator', name: 'S', enabled: true }, []).contextValue)).toBe(true);
-    expect(offeredOn(new OverwriteNode(0).contextValue)).toBe(false);
+    expect(offeredOn(new OverwriteNode(0, 'MO2').contextValue)).toBe(false);
   });
 
   it('registers modbench.record.copyValue exactly once', () => {

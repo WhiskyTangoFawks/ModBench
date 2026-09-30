@@ -1,22 +1,19 @@
 import type { PluginMetadata } from '../client';
 
-/** Whether a mod folder is tracked. Injected: the Instance adapter answers it, and this box holds
- *  no door onto the instance of its own (ADR-0007). */
-export type IsTracked = (modFolder: string) => Promise<boolean>;
+/** The tracked folder a plugin file sits in, undefined when it sits in none. Injected: the Instance
+ *  adapter answers it, and this box holds no door onto the instance of its own (ADR-0007). */
+export type TrackedFolderOf = (pluginFile: string) => Promise<string | undefined>;
 
-/** The folder a plugin sits in. Injected: the Instance adapter owns every path function. */
-export type PluginFolder = (pluginFile: string) => string;
-
-/** Distinct, not one per plugin: a folder can hold several plugins, and each must register with
- *  `vscode.git` exactly once. */
-export async function trackedModFoldersOf(
-  plugins: readonly Pick<PluginMetadata, 'path'>[], isTracked: IsTracked, pluginFolder: PluginFolder,
-): Promise<string[]> {
-  const folders = new Set<string>();
-  for (const folder of new Set(plugins.map((p) => pluginFolder(p.path)))) {
-    if (await isTracked(folder)) folders.add(folder);
+/** Each plugin's tracked folder, by `pluginAddressKey`; a plugin in none has no entry. */
+export async function trackedFoldersOf(
+  plugins: readonly Pick<PluginMetadata, 'name' | 'origin' | 'path'>[], trackedFolderOf: TrackedFolderOf,
+): Promise<Map<string, string>> {
+  const folders = new Map<string, string>();
+  for (const plugin of plugins) {
+    const folder = await trackedFolderOf(plugin.path);
+    if (folder !== undefined) folders.set(pluginAddressKey(plugin.name, plugin.origin), folder);
   }
-  return [...folders];
+  return folders;
 }
 
 /** Deduplicates its input as a contract of its own, not as a property of one caller. A folder
@@ -42,14 +39,12 @@ export function pluginAddressKey(name: string, origin: string): string {
 
 /** Reindexed by plugin because a field edit knows the plugin it edited, never the folder. */
 export function pluginRepositoriesOf<T>(
-  plugins: readonly Pick<PluginMetadata, 'name' | 'origin' | 'path'>[],
-  folderRepositories: ReadonlyMap<string, T>,
-  pluginFolder: PluginFolder,
+  folders: ReadonlyMap<string, string>, folderRepositories: ReadonlyMap<string, T>,
 ): Map<string, T> {
   const byPlugin = new Map<string, T>();
-  for (const plugin of plugins) {
-    const repository = folderRepositories.get(pluginFolder(plugin.path));
-    if (repository) byPlugin.set(pluginAddressKey(plugin.name, plugin.origin), repository);
+  for (const [plugin, folder] of folders) {
+    const repository = folderRepositories.get(folder);
+    if (repository) byPlugin.set(plugin, repository);
   }
   return byPlugin;
 }

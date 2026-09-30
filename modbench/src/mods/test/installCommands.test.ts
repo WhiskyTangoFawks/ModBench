@@ -50,13 +50,13 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 // Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
 // against Fallout 4 and reach meta.ini wrong for every other install.
-const GAME_RELEASE = 'Skyrim Special Edition';
+const GAME_NAME = 'Skyrim Special Edition';
 const ACCESS = accessTo('/instance');
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE }) },
+    instance: { value: instanceValueFixture({ gameName: GAME_NAME }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -134,7 +134,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_RELEASE },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -176,7 +176,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME },
     );
     expect(succeeded).toEqual({ installed: true });
   });

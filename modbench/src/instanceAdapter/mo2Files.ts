@@ -27,14 +27,27 @@ function keep(walk: Walk, path: string, sourcePath: string = path): void {
   if (!EXCLUDED_RELATIVE_PATHS.has(relativePath)) walk.files.push({ relativePath, path: sourcePath });
 }
 
+// Another tool can remove a subfolder mid-walk: that skips it alone, noted. The root's absence is
+// its caller's to answer.
+async function inSubfolder(walk: Walk, dir: string, visit: () => Promise<void>): Promise<void> {
+  try {
+    await visit();
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    walk.notes.push(`"${dir}" was removed mid-read, skipped`);
+  }
+}
+
 // One real path per directory, so a single guard catches a link cycle.
 async function descend(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
-  const { realPath } = await factsOf(dir);
-  if (ancestors.has(realPath)) {
-    walk.notes.push(`link cycle at "${dir}", skipped`);
-    return;
-  }
-  await walkDir(walk, dir, new Set(ancestors).add(realPath));
+  await inSubfolder(walk, dir, async () => {
+    const { realPath } = await factsOf(dir);
+    if (ancestors.has(realPath)) {
+      walk.notes.push(`link cycle at "${dir}", skipped`);
+      return;
+    }
+    await walkDir(walk, dir, new Set(ancestors).add(realPath));
+  });
 }
 
 // A link is followed as MO2 follows it; a broken one is skipped and noted, and any other failure
@@ -87,8 +100,10 @@ async function listWhole(walk: Walk, dir: string): Promise<void> {
   for (const dirent of await listDir(dir)) {
     if (isTempWrite(dirent.name)) continue;
     const path = join(dir, dirent.name);
-    if (dirent.isDirectory()) await listWhole(walk, path);
+    if (dirent.isDirectory()) await inSubfolder(walk, path, () => listWhole(walk, path));
     else if (dirent.isFile()) keep(walk, path);
+    else if (dirent.isSymbolicLink()) walk.notes.push(`link "${path}" is not followed here, skipped`);
+    else walk.notes.push(`"${path}" is a socket, FIFO or device node, skipped`);
   }
 }
 

@@ -69,7 +69,7 @@ describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
 
   describe('a drop where what is dragged cannot go is no move', () => {
     it('on Overwrite', () => {
-      expect(dropMove({ rows: [delta], focused: delta }, new OverwriteNode(0), direction)).toBeUndefined();
+      expect(dropMove({ rows: [delta], focused: delta }, new OverwriteNode(0, 'MO2'), direction)).toBeUndefined();
     });
 
     it('on a row being dragged', () => {

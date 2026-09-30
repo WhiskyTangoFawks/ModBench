@@ -58,7 +58,7 @@ async function fourViewsOverOneInstance() {
   const channel = new FakeLogOutputChannel();
   const log = (msg: string) => { channel.info(msg); };
   const instance = new Instance({
-    instanceRoot: root, log, logReadFailure: (line) => { channel.error(line); },
+    log, logReadFailure: (line) => { channel.error(line); },
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
   const mods = new ModListProvider({ instance, access: accessTo(root) });

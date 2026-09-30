@@ -8,13 +8,7 @@ import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths 
 import { factsOf } from './files';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
-import { GAME_FOLDER_SETTING, type GameFolder, type GameFolderLook } from './instanceAdapter';
-
-/** What the user set, read fresh on each resolve by whoever built the resolver. */
-export interface GameDirectoryOverrides {
-  /** The game folder outright (`GAME_FOLDER_SETTING`). */
-  gameDirectory?: string;
-}
+import { GAME_FOLDER_SETTING, type GameDirectoryOverrides, type GameFolder, type GameFolderLook } from './instanceAdapter';
 
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */

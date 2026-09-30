@@ -25,7 +25,6 @@ import { accessTo, adapterOver, NO_DOWNLOADS } from '../../test/mo2/adapterOver'
 async function setup() {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
-    instanceRoot: root,
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
     log: () => {},
     logReadFailure: () => {},

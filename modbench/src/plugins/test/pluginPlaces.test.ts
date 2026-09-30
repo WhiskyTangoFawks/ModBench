@@ -56,4 +56,10 @@ describe('placeFolder', () => {
   it('answers a mod the value lists but does not enable as disabled', () => {
     expect(placeFolder(value, 'Disabled Mod')).toEqual({ lost: 'disabled' });
   });
+
+  // Rival: answering an empty path for Overwrite before the first read lands.
+  it('answers Overwrite as unread while the value names no folder for it', () => {
+    const unread = instanceValueFixture({ paths: { ...value.paths, overwriteDir: undefined } });
+    expect(placeFolder(unread, 'overwrite')).toEqual({ lost: 'unread' });
+  });
 });

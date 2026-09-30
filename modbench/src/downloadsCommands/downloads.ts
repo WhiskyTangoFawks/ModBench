@@ -9,7 +9,6 @@ import { goneFromDisk, type DownloadedFile, type InstanceAdapter } from '../inst
 
 /** What a downloads command reaches the instance through. */
 export interface DownloadsAccess {
-  readonly instanceRoot: string;
   readonly adapter: InstanceAdapter;
 }
 

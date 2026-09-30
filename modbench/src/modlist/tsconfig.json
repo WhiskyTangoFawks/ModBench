@@ -5,7 +5,6 @@
     "outDir": "../../out/projects/modlist"
   },
   "references": [
-    { "path": "../mo2Codecs" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],

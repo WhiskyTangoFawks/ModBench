@@ -53,7 +53,7 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 // provider reaching for `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths' | 'managerNames'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
@@ -61,6 +61,7 @@ function valueOf(
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFileCount: extra.overwriteFileCount ?? 0,
     ...(extra.paths ? { paths: extra.paths } : {}),
+    ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
   });
 }
 
@@ -874,6 +875,14 @@ describe('ModListProvider', () => {
       const row = await overwriteRow(2);
 
       expect(row.tooltip).toBe('The files tools wrote while MO2 ran them, which win over every mod.');
+    });
+
+    // Rival: the manager's name spelled here, which names MO2 over another manager's instance.
+    it('names the mod manager the value names', async () => {
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } })) });
+      const row = expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
+
+      expect(row.tooltip).toBe('The files tools wrote while Another Manager ran them, which win over every mod.');
     });
 
     // A resourceUri would hand the label to every file decoration provider, git's included.

@@ -36,7 +36,7 @@ function knownGameNameLiterals(): string[] {
     literals.add(release);
     const info = gamePathInfoForRelease(release);
     if (info) {
-      literals.add(info.mo2Name);
+      literals.add(info.gameName);
       literals.add(info.nexusSlug);
       if (info.steamAppId) literals.add(info.steamAppId);
       if (info.steamFolderName) literals.add(info.steamFolderName);

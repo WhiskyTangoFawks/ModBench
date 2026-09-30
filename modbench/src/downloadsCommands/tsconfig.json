@@ -5,7 +5,6 @@
     "outDir": "../../out/projects/downloadsCommands"
   },
   "references": [
-    { "path": "../mo2Codecs" },
     { "path": "../instanceAdapter" },
     { "path": "../ports" }
   ],

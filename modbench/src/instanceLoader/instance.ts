@@ -4,10 +4,10 @@
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
-import { nexusSlugForGame } from '../tables/gamePaths';
+import { nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ModlistEntry, type OriginFiles, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
@@ -34,7 +34,8 @@ export type DownloadsResult =
  *  a view reads its answer here. Each is read with the rest of the value, so the empty value
  *  names none. */
 export interface InstancePaths {
-  readonly overwriteDir: string;
+  /** `undefined` until read, and when the instance gives run-time output no folder. */
+  readonly overwriteDir: string | undefined;
   /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
@@ -64,8 +65,13 @@ export interface InstanceValue {
   readonly downloads: DownloadsResult;
   /** The profile the mod manager's configuration selects. */
   readonly activeProfile: string;
-  /** The game the mod manager's configuration names. */
-  readonly gameRelease: string;
+  /** How a message names the mod manager and its mod-order file: the adapter's answer, before any
+   *  read too. */
+  readonly managerNames: ManagerNames;
+  /** The game as the mod manager's configuration names it. */
+  readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
   /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
   readonly nexusSlug: string;
   /** The setting, then the mod manager's configuration, then detection; or each place looked when
@@ -93,7 +99,6 @@ export type ReadFailureListener = () => void;
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
 export interface InstanceOptions {
-  instanceRoot: string;
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   log: (msg: string) => void;
@@ -106,7 +111,7 @@ function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
 ): InstancePaths {
   return {
-    overwriteDir: runtimeOutput.folder ?? '',
+    overwriteDir: runtimeOutput.folder,
     downloadsDir: downloaded.kind === 'listed' ? downloaded.downloadsDir : undefined,
     modDirs: new Map(entries.flatMap((entry) => {
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
@@ -115,7 +120,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (): InstanceValue => ({
+const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
   modFolders: [],
   profiles: [],
@@ -124,18 +129,20 @@ const emptyValue = (): InstanceValue => ({
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
-  gameRelease: '',
+  managerNames,
+  gameName: '',
+  gameRelease: undefined,
   nexusSlug: '',
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
   modStatuses: new Map(),
   overwriteFileCount: 0,
-  paths: { overwriteDir: '', downloadsDir: undefined, modDirs: new Map() },
+  paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
 });
 
 export class Instance implements Subscription {
-  private current: InstanceValue = emptyValue();
+  private current: InstanceValue;
 
   private seq = 0;
 
@@ -156,6 +163,7 @@ export class Instance implements Subscription {
   private linksTold: ReadonlySet<string> = new Set();
 
   constructor(private readonly options: InstanceOptions) {
+    this.current = emptyValue(options.adapter.names);
     this.changes = options.adapter.subscribe(() => this.schedule());
   }
 
@@ -318,7 +326,7 @@ export class Instance implements Subscription {
     // The settings are read first and every later read is against the profile they name, so a
     // profile switch mid-recompute cannot mix one profile's mod order with another's plugin order.
     const settings = await adapter.settings();
-    const { profile, gameName } = settings;
+    const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
     const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, adapter, log),
@@ -352,8 +360,10 @@ export class Instance implements Subscription {
           rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto) : [],
         },
       activeProfile: profile,
-      gameRelease: gameName,
-      nexusSlug: nexusSlugForGame(gameName),
+      managerNames: adapter.names,
+      gameName,
+      gameRelease,
+      nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
       modStatuses: computeModStatuses(entries, index),

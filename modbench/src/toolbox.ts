@@ -10,17 +10,16 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf } from './tables/gamePaths';
-import { isMo2Instance } from './instanceAdapter/files';
-import { mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
+import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
   PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
 } from './plugins/PluginsTreeProvider';
-import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { loadOrderSnapshotOf, originFiles, originFolder, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import type { TrackedFolderOf } from './plugins/trackedRepositories';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -36,7 +35,7 @@ import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './mo2TreeViews';
+import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
@@ -93,14 +92,14 @@ export interface ToolboxDeps {
   referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string;
 }
 
-/** The MO2 side's wiring, which the activation file calls: the Toolbox view and everything below
- *  `modbench.toolbox` in the container is built here and torn down with it. */
+/** The instance side's wiring, which the activation file calls: the Toolbox view and everything
+ *  below `modbench.toolbox` in the container is built here and torn down with it. */
 export interface Toolbox extends vscode.Disposable {
   /** The instance check's answer, and whether the Instance's first value has landed. Exposed for
    *  integration tests, which cannot read a context key. */
   folder: FolderCheck;
   instanceRead: () => boolean;
-  /** Absent together, on the paths with no MO2 instance to read. Exposed for integration
+  /** Absent together, on the paths with no instance to read. Exposed for integration
    *  tests — production reaches all of these through the views. */
   modListProvider?: ModListProvider;
   downloadsProvider?: DownloadsProvider;
@@ -109,6 +108,8 @@ export interface Toolbox extends vscode.Disposable {
   enterEditing?: () => Promise<void>;
   /** Each origin's files in the value on screen; none outside an instance. */
   originFiles: OriginFilesOf;
+  /** The Instance adapter's answer; none outside an instance. */
+  trackedFolderOf: TrackedFolderOf;
 }
 
 export interface LoadOrderPuts {
@@ -248,8 +249,8 @@ function registerPluginListView(
   own(pluginListView.onDidChangeSelection(showKeyContext));
   own(pluginsTree.onDidChangeTreeData(showKeyContext));
   session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
-  // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
-  // against the tree's own locked row URIs so it never drifts from what is rendered.
+  // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
+  // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
     new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
@@ -432,7 +433,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
 }
 
 
-interface Mo2Side {
+interface InstanceSide {
   instance: Instance;
   instanceRoot: string;
   firstRead: FirstReadMark;
@@ -441,13 +442,14 @@ interface Mo2Side {
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
   originFiles: OriginFilesOf;
+  trackedFolderOf: TrackedFolderOf;
   // Copy value's Mods and Plugins adapters read these once an instance exists; createToolbox falls
   // back to undefined selection outside one, the same posture as `modListProvider` and its siblings.
   modListSelection: () => readonly ModlistNode[];
   pluginsSelection: () => readonly PluginsTreeNode[];
 }
 
-function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
+function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): InstanceSide {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
     setStatusText, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
@@ -457,12 +459,12 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   // The one Instance adapter over the instance; every consumer reaches the instance through it.
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
-  // ADR-0015: the one Instance over MO2's files, recomputed through the Instance adapter.
-  const instance = own(new Instance({ instanceRoot, adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
+  // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
+  const instance = own(new Instance({ adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
-  // The Instance watches files only, so an edited setting is the root's to hand to the same
+  // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
   // The value's own resolution, read fresh per call: a config change is a recompute trigger like
@@ -487,19 +489,19 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   });
   // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (value = instance.value): LoadOrderSource =>
-    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
+    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
-  const refreshIndex = () => refresh(client, instanceRoot, instance.value.gameRelease);
+  const refreshIndex = () => refresh(client, instanceRoot, instance.value);
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
-  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> =>
-    implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
+  const implicitMastersIn = (folder: string | undefined, gameRelease: string | undefined): Promise<string[] | undefined> =>
+    implicitMastersFrom(client, folder, gameRelease);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
-  // Plugin load order sync through the plugins.txt watcher.
+  // Plugin load order sync through the Instance adapter's watch.
   const syncPluginsOver = pluginSyncOver(access, implicitMastersIn);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
@@ -574,6 +576,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
+    trackedFolderOf: (pluginFile) => adapter.trackedFolderOf(pluginFile),
     modListSelection: () => modListView.selection, pluginsSelection,
   };
 }
@@ -605,17 +608,17 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   };
 
   const opened = openedFolder(deps.outputChannel);
-  const mo2 = opened.folder === 'instance' ? buildMo2Side(own, opened.instanceRoot, deps) : undefined;
+  const side = opened.folder === 'instance' ? buildInstanceSide(own, opened.instanceRoot, deps) : undefined;
 
-  const provider = own(new ToolboxProvider({ instance: mo2?.instance }));
+  const provider = own(new ToolboxProvider({ instance: side?.instance }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
-  own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
-  // Registered here, not inside buildMo2Side: Referenced By's own copy reaches this regardless
+  own(registerCreatePluginCommand(client, side?.instance, reporterFor('newPlugin')));
+  // Registered here, not inside buildInstanceSide: Referenced By's own copy reaches this regardless
   // of whether the folder is an instance.
   own(registerCopyValueCommand(
     [
-      { text: mo2 ? modsCopyValueText(() => mo2.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
-      { text: mo2 ? pluginsCopyValueText(() => mo2.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
+      { text: side ? modsCopyValueText(() => side.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
+      { text: side ? pluginsCopyValueText(() => side.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
       { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
     ],
     reporterFor,
@@ -623,13 +626,14 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
 
   return {
     folder: opened.folder,
-    instanceRead: () => mo2?.firstRead.landed ?? false,
-    modListProvider: mo2?.modListProvider,
-    downloadsProvider: mo2?.downloadsProvider,
-    pluginsTree: mo2?.pluginsTree,
-    instance: mo2?.instance,
-    enterEditing: mo2?.enterEditing,
-    originFiles: (origin) => mo2?.originFiles(origin),
+    instanceRead: () => side?.firstRead.landed ?? false,
+    modListProvider: side?.modListProvider,
+    downloadsProvider: side?.downloadsProvider,
+    pluginsTree: side?.pluginsTree,
+    instance: side?.instance,
+    enterEditing: side?.enterEditing,
+    originFiles: (origin) => side?.originFiles(origin),
+    trackedFolderOf: (pluginFile) => side?.trackedFolderOf(pluginFile) ?? Promise.resolve(undefined),
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;

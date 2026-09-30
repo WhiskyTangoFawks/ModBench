@@ -22,11 +22,11 @@ import {
   type MovePlace,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
-import { collidingModName } from './modNameCollision';
+import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
-/** The Mods tree's view direction writes no MO2 file, so it lives with the view it flips. It
+/** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
  *  starts losing at the top on each activation, and the context key, which outlives an extension
  *  host restart, is told so. */
 export function registerModListCoreCommands(modListProvider: Pick<ModListProvider, 'setViewDirection'>): vscode.Disposable[] {
@@ -149,7 +149,7 @@ export function registerModContextCommands(
         for (const item of result.outcome.landed) {
           if (item.lineRefusal !== undefined) {
             reporter.report('warning',
-              `"${item.name}" was uninstalled, but its modlist.txt line could not be removed.`, item.lineRefusal);
+              `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
           } else if (item.markRefusal !== undefined) {
             log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
           }
@@ -207,7 +207,7 @@ export function registerSeparatorCommands(
         for (const item of result.outcome.landed) {
           if (item.lineRefusal !== undefined) {
             reporter.report('warning',
-              `"${item.name}" was deleted, but its modlist.txt line could not be removed.`, item.lineRefusal);
+              `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
           }
         }
       }),
@@ -219,7 +219,7 @@ export function registerCreateEmptyModCommand(
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => collidingModName(access, value),
+      validateInput: (value) => installNameRefusal(access, value),
     });
     if (!name) return;
     try {
@@ -228,7 +228,7 @@ export function registerCreateEmptyModCommand(
       applyOrThrow(outcome);
       if (outcome.lineRefusal !== undefined) {
         reporter.report(
-          'warning', `"${name}" was created, but its modlist.txt line could not be written.`, outcome.lineRefusal);
+          'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
       }
     } catch (err) {
       reporter.report('error', `Failed to create "${name}".`, errorMessage(err));
@@ -264,9 +264,9 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 function folderOf(
   instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
 ): { name: string; folder: vscode.Uri | undefined } {
-  if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: vscode.Uri.file(instance.value.paths.overwriteDir) };
-  const folder = instance.value.paths.modDirs.get(node.mod.name);
-  return { name: node.mod.name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
+  const { overwriteDir, modDirs } = instance.value.paths;
+  const [name, folder] = node.kind === OVERWRITE_NODE_KIND ? ['Overwrite', overwriteDir] : [node.mod.name, modDirs.get(node.mod.name)];
+  return { name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
 }
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a

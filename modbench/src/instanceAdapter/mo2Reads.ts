@@ -7,14 +7,14 @@ import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { dataFolderOf } from '../tables/gamePaths';
-import { factsOf, get, listDir } from './files';
+import { dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
+import { factsOf, get, isTracked, listDir } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
-  modMetaFile, pluginsFile, profilesDir, settingsFile,
+  modMetaFile, pluginFolder, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -23,7 +23,7 @@ import { isPluginFile } from './pluginFile';
 export type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
   | 'trashDownloadedFileMeta' | 'selectProfile' | 'stagingFolder' | 'stagingFolderOf' | 'stagedEntries'
-  | 'landNewMod' | 'upgradeMod' | 'subscribe'>;
+  | 'landNewMod' | 'upgradeMod' | 'subscribe' | 'names'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
@@ -54,6 +54,9 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   }
 }
 
+// The tables key each release on the game's name as `gameName=` spells it.
+const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
+
 export function mo2Reads(context: Mo2Context): Mo2Reads {
   const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
   return {
@@ -61,7 +64,7 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
       const iniText = await get(settingsFile(instanceRoot));
       return {
         profile: readSelectedProfile(iniText),
-        gameName: readGameName(iniText),
+        ...gameOf(readGameName(iniText)),
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(iniText);
@@ -114,5 +117,10 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     entryFolder: (entry) => folderHolding(context, entry),
 
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
+
+    async trackedFolderOf(pluginFile) {
+      const folder = pluginFolder(pluginFile);
+      return (await isTracked(folder)) ? folder : undefined;
+    },
   };
 }

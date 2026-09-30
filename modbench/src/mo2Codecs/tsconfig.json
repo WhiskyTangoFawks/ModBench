@@ -1,9 +1,0 @@
-{
-  "extends": "../../tsconfig.box.json",
-  "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "../../out/projects/mo2Codecs"
-  },
-  "include": ["**/*.ts"],
-  "exclude": ["test", "**/*.test.ts"]
-}
