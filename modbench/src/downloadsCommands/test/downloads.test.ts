@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { describe, it, expect, afterEach } from 'vitest';
+import { mkdtemp, mkdir, chmod, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,22 +9,6 @@ import {
 import { spliceDownloadMeta } from '../../instanceAdapter/downloadMeta';
 import { parseDownloadMeta, setInstalledInText } from '../../mo2Codecs/downloads';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
-
-// Set by a test: a write landing through here on `lockedPath` is refused.
-let lockedPath: string | undefined;
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return {
-    ...actual,
-    rename: async (from: string, to: string) => {
-      if (to === lockedPath) {
-        throw Object.assign(new Error(`EACCES: permission denied, rename '${from}' -> '${to}'`), { code: 'EACCES' });
-      }
-      return actual.rename(from, to);
-    },
-  };
-});
 
 // expect.stringContaining's type is `any`, so this checks the refusal by hand instead of
 // embedding the matcher in a toEqual object.
@@ -36,7 +20,12 @@ function assertRefusal(result: DownloadsCommandResult, expectedSubstring: string
 // tmpdirs made this test, removed in afterEach even when an assertion above the cleanup failed.
 let roots: string[] = [];
 
+// Paths a test chmod'd read-only, restored writable before their tmpdir is removed.
+let lockedPaths: string[] = [];
+
 afterEach(async () => {
+  await Promise.all(lockedPaths.map((path) => chmod(path, 0o644)));
+  lockedPaths = [];
   await Promise.all(roots.map((downloadsDir) => rm(downloadsDir, { recursive: true, force: true })));
   roots = [];
 });
@@ -122,26 +111,20 @@ describe('excludeDownload / includeDownload', () => {
     const downloadsDir = await makeDownloadsDir();
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nremoved=true\r\n');
-    lockedPath = sidecar;
+    await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
-    } finally {
-      lockedPath = undefined;
-    }
+    expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
   });
 
   it('including an already included download writes nothing — a locked sidecar still applies', async () => {
     const downloadsDir = await makeDownloadsDir();
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nremoved=false\r\n');
-    lockedPath = sidecar;
+    await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      expect(await includeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
-    } finally {
-      lockedPath = undefined;
-    }
+    expect(await includeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
   });
 
   // Confirms the two locked-sidecar tests above actually exercise a write path: the same lock,
@@ -150,14 +133,11 @@ describe('excludeDownload / includeDownload', () => {
     const downloadsDir = await makeDownloadsDir();
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\n');
-    lockedPath = sidecar;
+    await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      const outcome = await excludeDownload(downloadsDir, 'foo.7z');
-      expect(outcome.applied).toBe(false);
-    } finally {
-      lockedPath = undefined;
-    }
+    const outcome = await excludeDownload(downloadsDir, 'foo.7z');
+    expect(outcome.applied).toBe(false);
   });
 
   it('excluding a file gone from disk is refused, naming it, and touches no sidecar', async () => {

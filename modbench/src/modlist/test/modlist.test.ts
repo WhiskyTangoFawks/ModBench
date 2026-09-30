@@ -121,7 +121,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('setModsEnabled flips only the mods not already in the chosen state, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
@@ -147,7 +146,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('setModsEnabled refuses a gone mod by name while the rest land, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'No Such Mod'], true);
@@ -519,7 +517,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     it('removes every selected line in one write', async () => {
-      vi.mocked(writeFile).mockClear();
       vi.mocked(rename).mockClear();
 
       const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED, RADFALL], trash);
@@ -534,7 +531,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     // The gone separator's folder is still under mods/, as MO2 or another tool may leave it.
     it('refuses a gone separator by name while the others land, in one write, trashing nothing for it', async () => {
       await mkdir(join(dir, 'mods', 'No Such Separator_separator'));
-      vi.mocked(writeFile).mockClear();
       vi.mocked(rename).mockClear();
 
       const outcome = await deleteSeparators(dir, 'Default', ['No Such Separator', UNASSIGNED], trash);
@@ -661,7 +657,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   it('moveMods refuses a gone mod by name while the others land, in one write', async () => {
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     const outcome = await moveMods(
@@ -804,7 +799,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     it('removes every selected mod\'s line in one write', async () => {
-      vi.mocked(writeFile).mockClear();
       vi.mocked(rename).mockClear();
 
       const outcome = await uninstallMods(
@@ -1063,7 +1057,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-sync-'));
     await cp(fixture, dir, { recursive: true });
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -1073,7 +1066,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // Rival: two splices, one per direction, which writes the file twice.
   it('adds a line for a folder with none and drops each line whose folder is gone, in one write', async () => {
     await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
@@ -1091,7 +1083,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // Rival: a splice that always puts the bytes back, which fires the watcher and loops forever.
   it('writes nothing when every folder has a line and every mod line has a folder', async () => {
     await sync([...MOD_FOLDERS, '[NODELETE] Radfall']);
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     expect(await sync([...MOD_FOLDERS, '[NODELETE] Radfall'])).toEqual({ applied: true, added: [], dropped: [] });
@@ -1117,7 +1108,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   it('refuses, writing nothing, when mods/ is gone by the time the sync writes', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     await rm(join(dir, 'mods'), { recursive: true });
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
@@ -1129,7 +1119,6 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     const before = await readFile(modlistPath(), 'utf8');
     await rm(join(dir, 'mods'), { recursive: true });
     await writeFile(join(dir, 'mods'), 'not a folder');
-    vi.mocked(writeFile).mockClear();
     vi.mocked(rename).mockClear();
 
     assertRefusal(await sync(MOD_FOLDERS), 'ENOTDIR');
@@ -1200,7 +1189,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['Weapons/Armor_separator'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Weapons'))).toEqual([]);
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
@@ -1214,7 +1203,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 

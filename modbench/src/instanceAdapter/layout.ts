@@ -2,6 +2,7 @@
 // built from them, and the Instance's watcher globs. Each file's own name is its codec's, and
 // `formatLiteralScan.test.ts` refuses a second speller.
 
+import { randomBytes } from 'node:crypto';
 import { dirname, join, sep } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
 import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
@@ -96,3 +97,17 @@ export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
+
+// files.ts's own write lands beside its target under this suffix, then one rename onto it.
+const TEMP_WRITE_PATTERN = /\.[0-9a-f]{12}\.tmp$/;
+
+/** The temp path files.ts writes to beside `path`, before its one rename onto it. */
+export function tempWritePath(path: string): string {
+  return `${path}.${randomBytes(6).toString('hex')}.tmp`;
+}
+
+/** Whether `name` is one of files.ts's own temp files. Every scan that lists an instance
+ *  folder's own contents excludes it. */
+export function isTempWrite(name: string): boolean {
+  return TEMP_WRITE_PATTERN.test(name);
+}

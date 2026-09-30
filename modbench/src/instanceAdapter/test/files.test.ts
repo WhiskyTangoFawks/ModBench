@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat,
+  mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat, lstat, chmod, symlink, realpath,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isMo2Instance, write, putIfChanged } from '../files';
 
-// Set by a test, cleared by the mocked `rename` below, which then deletes its own source first —
-// a real, cross-platform rename failure, the shape a crash mid-write leaves.
+// Set by a test, cleared by the mocked `rename` below, which then rejects instead of renaming —
+// a temp file written but never landed, the shape a crash between the two leaves.
 let sabotageNextRename = false;
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     rename: async (from: string, to: string) => {
       if (sabotageNextRename) {
         sabotageNextRename = false;
-        await actual.rm(from, { force: true });
+        throw Object.assign(new Error(`EPERM: simulated crash, rename '${from}' -> '${to}'`), { code: 'EPERM' });
       }
       return actual.rename(from, to);
     },
@@ -103,8 +103,8 @@ describe('write', () => {
     expect(await readdir(root)).toEqual(['meta.ini']);
   });
 
-  // Rival: rename a file onto an existing directory. Windows and Linux both refuse it, so it
-  // stands in for any write the platform refuses.
+  // A directory already at the destination makes the platform refuse the rename on both Windows
+  // and Linux. Rival: no cleanup on that failure, which leaves the temp file sitting beside it.
   it('leaves the destination alone and its temp file cleaned up when the platform refuses the write', async () => {
     await mkdir(path);
 
@@ -114,16 +114,70 @@ describe('write', () => {
     expect((await stat(path)).isDirectory()).toBe(true);
   });
 
-  // Rival: write straight to `path`, no temp file and no rename. That rival leaves the mocked
-  // `rename` uncalled, `sabotageNextRename` set, and the write lands as 'new' — this test catches
-  // it on the final content, not on whether the mock fired.
-  it('leaves the previous content intact when the rename is interrupted, as by a crash', async () => {
+  // The mock only rejects the rename; it never touches the temp file itself. So "no temp left"
+  // here can only be the catch's own `rm` running, not an accident of the injection.
+  it('leaves the previous content intact, and its own refusal nameable, when the rename is interrupted as by a crash', async () => {
     await writeFile(path, 'original');
     sabotageNextRename = true;
 
-    await expect(write(path, 'new')).rejects.toThrow();
+    const failure: unknown = await write(path, 'new').then(() => undefined, (err: unknown) => err);
 
+    if (!(failure instanceof Error)) throw new Error('expected write to reject with an Error');
+    expect(failure.message).toContain(path);
+    expect(failure.message).not.toContain('.tmp');
     expect(await readFile(path, 'utf8')).toBe('original');
+    expect(await readdir(root)).toEqual(['meta.ini']);
+  });
+
+  // Rival: no access check before writing, which lets a rename land on a read-only file (rename
+  // only needs write permission on the directory, not the target) and silently overwrite it.
+  it('refuses a target that is not writable, before any temp is written', async () => {
+    await writeFile(path, 'original');
+    await chmod(path, 0o444);
+
+    try {
+      await expect(write(path, 'new')).rejects.toThrow();
+      expect(await readFile(path, 'utf8')).toBe('original');
+      expect(await readdir(root)).toEqual(['meta.ini']);
+    } finally {
+      await chmod(path, 0o644);
+    }
+  });
+
+  // Rival: create the temp with the default mode and never carry the target's own mode onto it.
+  it('carries the target\'s own mode onto the file that lands', async () => {
+    await writeFile(path, 'original');
+    await chmod(path, 0o640);
+
+    await write(path, 'new');
+
+    expect((await stat(path)).mode & 0o777).toBe(0o640);
+  });
+
+  // Rival: rename onto `path` itself, which replaces the symlink with a plain file — the link
+  // breaks, and whatever it pointed at keeps its old content forever.
+  it('writes through a symlink onto its real target, and leaves the link itself alone', async () => {
+    const real = join(root, 'real-meta.ini');
+    const link = join(root, 'linked-meta.ini');
+    await writeFile(real, 'original');
+    await symlink(real, link);
+
+    await write(link, 'new');
+
+    expect(await readFile(real, 'utf8')).toBe('new');
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(await realpath(link)).toBe(real);
+  });
+
+  // Rival: sweep only the current call's own temp on failure, which leaves an earlier crash's
+  // temp — a different random suffix — sitting beside the target forever.
+  it('removes a stale temp file left by an earlier crash before writing again', async () => {
+    await writeFile(path, 'original');
+    await writeFile(`${path}.deadbeef0000.tmp`, 'crash leftover');
+
+    await write(path, 'new');
+
+    expect(await readFile(path, 'utf8')).toBe('new');
     expect(await readdir(root)).toEqual(['meta.ini']);
   });
 });
