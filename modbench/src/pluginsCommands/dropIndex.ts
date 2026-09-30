@@ -14,8 +14,8 @@ function indexAfterRemoval(order: readonly string[], movedNames: readonly string
 }
 
 /** The index a splice writes the block at, in `plugins.txt`, whose last line wins. The losing end
- *  is index 0 whatever else the list holds, so it needs no reckoning against the order at all.
- *  Throws for a row the order does not list: the block has no place beside it. */
+ *  is index 0 whatever the list holds. Throws for a row the order does not list: the block has no
+ *  place beside it. */
 export function dropIndexIn(order: readonly string[], movedNames: readonly string[], drop: Drop): number {
   if (drop.kind === 'losingEnd') return 0;
   if (drop.kind === 'winningEnd') return indexAfterRemoval(order, movedNames, order.length);

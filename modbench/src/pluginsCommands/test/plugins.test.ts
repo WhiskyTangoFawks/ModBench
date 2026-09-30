@@ -65,7 +65,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   // Rival: settling a drop on a row that has gone at the winning end, a place the user never chose.
-  it('reorderPlugins refuses a drop on a row plugins.txt no longer lists, naming it, and writes nothing', async () => {
+  it('reorderPlugins refuses a drop on a row plugins.txt does not list, naming it, and writes nothing', async () => {
     assertRefusal(
       await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'before', name: 'Gone.esp' }),
       'Plugin not found in plugins.txt: Gone.esp');
