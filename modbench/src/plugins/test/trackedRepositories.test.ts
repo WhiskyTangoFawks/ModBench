@@ -74,9 +74,7 @@ describe('registerTrackedRepositories', () => {
   it('never calls openRepository twice for the same folder', async () => {
     const openRepository = vi.fn().mockResolvedValue(undefined);
 
-    // Two plugins share a folder, but "no duplicate SCM registration" is this
-    // function's own contract too — it must not re-introduce a duplicate even if handed
-    // one, e.g. by a caller that merged two plugin lists without re-deduping.
+    // The caller hands one folder per tracked plugin, so two plugins sharing a folder hand it twice.
     await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/A']);
 
     expect(openRepository).toHaveBeenCalledTimes(1);
