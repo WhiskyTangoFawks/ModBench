@@ -6,9 +6,9 @@ import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
-import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import { PluginNode, pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {
-  compilableSelected, pluginsGestureEntry, pluralArgument, registerPluginsGesture, selectionArgument, type GestureEntry,
+  compilableSelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
@@ -59,41 +59,89 @@ function pickTrackPreset(placeholder: string): Promise<PresetOption | undefined>
   });
 }
 
+export interface TrackDeps {
+  progress: PluginsViewProgress;
+  client: Pick<MEditClient, 'track'>;
+  reporter: Reporter;
+  onTracked: () => Promise<void>;
+  plugins: () => readonly PluginAddress[];
+  modOfRow: (value: unknown) => string | undefined;
+}
+
+/** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
+ *  selection, each sent to mEdit as its plugins, in one call and one pick. */
+export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
+  return vscode.commands.registerCommand(
+    'modbench.mod.track',
+    async (clicked?: unknown, selected?: readonly unknown[]) => {
+      const rows = clicked === undefined ? paletteSelection() : selected ?? [clicked];
+      const mods = rows.map((row) => deps.modOfRow(row) ?? pluginOriginOf(row)).filter((mod) => mod !== undefined);
+      await trackMods(deps, [...new Set(mods)]);
+    },
+  );
+}
+
+// A plugin row or a column header acts on its plugin's mod.
+function pluginOriginOf(row: unknown): string | undefined {
+  return row instanceof PluginNode ? row.origin : columnHeaderOf(row)?.origin;
+}
+
+const PROVIDES_NO_PLUGIN = 'it provides no plugin';
+
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
-export function registerTrackCommand(
-  progress: PluginsViewProgress, client: Pick<MEditClient, 'track'>,
-  reporter: Reporter, onTracked: () => Promise<void>,
-  viewSelection: () => readonly PluginsTreeNode[],
-): vscode.Disposable {
-  // commands.md, "A selection is one gesture": the right-clicked row, or the whole selection when
-  // that row is one of several selected, in one call and one pick.
-  return registerPluginsGesture('modbench.plugin.track', viewSelection, async (entry) => {
-    const nodes = pluralArgument(entry, 'plugin');
-    const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
-    const [first] = addressed;
-    if (!first) return;
-    const report = (outcome: SelectionOutcome<PluginAddress>) => {
-      reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
-    };
+async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void> {
+  const { progress, client, reporter, onTracked } = deps;
+  const instancePlugins = deps.plugins();
+  const pluginsOf = (mod: string): PluginAddress[] =>
+    instancePlugins.filter((p) => p.origin === mod).map(({ name, origin }) => ({ name, origin }));
+  const withPlugins = mods.filter((mod) => pluginsOf(mod).length > 0);
+  const pluginless = mods.filter((mod) => !withPlugins.includes(mod));
+  const [firstMod] = withPlugins;
+  if (firstMod === undefined) {
+    reportRefused(reporter, mods, pluginless);
+    return;
+  }
+  const addressed = withPlugins.flatMap(pluginsOf);
+  const what = withPlugins.length === 1 ? `"${firstMod}"` : `${withPlugins.length} mods`;
 
-    const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
-    if (!choice) return;
+  const choice = await pickTrackPreset(`Track ${what}`);
+  if (!choice) return;
 
-    await progress.while(async () => {
-      progress.say(trackProgressMessage(first.origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(addressed, choice.label, {
-        onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
-      });
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
-      if (result.landed.length > 0) await onTracked();
-      const [only, ...more] = result.landed;
-      if (result.refused.length > 0) report(result);
-      else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${result.landed.length} plugins.`);
+  await progress.while(async () => {
+    progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+    const result = await client.track(addressed, choice.label, {
+      onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
     });
+    if (isRefused(result)) { reporter.report('error', result.message); return; }
+    // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
+    if (result.landed.length > 0) await onTracked();
+    const refused = reportRefused(reporter, mods, pluginless, { total: addressed.length, outcome: result });
+    if (!refused && result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
   });
+}
+
+// commands.md, "each item lands on its own": one notification naming each mod that provides no
+// plugin and each plugin mEdit refused. Returns whether it named any.
+function reportRefused(
+  reporter: Reporter, mods: readonly string[], pluginless: readonly string[],
+  plugins?: { total: number; outcome: SelectionOutcome<PluginAddress> },
+): boolean {
+  const refusedPlugins = plugins?.outcome.refused ?? [];
+  const counts = [
+    ...(pluginless.length > 0 ? [`${pluginless.length} of ${mods.length} mods`] : []),
+    ...(plugins && refusedPlugins.length > 0 ? [`${refusedPlugins.length} of ${plugins.total} plugins`] : []),
+  ];
+  if (counts.length === 0) return false;
+  reporter.selectionOutcome(`Could not track ${counts.join(' and ')}.`, {
+    landed: (plugins?.outcome.landed ?? []).map(rowName),
+    refused: [
+      ...pluginless.map((mod) => ({ item: mod, reason: PROVIDES_NO_PLUGIN })),
+      ...refusedPlugins.map(({ item, reason }) => ({ item: rowName(item), reason })),
+    ],
+  }, (name) => name);
+  return true;
 }
 
 /** What compile needs: the tracked plugins for the palette's pick, the compile itself, the view's

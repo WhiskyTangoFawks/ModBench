@@ -22,7 +22,7 @@ import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
-  registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps,
+  registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
   registerOpenHeaderCommand, conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -33,6 +33,7 @@ import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { registerRecordCreateCommand } from './plugins/createRecordCommand';
 import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { errorMessage } from './ports/errorMessage';
+import { modOfRow } from './mods/ModListProvider';
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
 // that lifecycle stopped being a user decision (ADR-0002). A config change is the only gesture
@@ -140,6 +141,8 @@ export function activate(context: vscode.ExtensionContext) {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     conflictsComputed,
     originFiles: (origin) => toolbox.originFiles(origin),
+    instancePlugins: () => toolbox.instance?.value.plugins ?? [],
+    trackSelection: () => toolbox.trackSelection(),
   };
   // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
@@ -218,19 +221,21 @@ interface PluginRowCommandDeps {
   compileProblems: CompileProblems;
   conflictsComputed: () => Promise<void>;
   originFiles: OriginFilesOf;
+  instancePlugins: TrackDeps['plugins'];
+  trackSelection: () => readonly unknown[];
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed } = deps;
+  const { session, client, outputChannel, conflictsComputed, instancePlugins, trackSelection } = deps;
   return [
-    registerTrackCommand(
-      { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
-      client, makeReporter(outputChannel, 'pluginListTree.track'),
-      conflictsComputed,
-      () => session.pluginsTreeView?.selection ?? [],
-    ),
+    registerTrackCommand({
+      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
+      plugins: instancePlugins,
+      modOfRow,
+    }, trackSelection),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),

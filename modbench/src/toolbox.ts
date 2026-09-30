@@ -35,7 +35,7 @@ import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
+import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
@@ -110,6 +110,9 @@ export interface Toolbox extends vscode.Disposable {
   originFiles: OriginFilesOf;
   /** The Instance adapter's answer; none outside an instance. */
   trackedFolderOf: TrackedFolderOf;
+  /** Track's palette Argument: the Mods or Plugins selection, whichever view was last selected in;
+   *  none outside an instance. */
+  trackSelection: () => readonly unknown[];
 }
 
 export interface LoadOrderPuts {
@@ -212,7 +215,7 @@ interface PluginListDeps {
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(
   deps: PluginListDeps,
-): { pluginsTree: PluginsTreeProvider; pluginsSelection: () => readonly PluginsTreeNode[] } {
+): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode> } {
   const { own, session, outputChannel, reporterFor, access, implicitMasters, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
@@ -260,7 +263,7 @@ function registerPluginListView(
   ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(
     access, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
-  return { pluginsTree, pluginsSelection: () => pluginListView.selection };
+  return { pluginsTree, pluginListView };
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
@@ -447,6 +450,7 @@ interface InstanceSide {
   // back to undefined selection outside one, the same posture as `modListProvider` and its siblings.
   modListSelection: () => readonly ModlistNode[];
   pluginsSelection: () => readonly PluginsTreeNode[];
+  trackSelection: () => readonly unknown[];
 }
 
 function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): InstanceSide {
@@ -505,7 +509,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const syncPluginsOver = pluginSyncOver(access, implicitMastersIn);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
-  const { pluginsTree, pluginsSelection } = registerPluginListView({
+  const { pluginsTree, pluginListView } = registerPluginListView({
     own, session, outputChannel, reporterFor, access,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
@@ -570,6 +574,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
   ])));
+  const trackSelection = lastSelectedViewSelection(own, [
+    { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
+  ], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
     refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
@@ -577,7 +584,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
     trackedFolderOf: (pluginFile) => adapter.trackedFolderOf(pluginFile),
-    modListSelection: () => modListView.selection, pluginsSelection,
+    modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection, trackSelection,
   };
 }
 
@@ -634,6 +641,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     enterEditing: side?.enterEditing,
     originFiles: (origin) => side?.originFiles(origin),
     trackedFolderOf: (pluginFile) => side?.trackedFolderOf(pluginFile) ?? Promise.resolve(undefined),
+    trackSelection: () => side?.trackSelection() ?? [],
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;
