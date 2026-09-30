@@ -10,6 +10,7 @@ import type { MoveToTrash } from '../ports/trash';
 import {
   createEmptyMod,
   deleteSeparators,
+  folderNamesOf,
   insertSeparator,
   moveMods,
   moveSeparators,
@@ -17,13 +18,11 @@ import {
   setModsEnabled,
   uninstallMods,
   separatorNameRefusal,
+  type ModlistAccess,
   type ModlistSelectionResult,
   type MovePlace,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
-import {
-  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder,
-} from '../install/install';
 import { collidingModName } from './modNameCollision';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
@@ -43,90 +42,10 @@ export function registerModListCoreCommands(modListProvider: Pick<ModListProvide
   ];
 }
 
-/** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
- *  name prompt and a refused install are one answer, since each leaves nothing installed. */
-export interface InstallOutcome {
-  installed: boolean;
-}
-const NOT_INSTALLED: InstallOutcome = { installed: false };
-
-export interface ModInstallDeps {
-  instanceRoot: string;
-  instance: Pick<Instance, 'value'>;
-  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-  promptModName: (defaultName: string, validate?: (value: string) => string | undefined) => Thenable<string | undefined>;
-  warnIfFomod: (name: string, isFomod: boolean) => void;
-}
-
-interface SourceKindItem extends vscode.QuickPickItem {
-  sourceKind: 'archive' | 'folder';
-}
-
-// modbench.mod.install: the Mods menu supplies no source, so it asks archive-or-folder first,
-// before either OS picker opens (mods.md, Create empty mod and install, story 2).
-export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { instanceRoot, instance, runModAction, promptModName, warnIfFomod } = deps;
-  const validateName = (name: string) => collidingModName(instance, name);
-  const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
-    const name = await promptModName(defaultModName(archivePath), validateName);
-    if (!name) return NOT_INSTALLED;
-    let succeeded = false;
-    await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-      const outcome = await installFromArchive(
-        instanceRoot, { kind: 'new', name }, archivePath, instance.value.paths.downloadsDir,
-        { gameName: instance.value.gameRelease });
-      if (!outcome.applied) throw new Error(outcome.refusal);
-      warnIfFomod(name, outcome.isFomod);
-      succeeded = true;
-    });
-    return { installed: succeeded };
-  };
-  const installFolder = async (folder: string): Promise<InstallOutcome> => {
-    const name = await promptModName(defaultModNameForFolder(folder), validateName);
-    if (!name) return NOT_INSTALLED;
-    let succeeded = false;
-    await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
-      const outcome = await installFromFolder(instanceRoot, { kind: 'new', name }, folder, { gameName: instance.value.gameRelease });
-      if (!outcome.applied) throw new Error(outcome.refusal);
-      warnIfFomod(name, outcome.isFomod);
-      succeeded = true;
-    });
-    return { installed: succeeded };
-  };
-  return [
-    vscode.commands.registerCommand('modbench.mod.install', async (): Promise<InstallOutcome> => {
-      const picked = await vscode.window.showQuickPick<SourceKindItem>(
-        [
-          { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },
-          { label: 'Folder…', description: 'An already-extracted mod folder', sourceKind: 'folder' },
-        ],
-        { placeHolder: 'Install a mod from an archive or a folder' },
-      );
-      if (!picked) return NOT_INSTALLED;
-      if (picked.sourceKind === 'archive') {
-        const archivePicked = await vscode.window.showOpenDialog({
-          canSelectMany: false,
-          filters: { 'Mod archives': [...ARCHIVE_EXTENSIONS] },
-          openLabel: 'Install',
-        });
-        const archive = archivePicked?.[0]?.fsPath;
-        return archive ? installArchive(archive) : NOT_INSTALLED;
-      }
-      const folderPicked = await vscode.window.showOpenDialog({
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: 'Install',
-      });
-      const folder = folderPicked?.[0]?.fsPath;
-      return folder ? installFolder(folder) : NOT_INSTALLED;
-    }),
-  ];
-}
 // modbench.mod.enable / modbench.mod.disable: the whole selection through the entry (mods.md,
 // Menus and keys, story 3). Each mod lands on its own (commands.md, "A selection is one gesture").
 export function registerModEnableCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>,
+  access: ModlistAccess, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
@@ -134,7 +53,7 @@ export function registerModEnableCommands(
     if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
     const profile = instance.value.activeProfile;
-    const result = await setModsEnabled(instanceRoot, profile, modNames, enabled);
+    const result = await setModsEnabled(access.instanceRoot, profile, modNames, enabled);
     if (!result.applied) {
       reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
       return;
@@ -160,7 +79,7 @@ const SEPARATOR_PLACES =
   'A separator lands beside another separator or at an end of mod order, never beside a mod or among the ungrouped mods.';
 
 export function registerModMoveCommand(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, view: MoveView, reporter: Reporter,
 ): vscode.Disposable {
   const report = (kind: 'mod' | 'separator', count: number, result: ModlistSelectionResult) => {
     const noun = `${kind}s`;
@@ -185,7 +104,7 @@ export function registerModMoveCommand(
     if (modNames.length > 0 && separatorNames.length === 0) {
       const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
       if (!target) return;
-      report('mod', modNames.length, await moveMods(instanceRoot, activeProfile, modNames, target.place, target.end));
+      report('mod', modNames.length, await moveMods(access.instanceRoot, activeProfile, modNames, target.place, target.end));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
       if (!target) return;
@@ -194,7 +113,7 @@ export function registerModMoveCommand(
         return;
       }
       report('separator', separatorNames.length,
-        await moveSeparators(instanceRoot, activeProfile, separatorNames, target.place, target.end));
+        await moveSeparators(access.instanceRoot, activeProfile, separatorNames, target.place, target.end));
     }
   });
 }
@@ -210,7 +129,7 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
 }
 
 export function registerModContextCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, viewSelection: () => readonly ModlistNode[],
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, viewSelection: () => readonly ModlistNode[],
   reporter: Reporter, ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
 ): vscode.Disposable[] {
   return [
@@ -221,7 +140,7 @@ export function registerModContextCommands(
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
         const profile = instance.value.activeProfile;
-        const result = await uninstallMods(instanceRoot, profile, mods, instance.value.paths.downloadsDir, trash);
+        const result = await uninstallMods(access.instanceRoot, profile, mods, instance.value.paths.downloadsDir, trash);
         if (!result.applied) {
           reporter.report('error', 'Failed to uninstall mods.', result.refusal);
           return;
@@ -244,7 +163,7 @@ function separatorNamePrompt(instance: Pick<Instance, 'value'>, own?: string): (
 }
 
 export function registerSeparatorCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, trash: MoveToTrash,
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable[] {
   return [
@@ -257,7 +176,7 @@ export function registerSeparatorCommands(
         });
         if (!newName || newName === oldName) return;
         await reportFailure(reporter, 'Failed to rename separator.', async () => {
-          applyOrThrow(await renameSeparator(instanceRoot, instance.value.activeProfile, oldName, newName));
+          applyOrThrow(await renameSeparator(access.instanceRoot, instance.value.activeProfile, oldName, newName));
         });
       }),
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
@@ -270,13 +189,13 @@ export function registerSeparatorCommands(
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
         await reportFailure(reporter, 'Failed to add separator.', async () => {
           applyOrThrow(await insertSeparator(
-            instanceRoot, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
+            access.instanceRoot, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
         });
       }),
       registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
-        const result = await deleteSeparators(instanceRoot, instance.value.activeProfile, names, trash);
+        const result = await deleteSeparators(access.instanceRoot, instance.value.activeProfile, names, trash);
         if (!result.applied) {
           reporter.report('error', 'Failed to delete separators.', result.refusal);
           return;
@@ -294,17 +213,17 @@ export function registerSeparatorCommands(
   ];
 }
 export function registerCreateEmptyModCommand(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => collidingModName(instance, value),
+      validateInput: (value) => collidingModName(access, instance, value),
     });
     if (!name) return;
     try {
       const profile = instance.value.activeProfile;
-      const outcome = await createEmptyMod(instanceRoot, profile, name, instance.value.modFolders ?? []);
+      const outcome = await createEmptyMod(access.instanceRoot, profile, name, folderNamesOf(instance.value.modFolders ?? []));
       applyOrThrow(outcome);
       if (outcome.lineRefusal !== undefined) {
         reporter.report(

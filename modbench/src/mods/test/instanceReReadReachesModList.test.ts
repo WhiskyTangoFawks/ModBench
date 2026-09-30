@@ -19,20 +19,20 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, ModNode } from '../ModListProvider';
-import { resolvesNotFound } from '../../test/mo2/gameFolderNotFound';
-import { resolvesNoDownloads } from '../../test/mo2/downloadsUnresolved';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
+import { accessTo, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
+import { watchedAdapterOver } from '../../test/mo2/watchedAdapterOver';
 
 async function setup() {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: resolvesNotFound,
-    resolveDownloadsDirectory: resolvesNoDownloads,
+    adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
     log: () => {},
     logReadFailure: () => {},
   });
   await instance.refresh();
-  const provider = new ModListProvider({ instance, instanceRoot: root });
+  const provider = new ModListProvider({ instance, access: accessTo(root) });
   await provider.getChildren(); // populate the cache off the first value
   return { root, instance, provider };
 }

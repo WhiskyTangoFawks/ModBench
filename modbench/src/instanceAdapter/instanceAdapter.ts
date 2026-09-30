@@ -8,6 +8,9 @@ import type { GameFolder } from './gameDirectory';
 
 export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 
+/** The reserved origin of the files the game wrote at run time (ADR-0012). */
+export { OVERWRITE_DIR_NAME as OVERWRITE_ORIGIN } from './codecs/modlistText';
+
 /** A Nexus mod and file id pair recorded as installed into a mod. */
 export interface InstalledFileId {
   modid: string;
@@ -165,6 +168,12 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
+/** What a subscriber disposes of to hear no more. */
+export interface Subscription {
+  dispose(): void;
+}
+
+
 export interface InstanceAdapter {
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
@@ -183,6 +192,21 @@ export interface InstanceAdapter {
   hasModFolder(mod: string): Promise<boolean>;
   /** The name of the downloaded file at `path`; undefined when `path` is not one. */
   downloadedFileAt(path: string): Promise<string | undefined>;
+  /** The key the instance matches an entry's name by. */
+  nameKey(name: string): string;
+
+  /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
+   *  plugins, where the last read of the settings resolved them. */
+  subscribe(listener: () => void): Subscription;
+  /** The folder holding what the game wrote at run time; its files take `OVERWRITE_ORIGIN`. */
+  overwriteFolder(): string;
+  /** A file inside `folder`, by the relative path a source tree names it with. */
+  fileInFolder(folder: string, relativePath: string): string;
+  isInFolder(folder: string, file: string): boolean;
+  /** Whether the file named `name` is one of this adapter's own writes still in flight. */
+  isTempWrite(name: string): boolean;
+  /** Whether the file at `relativePath` in a mod folder is the mod's metadata, not its content. */
+  isModMetaFile(relativePath: string): boolean;
 
   /** Every change lands in one write, its folders with it. A change naming an entry that is not
    *  there, or adding one that is, rejects, and nothing changes. */

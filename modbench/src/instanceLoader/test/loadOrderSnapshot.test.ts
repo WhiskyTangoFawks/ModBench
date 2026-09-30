@@ -7,6 +7,7 @@ import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
 } from '../loadOrderSnapshot';
 import { present } from '../../ports/present';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
@@ -226,7 +227,7 @@ describe('originFiles', () => {
   const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
 
   it('names a file inside the folder the origin\'s plugin sits in, and holds only what is beneath it', () => {
-    const files = present(originFiles(rows, 'TS Mod'), 'the TS Mod origin\'s files');
+    const files = present(originFiles(adapterOver('/instance'), rows, 'TS Mod'), 'the TS Mod origin\'s files');
 
     expect(files.file('source/x.json')).toBe(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'));
     expect(files.holds(join('/instance', 'mods', 'TS Mod', 'source', 'x.json'))).toBe(true);
@@ -234,7 +235,7 @@ describe('originFiles', () => {
   });
 
   it('answers nothing for an origin with no plugin file on disk', () => {
-    expect(originFiles(rows, 'Missing')).toBeUndefined();
+    expect(originFiles(adapterOver('/instance'), rows, 'Missing')).toBeUndefined();
   });
 });
 

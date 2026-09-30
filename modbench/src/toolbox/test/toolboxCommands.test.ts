@@ -34,6 +34,7 @@ import { registerRefreshCommand, registerToolboxCommands, type ToolboxCommandDep
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import { accessTo } from '../../test/mo2/adapterOver';
 import type { RefreshResult } from '../../instanceCommands/loadOrder';
 
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
@@ -41,7 +42,7 @@ const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Defau
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
   registerToolboxCommands({
-    instanceRoot: '/instance',
+    access: accessTo('/instance'),
     instance: { value },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,

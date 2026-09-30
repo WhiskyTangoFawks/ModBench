@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload } from '../downloadsCommands/downloads';
-import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
+import {
+  deleteDownloads, excludeDownloads, includeDownloads, type DeletedDownload, type DownloadsAccess,
+} from '../downloadsCommands/downloads';
+import {
+  defaultModName, installFromArchive, type InstallAccess, type InstallChoice, type InstallTarget,
+} from '../install/install';
 import type { DownloadNode, DownloadsProvider, DownloadsTreeNode } from './DownloadsProvider';
 import { selectedFiles, singleSelectedFile } from './keyContext';
 import type { DownloadFile, Instance } from '../instanceLoader/instance';
@@ -87,7 +91,7 @@ async function resolveTarget(
 // The row holds the archive's path and its own mod id, file id and version, so the view re-reads
 // no sidecar; install is called for what it is, and install marks the download installed.
 async function installArchive(
-  row: DownloadFile, instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
   deps: DownloadInstallDeps,
 ): Promise<void> {
   const { name } = row;
@@ -102,7 +106,7 @@ async function installArchive(
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
     if (!target) return;
-    const outcome = await installFromArchive(instanceRoot, target, row.path, instance.value.paths.downloadsDir, {
+    const outcome = await installFromArchive(access.instanceRoot, target, row.path, instance.value.paths.downloadsDir, {
       gameName: instance.value.gameRelease, modID: row.modID, fileID: row.fileID, version: row.version,
     });
     applyOrThrow(outcome);
@@ -192,13 +196,13 @@ async function includeSelection(
 /** Clicked row only, as MO2 batches no Install and five opened tabs help no one. The palette
  *  hands no row, so open and open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
+  access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
   viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rowOf = (node?: DownloadNode) => (node ?? singleSelectedFile(viewSelection()))?.row;
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
+      if (node?.row.name) void installArchive(node.row, access, instance, reporter, install);
     }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = rowOf(node);
@@ -227,7 +231,7 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 /** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
  *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
 export function registerDownloadsMultiRowCommands(
-  instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  _access: DownloadsAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const names = (clicked?: DownloadNode, selected?: DownloadNode[]) => {

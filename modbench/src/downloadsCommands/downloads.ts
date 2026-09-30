@@ -9,6 +9,13 @@ import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+/** What a downloads command reaches the instance through. */
+export interface DownloadsAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** `wrote` is false when the gesture already held, so no watcher fires (ADR-0014 invariant 4).
  *  `metaLeftBehind` is delete's own: the file trashed but its `.meta` didn't. */

@@ -10,6 +10,7 @@ import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codec
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 import type { EntryRef } from './instanceAdapter';
+import { PLUGIN_EXTENSIONS } from './pluginFile';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -118,8 +119,16 @@ export const MODS_GLOB = `${MODS}/**`;
 export const OVERWRITE_GLOB = `${OVERWRITE_DIR_NAME}/**`;
 export const MODLIST_GLOB = `${PROFILES}/*/${MODLIST_FILE_NAME}`;
 export const PLUGINS_GLOB = `${PROFILES}/*/${PLUGINS_FILE_NAME}`;
+/** A profile switch rewrites the settings and nothing else. */
+export const SETTINGS_WATCH_GLOB = SETTINGS_FILE_NAME;
 /** Downloads' own base is the resolved folder itself, so this glob is everything under it. */
 export const DOWNLOADS_WATCH_GLOB = '**';
+
+// A glob matches case, and a plugin's extension is any case, so each letter is a class.
+const anyCase = (text: string): string => text.replace(/./g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+
+/** The plugin files at the root of the game folder's Data folder, the Data folder its base. */
+export const DATA_FOLDER_PLUGINS_GLOB = `*.{${[...PLUGIN_EXTENSIONS].map((ext) => anyCase(ext.slice(1))).join(',')}}`;
 
 // The one spelling of files.ts's own temp suffix, so a sibling target's temp — whose name only
 // starts the same way — can never pass a check built for one exact target.

@@ -28,12 +28,13 @@ import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 // The row a real tree over the corpus's own modlist, sorted the given way, hands a right click —
 // not a hand-built fixture. Nothing but the tree is under test here, so no Instance reads a clone.
 async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
-  const provider = new ModListProvider({ instance, instanceRoot: CORPUS_FIXTURE });
+  const provider = new ModListProvider({ instance, access: accessTo(CORPUS_FIXTURE) });
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
@@ -47,7 +48,7 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   showInputBox.mockResolvedValueOnce('New Section');
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
   const reporter = recordingReporter();
-  registerSeparatorCommands(root, instance, reporter, vi.fn(), () => []);
+  registerSeparatorCommands(accessTo(root), instance, reporter, vi.fn(), () => []);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
   if (!call) throw new Error('modbench.separator.add not registered');
   await call[1](anchor);

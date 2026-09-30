@@ -13,6 +13,13 @@ import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename,
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+/** What install reaches the instance through. */
+export interface InstallAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** For a manual local install only `installationFile` is typically known; the rest arrives from a
  *  Nexus archive's download identity. */

@@ -3,14 +3,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
-import { switchProfile } from '../../instanceCommands/profile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
-  readModlistEntries, readPluginLines, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readPluginLines,
+  snapshotTree,
 } from './corpusFixture';
 
-const INI = 'ModOrganizer.ini';
 const PROFILE = 'Default';
 // The fixture has no game folder, so its Creation Club plugin stands in the game's Data folder,
 // case-folded as the Instance lists it.
@@ -21,7 +19,7 @@ const pluginOrder = async (dir: string): Promise<string[]> =>
 const enabledPlugins = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).filter((p) => p.enabled).map((p) => p.name);
 
-describe('plugins.txt + profile corpus', () => {
+describe('plugins.txt corpus', () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -92,21 +90,5 @@ describe('plugins.txt + profile corpus', () => {
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
     expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture.esp');
-  });
-
-  // Rival this catches: an implementation that copies or merges profile content
-  // instead of repointing selected_profile — both profiles' modlist.txt/plugins.txt
-  // must stay byte-identical across a switch.
-  it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
-    const before = await snapshotTree(dir);
-    await switchProfile(dir, 'Secondary', ['Default', 'Secondary']);
-    const after = await snapshotTree(dir);
-    assertOnlyChanged(before, after, new Set([INI]));
-
-    expect(await readActiveProfile(dir)).toBe('Secondary');
-    expect((await readModlistEntries(dir, 'Secondary')).map((e) => e.name)).toEqual([
-      'Unofficial Fallout 4 Patch',
-      'Harder VATS',
-    ]);
   });
 });

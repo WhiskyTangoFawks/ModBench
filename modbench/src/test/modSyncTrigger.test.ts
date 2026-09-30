@@ -1,9 +1,8 @@
-// The installer writes no modlist line and a hand-deleted folder leaves its line behind; a landed
-// Instance value is what runs the mod sync that settles both.
+// A folder dropped in has no modlist line and a hand-deleted folder leaves its line behind; a
+// landed Instance value is what runs the mod sync that settles both.
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
 
@@ -12,18 +11,17 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { registerModSync } from '../modSyncTrigger';
-import { syncMods, type ModSyncResult } from '../modlist/modlist';
-import { installFromFolder } from '../install/install';
+import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
+import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
-import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
-import { downloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { accessTo } from './mo2/adapterOver';
 import { modsDir } from '../instanceAdapter/layout';
 import { present } from '../ports/present';
+import { watchedAdapterOver } from './mo2/watchedAdapterOver';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
-const resolvesDataFolder: GameDirectoryResolver = () =>
-  Promise.resolve({ kind: 'found', root: '/game', dataFolder: DATA_FOLDER });
+const DATA_FOLDER_FOUND = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER } as const;
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -61,14 +59,13 @@ async function wiredInstance(): Promise<{
   instance: Instance;
   channel: ReturnType<typeof channelDouble>;
   syncs: Promise<ModSyncResult>[];
-  handed: (readonly string[] | undefined)[];
+  handed: (readonly ModFolder[] | undefined)[];
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const instance = new Instance({
     instanceRoot: root,
-    resolveGameDirectory: resolvesDataFolder,
-    resolveDownloadsDirectory: downloadsDirectoryResolver(),
+    adapter: watchedAdapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
     log: () => {},
     logReadFailure: () => {},
   });
@@ -76,10 +73,10 @@ async function wiredInstance(): Promise<{
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
   // What the trigger handed the command, so a test can hold it against the value's own field.
-  const handed: (readonly string[] | undefined)[] = [];
+  const handed: (readonly ModFolder[] | undefined)[] = [];
   const trigger = registerModSync(instance, (value) => {
     handed.push(value.modFolders);
-    const run = syncMods(root, value.activeProfile, value.modFolders);
+    const run = modSyncOver(accessTo(root))(value);
     syncs.push(run);
     return run;
   }, channel);
@@ -94,25 +91,19 @@ async function wiredInstance(): Promise<{
 
 describe('registerModSync — driven by the Instance value', () => {
   // Rival: dropping the sync trigger, or keying it off a watcher of its own instead of the landed
-  // value. Nothing else writes the line, so the install stays unlisted forever.
-  it('adds a line for the folder an install dropped in, off the Instance value alone', async () => {
+  // value. Nothing else writes the line, so the folder stays unlisted forever.
+  it('adds a line for a mod folder dropped in, off the Instance value alone', async () => {
     const { root, instance, syncs } = await wiredInstance();
     const before = instance.sequence;
-    const sourceFolder = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
-    try {
-      await writeFile(join(sourceFolder, 'Installed.esp'), 'plugin bytes');
-      const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: 'Fallout 4' });
-      expect(outcome).toMatchObject({ applied: true });
-      expect(await modlistText(root)).not.toContain(MOD); // the installer wrote no line
+    await mkdir(join(root, 'mods', MOD));
+    await writeFile(join(root, 'mods', MOD, 'Installed.esp'), 'plugin bytes');
+    expect(await modlistText(root)).not.toContain(MOD);
 
-      watcherFor('mods/**').fireCreate(join(root, 'mods', MOD, 'Installed.esp'));
-      await pastSequence(instance, before);
-      await syncs[syncs.length - 1];
+    watcherFor('mods/**').fireCreate(join(root, 'mods', MOD, 'Installed.esp'));
+    await pastSequence(instance, before);
+    await syncs[syncs.length - 1];
 
-      expect(await modlistText(root)).toContain(MOD);
-    } finally {
-      await rm(sourceFolder, { recursive: true, force: true });
-    }
+    expect(await modlistText(root)).toContain(MOD);
   });
 
   it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
@@ -154,7 +145,7 @@ describe('registerModSync — driven by the Instance value', () => {
     const value = await pastSequence(instance, before);
 
     expect(handed[handed.length - 1]).toBe(value.modFolders);
-    expect(value.modFolders).toContain('Hand Extracted Mod');
+    expect(value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
   });
 
   // Rival: a sync that writes on every landed value, which a plugins.txt edit would turn into a

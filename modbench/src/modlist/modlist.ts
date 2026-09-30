@@ -32,6 +32,13 @@ import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
+import type { InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
+
+/** What a modlist command reaches the instance through. */
+export interface ModlistAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -460,4 +467,16 @@ export async function syncMods(
     return [...added].reverse().reduce((out, name) => insertModAtWinningEnd(out, name), withoutGone);
   });
   return outcome.applied ? { applied: true, added, dropped } : outcome;
+}
+
+/** Each mod folder's own name under `mods/`. */
+export const folderNamesOf = (folders: readonly ModFolder[]): string[] =>
+  folders.map((folder) => (folder.kind === 'separator' ? separatorModName(folder.name) : folder.name));
+
+/** Mod sync on a landed value's own profile and mod folders. */
+export type ModSyncRun = (value: { readonly activeProfile: string; readonly modFolders: readonly ModFolder[] | undefined }) => Promise<ModSyncResult>;
+
+/** `syncMods` bound to one instance. */
+export function modSyncOver(access: ModlistAccess): ModSyncRun {
+  return (value) => syncMods(access.instanceRoot, value.activeProfile, value.modFolders && folderNamesOf(value.modFolders));
 }

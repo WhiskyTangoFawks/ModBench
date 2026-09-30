@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, matchesGlob } from 'node:path';
 import { mo2InstanceAdapter } from '../mo2Instance';
+import { OVERWRITE_ORIGIN } from '../instanceAdapter';
 import type { GameDetectors, GameFolder } from '../gameDirectory';
-import type { InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange } from '../instanceAdapter';
+import type {
+  InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
+} from '../instanceAdapter';
 import { tempWritePath } from '../layout';
+import type { WatchFiles } from '../mo2Watch';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -18,8 +22,9 @@ const NO_DETECTORS: GameDetectors = {
 const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-const adapterAt = (instanceRoot: string, gameDirectory?: string): InstanceAdapter =>
-  mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS });
+const adapterAt = (instanceRoot: string, gameDirectory?: string): InstanceAdapter => mo2InstanceAdapter({
+  instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS, watchFiles: () => ({ dispose: () => undefined }),
+});
 
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
@@ -93,6 +98,17 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get('manual.zip')?.size).toBe(3);
       expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));
       expect(byName.get('manual.zip')?.metaPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
+    });
+
+    // Rival: empty metadata read as none, so a file whose metadata is there to open shows none.
+    it('answers metadata that is there but empty as metadata', async () => {
+      await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
+      await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
+
+      const downloads = await (await adapter.settings()).downloadedFiles();
+
+      if (downloads.kind !== 'listed') throw new Error(`expected listed, got ${downloads.reason}`);
+      expect(downloads.files?.find((file) => file.name === 'manual.zip')?.meta).toMatchObject({ status: 'Downloaded' });
     });
 
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
@@ -243,6 +259,157 @@ describe('the MO2 Instance adapter', () => {
         if (plugins.kind !== 'unreadable') throw new Error(`expected unreadable, got ${plugins.kind}`);
         expect(plugins.reason).toMatch(/ENOENT/);
       });
+    });
+  });
+
+  describe('the watch', () => {
+    interface ArmedWatch {
+      readonly base: string;
+      readonly glob: string;
+      readonly onChange: (path: string) => void;
+      disposed: boolean;
+    }
+
+    // The host's watcher, doubled: each watch the adapter arms, and a change fired beneath one.
+    function hostWatcher(): {
+      watchFiles: WatchFiles; live: () => ArmedWatch[]; fire: (base: string, relative: string, heardAs?: string) => boolean;
+    } {
+      const armed: ArmedWatch[] = [];
+      const live = (): ArmedWatch[] => armed.filter((w) => !w.disposed);
+      return {
+        watchFiles: (base, glob, onChange) => {
+          const watch: ArmedWatch = { base, glob, onChange, disposed: false };
+          armed.push(watch);
+          return { dispose: () => { watch.disposed = true; } };
+        },
+        live,
+        // `heardAs` stands in for a path the matcher here reads differently than the host does.
+        fire: (base, relative, heardAs = relative) => {
+          const watch = live().find((w) => w.base === base && matchesGlob(heardAs, w.glob));
+          watch?.onChange(join(base, relative));
+          return watch !== undefined;
+        },
+      };
+    }
+
+    const watching = (host: ReturnType<typeof hostWatcher>, gameDirectory?: string): InstanceAdapter => mo2InstanceAdapter({
+      instanceRoot: root, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS, watchFiles: host.watchFiles,
+    });
+
+    it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
+      const host = hostWatcher();
+      const watched = watching(host);
+      expect(host.live()).toEqual([]);
+
+      const first = watched.subscribe(() => undefined);
+      const second = watched.subscribe(() => undefined);
+      expect(host.live().length).toBeGreaterThan(0);
+
+      first.dispose();
+      expect(host.live().length).toBeGreaterThan(0);
+      second.dispose();
+      expect(host.live()).toEqual([]);
+    });
+
+    it('signals a change to every profile\'s two order files, the settings, a mod\'s files and overwrite', () => {
+      const host = hostWatcher();
+      let signals = 0;
+      watching(host).subscribe(() => { signals++; });
+
+      for (const relative of [
+        'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
+        'mods/Harder VATS/Textures/a.dds', 'overwrite/F4SE/Plugins/x.ini',
+      ]) expect(host.fire(root, relative), relative).toBe(true);
+      expect(host.fire(root, 'profiles/Default/other.txt')).toBe(false);
+      expect(signals).toBe(5);
+    });
+
+    // Rival: every path under a mod heard alike, so a git operation inside a tracked mod reads as
+    // a change to the instance.
+    it('hears nothing inside a mod\'s git repository, but hears the repository folder itself come or go', () => {
+      const host = hostWatcher();
+      let signals = 0;
+      watching(host).subscribe(() => { signals++; });
+
+      expect(host.fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/index')).toBe(true);
+      expect(signals).toBe(0);
+      expect(host.fire(root, 'mods/Harder VATS/.git', 'mods/Harder VATS/git')).toBe(true);
+      expect(signals).toBe(1);
+    });
+
+    // Rival: the downloads folder watched where the instance began, so a download landing in the
+    // folder the settings name now is never heard.
+    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves', async () => {
+      const host = hostWatcher();
+      let signals = 0;
+      const watched = watching(host);
+      watched.subscribe(() => { signals++; });
+      await (await watched.settings()).downloadedFiles();
+      expect(host.fire(join(root, 'downloads'), 'new.7z')).toBe(true);
+      signals = 0;
+
+      await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
+      await (await watched.settings()).downloadedFiles();
+      expect(signals).toBe(1);
+      await (await watched.settings()).downloadedFiles();
+      expect(signals).toBe(1);
+
+      expect(host.fire(join(root, 'downloads'), 'old.7z')).toBe(false);
+      expect(host.fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);
+    });
+
+    // Rival: a glob of one case, which misses a plugin whose extension another tool wrote in capitals.
+    it('follows the plugins at the root of the game folder\'s Data folder, in any case', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
+      try {
+        await mkdir(join(game, 'Data'));
+        const host = hostWatcher();
+        const watched = watching(host, game);
+        watched.subscribe(() => undefined);
+
+        await (await watched.settings()).gameFolder();
+
+        for (const name of ['Fallout4.esm', 'Patch.ESP', 'cc.Esl']) expect(host.fire(join(game, 'Data'), name), name).toBe(true);
+        expect(host.fire(join(game, 'Data'), 'readme.txt')).toBe(false);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
+    it('follows no game folder when none is found', async () => {
+      const host = hostWatcher();
+      const watched = watching(host);
+      watched.subscribe(() => undefined);
+      const before = host.live().length;
+
+      await (await watched.settings()).gameFolder();
+
+      expect(host.live()).toHaveLength(before);
+    });
+  });
+
+  describe('where the loader finds things', () => {
+    it('answers the overwrite folder, named as the origin its files take', () => {
+      expect(adapter.overwriteFolder()).toBe(join(root, OVERWRITE_ORIGIN));
+    });
+
+    it('answers a file inside a folder, and whether a file is inside one', () => {
+      const folder = join(root, 'mods', 'Harder VATS');
+      const file = adapter.fileInFolder(folder, 'Textures/a.dds');
+
+      expect(adapter.isInFolder(folder, file)).toBe(true);
+      expect(adapter.isInFolder(`${folder} Extra`, file)).toBe(false);
+    });
+
+    it('tells its own writes in flight and a mod\'s metadata from a mod\'s content', () => {
+      expect(adapter.isTempWrite(basename(tempWritePath(join(root, 'modlist.txt'))))).toBe(true);
+      expect(adapter.isTempWrite('modlist.txt')).toBe(false);
+      expect(adapter.isModMetaFile('meta.ini')).toBe(true);
+      expect(adapter.isModMetaFile('Textures/meta.ini')).toBe(false);
+    });
+
+    it('keys an entry\'s name without case, as MO2 matches it', () => {
+      expect(adapter.nameKey('Harder VATS')).toBe(adapter.nameKey('harder vats'));
     });
   });
 

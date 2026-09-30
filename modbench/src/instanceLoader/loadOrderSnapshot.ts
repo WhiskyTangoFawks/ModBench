@@ -6,7 +6,8 @@ import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
-import { fileInFolder, isInFolder, overwriteDir } from '../instanceAdapter/layout';
+import { overwriteDir } from '../instanceAdapter/layout';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { isPluginFile } from '../instanceAdapter/pluginFile';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
@@ -68,14 +69,20 @@ export interface OriginFiles {
  *  its own. */
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
-/** The files of the folder `originFolder` answers, through the Instance adapter's path functions.
+/** How the Instance adapter answers a file inside a folder, and whether a file is inside one. */
+export type FolderFiles = Pick<InstanceAdapter, 'fileInFolder' | 'isInFolder'>;
+
+/** The files of the folder `originFolder` answers, through the Instance adapter's answers.
  *  `undefined` when no row for that origin has a plugin file on disk. */
 export function originFiles(
-  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
+  folders: FolderFiles, plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): OriginFiles | undefined {
   const folder = originFolder(plugins, origin);
   if (folder === undefined) return undefined;
-  return { file: (relativePath) => fileInFolder(folder, relativePath), holds: (file) => isInFolder(folder, file) };
+  return {
+    file: (relativePath) => folders.fileInFolder(folder, relativePath),
+    holds: (file) => folders.isInFolder(folder, file),
+  };
 }
 
 /** The plugin files this instance provides, keyed case-folded to the winning plugin's on-disk

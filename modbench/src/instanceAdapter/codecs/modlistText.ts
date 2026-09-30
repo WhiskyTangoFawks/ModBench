@@ -18,6 +18,9 @@ const SEPARATOR_SUFFIX = '_separator';
  *  under `mods/`. */
 export const separatorModName = (name: string): string => name + SEPARATOR_SUFFIX;
 
+/** MO2 keys mods and separators by name without case (modinfo.cpp, FileNameComparator). */
+export const modNameKey = (name: string): string => name.toLowerCase();
+
 /** The entry MO2's own name for it holds, a line's or a folder's alike: a separator's carries the
  *  suffix. */
 export const entryNamed = (modName: string): EntryRef => (modName.endsWith(SEPARATOR_SUFFIX)

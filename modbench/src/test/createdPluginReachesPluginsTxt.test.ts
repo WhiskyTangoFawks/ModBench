@@ -12,8 +12,8 @@ import { Instance } from '../instanceLoader/instance';
 import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
-import { resolvesNoDownloads } from './mo2/downloadsUnresolved';
-import type { GameDirectoryResolver } from '../instanceAdapter/gameDirectory';
+import { NO_DOWNLOADS } from './mo2/adapterOver';
+import { watchedAdapterOver } from './mo2/watchedAdapterOver';
 
 const PROFILE = 'Default';
 
@@ -39,12 +39,12 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
     await writeFile(join(dir, 'profiles', PROFILE, 'modlist.txt'), '+Existing Mod\r\n');
     await writeFile(join(dir, 'mods', 'Existing Mod', 'Base.esp'), 'plugin');
     await writeFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-    const resolveGameDirectory: GameDirectoryResolver = () =>
-      Promise.resolve({ kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') });
     instance = new Instance({
       instanceRoot: dir,
-      resolveGameDirectory,
-      resolveDownloadsDirectory: resolvesNoDownloads,
+      adapter: watchedAdapterOver(dir, {
+        gameFolder: { kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') },
+        downloadedFiles: NO_DOWNLOADS,
+      }),
       log: () => {},
       logReadFailure: () => {},
     });

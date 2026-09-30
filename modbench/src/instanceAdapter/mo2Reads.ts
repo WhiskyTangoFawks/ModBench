@@ -1,0 +1,123 @@
+// MO2's parsed reads: each file read through its own codec, and each answer about where the
+// instance keeps what.
+
+import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
+import { errorMessage } from '../ports/errorMessage';
+import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
+import { MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
+import { modNameKey, parseModlist } from './codecs/modlistText';
+import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
+import { exists, factsOf, get, listDir } from './files';
+import { dataFolderOf, type GameFolder } from './gameDirectory';
+import type { DataFolderPlugins, DownloadedFile, DownloadedFiles, InstanceAdapter } from './instanceAdapter';
+import {
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, entryDir,
+  fileInFolder, isInFolder, isTempWrite, mo2FolderName, modlistFile, modMetaFile, overwriteDir, pluginsFile,
+  profilesDir, settingsFile,
+} from './layout';
+import { listModFolders, readOrAbsent, type Mo2Context } from './mo2Context';
+import { isPluginFile } from './pluginFile';
+
+export type Mo2Reads = Omit<InstanceAdapter,
+  | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'stagingFolder' | 'landNewMod' | 'upgradeMod' | 'subscribe'>;
+
+async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
+  const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);
+  if (dirents === undefined) return undefined;
+  const names = dirents
+    .filter((d) => d.isFile() && !isTempWrite(d.name) && !d.name.endsWith(DOWNLOAD_SIDECAR_SUFFIX))
+    .map((d) => d.name);
+  return Promise.all(names.map(async (name) => {
+    const path = downloadFile(downloadsDir, name);
+    const metaPath = downloadSidecarFile(downloadsDir, name);
+    const [facts, metaText] = await Promise.all([
+      factsOf(path),
+      readOrAbsent<string | undefined>(() => get(metaPath), undefined),
+    ]);
+    const meta = metaText === undefined ? undefined : parseDownloadMeta(metaText);
+    return { name, path, metaPath, size: facts.size, mtimeMs: facts.mtimeMs, meta };
+  }));
+}
+
+async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
+  const dataFolder = dataFolderOf(gameFolder);
+  if (dataFolder === undefined) return { kind: 'unresolved' };
+  try {
+    const dirents = await listDir(dataFolder);
+    return { kind: 'listed', names: new Set(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase())) };
+  } catch (err) {
+    return { kind: 'unreadable', reason: errorMessage(err) };
+  }
+}
+
+export function mo2Reads(context: Mo2Context): Mo2Reads {
+  const { instanceRoot, resolveGameFolder, resolveDownloadsFolder, watch } = context;
+  return {
+    async settings() {
+      const iniText = await get(settingsFile(instanceRoot));
+      return {
+        profile: readSelectedProfile(iniText),
+        gameName: readGameName(iniText),
+        // What the settings resolve is what the watch follows.
+        gameFolder: async () => {
+          const gameFolder = await resolveGameFolder(iniText);
+          watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
+          return gameFolder;
+        },
+        downloadedFiles: async (): Promise<DownloadedFiles> => {
+          const resolution = await resolveDownloadsFolder(instanceRoot, iniText);
+          watch.follow('downloadedFiles', resolution.kind === 'resolved' ? resolution.downloadsDir : undefined, DOWNLOADS_WATCH_GLOB);
+          if (resolution.kind === 'unresolved') return resolution;
+          const { downloadsDir } = resolution;
+          return { kind: 'listed', downloadsDir, files: await listDownloadedFiles(downloadsDir) };
+        },
+      };
+    },
+
+    async profiles() {
+      const dirents = await readOrAbsent(() => listDir(profilesDir(instanceRoot)), []);
+      return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    },
+
+    async modOrder(profile) {
+      return parseModlist(await get(modlistFile(instanceRoot, profile)));
+    },
+
+    modMeta(mod) {
+      return readOrAbsent(async () => parseMetaIni(await get(modMetaFile(instanceRoot, mod))), {});
+    },
+
+    modFolders: (skippedLink) => listModFolders(context, skippedLink),
+
+    async pluginOrder(profile) {
+      return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
+    },
+
+    gameFolderPlugins: listGameFolderPlugins,
+
+    folderNameFor: mo2FolderName,
+
+    async hasModFolder(mod) {
+      const folder = entryDir(instanceRoot, { kind: 'mod', name: mod });
+      return folder !== undefined && exists(folder);
+    },
+
+    async downloadedFileAt(path) {
+      const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));
+      return resolution.kind === 'unresolved' ? undefined : downloadNameAt(resolution.downloadsDir, path);
+    },
+
+    nameKey: modNameKey,
+
+    overwriteFolder: () => overwriteDir(instanceRoot),
+
+    fileInFolder,
+
+    isInFolder,
+
+    isTempWrite,
+
+    isModMetaFile: (relativePath) => relativePath === MOD_META_FILE_NAME,
+  };
+}
