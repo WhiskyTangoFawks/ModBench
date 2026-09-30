@@ -56,7 +56,7 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   },
   // editor.md, Columns, A column's header, Status table: Overwrite's own row, worded as the
   // table's tooltip column states it, naming no gesture this header's menu lacks.
-  overwrite: {
+  inOverwrite: {
     label: '(in Overwrite)',
     title: 'Overwrite is not a mod, and a plugin moved into a mod can be tracked.',
   },

@@ -24,7 +24,7 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 // immutable and named by the load order, while a plugin the load order doesn't name (ADR-0012) is
 // immutable *because* it isn't.
 export type ColumnStatus =
-  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'overwrite' | 'untracked' | 'tracked';
+  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'inOverwrite' | 'untracked' | 'tracked';
 
 /** Ordered by what the user can do about it: a parse failure and an immutable column come first,
  *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
@@ -35,7 +35,7 @@ export function columnStatus(
 ): ColumnStatus {
   if (parseDiagnosis != null) return 'parseFailure';
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
-  if (isInOverwrite) return 'overwrite';
+  if (isInOverwrite) return 'inOverwrite';
   return isTracked ? 'tracked' : 'untracked';
 }
 
