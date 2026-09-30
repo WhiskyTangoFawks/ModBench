@@ -18,7 +18,7 @@ client.label: mEdit client
 mo2 -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder}
-instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins, the manager's names" {class: loadorder}
+instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list, the manager's names" {class: loadorder}
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
