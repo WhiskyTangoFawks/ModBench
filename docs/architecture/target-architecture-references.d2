@@ -71,8 +71,6 @@ modbench_core.deploy -> modbench_driven.instanceadapter {class: ref}
 modbench_core.deploy -> modbench_driven.deployment {class: ref}
 # Modbench: driven adapters (the kernel by the band's rule, not drawn)
 modbench_driven.instanceloader -> modbench_driven.instanceadapter {class: ref}
-modbench_driven.instanceloader -> modbench_data.mo2 {class: store}
-modbench_driven.instanceloader -> modbench_data.gamedata {class: store}
 modbench_driven.instanceadapter -> modbench_data.mo2 {class: store}
 modbench_driven.instanceadapter -> modbench_data.gamedata {class: store}
 modbench_driven.deployment -> modbench_data.gamedata {class: store}
