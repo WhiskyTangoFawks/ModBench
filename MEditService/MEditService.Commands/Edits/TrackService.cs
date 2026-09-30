@@ -4,13 +4,12 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The Track gesture end to end: deep-parses each plugin of the selection (the load order's
-/// overlay is not always structurally faithful), serializes through the whole-mod door, and
-/// commits. A designated door (ADR-0007).</summary>
+/// <summary>The Track gesture end to end: decompiles each plugin of the selection, then gives each
+/// mod with no repository one, with a baseline commit per plugin. A designated door
+/// (ADR-0007).</summary>
 public sealed class TrackService(
     ILogger<TrackService> logger, IPluginAdapter adapter, INotificationPublisher? notifications = null)
 {
@@ -20,11 +19,7 @@ public sealed class TrackService(
     public TrackProgress Progress => Volatile.Read(ref _progress);
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
-
-    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a plugin whose file
-    // cannot be read has no bytes to deep-parse, so Track refuses that plugin and goes on with the
-    // rest.
-    private bool Readable(RegisteredPlugin plugin) => adapter.CanRead(plugin);
+    private readonly PluginDecompiler _decompiler = new(logger, adapter);
 
     /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
     /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
@@ -103,8 +98,8 @@ public sealed class TrackService(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            // Creating the repository or checking out its edit branch failed; a baseline already on
-            // main landed all the same (plugins.md, Track, story 5).
+            // Creating the repository failed, or catching its index up with main did; a baseline already
+            // on main landed all the same (plugins.md, Track, story 5).
             logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
             failed = [.. plugins
                 .Where(v => !SourceRepository.IsPluginTracked(modFolder, v.Plugin.Name))
@@ -149,122 +144,31 @@ public sealed class TrackService(
                     "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
-        if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))
-            return Refuse(TrackRefusal.AlreadyTracked, $"{plugin.Name} is already tracked in '{modFolder}'.");
+        // ADR-0007 invariant 2: Track takes a mod with no repository.
+        if (SourceRepository.IsTracked(modFolder))
+        {
+            return Refuse(TrackRefusal.AlreadyTracked,
+                $"'{modFolder}' is already tracked. To put {plugin.Name}'s source into its working tree, decompile it.");
+        }
 
         // ADR-0003: a repository with history but no main is someone else's, never written to.
         if (SourceRepository.HoldsAnotherRepository(modFolder))
-            return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
+            return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' already holds a repository with no main branch.");
 
-        if (!Readable(plugin))
+        var decompiled = await _decompiler.DecompileAsync(loadOrder, plugin, modFolder, onParsed, cancel);
+        if (decompiled.Files is not { } files)
         {
-            return Refuse(TrackRefusal.RoundTripFailed,
-                $"{plugin.Name} cannot be read from its own binary. Close whatever holds the file, then track again.");
+            return Refuse(decompiled.Refusal == DecompileRefusal.MissingLocalizationStrings
+                ? TrackRefusal.MissingLocalizationStrings
+                : TrackRefusal.RoundTripFailed, decompiled.Message);
         }
-
-        // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-        var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
-
-        // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
-        (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
-        try
-        {
-            tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
-            // the innermost RecordException.
-            var diagnosis = PluginDiagnosis.FromParseException(ex);
-            logger.LogWarning(ex, "Refused to track {Plugin}: its own binary could not be deep-parsed", plugin.Name);
-            return Refuse(TrackRefusal.RoundTripFailed,
-                $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
-        }
-
-        if (tree.MissingStringsFile is { } missingFile)
-        {
-            return Refuse(TrackRefusal.MissingLocalizationStrings,
-                $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
-                $"in {strings.Folder}. Restore the file, then track again.");
-        }
-
-        // Where the door's tree lands in the mod folder is the repository's answer, and the round-trip
-        // gate below reads the same files the commit will hold.
-        onParsed();
-        var pristineFiles = SourceRepository.PristineFilesOf(plugin.Name, tree.Files);
-        if (await VerifyRoundTrip(plugin.Name, plugin.Path, pristineFiles, loadOrder.GameRelease, strings, cancel) is { } refusal)
-            return Refuse(TrackRefusal.RoundTripFailed, refusal);
 
         return new Verification(
             new VerifiedPlugin(
-                key, modFolder, pristineFiles,
+                key, modFolder, files,
                 new BaselineTrailers(key.Name, upstreamVersion, PluginBinaryHash.TrailerFormOfFile(plugin.Path))),
             null);
     }
-
-    // ADR-0006 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every
-    // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
-    // writer does.
-    private async Task<string?> VerifyRoundTrip(
-        string pluginName,
-        string originalPluginPath,
-        IReadOnlyList<TreeFile> pristineFilesForThisPlugin,
-        GameRelease gameRelease,
-        PluginStrings strings,
-        CancellationToken cancel)
-    {
-        using var scratch = SourceRepository.ScratchFor(pluginName);
-        var recompiledPath = scratch.PluginPath;
-        try
-        {
-            await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, cancel);
-        }
-        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-        {
-            // ADR-0008's content-derived master pass prunes a master this write still needs when the only
-            // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
-            // widen this catch.
-            var diagnosis = PluginDiagnosis.FromWriteException(ex);
-            logger.LogWarning(ex, "Refused to track {Plugin}: its round-trip write dropped a needed master", pluginName);
-            return $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}";
-        }
-
-        var originalBytes = await PluginBinaryHash.ExactBytesOfFileAsync(originalPluginPath, cancel);
-        var recompiledBytes = await PluginBinaryHash.ExactBytesOfFileAsync(recompiledPath, cancel);
-        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
-            return null;
-
-        if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
-        {
-            // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
-            var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
-                d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-            return $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
-                ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
-                  $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
-                : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
-                  "present in the original — dropped during parsing, before Track ever wrote its source.");
-        }
-
-        if (adapter.DivergenceFrom(
-                pluginName, originalPluginPath, recompiledPath, gameRelease, strings) is { } divergence)
-        {
-            return $"{pluginName} does not round-trip through its own tracked source: {divergence}";
-        }
-
-        // Model-identical but not byte-identical: an encoding-only difference ADR-0006 decision 2
-        // documents rather than gates. Reported, never a refusal.
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "{Plugin} is model-identical to its own tracked source but not byte-identical — " +
-                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 decision 2).",
-                pluginName);
-        }
-
-        return null;
-    }
-
 
     private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal)
     {

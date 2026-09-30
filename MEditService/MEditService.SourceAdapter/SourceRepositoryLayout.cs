@@ -68,14 +68,10 @@ public sealed partial class SourceRepository
     public static bool HoldsTreeFor(string modFolder, string pluginFileName) =>
         IsTracked(modFolder) && Directory.Exists(RootIn(modFolder, pluginFileName));
 
-    /// <summary>Whether the plugin is tracked: its source is on <c>main</c> or in the working tree.
-    /// Tracked into an existing repository, it is on <c>main</c> alone until the user rebases the
-    /// edit branch with git.</summary>
+    /// <summary>Whether the plugin is tracked: its source is in the working tree of a tracked
+    /// mod.</summary>
     public static bool IsPluginTracked(string modFolder, string pluginFileName) =>
-        HoldsTreeFor(modFolder, pluginFileName)
-        || (IsTracked(modFolder) && GitCli.TryRun(
-            Path.Combine(modFolder, ".git"), modFolder, out _,
-            "cat-file", "-e", $"refs/heads/main:{ToGitPath(RootFor(pluginFileName))}"));
+        HoldsTreeFor(modFolder, pluginFileName);
 
     /// <summary>The mod folder's git internals for the watcher (ADR-0014): the directory, and the ref
     /// paths whose change means a commit, checkout or reset.</summary>

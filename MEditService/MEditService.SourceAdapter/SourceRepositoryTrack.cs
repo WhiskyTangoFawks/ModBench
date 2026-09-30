@@ -31,40 +31,23 @@ public enum SourcePreset
 
 public sealed partial class SourceRepository
 {
-    /// <summary>One baseline commit per plugin on <c>main</c>, answering each plugin whose commit
-    /// failed. A mod with no repository gets one: <c>Track &lt;mod&gt;</c> first, the edit branch
-    /// checked out last.</summary>
+    /// <summary>A repository for a mod that has none: <c>Track &lt;mod&gt;</c>, then one baseline commit
+    /// per plugin on <c>main</c>, which stays checked out. Answers each plugin whose commit
+    /// failed.</summary>
     public static IReadOnlyList<(string Plugin, string Reason)> Track(
         string modFolder, SourcePreset preset,
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
     {
         GitCli.EnsureOnPath();
-        var gitDir = Path.Combine(modFolder, ".git");
-        if (IsTracked(modFolder)) return JoinRepository(gitDir, baselines);
-        if (HoldsAnotherRepository(modFolder))
-            throw new InvalidOperationException($"'{modFolder}' holds a repository with history but no main branch.");
+        if (IsTracked(modFolder) || HoldsAnotherRepository(modFolder))
+            throw new InvalidOperationException($"'{modFolder}' already holds a repository.");
 
+        var gitDir = Path.Combine(modFolder, ".git");
         CreateRepository(gitDir, modFolder, preset);
         var refused = CommitEachBaseline(gitDir, modFolder, baselines);
-        GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
+        // The baselines were committed through a scratch index, so the real one catches up with main.
         GitCli.Run(gitDir, modFolder, "reset", "-q");
         return refused;
-    }
-
-    // A scratch work tree: the edit branch does not move, and a baseline written into the real one
-    // would stand in the way of the user's rebase as untracked files.
-    private static List<(string Plugin, string Reason)> JoinRepository(
-        string gitDir, IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines)
-    {
-        var scratchDir = Directory.CreateTempSubdirectory("medit-track-").FullName;
-        try
-        {
-            return CommitEachBaseline(gitDir, scratchDir, baselines);
-        }
-        finally
-        {
-            Directory.Delete(scratchDir, recursive: true);
-        }
     }
 
     // No rollback beyond git's: the commits before a failed one stand, and git's own clean takes the
@@ -159,10 +142,6 @@ public sealed partial class SourceRepository
             .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
             .Select(line => line[prefix.Length..].Trim());
     }
-
-    /// <summary>The checked-out branch edits live on (CONTEXT.md's "Edit branch") — one fixed name, since
-    /// a mod folder can hold more than one plugin.</summary>
-    internal const string EditBranchName = "edit";
 
     // Pins a repo-local identity only when the global one is unset; never overwrites a real identity.
     private static void EnsureCommitIdentity(string gitDir, string workTree)

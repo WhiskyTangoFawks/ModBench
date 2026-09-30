@@ -160,36 +160,75 @@ public sealed partial class SourceRepository
     // pre-image puts back what went; a file still standing is left alone, as this delete never wrote it.
     private void DeleteWholeOrNotAtAll(string directory)
     {
-        var directories = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
-            .Prepend(directory)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        var files = Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))
-            .ToList();
+        var before = PreImageOf(directory);
         try
         {
             Directory.Delete(directory, recursive: true);
         }
         catch (Exception cause) when (cause is IOException or UnauthorizedAccessException)
         {
-            var unrestored = PutBack(directories, files);
+            var unrestored = PutBack(before);
             if (unrestored.Count == 0) throw;
             throw new IOException(
                 $"{cause.Message} Everything it removed is back except: {string.Join(" ", unrestored)}", cause);
         }
     }
 
+    /// <summary>The plugin's source in the working tree becomes <paramref name="files"/>, and the
+    /// last-compile ref names only the binary they were read from. A failure leaves both as they
+    /// were.</summary>
+    public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
+    {
+        var root = RootIn(_modFolder, pluginFileName);
+        var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
+        try
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            PristineFileWriter.WriteAll(files, _modFolder);
+            ParkDecompiled(pluginFileName, binarySha256);
+        }
+        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            var unrestored = new List<string>();
+            TryPutBack(root, () => { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }, unrestored);
+            unrestored.AddRange(PutBack(before));
+            if (unrestored.Count == 0) throw;
+            throw new IOException(
+                $"{cause.Message} Its source is back as it was except: {string.Join(" ", unrestored)}", cause);
+        }
+        finally
+        {
+            Forget();
+        }
+    }
+
+    // What the working tree now holds was made from this binary, as a landed compile's is.
+    private void ParkDecompiled(string plugin, string binarySha256)
+    {
+        var gitDir = Path.Combine(_modFolder, ".git");
+        var headSha = GitCli.Run(gitDir, _modFolder, "rev-parse", "HEAD").Trim();
+        Repark(gitDir, _modFolder, plugin, WorkingTreeSnapshotTree(gitDir, _modFolder), headSha, [$"{BinaryTrailer}: {binarySha256}"]);
+    }
+
+    private sealed record PreImage(List<string> Directories, List<(string Path, byte[] Bytes)> Files);
+
+    private static PreImage PreImageOf(string directory) => new(
+        [.. Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)
+            .Prepend(directory)
+            .Order(StringComparer.Ordinal)],
+        [.. Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
+
     // One path that cannot be written never stops the pass (ADR-0019): every other one is still put back.
-    private List<string> PutBack(List<string> directories, List<(string Path, byte[] Bytes)> files)
+    private List<string> PutBack(PreImage before)
     {
         var unrestored = new List<string>();
-        foreach (var level in directories)
+        foreach (var level in before.Directories)
         {
             TryPutBack(level, () => Directory.CreateDirectory(level), unrestored);
         }
-        foreach (var (path, bytes) in files.Where(file => !File.Exists(file.Path)))
+        foreach (var (path, bytes) in before.Files.Where(file => !File.Exists(file.Path)))
         {
             TryPutBack(path, () => File.WriteAllBytes(path, bytes), unrestored);
         }

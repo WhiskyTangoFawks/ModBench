@@ -105,6 +105,15 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/decompile", Decompile)
+            .WithName("DecompilePlugin")
+            .WithTags(Tag)
+            .Produces<DecompileResponse>()
+            .ProducesProblem(400)
+            // git missing refuses the whole selection; every other refusal is an item of the answer.
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
         // A missing load order refuses the whole selection once; every other refusal is an item of
         // the answer.
         app.MapPost("/plugins/compile", Compile)
@@ -228,6 +237,34 @@ public static class PluginEndpoints
         }
     }
 
+    // decompile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
+    internal static async Task<IResult> Decompile(
+        DecompileRequest req, DecompilePluginHandler decompileHandler, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var plugins = req.Plugins ?? [];
+        if (plugins.Count == 0)
+            return Results.Problem("At least one plugin is required.", statusCode: 400);
+        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
+            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
+
+        try
+        {
+            var result = await decompileHandler.DecompileAsync(plugins);
+            if (result.GitUnavailable is { } message)
+            {
+                logger.LogWarning("Refused to decompile {Count} plugin(s): {Message}", plugins.Count, message);
+                return WriteEndpointMapping.WriteFailure(message);
+            }
+            return Results.Ok(new DecompileResponse(result.Landed, result.Refused));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No loadOrder when decompiling {Count} plugin(s)", plugins.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
+    }
+
     // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
     internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
@@ -307,13 +344,17 @@ public record PluginCreatedResponse(string Name, string Origin, string Path);
 /// message naming the way out.</summary>
 public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
-// Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything"); a repository that
-// already stands keeps its own .gitignore.
+// Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything").
 public record TrackRequest(
     IReadOnlyList<PluginAddress> Plugins, string Preset, IReadOnlyDictionary<string, string> UpstreamVersionByOrigin);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
 public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
+
+public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
+
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+public record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileRefused> Refused);
 
 public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
