@@ -20,11 +20,6 @@ internal sealed class SourceValidation(
     /// changed since the HEAD it validated and what the index holds as dirty (ADR-0009).</summary>
     internal ValidationReport Validate(PluginAddress key, string modFolder)
     {
-        // Tracked but holding no tree for this plugin: nothing here can say what its rows should be,
-        // and the caller's whole-plugin path already knows how to fall back to the binary.
-        if (!Directory.Exists(SourceRepository.RootIn(modFolder, key.Name)))
-            return new ValidationReport(key, [], NeedsRebuild: true, []);
-
         var report = ValidateAgainstGit(key, modFolder, out var head);
         if (head is not null && report.Failures.Count == 0) _validatedHeads[key] = head;
         else _validatedHeads.Remove(key);
@@ -33,20 +28,16 @@ internal sealed class SourceValidation(
 
     private ValidationReport ValidateAgainstGit(PluginAddress key, string modFolder, out string? head)
     {
-        _validatedHeads.TryGetValue(key, out var validatedHead);
-        TreeChanges changes;
-        try
-        {
-            changes = SourceRepository.Over(modFolder, release).ChangesSince(key, validatedHead);
-        }
-        catch (AmbiguousSourceUnitException ex)
-        {
-            head = null;
-            return new ValidationReport(key, [], NeedsRebuild: true, [ex.Message]);
-        }
+        head = null;
+        // Tracked but holding no tree for this plugin: nothing here can say what its rows should be,
+        // and the caller's whole-plugin path falls back to the binary, which no HEAD vouches for.
+        if (!Directory.Exists(SourceRepository.RootIn(modFolder, key.Name)))
+            return new ValidationReport(key, [], NeedsRebuild: true, []);
 
+        _validatedHeads.TryGetValue(key, out var validatedHead);
+        var changes = SourceRepository.Over(modFolder, release).ChangesSince(key, validatedHead);
         head = changes.Head;
-        return changes.Documents is { } named && !NamesACopy(key, named)
+        return changes.Documents is { } named
             ? ValidateNamed(key, modFolder, named, headMoved: changes.Head != validatedHead)
             : ValidateWholeTree(key, modFolder);
     }
@@ -70,7 +61,7 @@ internal sealed class SourceValidation(
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
         }
 
-        return Reconcile(key, modFolder, onDisk, HeldDocuments(key), treeFullyRead, committedAlso: [], failures);
+        return Reconcile(key, modFolder, onDisk, HeldDocuments(key), treeFullyRead, validateCommitted: true, failures);
     }
 
     // Every document git names, and every one the index holds as dirty: git leaves that one unnamed
@@ -90,16 +81,9 @@ internal sealed class SourceValidation(
         foreach (var (formKey, headBody) in RestoredDocuments(key, modFolder, namedKeys))
             onDisk[formKey] = headBody;
 
-        return Reconcile(key, modFolder, onDisk, held, treeFullyRead: true, committedAlso: headMoved ? namedKeys : null, []);
+        // At an unmoved HEAD the committed rows stand as the last validation left them.
+        return Reconcile(key, modFolder, onDisk, held, treeFullyRead: true, validateCommitted: headMoved, []);
     }
-
-    // A new path declaring a record HEAD holds, with no named path giving it up: a copy, whose
-    // original only a whole-tree read sees.
-    private bool NamesACopy(PluginAddress key, IReadOnlyList<ChangedDocument> named) =>
-        named.Any(document =>
-            document.NewPath && document.WorkingTreeText is not null
-            && HeadBody(key, document.FormKey) is not null
-            && !named.Any(other => other.FormKey == document.FormKey && other.WorkingTreeText is null));
 
     // A document deleted in the working tree that git leaves unnamed is back at HEAD's path. HEAD
     // alone holds such a record, so HEAD's listing tells a document from an embedded child.
@@ -120,7 +104,7 @@ internal sealed class SourceValidation(
     // for every row derived from it.
     private ValidationReport Reconcile(
         PluginAddress key, string modFolder, IReadOnlyDictionary<string, string> onDisk,
-        Dictionary<string, string> held, bool treeFullyRead, IEnumerable<string>? committedAlso, List<string> failures)
+        Dictionary<string, string> held, bool treeFullyRead, bool validateCommitted, List<string> failures)
     {
         // A document the index never saw moves which records the plugin has, which only a rebuild
         // expresses; the report names the records gained. Concluded from a whole tree only.
@@ -147,11 +131,7 @@ internal sealed class SourceValidation(
             .Select(d => d.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        // Null at an unmoved HEAD, where the committed rows stand as the last validation left them.
-        // Every other record git names is a document, deleted in the working tree or not.
-        var goneAtHead = committedAlso is null
-            ? []
-            : ValidateCommitted(key, modFolder, held.Keys.Union(committedAlso, StringComparer.Ordinal), drifted, failures);
+        var goneAtHead = validateCommitted ? ValidateCommitted(key, modFolder, held.Keys, drifted, failures) : [];
 
         // Before the refresh: a record whose document left HEAD keeps its working-tree rows, and the
         // refresh below would otherwise re-read a committed baseline this is about to retire.
@@ -176,7 +156,7 @@ internal sealed class SourceValidation(
     }
 
     // The committed half, from one ls-tree rather than a git process per record: a document whose
-    // bytes are still a blob in that listing is clean at HEAD. Returns what the listing proves gone.
+    // bytes are still a blob in that listing is clean at HEAD. Returns what HEAD proves gone.
     private List<string> ValidateCommitted(
         PluginAddress key, string modFolder, IEnumerable<string> documents, HashSet<string> drifted, List<string> failures)
     {
@@ -194,8 +174,6 @@ internal sealed class SourceValidation(
         }
 
         var blobs = listing.Values.ToHashSet(StringComparer.Ordinal);
-        // Only records known to be documents. A record held at HEAD alone and named by no path could
-        // be an embedded child, so it fails closed.
         foreach (var formKey in documents)
         {
             if (HeadBody(key, formKey) is not { } headBody) continue;
@@ -204,6 +182,23 @@ internal sealed class SourceValidation(
 
             if (SourceRepository.PathCarrying(listing.Keys, key.Name, formKey) != null) drifted.Add(formKey);
             else goneAtHead.Add(formKey);
+        }
+
+        // A record HEAD alone holds may be an embedded child, which no path names, so HEAD's text
+        // answers for it.
+        var headOnly = DeletedInWorkingTree(key).Keys.ToList();
+        if (headOnly.Count > 0)
+        {
+            if (SourceRepository.Over(modFolder, release).HeldAtHead(key, headOnly) is { } heldAtHead)
+            {
+                goneAtHead.AddRange(headOnly.Where(formKey => !heldAtHead.Contains(formKey)));
+            }
+            else
+            {
+                failures.Add(
+                    $"Could not search the committed source tree of '{key.Name}' in '{modFolder}', so the " +
+                    "records only HEAD holds were not validated.");
+            }
         }
 
         if (goneAtHead.Count > 0 && logger.IsEnabled(LogLevel.Information))

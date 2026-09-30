@@ -1,5 +1,6 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -158,10 +159,10 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Equal("RenamedByHand", entry.Head.EditorId);
     }
 
-    // Read for the move of HEAD and failed: nothing vouches for it, so the next validation reads the
-    // whole tree though git names nothing.
+    // Refreshing the locked document throws, so that validation records no HEAD, and the next one
+    // names the commit again.
     [Fact]
-    public void ADocumentACommitChangedButThatCouldNotBeRead_IsReadByTheNextValidation()
+    public void ADocumentACommitChangedButThatCouldNotBeRead_IsRefreshedByTheNextValidation()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
@@ -171,6 +172,83 @@ public sealed class ValidateThroughGitTests : IDisposable
         Validate();
 
         Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+    }
+
+    // Committed, so git names it only once: a validation that reported it vouches for nothing, and
+    // the next reads the whole tree again.
+    [Fact]
+    public void ACommittedDocumentDeclaringNoRecord_IsReportedByEveryValidation()
+    {
+        var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
+        File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
+        _mod.Git("add", "--", GitPath(stray));
+        _mod.Git("commit", "-q", "-m", "a document declaring no FormKey");
+        Assert.NotEmpty(Validate().Failures);
+
+        Assert.NotEmpty(Validate().Failures);
+    }
+
+    // The tree gone, the rows come from the binary; the tree back at the same HEAD reads clean to
+    // git, so only a whole-tree read puts the tree's rows back.
+    [Fact]
+    public void ATreeRestoredAtTheSameHead_ReplacesTheBinarysRows()
+    {
+        _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
+        _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
+        Validate();
+        var tree = SourceRepository.RootIn(_mod.ModFolderOf(), _mod.Name);
+        Directory.Move(tree, tree + ".away");
+        Validate();
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+        Directory.Move(tree + ".away", tree);
+
+        Validate();
+
+        Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
+    }
+
+    // The first validation after an open reads the whole tree, and HEAD holds nothing for a
+    // record whose deletion was committed while the index was closed.
+    [Fact]
+    public void ADeletionCommittedBetweenOpens_LeavesNothingAtHead()
+    {
+        var instanceRoot = Directory.CreateTempSubdirectory("validate-through-git-instance-").FullName;
+        try
+        {
+            var file = NpcFile;
+            var text = File.ReadAllText(file);
+            using (var first = Indexes.Reconciled(_fixture, instanceRoot))
+            {
+                File.Delete(file);
+                first.ValidateIndex(_mod.KeyOf());
+            }
+            _mod.Git("commit", "-q", "-am", "a deletion committed while the index was closed");
+
+            using var second = Indexes.Reconciled(_fixture, instanceRoot);
+            File.WriteAllText(file, text);
+            second.ValidateIndex(_mod.KeyOf());
+
+            var listing = second.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+            Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
+        }
+        finally
+        {
+            Directory.Delete(instanceRoot, recursive: true);
+        }
+    }
+
+    // A staged move names the path it left as well as the one it made, so HEAD keeps the record.
+    [Fact]
+    public void AStagedRename_KeepsTheRecordAtHead()
+    {
+        var document = NpcFile;
+        var renamed = Path.Combine(Path.GetDirectoryName(document).Require(), Path.GetFileName(document).Replace("FixtureNpc - ", "Renamed - ", StringComparison.Ordinal));
+        _mod.Git("mv", GitPath(document), GitPath(renamed));
+
+        using var index = Indexes.Reconciled(_fixture);
+
+        var listing = index.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal(WorkingTreeState.None, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
     }
 
     [Fact]

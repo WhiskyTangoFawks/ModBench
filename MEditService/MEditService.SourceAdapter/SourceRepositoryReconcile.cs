@@ -26,25 +26,21 @@ public sealed partial class SourceRepository
         var documents = new List<DirtyDocument>();
         var needsStructuralPass = false;
 
-        // Which plugin's subtree a dirty path sits under — not a container-path grammar (ADR-0003).
-        var ownTreePrefix = $"{RootFor(plugin.Name)}{Path.DirectorySeparatorChar}";
+        if (WorkingTreeStatus(_modFolder, plugin.Name) is not { } status)
+            return new WorkingTreeDirt(documents, NeedsStructuralPass: true);
 
-        foreach (var gitPath in WorkingTreeStatus(_modFolder))
+        foreach (var (_, gitPath) in status)
         {
             // git speaks forward slashes on every platform; the layout splits on the platform's
             // own separator, so a raw porcelain path would simply never parse on Windows.
             var relativePath = gitPath.Replace('/', Path.DirectorySeparatorChar);
 
+            // Not a flat record file, such as a container's: the structural pass reconciles it.
             if (ParseDocumentPath(relativePath, _release) is not { } identity)
             {
-                // Not a flat record file: a path under this plugin's own tree (a container) defers to the
-                // structural pass; a path outside it carries nothing to reconcile.
-                needsStructuralPass |=
-                    relativePath.StartsWith(ownTreePrefix, StringComparison.OrdinalIgnoreCase);
+                needsStructuralPass = true;
                 continue;
             }
-
-            if (!identity.PluginFileName.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)) continue;
 
             var fullPath = Path.Combine(_modFolder, relativePath);
             var committedText = ReadCommittedSourceText(_modFolder, relativePath);

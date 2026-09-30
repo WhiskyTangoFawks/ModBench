@@ -23,6 +23,8 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Path.Combine("plugin-source", PluginName, "Npcs", $"FixtureNpc - 000800_{PluginName}.json");
     private static readonly string OtherRelativePath =
         Path.Combine("plugin-source", PluginName, "Npcs", $"OtherNpc - 000900_{PluginName}.json");
+    private static readonly string TwinRelativePath =
+        Path.Combine("plugin-source", PluginName, "Npcs", $"Twin - 000800_{PluginName}.json");
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-changes-since-").FullName;
     private readonly SourceRepository _repository;
@@ -75,7 +77,6 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
 
         Assert.Equal(NpcFormKey, only.FormKey);
         Assert.Equal(EditedBody, only.WorkingTreeText);
-        Assert.False(only.NewPath);
     }
 
     [Fact]
@@ -90,18 +91,14 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
     }
 
     [Fact]
-    public void ADocumentNoRefHolds_IsANewPath()
+    public void ADocumentNoRefHolds_IsNamed()
     {
         var created = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000A00_{PluginName}.json");
         File.WriteAllText(FullPath(created), "{\"FormKey\":\"000A00:Test.esp\",\"EditorID\":\"Created\"}");
 
-        var only = Assert.Single(Named());
-
-        Assert.Equal("000A00:Test.esp", only.FormKey);
-        Assert.True(only.NewPath);
+        Assert.Equal("000A00:Test.esp", Assert.Single(Named()).FormKey);
     }
 
-    // The rival: status alone, which reports a tree the commit left clean.
     [Fact]
     public void ACommitSinceTheValidatedHead_NamesWhatItChanged_ThoughTheTreeIsClean()
     {
@@ -116,10 +113,8 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Equal(Git("rev-parse", "HEAD").Trim(), changes.Head);
     }
 
-    // Removed from the commit and still in the working tree: the path was HEAD's at the validated
-    // HEAD, so it is no new path though git calls it untracked now.
     [Fact]
-    public void ADocumentCommittedOutOfHead_IsNotANewPath()
+    public void ADocumentCommittedOutOfHead_IsNamedWithItsText()
     {
         Git("rm", "-q", "--cached", GitPath(NpcRelativePath));
         Git("commit", "-q", "-m", "removed from the committed tree outside Modbench");
@@ -127,10 +122,9 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         var only = Assert.Single(Named());
 
         Assert.Equal(NpcFormKey, only.FormKey);
-        Assert.False(only.NewPath);
+        Assert.Equal(NpcBody, only.WorkingTreeText);
     }
 
-    // --no-renames: a staged move names the document it left as well as the one it made.
     [Fact]
     public void AStagedRename_NamesBothPaths()
     {
@@ -142,7 +136,7 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Equal(2, named.Count);
         Assert.All(named, d => Assert.Equal(NpcFormKey, d.FormKey));
         Assert.Contains(named, d => d.WorkingTreeText == null);
-        Assert.Contains(named, d => d.WorkingTreeText == NpcBody && d.NewPath);
+        Assert.Contains(named, d => d.WorkingTreeText == NpcBody);
     }
 
     [Fact]
@@ -184,12 +178,23 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
     }
 
     [Fact]
-    public void TwoNamedDocumentsDeclaringOneFormKey_AreAmbiguous()
+    public void ACopyUnderANameCarryingItsFormKey_NarrowsNothing()
     {
-        File.WriteAllText(FullPath(Path.Combine("plugin-source", PluginName, "Npcs", $"Twin - 000800_{PluginName}.json")), NpcBody);
-        File.WriteAllText(FullPath(NpcRelativePath), EditedBody);
+        File.WriteAllText(FullPath(TwinRelativePath), NpcBody);
 
-        Assert.Throws<AmbiguousSourceUnitException>(() => _repository.ChangesSince(Plugin, _validatedHead));
+        Assert.Null(_repository.ChangesSince(Plugin, _validatedHead).Documents);
+    }
+
+    // A path the commit added stays new to the validated HEAD, whatever status says of it since.
+    [Fact]
+    public void ACommittedCopyEditedSince_NarrowsNothing()
+    {
+        File.WriteAllText(FullPath(TwinRelativePath), NpcBody);
+        Git("add", "--", GitPath(TwinRelativePath));
+        Git("commit", "-q", "-m", "a copy committed outside Modbench");
+        File.WriteAllText(FullPath(TwinRelativePath), EditedBody);
+
+        Assert.Null(_repository.ChangesSince(Plugin, _validatedHead).Documents);
     }
 
     // Untracked files under an untracked folder: -uall lists each, where git would name the folder.

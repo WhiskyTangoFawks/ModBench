@@ -681,9 +681,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             {
                 _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
-            var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
-                ?? throw new InvalidOperationException(
-                    $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
+            var modFolder = ModFolderHoldingTree(plugin);
             SourceIngest.Ingest(
                 index, modFolder,
                 plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
@@ -710,6 +708,11 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
         IndexFromBinary(held, index, plugin);
     }
+
+    private static string ModFolderHoldingTree(PluginMetadata plugin) =>
+        LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
+            ?? throw new InvalidOperationException(
+                $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
 
     // ADR-0005 invariant 2: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
@@ -877,9 +880,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         {
             try
             {
-                var modFolder = LoadOrderSnapshot.ModFolderOf(metadata.Origin, metadata.Path)
-                    ?? throw new InvalidOperationException(
-                        $"'{metadata.Name}' from '{metadata.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
+                var modFolder = ModFolderHoldingTree(metadata);
                 SourceIngest.Ingest(
                     index, modFolder,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);

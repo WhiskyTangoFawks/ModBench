@@ -1,12 +1,12 @@
 using System.Text;
 using MEditService.LoadOrder;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A document git names as changed: the record it declares, its working-tree text (null
-/// when the working tree holds no file there), and whether the validated HEAD held nothing at its
-/// path.</summary>
-public sealed record ChangedDocument(string FormKey, string? WorkingTreeText, bool NewPath);
+/// <summary>A document git names as changed: the record it declares, and its working-tree text (null
+/// when the working tree holds no file there).</summary>
+public sealed record ChangedDocument(string FormKey, string? WorkingTreeText);
 
 /// <summary>HEAD now, null when git cannot read it, and the documents changed since the validated
 /// HEAD, null when git cannot narrow them and only a whole-tree read can say.</summary>
@@ -27,60 +27,104 @@ public sealed partial class SourceRepository
         var head = headOutput.Trim();
         if (validatedHead is null) return new TreeChanges(head, null);
 
-        if (ChangedPaths(gitDir, LiteralPathspec(RootFor(plugin.Name)), validatedHead, head) is not { } paths)
-            return new TreeChanges(head, null);
+        if (ChangedPaths(gitDir, plugin, validatedHead, head) is not { } paths) return new TreeChanges(head, null);
 
         var documents = new List<ChangedDocument>();
-        var holders = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (gitPath, newPath) in paths)
         {
-            var fullPath = Path.Combine(_modFolder, gitPath.Replace('/', Path.DirectorySeparatorChar));
+            var fullPath = Path.GetFullPath(Path.Combine(_modFolder, gitPath.Replace('/', Path.DirectorySeparatorChar)));
             // The whole-tree read's own rule for which files are documents.
             if (CarriesNoRecord(fullPath)) continue;
 
             if (!File.Exists(fullPath))
             {
-                var committed = CommittedText(gitDir, head, gitPath) ?? CommittedText(gitDir, validatedHead, gitPath);
+                var committed = ReadCommittedSourceText(_modFolder, gitPath, head)
+                    ?? ReadCommittedSourceText(_modFolder, gitPath, validatedHead);
                 if (committed is null || FormKeyDeclaredIn(committed, fullPath, plugin.Name) is not { } goneFormKey)
                     return new TreeChanges(head, null);
-                documents.Add(new ChangedDocument(goneFormKey, null, newPath));
+                documents.Add(new ChangedDocument(goneFormKey, null));
                 continue;
             }
 
-            string text;
-            try
-            {
-                text = Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(fullPath)));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return new TreeChanges(head, null);
-            }
-
-            // A name that does not carry the FormKey its text declares is a copy or a hand rename,
-            // and the tree's other document for that record is one git does not name.
-            if (FormKeyDeclaredIn(text, fullPath, plugin.Name) is not { } formKey
-                || PathCarrying([gitPath], plugin.Name, formKey) is null)
+            // A name not carrying the FormKey its text declares, or a new path beside another document
+            // naming that FormKey, is a copy or a hand rename whose twin git does not name.
+            if (ReadOrNull(fullPath) is not { } text
+                || FormKeyDeclaredIn(text, fullPath, plugin.Name) is not { } formKey
+                || !FormKey.TryFactory(formKey, out _)
+                || PathCarrying([gitPath], plugin.Name, formKey) is null
+                || (newPath && HoldsAnotherDocumentNaming(plugin, formKey, fullPath)))
             {
                 return new TreeChanges(head, null);
             }
-
-            OneDocumentPerFormKey.Claim(holders, formKey, fullPath, _modFolder);
-            documents.Add(new ChangedDocument(formKey, text, newPath));
+            documents.Add(new ChangedDocument(formKey, text));
         }
         return new TreeChanges(head, documents);
     }
 
-    // Each named path, and whether the validated HEAD held nothing at it. --no-renames names both
-    // ends of a move and -uall each file of an untracked folder. The whole-tree read counts
-    // ignored files, so status lists them.
-    private Dictionary<string, bool>? ChangedPaths(string gitDir, string pathspec, string validatedHead, string head)
+    /// <summary>Which of <paramref name="formKeys"/> HEAD holds, as a document or as a child another
+    /// document embeds; null when git cannot say. One git grep finds the committed files naming any
+    /// of them, and only those are read.</summary>
+    public IReadOnlySet<string>? HeldAtHead(PluginAddress plugin, IReadOnlyCollection<string> formKeys)
+    {
+        var held = new HashSet<string>(StringComparer.Ordinal);
+        var wanted = new Dictionary<FormKey, string>();
+        var header = HeaderFormKeyOf(plugin.Name);
+        foreach (var formKey in formKeys)
+        {
+            // The header's document declares a ModKey, so no committed text carries its FormKey.
+            if (formKey.Equals(header, StringComparison.OrdinalIgnoreCase))
+            {
+                if (ReadCommittedSourceText(_modFolder, HeaderDocumentFor(plugin.Name)) is not null) held.Add(formKey);
+            }
+            else if (FormKey.TryFactory(formKey, out var parsed))
+            {
+                wanted[parsed] = formKey;
+            }
+        }
+        if (wanted.Count == 0) return held;
+
+        var gitDir = Path.Combine(_modFolder, ".git");
+        string[] args =
+        [
+            "grep", "-l", "-z", "-i", "-F", .. wanted.Values.SelectMany(formKey => new[] { "-e", formKey }),
+            "HEAD", "--", LiteralPathspec(RootFor(plugin.Name)),
+        ];
+        // git grep exits 1 when nothing matched.
+        switch (GitCli.RunForExitCode(gitDir, _modFolder, out var files, args))
+        {
+            case 1: return held;
+            case not 0: return null;
+        }
+
+        const string treePrefix = "HEAD:";
+        foreach (var hit in files.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var gitPath = hit[treePrefix.Length..];
+            if (ReadCommittedSourceText(_modFolder, gitPath) is not { } text) return null;
+
+            if (FormKeyDeclaredIn(text, gitPath, plugin.Name) is { } declared
+                && FormKey.TryFactory(declared, out var own) && wanted.TryGetValue(own, out var document))
+            {
+                held.Add(document);
+            }
+            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(text), _release))
+            {
+                if (inAnEmbedSlot && FormKey.TryFactory(formKey, out var parsed) && wanted.TryGetValue(parsed, out var child))
+                    held.Add(child);
+            }
+        }
+        return held;
+    }
+
+    // Each named path, and whether the validated HEAD held nothing at it.
+    private Dictionary<string, bool>? ChangedPaths(string gitDir, PluginAddress plugin, string validatedHead, string head)
     {
         var paths = new Dictionary<string, bool>(StringComparer.Ordinal);
         if (head != validatedHead)
         {
             if (!GitCli.TryRun(gitDir, _modFolder, out var diff,
-                    "diff-tree", "-r", "-z", "--no-renames", "--name-status", validatedHead, head, "--", pathspec))
+                    "diff-tree", "-r", "-z", "--no-renames", "--name-status", validatedHead, head,
+                    "--", LiteralPathspec(RootFor(plugin.Name))))
             {
                 return null;
             }
@@ -88,21 +132,13 @@ public sealed partial class SourceRepository
             for (var i = 0; i + 1 < fields.Length; i += 2) paths[fields[i + 1]] = fields[i] == "A";
         }
 
-        if (!GitCli.TryRun(gitDir, _modFolder, out var status,
-                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored", "--", pathspec))
-        {
-            return null;
-        }
-        foreach (var entry in status.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (entry.Length < 4) continue;
-            // HEAD holds nothing at an untracked, ignored or newly staged path, and neither did the
-            // validated HEAD unless diff-tree already named it.
-            paths.TryAdd(entry[3..], entry[0] is '?' or '!' or 'A');
-        }
+        if (WorkingTreeStatus(_modFolder, plugin.Name) is not { } status) return null;
+        // HEAD holds nothing at an untracked, ignored or newly staged path.
+        foreach (var (code, gitPath) in status) paths.TryAdd(gitPath, code is '?' or '!' or 'A');
         return paths;
     }
 
-    private string? CommittedText(string gitDir, string commit, string gitPath) =>
-        GitCli.TryRun(gitDir, _modFolder, out var text, "cat-file", "-p", $"{commit}:{gitPath}") ? text : null;
+    private bool HoldsAnotherDocumentNaming(PluginAddress plugin, string formKey, string fullPath) =>
+        DocumentsNaming(Path.Combine(_modFolder, RootFor(plugin.Name)), formKey)
+            .Any(other => File.Exists(other) && !Path.GetFullPath(other).Equals(fullPath, StringComparison.Ordinal));
 }
