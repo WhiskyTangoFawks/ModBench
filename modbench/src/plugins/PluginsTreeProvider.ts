@@ -38,7 +38,7 @@ const noRecordBrowser = (): [ErrorNode] => [new ErrorNode(NO_RECORD_BROWSER)];
 const NO_DATA_FOLDER_FILE = (): string | undefined => undefined;
 const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
 
-/** `reorderPlugins`, bound to the instance root and the active profile by the composition root;
+/** `reorderPlugins`, bound to the instance and the active profile by the composition root;
  *  a refused command reaches this provider as a rejection. Enable/disable reaches its own core
  *  directly, never through the tree. */
 export interface PluginListSource {
@@ -835,12 +835,12 @@ export class PluginsTreeProvider
     const { names } = payload.value;
     const drop = this.dropFor(target, names);
     if (drop === undefined) return;
-    const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
-    if (refusal !== undefined) {
-      this.reporter?.report('error', 'Could not move plugins.', refusal);
-      return;
-    }
     try {
+      const refusal = moveOrderRefusal(this.lastOrder.map((line) => line.name), names, drop, this.orderFacts());
+      if (refusal !== undefined) {
+        this.reporter?.report('error', 'Could not move plugins.', refusal);
+        return;
+      }
       await this.source.reorderPlugins(names, drop);
     } catch (e) {
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
