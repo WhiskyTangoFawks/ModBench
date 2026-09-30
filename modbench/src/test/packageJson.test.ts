@@ -655,7 +655,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
-      ['modbench.plugin.track', '4_sourceControl'],
+      ['modbench.mod.track', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
     expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
@@ -752,7 +752,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   // not a quick inline action.
   it('never offers track as an inline or title icon', () => {
     const icons = [...inPluginsView('view/item/context'), ...inPluginsView('view/title')]
-      .filter((e) => e.command === 'modbench.plugin.track' && (e.group === 'inline' || e.group?.startsWith('navigation')));
+      .filter((e) => e.command === 'modbench.mod.track' && (e.group === 'inline' || e.group?.startsWith('navigation')));
     expect(icons).toEqual([]);
   });
 });
@@ -906,6 +906,35 @@ describe('package.json compile on the record tab', () => {
   });
 });
 
+// commands.md, Principles: a palette entry takes the focused view's selection. Track is offered from
+// Mods and from Plugins, each only while it is the view last selected in, whose selection the
+// command takes.
+describe('package.json track\'s palette entry', () => {
+  it('is in the palette while Mods or Plugins has focus, was last selected in, and holds what track acts on', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.mod.track');
+    expect(entries.map((e) => e.when)).toEqual([
+      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.holdsModWithPlugin`
+      + ' && modbench.mod.trackRowsIn == modbench.modList'
+      + ` || focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && modbench.plugin.allUntrackedInMod`
+      + ' && modbench.mod.trackRowsIn == modbench.pluginListTree',
+    ]);
+  });
+});
+
+// editor.md, Menus and keys: the column header offers track on an untracked plugin's mod, before
+// compile.
+describe('package.json track on the record tab', () => {
+  it('is on the column header\'s menu of a trackable plugin, ahead of compile', () => {
+    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+    const headerMenu = webviewMenu.filter((e) => e.when.includes('recordHeader'));
+    expect(headerMenu.map((e) => e.command).slice(0, 2)).toEqual(['modbench.mod.track', 'modbench.plugin.compile']);
+    expect(headerMenu.filter((e) => e.command === 'modbench.mod.track').map((e) => e.when)).toEqual([
+      String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && trackable`,
+    ]);
+  });
+});
+
 // editor.md, Menus and keys: the column header offers copy…, which picks the mode itself.
 describe('package.json copy on the record tab', () => {
   it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
@@ -930,7 +959,6 @@ describe('package.json compile\'s palette entry', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
-    ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
     ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
     ['modbench.record.copy', 'modbench.plugin.allRecords'],
@@ -1089,7 +1117,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
-  it('mod menu: open, change, create, copy, then destroy, with source control left to track', () => {
+  it('mod menu: open, change, create, source control, copy, then destroy', () => {
     expect(placed(rowMenu(MOD_ROW))).toEqual([
       ['modbench.mod.openFolder', '1_open'],
       ['modbench.mod.viewOnNexus', '1_open'],
@@ -1099,9 +1127,16 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.separator.add', '3_create'],
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
+      ['modbench.mod.track', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
       ['modbench.mod.uninstall', '6_destroy'],
     ]);
+  });
+
+  it('mod menu: track only on a mod that holds a plugin', () => {
+    const track = present(rowMenu(MOD_ROW).find((e) => e.command === 'modbench.mod.track'), 'the mod menu\'s track');
+    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin' })).toBe(true);
+    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled' })).toBe(false);
   });
 
   it('mod menu: enable and disable share one slot', () => {
@@ -1234,7 +1269,6 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     ids: ['modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
     outOfPalette: ['modbench.openHeader'],
   },
-  { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },
   { gesture: 'show referenced by', removedBy: '#1096', ids: ['modbench.record.showReferencedBy'], outOfPalette: [] },
   {
     gesture: 'copy value and the name filter', removedBy: '#1096',

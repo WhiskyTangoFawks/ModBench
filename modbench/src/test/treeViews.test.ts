@@ -76,7 +76,9 @@ vi.mock('vscode', () => ({
 
 import { Instance } from '../instanceLoader/instance';
 import { ModListProvider, ModNode, SeparatorNode } from '../mods/ModListProvider';
-import { createModListView, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps } from '../treeViews';
+import {
+  createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView, type DownloadsViewDeps,
+} from '../treeViews';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 import { present } from '../ports/present';
@@ -459,26 +461,27 @@ describe('the Downloads view tells its palette entries what the selection holds'
   });
 });
 
+type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
+function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
+  const listeners: ((e: SelectionChange) => void)[] = [];
+  const view = {
+    selection: [] as readonly unknown[],
+    select(rows: readonly unknown[]) {
+      view.selection = rows;
+      for (const listener of listeners) listener({ selection: rows });
+    },
+    onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
+      listeners.push(listener);
+      return { dispose() { /* no-op */ } };
+    },
+  };
+  return view;
+}
+
 // commands.md, No dead entries: a gesture is absent, not refused, where its condition is false, so
 // the palette offers view on Nexus exactly on the view whose row it opens.
 describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
   const KEY = 'modbench.mod.nexusRowIn';
-  type SelectionChange = vscode.TreeViewSelectionChangeEvent<unknown>;
-  function fakeView(): { selection: readonly unknown[]; select(rows: readonly unknown[]): void; onDidChangeSelection: vscode.Event<SelectionChange> } {
-    const listeners: ((e: SelectionChange) => void)[] = [];
-    const view = {
-      selection: [] as readonly unknown[],
-      select(rows: readonly unknown[]) {
-        view.selection = rows;
-        for (const listener of listeners) listener({ selection: rows });
-      },
-      onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
-        listeners.push(listener);
-        return { dispose() { /* no-op */ } };
-      },
-    };
-    return view;
-  }
 
   it('offers it on the view whose one selected row it opens, and nowhere while that row has no Nexus id', () => {
     const mods = fakeView();
@@ -498,5 +501,25 @@ describe('view on Nexus from the palette: the row it opens and the view the pale
     expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual(['modbench.downloads', nexusFile]);
     mods.select([nexusMod, new ModNode({ kind: 'mod', name: 'Also', enabled: true, nexusId: '43' })]);
     expect([h.state.contextKeys.get(KEY), nexusRow()]).toEqual([undefined, undefined]);
+  });
+});
+
+// commands.md, Principles: a palette entry takes the focused view's selection. No stable API names
+// the focused view, so the entry is offered only on the view last selected in, which the key names.
+describe('a palette gesture two views offer: the selection of the view last selected in', () => {
+  const KEY = 'modbench.mod.trackRowsIn';
+
+  it('takes the selection of the view last selected in, and names that view in its key', () => {
+    const mods = fakeView();
+    const plugins = fakeView();
+    const selection = lastSelectedViewSelection(own, [
+      { id: 'modbench.modList', view: mods }, { id: 'modbench.pluginListTree', view: plugins },
+    ], KEY);
+
+    expect([h.state.contextKeys.get(KEY), selection()]).toEqual([undefined, []]);
+    mods.select(['ModA', 'ModB']);
+    expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.modList', ['ModA', 'ModB']]);
+    plugins.select(['First.esp']);
+    expect([h.state.contextKeys.get(KEY), selection()]).toEqual(['modbench.pluginListTree', ['First.esp']]);
   });
 });

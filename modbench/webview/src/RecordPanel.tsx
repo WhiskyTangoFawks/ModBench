@@ -53,9 +53,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // ADR-0013: a plugin the load order doesn't name drives the header's dimming and tooltip wording
   // independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0007: starts empty and stays empty until a load says otherwise — fail-closed, so a panel
-  // that has not heard from /plugins offers no editing rather than edits that cannot land.
-  const [trackedSet, setTrackedSet] = useState<Set<ColumnKey>>(new Set());
+  // ADR-0007: null until /plugins answers, and null again when it fails — fail-closed, so a panel
+  // that has not heard from /plugins offers no editing, compile or track rather than gestures that
+  // cannot land.
+  const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
   // lands (the `!result` early return renders "Loading…" until then), so it can never read as a
   // false "settled".
@@ -86,7 +87,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key)
+    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet?.has(key) === true
     && !o.isPartialForm && o.parseDiagnosis == null),
     [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
@@ -127,10 +128,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
-      // `??`, not a truthiness guard like the two above — this one has to degrade to "nothing is
-      // editable", so a null must actively clear the set rather than leave a previous record's
-      // answer standing.
-      setTrackedSet(loaded.trackedSet ?? new Set());
+      // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
+      // unknown state reads as neither tracked nor untracked.
+      setTrackedSet(loaded.trackedSet);
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
@@ -387,6 +387,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   // context still gets the real plugin+origin pair, never the compound key.
                   const isCollapsed = collapsedColumns.has(col.key);
                   const isImmutable = immutableSet.has(col.key);
+                  const tracked = trackedSet?.has(col.key);
                   // ADR-0013: the column's own load-order membership drives both the header's
                   // reason wording and the dimming that carries down through every cell in this
                   // column — "non-participating plugins render dimmed".
@@ -404,7 +405,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         override={col.override}
                         isImmutable={isImmutable}
                         inLoadOrder={inLoadOrder}
-                        isTracked={trackedSet.has(col.key)}
+                        isTracked={tracked === true}
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
@@ -414,7 +415,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(
                             col.override.formKey, col.override.plugin, col.override.origin,
-                            trackedSet.has(col.key) && !isImmutable,
+                            { compilable: tracked === true && !isImmutable, trackable: tracked === false && !isImmutable },
                           ),
                         )}
                         // The annotated synthetic member is the one sanctioned header-flag write —
