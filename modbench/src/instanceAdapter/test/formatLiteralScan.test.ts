@@ -236,7 +236,7 @@ describe('format literals', () => {
   });
 });
 
-// ── MO2's layout: directory and file names ────────────────────────────────
+// ── The layout: directory and file names ──────────────────────────────────
 
 // A module specifier names this repo's own tree, never the MO2 instance; a literal type, as in
 // `Pick<InstanceValue, 'mods'>`, names a property.
@@ -292,7 +292,7 @@ function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   return leaks;
 }
 
-describe('mo2 layout names', () => {
+describe('layout names', () => {
   // Rival: a name dropped from its owner, which frees every other file to spell it again with
   // the production assertion still green.
   it('every name is spelled by each file that owns it', () => {
