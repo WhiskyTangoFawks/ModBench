@@ -20,7 +20,12 @@ function assertRefusal(result: DownloadsCommandResult, expectedSubstring: string
 // tmpdirs made this test, removed in afterEach even when an assertion above the cleanup failed.
 let roots: string[] = [];
 
+// Paths a test chmod'd read-only, restored writable before their tmpdir is removed.
+let lockedPaths: string[] = [];
+
 afterEach(async () => {
+  await Promise.all(lockedPaths.map((path) => chmod(path, 0o644)));
+  lockedPaths = [];
   await Promise.all(roots.map((downloadsDir) => rm(downloadsDir, { recursive: true, force: true })));
   roots = [];
 });
@@ -107,12 +112,9 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nremoved=true\r\n');
     await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
-    } finally {
-      await chmod(sidecar, 0o644);
-    }
+    expect(await excludeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
   });
 
   it('including an already included download writes nothing — a locked sidecar still applies', async () => {
@@ -120,12 +122,9 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nremoved=false\r\n');
     await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      expect(await includeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
-    } finally {
-      await chmod(sidecar, 0o644);
-    }
+    expect(await includeDownload(downloadsDir, 'foo.7z')).toEqual({ applied: true, wrote: false });
   });
 
   // Confirms the two locked-sidecar tests above actually exercise a write path: the same lock,
@@ -135,13 +134,10 @@ describe('excludeDownload / includeDownload', () => {
     await writeArchive(downloadsDir, 'foo.7z');
     const sidecar = await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\n');
     await chmod(sidecar, 0o444);
+    lockedPaths.push(sidecar);
 
-    try {
-      const outcome = await excludeDownload(downloadsDir, 'foo.7z');
-      expect(outcome.applied).toBe(false);
-    } finally {
-      await chmod(sidecar, 0o644);
-    }
+    const outcome = await excludeDownload(downloadsDir, 'foo.7z');
+    expect(outcome.applied).toBe(false);
   });
 
   it('excluding a file gone from disk is refused, naming it, and touches no sidecar', async () => {

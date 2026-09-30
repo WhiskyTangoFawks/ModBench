@@ -3,7 +3,7 @@
 
 import { join, relative, sep } from 'node:path';
 import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
-import { modDir } from '../instanceAdapter/layout';
+import { isTempWrite, modDir } from '../instanceAdapter/layout';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { factsOf, listDir } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
@@ -111,9 +111,9 @@ async function walk(
   const dirents = await listDir(dir);
   const results: { relativePath: string; absolutePath: string }[] = [];
   for (const dirent of dirents) {
-    // Dot-prefixed at any depth, any dirent kind — checked first, ahead of every other
-    // rule, since it needs none of their context (root-relative or not, file or directory).
-    if (isDotPrefixed(dirent.name)) continue;
+    // Dot-prefixed, or one of files.ts's own temp files — at any depth, any dirent kind,
+    // checked first, ahead of every other rule, since neither needs any of their context.
+    if (isDotPrefixed(dirent.name) || isTempWrite(dirent.name)) continue;
     const absolutePath = join(dir, dirent.name);
     if (dirent.isDirectory()) {
       if (isExcludedSourceDirectory(dirent.name, dir, root)) continue;
