@@ -14,6 +14,10 @@ type Schemas = components['schemas'];
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
+/** `GET /records/{formKey}/compare`: one record as every active plugin has it, carried
+ *  untransformed — the record panel's own consumer narrows `FieldMetadata.type` further. */
+export type CompareResult = Schemas['CompareResult'];
+
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackPhase = Schemas['TrackPhase'];

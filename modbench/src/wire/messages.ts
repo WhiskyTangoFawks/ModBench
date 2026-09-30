@@ -8,6 +8,9 @@ export const EXTENSION_TO_WEBVIEW = {
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
+  // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
+  // winner sweep has run, posted untransformed (ADR-0002 invariant 2 — the webview names no port).
+  RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -19,9 +22,8 @@ export const WEBVIEW_TO_EXTENSION = {
   // (webview clipboard access isn't guaranteed), so the webview posts the already-computed model
   // value up. Fire-and-forget: nothing comes back.
   COPY_TO_CLIPBOARD: 'copyToClipboard',
-  // ADR-0007: routed through the extension host rather than posted to the backend the way a
-  // *read* is, because an edit can be refused and a refusal has to become a native notification
-  // (ADR-0019).
+  // ADR-0007: routed through the extension host because an edit can be refused and a refusal has
+  // to become a native notification (ADR-0019).
   EDIT_FIELD: 'editField',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
@@ -29,6 +31,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // commands.md, Record: a field gesture from the palette acts on the focused cell, which only the
   // panel knows. `context` is what its right-click hands a command; `null` is no focused cell.
   FOCUS_CELL: 'focusCell',
+  // RecordPanelClient's own read, asked of the host's mEdit client rather than fetched by the
+  // webview itself. `requestId` pairs the reply.
+  REQUEST_RECORD_LOAD: 'requestRecordLoad',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -47,7 +52,8 @@ export type WebviewToExtension =
       envelope: RecordEditEnvelope;
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null };
+  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null }
+  | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
 
 // A `data-vscode-context` payload VS Code hands the invoked command, never a `postMessage` — hence
 // beside the message unions. `path` is the envelope's own wire path, resolved cell-side
@@ -134,10 +140,23 @@ export interface StringValueContext {
   preventDefaultContextMenuItems: true;
 }
 
+/** RecordPanelClient's own read, carried untransformed — the webview still derives its own column
+ *  sets from `plugins` (ADR-0005 invariant 6). `plugins` is null exactly when that one read
+ *  failed, degrading only that slice. */
+export type RecordLoadAnswer =
+  | {
+      ok: true;
+      compare: components['schemas']['CompareResult'];
+      plugins: components['schemas']['PluginResponse'][] | null;
+      conflictsComputed: boolean;
+    }
+  | { ok: false; error: string };
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
-  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
+  | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer);
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -207,6 +226,12 @@ function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
   return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context };
 }
 
+function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.requestId)) throw new Error('Expected "requestRecordLoad" to carry a string requestId.');
+  if (!isString(w.formKey)) throw new Error('Expected "requestRecordLoad" to carry a string formKey.');
+  return { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: w.requestId, formKey: w.formKey };
+}
+
 /** The webview message router's one entry point for data crossing `postMessage`: every
  *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
  *  Throws when the discriminant or a required field doesn't match what the type demands. */
@@ -222,9 +247,54 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
+    case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
     default:
       throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
   }
+}
+
+// Shallow: compare/plugins are the schema's own nested shapes, trusted once the envelope checks
+// out. A type predicate narrows unknown without an `as` cast.
+function isCompareResultShape(value: unknown): value is components['schemas']['CompareResult'] {
+  return typeof value === 'object' && value !== null;
+}
+
+function isPluginResponseArray(value: unknown): value is components['schemas']['PluginResponse'][] {
+  return Array.isArray(value);
+}
+
+function parseLoadRecord(w: { formKey?: unknown }): ExtensionToWebview {
+  if (!isString(w.formKey)) throw new Error('Expected "loadRecord" to carry a string formKey.');
+  return { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: w.formKey };
+}
+
+function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): ExtensionToWebview {
+  if (!isString(w.requestId)) throw new Error('Expected "formKeyPicked" to carry a string requestId.');
+  if (w.formKey !== null && !isString(w.formKey)) {
+    throw new Error('Expected "formKeyPicked" to carry a string or null formKey.');
+  }
+  return { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: w.requestId, formKey: w.formKey };
+}
+
+function parseRecordLoadAnswer(w: {
+  requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; error?: unknown;
+}): { requestId: string } & RecordLoadAnswer {
+  if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
+  if (w.ok === false) {
+    if (!isString(w.error)) throw new Error('Expected a refused "recordLoadAnswered" to carry a string error.');
+    return { requestId: w.requestId, ok: false, error: w.error };
+  }
+  if (w.ok !== true) throw new Error('Expected "recordLoadAnswered" to carry a boolean ok.');
+  if (!isCompareResultShape(w.compare)) {
+    throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object.');
+  }
+  if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
+    throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');
+  }
+  if (typeof w.conflictsComputed !== 'boolean') {
+    throw new Error('Expected "recordLoadAnswered" to carry a boolean conflictsComputed.');
+  }
+  return { requestId: w.requestId, ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed };
 }
 
 /** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
@@ -233,22 +303,15 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   if (typeof value !== 'object' || value === null) {
     throw new Error(`Expected an extension-to-webview message object, got ${typeof value}.`);
   }
-  const w = value as { type?: unknown; formKey?: unknown; requestId?: unknown };
+  const w = value as {
+    type?: unknown; formKey?: unknown; requestId?: unknown;
+    ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; error?: unknown;
+  };
   switch (w.type) {
-    case EXTENSION_TO_WEBVIEW.LOAD_RECORD:
-      if (!isString(w.formKey)) throw new Error('Expected "loadRecord" to carry a string formKey.');
-      return { type: w.type, formKey: w.formKey };
-
-    case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED:
-      return { type: w.type };
-
-    case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED:
-      if (!isString(w.requestId)) throw new Error('Expected "formKeyPicked" to carry a string requestId.');
-      if (w.formKey !== null && !isString(w.formKey)) {
-        throw new Error('Expected "formKeyPicked" to carry a string or null formKey.');
-      }
-      return { type: w.type, requestId: w.requestId, formKey: w.formKey };
-
+    case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
+    case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED: return { type: w.type };
+    case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
+    case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     default:
       throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
   }

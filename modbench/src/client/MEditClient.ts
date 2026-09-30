@@ -6,7 +6,7 @@ import {
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellReferences, type CellSummary,
   type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type PluginLoadFailure,
+  type PluginLoadFailure, type CompareResult,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
@@ -175,6 +175,9 @@ export interface MEditClient {
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
+  /** One record as every active plugin has it: the record panel's host asks for this and posts it
+   *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). */
+  getComparison(formKey: string): Promise<CompareResult>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
@@ -213,5 +216,5 @@ export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
-  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure,
+  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult,
 };

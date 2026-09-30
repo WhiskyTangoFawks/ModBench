@@ -3,7 +3,6 @@ import { buildWebviewHtml } from '../webviewHtml';
 
 const BASE_PARAMS = {
   formKey: 'Fallout4.esm:001234',
-  port: 5172,
   scriptUri: 'vscode-webview://host/main.js',
   cspSource: 'vscode-webview-resource:',
   panelId: 'panel-7',
@@ -22,10 +21,9 @@ describe('buildWebviewHtml', () => {
     expect(html).toContain(`<script nonce="${nonceInCsp}">`);
   });
 
-  it('sets mEditFormKey and mEditBackendPort in the inline script', () => {
+  it('sets mEditFormKey in the inline script', () => {
     const html = buildWebviewHtml(BASE_PARAMS);
     expect(html).toContain('window.mEditFormKey = "Fallout4.esm:001234"');
-    expect(html).toContain('window.mEditBackendPort = 5172');
   });
 
   // A webview right-click hands its command the contexts merged from the document root down, so
@@ -42,5 +40,13 @@ describe('buildWebviewHtml', () => {
     const nonce1 = html1.match(/'nonce-([A-Za-z0-9+/]+=*)'/)?.[1];
     const nonce2 = html2.match(/'nonce-([A-Za-z0-9+/]+=*)'/)?.[1];
     expect(nonce1).not.toBe(nonce2);
+  });
+
+  // ADR-0002 invariant 2: nothing outside the mEdit client names the port. The record panel now
+  // reads through its host, so the webview never learns the backend's port at all.
+  it('names no backend port, and no connect-src to localhost', () => {
+    const html = buildWebviewHtml(BASE_PARAMS);
+    expect(html).not.toContain('mEditBackendPort');
+    expect(html).not.toMatch(/connect-src[^;]*localhost/);
   });
 });

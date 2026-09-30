@@ -21,9 +21,10 @@ import {
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
-import type { RecordSummary } from '../../client';
+import type { RecordSummary, CompareResult } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
+import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 
@@ -55,6 +56,8 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     focusCell: vi.fn(),
+    reply: vi.fn(),
+    conflictsComputed: () => true,
     ...overrides,
   };
 }
@@ -609,5 +612,60 @@ describe('routeRecordPanelMessage — the focused cell', () => {
     await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null }, makeDeps({ focusCell }));
 
     expect(focusCell.mock.calls).toEqual([[context], [undefined]]);
+  });
+});
+
+// ADR-0002 invariant 2: RecordPanelClient's own read, asked of the mEdit client through the host
+// rather than fetched by the webview itself.
+describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
+  const compare: CompareResult = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
+  const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
+  const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' };
+
+  it('answers with the comparison, the plugin list and the settled conflictsComputed', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const reply = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => true }));
+
+    expect(reply).toHaveBeenCalledWith({
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true,
+    });
+  });
+
+  it('asks the comparison by the message\'s own formKey', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply: vi.fn() }));
+
+    expect(meditClient.calls).toContainEqual({ method: 'getComparison', args: ['000001:A.esp'] });
+  });
+
+  it('fails the whole load when the comparison itself fails', async () => {
+    meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const reply = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply }));
+
+    expect(reply).toHaveBeenCalledWith({
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'ECONNREFUSED',
+    });
+  });
+
+  // The rival: a client that fails the whole load when only the plugin list's own read fails,
+  // rather than degrading that one slice to null.
+  it('degrades the plugin list to null, rather than failing the load, when only it fails', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+    const reply = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => false }));
+
+    expect(reply).toHaveBeenCalledWith({
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false,
+    });
   });
 });

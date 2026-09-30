@@ -1,6 +1,6 @@
 export {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview,
-  type WebviewToExtension, type ExtensionToWebview, type LogLevel,
+  type WebviewToExtension, type ExtensionToWebview, type LogLevel, type RecordLoadAnswer,
   type ArrayElementContext, type ArrayParentContext,
   type ColumnHeaderContext, type StringValueContext, type PathHop, type PathSegment, type RecordEditEnvelope,
 } from '../../src/wire/messages';
