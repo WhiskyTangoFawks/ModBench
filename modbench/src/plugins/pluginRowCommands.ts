@@ -68,9 +68,8 @@ export interface TrackDeps {
   modOfRow: (value: unknown) => string | undefined;
 }
 
-/** commands.md, `track`: the mods, from a Mods row, a plugin row or a record tab's column header,
- *  each sent to mEdit as its plugins, in one call and one pick. From the palette, the selection of
- *  the view last selected in. */
+/** commands.md, `track`: the mods of Mods rows, plugin rows, a column header, or the palette's
+ *  selection, each sent to mEdit as its plugins, in one call and one pick. */
 export function registerTrackCommand(deps: TrackDeps, paletteSelection: () => readonly unknown[]): vscode.Disposable {
   return vscode.commands.registerCommand(
     'modbench.mod.track',
