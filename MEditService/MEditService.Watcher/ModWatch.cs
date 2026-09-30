@@ -49,6 +49,7 @@ internal sealed class ModWatch : IDisposable
     private readonly Dictionary<string, PluginEntry> _plugins = new(StringComparer.Ordinal);
     private bool _batchOpen;
     private bool _modTouched;
+    private bool _tracked;
     private bool _disposed;
 
     /// <summary>Throws <see cref="ArgumentException"/> when the folder is not on disk, as
@@ -119,6 +120,18 @@ internal sealed class ModWatch : IDisposable
     public void ClearRegistrations()
     {
         lock (_lock) _plugins.Clear();
+    }
+
+    /// <summary>Records whether the mod is tracked, answering whether that moved since the last
+    /// record: a mod whose repository came or went is settled again.</summary>
+    public bool TrackedChanged(bool tracked)
+    {
+        lock (_lock)
+        {
+            var changed = tracked != _tracked;
+            _tracked = tracked;
+            return changed;
+        }
     }
 
     /// <summary>Upgraded, never downgraded: the folder holds a source tree or a repository, so
@@ -203,8 +216,9 @@ internal sealed class ModWatch : IDisposable
             {
                 foreach (var plugin in _plugins.Values) plugin.WholePlugin = true;
             }
-            else if (Under(_git.GitDirectory, fullPath))
+            else if (Inside(_git.GitDirectory, fullPath))
             {
+                // Only what is inside: the repository itself coming or going settles the mod.
                 return;
             }
             else if (_plugins.Values.FirstOrDefault(p => Under(p.SourceRoot, fullPath)) is { } sourcePlugin)
@@ -257,8 +271,10 @@ internal sealed class ModWatch : IDisposable
         || Under(_git.RefsDirectory, fullPath);
 
     private static bool Under(string directory, string fullPath) =>
-        fullPath.Equals(directory, StringComparison.Ordinal)
-        || fullPath.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        fullPath.Equals(directory, StringComparison.Ordinal) || Inside(directory, fullPath);
+
+    private static bool Inside(string directory, string fullPath) =>
+        fullPath.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
     // Closing the batch under the lock is what stops a callback already queued from touching a
     // disposed timer: it finds no window open and leaves.

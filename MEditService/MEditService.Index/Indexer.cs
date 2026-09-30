@@ -958,6 +958,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private bool RefreshBinaryNow(PluginAddress key, string path)
     {
+        RetryFailedReconcile();
+
         if (!File.Exists(path))
         {
             var wasIndexed = IndexedContentHash(key) is not null;
@@ -973,6 +975,15 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
 
         return IndexNotYetHeld(key);
+    }
+
+    // plugins.md, States, story 6: the next change to the instance tries a failed reconcile again,
+    // once per change heard.
+    private void RetryFailedReconcile()
+    {
+        bool failed;
+        lock (_lock) failed = _failureMessage is not null;
+        if (failed) ReconcileHeld();
     }
 
     // A plugin the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
@@ -1090,14 +1101,15 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence).Dispose();
 
         return Task.Factory.StartNew(
-            RefillUnlessDisposed, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
+            ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
     }
 
-    private void RefillUnlessDisposed()
+    // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
+    // reconcile opens a store after Dispose.
+    private void ReconcileHeld() => Reconcile(() =>
     {
-        lock (_lock) if (_disposed) return;
-        Reconcile(() => _holder.Held);
-    }
+        lock (_lock) return _disposed ? null : _holder.Held;
+    });
 
     // Drops the scope: the plugins it has open and the store's connection. Cancels an in-flight
     // reconcile and waits for it to stop first. The kernel's load order is its own and is untouched.

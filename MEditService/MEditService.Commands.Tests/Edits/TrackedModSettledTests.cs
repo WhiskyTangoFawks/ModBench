@@ -146,14 +146,18 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal([], TheExternalChange().Plugins);
     }
 
+    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so a mod whose
+    // repository went clears what its last settle named.
     [Fact]
-    public void ASettle_PublishesNothing_ForAnUntrackedFolder()
+    public void ASettle_NamesNoPlugin_ForAnUntrackedFolder()
     {
         var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
-        Assert.Empty(_notifications.Notifications);
+        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
+        Assert.Equal(Origin, notice.Origin);
+        Assert.Empty(notice.Plugins);
     }
 
     // ADR-0003 invariant 3: Modbench keeps nothing about the change.

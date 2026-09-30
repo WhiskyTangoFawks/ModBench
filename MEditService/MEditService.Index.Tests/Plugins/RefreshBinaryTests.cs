@@ -18,14 +18,15 @@ public sealed class RefreshBinaryTests : IDisposable
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-refresh-binary-instance-").FullName;
     private const string PluginName = "Untracked.esp";
     private const string Origin = "UntrackedMod";
+    private readonly string _modFolder;
     private readonly string _pluginPath;
     private readonly PluginAddress _key = new(PluginName, Origin);
 
     public RefreshBinaryTests()
     {
         _index = Indexes.Open(_holder);
-        var modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
-        _pluginPath = Path.Combine(modFolder, PluginName);
+        _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
+        _pluginPath = Path.Combine(_modFolder, PluginName);
     }
 
     public void Dispose()
@@ -124,6 +125,43 @@ public sealed class RefreshBinaryTests : IDisposable
 
         var identicalBytesResettling = await _index.RefreshBinary(_key, _pluginPath);
         Assert.False(identicalBytesResettling);
+    }
+
+    // plugins.md, States, story 6: the next change to the instance tries again. A binary that
+    // replaces its repository as the plugin's truth, and cannot be read, fails the reconcile.
+    [Fact]
+    public async Task RefreshBinary_WhileTheReconcileFailed_TriesTheReconcileAgain()
+    {
+        WriteValidPlugin(_pluginPath);
+        TrackedMods.Track(_pluginPath, _gameDirectory);
+        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        Directory.Delete(Path.Combine(_modFolder, ".git"), recursive: true);
+        File.WriteAllText(_pluginPath, "not a plugin");
+        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
+
+        WriteValidPlugin(_pluginPath);
+        await _index.RefreshBinary(_key, _pluginPath);
+
+        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
+        Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
+    }
+
+    [Fact]
+    public async Task RefreshBinary_WhileTheReconcileStillFails_TriesItOncePerChange()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = Indexes.Open(_holder, notifications: notifications);
+        WriteValidPlugin(_pluginPath);
+        index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.SkyrimSE, _instanceRoot);
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+        int FailedStatuses() => notifications.Notifications.OfType<LoadOrderStatusNotification>()
+            .Count(n => n.Status.State == LoadOrderState.Failed);
+        var before = FailedStatuses();
+
+        await index.RefreshBinary(_key, _pluginPath);
+
+        Assert.Equal(before + 1, FailedStatuses());
     }
 
     // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it

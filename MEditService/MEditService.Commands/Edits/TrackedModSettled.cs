@@ -5,9 +5,9 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What the watcher calls when a tracked mod settles or loads (ADR-0003 invariant 3): each
-/// tracked plugin's bytes against what Modbench last wrote, published with the mod's untracked
-/// plugins. It keeps nothing and refuses nothing.</summary>
+/// <summary>What the watcher calls when a mod settles or loads (ADR-0003 invariant 3): each tracked
+/// plugin's bytes against what Modbench last wrote, and the untracked plugins; none for an untracked
+/// mod. It keeps and refuses nothing.</summary>
 public sealed class TrackedModSettled
 {
     private readonly INotificationPublisher _notifications;
@@ -17,14 +17,18 @@ public sealed class TrackedModSettled
 
     public void Handle(LoadOrderSnapshot loadOrder, string modFolder)
     {
-        if (!SourceRepository.IsTracked(modFolder)) return;
-
         var plugins = loadOrder.Plugins
             .Where(plugin => string.Equals(
                 LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path), modFolder, StringComparison.Ordinal))
             .ToList();
         // The origin is the mod manager's name for the mod, which only a plugin of it carries.
         if (plugins is not [{ Origin: var origin }, ..]) return;
+
+        if (!SourceRepository.IsTracked(modFolder))
+        {
+            _notifications.Publish(new ExternalChangeNotification(origin, []));
+            return;
+        }
 
         var tracked = plugins.ToLookup(plugin => SourceRepository.IsPluginTracked(modFolder, plugin.Name));
         _notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]

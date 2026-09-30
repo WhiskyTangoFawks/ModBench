@@ -279,9 +279,8 @@ public sealed class SourceBatchTests
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        await tree.Observes(
-            () => WatchedTree.RemoveRepository(modFolder),
-            () => tree.WriteUnnamedDocument(modFolder, "A.esp"));
+        await tree.RemoveRepository(modFolder);
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, "A.esp"));
         Assert.False(SourceRepository.IsTracked(modFolder));
 
         tree.AdvancePastBothWindows();

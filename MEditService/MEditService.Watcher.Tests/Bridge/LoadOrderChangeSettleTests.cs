@@ -135,6 +135,71 @@ public sealed class LoadOrderChangeSettleTests
         Assert.Single(tree.Index.Reconciles);
     }
 
+    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so the status the last
+    // settle set goes with the repository.
+    [Fact]
+    public async Task ATrackedModWhoseRepositoryGoes_NamesNoPluginOnceItSettles()
+    {
+        var (tree, modFolder) = TrackedBeforeWatching();
+        using var _ = tree;
+        File.WriteAllBytes(PluginPath(tree), "changed-by-xedit"u8.ToArray());
+        await tree.ApplyLoadOrder();
+        Assert.Equal([PluginName], Assert.Single(Notices(tree)).ChangedPlugins);
+
+        await tree.RemoveRepository(modFolder);
+
+        Assert.True(await tree.Settles(() => Notices(tree).Count == 2), "the mod never settled once its repository went");
+        Assert.Equal(Origin, Notices(tree)[1].Origin);
+        Assert.Empty(Notices(tree)[1].ChangedPlugins);
+    }
+
+    [Fact]
+    public async Task AnUntrackedModThatGainsARepository_IsSettledAsTracked()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = tree.AddMod(Origin, PluginName);
+        await tree.ApplyLoadOrder();
+        Assert.Empty(Notices(tree));
+
+        tree.MoveInRepository(modFolder, PluginName);
+
+        Assert.True(await tree.Settles(() => Notices(tree).Count == 1), "the mod never settled once it was tracked");
+        Assert.Equal(Origin, Notices(tree)[0].Origin);
+    }
+
+    // The rival this pins: a repository moved in whole, under a watch already recursive, is one path
+    // inside the git directory's own early return.
+    [Fact]
+    public async Task AModWhoseRepositoryReturns_IsSettledAsTrackedAgain()
+    {
+        var (tree, modFolder) = TrackedBeforeWatching();
+        using var _ = tree;
+        await tree.ApplyLoadOrder();
+        await tree.RemoveRepository(modFolder);
+        Assert.True(await tree.Settles(() => Notices(tree).Count == 2), "the mod never settled once its repository went");
+
+        tree.MoveInRepository(modFolder, PluginName);
+
+        Assert.True(await tree.Settles(() => Notices(tree).Count == 3), "the mod never settled once its repository returned");
+    }
+
+    // A load order that arrives before the mod's own window closes answers for the mod at load.
+    [Fact]
+    public async Task ALoadAfterTheRepositoryWent_NamesNoPlugin_BeforeTheModsOwnWindowCloses()
+    {
+        var (tree, modFolder) = TrackedBeforeWatching();
+        using var _ = tree;
+        File.WriteAllBytes(PluginPath(tree), "changed-by-xedit"u8.ToArray());
+        await tree.ApplyLoadOrder();
+
+        await tree.RemoveRepository(modFolder);
+        tree.AddMod("OtherMod", "Other.esp");
+        await tree.ApplyLoadOrder();
+
+        Assert.True(await WatchedTree.Reached(() => Notices(tree).Count == 2), "the load never answered for the mod");
+        Assert.Empty(Notices(tree)[1].ChangedPlugins);
+    }
+
     // The rival this pins: a re-arm that forgets the registrations but keeps the folder's watch, so a
     // mod the load order dropped still settles into Commands with no origin to put on it.
     [Fact]

@@ -227,9 +227,11 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>Performs the writes and returns once the watcher's own watches have observed every
     /// one of them: each write here raises exactly one file event.</summary>
-    internal async Task Observes(params Action[] writes)
+    internal Task Observes(params Action[] writes) => Observes(writes.Length, writes);
+
+    private async Task Observes(int events, params Action[] writes)
     {
-        var expected = Clock.Observations + writes.Length;
+        var expected = Clock.Observations + events;
         foreach (var write in writes) write();
         await Reached(() => Clock.Observations >= expected);
         Assert.True(Clock.Observations == expected,
@@ -258,13 +260,13 @@ internal sealed class WatchedTree : IDisposable
 
     internal void AdvancePastBothWindows() => Clock.Advance(PastBothWindows);
 
-    /// <summary>Puts the repository aside, the way another tool's reinstall replaces it. Renamed
-    /// in place, never moved out: a watched directory moved out of a live watch loses its own
-    /// event and the next one.</summary>
-    internal static void RemoveRepository(string modFolder) =>
-        Directory.Move(
+    /// <summary>Puts the repository aside as another tool's reinstall does, observed under both
+    /// names. Renamed in place, never moved out: a watched directory moved out of a live watch
+    /// loses its own event and the next one.</summary>
+    internal Task RemoveRepository(string modFolder) =>
+        Observes(2, () => Directory.Move(
             SourceRepository.GitWatchPathsIn(modFolder).GitDirectory,
-            Path.Combine(modFolder, ".git.replaced"));
+            Path.Combine(modFolder, ".git.replaced")));
 
     public void Dispose()
     {

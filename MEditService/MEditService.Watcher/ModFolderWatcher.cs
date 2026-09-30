@@ -65,7 +65,7 @@ public sealed class ModFolderWatcher : IDisposable
     {
         try
         {
-            if (Armed(snapshot, version) is not { } tracked) return;
+            if (Armed(snapshot, version) is not { } toSettle) return;
 
             // Outside the in-flight scope: the Index owns its own cancellation on disposal, and a
             // disposed watcher speaks for no snapshot.
@@ -76,7 +76,7 @@ public sealed class ModFolderWatcher : IDisposable
                     CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
 
-            foreach (var modFolder in tracked) RaiseSafely(() => SettleAtLoad(snapshot, modFolder));
+            foreach (var modFolder in toSettle) RaiseSafely(() => SettleAtLoad(snapshot, modFolder));
         }
         finally
         {
@@ -120,12 +120,11 @@ public sealed class ModFolderWatcher : IDisposable
 
         if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
 
-        if (SourceRepository.IsTracked(mod.ModFolder))
-        {
-            if (window.ModTouched || window.Binaries.Count > 0)
-                RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
-        }
-        else
+        var tracked = SourceRepository.IsTracked(mod.ModFolder);
+        if (mod.TrackedChanged(tracked) || (tracked && (window.ModTouched || window.Binaries.Count > 0)))
+            RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
+
+        if (!tracked)
         {
             foreach (var binary in window.Binaries)
                 await _sinks.RefreshBinary(binary.Key, binary.Path).ConfigureAwait(false);

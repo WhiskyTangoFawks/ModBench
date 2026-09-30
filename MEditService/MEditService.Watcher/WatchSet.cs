@@ -26,13 +26,13 @@ internal sealed class WatchSet : IDisposable
         _overflow = overflow;
     }
 
-    /// <summary>The watch set this snapshot implies, answering the tracked mod folders the load-time
-    /// settle reads. Null when a newer version was armed already or the set is disposed: that change
-    /// arms nothing and settles nothing.</summary>
+    /// <summary>The watch set this snapshot implies, answering the mod folders the load-time settle
+    /// reads: each tracked one and each whose repository went. Null when a newer version was armed
+    /// already or the set is disposed.</summary>
     public IReadOnlyList<string>? Arm(LoadOrderSnapshot order, long version)
     {
         var wanted = FoldersOf(order);
-        var tracked = new List<string>();
+        var toSettle = new List<string>();
 
         lock (_gate)
         {
@@ -57,15 +57,12 @@ internal sealed class WatchSet : IDisposable
 
                 watch.ClearRegistrations();
                 foreach (var plugin in mod.Plugins) watch.Register(plugin.Name, plugin.Origin, plugin.Path);
-                if (isTracked)
-                {
-                    watch.EnsureRecursive();
-                    tracked.Add(folder);
-                }
+                if (isTracked) watch.EnsureRecursive();
+                if (watch.TrackedChanged(isTracked) || isTracked) toSettle.Add(folder);
             }
         }
 
-        return tracked;
+        return toSettle;
     }
 
     /// <summary>Drops the watch on a folder that is gone from disk. Nothing re-arms it until the
