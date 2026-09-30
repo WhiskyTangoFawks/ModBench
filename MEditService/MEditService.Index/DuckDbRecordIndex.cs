@@ -1196,7 +1196,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
-        // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.
+        // This builder doesn't enforce invariant 1 itself; every live caller already passes both or
+        // neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,
             IReadOnlyList<string>? recordTypes = null, string? groupCondition = null)

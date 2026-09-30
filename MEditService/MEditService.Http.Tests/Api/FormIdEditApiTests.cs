@@ -102,7 +102,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
 
     private async Task<List<string>> NpcFormKeys()
     {
-        var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");
         return [.. listing.GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey")))];
     }
 }

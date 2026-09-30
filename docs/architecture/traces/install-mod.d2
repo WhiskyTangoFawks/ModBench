@@ -32,7 +32,8 @@ from download: "from a downloaded file" {
 
 instanceadapter -> mo2: "the folder · the .meta" {class: loadorder}
 install -> downloads: applied or refusal {class: loadorder}
-mo2 -> instanceloader: watch {class: signal}
+mo2 -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."mod sync: update-load-order-file"
 mo2 -> watcher: changed paths {class: signal}

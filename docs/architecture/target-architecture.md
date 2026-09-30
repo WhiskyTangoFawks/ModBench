@@ -34,7 +34,7 @@ pictures.
 ## The layers
 
 Both columns use the same six names. Drivers: who drives the process. Driving adapters: what
-turns a driver's gesture or a file's change into a call. Core: the rules, one command per
+turns a driver's gesture into a call. Core: the rules, one command per
 gesture. Kernel: read by every Core box and driven adapter. On Modbench it is pure. On mEdit it
 also holds the load order state (ADR-0013, invariant 4). A port lives here when its implementer
 sits above its callers. Both then reference the kernel, and no reference points up or across.

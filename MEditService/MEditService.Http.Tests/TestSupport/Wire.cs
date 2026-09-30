@@ -64,28 +64,22 @@ internal static class Wire
         (string Plugin, string Origin) destination, bool replace = false) =>
         client.Copy([(formKey, source.Plugin, source.Origin)], mode, [destination], replace);
 
-    internal static async Task<string> FirstFormKey(this HttpClient client, string plugin, string type = "npc_")
-    {
-        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
-            ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} to carry a formKey.");
-    }
-
-    internal static async Task<string> FormKeyNamed(this HttpClient client, string plugin, string type, string editorId)
-    {
-        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}&search={editorId}");
-        return records.GetProperty("items").EnumerateArray()
-            .Single(r => r.GetProperty("editorId").GetString() == editorId)
-            .GetProperty("formKey").GetString()
-            ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
-    }
-
-    internal static async Task<string> FirstFormKeyIn(
-        this HttpClient client, string plugin, string origin, string type = "npc_")
+    // ADR-0012 invariant 1: a plugin is (origin, filename) together, so origin is required here too.
+    internal static async Task<string> FirstFormKey(this HttpClient client, string plugin, string origin, string type = "npc_")
     {
         var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type={type}");
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()
             ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} ({origin}) to carry a formKey.");
+    }
+
+    internal static async Task<string> FormKeyNamed(
+        this HttpClient client, string plugin, string origin, string type, string editorId)
+    {
+        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type={type}&search={editorId}");
+        return records.GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("editorId").GetString() == editorId)
+            .GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
     }
 
     internal static async Task<JsonElement> Body(this HttpResponseMessage response) =>

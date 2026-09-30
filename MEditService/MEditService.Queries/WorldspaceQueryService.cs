@@ -7,29 +7,26 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // ADR-0012: origin — stated by a caller that knows which plugin named `plugin` it's
-    // browsing (a tree row does; it was built from one), else resolved from the load order.
-    IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
-    WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
-    CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null);
-    IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string? origin = null);
+    // ADR-0012 invariant 1: a plugin is (origin, filename) together — the caller that names
+    // `plugin` (a tree row built from one) always knows which origin it means.
+    IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
+    WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);
+    CellReferences GetCellReferences(string plugin, string cellFormKey, string origin);
+    IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin);
 }
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
 /// See ADR-0005.</summary>
-public sealed class WorldspaceQueryService(
-    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<WorldspaceQueryService>? logger = null)
+public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly IQueryIndex _index = index;
-    private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
+    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin)
     {
-        origin ??= ResolveOrigin(plugin);
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
@@ -41,9 +38,8 @@ public sealed class WorldspaceQueryService(
                 holdingCells.Contains(r.FormKey)))];
     }
 
-    public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
+    public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin)
     {
-        origin ??= ResolveOrigin(plugin);
         var cells = _index.RequireReads().GetWorldspaceCells(new PluginAddress(plugin, origin), worldspaceFormKey);
 
         // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
@@ -87,15 +83,12 @@ public sealed class WorldspaceQueryService(
         return new WorldspaceBlocks(blocks, topCells);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
-    {
-        origin ??= ResolveOrigin(plugin);
-        return _index.RequireReads().GetCellReferences(new PluginAddress(plugin, origin), cellFormKey);
-    }
+    public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
+        _index.RequireReads().GetCellReferences(new PluginAddress(plugin, origin), cellFormKey);
 
-    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string? origin = null)
+    public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin)
     {
-        var pluginKey = new PluginAddress(plugin, origin ?? ResolveOrigin(plugin));
+        var pluginKey = new PluginAddress(plugin, origin);
         return [.. _index.RequireReads().GetInteriorCells(pluginKey)
             .GroupBy(c => c.BlockX ?? 0)
             .Select(block =>
@@ -113,9 +106,4 @@ public sealed class WorldspaceQueryService(
         new(c.FormKey, c.EditorId, c.CellX, c.CellY,
             FullName: c.FullName, HasParseFailure: c.HasParseFailure, ParseDiagnosis: c.ParseDiagnosis,
             HasChildren: c.HasChildren);
-
-    // An ordinary load-order row has no origin to give, so this stays the fallback; callers that
-    // do know (a tree row built from a specific plugin) pass an explicit origin instead.
-    private string ResolveOrigin(string plugin) =>
-        PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
 }

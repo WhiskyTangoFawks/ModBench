@@ -186,11 +186,10 @@ public static class IndexEndpoints
             logger.LogInformation("Received ReconcileIndex for {Plugin} ({Origin})", plugin ?? "every plugin", origin);
         }
 
-        // ADR-0012 invariant 1: a plugin is (origin, filename) together, so half an identity names nothing.
-        if (string.IsNullOrEmpty(plugin) != string.IsNullOrEmpty(origin))
+        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
             return Results.Problem("Name a plugin with both plugin and origin, or neither to check every plugin.", statusCode: 400);
 
-        PluginAddress? key = !string.IsNullOrEmpty(plugin) && !string.IsNullOrEmpty(origin)
+        PluginAddress? key = !string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin)
             ? new PluginAddress(plugin, origin)
             : null;
         if (key is { } named && !index.Registers(named))

@@ -3,10 +3,10 @@
 shape: sequence_diagram
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nprofiles/*/modlist.txt, plugins.txt · ModOrganizer.ini · mods/*/meta.ini · mods/ · overwrite/ · downloads/"
-instanceloader: @../target-architecture.modbench_driven.instanceloader
-instanceloader.label: Instance loader
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
+instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader.label: Instance loader
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
 toolbox: @../target-architecture.modbench_driving.toolbox
 toolbox.label: Toolbox
@@ -15,7 +15,8 @@ instancecommands.label: instance commands
 client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 
-mo2 -> instanceloader: watch {class: signal}
+mo2 -> instanceadapter: watch {class: signal}
+instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> instanceadapter: "get: the instance's files" {class: loadorder}
 instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and their meta, the load order, the downloaded files, the game folder's plugins and Creation Club list" {class: loadorder}
 instanceloader."the value, replaced whole"

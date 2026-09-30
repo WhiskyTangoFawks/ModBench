@@ -9,12 +9,11 @@ namespace MEditService.Queries;
 /// hydrated through the ordinary Search path so IsWinner/WorkingTreeState/LoadOrderIndex derive
 /// exactly as every other listing does — no second derivation to keep in step.</summary>
 public sealed class ContainerChildQueryService(
-    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<ContainerChildQueryService>? logger = null)
+    IQueryIndex index, ILogger<ContainerChildQueryService>? logger = null)
 {
     private const int UnlimitedRecords = int.MaxValue;
 
     private readonly IQueryIndex _index = index;
-    private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // The children xEdit nests under a quest (wbVWDAsQuestChildren: DIAL, DLBR, SCEN) and a topic
@@ -28,11 +27,10 @@ public sealed class ContainerChildQueryService(
         ["Responses"] = "info",
     };
 
-    // ADR-0012: origin — a caller that already knows which plugin named `plugin` it's browsing
-    // (a tree row built from one) states it explicitly, else it's resolved from the load order.
-    public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
+    // ADR-0012 invariant 1: a plugin is (origin, filename) together — the caller that names
+    // `plugin` (a tree row built from one) always knows which origin it means.
+    public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string origin)
     {
-        origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var repo = _index.RequireReads();
         var pluginKey = new PluginAddress(plugin, origin);
 

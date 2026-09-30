@@ -45,7 +45,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
 
         // Editing is what Track is for, and an edit is refused on a plugin no repository holds, so
         // an applied edit is the tracked repository answering.
-        var edit = await Client.Edit(await Client.FirstFormKey(Plugin), Plugin, Origin, "HeightMax", 0.75);
+        var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
         edit.EnsureSuccessStatusCode();
         Assert.True((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
     }
@@ -120,7 +120,7 @@ public sealed class DecompilePluginTraceTests : HostedTests
     {
         await Loaded();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(_instance, Origin), Plugin, Npc, "RenamedByHand");

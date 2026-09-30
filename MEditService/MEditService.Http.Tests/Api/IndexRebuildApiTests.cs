@@ -33,7 +33,7 @@ public sealed class IndexRebuildApiTests : HostedTests
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         var before = await Client.Sequence();
         var held = (await Status()).GetProperty("version").GetInt64();
         Assert.True(before > 0, "loading must have advanced the sequence past 0");
