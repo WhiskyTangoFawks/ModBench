@@ -57,7 +57,7 @@ import { errorMessage } from './ports/errorMessage';
 // The port members every gesture, plugin sync and the launch in this file call — narrowed off
 // `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
-  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
+  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
 
 export interface ToolboxDeps {

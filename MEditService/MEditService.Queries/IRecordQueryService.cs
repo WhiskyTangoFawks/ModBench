@@ -25,6 +25,7 @@ public interface IRecordQueryService
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
+    bool GetLightPluginsSupported();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
     // ADR-0013 invariant 4: answered in every state, "no load order yet" included.

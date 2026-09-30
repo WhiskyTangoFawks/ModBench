@@ -735,6 +735,23 @@ describe('HttpMEditClient — the record types the game can create', () => {
   });
 });
 
+describe('HttpMEditClient — whether the game has light plugins', () => {
+  it('asks mEdit and reads its answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, false)));
+    const client = makeClient(fetch);
+
+    await expect(client.getLightPluginsSupported()).resolves.toBe(false);
+    expect(fetch.mock.calls[0]?.[0].url).toMatch(/\/plugins\/light-plugins-supported$/);
+  });
+
+  it('rejects, naming the reason, when mEdit cannot answer', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(503, { detail: 'No load order has been loaded.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getLightPluginsSupported()).rejects.toThrow(/No load order has been loaded/);
+  });
+});
+
 // withTimeout: the race every spatial/record read verb shares. getRecordTypes stands in for all six.
 describe('HttpMEditClient — read timeout', () => {
   it('rejects a hung read after the configured timeout, aborting the request', async () => {

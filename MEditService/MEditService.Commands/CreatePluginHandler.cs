@@ -1,7 +1,7 @@
+using MEditService.Codec.Schema;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Meta;
 
 namespace MEditService.Commands;
 
@@ -23,7 +23,7 @@ public sealed class CreatePluginHandler
         var release = _holder.Require().GameRelease;
         var modKey = ModKey.FromFileName(plugin.Name);
 
-        if (modKey.Type == ModType.Light && GameConstants.Get(release).SmallMasterFlag is null)
+        if (modKey.Type == ModType.Light && !LightPluginSupport.Of(release))
         {
             return new PluginCreateResult(PluginCreateRefusal.LightPluginUnsupported,
                 $"{release} has no light plugins, so {plugin.Name} cannot be created.");
