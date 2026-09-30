@@ -39,6 +39,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { readPluginLines } from '../../test/mo2/corpusFixture';
 import { present } from '../../ports/present';
+import { listsForThePluginAsked } from '../../client/test/fixtures';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -712,7 +713,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(new RecordNode(recordSummary()), dt, NONE);
+    await tree.handleDrop(new RecordNode(recordSummary(), 'SomeMod'), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
@@ -726,7 +727,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon'), dt, NONE);
+    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon', 'SomeMod'), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
@@ -1465,7 +1466,7 @@ describe('PluginsTreeProvider — an enabled row is always collapsible', () => {
   });
 
   // The rival this guards: collapsibleState quietly reading a held-plugin set again (e.g. `None`
-  // while `heldFiles` does not have this row). Nothing the load order ever reports about a plugin
+  // while the held set does not have this row). Nothing the load order ever reports about a plugin
   // reaches this decision any more.
   it('a plugin the load order never reports still gets a chevron', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
@@ -1534,7 +1535,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', undefined] });
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', 'SomeMod'] });
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
   });
 
@@ -1555,7 +1556,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     const h = makeTree([A_ROW(), B_ROW()], { client });
     const rows = await h.tree.getChildren();
 
-    h.tree.applyIndexed(['A.esp'], []);
+    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
 
     expect((await h.tree.getChildren(rows[0]))[0]).toBeInstanceOf(RecordTypeNode);
     expect(await h.tree.getChildren(rows[1])).toEqual([expect.any(IndexingNode)]);
@@ -1656,10 +1657,10 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: expectInstanceOf(group, RecordTypeNode), record: expectInstanceOf(record, RecordNode) };
   }
 
-  // An override's own plugin is its master's, which mEdit calls read-only: the row still sits in,
-  // and is edited through, the tracked plugin above it.
+  // An override's FormKey names its master, which mEdit calls read-only; the row is still its
+  // tracked plugin's own.
   it('states an override record under a tracked, editable plugin tracked and editable', async () => {
-    const client = weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: 'Data' }));
+    const client = weaponOf(recordSummary({ formKey: '000001:Fallout4.esm' }));
     const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
     await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
 
@@ -1690,7 +1691,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
-    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm' })),
+    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' })),
       implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
@@ -1706,14 +1707,13 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
       expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked', 'record untracked']);
     });
 
-  it('offers no record edit under a locked row mEdit names no plugin for at its origin', async () => {
+  it('expands a locked row mEdit names no plugin for at its origin as still indexing', async () => {
     const h = lockedTree(false);
     await reconcile(h, [MOD_COPY, held('A.esp')]);
 
     const locked = present((await h.tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
-    const { group, record } = await firstRecordUnder(h, locked);
 
-    expect([group.contextValue, record.contextValue]).toEqual(['recordType untracked', 'record untracked']);
+    expect(await h.tree.getChildren(locked)).toEqual([expect.any(IndexingNode)]);
   });
 
   it.each([['last', [MOD_COPY, DATA_COPY]], ['first', [DATA_COPY, MOD_COPY]]])(
@@ -1795,7 +1795,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     const [discChild] = await disconnected.tree.getChildren(discRow);
 
     const indexing = makeTree([A_ROW(), B_ROW()]);
-    indexing.tree.applyIndexed(['A.esp'], []); // B.esp is not indexed yet
+    indexing.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []); // B.esp is not indexed yet
     const rows = await indexing.tree.getChildren();
     const [idxChild] = await indexing.tree.getChildren(rows[1]);
 
@@ -1908,7 +1908,7 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
     const h = makeTree([A_ROW()], { client });
     h.tree.applyRefused(heldElsewhere);
 
-    h.tree.applyIndexed(['A.esp'], []);
+    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
     const [row] = await h.tree.getChildren();
     const children = await h.tree.getChildren(row);
 
@@ -1930,10 +1930,10 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
   });
 
   // The rival this guards: a disconnect mid-reconcile leaving an unheld row "Still indexing…"
-  // forever, because `heldFiles` is already a (partial) Set rather than undefined.
+  // forever, because the held set is already a partial one rather than undefined.
   it('names the reason on a row this reload has not reached yet, mid-reconcile', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
-    h.tree.applyIndexed(['A.esp'], []); // B.esp is mid-reconcile, not yet reached
+    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []); // B.esp is mid-reconcile, not yet reached
     const rows = await h.tree.getChildren();
 
     h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
@@ -1945,7 +1945,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
   it('leaves an already-held row browsable — the disconnect is not this row\'s to report', async () => {
     const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
     const h = makeTree([A_ROW()], { client });
-    h.tree.applyIndexed(['A.esp'], []);
+    h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
     const [row] = await h.tree.getChildren();
 
     h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
@@ -2174,7 +2174,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 describe('PluginsTreeProvider — a row expands into the record browser children', () => {
   const withRecords = (client: InMemoryMEditClient) => makeTree([A_ROW()], { client });
 
-  it('asks the record browser for that plugin children, by filename', async () => {
+  it('asks the record browser for that plugin children, by (origin, filename)', async () => {
     const client = makeClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
     const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
@@ -2182,11 +2182,33 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', undefined] });
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', 'SomeMod'] });
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
     expect(expectInstanceOf(children[0], RecordTypeNode).label).toBe('Weapon');
     expect(expectInstanceOf(children[0], RecordTypeNode).description).toBe('5');
+  });
+
+  // ADR-0012 invariant 1: the overridden plugin of the name is indexed too, so a filename alone
+  // could read either.
+  it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
+      records: { items: [recordSummary({ plugin: 'Shared.esp', formKey: '000001:Shared.esp', origin: 'ModB' })], total: 1 },
+    });
+    const h = makeTree([
+      plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA', winning: false }),
+      plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB' }),
+    ], { client });
+    await reconcile(h, [held('Shared.esp', { origin: 'ModA' }), held('Shared.esp', { origin: 'ModB' })]);
+    const [row] = await h.tree.getChildren();
+
+    const group = expectInstanceOf((await h.tree.getChildren(row))[0], RecordTypeNode);
+    const record = expectInstanceOf((await h.tree.getChildren(group))[0], RecordNode);
+
+    expect(client.calls.filter((c) => c.method === 'getRecordTypes' || c.method === 'getRecords').map((c) => c.args))
+      .toEqual([['Shared.esp', 'ModB'], ['Shared.esp', 'weap', 0, expect.any(Number), 'ModB']]);
+    expect([group.plugin, group.origin, record.record.plugin, record.origin]).toEqual(['Shared.esp', 'ModB', 'Shared.esp', 'ModB']);
   });
 
   it('renders the records under a record type', async () => {
@@ -2348,7 +2370,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
   }
 
   async function heldTree(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], instance?: FakeInstance): Promise<Harness> {
-    const h = makeTree(plugins, { client: everyKindOfRecord(), instance });
+    const h = makeTree(plugins, { client: listsForThePluginAsked(everyKindOfRecord()), instance });
     await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
     return h;
   }
@@ -2394,10 +2416,12 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
 
   it('gives a record under the plugin of the same name from another origin another identity', async () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })]));
-    const { tree } = await heldTree([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })], instance);
+    const h = await heldTree([plugin({ name: 'A.esp', slot: 0, origin: 'ModA' })], instance);
+    const { tree } = h;
     const fromModA = recordRows(await everyRow(tree)).map((row) => row.id);
 
     instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0, origin: 'ModB' })]));
+    await reconcile(h, [held('A.esp', { origin: 'ModB' })]);
     const fromModB = recordRows(await everyRow(tree)).map((row) => row.id);
 
     expect(fromModB).toHaveLength(fromModA.length);
@@ -3312,6 +3336,23 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(item.tooltip).toBe('Shared.esp\nModA');
   });
 
+  // ADR-0012 invariant 1: the other plugin of the name being held says nothing of this one.
+  it('expands the row as still indexing while only the other plugin has landed', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    h.tree.applyIndexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
+
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+
+  it('expands the row as still indexing while mEdit holds only the other plugin', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModB' })]);
+
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+
   it('expands the winning row as still indexing, never into the other plugin failure', async () => {
     const h = makeTree([SHARED_ROW()]);
     h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
@@ -3466,17 +3507,6 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     const pluginRow = expectInstanceOf(tree.getParent(group), PluginNode);
 
     expect([group.recordType, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['npc_', 'A.esp', undefined]);
-  });
-
-  // The Plugins view reads a held plugin's records without its origin, so a group row does not
-  // carry it: the plugin row above it does.
-  it('names the plugin of a group row, and of a plugin row, by (origin, filename)', async () => {
-    const { tree } = await heldWith(listing('000900:A.esp'));
-    const [pluginRow] = await tree.getChildren();
-    const group = present((await tree.getChildren(pluginRow)).find((row) => row.kind === 'recordType'), 'a group row');
-
-    expect([tree.pluginOf(group), tree.pluginOf(present(pluginRow, 'the plugin row'))])
-      .toEqual([{ name: 'A.esp', origin: 'SomeMod' }, { name: 'A.esp', origin: 'SomeMod' }]);
   });
 
   it('finds nothing while mEdit does not list the record yet', async () => {

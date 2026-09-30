@@ -380,14 +380,14 @@ describe('pluginsCopyValueText', () => {
   const locked = new ImplicitMasterNode('Fallout4.esm', 'Data');
   const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp', editorId: 'Gun' }), 'ModA');
   const unnamed = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp', editorId: null }), 'ModA');
-  const worldspace = new WorldspaceNode('Alpha.esp', { formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true });
+  const worldspace = new WorldspaceNode('Alpha.esp', { formKey: '000802:Alpha.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }, 'ModA');
   const cell = new CellNode('Alpha.esp', {
     formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false,
-  });
+  }, 'ModA');
   const placedRef = new PlacedNode('Alpha.esp', {
     formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
-  });
-  const group = new RecordTypeNode('Alpha.esp', 'weap', 2, 'Weapon');
+  }, 'ModA');
+  const group = new RecordTypeNode('Alpha.esp', 'weap', 2, 'Weapon', 'ModA');
   const mixed = [plugin, record, locked, unnamed, worldspace, cell, placedRef, group];
   const LINES = [
     'Alpha.esp', 'Gun [000800:Alpha.esp]', 'Fallout4.esm', '000801:Alpha.esp',

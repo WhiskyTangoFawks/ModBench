@@ -179,7 +179,7 @@ interface PluginFacts {
 }
 
 // ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
-// under both, and a read with no origin finds nothing.
+// under both.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
 
@@ -193,8 +193,8 @@ class ByPluginAddress<T> {
     this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
   }
 
-  get(name: string, origin: string | undefined): T | undefined {
-    return origin === undefined ? undefined : this.byAddress.get(pluginAddressKey(name, origin));
+  get(name: string, origin: string): T | undefined {
+    return this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
@@ -462,8 +462,7 @@ export class PluginsTreeProvider
     return children;
   }
 
-  /** The plugin row a row sits under, or is: the rows beneath it are read without its origin. */
-  pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
+  private pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
     let current: PluginsTreeNode | undefined = node;
     while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
     return current && { name: pluginFileOf(current), origin: current.origin };
@@ -482,11 +481,8 @@ export class PluginsTreeProvider
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
     if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
-    if (this.heldFiles?.has(file.toLowerCase()) === true) {
-      // Deliberately not the row's own `origin`: a stated origin means "the plugin the load order
-      // does not name" downstream, which would make every record row read-only. The backend
-      // resolves a load-order filename itself.
-      return this.records?.getPluginChildren(file, undefined, this.conditionsOf(element, file)) ?? noRecordBrowser();
+    if (this.held?.has(file, element.origin) === true) {
+      return this.records?.getPluginChildren(file, element.origin, this.conditionsOf(element, file)) ?? noRecordBrowser();
     }
     // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
     const failure = this.reachableFailureOf(element);
@@ -596,32 +592,31 @@ export class PluginsTreeProvider
   // stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
     const file = row.plugin.name;
-    const joinedOrigin = this.joinOrigin(file, row);
-    const statuses = this.statusesOf(row, joinedOrigin);
+    const statuses = this.statusesOf(row);
     const [first] = statuses;
     if (first !== undefined) {
       row.iconPath = first.kind === 'changedOutside' || first.kind === 'malformed' ? warningIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
     const lines = [file, row.origin];
-    if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
+    if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    row.contextValue = this.contextValueOf(row, joinedOrigin);
+    row.contextValue = this.contextValueOf(row);
   }
 
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
-  private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
+  private contextValueOf(row: PluginNode): string {
     const place = this.placeOf(row.origin);
-    const facts = this.facts?.get(row.plugin.name, joinedOrigin);
+    const facts = this.facts?.get(row.plugin.name, row.origin);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
       .join(' ');
   }
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    const facts = this.facts?.get(file, this.joinOrigin(file, row));
+    const facts = this.facts?.get(file, row.origin);
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -643,24 +638,23 @@ export class PluginsTreeProvider
     return facts?.tracked === true && facts.readOnly !== true;
   }
 
-  // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
-  // failures; `joinedOrigin` joins every other fact.
-  private statusesOf(row: PluginNode, joinedOrigin: string | undefined): PluginStatus[] {
+  // plugins.md, A row: every status the plugin carries, spec order.
+  private statusesOf(row: PluginNode): PluginStatus[] {
     const file = row.plugin.name;
-    const facts = this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, row.origin);
     const statuses = [
       failedToReadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
-      changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),
-      malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
+      changedOutsideStatus(this.changedOutside.has(file, row.origin)),
+      malformedStatus(this.diagnoses?.get(file, row.origin) ?? []),
     ];
     return statuses.filter((s): s is PluginStatus => s !== undefined);
   }
 
   // ── the load order and its facts ──────────────────────────────────────────
 
-  private heldFiles?: Set<string>;
+  private held?: ByPluginAddress<true>;
   private facts?: ByPluginAddress<PluginFacts>;
   private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
@@ -688,11 +682,11 @@ export class PluginsTreeProvider
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
    *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
    *  this reload's own ticks. */
-  applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
+  applyIndexed(indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
+    this.held = heldSet(indexedPlugins);
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
     this._onDidChangeTreeData.fire(undefined);
@@ -725,7 +719,7 @@ export class PluginsTreeProvider
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
     this.indexFailure = undefined;
-    this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
+    this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
@@ -751,8 +745,8 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0013: keyed by filename, reading the `inLoadOrder` plugins — two held plugins can share
-  // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
+  // ADR-0013: the `inLoadOrder` plugins, two of which can share a filename. A failed read is
+  // never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
@@ -807,23 +801,12 @@ export class PluginsTreeProvider
   // "is a filter active" signal has to be threaded in here.
   private isHiddenByFilter(row: PluginListNode): boolean {
     const file = pluginFileOf(row);
-    return this.matches?.get(file, this.joinOrigin(file, row)) === false;
+    return this.matches?.get(file, row.origin) === false;
   }
 
-  // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
-  // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
+  // Children expansion only (plugins.md, States 2): this reload's own ticks.
   private reachableFailureOf(row: PluginListNode): string | undefined {
     return this.reachableFailures.get(pluginFileOf(row), row.origin);
-  }
-
-  // ADR-0012 keys every fact by origin: a row's own, and for a locked row the copy the game loads.
-  // A row whose origin mEdit names no plugin for joins nothing.
-  private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    return this.heldOrigin(file, row.origin);
-  }
-
-  private heldOrigin(file: string, origin: string | undefined): string | undefined {
-    return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -870,7 +853,7 @@ export class PluginsTreeProvider
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {
-      const origin = this.heldOrigin(name, originOf.get(name));
+      const origin = originOf.get(name);
       return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
     };
   }
@@ -899,6 +882,12 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
   if (!isRecordRow(row)) return undefined;
   return row.kind === 'record' ? row.record.formKey : row.formKey;
+}
+
+function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
+  const held = new ByPluginAddress<true>();
+  for (const { name, origin } of plugins) held.set(name, origin, true);
+  return held;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

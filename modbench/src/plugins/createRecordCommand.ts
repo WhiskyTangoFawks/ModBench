@@ -9,7 +9,6 @@ import type { RecordGroup } from './createdRecordSelection';
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes'>;
   reporter: Reporter;
-  pluginOf(row: PluginsTreeNode): PluginAddress | undefined;
   createdRecords: { selectWhenListed(group: RecordGroup): Promise<() => void> };
 }
 
@@ -31,12 +30,7 @@ export function registerRecordCreateCommand(
   return registerPluginsGesture('modbench.record.create', viewSelection, async (entry) => {
     const row = singularArgument(entry, 'plugin', 'recordType');
     if (row === undefined) return;
-    const plugin = deps.pluginOf(row);
-    if (plugin === undefined) {
-      const name = row.kind === 'plugin' ? row.plugin.name : row.plugin;
-      deps.reporter.report('error', `Could not create a record in "${name}": the Plugins view does not show its plugin.`);
-      return;
-    }
+    const plugin: PluginAddress = { name: row.kind === 'plugin' ? row.plugin.name : row.plugin, origin: row.origin };
     const recordType = row.kind === 'recordType' ? row.recordType : await pickRecordType(deps);
     if (recordType === undefined) return;
 

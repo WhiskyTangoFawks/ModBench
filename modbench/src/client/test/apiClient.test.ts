@@ -42,18 +42,18 @@ describe('errorText', () => {
 // ADR-0013: the whole-set conflict sweep leaves a Ready load order with stale winners, so
 // anything rendering conflict information must read `conflictsComputed`, never the wire's `state`.
 describe('toLoadOrderStatus', () => {
-  it('keys indexedPlugins on filename alone, dropping origin', () => {
+  it('keeps each indexed plugin as (origin, filename), so two of one filename stay two', () => {
     const status = toLoadOrderStatus({
       state: 'Reconciling',
       totalPlugins: 3, version: 1,
-      indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
+      indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
 
     expect(status).toEqual({
       totalPlugins: 3, version: 1,
-      indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
+      indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
       holdsNone: false,

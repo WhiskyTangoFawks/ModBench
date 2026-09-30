@@ -745,7 +745,7 @@ describe('HttpMEditClient — read timeout', () => {
     });
     const client = makeClient(fetch, 'up', 20);
 
-    await expect(client.getRecordTypes('MyPatch.esp')).rejects.toThrow(/timed out after 20ms/);
+    await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).rejects.toThrow(/timed out after 20ms/);
     expect(sawSignal?.aborted).toBe(true);
   });
 
@@ -753,6 +753,6 @@ describe('HttpMEditClient — read timeout', () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
     const client = makeClient(fetch, 'up', 20);
 
-    await expect(client.getRecordTypes('MyPatch.esp')).resolves.toEqual([]);
+    await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).resolves.toEqual([]);
   });
 });

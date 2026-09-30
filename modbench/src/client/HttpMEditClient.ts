@@ -431,10 +431,10 @@ export class HttpMEditClient implements MEditClient {
     return data ?? [];
   }
 
-  async getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]> {
+  async getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]> {
     return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/record-types', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getRecordTypes(${plugin})`, response, error);
@@ -451,11 +451,11 @@ export class HttpMEditClient implements MEditClient {
   }
 
   async getRecords(
-    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
   ): Promise<RecordPage> {
     return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/records', {
-        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }), ...options } },
+        params: { query: { plugin, type, offset, limit, origin, ...options } },
         signal,
       });
       this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
@@ -530,10 +530,10 @@ export class HttpMEditClient implements MEditClient {
     return { sql: data.sql, source: data.source };
   }
 
-  async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {
+  async getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]> {
     return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getWorldspaces(${plugin})`, response, error);
@@ -541,10 +541,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks> {
+  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks> {
     return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
-        params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
@@ -552,10 +552,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences> {
+  async getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences> {
     return this.withTimeout(`getCellReferences(${plugin}, ${cellFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/references', {
-        params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: cellFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
@@ -563,10 +563,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]> {
+  async getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]> {
     return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getInteriorCells(${plugin})`, response, error);
@@ -574,10 +574,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]> {
+  async getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]> {
     return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
-        params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: parentFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
