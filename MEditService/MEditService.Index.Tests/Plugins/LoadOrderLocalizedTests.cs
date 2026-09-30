@@ -48,4 +48,39 @@ public sealed class LoadOrderLocalizedTests
             Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Big Door") == true);
         }
     }
+
+    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, but its own Strings folder is real —
+    // unlike Data, ModFolderOf's null must not send this read chasing a fallback that has none.
+    [Fact]
+    public void Load_ALocalizedOverwritePlugin_ReadsItsOwnStrings_NotTheGamesDataFolder()
+    {
+        var holder = new LoadOrderHolder();
+        FormKey doorFormKey = default;
+        var fx = new PluginFixtureBuilder("load-order-localized-overwrite")
+            .WithPlugin("Fixture.esp", mod =>
+            {
+                var door = mod.Doors.AddNew("MainDoor");
+                door.Name = new TranslatedString(Language.English, "The Overwrite Door");
+                mod.UsingLocalization = true;
+                doorFormKey = door.FormKey;
+            }, origin: PluginOrigin.Overwrite)
+            .BuildScattered();
+        using (fx)
+        {
+            var overwriteFolder = Path.GetDirectoryName(fx.Plugins.Single().Path).Require();
+            // Same archive-listing forcing as the Data case above, over the plugin's own folder.
+            File.WriteAllBytes(Path.Combine(overwriteFolder, "UnrelatedMod - Main.ba2"), []);
+            Assert.False(Directory.Exists(Path.Combine(fx.GameDirectory, "Strings")), "the fixture must carry no Data/Strings to fall back to");
+
+            using var manager = Indexes.Open(holder);
+            manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+
+            Assert.Empty(manager.Status.Failures);
+
+            var reads = manager.RequireReads();
+            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginAddress("Fixture.esp", PluginOrigin.Overwrite));
+            Assert.NotNull(detail);
+            Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Overwrite Door") == true);
+        }
+    }
 }

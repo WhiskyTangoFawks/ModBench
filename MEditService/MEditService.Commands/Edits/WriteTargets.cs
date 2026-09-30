@@ -178,15 +178,21 @@ internal sealed class WriteTargets(
     // would be silent dead UI.
     private RecordEditResult RefuseUntracked(PluginAddress plugin) =>
         loadOrder.Current.ModFolderOf(plugin) is null
-            ? RecordEditResult.Refused(
-                RecordEditRefusal.PluginHasNoModFolder,
-                $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
-                "Author a patch plugin and edit the override there.")
+            ? RecordEditResult.Refused(RecordEditRefusal.PluginHasNoModFolder, NoModFolderMessage(plugin))
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
+
+    // ADR-0012 invariant 2: the game's Data folder and Overwrite are both origins with no mod
+    // folder, but neither one's way out is the other's.
+    private static string NoModFolderMessage(PluginAddress plugin) =>
+        PluginOrigin.IsOverwrite(plugin.Origin)
+            ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
+              "folder to hold its source. Move it into a mod, then edit it there."
+            : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
+              "Author a patch plugin and edit the override there.";
 
     // Everything the allocator needs about one plugin, read from its tree once per gesture: a
     // per-child re-read would walk the whole tree again for every key drawn.

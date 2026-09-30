@@ -140,13 +140,15 @@ public sealed class TrackService(
                 $"{key.Name} from '{key.Origin}' is not in the load order, so there is nothing to track.");
         }
 
-        // The load order is the one rule for a plugin's mod folder: null for the game's own Data
-        // directory (PluginOrigin.DataDirectory), where Track must not git-init.
         if (LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path) is not { } modFolder)
         {
-            return Refuse(TrackRefusal.DataDirectoryOrigin,
-                $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
-                "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
+            return PluginOrigin.IsOverwrite(plugin.Origin)
+                ? Refuse(TrackRefusal.OverwriteOrigin,
+                    $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no repository " +
+                    "to track into. Move it into a mod, then track that.")
+                : Refuse(TrackRefusal.DataDirectoryOrigin,
+                    $"{plugin.Name} is a base-game plugin loaded from the game's own Data folder, " +
+                    "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
         if (SourceRepository.IsPluginTracked(modFolder, plugin.Name))

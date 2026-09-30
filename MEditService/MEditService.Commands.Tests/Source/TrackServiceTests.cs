@@ -245,6 +245,86 @@ public sealed class TrackServiceTests
         }
     }
 
+    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no repository for Track to
+    // put a baseline into.
+    [Fact]
+    public async Task TrackAsync_WithOnlyAnOverwriteOriginPlugin_RefusesWithoutInitializingARepository()
+    {
+        var overwriteDir = Directory.CreateTempSubdirectory("medit-trackservice-overwrite-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-overwrite-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(overwriteDir, "Stray.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Stray.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.WriteToBinary(pluginPath);
+
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            [
+                new RegisteredPlugin("Stray.esp", PluginOrigin.Overwrite, pluginPath, 0, Enabled: true, Winning: true),
+            ]);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
+            var result = (await service.TrackModAsync(
+                loadOrder, PluginOrigin.Overwrite, SourcePreset.Edits)).Only();
+
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.OverwriteOrigin, result.Refusal);
+            Assert.Contains("Stray.esp", result.Message, StringComparison.Ordinal);
+            Assert.Contains("Overwrite", result.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateDirectories(overwriteDir, ".git", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            SafeDelete(overwriteDir);
+            SafeDelete(gameDir);
+        }
+    }
+
+    // "A selection is one gesture, and each item lands on its own" (commands.md): a selection mixing
+    // an Overwrite plugin with a real mod's plugin refuses the first and tracks the second.
+    [Fact]
+    public async Task TrackAsync_OverASelectionMixingOverwriteAndAMod_RefusesOnlyTheOverwritePlugin()
+    {
+        var overwriteDir = Directory.CreateTempSubdirectory("medit-trackservice-mixed-overwrite-").FullName;
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-mixed-mod-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-mixed-game-").FullName;
+        try
+        {
+            var strayPath = Path.Combine(overwriteDir, "Stray.esp");
+            new Fallout4Mod(ModKey.FromFileName("Stray.esp"), Fallout4Release.Fallout4).WriteToBinary(strayPath);
+
+            var trackablePath = Path.Combine(modFolder, "Fixture.esp");
+            var trackableMod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            trackableMod.Npcs.AddNew("OnlyNpc");
+            trackableMod.WriteToBinary(trackablePath);
+
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
+            [
+                new RegisteredPlugin("Stray.esp", PluginOrigin.Overwrite, strayPath, 0, Enabled: true, Winning: true),
+                new RegisteredPlugin("Fixture.esp", "FixtureMod", trackablePath, 1, Enabled: true, Winning: true),
+            ]);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
+            var result = await service.TrackAsync(
+                loadOrder,
+                [new PluginAddress("Stray.esp", PluginOrigin.Overwrite), new PluginAddress("Fixture.esp", "FixtureMod")],
+                SourcePreset.Edits);
+
+            Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
+            var refused = Assert.Single(result.Refused);
+            Assert.Equal((new PluginAddress("Stray.esp", PluginOrigin.Overwrite), TrackRefusal.OverwriteOrigin), (refused.Plugin, refused.Refusal));
+            Assert.True(SourceRepository.IsTracked(modFolder));
+            Assert.Empty(Directory.EnumerateDirectories(overwriteDir, ".git", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            SafeDelete(overwriteDir);
+            SafeDelete(modFolder);
+            SafeDelete(gameDir);
+        }
+    }
+
     // Serializing's granularity is per-plugin, so a genuine 0 < done < total tick needs two plugins
     // under one origin: the observation point falls between the first plugin's door call and the
     // second's.
