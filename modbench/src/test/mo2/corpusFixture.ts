@@ -6,11 +6,6 @@ import { cp, mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { expect } from 'vitest';
-import { parseModlist } from '../../mo2Codecs/modlistText';
-import { parsePlugins } from '../../mo2Codecs/pluginsText';
-import { readSelectedProfile } from '../../mo2Codecs/modOrganizerIni';
-import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
-import type { ModlistEntry, PluginEntry } from '../../instanceLoader/instance';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
 // in place by tests asserting its exact contents, so any addition breaks them.
@@ -21,35 +16,10 @@ export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus')
 export const DEFAULT_MODLIST = 'profiles/Default/modlist.txt';
 export const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 
-/** What a corpus test reads back after a command wrote: the same parsers the Instance uses,
- *  so a test never re-derives an MO2 file format of its own. */
-export const readModlistEntries = async (root: string, profile = 'Default'): Promise<ModlistEntry[]> =>
-  parseModlist(await readFile(join(root, 'profiles', profile, 'modlist.txt'), 'utf8'));
-
-export const readPluginLines = async (root: string, profile = 'Default'): Promise<PluginEntry[]> =>
-  parsePlugins(await readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8'));
-
-export const readActiveProfile = async (root: string): Promise<string> =>
-  readSelectedProfile(await readFile(join(root, 'ModOrganizer.ini'), 'utf8'));
-
 /** The `mods/` folders the Instance's value carries, for a test handing a command the argument
  *  it takes instead of probing. */
 export const modFolderNames = async (root: string): Promise<string[]> =>
   (await readdir(join(root, 'mods'), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
-
-/** The winners the Instance's value carries for a tree on disk, built through the value's own
- *  builder: a test handing plugin sync its argument fakes no walk of its own. */
-export async function providedPluginsIn(
-  root: string, profile = 'Default', dataFolder?: string,
-): Promise<ReadonlyMap<string, string>> {
-  const entries = await readModlistEntries(root, profile);
-  const lines = await readPluginLines(root, profile);
-  return providedPluginsOf(await buildLoadOrderRows({
-    readModlist: () => Promise.resolve(entries),
-    readPluginOrder: () => Promise.resolve(lines.map((e) => e.name)),
-    readEnabledPlugins: () => Promise.resolve(lines.filter((e) => e.enabled).map((e) => e.name)),
-  }, root, dataFolder));
-}
 
 /** Caller owns cleanup of the returned temp root. */
 export async function cloneCorpusFixture(): Promise<string> {

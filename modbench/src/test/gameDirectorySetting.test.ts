@@ -5,7 +5,7 @@ import {
   SETTING_SETTLE_MS, refreshOnGameDirectoryChange,
   type ConfigChangeEvent, type Subscription,
 } from '../gameDirectorySetting';
-import { GAME_FOLDER_SETTING } from '../instanceAdapter/gameDirectory';
+import { GAME_FOLDER_SETTING } from '../instanceAdapter/instanceAdapter';
 
 function fakeConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;

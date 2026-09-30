@@ -1,6 +1,10 @@
 // Each test drives the real write path and asserts over the WHOLE instance tree that only the
 // files it names changed — the composition-level guarantee a per-format test cannot give.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from './fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -14,8 +18,9 @@ import {
   syncMods,
 } from '../../modlist/modlist';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, snapshotTree,
 } from './corpusFixture';
+import { readModlistEntries } from './adapterOver';
 import type { Mod } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 

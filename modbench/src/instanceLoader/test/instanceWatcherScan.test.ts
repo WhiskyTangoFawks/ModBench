@@ -8,18 +8,7 @@ import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 
-// The Instance adapter's watch, and the Instance's own watcher modules, each calling the factory
-// one level down.
-const ALLOWED = new Set([
-  join('instanceAdapter', 'mo2Watch.ts'),
-  join('instanceLoader', 'instance.ts'),
-  join('instanceLoader', 'fsWatcher.ts'),
-  join('instanceLoader', 'modsWatcher.ts'),
-  join('instanceLoader', 'modlistWatcher.ts'),
-  join('instanceLoader', 'pluginsTxtWatcher.ts'),
-  join('instanceLoader', 'overwriteWatcher.ts'),
-  join('instanceLoader', 'downloadsWatcher.ts'),
-]);
+const ALLOWED = new Set([join('instanceAdapter', 'mo2Watch.ts')]);
 
 const WATCHER_FACTORY = /^create\w*Watcher$/;
 
@@ -48,7 +37,7 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
   return found;
 }
 
-describe('every watcher on the instance is created inside the Instance or a watcher module', () => {
+describe('every watcher on the instance is created inside the Instance adapter\'s watch', () => {
   it('scans a real body of files', () => {
     expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
   });

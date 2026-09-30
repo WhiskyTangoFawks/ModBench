@@ -4,11 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
-import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
-import { setEnabledInText } from '../../mo2Codecs/modlistText';
-import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
-import type { GameFolder } from '../../instanceAdapter/gameDirectory';
-import type { DownloadedFiles, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
+import type { GameFolder, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
@@ -76,6 +73,27 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   };
 }
 
+// The adapter's signal, fired by the test: the watch behind it is the adapter's, and its own suite
+// tests it.
+async function signalledInstance(): Promise<{ instance: Instance; signal: () => void; listeners: ReadonlySet<() => void> }> {
+  const root = await cloneCorpusFixture();
+  roots.push(root);
+  const listeners = new Set<() => void>();
+  const instance = new Instance({
+    instanceRoot: root,
+    adapter: {
+      ...adapterOver(root, { gameFolder: resolvesDataFolder }),
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return { dispose: () => { listeners.delete(listener); } };
+      },
+    },
+    log: () => {}, logReadFailure: () => {},
+  });
+  instances.push(instance);
+  return { instance, signal: () => { for (const listener of [...listeners]) listener(); }, listeners };
+}
+
 const NONO = 'Ñoño\'s Retexture';
 
 async function writeModFile(root: string, modName: string, relativePath: string, body: string): Promise<string> {
@@ -98,9 +116,9 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
   });
 }
 
-// The first read binds the downloads watcher and arms one follow-up read for the gap before it
-// can fire; a refresh absorbs that armed read, so none lands behind a later step, however slowly
-// that step runs.
+// The first read has the adapter follow the downloads folder, which signals once for the gap before
+// its watch can fire; a refresh absorbs that armed read, so none lands behind a later step, however
+// slowly that step runs.
 async function readToRest(instance: Instance): Promise<void> {
   await instance.refresh();
   await instance.refresh();
@@ -134,20 +152,15 @@ const watcherFor = (glob: string): FakeWatcher => {
   return present(found[0], `the sole watcher for ${glob}`);
 };
 
-// Downloads' own watcher is based at the resolved folder itself (glob `**`), never a fixed
-// instance-relative glob, so it is found by base rather than by `watcherFor`'s glob lookup.
-const downloadsWatcherFor = (instance: Instance): FakeWatcher => {
-  const dir = instance.value.paths.downloadsDir;
-  const found = watchers.filter((w) => w.base === dir && w.pattern === '**');
-  expect(found).toHaveLength(1);
-  return present(found[0], `the sole downloads watcher for ${dir}`);
-};
-
-// MO2, xEdit or the user rewriting the file, with Modbench none the wiser.
-async function enableOutsideModbench(root: string, modName: string): Promise<void> {
-  const path = join(root, DEFAULT_MODLIST);
-  await writeFile(path, setEnabledInText(await readFile(path, 'utf8'), modName, true));
+// MO2, xEdit or the user rewriting a file's bytes, with Modbench none the wiser.
+async function rewriteOutsideModbench(path: string, from: string, to: string): Promise<void> {
+  const text = await readFile(path, 'utf8');
+  expect(text).toContain(from);
+  await writeFile(path, text.replace(from, to));
 }
+
+const enableHarderVatsOutsideModbench = (root: string): Promise<void> =>
+  rewriteOutsideModbench(join(root, DEFAULT_MODLIST), '-Harder VATS', '+Harder VATS');
 
 const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
 
@@ -363,40 +376,58 @@ describe('Instance — the overwrite folder', () => {
 });
 
 describe('Instance — built by watching', () => {
-  it('owns a watcher for every MO2 file fixed at the instance root, before any read has landed', async () => {
-    await realInstance();
-
-    expect(watchers.map((w) => w.pattern).sort()).toEqual(
-      ['ModOrganizer.ini', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
-    );
-  });
-
-  // Downloads' own watcher cannot exist before its base is known — resolving it is an async read
-  // of ModOrganizer.ini — so it joins the rest only once the first recompute lands.
-  it('adds the downloads watcher, based at the resolved folder, once the first read lands', async () => {
-    const { root, instance } = await realInstance();
-
-    await instance.refresh();
-
-    expect(downloadsWatcherFor(instance).base).toBe(join(root, 'downloads'));
-  });
-
-  it('disposes every watcher it owns, the downloads one included', async () => {
-    const { instance } = await realInstance();
-    await instance.refresh();
+  it('listens for the adapter\'s signal from construction, before any read, until disposed', async () => {
+    const { instance, listeners } = await signalledInstance();
+    expect(instance.sequence).toBe(0);
+    expect(listeners.size).toBe(1);
 
     instance.dispose();
 
-    expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true, true]);
+    expect(listeners.size).toBe(0);
+  });
+
+  it('recomputes once for a burst of the adapter\'s signals', async () => {
+    const { instance, signal } = await signalledInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    for (let i = 0; i < 6; i++) signal();
+
+    expect(await pastSequenceWithin(instance, before, 2000)).not.toBe(TIMED_OUT);
+    // Chains behind anything the burst still had queued, so a per-signal recompute would be
+    // counted here rather than landing after the assertion.
+    await instance.refresh();
+
+    // The burst's one recompute, plus this refresh — a per-signal recompute would land five more.
+    expect(instance.sequence).toBe(before + 2);
+  });
+
+  it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
+    const { instance, signal } = await signalledInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    vi.useFakeTimers();
+    try {
+      signal();
+      await instance.refresh();
+      await vi.advanceTimersByTimeAsync(1000); // a wait left armed would fire here
+    } finally {
+      vi.useRealTimers();
+    }
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 2);
   });
 
   // A watcher just bound is not yet armed at the OS level; a file landing in that gap fires no
-  // watcher event (never fired here) — only the rebind's own follow-up recompute can catch it.
+  // watcher event (never fired here) — only the adapter's signal on following the folder can
+  // catch it.
   it('catches a file written in the gap before the just-bound downloads watcher can arm', async () => {
     const { root, instance } = await realInstance();
     fakeSettleClock();
     try {
-      await instance.refresh(); // binds the downloads watcher for the first time
+      await instance.refresh(); // the adapter follows the downloads folder for the first time
       const before = instance.sequence;
 
       await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
@@ -408,43 +439,6 @@ describe('Instance — built by watching', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('a rebind that lands after dispose() creates no orphan downloads watcher', async () => {
-    const root = await cloneCorpusFixture();
-    roots.push(root);
-    let resolveDownloadsDir: ((files: DownloadedFiles) => void) | undefined;
-    const pending = new Promise<DownloadedFiles>((resolve) => { resolveDownloadsDir = resolve; });
-    const instance = new Instance({
-      instanceRoot: root,
-      adapter: adapterOver(root, { gameFolder: resolvesDataFolder, downloadedFiles: () => pending }),
-      log: () => {}, logReadFailure: () => {},
-    });
-    instances.push(instance);
-
-    const refreshed = instance.refresh(); // recompute begins, blocked on the pending resolver
-    instance.dispose();
-    present(resolveDownloadsDir, 'the captured resolver')({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: [] });
-    await refreshed;
-
-    expect(watchers.some((w) => !w.disposed)).toBe(false);
-  });
-
-  // download_directory itself can move — the settings-file watcher is what notices the ini
-  // rewrite — so the watcher aimed at the old folder must not linger once a newer one replaces it.
-  it('rebinds the downloads watcher to the newly resolved folder when download_directory moves, disposing the old one', async () => {
-    const { root, instance } = await realInstance();
-    await instance.refresh();
-    const originalWatcher = downloadsWatcherFor(instance);
-    const iniPath = join(root, 'ModOrganizer.ini');
-    const originalIni = await readFile(iniPath, 'utf8');
-
-    await writeFile(iniPath, `${originalIni}download_directory=MovedDownloads\r\n`);
-    await instance.refresh();
-
-    expect(instance.value.paths.downloadsDir).toBe(join(root, 'MovedDownloads'));
-    expect(originalWatcher.disposed).toBe(true);
-    expect(downloadsWatcherFor(instance).base).toBe(join(root, 'MovedDownloads'));
   });
 
   // An untranslatable download_directory must not fail the whole recompute — Mods and Plugins do
@@ -494,69 +488,13 @@ describe('Instance — built by watching', () => {
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
     const before = instance.sequence;
 
-    await enableOutsideModbench(root, 'Harder VATS');
+    await enableHarderVatsOutsideModbench(root);
     watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
 
     expect(isEnabled(await pastSequence(instance, before), 'Harder VATS')).toBe(true);
     expect(instance.sequence).toBeGreaterThan(before);
   });
 
-  it('recomputes once for a burst of events across every watcher', async () => {
-    const { root, instance } = await realInstance();
-    await readToRest(instance);
-    const before = instance.sequence;
-
-    watcherFor('mods/**').fireCreate(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'a.dds'));
-    watcherFor('mods/**').fireChange(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'b.dds'));
-    watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
-    watcherFor('profiles/*/plugins.txt').fireChange(join(root, DEFAULT_PLUGINS));
-    watcherFor('overwrite/**').fireCreate(join(root, 'overwrite', 'stray.esp'));
-    downloadsWatcherFor(instance).fireCreate(join(root, 'downloads', 'New.7z'));
-
-    await pastSequence(instance, before);
-    // Chains behind anything the burst still had queued, so a per-event recompute would be
-    // counted here rather than landing after the assertion.
-    await instance.refresh();
-
-    // The burst's one recompute, plus this refresh — a per-event recompute would land six more.
-    expect(instance.sequence).toBe(before + 2);
-  });
-
-  it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
-    const { root, instance } = await realInstance();
-    await readToRest(instance);
-    const before = instance.sequence;
-
-    vi.useFakeTimers();
-    try {
-      watcherFor('mods/**').fireChange(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'a.dds'));
-      await vi.advanceTimersByTimeAsync(1); // the watcher's own hop, which arms the Instance's wait
-      await instance.refresh();
-      await vi.advanceTimersByTimeAsync(1000); // a wait left armed would fire here
-    } finally {
-      vi.useRealTimers();
-    }
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 2);
-  });
-
-  it('never recomputes for a write inside a tracked mod\'s git internals', async () => {
-    const { root, instance } = await realInstance();
-    await readToRest(instance);
-    const before = instance.sequence;
-
-    vi.useFakeTimers();
-    try {
-      watcherFor('mods/**').fireChange(join(root, 'mods', 'Tracked Patch Mod', '.git', 'objects', 'ab', 'cdef'));
-      await vi.advanceTimersByTimeAsync(1000);
-    } finally {
-      vi.useRealTimers();
-    }
-    await instance.refresh();
-
-    expect(instance.sequence).toBe(before + 1); // the refresh, and nothing the event caused
-  });
 });
 
 describe('Instance — a value that survives a bad read', () => {
@@ -734,7 +672,7 @@ describe('Instance — a value that survives a bad read', () => {
     await readToRest(instance);
     const before = instance.sequence;
 
-    await enableOutsideModbench(root, 'Harder VATS');
+    await enableHarderVatsOutsideModbench(root);
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false); // the event was suppressed
 
     await instance.refresh();
@@ -744,12 +682,9 @@ describe('Instance — a value that survives a bad read', () => {
   });
 });
 
-// Simulates MO2, xEdit or the user rewriting ModOrganizer.ini's own selected_profile — the
-// Instance only ever reads it.
-async function switchProfileOutsideModbench(root: string, profile: string): Promise<void> {
-  const path = join(root, 'ModOrganizer.ini');
-  await writeFile(path, setSelectedProfileInText(await readFile(path, 'utf8'), profile));
-}
+const switchToSecondaryOutsideModbench = (root: string): Promise<void> => rewriteOutsideModbench(
+  join(root, 'ModOrganizer.ini'), 'selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)',
+);
 
 describe('Instance — downloads, profile and game directory', () => {
   it('carries downloads with status and hidden, the active profile, the resolved game directory and release, from one value', async () => {
@@ -829,7 +764,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
     expect(instance.value.activeProfile).toBe('Default');
 
-    await switchProfileOutsideModbench(root, 'Secondary');
+    await switchToSecondaryOutsideModbench(root);
     await instance.refresh();
 
     expect(instance.value.activeProfile).toBe('Secondary');
@@ -842,7 +777,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await readToRest(instance);
     const before = instance.sequence;
 
-    await switchProfileOutsideModbench(root, 'Secondary');
+    await switchToSecondaryOutsideModbench(root);
     watcherFor('ModOrganizer.ini').fireChange();
 
     const landed = await pastSequenceWithin(instance, before, 2000);
@@ -987,7 +922,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameRelease).toBe('Rewritten Mid Recompute');
   });
 
-  it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder', async () => {
+  it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {
     const { root, instance } = await realInstance();
 
     await instance.refresh();
@@ -997,12 +932,14 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(paths.downloadsDir).toBe(join(root, 'downloads'));
     const first = present(mods.find((m) => m.kind === 'mod'), 'the fixture\'s first mod');
     expect(paths.modDirs.get(first.name)).toBe(join(root, 'mods', first.name));
-    expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length);
+    // The fixture lists "[NODELETE] Radfall" with no folder under mods/.
+    expect(paths.modDirs.has('[NODELETE] Radfall')).toBe(false);
+    expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
   });
 
-  // Rival: paths filled only once a read lands, which would leave a view constructed at
-  // activation joining its own. downloadsDir needs a read first, so it carries no guess.
-  it('carries those paths from sequence 0, before any read has landed', () => {
+  // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
+  // keeps its folders.
+  it('names no folder before the first read lands', () => {
     const instance = new Instance({
       instanceRoot: '/an/instance', adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
       log: () => {}, logReadFailure: () => {},
@@ -1010,8 +947,7 @@ describe('Instance — downloads, profile and game directory', () => {
     instances.push(instance);
 
     expect(instance.sequence).toBe(0);
-    expect(instance.value.paths.overwriteDir).toBe(join('/an/instance', 'overwrite'));
-    expect(instance.value.paths.downloadsDir).toBeUndefined();
+    expect(instance.value.paths).toEqual({ overwriteDir: '', downloadsDir: undefined, modDirs: new Map() });
   });
 });
 
@@ -1125,6 +1061,17 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await instance.refresh();
 
     expect(present(instance.value.modFolders, 'the listed mods/ folders').map((f) => f.name).sort()).toEqual(['Consumer', 'Unlisted Folder']);
+  });
+
+  // Rival: a listed mod matched to its folder by exact name, where the mod manager matches names
+  // by its own rule.
+  it('carries the folder of a listed mod whose line names it in another case', async () => {
+    const { root, instance } = await minimalInstance();
+    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+consumer\n');
+
+    await instance.refresh();
+
+    expect(instance.value.paths.modDirs.get('consumer')).toBe(join(root, 'mods', 'Consumer'));
   });
 
   it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {

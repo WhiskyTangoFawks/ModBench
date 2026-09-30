@@ -5,7 +5,7 @@
 import type {
   LoadOrderOutcome, LoadOrderSender, LoadOrderSnapshot, MEditClient,
 } from '../client';
-import type { GameFolder } from '../instanceAdapter/gameDirectory';
+import type { GameFolder } from '../instanceAdapter/instanceAdapter';
 import {
   loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
 } from '../instanceLoader/loadOrderSnapshot';

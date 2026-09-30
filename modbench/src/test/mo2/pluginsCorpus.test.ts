@@ -1,13 +1,17 @@
 // Composition, against the committed mo2-instance-corpus fixture: proving these writers touch
 // only their own file and nothing else.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from './fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { rm } from 'node:fs/promises';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../../pluginsCommands/plugins';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readPluginLines,
-  snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
+import { providedPluginsIn, readPluginLines } from './adapterOver';
 
 const PROFILE = 'Default';
 // The fixture has no game folder, so its Creation Club plugin stands in the game's Data folder,
