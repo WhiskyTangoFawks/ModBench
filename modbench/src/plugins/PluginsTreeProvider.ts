@@ -179,7 +179,7 @@ interface PluginFacts {
 }
 
 // ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
-// under both, and a read with no origin finds nothing.
+// under both.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
 
@@ -193,8 +193,8 @@ class ByPluginAddress<T> {
     this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
   }
 
-  get(name: string, origin: string | undefined): T | undefined {
-    return origin === undefined ? undefined : this.byAddress.get(pluginAddressKey(name, origin));
+  get(name: string, origin: string): T | undefined {
+    return this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
@@ -592,32 +592,31 @@ export class PluginsTreeProvider
   // stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
     const file = row.plugin.name;
-    const joinedOrigin = this.joinOrigin(file, row);
-    const statuses = this.statusesOf(row, joinedOrigin);
+    const statuses = this.statusesOf(row);
     const [first] = statuses;
     if (first !== undefined) {
       row.iconPath = first.kind === 'changedOutside' || first.kind === 'malformed' ? warningIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
     const lines = [file, row.origin];
-    if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
+    if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    row.contextValue = this.contextValueOf(row, joinedOrigin);
+    row.contextValue = this.contextValueOf(row);
   }
 
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
-  private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
+  private contextValueOf(row: PluginNode): string {
     const place = this.placeOf(row.origin);
-    const facts = this.facts?.get(row.plugin.name, joinedOrigin);
+    const facts = this.facts?.get(row.plugin.name, row.origin);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
       .join(' ');
   }
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    const facts = this.facts?.get(file, this.joinOrigin(file, row));
+    const facts = this.facts?.get(file, row.origin);
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -639,17 +638,16 @@ export class PluginsTreeProvider
     return facts?.tracked === true && facts.readOnly !== true;
   }
 
-  // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
-  // failures; `joinedOrigin` joins every other fact.
-  private statusesOf(row: PluginNode, joinedOrigin: string | undefined): PluginStatus[] {
+  // plugins.md, A row: every status the plugin carries, spec order.
+  private statusesOf(row: PluginNode): PluginStatus[] {
     const file = row.plugin.name;
-    const facts = this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, row.origin);
     const statuses = [
       failedToReadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
-      changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),
-      malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
+      changedOutsideStatus(this.changedOutside.has(file, row.origin)),
+      malformedStatus(this.diagnoses?.get(file, row.origin) ?? []),
     ];
     return statuses.filter((s): s is PluginStatus => s !== undefined);
   }
@@ -803,23 +801,12 @@ export class PluginsTreeProvider
   // "is a filter active" signal has to be threaded in here.
   private isHiddenByFilter(row: PluginListNode): boolean {
     const file = pluginFileOf(row);
-    return this.matches?.get(file, this.joinOrigin(file, row)) === false;
+    return this.matches?.get(file, row.origin) === false;
   }
 
-  // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
-  // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
+  // Children expansion only (plugins.md, States 2): this reload's own ticks.
   private reachableFailureOf(row: PluginListNode): string | undefined {
     return this.reachableFailures.get(pluginFileOf(row), row.origin);
-  }
-
-  // ADR-0012 keys every fact by origin: a row's own, and for a locked row the copy the game loads.
-  // A row whose origin mEdit names no plugin for joins nothing.
-  private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    return this.heldOrigin(file, row.origin);
-  }
-
-  private heldOrigin(file: string, origin: string | undefined): string | undefined {
-    return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -866,7 +853,7 @@ export class PluginsTreeProvider
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {
-      const origin = this.heldOrigin(name, originOf.get(name));
+      const origin = originOf.get(name);
       return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
     };
   }

@@ -23,7 +23,7 @@ vi.mock('vscode', () => ({
   window: { showQuickPick },
 }));
 
-import { registerRecordLifecycleCommands, registerRecordCopyCommands, recordIdentity } from '../recordLifecycleCommands';
+import { registerRecordLifecycleCommands, registerRecordCopyCommands, recordArgument } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -42,31 +42,25 @@ const RECORD_NODE = {
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 
-describe('recordIdentity — structural, not node-typed', () => {
+describe('recordArgument — structural, not node-typed', () => {
   it('reads a RecordNode-shaped row', () => {
-    expect(recordIdentity(RECORD_NODE)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
+    expect(recordArgument(RECORD_NODE)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
   });
 
   it('reads a plain identity literal the same way', () => {
-    expect(recordIdentity(RECORD_IDENTITY)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
+    expect(recordArgument(RECORD_IDENTITY)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
   });
 
   // plugins.md, Menus and keys: delete and copy are on worldspace, cell and placed-reference rows,
   // each of which states its record's FormKey and EditorID beside its plugin.
   it.each(['worldspace', 'cell', 'placed'])('reads a %s row that states its record', (kind) => {
-    expect(recordIdentity({ kind, formKey: '000802:MyPatch.esp', editorId: 'Here', plugin: 'MyPatch.esp', origin: 'ModA' }))
+    expect(recordArgument({ kind, formKey: '000802:MyPatch.esp', editorId: 'Here', plugin: 'MyPatch.esp', origin: 'ModA' }))
       .toEqual({ formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: 'Here' });
   });
 
   it('is undefined for neither shape', () => {
-    expect(recordIdentity({ nothing: true })).toBeUndefined();
+    expect(recordArgument({ nothing: true })).toBeUndefined();
   });
-
-  // ADR-0012 invariant 1: a filename alone names no one plugin.
-  it.each([['a RecordNode-shaped row', { ...RECORD_NODE, origin: undefined }], ['a plain identity literal', { ...RECORD_IDENTITY, origin: undefined }]])(
-    'is undefined for %s that states no origin', (_label, arg) => {
-      expect(recordIdentity(arg)).toBeUndefined();
-    });
 });
 
 describe('registerRecordLifecycleCommands', () => {
@@ -191,6 +185,22 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
+    // ADR-0012 invariant 1: a filename alone names no one plugin, so none is guessed.
+    it('refuses a record whose argument states no origin, naming it, and still deletes the rest', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
+      const { reporter } = invoke(client, 'Delete');
+
+      await deleteRecords(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+
+      expect(deleteCalls(client)).toEqual([[[FIRST]]]);
+      expect(reporter.reports).toEqual([{
+        severity: 'error',
+        message: 'Could not delete 1 of 2 records.',
+        detail: '"000700:Lost.esp in Lost.esp" (it states no origin)',
+      }]);
+    });
+
     it('says nothing when every record landed', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
@@ -274,6 +284,23 @@ describe('modbench.record.copy', () => {
 
       expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH, OTHER], false]]);
     });
+
+  it('refuses a record whose argument states no origin, naming it, and still copies the rest', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { landed: [], refused: [] });
+    pick('New', [PATCH]);
+    const { reporter } = invoke(client);
+
+    await copy(RECORD_NODE, [RECORD_NODE, { formKey: '000700:Lost.esp', plugin: 'Lost.esp' }]);
+
+    expect(copyCalls(client)).toEqual([[[SOURCE], 'New', [PATCH], false]]);
+    expect(reporter.reports).toEqual([{
+      severity: 'error',
+      message: 'Could not copy 1 of 2 records.',
+      detail: '"000700:Lost.esp in Lost.esp" (it states no origin)',
+    }]);
+  });
 
   it('takes the whole selection when the right-clicked row is one of several selected', async () => {
     const client = new InMemoryMEditClient();

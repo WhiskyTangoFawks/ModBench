@@ -67,7 +67,7 @@ export interface LoadOrderStatus {
   /** The plugins whose indexing has completed, in the order they landed. A plugin appears here
    *  only once it is wholly queryable — strictly later than "opened", which is what
    *  `GET /plugins` reports. */
-  indexedPlugins: Schemas['IndexedPlugin'][];
+  indexedPlugins: Schemas['PluginAddress'][];
   /** Whether the winner sweep has run. False means *nothing has looked yet*, which is not the
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;

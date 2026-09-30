@@ -2,26 +2,26 @@ import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
+import type { ItemRefusal } from '../ports/selectionOutcome';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
  *  plain identity literal, the way `recordOpenIdentity` (recordPanelHost.ts) already reads an
  *  unknown node. Editor names no Plugins-view node type. */
-export interface RecordIdentity {
+export interface RecordArgument {
   formKey: string;
   plugin: string;
-  origin: string;
+  origin?: string;
   editorId?: string;
 }
 
-export function recordIdentity(arg: unknown): RecordIdentity | undefined {
+export function recordArgument(arg: unknown): RecordArgument | undefined {
   if (!arg || typeof arg !== 'object') return undefined;
   const n = arg as {
     record?: { formKey?: string; plugin?: string; editorId?: string | null };
     origin?: string; formKey?: string; plugin?: string; editorId?: string;
   };
-  if (!n.origin) return undefined;
   if (n.record) {
     if (!n.record.formKey || !n.record.plugin) return undefined;
     return { formKey: n.record.formKey, plugin: n.record.plugin, origin: n.origin, editorId: n.record.editorId ?? undefined };
@@ -36,31 +36,42 @@ function recordName(formKey: string, editorId: string | undefined): string {
 
 // The plugin and its origin as well as the record: the same FormKey can sit in two plugins that
 // share a filename (ADR-0012), and the question must say which.
-function recordLabel(record: RecordIdentity): string {
-  return `${recordName(record.formKey, record.editorId)} in ${record.plugin} (${record.origin})`;
+function recordLabel({ formKey, editorId, plugin, origin }: RecordArgument): string {
+  return `${recordName(formKey, editorId)} in ${origin === undefined ? plugin : `${plugin} (${origin})`}`;
 }
 
-function askToDelete(records: readonly RecordIdentity[], ask: AskQuestion): PromiseLike<string | undefined> {
-  const [only] = records;
-  if (records.length === 1 && only) {
-    return ask(
-      `Delete ${recordLabel(only)}? It leaves its plugin source as a working-tree change you can review.`,
-      { modal: true }, 'Delete');
+function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<string | undefined> {
+  const [only] = labels;
+  if (labels.length === 1 && only) {
+    return ask(`Delete ${only}? It leaves its plugin source as a working-tree change you can review.`, { modal: true }, 'Delete');
   }
   return ask(
-    `Delete ${records.length} records? They leave their plugin source as working-tree changes you can review.`,
-    { modal: true, detail: records.map(recordLabel).join('\n') },
+    `Delete ${labels.length} records? They leave their plugin source as working-tree changes you can review.`,
+    { modal: true, detail: labels.join('\n') },
     'Delete',
   );
 }
 
-function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefined): RecordIdentity[] {
-  const nodes: readonly unknown[] = selected?.length ? selected : [clicked];
-  return nodes.map(recordIdentity).filter((i): i is RecordIdentity => i !== undefined);
+// ADR-0012 invariant 1: a filename alone names no one plugin, so an argument that states no
+// origin is refused rather than resolved.
+const NO_ORIGIN = 'it states no origin';
+
+interface Selection {
+  records: RecordAddress[];
+  originless: ItemRefusal<RecordArgument>[];
+  editorIds: ReadonlyMap<string, string | undefined>;
 }
 
-function addressOf({ formKey, plugin, origin }: RecordIdentity): RecordAddress {
-  return { formKey, plugin, origin };
+function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefined): Selection {
+  const nodes: readonly unknown[] = selected?.length ? selected : [clicked];
+  const named = nodes.map(recordArgument).filter((a): a is RecordArgument => a !== undefined);
+  const records: RecordAddress[] = [];
+  const originless: ItemRefusal<RecordArgument>[] = [];
+  for (const { formKey, plugin, origin, editorId } of named) {
+    if (origin === undefined) originless.push({ item: { formKey, plugin, editorId }, reason: NO_ORIGIN });
+    else records.push({ formKey, plugin, origin });
+  }
+  return { records, originless, editorIds: new Map(named.map((a) => [a.formKey, a.editorId])) };
 }
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
@@ -74,14 +85,17 @@ export function registerRecordLifecycleCommands(
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
-      const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
-      if (identities.length === 0) return;
-      if (await askToDelete(identities, ask) !== 'Delete') return;
+      const { records, originless, editorIds } = clicked === undefined
+        ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
+      const label = (record: RecordArgument) => addressLabel(record, editorIds);
+      if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
-      const answer = await client.deleteRecords(identities.map(addressOf));
+      const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
+      const refused = [...originless, ...answer.refused];
       reporter.selectionOutcome(
-        `Could not delete ${answer.refused.length} of ${identities.length} records.`, answer, recordLabel);
+        `Could not delete ${refused.length} of ${records.length + originless.length} records.`,
+        { landed: answer.landed, refused }, label);
     }),
   ];
 }
@@ -123,7 +137,7 @@ async function copiesAnOverrideReplaces(
   return heldCopies(records, destinations, holders);
 }
 
-function addressLabel(record: RecordAddress, editorIds: ReadonlyMap<string, string | undefined>): string {
+function addressLabel(record: RecordArgument, editorIds: ReadonlyMap<string, string | undefined>): string {
   return recordLabel({ ...record, editorId: editorIds.get(record.formKey) });
 }
 
@@ -177,10 +191,12 @@ export function registerRecordCopyCommands(
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
-      const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
-      if (identities.length === 0) return;
-      const records = identities.map(addressOf);
-      const editorIds = new Map(identities.map((i) => [i.formKey, i.editorId]));
+      const { records, originless, editorIds } = clicked === undefined
+        ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);
+      const reportOriginless = () => reporter.selectionOutcome(
+        `Could not copy ${originless.length} of ${records.length + originless.length} records.`,
+        { landed: [], refused: originless }, (record) => addressLabel(record, editorIds));
+      if (records.length === 0) { reportOriginless(); return; }
 
       const mode = await pickCopyMode();
       if (!mode) return;
@@ -201,6 +217,7 @@ export function registerRecordCopyCommands(
       reporter.selectionOutcome(
         `Could not make ${answer.refused.length} of ${written.length + answer.refused.length} copies.`,
         answer, into);
+      reportOriginless();
     }),
   ];
 }
