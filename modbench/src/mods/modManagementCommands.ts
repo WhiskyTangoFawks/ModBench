@@ -264,9 +264,9 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 function folderOf(
   instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
 ): { name: string; folder: vscode.Uri | undefined } {
-  if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: vscode.Uri.file(instance.value.paths.overwriteDir) };
-  const folder = instance.value.paths.modDirs.get(node.mod.name);
-  return { name: node.mod.name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
+  const { overwriteDir, modDirs } = instance.value.paths;
+  const [name, folder] = node.kind === OVERWRITE_NODE_KIND ? ['Overwrite', overwriteDir] : [node.mod.name, modDirs.get(node.mod.name)];
+  return { name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
 }
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a

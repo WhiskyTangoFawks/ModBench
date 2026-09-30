@@ -979,6 +979,20 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     ]);
   });
 
+  // Rival: revealing an empty path while the value names no overwrite folder yet.
+  it('refuses the Overwrite row while the value names no folder for it', async () => {
+    const reporter = recordingReporter();
+    const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
+
+    registerOpenFolderCommand(unread, reporter, () => []);
+    await invoke('modbench.mod.openFolder', new OverwriteNode(3));
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "Overwrite".', detail: 'No folder holds it.' },
+    ]);
+  });
+
   it('reveals the overwrite folder from the Overwrite row', async () => {
     registerOpenFolderCommand(instance, recordingReporter(), () => []);
     await invoke('modbench.mod.openFolder', new OverwriteNode(3));

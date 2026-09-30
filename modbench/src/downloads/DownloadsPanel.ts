@@ -227,7 +227,7 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
 /** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
  *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
 export function registerDownloadsMultiRowCommands(
-  access: DownloadsAccess, _instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
+  access: DownloadsAccess, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {

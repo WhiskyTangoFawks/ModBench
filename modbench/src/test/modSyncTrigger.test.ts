@@ -62,7 +62,6 @@ async function wiredInstance(): Promise<{
   const root = await cloneCorpusFixture();
   roots.push(root);
   const instance = new Instance({
-    instanceRoot: root,
     adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
     log: () => {},
     logReadFailure: () => {},

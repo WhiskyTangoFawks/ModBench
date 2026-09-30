@@ -96,6 +96,11 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
+function lostPlace(origin: string, lost: 'gone' | 'disabled' | 'unread'): string {
+  if (lost === 'unread') return 'Overwrite has no folder yet';
+  return `The mod "${origin}" ${lost === 'gone' ? 'is gone' : 'was disabled'}`;
+}
+
 // create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
 // watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
@@ -122,8 +127,7 @@ export function registerCreatePluginCommand(
 
     const place = placeFolder(mo2.instance.value, picked.origin);
     if ('lost' in place) {
-      const became = place.lost === 'gone' ? 'is gone' : 'was disabled';
-      reporter.report('error', `The mod "${picked.origin}" ${became}, so "${name}" was not created.`);
+      reporter.report('error', `${lostPlace(picked.origin, place.lost)}, so "${name}" was not created.`);
       return;
     }
 

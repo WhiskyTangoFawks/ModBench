@@ -20,7 +20,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     dataFolderPlugins: { kind: 'unresolved' },
     modStatuses: new Map(),
     overwriteFileCount: 0,
-    paths: { overwriteDir: '', downloadsDir: '', modDirs: new Map() },
+    paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
     ...overrides,
   };
 }

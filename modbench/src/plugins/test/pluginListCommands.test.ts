@@ -203,6 +203,23 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
+  // Rival: handing mEdit an empty folder for Overwrite before the first read lands.
+  it('refuses Overwrite while the value names no folder for it, and creates nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const mo2 = makeMo2();
+    mo2.instance.value = { ...mo2.instance.value, paths: { ...mo2.instance.value.paths, overwriteDir: undefined } };
+    showInputBox.mockResolvedValue('New.esp');
+    showQuickPick.mockImplementation((places: Place[]) => Promise.resolve(places.find((p) => p.label === 'Overwrite')));
+
+    const { run, reporter } = invoke(client, mo2);
+    await run();
+
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Overwrite has no folder yet, so "New.esp" was not created.', detail: undefined },
+    ]);
+  });
+
   it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });

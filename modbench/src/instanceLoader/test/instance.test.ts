@@ -61,7 +61,6 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   const settingsReads = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
-    instanceRoot: root,
     adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
@@ -80,7 +79,6 @@ async function signalledInstance(): Promise<{ instance: Instance; signal: () => 
   roots.push(root);
   const listeners = new Set<() => void>();
   const instance = new Instance({
-    instanceRoot: root,
     adapter: {
       ...adapterOver(root, { gameFolder: resolvesDataFolder }),
       subscribe: (listener) => {
@@ -941,13 +939,13 @@ describe('Instance — downloads, profile and game directory', () => {
   // keeps its folders.
   it('names no folder before the first read lands', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
+      adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
       log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
     expect(instance.sequence).toBe(0);
-    expect(instance.value.paths).toEqual({ overwriteDir: '', downloadsDir: undefined, modDirs: new Map() });
+    expect(instance.value.paths).toEqual({ overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() });
   });
 });
 
@@ -968,7 +966,6 @@ async function minimalInstance(): Promise<{
   const readFailureLines: string[] = [];
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
-    instanceRoot: root,
     adapter: adapterOver(root, { gameFolder: () => resolve() }),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),

@@ -159,7 +159,7 @@ export function registerDownloadsView(
   for (const disposable of [
     ...registerDownloadsExcludedToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(access, instance, reporter, install, () => downloadsView.selection),
-    ...registerDownloadsMultiRowCommands(access, instance, reporter, ask, trash, install.log, () => downloadsView.selection),
+    ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection),
   ]) own(disposable);
   return { downloadsProvider, downloadsView };
 }

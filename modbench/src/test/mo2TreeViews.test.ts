@@ -98,7 +98,6 @@ const currentBox = currentBoxOf(h.state);
 
 async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
-    instanceRoot: root,
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },

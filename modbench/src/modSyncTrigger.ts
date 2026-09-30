@@ -6,8 +6,8 @@ import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } fr
 /** Its message is the Mods view's, for a failed run until a run lands. */
 export interface ModSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns {}
 
-// Termination: the write re-enters here, since the Instance watches modlist.txt. The next value
-// agrees with mods/, so the command writes nothing, which stops the loop.
+// Termination: the write re-enters here through the Instance adapter's signal. The next value
+// agrees with the mod folders, so the command writes nothing, which stops the loop.
 export function registerModSync(
   instance: Pick<Instance, 'subscribe'>,
   sync: (value: InstanceValue) => Promise<ModSyncResult>,

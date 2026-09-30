@@ -9,7 +9,7 @@ import { adapterOver } from './adapterOver';
 export async function withUnreadCorpusInstance(test: (instance: Instance, root: string) => Promise<void>): Promise<void> {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
-    instanceRoot: root, log: () => {}, logReadFailure: () => {},
+    log: () => {}, logReadFailure: () => {},
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
   try {

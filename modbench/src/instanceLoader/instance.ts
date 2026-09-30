@@ -34,7 +34,8 @@ export type DownloadsResult =
  *  a view reads its answer here. Each is read with the rest of the value, so the empty value
  *  names none. */
 export interface InstancePaths {
-  readonly overwriteDir: string;
+  /** `undefined` until read, and when the instance gives run-time output no folder. */
+  readonly overwriteDir: string | undefined;
   /** `undefined` while unresolved (or not yet read): a consumer skips the action, no fallback. */
   readonly downloadsDir: string | undefined;
   /** Each listed mod's own folder, by mod name; a mod with no folder has none. */
@@ -93,7 +94,6 @@ export type ReadFailureListener = () => void;
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
 export interface InstanceOptions {
-  instanceRoot: string;
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
   log: (msg: string) => void;
@@ -106,7 +106,7 @@ function pathsOf(
   runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
 ): InstancePaths {
   return {
-    overwriteDir: runtimeOutput.folder ?? '',
+    overwriteDir: runtimeOutput.folder,
     downloadsDir: downloaded.kind === 'listed' ? downloaded.downloadsDir : undefined,
     modDirs: new Map(entries.flatMap((entry) => {
       const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
@@ -131,7 +131,7 @@ const emptyValue = (): InstanceValue => ({
   dataFolderPlugins: { kind: 'unresolved' },
   modStatuses: new Map(),
   overwriteFileCount: 0,
-  paths: { overwriteDir: '', downloadsDir: undefined, modDirs: new Map() },
+  paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
 });
 
 export class Instance implements Subscription {

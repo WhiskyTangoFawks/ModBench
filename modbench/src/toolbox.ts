@@ -458,11 +458,11 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
   // ADR-0015: the one Instance over MO2's files, recomputed through the Instance adapter.
-  const instance = own(new Instance({ instanceRoot, adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
+  const instance = own(new Instance({ adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
-  // The Instance watches files only, so an edited setting is the root's to hand to the same
+  // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
   // The value's own resolution, read fresh per call: a config change is a recompute trigger like
