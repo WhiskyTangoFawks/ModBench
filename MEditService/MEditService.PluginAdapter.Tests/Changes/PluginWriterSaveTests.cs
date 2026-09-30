@@ -52,4 +52,27 @@ public sealed class PluginWriterSaveTests
 
         Assert.Equal([pluginPath], Directory.GetFiles(data.DataFolder, "TestPlugin*"));
     }
+
+    // plugins.md, Compile, story 5: an interrupted write leaves the old binary or the new one.
+    [Fact]
+    public async Task Commit_ThatCannotMoveTheNewBinaryIn_LeavesTheOldOne()
+    {
+        using var data = new PluginFixtureBuilder("pw-commit-keeps-old")
+            .WithPlugin("TestPlugin.esp")
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var before = File.ReadAllBytes(pluginPath);
+        var mod = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
+
+        using (var prep = await PluginWriter.PrepareFromModAsync(mod, pluginPath))
+        {
+            var tempDir = Assert.Single(Directory.GetDirectories(data.DataFolder, ".medit_tmp_*"));
+            File.Delete(Path.Combine(tempDir, "TestPlugin.esp"));
+
+            Assert.ThrowsAny<IOException>(prep.Commit);
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(pluginPath));
+    }
 }

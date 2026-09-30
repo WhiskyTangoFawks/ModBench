@@ -31,7 +31,7 @@ public sealed class SourceRepositoryRefEncodingTests
     [Theory]
     [InlineData("LitR - Settings Holotapes Sorting.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
-    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256_RoundTrips_ForARefUnsafeName(string plugin)
+    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256s_RoundTrips_ForARefUnsafeName(string plugin)
     {
         var modFolder = NewModFolder();
         try
@@ -41,7 +41,7 @@ public sealed class SourceRepositoryRefEncodingTests
 
             SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
 
-            Assert.Equal("DEADBEEF", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
+            Assert.Equal(["DEADBEEF"], SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin));
         }
         finally
         {

@@ -26,14 +26,6 @@ public sealed class TrackedModSettled
         // The origin is the mod manager's name for the mod, which only a plugin of it carries.
         if (plugins is not [{ Origin: var origin }, ..]) return;
 
-        // plugins.md, Compile, story 5: an interrupted compile is a warning, not a change.
-        if (CompileJournal.UnfinishedBatch(modFolder) is { } unfinished)
-        {
-            foreach (var plugin in unfinished.Unlanded)
-                _notifications.Publish(new CompileUnfinishedNotification(new PluginAddress(plugin, origin)));
-            return;
-        }
-
         var tracked = plugins.ToLookup(plugin => SourceRepository.IsPluginTracked(modFolder, plugin.Name));
         _notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]
             .Select(plugin => new ChangedPlugin(plugin.Name, PluginBinaryHash.OfFile(plugin.Path)))
@@ -46,6 +38,6 @@ public sealed class TrackedModSettled
     // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
     private static bool MatchesLastWrite(string modFolder, ChangedPlugin plugin) =>
         plugin.BytesSha256 is { } observed
-        && SourceRepository.ParkedCompileBinarySha256(modFolder, plugin.Name) is { } parked
-        && string.Equals(observed, parked, StringComparison.OrdinalIgnoreCase);
+        && SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin.Name)
+            .Contains(observed, StringComparer.OrdinalIgnoreCase);
 }

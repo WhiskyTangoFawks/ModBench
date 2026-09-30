@@ -43,11 +43,14 @@ public sealed class TrackedModSettledTests : IDisposable
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
+    // The commit trailers spell a hash upper-cased.
+    private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
     // Track as the Source adapter records it: a baseline whose trailer names the bytes it was taken from.
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile($"source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
-            new BaselineTrailers(p.Plugin, null, Convert.ToHexString(SHA256.HashData(p.Bytes)))))]);
+            new BaselineTrailers(p.Plugin, null, TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
@@ -188,35 +191,65 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal(notices[0].Plugins, notices[1].Plugins);
     }
 
+    // plugins.md, Compile, story 5: a compile records what it writes before it writes it.
     [Fact]
-    public async Task ASettle_WarnsCompileUnfinished_AndTellsNoExternalChange_WhileACompileMarkStands()
+    public void ASettle_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {
-        var loadOrder = WithPlugins((PluginName, "anything, hash mismatches regardless"u8.ToArray()));
-        Track((PluginName, "the tracked binary"u8.ToArray()));
-        await CompileJournal.RunBatchAsync(ModFolder, [PluginName], _ => Task.FromResult(false));
+        var old = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, old));
+        Track((PluginName, old));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
-        Assert.Equal(
-            [new CompileUnfinishedNotification(new PluginAddress(PluginName, Origin))],
-            _notifications.Notifications);
+        Assert.Empty(TheExternalChange().Plugins);
     }
 
-    // The rival this pins: naming every plugin the batch named, when its first plugin landed and only
-    // the second's binary is bad.
     [Fact]
-    public async Task ASettle_NamesOnlyThePluginsTheInterruptedBatchDidNotLand()
+    public void ASettle_NamesNoPlugin_WhenTwoInterruptedCompilesInARowLeftTheOldBinary()
     {
-        const string landed = "Landed.esp";
-        var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
-        Track((PluginName, "the tracked binary"u8.ToArray()));
-        await CompileJournal.RunBatchAsync(ModFolder, [landed, PluginName], plugin => Task.FromResult(plugin == landed));
+        var old = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, old));
+        Track((PluginName, old));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
-        Assert.Equal(
-            [new CompileUnfinishedNotification(new PluginAddress(PluginName, Origin))],
-            _notifications.Notifications);
+        Assert.Empty(TheExternalChange().Plugins);
+    }
+
+    [Fact]
+    public void ASettle_NamesNoPlugin_WhenAnInterruptedCompileLeftTheNewBinary()
+    {
+        var old = "the tracked binary"u8.ToArray();
+        var compiled = "the compiled binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, old));
+        Track((PluginName, old));
+        SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash(compiled));
+        File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled);
+
+        Settled.Handle(loadOrder, ModFolder);
+
+        Assert.Empty(TheExternalChange().Plugins);
+    }
+
+    // ADR-0003 invariant 3: once the new binary has landed, it alone is what Modbench last wrote.
+    [Fact]
+    public async Task ASettle_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
+    {
+        using var mod = SourceEditFixture.Tracked();
+        var pluginPath = mod.LoadOrder.Plugin(mod.Plugin)?.Path ?? throw new InvalidOperationException("Expected the fixture's plugin in its load order.");
+        var before = File.ReadAllBytes(pluginPath);
+        mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
+        var result = await CompileServices.Over(mod.LoadOrder).CompileAsync(mod.Plugin);
+        Assert.True(result.Succeeded, result.RefusalReason);
+        File.WriteAllBytes(pluginPath, before);
+
+        Settled.Handle(mod.LoadOrder, mod.ModFolder);
+
+        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
+        Assert.Equal([new ChangedPlugin(mod.Plugin.Name, Sha256(before))], notice.Plugins);
     }
 
     private static Dictionary<string, string> FilesUnder(string folder) =>

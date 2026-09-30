@@ -78,8 +78,8 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Equal(Git("rev-parse", "main~1"), Git("rev-parse", SourceRepository.LastCompileRef("First.esp")));
         Assert.Equal(Git("rev-parse", "main"), Git("rev-parse", SourceRepository.LastCompileRef("Second.esp")));
-        Assert.Equal(first, SourceRepository.ParkedCompileBinarySha256(_modFolder, "First.esp"));
-        Assert.Equal(second, SourceRepository.ParkedCompileBinarySha256(_modFolder, "Second.esp"));
+        Assert.Equal([first], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "First.esp"));
+        Assert.Equal([second], SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal([Key("First.esp")], result.Landed);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
-        Assert.Null(SourceRepository.ParkedCompileBinarySha256(_modFolder, "Second.esp"));
+        Assert.Empty(SourceRepository.ParkedCompileBinarySha256s(_modFolder, "Second.esp"));
     }
 
     [Fact]

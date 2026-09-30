@@ -99,32 +99,25 @@ public sealed class PluginCompileService(
             .Select(c => c.Name)
             .ToList();
 
-        // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
-        // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
-        // until Commit(), so refusing is safe.
-        string? writeRefusal = null;
-        await CompileJournal.RunBatchAsync(modFolder, [plugin.Name], async _ =>
+        PreparedPluginSave save;
+        try
         {
-            try
-            {
-                await tree.SaveThroughAsync(registered.Path, loadOrderNames);
-            }
-            catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-            {
-                // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
-                // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
-                // master this write still needs. Every other write failure propagates raw.
-                writeRefusal = $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}";
-                return false;
-            }
-
-            // The parked snapshot advances only after the binary write has landed.
-            SourceRepository.ParkCompileSnapshot(
-                modFolder, plugin.Name, PluginBinaryHash.TrailerFormOfFile(registered.Path));
-            return true;
-        });
-        if (writeRefusal != null)
-            return CompileResult.Refused(writeRefusal);
+            save = await tree.PrepareSaveAsync(registered.Path, loadOrderNames);
+        }
+        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
+        {
+            // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
+            // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
+            // master this write still needs. Every other write failure propagates raw.
+            return CompileResult.Refused(
+                $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}");
+        }
+        using (save)
+        {
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, save.BinarySha256());
+            save.Commit();
+            SourceRepository.NarrowCompileSnapshot(modFolder, plugin.Name);
+        }
 
         if (logger.IsEnabled(LogLevel.Information))
         {

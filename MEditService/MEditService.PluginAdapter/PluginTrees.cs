@@ -241,8 +241,8 @@ public sealed class CompiledTree
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>The mod handed straight to the write, through the temp-and-rename discipline every
-    /// plugin replacement shares.</summary>
-    public Task SaveThroughAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
-        PluginWriter.SaveFromModAsync(_mod, pluginPath, loadOrder);
+    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/>, which the
+    /// returned save renames into place on Commit.</summary>
+    public Task<PreparedPluginSave> PrepareSaveAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
+        PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
 }
