@@ -11,8 +11,9 @@ npx vitest run src/<box>   # skips the cross-cutting scans in src/test/; npm run
 - The instance value is the Instance loader's in-memory read of the instance and the game's Data/
   folder. Views read it; a command is handed the slice it needs as an argument.
 - A gesture belongs to the object it acts on, never to a view
-  ([commands.md](../docs/architecture/commands.md)). A view shows objects and offers their gestures;
-  each gesture is a command of the core box for its object.
+  ([commands.md](../docs/architecture/commands.md)). A view shows objects and offers their gestures.
+  A gesture Modbench handles is a command of the core box for its object; a gesture mEdit handles
+  is a call through the mEdit client, from a box the reference view draws an arrow to it from.
 - A view takes every path it shows or opens from the instance value and never builds one: the box
   that owns a path answers it, the Instance adapter for the instance's, and a lint rule keeps
   `node:path` out of every view.

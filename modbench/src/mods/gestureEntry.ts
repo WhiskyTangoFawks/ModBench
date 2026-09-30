@@ -83,6 +83,7 @@ export interface ModsKeyContext {
   readonly singleFolder: boolean;
   readonly holdsEnabledMod: boolean;
   readonly holdsDisabledMod: boolean;
+  readonly holdsModWithPlugin: boolean;
 }
 
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
@@ -98,6 +99,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     singleFolder: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND,
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
+    holdsModWithPlugin: mods.some((row) => row.holdsPlugin),
   };
 }
 
