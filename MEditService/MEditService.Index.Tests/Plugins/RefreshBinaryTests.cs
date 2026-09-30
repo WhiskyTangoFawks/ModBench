@@ -127,41 +127,47 @@ public sealed class RefreshBinaryTests : IDisposable
         Assert.False(identicalBytesResettling);
     }
 
-    // plugins.md, States, story 6: the next change to the instance tries again. A binary that
-    // replaces its repository as the plugin's truth, and cannot be read, fails the reconcile.
-    [Fact]
-    public async Task RefreshBinary_WhileTheReconcileFailed_TriesTheReconcileAgain()
+    private string OtherPluginPath => Path.Combine(_gameDirectory, "Other.esp");
+
+    private LoadOrderEntry OtherEntry => new("Other.esp", OtherPluginPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+
+    // A tracked plugin whose repository went reads its binary now, and that binary does not read.
+    private void UntrackedOverAnUnreadableBinary()
     {
         WriteValidPlugin(_pluginPath);
         TrackedMods.Track(_pluginPath, _gameDirectory);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
         Directory.Delete(Path.Combine(_modFolder, ".git"), recursive: true);
         File.WriteAllText(_pluginPath, "not a plugin");
-        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
-        Assert.Equal(LoadOrderState.Failed, _index.Status.State);
+        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
+        other.Npcs.AddNew("OtherNpc");
+        other.WriteToBinary(OtherPluginPath);
+        _index.Reconcile(_holder, _gameDirectory, [Entry, OtherEntry], GameRelease.Fallout4, _instanceRoot);
+    }
+
+    // plugins.md, A row, Plugin: "Failed to read" is the plugin's own status; story 6's failed
+    // index is for a failure of the index itself.
+    [Fact]
+    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
+    {
+        UntrackedOverAnUnreadableBinary();
+
+        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
+        Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
+        Assert.Contains(_index.RequireReads().GetDocuments(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
+            d => d.EditorId == "OtherNpc");
+    }
+
+    [Fact]
+    public async Task AReDerivationThatCannotReadTheBinary_ReadsAgainOnceItsBytesChange()
+    {
+        UntrackedOverAnUnreadableBinary();
 
         WriteValidPlugin(_pluginPath);
         await _index.RefreshBinary(_key, _pluginPath);
 
-        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
+        Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
         Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
-    }
-
-    [Fact]
-    public async Task RefreshBinary_WhileTheReconcileStillFails_TriesItOncePerChange()
-    {
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = Indexes.Open(_holder, notifications: notifications);
-        WriteValidPlugin(_pluginPath);
-        index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.SkyrimSE, _instanceRoot);
-        Assert.Equal(LoadOrderState.Failed, index.Status.State);
-        int FailedStatuses() => notifications.Notifications.OfType<LoadOrderStatusNotification>()
-            .Count(n => n.Status.State == LoadOrderState.Failed);
-        var before = FailedStatuses();
-
-        await index.RefreshBinary(_key, _pluginPath);
-
-        Assert.Equal(before + 1, FailedStatuses());
     }
 
     // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it

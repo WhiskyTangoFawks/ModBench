@@ -26,6 +26,10 @@ internal sealed class WatcherSinks
     /// thread.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => _index.Reconcile(snapshot, version);
 
+    /// <summary>plugins.md, States, story 6: the next change to the instance tries a failed
+    /// reconcile again.</summary>
+    public void RetryFailedReconcile() => _index.RetryFailedReconcile();
+
     /// <summary>"A tracked mod settled" (ADR-0015 invariant 2), at load and live alike.</summary>
     public void Settle(LoadOrderSnapshot order, string modFolder) => _settled.Handle(order, modFolder);
 

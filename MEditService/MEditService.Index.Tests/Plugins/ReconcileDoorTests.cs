@@ -57,6 +57,60 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
+    // plugins.md, States, story 6: the next change to the instance tries again. A file where the
+    // store's folder goes keeps the store from opening until it is gone.
+    [Fact]
+    public void AFailedReconcile_IsTriedAgain_OnRetry()
+    {
+        using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp").Build();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        var blocker = Path.Combine(data.InstanceRoot, "modbench");
+        File.WriteAllText(blocker, "not a folder");
+        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        index.Reconcile(snapshot, holder.Apply(snapshot));
+        Assert.Equal(LoadOrderState.Failed, index.Status.State);
+
+        File.Delete(blocker);
+        index.RetryFailedReconcile();
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
+    }
+
+    [Fact]
+    public void AReconcileThatStillFails_IsTriedOncePerRetry()
+    {
+        using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.SkyrimSE, data.Plugins);
+        index.Reconcile(snapshot, holder.Apply(snapshot));
+        var before = StatusesPublished(notifications).Length;
+
+        index.RetryFailedReconcile();
+
+        Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)[before..]).Status.State);
+    }
+
+    // The watcher asks on every settle, so a retry of an index that has not failed does nothing.
+    [Fact]
+    public void ARetry_OfAnIndexThatHasNotFailed_ReconcilesNothing()
+    {
+        using var data = new PluginFixtureBuilder("retry-ready-door").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder, notifications: notifications);
+        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        index.Reconcile(snapshot, holder.Apply(snapshot));
+        var before = StatusesPublished(notifications).Length;
+
+        index.RetryFailedReconcile();
+
+        Assert.Equal(before, StatusesPublished(notifications).Length);
+    }
+
     [Fact]
     public void ALoadOrderNamingTwoWinnersOfOneFilename_IsAnsweredAsFailed_NamingBoth()
     {

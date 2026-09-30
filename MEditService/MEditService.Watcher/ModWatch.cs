@@ -55,7 +55,7 @@ internal sealed class ModWatch : IDisposable
     /// <summary>Throws <see cref="ArgumentException"/> when the folder is not on disk, as
     /// FileSystemWatcher does: a vanished mod folder gets no watch.</summary>
     public ModWatch(
-        string modFolder, bool recursive, bool upgradable, TimeSpan quiet, TimeSpan maxWindow,
+        string modFolder, bool upgradable, TimeSpan quiet, TimeSpan maxWindow,
         TimeProvider time, Action<ModWatch> settle, Action<ModWatch> overflow)
     {
         ModFolder = modFolder;
@@ -65,7 +65,8 @@ internal sealed class ModWatch : IDisposable
         _maxWindow = maxWindow;
         _watcher = new FileSystemWatcher(modFolder)
         {
-            IncludeSubdirectories = recursive,
+            // A tracked mod routes everything under it from the start.
+            IncludeSubdirectories = TrackedNow,
             // FileName and DirectoryName: git and a compile both write through a rename, and
             // .NET's inotify-backed Linux watcher gates Renamed on those bits.
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
@@ -122,17 +123,20 @@ internal sealed class ModWatch : IDisposable
         lock (_lock) _plugins.Clear();
     }
 
-    /// <summary>Records whether the mod is tracked, answering whether that moved since the last
-    /// record: a mod whose repository came or went is settled again.</summary>
-    public bool TrackedChanged(bool tracked)
+    /// <summary>Whether the mod is tracked now, and whether that moved since this was last asked.
+    /// A folder the snapshot marks untrackable, the game's own Data folder, never is.</summary>
+    public (bool Tracked, bool Moved) Trackedness()
     {
+        var tracked = TrackedNow;
         lock (_lock)
         {
-            var changed = tracked != _tracked;
+            var moved = tracked != _tracked;
             _tracked = tracked;
-            return changed;
+            return (tracked, moved);
         }
     }
+
+    private bool TrackedNow => _upgradable && SourceRepository.IsTracked(ModFolder);
 
     /// <summary>Upgraded, never downgraded: the folder holds a source tree or a repository, so
     /// everything under it routes.</summary>

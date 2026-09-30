@@ -1,7 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Watcher;
@@ -14,7 +13,7 @@ public sealed class ModFolderWatcher : IDisposable
     private readonly LoadOrderHolder _holder;
     private readonly WatchSet _watches;
     private readonly WatcherSinks _sinks;
-    private readonly OverflowValidation _overflow;
+    private readonly WholePluginValidation _validation;
     private readonly ILogger _logger;
     private readonly Action<LoadOrderSnapshot, long> _onChanged;
     private readonly object _lifecycle = new();
@@ -35,7 +34,7 @@ public sealed class ModFolderWatcher : IDisposable
         _holder = holder;
         _logger = logger;
         _sinks = new WatcherSinks(index, settled, logger);
-        _overflow = new OverflowValidation(_sinks, logger);
+        _validation = new WholePluginValidation(_sinks, logger);
         _watches = new WatchSet(
             quiet ?? TimeSpan.FromMilliseconds(300),
             maxWindow ?? TimeSpan.FromSeconds(2),
@@ -118,10 +117,17 @@ public sealed class ModFolderWatcher : IDisposable
         var window = mod.Close();
         if (window.IsEmpty) return;
 
-        if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
+        // Once per window, however many paths it holds, and first, so what follows lands in the
+        // index the retry opened.
+        RaiseSafely(_sinks.RetryFailedReconcile);
 
-        var tracked = SourceRepository.IsTracked(mod.ModFolder);
-        if (mod.TrackedChanged(tracked) || (tracked && (window.ModTouched || window.Binaries.Count > 0)))
+        // A move of tracked-ness moves which truth every plugin of the mod reads, so each is
+        // re-derived whole, which covers whatever the batch named.
+        var (tracked, moved) = mod.Trackedness();
+        if (moved) _validation.Validate(mod.RegisteredKeys, "its repository coming or going");
+        else if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
+
+        if (moved || (tracked && (window.ModTouched || window.Binaries.Count > 0)))
             RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
 
         if (!tracked)
@@ -147,7 +153,7 @@ public sealed class ModFolderWatcher : IDisposable
             }
 
             mod.MarkEverythingTouched();
-            _overflow.Validate(mod.RegisteredKeys);
+            _validation.Validate(mod.RegisteredKeys, "a watch overflow");
             return Task.CompletedTask;
         });
     }

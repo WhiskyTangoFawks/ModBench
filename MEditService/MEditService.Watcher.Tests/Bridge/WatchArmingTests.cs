@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.Watcher.Tests.TestSupport;
 
@@ -10,6 +11,23 @@ public sealed class WatchArmingTests
 {
     private const string Origin = "TrackedMod";
     private const string PluginName = "Tracked.esp";
+
+    // Track does not apply to the game's own Data folder, so a repository a user keeps there does
+    // not take its binaries from the Index.
+    [Fact]
+    public async Task ADataFolderHoldingARepository_IsNeverTracked()
+    {
+        using var tree = new WatchedTree();
+        tree.AddPlugin(PluginOrigin.DataDirectory, tree.GameDirectory, "Game.esm");
+        WatchedTree.Track(tree.GameDirectory);
+        await tree.ApplyLoadOrder();
+
+        await tree.Observes(() =>
+            tree.WriteFile(WatchedTree.PluginPath(tree.GameDirectory, "Game.esm"), "an official update"u8.ToArray()));
+
+        Assert.True(await tree.Settles(() => tree.Index.BinaryPokes.Count > 0), "the Data folder's binary never reached the Index");
+        Assert.Empty(tree.Notifications.Published);
+    }
 
     // The rival this pins: a Subscribe that never wires Changed, leaving every plugin unwatched
     // when a load order arrives through Apply.

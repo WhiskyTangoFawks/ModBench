@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 
 namespace MEditService.Watcher;
 
@@ -52,13 +51,13 @@ internal sealed class WatchSet : IDisposable
 
             foreach (var (folder, mod) in wanted)
             {
-                var isTracked = mod.Trackable && SourceRepository.IsTracked(folder);
-                if (WatchOf(folder, recursive: isTracked, upgradable: mod.Trackable) is not { } watch) continue;
+                if (WatchOf(folder, upgradable: mod.Trackable) is not { } watch) continue;
 
                 watch.ClearRegistrations();
                 foreach (var plugin in mod.Plugins) watch.Register(plugin.Name, plugin.Origin, plugin.Path);
-                if (isTracked) watch.EnsureRecursive();
-                if (watch.TrackedChanged(isTracked) || isTracked) toSettle.Add(folder);
+                var (tracked, moved) = watch.Trackedness();
+                if (tracked) watch.EnsureRecursive();
+                if (tracked || moved) toSettle.Add(folder);
             }
         }
 
@@ -94,12 +93,12 @@ internal sealed class WatchSet : IDisposable
 
     // Called under _gate. Lazily arms the folder's watch, recursive only once needed. A vanished
     // mod folder gets no watch, and no throw.
-    private ModWatch? WatchOf(string folder, bool recursive, bool upgradable)
+    private ModWatch? WatchOf(string folder, bool upgradable)
     {
         if (_mods.TryGetValue(folder, out var existing)) return existing;
         try
         {
-            var watch = new ModWatch(folder, recursive, upgradable, _quiet, _maxWindow, _time, _settle, _overflow);
+            var watch = new ModWatch(folder, upgradable, _quiet, _maxWindow, _time, _settle, _overflow);
             _mods[folder] = watch;
             return watch;
         }

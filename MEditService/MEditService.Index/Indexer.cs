@@ -544,7 +544,18 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
                     "{Plugin} ({Origin}) now reads from {Truth}; re-deriving it", plugin.Name, plugin.Origin,
                     holdsTree ? "its source tree" : "its binary");
             }
-            IndexOnePlugin(held, index, metadata, holdsTree, token);
+            try
+            {
+                IndexOnePlugin(held, index, metadata, holdsTree, token);
+            }
+            catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
+            {
+                // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to
+                // read", never the whole index's failure.
+                _logger.LogWarning(ex, "Failed to re-derive {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                held.SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
+                PublishStatus();
+            }
         }
     }
 
@@ -918,6 +929,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        if (_heldPlugins?.ClearFailure(metadata.Key) == true) PublishStatus();
         AnnouncePluginChanged(index, metadata.Key);
     }
 
@@ -958,8 +970,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private bool RefreshBinaryNow(PluginAddress key, string path)
     {
-        RetryFailedReconcile();
-
         if (!File.Exists(path))
         {
             var wasIndexed = IndexedContentHash(key) is not null;
@@ -969,7 +979,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
         if (IndexedContentHash(key) is { } indexedHash)
         {
-            if (ContentHashOnDisk(path) == indexedHash) return false;
+            // A plugin whose last read failed is read whole again, which is what lifts the failure.
+            if (ContentHashOnDisk(path) == indexedHash && _heldPlugins?.IsHeldWithAFailure(key) != true) return false;
             ReindexHeldPlugin(key);
             return true;
         }
@@ -977,9 +988,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         return IndexNotYetHeld(key);
     }
 
-    // plugins.md, States, story 6: the next change to the instance tries a failed reconcile again,
-    // once per change heard.
-    private void RetryFailedReconcile()
+    /// <summary>See <see cref="IRefreshIndex.RetryFailedReconcile"/>.</summary>
+    public void RetryFailedReconcile()
     {
         bool failed;
         lock (_lock) failed = _failureMessage is not null;
