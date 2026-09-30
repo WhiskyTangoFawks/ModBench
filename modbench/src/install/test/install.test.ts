@@ -331,9 +331,8 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!source/\n');
   });
 
-  // Rival: refuse only a tracking entry the mod folder already has, or match its name with case.
-  // The release would plant a .GITIGNORE or a Source/ beside the mod's own, which every later
-  // upgrade refuses, or which Windows moves onto the kept one part way.
+  // Rival: a case-sensitive match. Windows would move Source/ onto the kept source/ part way;
+  // elsewhere it would land beside it and drop out of the mod's files.
   it.each(['.GITIGNORE', 'Source'])(
     'refuses, before any write, a release that ships %s, naming it',
     async (entry) => {
