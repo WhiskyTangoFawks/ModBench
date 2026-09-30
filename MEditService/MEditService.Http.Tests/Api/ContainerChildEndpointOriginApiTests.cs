@@ -84,5 +84,8 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
 
         var omitted = await _client.GetAsync($"/plugins/Shared.esp/records/{encodedFk}/children");
         Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+        Assert.Equal("application/problem+json", omitted.Content.Headers.ContentType?.MediaType);
+        var body = await omitted.Body();
+        Assert.Equal("Origin is required.", body.GetProperty("detail").GetString());
     }
 }

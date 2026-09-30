@@ -3,6 +3,14 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
+/// <summary>ADR-0012 invariant 1: naming a plugin without its origin names half an identity.
+/// Shared so no caller's own copy of this check can drift from another's.</summary>
+public static class RecordFilterGuard
+{
+    public static bool NamesOnlyPluginOrOnlyOrigin(string? plugin, string? origin) =>
+        string.IsNullOrWhiteSpace(plugin) != string.IsNullOrWhiteSpace(origin);
+}
+
 public interface IRecordQueryService
 {
     IReadOnlyList<PluginRow> GetPlugins();

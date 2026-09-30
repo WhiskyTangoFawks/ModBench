@@ -64,8 +64,7 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for the Index side; this service takes
-    // the load order itself from the holder.
+    // The reads' presence is what "no load order" means for the Index side.
     private sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
@@ -129,8 +128,8 @@ public class WorldspaceQueryServiceTests
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
     }
 
-    // The reads are what "no load order" means for this service: it never touches a LoadOrderHolder
-    // of its own any more (origin travels in from the caller), so RequireReads() is the one guard.
+    // The reads are what "no load order" means for this service: origin travels in from the
+    // caller, so RequireReads() is the one guard.
     [Fact]
     public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException()
     {

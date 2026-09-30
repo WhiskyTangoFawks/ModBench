@@ -23,8 +23,7 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
-            if (string.IsNullOrWhiteSpace(origin))
-                return Results.Problem("Origin is required.", statusCode: 400);
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -49,8 +48,7 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
-            if (string.IsNullOrWhiteSpace(origin))
-                return Results.Problem("Origin is required.", statusCode: 400);
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -75,8 +73,7 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             }
-            if (string.IsNullOrWhiteSpace(origin))
-                return Results.Problem("Origin is required.", statusCode: 400);
+            if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decoded = Uri.UnescapeDataString(plugin);
             try
             {
@@ -103,8 +100,7 @@ public static class WorldspaceEndpoints
         {
             logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         }
-        if (string.IsNullOrWhiteSpace(origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
+        if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
         var decoded = Uri.UnescapeDataString(plugin);
         try
         {

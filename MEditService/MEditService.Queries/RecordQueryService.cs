@@ -56,17 +56,16 @@ public sealed class RecordQueryService(
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
+        // A plugin filter with no origin would match every plugin sharing that filename; an origin
+        // with no plugin filter names half an identity the same way (ADR-0012 invariant 1).
+        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
+            throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
+
         PluginName? pluginFilter = null;
-        if (plugin != null)
-        {
-            // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin
-            // sharing that filename — the exact collapse the invariant forbids.
-            if (origin == null)
-                throw new ArgumentException("A plugin filter requires its origin.", nameof(origin));
-            pluginFilter = plugin;
-        }
+        if (!string.IsNullOrWhiteSpace(plugin)) pluginFilter = plugin;
+        var originFilter = string.IsNullOrWhiteSpace(origin) ? null : origin;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: origin, Search: search, Limit: limit, Offset: offset,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search, Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }

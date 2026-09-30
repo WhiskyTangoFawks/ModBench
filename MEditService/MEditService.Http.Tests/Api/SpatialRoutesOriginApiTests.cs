@@ -101,7 +101,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await PutBothPlugins(fx);
 
         var omitted = await _client.GetAsync("/plugins/Shared.esp/worldspaces");
-        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+        await AssertOriginRequiredProblem(omitted);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
 
         var omitted = await _client.GetAsync($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks");
-        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+        await AssertOriginRequiredProblem(omitted);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         var encodedFk = Uri.EscapeDataString(cellFk);
 
         var omitted = await _client.GetAsync($"/plugins/Shared.esp/cells/{encodedFk}/references");
-        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+        await AssertOriginRequiredProblem(omitted);
     }
 
     [Fact]
@@ -172,7 +172,17 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await PutBothPlugins(fx);
 
         var omitted = await _client.GetAsync("/plugins/Shared.esp/interior-cells");
-        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+        await AssertOriginRequiredProblem(omitted);
+    }
+
+    // A 400 alone doesn't say why: some other cause could return the same status, so the problem
+    // detail itself is the assertion that this is the origin guard and not a stray 400 elsewhere.
+    private static async Task AssertOriginRequiredProblem(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Body();
+        Assert.Equal("Origin is required.", body.GetProperty("detail").GetString());
     }
 
     private static IEnumerable<string?> InteriorEditorIds(JsonElement blocks) =>

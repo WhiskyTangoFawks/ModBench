@@ -153,7 +153,7 @@ public sealed class RecordQueryServiceTests
 
     // Matching, sorting and paging are the real Index's own behaviour, covered at
     // Index.Tests/Query/RecordReadsTests.cs. This service's own job is building the RecordQuery,
-    // resolving type and origin, and returning reads.Search's answer untouched.
+    // resolving type, guarding plugin/origin together, and returning reads.Search's answer untouched.
 
     [Fact]
     public void GetRecords_KnownType_ForwardsSearchLimitOffsetUntouchedIntoTheQuery()
@@ -188,6 +188,27 @@ public sealed class RecordQueryServiceTests
     {
         Assert.Throws<ArgumentException>(
             () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
+    }
+
+    // The other half of the same invariant: an origin names half an identity just as much as a
+    // bare plugin filename does.
+    [Fact]
+    public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(
+            () => _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0, origin: "Data"));
+    }
+
+    // A blank plugin must not reach the guard's throw: the endpoint's own check already treats a
+    // blank plugin the same as an absent one, so the service has to agree.
+    [Fact]
+    public void GetRecords_EmptyPluginAndNoOrigin_BrowsesEveryPluginRatherThanThrowing()
+    {
+        _svc.GetRecords(type: "npc_", plugin: "", search: null, limit: 10, offset: 0);
+
+        var query = _reads.LastSearch;
+        Assert.NotNull(query);
+        Assert.Null(query.Plugin);
     }
 
     [Fact]

@@ -57,8 +57,7 @@ public class ContainerChildQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for the Index side; this service takes
-    // the load order itself from the holder.
+    // The reads' presence is what "no load order" means for the Index side.
     private sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
