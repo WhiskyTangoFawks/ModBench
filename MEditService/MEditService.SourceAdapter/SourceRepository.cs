@@ -309,15 +309,14 @@ public sealed partial class SourceRepository
         return blobs;
     }
 
-    /// <summary>One file's text as HEAD has it, or null. cat-file -p, not git show: for a missing
-    /// glob-shaped path, show applies pathspec magic and exits 0 with empty output — a lying empty
-    /// string, not null.</summary>
-    internal static string? ReadCommittedSourceText(string modFolder, string relativePath)
+    /// <summary>One file's text at <paramref name="gitRef"/>, or null. cat-file -p, not git show: for
+    /// a missing glob-shaped path, show exits 0 with empty output — a lying empty string.</summary>
+    internal static string? ReadCommittedSourceText(string modFolder, string relativePath, string gitRef = "HEAD")
     {
         if (!IsTracked(modFolder)) return null;
 
         var gitDir = Path.Combine(modFolder, ".git");
-        return GitCli.TryRun(gitDir, modFolder, out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}")
+        return GitCli.TryRun(gitDir, modFolder, out var stdout, "cat-file", "-p", $"{gitRef}:{ToGitPath(relativePath)}")
             ? stdout
             : null;
     }
@@ -377,29 +376,27 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
-    /// clean.</summary>
-    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
+    /// <summary>Each path under the plugin's tree that git status names, with its index-column code;
+    /// null when git cannot say. It names both ends of a move and every untracked or ignored
+    /// file.</summary>
+    internal static IReadOnlyList<(char Code, string Path)>? WorkingTreeStatus(string modFolder, string pluginFileName)
     {
-        if (!IsTracked(modFolder)) return [];
-
         var gitDir = Path.Combine(modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "status", "--porcelain=v1", "-z")) return [];
-
-        // A rename/copy's old path rides a second NUL-terminated token with no code of its own —
-        // skipped rather than misread as an unrelated entry.
-        var paths = new List<string>();
-        var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-        var i = 0;
-        while (i < tokens.Length)
+        if (!GitCli.TryRun(gitDir, modFolder, out var stdout,
+                "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignored",
+                "--", LiteralPathspec(RootFor(pluginFileName))))
         {
-            var entry = tokens[i];
-            i++;
-            if (entry.Length < 4) continue;
-            paths.Add(entry[3..]);
-            if (entry[0] is 'R' or 'C') i++;
+            return null;
         }
-        return paths;
+
+        var entries = new List<(char, string)>();
+        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // "XY path": a shorter entry is one this parse cannot read.
+            if (entry.Length < 4) return null;
+            entries.Add((entry[0], entry[3..]));
+        }
+        return entries;
     }
 
     /// <summary>Every binary hash the plugin's last-compile ref names: a baseline's or a landed

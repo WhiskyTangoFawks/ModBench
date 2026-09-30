@@ -35,11 +35,16 @@ internal static class GitCli
 
     /// <summary>Runs git without throwing on a non-zero exit — for existence checks
     /// (<c>git cat-file -e</c>) where "not found" is an expected, non-exceptional outcome.</summary>
-    internal static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args)
+    internal static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args) =>
+        RunForExitCode(gitDir, workTree, out stdout, args) == 0;
+
+    /// <summary>For a command whose exit code is its answer, as <c>git grep</c>'s 1 is "nothing
+    /// matched".</summary>
+    internal static int RunForExitCode(string gitDir, string workTree, out string stdout, params string[] args)
     {
         var (exitCode, output, _) = Execute(gitDir, workTree, null, args);
         stdout = output;
-        return exitCode == 0;
+        return exitCode;
     }
 
     /// <summary>Against a scratch index instead of <c>$GIT_DIR/index</c>: building a tree object must not

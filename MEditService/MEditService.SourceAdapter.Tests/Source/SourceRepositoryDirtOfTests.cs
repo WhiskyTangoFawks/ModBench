@@ -84,6 +84,21 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
+    public void DirtOf_AStagedRename_NamesThePathItLeftWithHeadsText()
+    {
+        var repository = Tracked();
+        var renamed = Path.Combine("plugin-source", PluginName, "Npcs", $"Renamed - 000800_{PluginName}.json");
+        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
+            NpcRelativePath.Replace('\\', '/'), renamed.Replace('\\', '/'));
+
+        var dirt = repository.DirtOf(Plugin);
+
+        Assert.Equal(2, dirt.Documents.Count);
+        Assert.Contains(dirt.Documents, d => !d.InWorkingTree && d.CommittedText == NpcBody);
+        Assert.Contains(dirt.Documents, d => d.InWorkingTree && d.CommittedText == null);
+    }
+
+    [Fact]
     public void DirtOf_AnEditToADocumentSortedBelowItsGroup_NamesItsRecordAsThatGroupsType()
     {
         var sortedPath = Path.Combine("plugin-source", PluginName, "Npcs", "SortedByHand", $"Sorted - 000900_{PluginName}.json");
