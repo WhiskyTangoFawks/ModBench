@@ -33,6 +33,8 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
 import { accessTo } from '../../test/mo2/adapterOver';
 
+const access = accessTo('/instance');
+
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const handler = present(handlers.get(commandId), `command not registered: ${commandId}`);
   return Promise.resolve(handler(...args));
@@ -52,37 +54,37 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('enable applies to every selected plugin, whatever its own current state', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } });
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], recordingReporter());
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
 
-    expect(setPluginsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Alpha.esp', 'Beta.esp'], true);
+    expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp', 'Beta.esp'], true);
   });
 
   it('disable applies to every selected plugin, whatever its own current state', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp', 'Beta.esp'], refused: [] } });
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], recordingReporter());
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.disable', beta, [alpha, beta]);
 
-    expect(setPluginsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Alpha.esp', 'Beta.esp'], false);
+    expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp', 'Beta.esp'], false);
   });
 
   it('a right-click outside the selection takes just that row, not the rest of the view selection', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [beta], recordingReporter());
+    registerPluginEnableCommands(access, instance, () => [beta], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, undefined);
 
-    expect(setPluginsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Alpha.esp'], true);
+    expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
   });
 
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [alpha], recordingReporter());
+    registerPluginEnableCommands(access, instance, () => [alpha], recordingReporter());
     await invoke('modbench.plugin.enable');
 
-    expect(setPluginsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Alpha.esp'], true);
+    expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
   });
 
   // plugins.md, "the locked rows are never part of the Argument": a plugin the game loads with no
@@ -90,16 +92,16 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
   it('drops a locked row from the selection it writes', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], recordingReporter());
+    registerPluginEnableCommands(access, instance, () => [], recordingReporter());
     await invoke('modbench.plugin.enable', alpha, [locked, alpha]);
 
-    expect(setPluginsEnabled).toHaveBeenCalledWith('/instance', 'Default', ['Alpha.esp'], true);
+    expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
   });
 
   it('calls nothing and reports nothing for an empty selection', async () => {
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], reporter);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable');
 
     expect(setPluginsEnabled).not.toHaveBeenCalled();
@@ -110,7 +112,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], reporter);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable', alpha);
 
     expect(reporter.reports).toEqual([]);
@@ -123,7 +125,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], reporter);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.enable', alpha, [alpha, beta]);
 
     expect(reporter.selectionOutcomeCalls).toEqual([{
@@ -139,7 +141,7 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     setPluginsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT' });
     const reporter = recordingReporter();
 
-    registerPluginEnableCommands(accessTo('/instance'), instance, () => [], reporter);
+    registerPluginEnableCommands(access, instance, () => [], reporter);
     await invoke('modbench.plugin.disable', alpha);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to disable plugins.', detail: 'ENOENT' }]);

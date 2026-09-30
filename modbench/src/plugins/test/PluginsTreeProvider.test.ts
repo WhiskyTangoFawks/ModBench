@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reorderPlugins, type PluginsDrop } from '../../pluginsCommands/plugins';
+import { reorderOver, type PluginsDrop } from '../../pluginsCommands/plugins';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
@@ -37,7 +37,7 @@ import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { readPluginLines } from '../../test/mo2/adapterOver';
+import { accessTo, readPluginLines } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
@@ -85,12 +85,9 @@ class FakeSource implements PluginListSource {
   }
 }
 
-// What the composition root binds: the reorder command against one instance root and profile.
+// What the composition root binds: the reorder command against one instance and profile.
 const writesTo = (instanceRoot: string): PluginListSource => ({
-  reorderPlugins: async (names, drop) => {
-    const result = await reorderPlugins(instanceRoot, 'Default', names, drop);
-    if (!result.applied) throw new Error(result.refusal);
-  },
+  reorderPlugins: reorderOver(accessTo(instanceRoot), () => 'Default'),
 });
 
 // One `GET /plugins` row: held and unremarkable unless a test overrides it.

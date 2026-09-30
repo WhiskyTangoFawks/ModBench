@@ -11,7 +11,7 @@ import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree,
 } from './corpusFixture';
-import { providedPluginsIn, readPluginLines } from './adapterOver';
+import { accessTo, providedPluginsIn, readPluginLines } from './adapterOver';
 
 const PROFILE = 'Default';
 // The fixture has no game folder, so its Creation Club plugin stands in the game's Data folder,
@@ -35,7 +35,7 @@ describe('plugins.txt corpus', () => {
   // touches, not one write per plugin.
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await setPluginsEnabled(dir, PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
+    const result = await setPluginsEnabled(accessTo(dir), PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -55,7 +55,7 @@ describe('plugins.txt corpus', () => {
   // The check box's own shape: several rows, each its own target state, still one splice.
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await setPluginsParticipation(dir, PROFILE, [
+    const result = await setPluginsParticipation(accessTo(dir), PROFILE, [
       { name: 'Tracked Patch Mod.esp', enabled: false },
       { name: 'NonAsciiRetexture.esp', enabled: true },
     ]);
@@ -74,7 +74,7 @@ describe('plugins.txt corpus', () => {
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await syncPlugins(
-      dir, PROFILE, await providedPluginsIn(dir), GAME_DATA, () => Promise.resolve([]));
+      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA, () => Promise.resolve([]));
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -89,7 +89,7 @@ describe('plugins.txt corpus', () => {
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], { kind: 'winningEnd' });
+    await reorderPlugins(accessTo(dir), PROFILE, ['NonAsciiRetexture.esp'], { kind: 'winningEnd' });
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

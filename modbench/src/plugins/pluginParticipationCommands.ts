@@ -16,7 +16,7 @@ export function registerPluginEnableCommands(
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
     const names = pluralArgument(entry, 'plugin').map((n: PluginNode) => n.plugin.name);
     if (names.length === 0) return;
-    const result = await setPluginsEnabled(access.instanceRoot, instance.value.activeProfile, names, enabled);
+    const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
     reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
   };
   return [

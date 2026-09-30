@@ -7,9 +7,9 @@ export type Drop =
   | { kind: 'losingEnd' };
 
 /** Where a block of dragged names lands once its own lines are gone: a drop names the
- *  *pre-removal* target, while every splice counts its index among the lines that remain. An
- *  absent target is the losing end. */
-export function dropIndexForMove(
+ *  *pre-removal* target, while every move counts its index among the lines that remain. An
+ *  absent or unknown target is the winning end. */
+function dropIndexForMove(
   order: readonly string[],
   movedNames: readonly string[],
   targetName: string | undefined,

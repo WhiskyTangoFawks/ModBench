@@ -10,7 +10,6 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance, type InstanceValue } from '../instanceLoader/instance';
 import { pluginSyncArguments, registerPluginSync } from '../pluginSyncTrigger';
 import { syncPlugins, setPluginsEnabled, type PluginSyncResult } from '../pluginsCommands/plugins';
-import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { present } from '../ports/present';
 import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
@@ -95,7 +94,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   const trigger = registerPluginSync(instance, (value) => {
     games.push(value.gameRelease);
     const { profile, provided, inData } = pluginSyncArguments(value);
-    const run = syncPlugins(root, profile, provided, inData, () => Promise.resolve([]));
+    const run = syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve([]));
     syncs.push(run);
     return run;
   }, { error: () => {}, info: () => {} });
@@ -208,7 +207,7 @@ describe('the game folder not found, across the whole instance', () => {
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));
     const pluginSync = registerPluginSync(instance, (value) => {
       const { profile, provided, inData } = pluginSyncArguments(value);
-      return syncPlugins(root, profile, provided, inData, () => Promise.resolve(undefined));
+      return syncPlugins(accessTo(root), profile, provided, inData, () => Promise.resolve(undefined));
     }, channel);
     const modSync = registerModSync(instance, modSyncOver(accessTo(root)), channel);
 
@@ -239,13 +238,12 @@ describe('a gesture writes the profile the Instance last landed', () => {
     await instance.refresh();
     const before = instance.sequence;
 
-    const ini = join(root, 'ModOrganizer.ini');
-    await writeFile(ini, setSelectedProfileInText(await readFile(ini, 'utf8'), OTHER_PROFILE));
+    await adapterOver(root).selectProfile(OTHER_PROFILE);
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
     // Exactly what the composition root binds enable/disable to.
-    const result = await setPluginsEnabled(root, instance.value.activeProfile, ['Base.esp'], false);
+    const result = await setPluginsEnabled(accessTo(root), instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
     expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
