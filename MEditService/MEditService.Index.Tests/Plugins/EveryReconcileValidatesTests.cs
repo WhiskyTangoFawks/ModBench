@@ -129,6 +129,21 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Empty(PublishedDuring(Reconcile));
     }
 
+    // A tracked mod holds a tree per plugin, and may hold none for one: that plugin reads from its
+    // binary, and validates against it.
+    [Fact]
+    public void AnEqualSnapshot_OfAPluginWithNoTreeInATrackedMod_PublishesNothing()
+    {
+        var loosePath = Path.Combine(_tracked.ModFolderOf(), "Loose.esp");
+        new Fallout4Mod(ModKey.FromFileName("Loose.esp"), Fallout4Release.Fallout4).WriteToBinary(loosePath);
+        LoadOrderEntry[] plugins = [.. _fixture.Plugins, new("Loose.esp", loosePath, _tracked.Origin, 2, Enabled: true, Winning: true)];
+        void ReconcileWithLoose() =>
+            _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        ReconcileWithLoose();
+
+        Assert.Empty(PublishedDuring(ReconcileWithLoose));
+    }
+
     [Fact]
     public void AnEqualSnapshot_ReadsABinaryThatFailedAgain_OnceItsBytesChange()
     {
