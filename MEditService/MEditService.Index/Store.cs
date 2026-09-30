@@ -17,15 +17,11 @@ internal sealed class Store : IDisposable
     internal const string PluginDerivationRelation = $"mirror.{TableDdlBuilder.PluginDerivationTable}";
     internal const string PluginDiagnosisRelation = $"mirror.{TableDdlBuilder.PluginDiagnosisTable}";
     internal const string SequenceRelation = "mirror.sequence";
+    internal const string IndexVersionRelation = "mirror.index_version";
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
-
-    // The version the rows in this file were written under (IndexVersion), resolved once at
-    // Initialize once the game release is known — same "one game for its whole lifetime" reasoning
-    // DuckDbRecordIndex itself already applies to _release.
-    private string? _indexVersion;
 
     public DuckDBConnection Connection { get; private set; }
 
@@ -126,32 +122,29 @@ internal sealed class Store : IDisposable
     }
 
     /// <summary>Discards a file written under another <see cref="IndexVersion"/> (whole-file rebuild,
-    /// never partial), then creates the fixed tables.</summary>
+    /// never partial), then creates the fixed tables and stamps the version they were built under.</summary>
     public void Initialize(string indexVersion)
     {
-        _indexVersion = indexVersion;
-        DiscardFileWrittenUnderAnotherVersion();
+        DiscardFileWrittenUnderAnotherVersion(indexVersion);
         TableDdlBuilder.CreateTables(Connection);
+        DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {IndexVersionRelation}");
+        DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
     // ADR-0009: a codec or schema version change invalidates the whole file, and there is no
     // in-place migration: the file is deleted and reopened empty, costing one cold load.
-    private void DiscardFileWrittenUnderAnotherVersion()
+    private void DiscardFileWrittenUnderAnotherVersion(string indexVersion)
     {
         if (_databasePath == null) return;
 
-        List<string> versions;
+        string? written;
         try
         {
             // Asked of the catalog first so a never-written file (the ordinary first open) is an
             // answer, not an exception; past this point a file that cannot answer is stale.
             if (!IndexedFilesTableExists()) return;
 
-            versions = [];
-            using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT index_version FROM {FilesRelation}";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read()) versions.Add(reader.GetString(0));
+            written = DuckDbSql.ScalarString(Connection, $"SELECT value FROM {IndexVersionRelation}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -161,7 +154,7 @@ internal sealed class Store : IDisposable
             return;
         }
 
-        if (versions.Count == 0 || versions.All(v => v == _indexVersion)) return;
+        if (written == indexVersion) return;
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -331,10 +324,9 @@ internal sealed class Store : IDisposable
         }
 
         DuckDbSql.ExecuteFor(Connection, $"""
-            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, index_version)
-            VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, Path.GetFullPath(filePath), PluginBinaryHash.OfBytes(bytes),
-            _indexVersion ?? throw new InvalidOperationException("Call Initialize before using the repository."));
+            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash)
+            VALUES ($1, $2, $3, $4)
+            """, plugin, origin, Path.GetFullPath(filePath), PluginBinaryHash.OfBytes(bytes));
         StampDiagnoses(plugin, origin, bytes);
     }
 
