@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Work an epic's ticket stack from a single go. Lane the tickets by file surface, dispatch executors to worktrees, land serially, report on the epic.
+description: Work an epic's ticket stack from a single go. Lane the tickets by architecture box, dispatch executors to worktrees, land serially, report on the epic.
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ Resolve before you route. A stop, break or question an executor or reviewer rais
 
 Read tickets, reports and the chain's documents; leave source to the executors. Every source file you open is context you will not have later in the run- spend your context wisely.
 
-Land serially by surface. Tickets that touch one file share a lane. A branch merges alone, and only after it contains current `main`.
+Land serially by box. Tickets that touch one box share a lane. A branch merges alone, and only after it contains current `main`.
 
 Verified means observed. An executor's report is a claim until it quotes what ran. Merge on evidence, or ask for the evidence first.
 
@@ -20,11 +20,17 @@ The run never waits. A tactical question is decided, and a strategic one parks i
 
 ## 1. Lane
 
-The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. File surface decides what can run beside what.
+The stack is an epic's `ready-for-agent` sub-issues with their blocking edges. Edges decide what can start. Boxes decide what can run beside what.
 
-Read each ticket once, with its comments and its epic's comments, and name the files it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets sharing a file share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
+A box is a module `docs/architecture/target-architecture.d2` draws, and its folder is the unit the kernel scans hold: a folder under `modbench/src/`, or an `MEditService.*` project. Read each ticket once, with its comments and its epic's comments, and name the boxes it touches, and what tier model it needs based on the complexity. Cut the stack into lanes so that tickets touching one box share a lane. Work is serial within a lane and parallel across lanes. Run 3 lanes at most.
 
-**Criterion:** every ticket sits in one lane, and no two lanes name the same file.
+Three things sit outside that rule:
+
+- A generated file, such as `api.ts`, belongs to no lane. A branch regenerates it after merging `main`.
+- The composition root is a box of its own: `modbench/src/*.ts`, `modbench/package.json` and `MEditService.Http`'s `Program.cs`. Two tickets that edit it share a lane.
+- A box's interface file has one owner per wave. When several tickets need another box's interface changed, that change runs first as an expand step, and it threads the composition root's wiring at the same time. The callers then run in parallel against it, each inside its own box. If the epic holds no expand ticket, dispatch the change as a finding.
+
+**Criterion:** every ticket sits in one lane, no two lanes name the same box, and every interface change a caller needs lands ahead of it.
 
 ## 2. Dispatch
 
@@ -39,8 +45,9 @@ Keep the agentId, because `SendMessage` carries every later exchange. Within a m
 - the ticket number, its body, and every comment on the ticket and on its epic, oldest first (`gh issue view <n> --json number,title,body,labels,comments`). The ticket's spec lines are its work, and the comments are context.
 - **landed since**, the list of what this run has already merged only if it changes the ticket's ground
 - the branch name to create; the worktree is the agent's working directory
+- **its boxes**: the boxes its lane owns, and the boxes the open lanes hold, which it stays out of
 
-Dispatch each further lane while the first executor is still implementing.
+Dispatch each further lane while the first executor is still implementing, and create each worktree only after the one before it exists, since two created at once race.
 
 **Criterion:** the agentId is held, the prompt is the brief plus fillings, the executor is running in the background, and its transcript grew past the first call.
 
@@ -61,10 +68,10 @@ When an executor reports committed, work through these in order.
 7. Where the outcome leaves a maintainer's document out of step with the code, such as a README status that should flip, quote it as a break for the drain.
 8. Close the ticket. Anything that needs human eyes is noted for the drain, since verification happens at the epic.
 9. Remove the worktree (`git worktree remove .claude/worktrees/<name>`) and delete the branch.
-10. Tell the other executor what landed and the new baseline test count, in one line.
+10. Tell every open executor what landed and the new baseline test count, in one line.
 11. Sort the report's **findings**. A defect the run finds is the run's to fix, whatever ticket or epic it sits under and however old it is. Each finding takes one of four routes:
-   - A defect, or a finding that serves the epic, inside the reporting executor's surface: message that executor the finding along with landed-since, and it lands with the ticket.
-   - A defect, or a finding that serves the epic, outside that surface: start a fresh executor with a brief you write.
+   - A defect, or a finding that serves the epic, inside the reporting executor's boxes: message that executor the finding along with landed-since, and it lands with the ticket.
+   - A defect, or a finding that serves the epic, outside them: start a fresh executor with a brief you write, in the lane of the box it touches.
    - A finding whose root lives in a maintainer's document, once resolution leaves it open: a break or a strategic question for the drain, in the chain of authority's form.
    - Anything else is dropped.
 
