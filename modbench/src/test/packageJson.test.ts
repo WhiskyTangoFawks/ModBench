@@ -587,7 +587,7 @@ describe('package.json command titles and categories', () => {
     const hidden = [...gestureIds].filter((id) => gatedFalse().has(id));
     expect(
       hidden,
-      'commands.md, Where: every gesture is also in the command palette, unless it is internal.',
+      'commands.md, Entry points are not gestures: every gesture is also in the command palette.',
     ).toEqual([]);
   });
 
@@ -662,8 +662,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
       ['modbench.record.create', '3_create'],
-      ['modbench.saveAndCompile', '4_sourceControl'],
-      ['modbench.pluginListTree.compileAtMain', '4_sourceControl'],
+      ['modbench.plugin.compile', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
   });
@@ -674,7 +673,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // plugins.md, Menus and keys, story 6: track on an untracked plugin in a mod, compile on a
+  // plugins.md, Menus and keys: track on an untracked plugin in a mod, compile on a
   // tracked, editable plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
@@ -696,7 +695,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('record-type group menu: create record, only where its plugin is tracked and editable', () => {
     expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable')).toEqual([]);
@@ -894,7 +893,7 @@ describe('package.json field gestures\' palette entries', () => {
 describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
-    expect(webviewMenu.filter((e) => e.command === 'modbench.saveAndCompile').map((e) => e.when)).toEqual([
+    expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
       String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && compilable`,
     ]);
     expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
@@ -915,7 +914,7 @@ describe('package.json copy on the record tab', () => {
 describe('package.json compile\'s palette entry', () => {
   it('is in the palette while any plugin compiles', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
-      .filter((e) => e.command === 'modbench.saveAndCompile');
+      .filter((e) => e.command === 'modbench.plugin.compile');
     expect(entries.map((e) => e.when)).toEqual([`${IN_AN_INSTANCE} && modbench.plugin.anyCompilable`]);
   });
 });
@@ -956,7 +955,7 @@ describe('package.json Downloads palette entries', () => {
   });
 });
 
-// mods.md, Menus and keys, story 3: enable on a disabled row, disable on an enabled one — the
+// mods.md, Menus and keys, story 2: enable on a disabled row, disable on an enabled one — the
 // row's own contextValue flag is what the menu reads to choose between the two commands.
 describe('package.json Mods row menu — enable/disable by row state', () => {
   const modRowMenu = (): MenuEntry[] =>
@@ -1024,7 +1023,7 @@ describe('package.json Move on the mod menu and the separator menu', () => {
   });
 });
 
-// mods.md, Menus and keys, story 7: copy value on the mod menu and the separator menu, under the
+// mods.md, Menus and keys, story 5: copy value on the mod menu and the separator menu, under the
 // catalog's one copy value id (commands.md, Record: copy value) — no second command for Mods.
 describe('package.json Mods row menu — copy value', () => {
   const modsViewMenu = (): MenuEntry[] =>
@@ -1220,34 +1219,6 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// The reverse of the forward gate below: a `built` row naming an ID nothing registers.
-function catalogBuiltCommandIds(markdown: string): Set<string> {
-  const ids = new Set<string>();
-  let idColumn: number | undefined;
-  let statusColumn: number | undefined;
-  for (const line of markdown.split('\n')) {
-    if (!line.startsWith('|')) {
-      idColumn = undefined;
-      statusColumn = undefined;
-      continue;
-    }
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-    if (idColumn === undefined) {
-      idColumn = cells.indexOf('Command ID');
-      statusColumn = cells.indexOf('Status');
-      continue;
-    }
-    if (idColumn === -1 || statusColumn === undefined || statusColumn === -1) continue;
-    if (cells[statusColumn] !== 'built') continue;
-    for (const match of (cells[idColumn] ?? '').matchAll(/`(modbench\.[\w.]+)`/g)) {
-      ids.add(present(match[1], 'the backticked Command ID'));
-    }
-  }
-  return ids;
-}
-
-const builtCatalog = catalogBuiltCommandIds(commandsMarkdown);
-
 // The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
 // another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
@@ -1257,9 +1228,15 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
     ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
     outOfPalette: ['modbench.openHeader'],
   },
+  { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },
+  { gesture: 'show referenced by', removedBy: '#1096', ids: ['modbench.record.showReferencedBy'], outOfPalette: [] },
   {
-    gesture: 'compile', removedBy: '#961', ids: ['modbench.saveAndCompile', 'modbench.pluginListTree.compileAtMain'],
-    outOfPalette: ['modbench.pluginListTree.compileAtMain'],
+    gesture: 'copy value and the name filter', removedBy: '#1096',
+    ids: [
+      'modbench.record.copyValue', 'modbench.mod.filter', 'modbench.mod.clearFilter', 'modbench.plugin.filter',
+      'modbench.plugin.clearFilter', 'modbench.downloadedFile.filter', 'modbench.downloadedFile.clearFilter',
+    ],
+    outOfPalette: [],
   },
 ];
 
@@ -1291,42 +1268,25 @@ describe('package.json registers every command under its catalog Command ID', ()
     const stale = [...legacy].filter((id) => !registered.includes(id));
     expect(stale, `${stale.join(', ')} is not registered: delete it from LEGACY_GESTURES.`).toEqual([]);
   });
-
-  it('registers every Command ID whose row is built', () => {
-    const missing = [...builtCatalog].filter((id) => !registered.includes(id));
-    expect(
-      missing,
-      missing.map((id) => `${id} is \`built\` in commands.md but package.json does not register it.`).join('\n'),
-    ).toEqual([]);
-  });
 });
 
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
-function expectTitleNamesVerbAndObject(catalogId: string, registeredId: string, title: string): void {
+function expectTitleNamesVerbAndObject(id: string, title: string): void {
   const [, object = '', verb = ''] = present(
-    /^modbench\.(\w+)\.(\w+)$/.exec(catalogId) ?? undefined, `${catalogId} as modbench.<object>.<verb>`);
+    /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
   const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
   const objectWords = wordsOf(object);
   const noun = present(objectWords.pop(), `the noun of ${object}`);
-  expect(titleWords, `the title of ${registeredId} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
-  expect(titleWords, `the title of ${registeredId} names the object`).toEqual(expect.arrayContaining(objectWords));
-  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${registeredId} names the ${noun}`).toBe(true);
+  expect(titleWords, `the title of ${id} names the verb`).toEqual(expect.arrayContaining(wordsOf(verb)));
+  expect(titleWords, `the title of ${id} names the object`).toEqual(expect.arrayContaining(objectWords));
+  expect(titleWords.some((w) => w === noun || w === `${noun}s`), `the title of ${id} names the ${noun}`).toBe(true);
 }
 
 describe('package.json palette titles are the verb and the object', () => {
   const titled = pkg.contributes.commands.filter((c) => catalog.has(c.command));
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
-    expectTitleNamesVerbAndObject(id, id, title);
+    expectTitleNamesVerbAndObject(id, title);
   });
-
-  const compile = present(LEGACY_GESTURES.find((g) => g.gesture === 'compile'), 'the compile legacy gesture');
-  const legacyCompile = pkg.contributes.commands.filter((c) => compile.ids.includes(c.command));
-
-  it.each(legacyCompile.map((c) => [c.command, c.title]))(
-    '%s, still under its legacy ID, is titled by the catalog\'s compile: "%s"', (id, title) => {
-      expectTitleNamesVerbAndObject('modbench.plugin.compile', id, title);
-      expect(title.toLowerCase().split(/\s+/)[0], `the title of ${id} leads with the verb`).toBe('compile');
-    });
 });

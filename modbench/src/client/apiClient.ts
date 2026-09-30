@@ -21,29 +21,14 @@ export type MasterIssue = Schemas['MasterIssue'];
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
-/** Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
- *  successful (HTTP 200) answer (`succeeded: false` with a `refusalReason`), never an HTTP error. */
-export type CompileResult = Schemas['CompileResult'];
+/** A plugin compile wrote — `POST /plugins/compile` — with the masters its content needs and the
+ *  diagnostics the reference check left. */
+export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
-
-/** One mod's queued question. `plugins`/`trackedFiles` can each be empty; `metaChanged` only
- *  informs the dialog's default button, never acts (ADR-0007). */
-export interface UnansweredExternalChange {
-  origin: string;
-  plugins: string[];
-  trackedFiles: string[];
-  metaChanged: boolean;
-  oldVersion: string | null;
-  newVersion: string | null;
-}
 
 /** ADR-0013: names the plugin that failed — two plugins that share a filename are two
  *  registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
-
-/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
- *  same posture {@link CompileResult} uses. */
-export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every
  *  consumer must remember), and leaves room for a future 'Deleted' without a wire reshape. */

@@ -336,8 +336,8 @@ def main() -> int:
         f"({summary}) — backend Sonar/analyzer diagnostics (incl. info-level "
         "notes that don't show in a normal build) and frontend ESLint/sonarjs:\n\n"
         + "\n".join(lines) + "\n\n"
-        "Advisory, not a gate. Fix the ones in scope for this change now; leave "
-        "pre-existing/out-of-scope ones for /validate triage. Acknowledge and "
+        "Advisory, not a gate. Fix the ones in scope for this change now; report "
+        "pre-existing/out-of-scope ones as findings. Acknowledge and "
         "stop if none apply — this won't fire again this turn.",
         file=sys.stderr,
     )

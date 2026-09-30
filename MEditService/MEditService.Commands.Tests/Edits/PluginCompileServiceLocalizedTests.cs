@@ -67,7 +67,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         var plugin = new PluginAddress(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
-        var result = await compileService.CompileAsync(plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
 

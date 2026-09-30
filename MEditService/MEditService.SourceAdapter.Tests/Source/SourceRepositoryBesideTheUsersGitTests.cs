@@ -1,6 +1,8 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
@@ -25,7 +27,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
     // Same bytes, a stat the index does not hold: a plain `git status` refreshes that entry and
     // writes the index back under index.lock.
     [Fact]
-    public void ReadingTheChangedTrackedFiles_LeavesAStatDirtyIndexUnwritten()
+    public void ReadingTheDirt_LeavesAStatDirtyIndexUnwritten()
     {
         var modFolder = TrackedMod();
         try
@@ -33,7 +35,9 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
             File.SetLastWriteTimeUtc(Path.Combine(modFolder, "texture.dds"), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
             var before = File.ReadAllBytes(IndexOf(modFolder));
 
-            Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(modFolder));
+            var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
+                ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
+            Assert.Empty(repository.DirtOf(new PluginAddress(Plugin, "TestMod")).Documents);
 
             Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
         }
@@ -53,7 +57,7 @@ public sealed class SourceRepositoryBesideTheUsersGitTests
             var usersLock = IndexOf(modFolder) + ".lock";
             File.WriteAllText(usersLock, "");
 
-            SourceRepository.ParkCompileSnapshot(modFolder, Plugin, atRef: null, binarySha256: "DEADBEEF");
+            SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF");
 
             var parked = GitProbe.Run(
                 Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",

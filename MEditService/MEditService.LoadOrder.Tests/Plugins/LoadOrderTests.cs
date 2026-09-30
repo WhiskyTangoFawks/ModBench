@@ -119,31 +119,6 @@ public sealed class LoadOrderTests
         Assert.Equal(["A.esp"], order.Plugins.Select(c => c.Name));
     }
 
-    // ADR-0007: created before any plugins.txt line names it, so the gesture that follows sees it.
-    [Fact]
-    public void With_AddsACreatedPlugin_AndReplacesTheOneAlreadyUnderThatIdentity()
-    {
-        var added = Order(Registered("A.esp", "ModA", slot: 0)).With(Registered("New.esp", "ModA", slot: 1));
-        Assert.Equal(["A.esp", "New.esp"], added.Plugins.Select(c => c.Name));
-
-        var replaced = added.With(Registered("New.esp", "ModA", slot: 1, enabled: false));
-        Assert.Equal(["A.esp", "New.esp"], replaced.Plugins.Select(c => c.Name));
-        Assert.False(replaced.Participates(new PluginAddress("New.esp", "ModA")));
-    }
-
-    // ADR-0007's counterpart: a create that could not write its file takes its registration back,
-    // and only that one — two plugins that share a filename are two identities (ADR-0012).
-    [Fact]
-    public void Without_RemovesOnlyThePluginUnderThatIdentity()
-    {
-        var order = Order(Registered("A.esp", "ModA", slot: 0), Registered("A.esp", "ModB", slot: 1));
-
-        var left = order.Without(new PluginAddress("A.esp", "ModB"));
-
-        Assert.Equal(["ModA"], left.Plugins.Select(c => c.Origin));
-        Assert.Equal(order.Plugins, order.Without(new PluginAddress("Absent.esp", "ModA")).Plugins);
-    }
-
     // The entries are the whole of the snapshot: the path they carry names no directory that
     // exists, and the value resolves participation and the winner without one.
     [Fact]

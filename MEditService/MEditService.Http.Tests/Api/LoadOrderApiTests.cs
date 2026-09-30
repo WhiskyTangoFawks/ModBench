@@ -104,11 +104,11 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     public async Task PutLoadOrder_OverriddenPluginUnparseable_TheFailureNamesTheOverriddenPluginsOrigin()
     {
         using var fx = new PluginFixtureBuilder("api-overridden-plugin-bad")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .WithPlugin("Shared.esp", origin: "ModB")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .BuildScattered();
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var overridden = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        var overridden = fx.Plugins.Single(p => p.Origin == "ModB");
         await System.IO.File.WriteAllTextAsync(overridden.Path, "this is not a plugin");
 
         var response = await _client.PutLoadOrderAndAwaitReady(new

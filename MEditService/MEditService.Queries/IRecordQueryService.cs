@@ -1,4 +1,5 @@
 using MEditService.Index;
+using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
@@ -15,4 +16,8 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
+
+    void SetFilter(string sql, string source);
+    void ClearFilter();
+    Task RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

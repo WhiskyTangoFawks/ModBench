@@ -28,7 +28,7 @@ internal static class TrackedMods
         SourceRepository.Track(
             modFolder, SourcePreset.Edits,
             [(SourceRepository.PristineFilesOf(pluginName, files),
-              new BaselineTrailers(pluginName, null, null, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
+              new BaselineTrailers(pluginName, null, PluginBinaryHash.TrailerFormOfFile(pluginPath)))]);
     }
 
     internal static void Track(LoadOrderEntry entry, string dataFolder, GameRelease release = GameRelease.Fallout4) =>

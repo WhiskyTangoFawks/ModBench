@@ -188,7 +188,7 @@ describe('modbench.record.clearFilter', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // plugins.md, Order and view state, story 5: mEdit still filters, so the view keeps saying so.
+  // plugins.md, Order and view state, story 3: mEdit still filters, so the view keeps saying so.
   it('reports a refused clear and keeps showing the filter', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('clearFilter', 'No load order has been received yet.');

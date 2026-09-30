@@ -76,20 +76,6 @@ public sealed class OverriddenAndUnlistedRefusalTests
     }
 
     [Fact]
-    public async Task CompilingAnOverriddenPlugin_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered_WritingNothing()
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        mod.RaiseExternalChangeOn(mod.OverriddenPlugin, "unanswered");
-        var before = mod.PluginBytes(mod.OverriddenPlugin);
-
-        var result = await mod.CompileHandler.CompileAsync(mod.OverriddenPlugin, new CompileSource.WorkingTree());
-
-        Assert.False(result.Succeeded);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-        Assert.Equal(before, mod.PluginBytes(mod.OverriddenPlugin));
-    }
-
-    [Fact]
     public void CreatingARecord_InAnOverriddenPlugin_IsRefused()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
@@ -248,27 +234,5 @@ public sealed class OverriddenAndUnlistedRefusalTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
-    }
-
-    [Fact]
-    public void EditingAnOverriddenPlugin_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered()
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        mod.RaiseExternalChangeOn(mod.OverriddenPlugin, "unanswered");
-
-        var result = mod.EditHandler.Set(mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-    }
-
-    [Fact]
-    public void EditingAPluginWithNoLine_WithAnOpenQuestion_IsRefusedAsExternalChangeUnanswered()
-    {
-        using var mod = OverriddenAndUnlistedFixture.Create();
-        mod.RaiseExternalChangeOn(mod.UnlistedPlugin, "unanswered");
-
-        var result = mod.EditHandler.Set(mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), "HeightMax", Json("0.75"));
-
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
     }
 }

@@ -10,7 +10,6 @@ import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecor
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { warnCompileUnfinished } from './plugins/compileUnfinishedWarning';
 import { pluginsCreateTarget } from './plugins/gestureEntry';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
@@ -26,14 +25,14 @@ import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {
-  registerTrackCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps,
   registerOpenHeaderCommand, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import { originFiles, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
-import { wireQuestionOpen } from './plugins/externalChangeWiring';
+import { noticeExternalChanges } from './plugins/externalChangeNotice';
 import { errorMessage } from './ports/errorMessage';
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
@@ -73,8 +72,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-  // Compile's diagnostics — one collection for every tracked mod's source files, kept
-  // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
+  // Compile's diagnostics — one collection for every tracked mod's source files, in which
+  // CompileProblems replaces a plugin's own entries each time it compiles.
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
   // The session-load scan's own collection — a sibling of the compile one, targeting plugin
@@ -138,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Its `originFiles` closes over the Toolbox built below and re-reads the value each call, so a
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
-    session, client: meditClient, outputChannel, compileDiagnostics,
+    session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
     notifyConflictsComputed,
     originFiles: (origin) => originFiles(toolbox.instance?.value.plugins ?? [], origin),
   };
@@ -160,14 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(
     toolbox,
-    {
-      dispose: wireQuestionOpen({
-        client: meditClient, outputChannel,
-        askQuestion,
-        reporter: makeReporter(outputChannel, 'externalChange'),
-      }),
-    },
-    { dispose: warnCompileUnfinished(makeReporter(outputChannel, 'compile'), meditClient) },
+    { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
@@ -181,7 +173,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, treeSync: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, recordBadgeSource: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
@@ -226,7 +218,7 @@ interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
-  compileDiagnostics: vscode.DiagnosticCollection;
+  compileProblems: CompileProblems;
   notifyConflictsComputed: () => void;
   originFiles: OriginFilesOf;
 }
@@ -234,7 +226,7 @@ interface PluginRowCommandDeps {
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, compileDiagnostics, notifyConflictsComputed, originFiles } = deps;
+  const { session, client, outputChannel, notifyConflictsComputed } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
@@ -246,14 +238,20 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       },
       () => session.pluginsTreeView?.selection ?? [],
     ),
-    registerSaveAndCompileCommand(
-      client, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
-      compileDiagnostics, originFiles, () => session.pluginsTreeView?.selection ?? []),
-    registerCompileAtRefCommand(
-      client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
-      compileDiagnostics, originFiles),
+    registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
+}
+
+function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
+  const { session, client, outputChannel, compileProblems, originFiles } = deps;
+  return {
+    client,
+    progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+    reporter: makeReporter(outputChannel, 'plugin.compile'),
+    problems: compileProblems,
+    originFiles,
+  };
 }
 
 

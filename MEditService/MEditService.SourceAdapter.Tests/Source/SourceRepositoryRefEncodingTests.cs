@@ -31,7 +31,7 @@ public sealed class SourceRepositoryRefEncodingTests
     [Theory]
     [InlineData("LitR - Settings Holotapes Sorting.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
-    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256_RoundTrips_ForARefUnsafeName(string plugin)
+    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256s_RoundTrips_ForARefUnsafeName(string plugin)
     {
         var modFolder = NewModFolder();
         try
@@ -39,33 +39,9 @@ public sealed class SourceRepositoryRefEncodingTests
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits, [new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256: "DEADBEEF");
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
 
-            Assert.Equal("DEADBEEF", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void CommitBaselinesToMain_Succeeds_ForASpaceNamedPlugin()
-    {
-        var modFolder = NewModFolder();
-        const string plugin = "LitR - Settings Holotapes Sorting.esp";
-        var relativePath = $"source/{plugin}/npc_/{plugin}/000001.json";
-        try
-        {
-            SourceRepository.Track(
-                modFolder, SourcePreset.Edits,
-                [([new TreeFile(relativePath, "{\"old\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "OLDBIN"))]);
-
-            PluginBaselines.CommitToMain(
-                modFolder,
-                [([new TreeFile(relativePath, "{\"new\":true}"u8.ToArray())], new BaselineTrailers(plugin, null, null, "NEWBIN"))]);
-
-            Assert.Equal("NEWBIN", SourceRepository.ParkedCompileBinarySha256(modFolder, plugin));
+            Assert.Equal(["DEADBEEF"], SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin));
         }
         finally
         {

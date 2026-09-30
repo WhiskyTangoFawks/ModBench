@@ -10,8 +10,7 @@ type QueryMethod =
 
 type CommandMethod =
   | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
-  | 'copyRecords' | 'compile' | 'absorbUpstreamUpdate'
-  | 'keepAsMyEdit' | 'editRecord' | 'putLoadOrder';
+  | 'copyRecords' | 'compile' | 'editRecord' | 'putLoadOrder';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -213,14 +212,6 @@ export class InMemoryMEditClient implements MEditClient {
   }
   compile(...args: Parameters<MEditClient['compile']>): ReturnType<MEditClient['compile']> {
     return this.command('compile', args);
-  }
-  absorbUpstreamUpdate(
-    ...args: Parameters<MEditClient['absorbUpstreamUpdate']>
-  ): ReturnType<MEditClient['absorbUpstreamUpdate']> {
-    return this.command('absorbUpstreamUpdate', args);
-  }
-  keepAsMyEdit(...args: Parameters<MEditClient['keepAsMyEdit']>): ReturnType<MEditClient['keepAsMyEdit']> {
-    return this.command('keepAsMyEdit', args);
   }
   editRecord(...args: Parameters<MEditClient['editRecord']>): ReturnType<MEditClient['editRecord']> {
     return this.command('editRecord', args);

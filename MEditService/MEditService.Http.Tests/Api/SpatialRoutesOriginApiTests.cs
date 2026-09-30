@@ -49,13 +49,13 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         string? worldspaceFk = null;
         string? cellFk = null;
         var fx = new PluginFixtureBuilder("api-spatial-origin")
+            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
             .WithPlugin("Shared.esp", mod =>
             {
                 var (wrld, cell) = ConfigurePlugin(mod, "ModA");
                 worldspaceFk = wrld;
                 cellFk = cell;
             }, origin: "ModA")
-            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
             .BuildScattered();
         return (
             fx,
@@ -67,10 +67,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
         // same slot; only the winning, enabled, listed one participates.
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
-        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
-            ? p with { Slot = winner.Slot, Winning = false }
-            : p);
+        var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {

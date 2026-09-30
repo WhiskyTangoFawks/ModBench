@@ -1050,7 +1050,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
 
-  // commands.md, Where surfaces live: every gesture is in the palette, which hands it no row.
+  // commands.md, The surface supplies the Argument: a palette entry hands the gesture no row.
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
     ['Overwrite', new OverwriteNode(3), '/instance/overwrite'],
@@ -1141,7 +1141,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 });
 
-// mods.md, Menus and keys, story 7: copy value copies each selected mod's or separator's name,
+// mods.md, Menus and keys, story 5: copy value copies each selected mod's or separator's name,
 // one per line — Mods' own text for the catalog's one copy value id.
 describe('modsCopyValueText', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });

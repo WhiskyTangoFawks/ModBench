@@ -394,7 +394,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 });
 
-// update-load-order-file, Refusals: a game folder that is not found writes nothing, and is told
+// plugins.md, Reporting, story 2: a game folder that is not found writes nothing, and is told
 // once, as the instance's state (common.md, States, story 5).
 describe('registerPluginSync — the game folder not found', () => {
   // Rival: report it as the command's own refusal, a second telling beside the instance's state.
@@ -420,8 +420,7 @@ describe('registerPluginSync — the game folder not found', () => {
   });
 });
 
-// update-load-order-file, Refusals: before mEdit first attaches, plugin sync waits and runs on
-// attach, so a launch reports nothing.
+// Before mEdit first attaches, plugin sync waits and runs on attach, so a launch reports nothing.
 describe('registerPluginSync — before mEdit first attaches', () => {
   // Rival: run on every landed value from the start, which tells every launch that mEdit cannot say.
   it('a launch then an attach reports nothing, and the attach runs on the current value', async () => {
@@ -449,8 +448,8 @@ describe('registerPluginSync — before mEdit first attaches', () => {
   });
 });
 
-// update-load-order-file, The flow: mEdit answers which plugins load with no line, so a connect
-// after it went away is a moment plugin sync runs again.
+// mEdit answers which plugins load with no line, so a connect after it went away is a moment
+// plugin sync runs again.
 describe('registerPluginSync — on connect', () => {
   // Rival: no run on connect, so the refusal from while mEdit was away stands until a file changes.
   it('runs again with the current value, and a run that lands clears the refusal before it', async () => {

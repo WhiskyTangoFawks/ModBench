@@ -2,14 +2,17 @@
 
 The picture is [docs/architecture/](../architecture/target-architecture.md): one grid, six rows
 for the layers, two columns for the processes, each box a module with its interface and what it
-hides. The build enforces the arrows the diagram draws. Architecture words live here; domain words
-live in the glossary.
+hides. The build enforces the arrows the diagram draws. Architecture words live in `docs/architecture/`. The glossary
+holds the domain words whose usual meaning would mislead.
 
 ## Strategic invariants
 
-1. **Six layers, and each talks only to the one below.** Front end; driving adapters, the API and
-   the watchers on the mEdit side, the views on the Modbench side; the core; the shared kernel both
-   sides read; driven adapters; the systems of record. The core knows no path, no table and no
+1. **Six layers; a write passes through the core, and a read takes the shortest path down.** Front
+   end; driving adapters, the API and the watchers on the mEdit side, the views on the Modbench
+   side; the core; the shared kernel both sides read; driven adapters; the systems of record. A
+   write reaches a system of record through the core, which holds the rules that refuse it, and
+   then a driven adapter. A read or a change notice skips a layer that would only pass it on. The
+   core knows no path, no table and no
    byte format. A driven adapter decides nothing.
 2. **A layer boundary is crossed through a port.** A driving adapter calls the core through the
    gesture's handler. The core reaches a system of record only through a driven adapter. The
@@ -29,7 +32,7 @@ live in the glossary.
 
 ## Alternatives rejected
 
-- **Every module knows every other**, the service this replaced: the write path pushed rows into
+- **Every module knows every other:** the write path pushed rows into
   the index, queries re-read the source tree, and the load order, index and ingest were one type.
 - **An architecture test library or an import-boundaries lint** to hold the layers. Project
   references make the compiler the sweep on both sides: `ProjectReference` between the service's

@@ -559,7 +559,7 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     expect(unlistedModNames(['Unassigned (Modlist Development)_separator'], entries)).toEqual([]);
   });
 
-  // update-load-order-file, mod sync: a line for each folder in mods/ that has none, as MO2 lists
+  // commands.md, `mod sync`: a line for each folder in mods/ that has none, as MO2 lists
   // every folder. Rival: skipping every `_separator` folder, so an orphan one never gets a line.
   it('includes a separator folder with no separator line', () => {
     const entries = parseModlist(defaultModlist());

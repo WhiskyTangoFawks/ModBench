@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -37,7 +36,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     private async Task<IFallout4ModGetter> ImportCompiled()
     {
         var compileResult = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileAsync(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+            .CompileAsync(_fixture.DestinationPlugin);
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);

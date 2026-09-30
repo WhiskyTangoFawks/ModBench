@@ -145,14 +145,6 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
     /// "writes nothing" claim is checked against.</summary>
     public byte[] PluginBytes(PluginAddress plugin) => File.ReadAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name));
 
-    /// <summary>The mod's question as the watcher would raise it: its binary changed outside
-    /// Modbench and no answer has landed yet.</summary>
-    public void RaiseExternalChangeOn(PluginAddress plugin, string question)
-    {
-        File.WriteAllBytes(Path.Combine(ModFolderOf(plugin), plugin.Name), "changed-outside-modbench"u8.ToArray());
-        SourceRepository.RaiseExternalChangeQuestion(ModFolderOf(plugin), question);
-    }
-
     public void Dispose()
     {
         TryDelete(WinningModFolder);

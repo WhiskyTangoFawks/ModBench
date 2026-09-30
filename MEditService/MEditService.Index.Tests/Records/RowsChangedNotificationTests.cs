@@ -61,7 +61,7 @@ public sealed class RowsChangedNotificationTests
     }
 
     // The tree gained a record, as an edit of a FormID or a create leaves it: read again whole, and
-    // named by the rows that moved (edit-record.md, Hand-off), never by the plugin.
+    // named by the rows that moved (ADR-0015, invariant 3), never by the plugin.
     [Fact]
     public void RefreshKeys_ForAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
     {

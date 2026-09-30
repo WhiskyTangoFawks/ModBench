@@ -81,10 +81,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
     kind?: unknown; plugin?: unknown; origin?: unknown; keys?: unknown; sequence?: unknown;
     loadOrderStatus?: NotificationEvent['loadOrderStatus'];
     trackProgress?: NotificationEvent['trackProgress'];
-    externalChangeMetaChanged?: NotificationEvent['externalChangeMetaChanged'];
-    externalChangeOldVersion?: NotificationEvent['externalChangeOldVersion'];
-    externalChangeNewVersion?: NotificationEvent['externalChangeNewVersion'];
-    externalChangeTrackedFiles?: NotificationEvent['externalChangeTrackedFiles'];
+    changedPlugins?: NotificationEvent['changedPlugins'];
   };
   if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
   if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
@@ -93,10 +90,7 @@ function parseNotificationEvent(raw: string): NotificationEvent {
   if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
   return {
     kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
-    loadOrderStatus: w.loadOrderStatus, trackProgress: w.trackProgress,
-    externalChangeMetaChanged: w.externalChangeMetaChanged,
-    externalChangeOldVersion: w.externalChangeOldVersion, externalChangeNewVersion: w.externalChangeNewVersion,
-    externalChangeTrackedFiles: w.externalChangeTrackedFiles,
+    loadOrderStatus: w.loadOrderStatus, trackProgress: w.trackProgress, changedPlugins: w.changedPlugins,
   };
 }
 

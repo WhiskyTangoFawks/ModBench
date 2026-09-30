@@ -34,8 +34,6 @@ public sealed class SourceEditFixture : IDisposable
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
     public CompilePluginHandler CompileHandler { get; }
-    public AbsorbExternalChangeHandler AbsorbHandler { get; }
-    public KeepExternalChangeHandler KeepHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -87,8 +85,6 @@ public sealed class SourceEditFixture : IDisposable
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
         CompileHandler = TestEditService.CompileHandler(holder);
-        AbsorbHandler = TestEditService.AbsorbHandler(holder);
-        KeepHandler = TestEditService.KeepHandler(holder);
     }
 
     public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
@@ -119,16 +115,9 @@ public sealed class SourceEditFixture : IDisposable
 
     public SourceRepository? Repository => SourceRepository.Open(ModFolder, GameRelease.Fallout4);
 
-    /// <summary>The question as the watcher raises it: the plugin's bytes differ from the parked
-    /// snapshot, and the marker names the change.</summary>
-    public void RaiseExternalChange(string question =
-        "Fixture.esp (in FixtureMod) changed outside Modbench and is awaiting an answer — Commit to " +
-        "main as new baseline, or Apply to working tree on edit; the question is asked again on the " +
-        "next change or load.")
-    {
+    /// <summary>Another tool rewrites the plugin: its bytes differ from what Modbench last wrote.</summary>
+    public void ChangeOutsideModbench() =>
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
-        SourceRepository.RaiseExternalChangeQuestion(ModFolder, question);
-    }
 
     public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
         Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));

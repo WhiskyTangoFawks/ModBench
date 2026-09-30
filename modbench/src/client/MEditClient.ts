@@ -1,15 +1,15 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompileResult,
-  type ExternalChangeActionResult, type NotificationEvent,
+  type CompiledPlugin, type CompileDiagnostic,
+  type NotificationEvent,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellReferences, type CellSummary,
   type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type UnansweredExternalChange, type PluginLoadFailure,
+  type PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `editRecord` is handed. Re-exported because a caller of the one write path names this
  *  type, and the client is the seam it reaches the backend through (ADR-0007). */
@@ -34,8 +34,8 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'question-open',
-  'compile-unfinished',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
+  'untracked-plugins',
 ] as const;
 
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
@@ -104,11 +104,13 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
-/** Absorb's answer: each changed plugin landed or refused, and beside them the commit of the mod's
- *  changed tracked files, which is no plugin's and can fail after every plugin landed. */
-export interface AbsorbOutcome extends SelectionOutcome<PluginAddress> {
-  trackedFilesRefusal: string | null;
+
+/** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
+export interface CompileOutcome {
+  landed: readonly CompiledPlugin[];
+  refused: readonly ItemRefusal<PluginAddress>[];
 }
+
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
@@ -119,7 +121,7 @@ export type CopyMode = components['schemas']['CopyMode'];
 export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination'>;
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
- *  (query-index contract, The record filter). */
+ *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
 /** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"
@@ -128,7 +130,7 @@ export type RecordFilter = components['schemas']['FilterRequest'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
@@ -142,11 +144,9 @@ export interface MEditClient {
   copyRecords(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
-  compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
-  // Origin-scoped: the mod, not one plugin in it, is the unit both answers cover.
-  // Absorb's WriteRefused is the whole answer refused, with nothing written.
-  absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
-  keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
+  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
+  // invariant 4). A WriteRefused is the call itself refused, with nothing written.
+  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
@@ -199,6 +199,6 @@ export interface MEditClient {
 export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult,
-  ExternalChangeActionResult, LoadOrderStatus, LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
+  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
+  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure,
 };

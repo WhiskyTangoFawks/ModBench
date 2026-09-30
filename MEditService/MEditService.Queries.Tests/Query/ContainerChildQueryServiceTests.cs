@@ -65,6 +65,11 @@ public class ContainerChildQueryServiceTests
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
         public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
+
+        public void SetFilter(string sql, string source) => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public void ClearFilter() => throw new NotSupportedException($"{GetType().Name} answers reads only.");
+        public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+            throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
 
     private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
@@ -77,7 +82,6 @@ public class ContainerChildQueryServiceTests
     private static RegisteredPlugin Plugin(string name, string origin) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
-    // The index answers in FormID order, whatever the children's types, and hydration keeps it.
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
     {

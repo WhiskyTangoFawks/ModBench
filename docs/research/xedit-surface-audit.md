@@ -1,5 +1,7 @@
 # xEdit Surface Audit — everything except the View grid
 
+Read from `references/TES5Edit` at `fd1e3602`.
+
 Describes xEdit only, read from source; takes no position on mEdit. The right-pane View grid (`vstView`, `pmuView`) is audited in [xedit-ux-audit.md](xedit-ux-audit.md) and not repeated here.
 
 ## Sources and conventions

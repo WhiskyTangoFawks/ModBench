@@ -23,8 +23,7 @@ source "$ROOT/.claude/skills/validate/own-backend.sh"
 # from the registry — an unpinned version whose generator output can differ from the
 # repo's pinned one, producing generator-version-driven false positives/negatives
 # instead of a loud clear failure. Same pinning rule `npm run package` already applies
-# to vsce, and the mutation-test JS runner (run-js.sh) applies to Stryker. Detached
-# review worktrees never carry node_modules, so install rather than fail.
+# to vsce. Detached review worktrees never carry node_modules, so install rather than fail.
 OPENAPI_TS="$ROOT/modbench/node_modules/.bin/openapi-typescript"
 if [[ ! -x "$OPENAPI_TS" ]]; then
   echo "No local openapi-typescript binary — installing dependencies (npm ci)..."

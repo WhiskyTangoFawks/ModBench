@@ -1,4 +1,6 @@
-Architecture words live in `docs/architecture/`. Verbs live in `docs/architecture/commands.md`.
+Architecture words live in `docs/architecture/`. Verbs live in `docs/architecture/commands.md`. A
+word is here only where its usual meaning, in software development or in modding, would mislead; a
+word that is not here means what it usually means.
 
 # Order
 A stack of items that resolve conflicts by override. Mod order and plugin order are its two kinds.
@@ -6,7 +8,7 @@ Load order combines them.
 Avoid: priority
 
 ## Mod order
-The order of mods, held in `modlist.txt`. It resolves files.
+The order of mods. It resolves files.
 Avoid: mod priority, mod load order
 
 ## Plugin order
@@ -51,8 +53,8 @@ with. It is the other side of an override. The item is a record or a file.
 Avoid: inject, inject-to-master
 
 # Mod
-A folder under the instance's `mods/` folder. Its files overlay the game folder. A line in
-`modlist.txt` places it in mod order. A mod holds zero or more plugins.
+A folder of files, installed as one unit, that overlays the game folder. A mod holds zero or more
+plugins.
 Avoid: plugin, package
 
 ## Mod separator
@@ -65,17 +67,15 @@ A mod whose folder holds a `.git` repository and the plugin source of its plugin
 git workflow.
 
 # Git workflow
-How a tracked mod uses its `main` branch. The user chooses, and Modbench does not detect which. Two
-kinds exist: authored and vendored.
+How a tracked mod uses its `main` branch. The user chooses. Two kinds exist: authored and vendored.
 
 ## Authored workflow
 A git workflow where `main` is the work itself.
 Avoid: custom mod, personal mod
 
 ## Vendored workflow
-A git workflow where `main` holds the upstream mod's releases: for each release, one baseline commit
-per plugin, with the release version and that plugin's binary hash as trailers. Edits live on the `edit` branch. Upstream is the
-author's releases, not a git remote: the repository holds no link to it.
+A git workflow where `main` holds the upstream mod's releases. Edits live on the `edit` branch.
+Upstream is the author's releases, not a git remote: the repository holds no link to it.
 Avoid: modified mod (a vendored workflow describes where `main` points)
 
 # Plugin
@@ -88,8 +88,8 @@ conflict.
 Avoid: override (that is a placement), fix plugin, child plugin
 
 ## Malformed plugin
-A plugin whose bytes provably depart from what the Creation Kit writes, because every vanilla record
-of the type shows the canonical form. It is not a correct plugin that Mutagen mishandles.
+A plugin whose bytes provably depart from what the Creation Kit writes. It is not a correct plugin
+that Mutagen mishandles.
 Avoid: broken plugin, corrupt plugin
 
 ## Overridden plugin
@@ -97,14 +97,18 @@ A plugin file that another mod's file of the same name overrides. The game loads
 and not this one.
 Avoid: plugin copy, duplicate, version, shadowed plugin
 
+## Active plugin
+A plugin the game loads: the file mod order resolves its name to, with an enabled `plugins.txt`
+line or loaded by the game with no line. An overridden plugin is never active, whatever its line
+says.
+Avoid: participating, loaded, registered
+
 ## Master Plugin
 A plugin that another plugin lists as a dependency. A master loads earlier.
 Avoid: parent plugin (an override's plugin is not its child)
 
 # Plugin source
-The deserialized form of a plugin, held in a tracked mod's folder. It has one file per record, with
-child records inside their container's file. The mod's own repository versions it. Compiling it
-reproduces the plugin's model, not its bytes.
+The deserialized form of a plugin, held in a tracked mod's folder.
 Avoid: source, text mirror, Spriggit tree
 
 # Vanilla
@@ -119,8 +123,8 @@ A record that holds a plugin's own header: author, masters and flags. A header i
 Avoid: TES4 record, plugin metadata
 
 ## Container record
-A record that owns child records: CELL, WRLD, DIAL or QUST. Its children exist only in a plugin that
-also carries it. In plugin source the children sit inside the container's document.
+A record that owns child records, such as a cell or a worldspace. Its children exist only in a
+plugin that also carries it.
 Avoid: group record
 
 ## Child record
@@ -141,26 +145,26 @@ Avoid: FormID, record ID
 
 # FormLink
 A typed field that holds another record's FormKey. Two data errors exist. A dangling link resolves
-to no record in the load order. A type-mismatched link resolves to a type the field does not permit.
+to no record in an active plugin. A type-mismatched link resolves to a type the field does not permit.
 Avoid: missing reference, broken link
 
 # Instance
-A mod manager's installation, a set of files on disk. MO2 is the one Modbench reads today.
+A mod manager's setup for one game: the mods, profiles and downloaded files it manages, wherever it
+keeps them.
 Avoid: loadout, workspace, profile (that is one part of it)
 
 # Profile
-An MO2 profile. Only the active profile shows in the instance.
+A named configuration of an instance: which mods are enabled, and in what order. One profile is
+active at a time.
 Avoid: session, loadout
 
 # Downloaded file
-A mod file that MO2 fetched into the instance's `downloads/` folder, with its `.meta` sidecar.
-Installing it creates a mod, and the file stays. The Downloads view lists downloaded files.
+A mod file the instance keeps with its metadata. Installing it creates a mod, and the file stays.
 Avoid: download (as a noun; to download is to fetch a file), archive (that is
 a BA2 or BSA), package
 
 # Game folder
-The game installation Modbench reads vanilla plugins from and deploys into. It is the Steam install
-or a stock game folder.
+The game installation: the Steam install or a stock game folder.
 Avoid: game directory, data folder (that is a subpath), install path
 
 ## Stock game folder

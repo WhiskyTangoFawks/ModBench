@@ -17,7 +17,7 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
-  <!-- ADR-0005 rule 2: for Codec and PluginAdapter the package edge already holds the rule (only
+  <!-- ADR-0005 invariant 2: for Codec and PluginAdapter the package edge already holds the rule (only
        they reference a game assembly); everything else that must never hold a live Mutagen object
        is these eight production boxes. No test project and not TestSupport — fixtures assemble
        plugins from live objects by design. -->
@@ -46,7 +46,7 @@
     </PackageReference>
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
     <EditorConfigFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.globalconfig" />
-    <!-- Identity is not a model of a record (ADR-0005 rule 2): FormKey, ModKey and GameRelease are
+    <!-- Identity is not a model of a record (ADR-0005 invariant 2): FormKey, ModKey and GameRelease are
          values every box names, and the ban above is what keeps the live-object namespaces out.
          Pinned to the version Mutagen.Bethesda.Fallout4 resolves in the codec and the adapter. -->
     <PackageReference Include="Mutagen.Bethesda.Core" Version="0.53.1" />

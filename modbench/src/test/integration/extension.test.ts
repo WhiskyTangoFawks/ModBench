@@ -527,7 +527,6 @@ describe('modbench command registration', () => {
     }
   });
 
-  // plugins.md, The tree, story 10: every record at once, so nothing pages.
   it('registers no load-more command', async () => {
     const all = await vscode.commands.getCommands(/* filterInternal */ true);
     assert.ok(!all.includes('modbench.loadMore'), 'modbench.loadMore is registered');
@@ -721,7 +720,7 @@ describe('modbench.openEditorBeside', () => {
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
 import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
-import { publishLoadDiagnoses } from '../../medit/loadDiagnostics';
+import { publishPluginWarnings } from '../../medit/loadDiagnostics';
 // esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
 // here from source is a distinct constructor — `.kind` is what identifies a node across that
 // boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
@@ -753,7 +752,7 @@ describe('the locked row is greyed and carries no Problems badge', () => {
   after(() => collection.dispose());
 
   it('holds none of the diagnostics published on its plugin file', () => {
-    publishLoadDiagnoses(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', defectClass: 'malformed', message: 'malformed', text: 'malformed' }]);
+    publishPluginWarnings(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
 
     const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
     assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
@@ -859,8 +858,8 @@ describe('modbench.downloads tree', () => {
     assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 
-  // downloads.md, story 1: `download_directory` can name a folder outside the instance. This
-  // proves VS Code's real watcher fires for one, not just that it was asked to.
+  // downloads.md, Which files are rows, story 1: `download_directory` can name a folder outside
+  // the instance. This proves VS Code's real watcher fires for one, not just that it was asked to.
   it('scans and watches a downloads folder ModOrganizer.ini points outside the instance', async function () {
     this.timeout(40000);
     if (!root) throw new Error('no open workspace');
@@ -1515,7 +1514,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
 // An enabled row is collapsible from launch (ADR-0002); launch/close changes its content on
-// expand, never its collapsibleState. A disabled row has no expander (plugins.md, A row story 5).
+// expand, never its collapsibleState. A disabled row has no expander (plugins.md, The tree,
+// story 5).
 
 // plugins.txt lines carry `plugin.name`; the game's implicitly-loaded masters carry `name`.
 function rowFields(row: unknown): { name?: unknown; plugin?: { name?: unknown; enabled?: unknown } } {
@@ -1539,7 +1539,7 @@ function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
   return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
 }
 
-// update-load-order-file, Refusals: once mEdit has attached, plugin sync's refusal reaches the
+// plugins.md, Reporting, story 2: once mEdit has attached, plugin sync's refusal reaches the
 // Plugins view's message line, and a connect runs plugin sync again.
 describe('Plugin sync says why it wrote nothing, and runs again on connect', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1710,7 +1710,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
   });
 
-  // plugins.md, A row story 5: the game does not load a disabled plugin's records, so its row
+  // plugins.md, The tree, story 4: the game does not load a disabled plugin's records, so its row
   // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();
@@ -2061,7 +2061,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// load-instance, refresh: mEdit reads every plugin again against the load order it holds, and the
+// commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
 // re-read of the instance that follows finds that load order unchanged.
 describe('Refresh rebuilds the index and sends nothing', () => {
   // Launched, so a re-read that changed the load order would put it.
@@ -2379,7 +2379,7 @@ describe('Progressive load', () => {
   });
 });
 
-// plugins.md, Reporting, story 1: a failed destination lookup says what failed and why, and the
+// common.md, Reporting: a failed destination lookup says what failed and why, and the
 // command resolves rather than escaping as VS Code's raw rejection toast.
 describe('Copy says why its destination lookup failed', () => {
   // A column header's data-vscode-context payload always carries `origin`, so origin resolution

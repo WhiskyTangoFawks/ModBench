@@ -1,20 +1,22 @@
 # Mod Management lives in the extension
 
-Record editing is split across the extension and the C# service. Mod Management is not: install,
-enable and disable, ordering, the file order conflict index, hardlink deploy and purge, and game-path
-resolution all live in the extension, in TypeScript. It is file, HTTP and JSON work, Node provides
-hardlinks natively, and the trees and status bar are already there, so a C# home would be a chatty
-HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record
+Record editing is split across the extension and the C# service. Mod Management is not. Install,
+enable and disable, ordering, the file order conflict index, deploy and purge, and game-path
+resolution all live in the extension, in TypeScript. That work is file, HTTP and JSON work, which
+Node does natively. The trees and the status bar are already in the extension. A C# home would be
+a chatty HTTP API around UI-adjacent bookkeeping. The editing backend stays a pure Mutagen and DuckDB record
 service.
 
 ## Strategic invariants
 
-1. **The extension parses no plugin binary.** A plugin's declared masters, and which plugins load
-   with no `plugins.txt` line, come from the backend through the generated client, so there is one
-   master verdict and no second signal for two views to disagree over.
+1. **The extension parses no plugin binary.** A plugin's declared masters come from the backend
+   through the generated client, so there is one master verdict and no second signal for two views
+   to disagree over. Which plugins load with no `plugins.txt` line is Mod Management's own answer,
+   read from no plugin binary
+   ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md), invariant 3).
    `pluginBinaryScan.test.ts` is the gate.
-2. **Mod Management reaches the backend only with plugin files at physical paths.** It never
-   sends a mod, a modlist or a profile
+2. **Mod Management hands the backend plugin files at physical paths, and a mod's facts that
+   Editing needs, as data.** It never sends a modlist or a profile
    ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)),
    and it never touches git or a record.
 

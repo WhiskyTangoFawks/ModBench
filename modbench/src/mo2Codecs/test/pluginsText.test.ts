@@ -142,42 +142,34 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 });
 
-// A plugin the user is actively authoring defaults to enabled and at the bottom,
-// which is the winning end of the plugin override order.
+// Plugin sync appends a disk-discovered plugin disabled, at the bottom, which is the winning end
+// of the plugin override order: discovery is not user intent to enable.
 describe('appendPluginInText — byte-faithful append at the winning end', () => {
-  it('appends an enabled entry line after the last existing entry, preserving everything before it', () => {
+  it('appends a disabled entry line after the last existing entry, preserving everything before it', () => {
     const input = defaultPlugins();
     const out = appendPluginInText(input, 'NewPlugin.esp');
-    expect(out).toBe(input + '*NewPlugin.esp\r\n');
+    expect(out).toBe(input + 'NewPlugin.esp\r\n');
   });
 
   it('appends to an empty file', () => {
-    expect(appendPluginInText('', 'Only.esp')).toBe('*Only.esp\n');
-  });
-
-  // Plugin sync appends a disk-discovered plugin disabled: discovery is not user
-  // intent to enable.
-  it('appends a disabled entry line (no marker) when asked to', () => {
-    const input = '*A.esp\r\nB.esp\r\n';
-    expect(appendPluginInText(input, 'New.esp', false)).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
-    expect(appendPluginInText('', 'Only.esp', false)).toBe('Only.esp\n');
+    expect(appendPluginInText('', 'Only.esp')).toBe('Only.esp\n');
   });
 
   it('preserves a trailing comment/blank line by landing before it, not after', () => {
     const input = '*A.esp\r\nB.esp\r\n# trailing comment\r\n';
     const out = appendPluginInText(input, 'New.esp');
-    expect(out).toBe('*A.esp\r\nB.esp\r\n*New.esp\r\n# trailing comment\r\n');
+    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n# trailing comment\r\n');
   });
 
   it('matches the file\'s own EOL style when the last line lacks a trailing newline', () => {
     const input = '*A.esp\r\nB.esp';
     const out = appendPluginInText(input, 'New.esp');
-    expect(out).toBe('*A.esp\r\nB.esp\r\n*New.esp\r\n');
+    expect(out).toBe('*A.esp\r\nB.esp\r\nNew.esp\r\n');
   });
 
   it('preserves a leading BOM', () => {
-    const out = appendPluginInText('﻿*First.esp\r\n', 'Second.esp');
-    expect(out).toBe('﻿*First.esp\r\n*Second.esp\r\n');
+    const out = appendPluginInText('\uFEFF*First.esp\r\n', 'Second.esp');
+    expect(out).toBe('\uFEFF*First.esp\r\nSecond.esp\r\n');
   });
 
   it('throws when the name already exists (never a silent duplicate line)', () => {
@@ -187,7 +179,7 @@ describe('appendPluginInText — byte-faithful append at the winning end', () =>
 
   it('a file with both LF- and CRLF-terminated lines uses CRLF for the new line, not the first line\'s own LF (the shared detectEol\'s ruled whole-file-scan behavior, end to end through this caller)', () => {
     const out = appendPluginInText('*A.esp\nB.esp\r\n', 'New.esp');
-    expect(out).toBe('*A.esp\nB.esp\r\n*New.esp\r\n');
+    expect(out).toBe('*A.esp\nB.esp\r\nNew.esp\r\n');
   });
 });
 

@@ -107,7 +107,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Contains("No load order", ex.Message);
     }
 
-    // plugins.md, Order and view state, story 5: the filter clears on purpose, whatever is held.
+    // plugins.md, Order and view state, story 3: the filter clears on purpose, whatever is held.
     [Fact]
     public void ClearFilter_NoLoadOrder_LeavesNoFilter()
     {

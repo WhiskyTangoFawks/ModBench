@@ -4,33 +4,36 @@ Issues live as GitHub issues. Use `gh` for all operations.
 
 ## The shape of the backlog
 
-Three kinds of open issue, nothing else:
+Four kinds of open issue, nothing else:
 
-- **PRD** (`prd` label) — one full spec per feature, minted only by the maintainer's
-  grill → `/to-spec` pipeline. Always assigned to a release milestone. Future tense;
-  spent when its slices ship. The surface specs and traces it changes are written
-  before its slices are built, never updated afterwards to match them.
-- **Implementation ticket** — a slice of a PRD, minted by `/to-tickets` run against
-  that PRD; carries a Parent reference to it and native blocked-by edges. No
-  parentless implementation tickets.
-- **`speculative`** — proto-PRD parked during the 2026-09 backlog migration; a
-  grilling session turns it into a PRD or discards it. Migration-era stock only:
-  nothing new gets this label.
+- **Epic** (`epic` label) — the bounded scope of one batch of work, drawn as pointers
+  into the specs, minted only by the maintainer's grill → `/to-epic` pipeline. Always
+  assigned to a release milestone. Future tense; spent when its slices ship. The specs
+  it points at are written before its slices are built, never updated afterwards to
+  match them.
+- **Implementation ticket** — a slice of an epic, minted by `/to-tickets` run against
+  that epic; a native sub-issue of it, pointing at the spec lines it makes true, with
+  native blocked-by edges. No parentless implementation tickets.
+- **Enhancement** (`enhancement` label) — a request for new behaviour that no spec
+  draws yet, from the maintainer or a user. A grill turns it into spec and then an
+  epic, or it closes. It carries no tickets.
+- **Bug** (`bug` label) — something doesn't work, reported by the maintainer or a
+  user. Triage verifies it; the fix is an in-loop fix or an epic.
 
-**Agents never create bug or tech-debt issues — the tracker holds no standing
-bug/tech-debt backlog.** A finding met mid-task is fixed in the same session,
+Every open issue carries one state label (`triage-labels.md`).
+
+**Agents never create issues outside `/to-epic` and `/to-tickets` — the tracker
+holds no agent-filed findings.** A finding met mid-task is fixed in the same session,
 reported to the maintainer in the session summary, or dropped. Only the maintainer
-escalates a finding into tracked work, through grill → `/to-spec` → `/to-tickets`.
-The `bug`/`tech debt` tickets still open on `1 — Alpha` are grandfathered
-legacy-orchestrate stock, burning down to zero — a closed set, never added to.
+escalates a finding into tracked work, through grill → `/to-epic` → `/to-tickets`.
 
 ## Milestones = releases
 
 Exactly four: `1 — Alpha`, `2 — v1`, `3 — v2` — releases, priority-ordered by
 numeric title prefix — and `Mutagen Bugs`, the unnumbered parking lot for upstream
 Mutagen defects (paired with the `mutagen` label). Assigning a milestone schedules
-an issue for that release. Every open issue carries a milestone except
-`speculative` ones, which are by definition unscheduled.
+an issue for that release. Every open issue carries a milestone except one
+that needs triage, which may be unscheduled.
 
 Traverse with `gh`:
 
@@ -90,7 +93,7 @@ Issues/PRs share one number space — a bare number may be either; try `gh pr vi
 
 ## When a skill says "publish to the issue tracker"
 
-Only `/to-spec` (a PRD) and `/to-tickets` (implementation tickets) publish — both run
+Only `/to-epic` (an epic) and `/to-tickets` (implementation tickets) publish — both run
 by the maintainer. Any other skill's instruction to file an issue is overridden by
 this repo's no-standing-backlog policy above: report the finding to the maintainer
 instead.

@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 
 namespace MEditService.Commands.Tests.Edits;
 
@@ -18,7 +17,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         Corrupt(_mod.NpcSourceFile);
 
         var compileService = _mod.CompileService();
-        var result = await compileService.CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("Npcs", result.RefusalReason);
@@ -35,22 +34,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     {
         Corrupt(_mod.NpcSourceFile);
 
-        var result = await _mod.CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
-
-        Assert.False(result.Succeeded);
-        Assert.Contains(
-            Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), result.RefusalReason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Compile_WhenTheCompiledRefHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
-    {
-        var healthy = File.ReadAllText(_mod.NpcSourceFile);
-        Corrupt(_mod.NpcSourceFile);
-        _mod.CommitWorkingTree("a malformed FormKey");
-        File.WriteAllText(_mod.NpcSourceFile, healthy);
-
-        var result = await _mod.CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("HEAD"));
+        var result = await _mod.CompileService().CompileAsync(_mod.Plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains(

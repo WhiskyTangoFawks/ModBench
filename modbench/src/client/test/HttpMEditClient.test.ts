@@ -226,6 +226,37 @@ describe('HttpMEditClient — deleting records answers per record', () => {
   });
 });
 
+describe('HttpMEditClient — creating a plugin', () => {
+  const plugin = { name: 'New.esp', origin: 'ModA' };
+
+  it('sends the origin, the file name and the folder, and reads back the plugin it wrote', async () => {
+    const wrote = { name: 'New.esp', origin: 'ModA', path: '/mods/ModA/New.esp' };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, wrote)));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual(wrote);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/plugins\/create$/);
+    expect(await request?.json()).toEqual({ origin: 'ModA', name: 'New.esp', folder: '/mods/ModA' });
+  });
+
+  it('resolves a WriteRefused carrying the name and the server text on a refusal', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(409, {
+      detail: 'A file is already at /mods/ModA/New.esp, so New.esp was not created.', refusal: 'FileExists',
+    })));
+    const client = makeClient(fetch);
+
+    const result = await client.createPlugin(plugin, '/mods/ModA');
+
+    expect(result).toEqual({
+      refused: true,
+      message: 'Could not create "New.esp" — A file is already at /mods/ModA/New.esp, so New.esp was not created.',
+    });
+  });
+});
+
 describe('HttpMEditClient — copying records answers per record and destination', () => {
   const npc = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
@@ -293,6 +324,38 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
   });
 });
 
+describe('HttpMEditClient — compiling plugins answers per plugin', () => {
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModB' };
+  const diagnostic = { formKey: '000800:First.esp', sourceRelativePath: 'First.esp/Npc/A.json', message: 'Race: points at nothing' };
+
+  it('sends the whole selection as one call, and reads each compiled plugin and each refusal with its message', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
+      refused: [{ plugin: second, refusal: 'None', message: 'Second.esp is not tracked, so there is no source to compile.' }],
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.compile([first, second]);
+
+    expect(outcome).toEqual({
+      landed: [{ plugin: first, masters: ['Fallout4.esm'], diagnostics: [diagnostic] }],
+      refused: [{ item: second, reason: 'Second.esp is not tracked, so there is no source to compile.' }],
+    });
+    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/compile$/.test(req.url));
+    expect(await request?.json()).toEqual({ plugins: [first, second] });
+  });
+
+  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, 'No load order has been received.')));
+    const client = makeClient(fetch);
+
+    const result = await client.compile([first, second]);
+
+    expect(result).toEqual({ refused: true, message: 'Could not compile 2 plugins — No load order has been received.' });
+  });
+});
+
 describe('HttpMEditClient — an applied edit', () => {
   it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
@@ -319,55 +382,6 @@ describe('HttpMEditClient — an applied edit', () => {
     );
 
     expect(outcome).toEqual({ applied: true });
-  });
-});
-
-describe('HttpMEditClient — absorbing an upstream update answers per plugin', () => {
-  const first = { name: 'First.esp', origin: 'ModA' };
-  const second = { name: 'Second.esp', origin: 'ModA' };
-
-  it('reads what was applied as landed, each refusal with its message, and the tracked-files refusal beside them', async () => {
-    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
-      applied: [first],
-      refused: [{ plugin: second, refusal: 'CommitFailed', message: "'Update Second.esp' could not be committed to main." }],
-      trackedFilesRefusal: null,
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.absorbUpstreamUpdate('ModA');
-
-    expect(outcome).toEqual({
-      landed: [first],
-      refused: [{ item: second, reason: "'Update Second.esp' could not be committed to main." }],
-      trackedFilesRefusal: null,
-    });
-  });
-
-  it('reads the tracked-files refusal when every plugin landed and that commit did not', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {
-      applied: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.absorbUpstreamUpdate('ModA');
-
-    expect(outcome).toEqual({
-      landed: [first, second], refused: [], trackedFilesRefusal: "'Update ModA' could not be committed to main.",
-    });
-  });
-
-  it('resolves a WriteRefused carrying the server text when the whole answer is refused', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(422, {
-      refusal: 'RoundTripFailed', detail: 'Second.esp could not be parsed from its own binary.',
-    })));
-    const client = makeClient(fetch);
-
-    const result = await client.absorbUpstreamUpdate('ModA');
-
-    expect(result).toEqual({
-      refused: true,
-      message: 'Could not absorb the upstream update for "ModA" — Second.esp could not be parsed from its own binary.',
-    });
   });
 });
 

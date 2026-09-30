@@ -128,7 +128,7 @@ public sealed class InjectedChildTests : IDisposable
 
     private async Task<IModDisposeGetter> CompileAndReimport(PluginAddress plugin, string modFolder)
     {
-        var result = await CompileServices.Over(_loadOrder).CompileAsync(plugin, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_loadOrder).CompileAsync(plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         return ModFactory.ImportGetter(

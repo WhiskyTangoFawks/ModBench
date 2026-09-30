@@ -1,12 +1,13 @@
 export type {
-  MEditClient, WriteRefused, AbsorbOutcome, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
+  MEditClient, WriteRefused, RebuildIndexOutcome, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, LoadOrderProgress,
   NotificationKind, NotificationEvent, BackendStatus, RecordEditOutcome, RecordPage, InteriorCellBlock, InteriorCellSubBlock,
   PluginRecordTypeCount, CreatableRecordType, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
-  PlacedSummary, ContainerChildSummary, CompileResult, ExternalChangeActionResult, LoadOrderStatus,
-  LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
+  PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
+  LoadOrderStatus,
+  LoadOrderRefusal, PluginLoadFailure,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isRefused } from './MEditClient';

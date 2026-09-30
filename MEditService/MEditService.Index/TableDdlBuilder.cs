@@ -261,6 +261,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 load_order_idx INTEGER,
                 enabled BOOLEAN NOT NULL,
                 winning BOOLEAN NOT NULL,
+                is_light BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);

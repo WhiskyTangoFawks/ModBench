@@ -15,12 +15,12 @@ placement, are populated from the documents at ingest.
 2. **Typed reads reconstitute; they never read the views.** Every typed read deserializes the
    document through the codec and runs the same extract delegates the views are generated from,
    so the values are identical by construction and cannot drift.
-3. **A field is promoted to a real column only when measurement demands it.** A filter probe over
-   a full load order found the views fast enough without any.
+3. **A field is promoted to a real column only when measurement demands it.** The views answer the
+   record filter fast enough without one.
 
 ## Alternatives rejected
 
-- **One reflected wide table per record type**, the original design. About 130 tables of DDL to
+- **One reflected wide table per record type.** About 130 tables of DDL to
   maintain, every whole-load-order query a union over all of them, nested lists silently dropped
   where the reflector had no mapping, and a schema coupled to Mutagen's at DDL time. Once the
   source became the record's text, the document was the natural row, and the only field-predicate

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse[Edit|Write]: refuse text Gate 1 would reject — Vale over the fragment as its file
 type, Vale again over it as raw text (string literals), plus comment-shape.py's structural checks.
+Gate 1 lints only what git tracks, so a gitignored file or one no repository holds passes.
 
 Only the text being written is checked, never the resulting file, so trimming an oversize
 comment across two edits is never blocked; the validate gate covers the whole file."""
@@ -39,12 +40,23 @@ def vale_hits(path, text):
     return list(dict.fromkeys(hits))
 
 
+def gate_lints(path):
+    target = os.path.join(ROOT, path)
+    directory = os.path.dirname(target)
+    while not os.path.isdir(directory):
+        directory = os.path.dirname(directory)
+    ignored = subprocess.run(["git", "-C", directory, "check-ignore", "-q", target], capture_output=True)
+    return ignored.returncode == 1
+
+
 data = json.load(sys.stdin)
 tool_input = data.get("tool_input", {})
 path = tool_input.get("file_path", "")
+if not gate_lints(path):
+    sys.exit(0)
 text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool_input.get("content")
 text = text or ""
-hits = [h.replace(path + ":", "line ") for h in comment_shape.check(path, text)] + vale_hits(path, text)
+hits =[h.replace(path + ":", "line ") for h in comment_shape.check(path, text)] + vale_hits(path, text)
 if hits:
     if not all("Ticket number" in h for h in hits):
         print("A comment states a constraint from outside the code; a string states the current "

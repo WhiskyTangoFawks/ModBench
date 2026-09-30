@@ -1,4 +1,4 @@
 # downloadsCommands
 
-downloads commands. The commands of a downloaded file. It hides the splice of the download's .meta
-and writes through the Instance adapter.
+downloads commands. The commands of a downloaded file: exclude, include and delete. It hides
+nothing. It hands the Instance adapter every change to a downloaded file and its metadata.

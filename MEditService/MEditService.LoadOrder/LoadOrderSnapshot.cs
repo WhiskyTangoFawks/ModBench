@@ -77,17 +77,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>The three facts one plugin is registered with, or null when it is not registered.</summary>
     public Registration? Registration(PluginAddress address) => Plugin(address)?.Registration;
 
-    /// <summary>This load order with one more registered plugin, replacing any plugin already
-    /// registered under the same identity (ADR-0007: a created plugin is a member at once).</summary>
-    public LoadOrderSnapshot With(RegisteredPlugin plugin) =>
-        new(DataFolderPath, InstanceRoot, GameRelease, [.. Plugins.Where(c => !SameAddress(c, plugin.Key)), plugin]);
-
-    /// <summary>This load order without the plugin registered under <paramref name="address"/>, unchanged
-    /// when none is (ADR-0007: a create that could not write its file takes its registration back).
-    /// </summary>
-    public LoadOrderSnapshot Without(PluginAddress address) =>
-        new(DataFolderPath, InstanceRoot, GameRelease, [.. Plugins.Where(c => !SameAddress(c, address))]);
-
     /// <summary>The folder holding the plugin's file, or null for a master resolved from the game's
     /// own Data directory (Track does not apply there) or a plugin none registered here names.</summary>
     public string? ModFolderOf(PluginAddress plugin) =>
@@ -98,18 +87,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase)
             ? null
             : Path.GetDirectoryName(pluginPath);
-
-    /// <summary>The folder every plugin under one origin shares, for a gesture the mod folder is the
-    /// unit of. Null when no registered plugin carries the origin.</summary>
-    public string? ModFolderOfOrigin(string origin) =>
-        Plugins.FirstOrDefault(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)) is { } plugin
-            ? ModFolderOf(plugin.Origin, plugin.Path)
-            : null;
-
-    /// <summary>Every plugin the mod holds, for a gesture the mod is the unit of — Absorb and
-    /// Keep.</summary>
-    public IReadOnlyList<RegisteredPlugin> PluginsOfOrigin(string origin) =>
-        [.. Plugins.Where(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))];
 
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two plugins
     /// that share a filename, so the filename alone does not say which.</summary>

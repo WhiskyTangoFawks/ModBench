@@ -27,7 +27,7 @@ describe('the destination pick', () => {
     plugin('Other.esp', 'OtherMod', 9),
   ];
 
-  // plugins.md, Menus and keys, story 7: an untracked plugin is no copy destination.
+  // plugins.md, Menus and keys, story 4: an untracked plugin is no copy destination.
   it('offers the tracked, editable plugins, each with its load position', () => {
     expect(copyDestinationItems(plugins, 'New', [npc]).map(({ label, description }) => ({ label, description }))).toEqual([
       { label: 'Source.esp', description: '[3]' },

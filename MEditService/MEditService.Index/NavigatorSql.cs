@@ -35,17 +35,13 @@ internal static class NavigatorSql
             WHERE held.child = {alias}.form_key AND held.plugin = {alias}.plugin AND held.origin = {alias}.origin)
         """;
 
-    /// <summary>A FormID is the load position of the FormKey's plugin, then its ID; a light plugin's
-    /// FormIDs take the FE prefix, so they follow every full plugin's.</summary>
-    internal static string FormIdOrder(string formKey, IEnumerable<string> lightPlugins)
-    {
-        var plugin = $"lower(split_part({formKey}, ':', 2))";
-        var lights = string.Join(", ", lightPlugins.Select(name => $"'{name.ToLowerInvariant().Replace("'", "''", StringComparison.Ordinal)}'"));
-        var lightLast = lights.Length == 0 ? "" : $"{plugin} IN ({lights}), ";
-        return $"""
-            {lightLast}(SELECT MIN(fo.load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} fo
-             WHERE lower(fo.plugin) = {plugin}) NULLS LAST,
-            {plugin}, split_part({formKey}, ':', 1)
-            """;
-    }
+    /// <summary>A FormID is the load position of the winning registration of the FormKey's
+    /// filename, then its ID; a light plugin's FormIDs take the FE prefix, so they follow every full
+    /// plugin's.</summary>
+    internal static string FormIdOrder(string formKey) => $"""
+        (SELECT row(fo.is_light, fo.load_order_idx)
+         FROM {TableDdlBuilder.RegistrationsRelation} fo
+         WHERE fo.winning AND lower(fo.plugin) = lower(split_part({formKey}, ':', 2))) NULLS LAST,
+        lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)
+        """;
 }

@@ -38,6 +38,10 @@ internal static class Wire
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string preset = "Edits") =>
         client.PostAsJsonAsync("/plugins/track", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }), preset });
 
+    internal static Task<HttpResponseMessage> Compile(
+        this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins) =>
+        client.PostAsJsonAsync("/plugins/compile", new { plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }) });
+
     internal static Task<HttpResponseMessage> Edit(
         this HttpClient client, string formKey, string plugin, string origin, string member, object value) =>
         client.PostAsJsonAsync(
@@ -65,6 +69,15 @@ internal static class Wire
         var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}");
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()
             ?? throw new InvalidOperationException($"Expected the first {type} record of {plugin} to carry a formKey.");
+    }
+
+    internal static async Task<string> FormKeyNamed(this HttpClient client, string plugin, string type, string editorId)
+    {
+        var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type={type}&search={editorId}");
+        return records.GetProperty("items").EnumerateArray()
+            .Single(r => r.GetProperty("editorId").GetString() == editorId)
+            .GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException($"Expected {plugin}'s {type} {editorId} to carry a formKey.");
     }
 
     internal static async Task<string> FirstFormKeyIn(

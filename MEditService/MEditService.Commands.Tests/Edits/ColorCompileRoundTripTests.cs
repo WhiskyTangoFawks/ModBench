@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -24,7 +23,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     private async Task<IFallout4ModGetter> CompileAndReparse()
     {
         var result = await CompileServices.Over(_fixture.LoadOrder)
-            .CompileAsync(_fixture.Plugin, new CompileSource.WorkingTree());
+            .CompileAsync(_fixture.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.ModFolder, ColorCompileFixture.PluginName);

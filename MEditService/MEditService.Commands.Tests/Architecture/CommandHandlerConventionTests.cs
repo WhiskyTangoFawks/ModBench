@@ -18,10 +18,8 @@ public sealed class CommandHandlerConventionTests
         (typeof(DeleteRecordHandler), "AllApplied"),
         (typeof(CreateRecordHandler), "Applied"),
         (typeof(TrackHandler), "AllApplied"),
-        (typeof(CompilePluginHandler), "Succeeded"),
+        (typeof(CompilePluginHandler), "AllApplied"),
         (typeof(CopyRecordHandler), "AllApplied"),
-        (typeof(AbsorbExternalChangeHandler), "AllApplied"),
-        (typeof(KeepExternalChangeHandler), "Applied"),
         (typeof(CreatePluginHandler), "Applied"),
         (typeof(PutLoadOrderHandler), "Applied"),
     ];
@@ -30,8 +28,10 @@ public sealed class CommandHandlerConventionTests
     // is the gesture's own (ADR-0014 invariant 4).
     private static readonly Type[] Carriers =
     [
-        typeof(AbsorbResult),
-        typeof(ExternalChangeLandResult),
+        typeof(CompiledPlugin),
+        typeof(CompileRefused),
+        typeof(CompileSelectionResult),
+        typeof(PluginCreateRefusal),
         typeof(PluginCreateResult),
         typeof(PutLoadOrderRefusal),
         typeof(PutLoadOrderResult),

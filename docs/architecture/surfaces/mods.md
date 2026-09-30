@@ -4,9 +4,7 @@ The Mods surface shows the active profile's mod order: its mods, grouped by sepa
 Overwrite folder. Its template is MO2's mod list
 ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs,
 [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md)
-under Mod and Separator; what each one writes is in its trace. What every view shares is in
-[common.md](common.md). The words are CONTEXT.md's: mod order, winning and losing, sort direction,
-file order conflict.
+under Mod and Separator. What every view shares is in [common.md](common.md).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -14,11 +12,11 @@ Each story cites its source. A story with no source is owned here.
 
 A native tree view, `modbench.modList`, second in the `modbench` container and open by default
 (commands.md, Where surfaces live). Separators are its parents and the mods they group are their
-children, so it has Collapse All (Chrome). Several rows can be selected at once. *catalog Argument:
-mods*
+children, so it has Collapse All (Chrome).
 
 The view's description shows how many mods are enabled out of how many are listed, counting the
-whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *ruling; MO2's active-mod counter*
+whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *MO2's
+active-mod counter*
 
 ## The tree
 
@@ -28,13 +26,12 @@ As a user, I want:
    line MO2 marks unmanaged (`*`) is not a row. *MO2, which hides unmanaged mods by default*
 2. Each separator to hold the mods between it and the next separator toward the winning end, whichever
    way the list is sorted. *CONTEXT.md, Mod separator; MO2*
-3. The mods before the first separator, at the losing end, to be ungrouped: rows of their own at the
-   losing end of the view, above every separator when losing is at the top, below when winning is.
-   *MO2*
+3. The mods on the losing side of the first separator to be ungrouped: top-level rows at the losing
+   end of the view. *MO2*
 4. The Overwrite row pinned at the winning end, outside every separator: last when losing is at the
    top, first when winning is. *MO2: Overwrite wins over every mod*
 5. Separators collapsed each time the extension activates, so the view opens clean. What I expand
-   stays expanded until then. *ruling*
+   stays expanded until then.
 6. A separator with no mods to show no expander. *VS Code*
 
 ## A row
@@ -50,9 +47,6 @@ As a user, I want:
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
-A mod whose folder was deleted by hand is not a row: its line is pruned from `modlist.txt`, and the
-row goes with it. *ruling; MO2*
-
 ### Separator
 
 | Part | What it shows | Source |
@@ -67,64 +61,55 @@ row goes with it. *ruling; MO2*
 |---|---|---|
 | Label | Overwrite | MO2 |
 | Description | the number of files it holds, left out when it holds none | |
-| Icon | `$(folder)`, tinted when it holds files | tinted, no badge |
+| Icon | `$(folder)`, tinted when it holds files, with no badge | |
 | Tooltip | what Overwrite is: the files tools wrote while MO2 ran them, which win over every mod | MO2 |
 
 Overwrite is always a row, even when it holds nothing. It is not a mod: it has no check box and
-cannot be dragged. *ruling; MO2*
+cannot be dragged. *MO2*
 
 ## Order and view state
 
 As a user, I want:
 
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the whole tree,
-   separators and the mods inside them. It never changes which mod wins. *MO2's priority sort;
-   CONTEXT.md, Sort direction*
+   separators and the mods inside them. *MO2's priority sort; common, A view, story 7*
 2. The name filter to match mod and separator names. A separator whose name matches shows all its
    mods; otherwise a separator shows only its matching mods, expanded, and one with none is not
    shown. Overwrite stays, and does not count as a match. *common, The name filter*
 3. A toggle in the filter box to show the matches as a flat list, with no separators. It returns to
    grouped whenever the filter clears.
 
-The sort direction and the filter box's toggle reset when the extension activates (common, A view,
-story 4).
-
 ## States
 
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
-1. With no mods and no separators, a message saying so, and that install or create empty mod, in the
-   title bar's overflow, adds one. Overwrite is always a row, so the message is the view's message
-   line, above it. *catalog Where*
-2. The title bar's gestures absent while the folder is not an instance. *No dead entries*
+1. With no mods and no separators, the view's message line to say so and to name install and create
+   empty mod, in the title bar's overflow.
 
 ## Menus and keys
 
-The catalog decides which gestures this view offers and on what condition. This is where each sits.
 The row menus follow VS Code's groups: open, change, create, source control, copy, then destroy.
 
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod menu | open folder · view on Nexus · enable or disable · move… · add separator · create empty mod · install… · track (holds an untracked plugin) · copy value · uninstall |
+| Mod menu | open folder · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
+| Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. |
 
 As a user, I want:
 
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's
    Argument in the catalog says. *catalog Argument*
-2. Keys that do what the same keys do in VS Code's Explorer. *common, A view, story 5*
-3. Enable or disable, over a selection that mixes enabled and disabled mods, to apply the right-
-   clicked row's direction to every mod. Space takes the focused row's direction. A mod already in
-   that state is left alone. *MO2; Doing nothing is not an error*
-4. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for
+2. Enable or disable, over a selection that mixes enabled and disabled mods, to apply the
+   right-clicked row's direction to every mod. Space takes the focused row's direction. A mod
+   already in that state is left alone. *MO2; Doing nothing is not an error*
+3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for
    separators.
-5. The check box to flip as I click it. If the write fails, it returns to what the disk says, and I
-   am told why. *A write is forgotten; common, Reporting*
-6. A click or double click on a row to do nothing but select it. *catalog: no row click on Mods*
-7. Copy value to copy each selected mod's or separator's name, one to a line. *catalog `copy value`*
+4. A click or double click on a row to do nothing but select it.
+5. Copy value to copy each selected mod's or separator's name. *catalog `copy value`*
 
 ## Drag and drop
 
@@ -138,11 +123,8 @@ As a user, I want:
    Overwrite when Overwrite is last.
 5. A drop where what I dragged cannot go to change nothing and say nothing: on Overwrite, on a row
    I am dragging, inside a separator I am dragging, or a separator on a mod. *MO2 refuses a
-   separator on a mod; Doing nothing is not an error; collected in the CLAUDE.md review*
-6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *ruling;
-   mo2.md*
-
-A drop is `move`, so it is one gesture however it lands (commands.md, Entry points are not gestures).
+   separator on a mod; Doing nothing is not an error*
+6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *mo2.md*
 
 ## Pickers, prompts and confirmations
 
@@ -163,21 +145,20 @@ As a user, I want:
 
 1. A prompt for the name. Esc or an empty name adds nothing. A name another separator has is refused
    in the prompt: "A separator with this name already exists". *MO2*
-2. On a mod, the separator on the mod's losing side in mod order, so the mod and the mods on its
-   winning side in its separator join the new one. On a separator, on the winning side of that
+2. On a mod, the new separator to go directly on the mod's losing side, so the mod and the mods on
+   its winning side in its separator join it. On a separator, on the winning side of that
    separator's last mod, taking none. With losing at the top, that is directly above the mod, and
-   directly below the separator's last mod, as shown. *ruling; catalog `add`, position; A gesture
-   is atomic*
+   directly below the separator's last mod, as shown. *catalog `add`, position; A gesture is atomic*
 
 ### Rename separator
 
-A prompt filled with the current name. Esc, an empty name or the same name renames nothing. A name
-another separator has is refused in the prompt, as for add. *MO2*
+As a user, I want a prompt filled with the current name. Esc, an empty name or the same name renames
+nothing. A name another separator has is refused in the prompt, as for add. *MO2*
 
 ### Delete separator
 
-A separator delete does not ask: no mod is lost, and the separator's folder goes to the trash.
-*Confirm what destroys; ruling*
+As a user, I want one confirmation for the selection that says the mods stay. *MO2; Confirm what
+destroys*
 
 ### Create empty mod and install
 
@@ -185,9 +166,25 @@ As a user, I want:
 
 1. A prompt for the name. A name a mod already has is refused in the prompt, before anything is
    written, with one wording for create and install. Esc creates nothing. *MO2*
-2. Install from the Mods menu to ask first for an archive or a folder, then open that picker.
+2. Install from the Mods menu to ask first for an archive or a folder, then open a file picker or a
+   folder picker.
    *catalog `install`: the Mods menu asks for the source*
 3. The name prompt filled with the archive's name without its extension, or the folder's name. *MO2*
+
+### What install does
+
+Install is offered here and on Downloads (catalog `install`). As a user, I want:
+
+1. Install never to merge into an existing folder, or to replace one I did not confirm.
+2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`
+   does.
+3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
+   its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
+4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
+   never blanks a known one. *ADR-0017, invariant 2*
+5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll
+   back. Installing again is the recovery, and a tracked mod's plugin source stays in git. This is
+   an exception to *A failed gesture writes nothing*.
 
 ### Uninstall
 
@@ -199,24 +196,15 @@ destroys; MO2's recycle bin*
 
 By [common.md](common.md#reporting). As a user, I want:
 
-1. A failed gesture's notification to say what failed and why, not only that it failed. *common,
-   Reporting*
-2. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
-   because the installer's own steps did not run. *install-mod, new mod, story 3; ADR-0019,
-   invariant 1*
-
-## Deferred
-
-| What | Waits on |
-|---|---|
-| A mod's file order conflicts: its status, its decoration and its contested files | the conflict UX design, #483 |
-| `rename` a mod, and F2 on a mod | its design |
-| `open details` and a double click that opens it, `highlight conflicts` | their design |
-| `exclude / include file` | #483: where a mod's files are shown |
-| `check for updates` and the update badge, `publish` | the Nexus API work |
-| move targets: top, bottom, priority N, first or last conflict; add separator above or inside | the catalog's planned Options |
-| install's position, installer choice and reinstall | the catalog's planned Options |
-| `open folder` in the native file tab, decorated by conflict status | #483 |
+1. A FOMOD installed as a plain copy to raise a notification that its files need arranging by hand,
+   because the installer's own steps did not run. *ADR-0019, invariant 1*
+2. When `mods/` cannot be listed, `modlist.txt` untouched, and the reason in the view's message line
+   and the Output.
+3. An uninstall or a separator delete that trashed the folder, and then failed on its line, reported
+   as done, with a line in the Output: `mod sync` drops the line. This is an exception to *A failed
+   gesture writes nothing*.
+4. An uninstall that landed, and then failed to mark its downloaded file uninstalled, not reported
+   as failed. The failed `.meta` write is a line in the Output.
 
 ## Test seam
 

@@ -322,25 +322,43 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Re-parks the last-compile ref at the tree just compiled from, without moving HEAD, branch
-    /// or index (ADR-0007). Null <paramref name="atRef"/> snapshots the working tree; a ref name
-    /// snapshots that ref's tree.</summary>
-    public static void ParkCompileSnapshot(
-        string modFolder, string plugin, string? atRef, string binarySha256)
+    /// <summary>Parks the working tree about to be compiled, naming its binary beside every binary the
+    /// ref already names, so an interrupted write leaves one it names (plugins.md, Compile, story 5).
+    /// Moves no HEAD, branch or index.</summary>
+    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256)
     {
         var gitDir = Path.Combine(modFolder, ".git");
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
+        var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
+        var earlier = ParkedCompileBinarySha256s(modFolder, plugin);
+        Repark(gitDir, modFolder, plugin, tree, headSha, [$"{BinaryTrailer}: {binarySha256}",
+            .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
+    }
 
-        var tree = atRef == null
-            ? WorkingTreeSnapshotTree(gitDir, modFolder)
-            : GitCli.Run(gitDir, modFolder, "rev-parse", $"{atRef}^{{tree}}").Trim();
+    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003,
+    /// invariant 3).</summary>
+    public static void NarrowCompileSnapshot(string modFolder, string plugin)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        var parked = LastCompileRef(plugin);
+        var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", parked);
+        var tree = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^{{tree}}").Trim();
+        var parent = GitCli.Run(gitDir, modFolder, "rev-parse", $"{parked}^").Trim();
+        Repark(gitDir, modFolder, plugin, tree, parent,
+            [.. ReadTrailers(body, BinaryTrailer).Select(sha => $"{BinaryTrailer}: {sha}")]);
+    }
 
-        // commit-tree is plumbing with no --trailer flag, so the trailer line is hand-written at the message
-        // tail.
-        var message = $"Save & Compile: {plugin}\n\nBinary-SHA256: {binarySha256}";
-        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m", message).Trim();
+    // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written.
+    private static void Repark(
+        string gitDir, string modFolder, string plugin, string tree, string parent, IEnumerable<string> trailers)
+    {
+        var message = string.Join('\n', [$"Compile: {plugin}", "", .. trailers]);
+        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", parent, "-m", message).Trim();
         GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
+
+    private const string BinaryTrailer = "Binary-SHA256";
+    private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
 
     // The index and every tracked file's working-tree bytes, built on a copy of the index: git stash
     // create would take index.lock, which the user's own commit or rebase may be holding.
@@ -359,47 +377,18 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>Stages every changed tracked file on the real repo — index matches working tree —
-    /// so the same bytes cannot re-raise the question once answered (ADR-0003).</summary>
-    public static void StageTrackedFileChanges(string modFolder, IReadOnlyList<TrackedFileChange> changes)
-    {
-        if (changes.Count == 0) return;
-        var gitDir = Path.Combine(modFolder, ".git");
-        var paths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
-        GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. paths]);
-    }
-
     /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
     /// clean.</summary>
-    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
-        [.. ParseStatus(modFolder).Select(e => e.Path)];
-
-    /// <summary>"Changed tracked files" (ADR-0003 invariant 3): every path outside the source
-    /// root whose working tree differs from the index, git's view; a change staged and untouched
-    /// since is an answer, not a question. Assets under Everything.</summary>
-    public static IReadOnlyList<TrackedFileChange> ChangedTrackedFilesOutsideSource(string modFolder)
-    {
-        var sourcePrefix = ToGitPath(RootFolderName) + "/";
-        return [.. ParseStatus(modFolder)
-            .Where(e => !e.Path.StartsWith(sourcePrefix, StringComparison.Ordinal) && e.WorktreeStatus != ' ')
-            .Select(e => new TrackedFileChange(
-                e.Path,
-                e.IndexStatus == 'D' || e.WorktreeStatus == 'D' ? TrackedFileChangeKind.Deleted : TrackedFileChangeKind.Modified,
-                e.IndexStatus is not (' ' or '?')))];
-    }
-
-    // A rename/copy's old path rides a second NUL-terminated token with no code of its own — dropped
-    // below rather than misread as an unrelated entry.
-    private readonly record struct StatusEntry(string Path, char IndexStatus, char WorktreeStatus);
-
-    private static List<StatusEntry> ParseStatus(string modFolder)
+    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
     {
         if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "status", "--porcelain=v1", "-z")) return [];
 
-        var entries = new List<StatusEntry>();
+        // A rename/copy's old path rides a second NUL-terminated token with no code of its own —
+        // skipped rather than misread as an unrelated entry.
+        var paths = new List<string>();
         var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var i = 0;
         while (i < tokens.Length)
@@ -407,33 +396,24 @@ public sealed partial class SourceRepository
             var entry = tokens[i];
             i++;
             if (entry.Length < 4) continue;
-            entries.Add(new StatusEntry(entry[3..], entry[0], entry[1]));
+            paths.Add(entry[3..]);
             if (entry[0] is 'R' or 'C') i++;
         }
-        return entries;
+        return paths;
     }
 
-    /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref, a baseline or a compile
-    /// snapshot, each holding one plugin. Null degrades to asking the dialog.</summary>
-    public static string? ParkedCompileBinarySha256(string modFolder, string plugin)
+    /// <summary>Every binary hash the plugin's last-compile ref names: a baseline's or a landed
+    /// compile's one, or an unfinished compile's with those before it. Empty when the ref is
+    /// missing.</summary>
+    public static IReadOnlyList<string> ParkedCompileBinarySha256s(string modFolder, string plugin)
     {
-        if (!IsTracked(modFolder)) return null;
+        if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin)))
-            return null;
+            return [];
 
-        return ReadTrailer(body, "Binary-SHA256");
-    }
-
-    /// <summary>Whether <paramref name="observedBytes"/> is the exact binary Modbench's own last
-    /// compile parked for <paramref name="plugin"/>. A missing parked ref is never a match.</summary>
-    public static bool MatchesParkedCompileBinary(string modFolder, string plugin, byte[] observedBytes)
-    {
-        var observedSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(observedBytes));
-        var parkedSha256 = ParkedCompileBinarySha256(modFolder, plugin);
-        return parkedSha256 != null
-            && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase);
+        return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
     }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds
@@ -498,14 +478,3 @@ public enum SourceRemoval
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
 /// (ADR-0007).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
-
-/// <summary>One tracked file outside the source root that git status finds dirty — the asset half of
-/// an external change (ADR-0003). <see cref="StagedAlready"/> is Keep's own collision
-/// signal: a path a prior answer already staged.</summary>
-public sealed record TrackedFileChange(string RelativePath, TrackedFileChangeKind Kind, bool StagedAlready);
-
-public enum TrackedFileChangeKind
-{
-    Modified,
-    Deleted,
-}

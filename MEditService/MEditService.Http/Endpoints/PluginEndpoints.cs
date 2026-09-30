@@ -1,5 +1,4 @@
 using MEditService.Commands;
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.SourceAdapter;
@@ -68,14 +67,11 @@ public static class PluginEndpoints
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
-                "Creates a new plugin at the given path/origin (ADR-0007), Tracking that " +
-                "destination under the Edits preset first if it is not already tracked. Does NOT " +
-                "add the plugin to any load order — the caller (the extension's Mod Management " +
-                "writer, or a script/agent consumer) is responsible for that.")
+                "Writes an empty plugin (a header whose flags its extension sets, no records and no " +
+                "masters) into the given folder, in the release of the held load order. Changes " +
+                "nothing else: no Track, no load order change and no plugins.txt line.")
             .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
-            // 404 and 422 are Track's own refusal map, which this route answers with rather than
-            // repeating inline: the destination is Tracked inside this gesture.
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(422)
@@ -91,15 +87,15 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // No "confirmed" flag: the compile-at-main modal is extension-side UX that must not leak
-        // through the wire. Refusal is a typed 200 (CompileResult.Succeeded == false), never an
-        // HTTP error.
-        app.MapPost("/plugins/{plugin}/compile", Compile)
+        // A missing load order refuses the whole selection once; every other refusal is an item of
+        // the answer.
+        app.MapPost("/plugins/compile", Compile)
             .WithName("CompilePlugin")
             .WithTags(Tag)
-            .Produces<CompileResult>()
+            .Produces<CompileResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(500);
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         // Create-record — the plugin hosts the new group, so it owns the route the way Compile
         // does; the FormKey doesn't exist yet, which is exactly why this isn't under /records/{formKey}.
@@ -117,34 +113,9 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin in it.
-        app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
-            .WithName("AbsorbExternalChange")
-            .WithTags(Tag)
-            .Produces<TrackResponse>()
-            .ProducesProblem(400)
-            // A plugin that cannot be read or parsed refuses the whole answer before anything is
-            // written; every other refusal but git missing (500) is an item of the answer.
-            .ProducesProblem(422)
-            .ProducesProblem(500)
-            .ProducesProblem(503);
-
-        // Keep, origin-scoped. A collision (a record or an already-staged tracked file)
-        // is ExternalChangeActionResponse.Succeeded == false naming it — never an HTTP error.
-        app.MapPost("/plugins/external-change/keep", KeepExternalChange)
-            .WithName("KeepExternalChange")
-            .WithTags(Tag)
-            .Produces<ExternalChangeActionResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(500)
-            .ProducesProblem(503);
-
         return app;
     }
 
-    // ADR-0007: an untracked destination is Tracked in the same gesture, silently and always under
-    // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
-    // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
@@ -153,19 +124,15 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await create.CreatePlugin(req.Name, Path.Combine(req.Path, req.Name), req.Origin);
-            if (result.Track is { Applied: false } refused)
+            var plugin = new PluginAddress(req.Name, req.Origin);
+            var result = await create.CreatePlugin(plugin, req.Folder);
+            if (result.Refusal is { } refusal)
             {
-                // Loud, not silent: the plugin file already landed, but plugins.txt is never
-                // appended without a 2xx, so no load order can name this half-created plugin.
-                logger.LogError(
-                    "Refused to track {Origin} while creating {Name}: {Refusal}",
-                    req.Origin, req.Name, refused.Refusal);
-                return WriteEndpointMapping.Refusal(refused);
+                logger.LogWarning("Refused to create {Name} in {Origin}: {Refusal}", req.Name, req.Origin, refusal);
+                return WriteEndpointMapping.Refusal(refusal, result.Message);
             }
 
-            var plugin = result.Plugin;
-            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Path, plugin.Origin, plugin.Slot, result.Version));
+            return Results.Ok(new PluginCreatedResponse(plugin.Name, plugin.Origin, Path.Combine(req.Folder, plugin.Name)));
         }
         catch (NoLoadOrderException ex)
         {
@@ -178,10 +145,10 @@ public static class PluginEndpoints
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return WriteEndpointMapping.InvalidArgument(ex);
         }
-        catch (System.IO.IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
-            return WriteEndpointMapping.DestinationConflict(ex);
+            logger.LogError(ex, "Could not write plugin {Name} into {Folder}", req.Name, req.Folder);
+            return WriteEndpointMapping.WriteFailure($"Could not write {req.Name} into {req.Folder}: {ex.Message}");
         }
     }
 
@@ -191,8 +158,8 @@ public static class PluginEndpoints
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Destination path and origin are required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.Folder) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("The folder and the origin are required.", statusCode: 400);
 
         var extension = Path.GetExtension(req.Name);
         return extension.Equals(".esp", StringComparison.OrdinalIgnoreCase)
@@ -243,27 +210,30 @@ public static class PluginEndpoints
         }
     }
 
-    // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
-    // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
-    internal static async Task<IResult> Compile(string plugin, CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
+    // compile-plugin: the selection, each plugin named by file name and origin (ADR-0012).
+    internal static async Task<IResult> Compile(CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
+        var plugins = req.Plugins ?? [];
+        if (plugins.Count == 0)
+            return Results.Problem("At least one plugin is required.", statusCode: 400);
+        if (plugins.Any(p => string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.Origin)))
+            return Results.Problem("Every plugin needs a name and an origin.", statusCode: 400);
 
-        // The write touches a file inside a git working tree Modbench does not own exclusively
-        // (root CLAUDE.md), so the I/O failure is shaped here rather than escaping as a bodyless 500.
         try
         {
-            CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = await compileHandler.CompileAsync(WriteEndpointMapping.PluginAddressOf(plugin, req.Origin), source);
-            return Results.Ok(result);
+            var result = await compileHandler.CompileAsync(plugins);
+            foreach (var refused in result.Refused)
+            {
+                logger.LogWarning("Refused to compile {Plugin} ({Origin}): {Message}",
+                    refused.Plugin.Name, refused.Plugin.Origin, refused.Message);
+            }
+            return Results.Ok(new CompileResponse(result.Landed, result.Refused));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (NoLoadOrderException ex)
         {
-            logger.LogError(ex, "Could not compile {Plugin}", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not compile {decoded}: {ex.Message}");
+            logger.LogError(ex, "No loadOrder when compiling {Count} plugin(s)", plugins.Count);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -305,71 +275,15 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.NoLoadOrder(ex);
             });
     }
-
-    // Absorb, origin-scoped: the question it answers covers the whole mod.
-    internal static async Task<IResult> AbsorbExternalChange(
-        ExternalChangeActionRequest req, AbsorbExternalChangeHandler handler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        try
-        {
-            if (await handler.AbsorbAsync(req.Origin) is not { } result)
-                return NotATrackedMod(req.Origin, logger);
-            if (result.AnswerRefusal is { } answerRefusal)
-                return WriteEndpointMapping.Refusal(answerRefusal);
-            return Results.Ok(new TrackResponse(
-                result.Landed,
-                [.. result.Refused.Select(r => new PluginAddressRefusal(r.Plugin, r.Refusal, r.Message))],
-                result.TrackedFilesRefusal));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not absorb upstream update for {Origin}", req.Origin);
-            return WriteEndpointMapping.WriteFailure($"Could not absorb upstream update for {req.Origin}: {ex.Message}");
-        }
-    }
-
-    // Keep, origin-scoped. A collision (a record or an already-staged tracked file) is a
-    // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
-    internal static IResult KeepExternalChange(
-        ExternalChangeActionRequest req, KeepExternalChangeHandler handler, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-
-        try
-        {
-            if (handler.Keep(req.Origin) is not { } result)
-                return NotATrackedMod(req.Origin, logger);
-            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not keep external change for {Origin}", req.Origin);
-            return WriteEndpointMapping.WriteFailure($"Could not keep external change for {req.Origin}: {ex.Message}");
-        }
-    }
-
-    // Untracked or unknown: the handler's one null answer, the caller's single refusal path for both.
-    private static IResult NotATrackedMod(string origin, ILogger logger)
-    {
-        logger.LogWarning("No tracked mod in the load order has origin {Origin}", origin);
-        return WriteEndpointMapping.NotTrackedMod(origin);
-    }
 }
 
-// Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
-// freshly installed mod folder, or overwrite/) — the caller resolves which physical folder, the
-// backend acts on it.
-public record CreatePluginRequest(string Name, string Path, string Origin);
+/// <summary>The origin and the file name are the plugin (ADR-0012 invariant 1); the folder is where
+/// the instance holds that origin's files.</summary>
+public record CreatePluginRequest(string Origin, string Name, string Folder);
 
-// What the create gesture wrote and registered, not a plugin row: masters, flags and record count
-// are the Index's to state, and it has not seen this plugin yet. Slot is 0 off a bare load order.
-public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
+/// <summary>The plugin the create gesture wrote and where. Not a plugin row: the Index has not seen
+/// it, and nothing registers it.</summary>
+public record PluginCreatedResponse(string Name, string Origin, string Path);
 
 /// <summary>A plugin of the selection that wrote nothing of its own: the typed refusal, and the
 /// message naming the way out.</summary>
@@ -379,18 +293,10 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 // already stands keeps its own .gitignore.
 public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.
-/// Only Absorb sets <see cref="TrackedFilesRefusal"/>: its tracked-files commit is no plugin's,
-/// and can fail after every plugin landed.</summary>
-public record TrackResponse(
-    IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused, string? TrackedFilesRefusal = null);
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
 
-// Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
-// means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
-public record CompileRequest(string Origin, string? Ref);
+public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
-// Absorb / Keep are origin-scoped — the mod, not one plugin in it, is
-// the unit of a baseline.
-public record ExternalChangeActionRequest(string Origin);
-
-public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);
+/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);

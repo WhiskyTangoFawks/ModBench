@@ -221,7 +221,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var before = fixture.ReadSourceTree();
         Assert.NotEmpty(before);
 
-        var result = await fixture.CompileService().CompileAsync(fixture.Plugin, new CompileSource.WorkingTree());
+        var result = await fixture.CompileService().CompileAsync(fixture.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName);
@@ -242,11 +242,11 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         var pluginPath = Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName);
 
-        var result1 = await fixture.CompileService().CompileAsync(fixture.Plugin, new CompileSource.WorkingTree());
+        var result1 = await fixture.CompileService().CompileAsync(fixture.Plugin);
         Assert.True(result1.Succeeded, result1.RefusalReason);
         var write1 = File.ReadAllBytes(pluginPath);
 
-        var result2 = await fixture.CompileService().CompileAsync(fixture.Plugin, new CompileSource.WorkingTree());
+        var result2 = await fixture.CompileService().CompileAsync(fixture.Plugin);
         Assert.True(result2.Succeeded, result2.RefusalReason);
         var write2 = File.ReadAllBytes(pluginPath);
 
@@ -277,7 +277,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var edit = scope.EditHandler().Set(scope.Plugin, npcFormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
-        var result = await scope.CompileService().CompileAsync(scope.Plugin, new CompileSource.WorkingTree());
+        var result = await scope.CompileService().CompileAsync(scope.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(scope.ModFolder, CutDownPluginFixture.PluginFileName);
@@ -313,7 +313,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
-        var result = await scope.CompileService().CompileAsync(scope.Plugin, new CompileSource.WorkingTree());
+        var result = await scope.CompileService().CompileAsync(scope.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(scope.ModFolder, CutDownPluginFixture.PluginFileName);

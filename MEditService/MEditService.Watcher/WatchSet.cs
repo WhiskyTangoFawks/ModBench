@@ -3,10 +3,6 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Watcher;
 
-/// <summary>A tracked mod the snapshot holds, with every plugin it holds there: what the load-time
-/// settle reads and classifies.</summary>
-internal sealed record TrackedMod(string ModFolder, IReadOnlyList<RegisteredPlugin> Plugins);
-
 /// <summary>Arming from the snapshot: one watch per folder the load order names, tracked or not,
 /// and none for a folder outside it. Re-armed whole on every change (ADR-0013 invariant 1).</summary>
 internal sealed class WatchSet : IDisposable
@@ -30,12 +26,13 @@ internal sealed class WatchSet : IDisposable
         _overflow = overflow;
     }
 
-    /// <summary>The watch set this snapshot implies. Null when a newer version was armed already
-    /// or the set is disposed: that change arms nothing and settles nothing.</summary>
-    public IReadOnlyList<TrackedMod>? Arm(LoadOrderSnapshot order, long version)
+    /// <summary>The watch set this snapshot implies, answering the tracked mod folders the load-time
+    /// settle reads. Null when a newer version was armed already or the set is disposed: that change
+    /// arms nothing and settles nothing.</summary>
+    public IReadOnlyList<string>? Arm(LoadOrderSnapshot order, long version)
     {
         var wanted = FoldersOf(order);
-        var tracked = new List<TrackedMod>();
+        var tracked = new List<string>();
 
         lock (_gate)
         {
@@ -63,7 +60,7 @@ internal sealed class WatchSet : IDisposable
                 if (isTracked)
                 {
                     watch.EnsureRecursive();
-                    tracked.Add(new TrackedMod(folder, mod.Plugins));
+                    tracked.Add(folder);
                 }
             }
         }

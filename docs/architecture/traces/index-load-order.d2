@@ -1,11 +1,11 @@
-# Index the load order, purple. Contract: index-load-order.md.
+# Index the load order, purple.
 ...@../styles
 shape: sequence_diagram
 instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -29,25 +29,23 @@ port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
-instanceloader -> instancecommands: "put load order: the snapshot as an argument" {class: loadorder}
-instancecommands -> client: load order snapshot {class: loadorder}
-client -> http: load order snapshot {class: loadorder}
+instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
+instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
+client -> http: "snapshot: every plugin · the active plugins" {class: loadorder}
 http -> commands: put load order {class: loadorder}
-commands -> loadorder: load order snapshot {class: query}
+commands -> loadorder: snapshot {class: query}
 commands -> http: "applied: the version" {class: loadorder}
 http -> client: the version {class: loadorder}
-loadorder -> watcher: the load order changed {class: signal}
-watcher."arm one watch per mod folder"
-watcher -> indexer: "reconcile: validate by hash" {class: signal}
-indexer."a plugin that left or moved: its registration only · read only content the index has not seen"
+loadorder -> watcher: the snapshot changed {class: signal}
+watcher -> indexer: reconcile {class: signal}
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
 indexer -> store: rows {class: query}
-loadorder -> indexer: the participating plugins {class: query}
-indexer."winners and conflicts, once"
+loadorder -> indexer: the active plugins {class: query}
+indexer."winners and conflicts"
 indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "index status · rows changed, then re-read" {class: push}
+client -> views: "index status · rows changed" {class: push}

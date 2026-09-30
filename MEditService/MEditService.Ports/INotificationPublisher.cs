@@ -48,25 +48,24 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>A question is open for this mod: a genuine external change awaiting Absorb/Keep. The
-/// mod folder is never on the wire — Origin names it.</summary>
-public sealed record QuestionOpenNotification(
-    string Origin, IReadOnlyList<string> Plugins, IReadOnlyList<string> TrackedFiles,
-    bool MetaChanged, string? OldVersion, string? NewVersion)
-    : Notification("question-open")
+/// <summary>A tracked mod settled or loaded: each of its tracked plugins whose bytes differ from what
+/// Modbench last wrote (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out
+/// matches.</summary>
+public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
+    : Notification("external-change")
 {
-    // Keys carries Plugins: the generic string list every other kind already has, repurposed rather
-    // than adding a field only this kind would fill.
-    public override NotificationEvent ToEvent() => new(Kind, "", Origin, Plugins, 0,
-        ExternalChangeMetaChanged: MetaChanged, ExternalChangeOldVersion: OldVersion, ExternalChangeNewVersion: NewVersion,
-        ExternalChangeTrackedFiles: TrackedFiles);
+    public override NotificationEvent ToEvent() => new(Kind, "", Origin, [], 0, ChangedPlugins: Plugins);
 }
 
-/// <summary>A compile of Plugin began and never finished, so its binary is bad; compiling again
-/// rebuilds it (compile-plugin, Failure).</summary>
-public sealed record CompileUnfinishedNotification(PluginAddress Plugin) : Notification("compile-unfinished")
+/// <summary>BytesSha256 names the state of the plugin's bytes, and is null when they cannot be
+/// read.</summary>
+public sealed record ChangedPlugin(string Name, string? BytesSha256);
+
+/// <summary>The plugins of a tracked mod that have no plugin source.</summary>
+public sealed record UntrackedPluginsNotification(string Origin, IReadOnlyList<string> Plugins)
+    : Notification("untracked-plugins")
 {
-    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, [], 0);
+    public override NotificationEvent ToEvent() => new(Kind, "", Origin, Plugins, 0);
 }
 
 /// <summary>The one wire shape every notification kind serializes to. Kind is the discriminator; the
@@ -75,7 +74,4 @@ public sealed record NotificationEvent(
     string Kind, string Plugin, string Origin, IReadOnlyList<string> Keys, long Sequence,
     LoadOrderStatus? LoadOrderStatus = null,
     TrackProgress? TrackProgress = null,
-    bool? ExternalChangeMetaChanged = null,
-    string? ExternalChangeOldVersion = null,
-    string? ExternalChangeNewVersion = null,
-    IReadOnlyList<string>? ExternalChangeTrackedFiles = null);
+    IReadOnlyList<ChangedPlugin>? ChangedPlugins = null);

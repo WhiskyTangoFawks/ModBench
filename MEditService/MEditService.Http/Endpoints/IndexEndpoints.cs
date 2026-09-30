@@ -1,6 +1,7 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
@@ -9,8 +10,9 @@ namespace MEditService.Http.Endpoints;
 public sealed record ReconcileResponse(
     int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);
 
-/// <summary>The Index's doors, one route each. A handler here is one door call and the wire
-/// translation of its answer: the Index decides, the endpoint wires (ADR-0014 invariant 1).</summary>
+/// <summary>The Index's doors, one route each — except setting/clearing the filter and rebuilding,
+/// which are Queries' own. A handler is one door call and the wire translation of its answer
+/// (ADR-0014 invariant 1).</summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
@@ -109,7 +111,7 @@ public static class IndexEndpoints
         return Results.Ok(new SequenceAwaitResponse(reached, index.Sequence));
     }
 
-    private static IResult SetFilter(FilterRequest req, Indexer index, ILoggerFactory loggerFactory)
+    private static IResult SetFilter(FilterRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -122,7 +124,7 @@ public static class IndexEndpoints
             return Results.Problem("The filter's source is required.", statusCode: 400);
         try
         {
-            index.SetFilter(req.Sql, req.Source);
+            svc.SetFilter(req.Sql, req.Source);
             return Results.Ok(new FilterResponse(req.Sql, req.Source));
         }
         catch (NoLoadOrderException ex)
@@ -142,13 +144,13 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult ClearFilter(Indexer index, ILoggerFactory loggerFactory)
+    private static IResult ClearFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received ClearFilter");
         try
         {
-            index.ClearFilter();
+            svc.ClearFilter();
             return Results.NoContent();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -216,7 +218,7 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult PostRebuildIndex(RebuildIndexRequest req, Indexer index, ILoggerFactory loggerFactory)
+    private static IResult PostRebuildIndex(RebuildIndexRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -230,7 +232,7 @@ public static class IndexEndpoints
         try
         {
             // Answered once the store is empty again; the refill reports through the index status.
-            _ = index.RebuildStore(gameRelease, req.InstanceRoot);
+            _ = svc.RebuildStore(gameRelease, req.InstanceRoot);
             return Results.NoContent();
         }
         catch (IndexHeldElsewhereException ex)

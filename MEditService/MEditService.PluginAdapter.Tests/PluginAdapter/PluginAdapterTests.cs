@@ -1,14 +1,13 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-// ADR-0005 rule 2: the verbs a plugin's bytes reach a live Mutagen mod through, and go back to
+// ADR-0005 invariant 2: the verbs a plugin's bytes reach a live Mutagen mod through, and go back to
 // bytes through, driven at IPluginAdapter and PluginWriter rather than the adapter's own internals.
 public sealed class PluginAdapterTests
 {
@@ -57,18 +56,126 @@ public sealed class PluginAdapterTests
         {
             var path = Path.Combine(scratch, PluginName);
 
-            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), path, GameRelease.Fallout4, smallMaster: false);
+            Assert.Equal(
+                EmptyPluginWrite.Written,
+                await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
 
             using var reread = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
             Assert.Equal(ModKey.FromFileName(PluginName), reread.ModKey);
             Assert.Equal(GameRelease.Fallout4, reread.GameRelease);
             Assert.Empty(reread.EnumerateMajorRecords());
+            Assert.Empty(reread.ModHeader.MasterReferences);
 
             // ADR-0006: the header's stored NextObjectID is written as stored, not re-derived.
             var freshDefault = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4)
                 .ModHeader.Stats.NextFormID;
             Assert.Equal(freshDefault, reread.ModHeader.Stats.NextFormID);
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Plain.esp", false, false)]
+    [InlineData("Master.esm", true, false)]
+    [InlineData("Light.esl", false, true)]
+    public async Task CreateAndWriteAsync_SetsTheHeaderFlagsFromTheExtensionAlone(string name, bool master, bool light)
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-flags-").FullName;
+        try
+        {
+            var path = Path.Combine(scratch, name);
+
+            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(name), scratch, GameRelease.Fallout4);
+
+            using var reread = Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName(name), path), Fallout4Release.Fallout4);
+            Assert.Equal((master, light), (reread.IsMaster, reread.IsSmallMaster));
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAndWriteAsync_LeavesThePluginAloneInItsFolder()
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-alone-").FullName;
+        try
+        {
+            await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+
+            Assert.Equal(
+                [PluginName],
+                Directory.EnumerateFileSystemEntries(scratch, "*", SearchOption.AllDirectories)
+                    .Select(entry => Path.GetRelativePath(scratch, entry)));
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAndWriteAsync_IntoAFolderThatHasGone_AnswersFolderGone_AndMakesNoFolder()
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-gone-").FullName;
+        try
+        {
+            var gone = Path.Combine(scratch, "GoneMod");
+
+            var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), gone, GameRelease.Fallout4);
+
+            Assert.Equal(EmptyPluginWrite.FolderGone, written);
+            Assert.False(Directory.Exists(gone));
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAndWriteAsync_OverAFileAlreadyThere_AnswersFileExists_AndLeavesItAsItWas()
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-exists-").FullName;
+        try
+        {
+            var path = Path.Combine(scratch, PluginName);
+            File.WriteAllText(path, "another tool's file");
+
+            var written = await Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4);
+
+            Assert.Equal(EmptyPluginWrite.FileExists, written);
+            Assert.Equal("another tool's file", File.ReadAllText(path));
+            Assert.Single(Directory.EnumerateFileSystemEntries(scratch));
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
+    }
+
+    // A directory already at the plugin's own name blocks the move that lands it — deterministic on
+    // every OS, unlike a permission denial (chmod is Unix-only, and a root-run process ignores it
+    // regardless of OS).
+    [Fact]
+    public async Task CreateAndWriteAsync_WhoseMoveLandsOnAnExistingDirectory_LeavesNoTempFile()
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-fails-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(scratch, PluginName));
+
+            await Assert.ThrowsAsync<IOException>(
+                () => Adapter.CreateAndWriteAsync(ModKey.FromFileName(PluginName), scratch, GameRelease.Fallout4));
+
+            Assert.Equal([PluginName], Directory.EnumerateFileSystemEntries(scratch).Select(Path.GetFileName));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(scratch, PluginName)));
         }
         finally
         {
@@ -98,8 +205,7 @@ public sealed class PluginAdapterTests
             Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
         }
 
-        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
-        await writer.SaveAsync(patchPath, GameRelease.Fallout4, reversed);
+        await PluginWriter.SaveAsync(patchPath, GameRelease.Fallout4, reversed);
 
         using var reread = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4);

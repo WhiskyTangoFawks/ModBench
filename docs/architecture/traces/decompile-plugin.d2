@@ -1,14 +1,9 @@
-# Decompile plugin, green. Contract: decompile-plugin.md.
+# Decompile plugin, green.
 ...@../styles
 shape: sequence_diagram
-tools: "MO2 · another tool · the user" {class: other}
-mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "the mod's folder"
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
-client: @../target-architecture.modbench_core.client
+client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
@@ -22,33 +17,23 @@ pluginadapter.label: Plugin adapter
 sourceadapter: @../target-architecture.medit_driven.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 
-the trigger: "the system trigger: which destination" {
-  tools -> mo2: bytes, at any time {class: outside}
-  mo2 -> watcher: changed paths {class: signal}
-  watcher."settle per mod, then classify: tracked plugins' bytes vs the parked ref · git status of tracked files"
-  watcher -> commands: a tracked mod settled {class: signal}
-  commands -> port: "external change pending: mod, what changed · untracked plugins" {class: push}
-  port -> http: publish {class: push}
-  http -> client: stream {class: push}
-  client -> plugins: "external change pending · untracked plugins" {class: push}
-  plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc defers, and every write to the mod is refused until it is answered · an untracked plugin: a warning"
-}
-
-plugins -> client: "decompile plugin: to the repository (track) · to main · to the working tree" {class: edit}
+plugins -> client: "decompile plugin: track, with the preset · decompile" {class: edit}
 client -> http: envelope {class: edit}
 http -> commands: envelope {class: edit}
 plugin -> pluginadapter: bytes {class: track}
 pluginadapter -> commands: bytes {class: track}
-commands."the round-trip gate, per plugin, before any of it is written"
+commands."the round-trip gate, per plugin"
 commands -> sourceadapter: documents, per plugin {class: track}
 commands -> port: track progress, per plugin {class: push}
 sourceadapter -> source: documents {class: track}
 
-baseline: "the repository or main" {
-  sourceadapter."one baseline commit per plugin, by plumbing, trailers from meta.ini; the edit branch moves only in a repository this run created"
+baseline: "the repository" {
+  sourceadapter."a new repository, with baseline commits · a tracked mod: the working tree"
 }
 
 commands -> http: "applied or refusal, per item" {class: edit}
@@ -60,7 +45,7 @@ sourceadapter -> indexer: documents (tracked) {class: query}
 
 
 refused: "refused, nothing of that plugin written" {
-  commands -> http: "git not on the PATH · a plugin in no mod · the bytes cannot be parsed · a record fails the round trip, naming it · a missing strings file · a record already changed, naming the records" {class: edit}
+  commands -> http: "the refusal" {class: edit}
   http -> client: the refusal {class: edit}
   client -> plugins: the refusal {class: edit}
 }

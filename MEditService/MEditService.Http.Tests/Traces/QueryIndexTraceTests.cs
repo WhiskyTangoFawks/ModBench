@@ -287,8 +287,6 @@ public sealed class QueryIndexTraceTests : HostedTests
     private const string ListedPlugin = "Listed.esp";
     private const int FillerRooms = 60;
 
-    // Each listing holds a record whose EditorID sorts last but whose FormID comes first, so only
-    // FormID order lists "Zulu" before "Alpha".
     private async Task LoadedListings()
     {
         var fixture = Owned(new PluginFixtureBuilder("trace-query-listings")
@@ -408,8 +406,6 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(["MasterSecond", "APatchLever"], EditorIds(activators.GetProperty("items")));
     }
 
-    // A light plugin's records take xEdit's FE-prefixed FormIDs, so they sort after every full
-    // plugin's whatever the light plugin's load position.
     [Fact]
     public async Task AGroupsRecords_ListALightMastersRecordsAfterAFullMastersLoadedAfterIt()
     {
@@ -427,6 +423,34 @@ public sealed class QueryIndexTraceTests : HostedTests
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
 
         Assert.Equal(["ZFullLever", "ALightLever"], EditorIds(activators.GetProperty("items")));
+    }
+
+    [Theory]
+    [InlineData("FullTwin", "LightTwin", new[] { "ZTwinLever", "ALateLever" })]
+    [InlineData("LightTwin", "FullTwin", new[] { "ALateLever", "ZTwinLever" })]
+    public async Task AFilenamesFormIds_SortAsThePluginTheGameLoadsUnderIt_NotAnOverriddenCopy(
+        string winnerOrigin, string loserOrigin, string[] expected)
+    {
+        static Action<Fallout4Mod> Twin(string origin) => mod =>
+        {
+            mod.IsSmallMaster = origin == "LightTwin";
+            mod.Activators.AddNew("ZTwinLever");
+        };
+        var fixture = Owned(new PluginFixtureBuilder("trace-query-twin-order")
+            .WithPlugin("Twin.esp", Twin(loserOrigin), origin: loserOrigin)
+            .WithPlugin("Twin.esp", Twin(winnerOrigin), origin: winnerOrigin)
+            .WithPlugin("Late.esm", mod => mod.Activators.AddNew("ALateLever"), origin: "LateMod")
+            .WithPlugin("Patch.esp", (mod, masters) =>
+            {
+                mod.Activators.GetOrAddAsOverride(masters[1].Activators.Single());
+                mod.Activators.GetOrAddAsOverride(masters[2].Activators.Single());
+            }, origin: "PatchMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
+
+        var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Patch.esp&type=acti&limit=10");
+
+        Assert.Equal(expected, EditorIds(activators.GetProperty("items")));
     }
 
     [Fact]
@@ -602,6 +626,108 @@ public sealed class QueryIndexTraceTests : HostedTests
         Assert.Equal(
             ["Dressing.esp"],
             plugins.Where(p => p.GetProperty("hasMatchingRecords").GetBoolean()).Select(p => p.GetProperty("name").GetString()));
+    }
+
+    [Fact]
+    public async Task ARecordFilter_ListsAHolderOnlyInThePluginWhoseCopyHoldsTheMatch()
+    {
+        var fixture = Owned(new PluginFixtureBuilder("trace-query-filter-own-holder")
+            .WithPlugin("Base.esm", mod =>
+            {
+                var room = new Cell(mod) { EditorID = "BaseRoom" };
+                room.Temporary.Add(new PlacedObject(mod) { EditorID = "BaseRef" });
+                var subBlock = new CellSubBlock { BlockNumber = 0 };
+                subBlock.Cells.Add(room);
+                var block = new CellBlock { BlockNumber = 0 };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: "BaseMod")
+            .WithPlugin("Lighting.esp", (mod, masters) =>
+            {
+                var room = masters[0].Cells.Records[0].SubBlocks[0].Cells[0].DeepCopy();
+                room.Temporary.Clear();
+                room.WaterHeight = 10f;
+                var subBlock = new CellSubBlock { BlockNumber = 0 };
+                subBlock.Cells.Add(room);
+                var block = new CellBlock { BlockNumber = 0 };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: "LightingMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
+        await Filtered("BaseRef");
+
+        var baseRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Base.esm/interior-cells");
+        var lightingRooms = await Client.GetFromJsonAsync<JsonElement>("/plugins/Lighting.esp/interior-cells");
+
+        Assert.Equal(["BaseRoom"], InteriorEditorIds(baseRooms));
+        Assert.Empty(InteriorEditorIds(lightingRooms));
+    }
+
+    private static IEnumerable<string?> InteriorEditorIds(JsonElement blocks) =>
+        blocks.EnumerateArray()
+            .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
+            .SelectMany(s => s.GetProperty("cells").EnumerateArray())
+            .Select(c => c.GetProperty("editorId").GetString());
+
+    [Fact]
+    public async Task AGroupsListing_HoldsAsManyRecordsAsItsCount()
+    {
+        await Loaded();
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/record-types");
+        var cells = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&type=cell&limit=10");
+
+        var count = types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "cell").GetProperty("count").GetInt32();
+        Assert.Equal(count, cells.GetProperty("total").GetInt32());
+        Assert.Equal(count, cells.GetProperty("items").GetArrayLength());
+    }
+
+    private const string HeldPlugin = "Held.esp";
+
+    private async Task LoadedHeldRecords()
+    {
+        var fixture = Owned(new PluginFixtureBuilder("trace-query-held")
+            .WithPlugin(HeldPlugin, mod =>
+            {
+                var topic = new DialogTopic(mod) { EditorID = "HeldTopic" };
+                topic.Responses.Add(new DialogResponses(mod) { EditorID = "HeldResponse" });
+                var quest = new Quest(mod) { EditorID = "HeldQuest" };
+                quest.DialogTopics.Add(topic);
+                quest.DialogBranches.Add(new DialogBranch(mod) { EditorID = "HeldBranch" });
+                quest.Scenes.Add(new Scene(mod) { EditorID = "HeldScene" });
+                mod.Quests.Add(quest);
+
+                var room = new Cell(mod) { EditorID = "HeldRoom" };
+                room.Temporary.Add(new PlacedObject(mod) { EditorID = "HeldRef" });
+                room.Persistent.Add(new PlacedNpc(mod) { EditorID = "HeldActor" });
+                var subBlock = new CellSubBlock { BlockNumber = 0 };
+                subBlock.Cells.Add(room);
+                var block = new CellBlock { BlockNumber = 0 };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: "HeldMod")
+            .BuildScattered());
+        (await Client.PutLoadOrder(fixture)).EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("refr")]
+    [InlineData("achr")]
+    [InlineData("dial")]
+    [InlineData("info")]
+    [InlineData("dlbr")]
+    [InlineData("scen")]
+    public async Task ARecordAnotherRecordHolds_HasNoGroupOfItsOwn(string type)
+    {
+        await LoadedHeldRecords();
+
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types");
+        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&limit=10");
+        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&type={type}&search=Held&limit=10");
+
+        Assert.Equal(1, held.GetProperty("total").GetInt32());
+        Assert.Equal(0, group.GetProperty("total").GetInt32());
+        Assert.DoesNotContain(type, types.EnumerateArray().Select(t => t.GetProperty("type").GetString()));
     }
 
     [Fact]

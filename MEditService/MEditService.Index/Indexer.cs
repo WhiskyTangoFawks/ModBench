@@ -277,6 +277,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
             // moment this one is asked for, whichever way this one goes.
             lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
+            RequireOneWinnerPerFilename(snapshot);
 
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
@@ -389,6 +390,21 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     // The diff is computed first and without side effects — one stamp read and a folder probe per
     // plugin — so a snapshot that moves nothing writes nothing and publishes no status.
+
+    // ADR-0012: the game loads one file per name. A load order naming two answers wrong everywhere
+    // a FormID or a winner is read by filename, so it is refused before anything registers.
+    private static void RequireOneWinnerPerFilename(LoadOrderSnapshot snapshot)
+    {
+        var contested = snapshot.Plugins
+            .Where(p => p.Winning)
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (contested is null) return;
+
+        throw new InvalidOperationException(
+            $"The load order names more than one winning {contested.Key}: " +
+            $"{string.Join(", ", contested.Select(p => p.Origin))}. The game loads one file per name.");
+    }
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.
@@ -691,7 +707,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         IndexFromBinary(held, index, plugin);
     }
 
-    // ADR-0005 rule 2: the binary reaches the index as documents, through the adapter's own door,
+    // ADR-0005 invariant 2: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
     private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
@@ -729,8 +745,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         return reports;
     }
 
-    // index-load-order.md, failures: one plugin that cannot be read is flagged with its reason, and the
-    // plugins after it are still validated.
+    // plugins.md, A row, Plugin, "Failed to read": one plugin that cannot be read is flagged with
+    // its reason, and the plugins after it are still validated.
     private ValidationReport ValidateOne(IRecordIndex index, PluginAddress key, string? modFolder)
     {
         try
@@ -739,8 +755,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
-            // Gained records are refreshed by key so the rows that moved are named (edit-record.md,
-            // Hand-off). A plugin whose last read failed is read whole: that lifts the failure
+            // Gained records are refreshed by key so the rows that moved are named (ADR-0015,
+            // invariant 3). A plugin whose last read failed is read whole: that lifts the failure
             // (ADR-0003).
             var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
             if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)

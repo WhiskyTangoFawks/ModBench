@@ -4,6 +4,7 @@ passes the gate it tests."""
 import json
 import pathlib
 import subprocess
+import tempfile
 import unittest
 
 HOOKS = pathlib.Path(__file__).resolve().parent
@@ -13,6 +14,7 @@ VALE = subprocess.run(["bash", ROOT / ".claude/skills/validate/install-vale.sh"]
 
 HISTORY = "previ" "ously"
 TICKET = "#" "742"
+DATE = "2026" "-09-01"
 
 
 def vale(text, ext, config=".vale.ini"):
@@ -143,6 +145,25 @@ class WriteHook(unittest.TestCase):
     def test_accepts_a_present_tense_comment(self):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_accepts_anything_in_a_gitignored_file(self):
+        run = hook(str(ROOT / ".scratch/report.md"), f"Ruling {DATE}: this {HISTORY} held.\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_accepts_anything_in_a_file_no_repository_holds(self):
+        with tempfile.TemporaryDirectory() as outside:
+            run = hook(str(pathlib.Path(outside) / "report.md"), f"Ruling {DATE}: this {HISTORY} held.\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_refuses_a_date_in_a_repository_beside_this_one(self):
+        with tempfile.TemporaryDirectory() as sibling:
+            subprocess.run(["git", "init", "-q", sibling], check=True)
+            run = hook(str(pathlib.Path(sibling) / "docs/report.md"), f"Ruling {DATE}: the grid renders the stack.\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_refuses_a_date_in_a_tracked_document(self):
+        run = hook(str(ROOT / "docs/report.md"), f"Ruling {DATE}: the grid renders the stack.\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
 
 
 if __name__ == "__main__":

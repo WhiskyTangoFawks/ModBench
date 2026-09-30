@@ -32,9 +32,9 @@ export interface ExtensionSession {
   loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
-// ADR-0002: one progress indicator, in the view whose contents are loading — not a per-command
-// `ProgressLocation.Notification`. The message clears on every exit path, so no failure leaves
-// the view claiming a load that is not running.
+// plugins.md, States, story 2: progress lives in the loading view, never a notification. The
+// message clears on every exit path, so no failure leaves the view claiming a load that is not
+// running.
 export function withPluginsViewProgress<T>(session: ExtensionSession, work: () => Promise<T>): Promise<T> {
   return Promise.resolve(vscode.window.withProgress(
     { location: { viewId: 'modbench.pluginListTree' } },

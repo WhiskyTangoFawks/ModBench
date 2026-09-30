@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Bytes to documents and facts and back (ADR-0005 rule 2): a live mod crosses this door
+/// <summary>Bytes to documents and facts and back (ADR-0005 invariant 2): a live mod crosses this door
 /// in neither direction. The game release is a parameter of every verb.</summary>
 public interface IPluginAdapter
 {
@@ -54,7 +54,7 @@ public interface IPluginAdapter
     // travels beside the path: a ModKey renders the extension from Mutagen's lowercase constants.
 
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
-    /// does not (ADR-0005 rule 2). A tree that will not read answers with its diagnosis.</summary>
+    /// does not (ADR-0005 invariant 2). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
@@ -62,8 +62,8 @@ public interface IPluginAdapter
         CancellationToken cancel = default);
 
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
-    /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification
-    /// must not drop a .bak beside the real plugin.</summary>
+    /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
+    /// replacement of the real plugin.</summary>
     Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default);
 
@@ -80,23 +80,23 @@ public interface IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
-    /// <summary>A plugin's binary as every record's own document plus the identity a source tree
-    /// files it by.</summary>
-    IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath,
-        GameRelease gameRelease,
-        PluginStrings strings,
-        RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas);
-
     /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the one at
     /// <paramref name="modPath"/> as the codec models them; null when they are model-identical. Both
     /// are reparsed, since only written bytes show what the writer does.</summary>
     string? DivergenceBetween(
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings);
 
-    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>, header and nothing else.
-    /// Creates a missing destination folder and refuses an existing file.
-    /// <paramref name="smallMaster"/> adds the removable ESL header flag.</summary>
-    Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster);
+    /// <summary>A new plugin in <paramref name="folder"/>: a header whose flags the extension alone
+    /// sets, no records and no masters. Written whole or not at all, into no folder it made and over
+    /// no file.</summary>
+    Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease);
+}
+
+/// <summary>What <see cref="IPluginAdapter.CreateAndWriteAsync"/> found at the path before it wrote
+/// anything, or that it wrote.</summary>
+public enum EmptyPluginWrite
+{
+    Written,
+    FolderGone,
+    FileExists,
 }

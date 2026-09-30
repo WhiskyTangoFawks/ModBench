@@ -1,4 +1,3 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -61,7 +60,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = await compileService.CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_plugin);
 
         Assert.False(result.Succeeded);
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);
@@ -74,13 +73,10 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     {
         var compileService = CompileServices.Over(_loadOrder);
 
-        var result = await compileService.CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_plugin);
 
         Assert.False(result.Succeeded);
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
-        // The .bak survives a refused compile on purpose: nothing says a backup taken for a
-        // write that never happened is safe to delete.
-        Assert.Single(Directory.GetFiles(_modFolder, "*.bak.esp"));
     }
 
     public void Dispose()

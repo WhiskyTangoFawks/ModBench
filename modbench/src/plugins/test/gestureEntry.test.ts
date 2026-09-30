@@ -164,8 +164,8 @@ describe('a singular Plugins gesture\'s Argument', () => {
   });
 });
 
-// commands.md, Where: a palette entry and a key are handed no row, so their `when` reads what the
-// Plugins selection holds, and the gesture is absent where it would have nothing to act on.
+// commands.md, The surface supplies the Argument; No dead entries: with no row, a palette entry or
+// key reads the Plugins selection, and is absent where it would have nothing to act on.
 describe('what the Plugins palette entries and keys read off the selection', () => {
   const withFlags = <T extends PluginsTreeNode>(row: T, contextValue: string): T => {
     row.contextValue = contextValue;
@@ -180,9 +180,9 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inMod tracked');
   const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
   const untrackedWeapons = new RecordTypeNode('Beta.esp', 'weap', 3, 'Weapon', 'ModB');
-  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
-  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', true, true);
-  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB');
+  const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
+  const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false });
+  const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB', { tracked: false, editable: true });
   const cell = new CellNode('Alpha.esp', {
     formKey: '000803:Alpha.esp', editorId: 'Cell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
   }, 'ModA', { tracked: true, editable: true });
@@ -210,7 +210,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(compilableSelected([compilable, alpha])).toBeUndefined();
   });
 
-  // plugins.md, Menus and keys, story 7: no record edit on an untracked plugin.
+  // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
   it('create sees exactly one selected record type or plugin that is tracked and editable', () => {
     expect(context([weapons]).singleCreatable).toBe(true);
     expect(context([compilable]).singleCreatable).toBe(true);
@@ -237,8 +237,8 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([]).allRecords).toBe(false);
   });
 
-  // mods.md, Menus and keys, story 3, which plugins.md story 5 follows: Space takes the focused
-  // row's direction, and a selection of one row stands for the focused row.
+  // mods.md, Menus and keys, story 2, which plugins.md, Menus and keys, story 3 follows: Space
+  // takes the focused row's direction, and a selection of one row stands for the focused row.
   it('Space takes the first selected plugin\'s direction, as its line is now', () => {
     expect(context([alpha, beta]).selectionToggle).toBe('disable');
     expect(context([beta, alpha]).selectionToggle).toBe('enable');
@@ -254,7 +254,7 @@ describe('what the Plugins palette entries and keys read off the selection', () 
 describe('create\'s Argument from the Plugins rows', () => {
   const alpha = pluginRow('Alpha.esp', 'ModA');
   const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
-  const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', false, true);
+  const record = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
   const target = (viewSelection: readonly PluginsTreeNode[], clicked?: unknown, selected?: readonly unknown[]) =>
     pluginsCreateTarget(() => viewSelection)(clicked, selected);
 

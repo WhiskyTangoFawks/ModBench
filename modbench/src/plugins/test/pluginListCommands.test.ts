@@ -27,8 +27,6 @@ vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, ThemeColor, EventEmitter,
 }));
 
-vi.mock('../../pluginsCommands/plugins', () => ({ appendPlugin: vi.fn() }));
-
 import {
   pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
 } from '../pluginListCommands';
@@ -36,11 +34,11 @@ import { PLUGINS_KEY_ARGS } from '../gestureEntry';
 import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
-import { appendPlugin } from '../../pluginsCommands/plugins';
 import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { present } from '../../ports/present';
+import type { LoadOrderPlugin } from '../../instanceLoader/loadOrderSnapshot';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { expectInstancesOf } from '../../test/expectInstanceOf';
 
@@ -49,16 +47,34 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+const plugin = (name: string, origin: string, path: string): LoadOrderPlugin =>
+  ({ name, origin, path, slot: null, enabled: false, winning: true });
+
 function makeMo2() {
   return {
     instance: {
       value: instanceValueFixture({
-        paths: { overwriteDir: '/instance/overwrite', downloadsDir: '/instance/downloads', modDirs: new Map() },
+        mods: [
+          { kind: 'mod', name: 'Winning Mod', enabled: true },
+          { kind: 'mod', name: 'Disabled Mod', enabled: false },
+          { kind: 'mod', name: 'Holding Mod', enabled: true },
+        ],
+        plugins: [plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp')],
+        paths: {
+          overwriteDir: '/instance/overwrite',
+          downloadsDir: '/instance/downloads',
+          modDirs: new Map([
+            ['Winning Mod', '/instance/mods/Winning Mod'],
+            ['Disabled Mod', '/instance/mods/Disabled Mod'],
+            ['Holding Mod', '/instance/mods/Holding Mod'],
+          ]),
+        },
       }),
     },
-    instanceRoot: '/instance',
   };
 }
+
+const WROTE = { name: 'MyPatch.esp', origin: 'Winning Mod', path: '/instance/mods/Winning Mod/MyPatch.esp' };
 
 describe('registerCreatePluginCommand', () => {
   function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
@@ -67,71 +83,169 @@ describe('registerCreatePluginCommand', () => {
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
-  it('appends the created plugin to the load order and lands the created toast', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null, version: 1 });
-    const mo2 = makeMo2();
-    showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ choice: 'overwrite' });
-    vi.mocked(appendPlugin).mockResolvedValue({ applied: true, wrote: true });
+  type Place = { label: string; origin: string };
+  const offering = (): { offered: Place[] } => {
+    const pick = { offered: [] as Place[] };
+    showQuickPick.mockImplementation((places: Place[]) => {
+      pick.offered = places;
+      return Promise.resolve(undefined);
+    });
+    return pick;
+  };
+  const pickOrigin = (origin: string) => showQuickPick.mockImplementation((places: Place[]) =>
+    Promise.resolve(places.find((p) => p.origin === origin)));
 
-    const { run, reporter } = invoke(client, mo2);
+  it('sends the origin, the file name and the picked place\'s folder, and lands the created toast', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', WROTE);
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    pickOrigin('Winning Mod');
+
+    const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(client.calls).toContainEqual({ method: 'createPlugin', args: ['MyPatch.esp', '/instance/overwrite', 'overwrite'] });
-    expect(appendPlugin).toHaveBeenCalledWith('/instance', 'Default', 'MyPatch.esp');
-    expect(reporter.landings).toEqual(['Created "MyPatch.esp".']);
+    expect(client.calls).toEqual([
+      { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod'] },
+    ]);
+    expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
     expect(reporter.reports).toEqual([]);
   });
 
-  // The rival: landing the created toast (or appending to the load order) on a refusal too would
-  // add a plugins.txt line for a file the backend never actually wrote.
-  it('reports the ready-to-show message at error and never appends to the load order when the backend refuses', async () => {
+  it('refuses an empty name and a name that is not .esp, .esm or .esl', async () => {
+    type Validate = (v: string) => string | undefined;
+    const prompt: { validate?: Validate } = {};
+    showInputBox.mockImplementation((options: { validateInput: Validate }) => {
+      prompt.validate = options.validateInput;
+      return Promise.resolve(undefined);
+    });
+    const { run } = invoke(new InMemoryMEditClient(), makeMo2());
+    await run();
+
+    const validate = present(prompt.validate, 'the name prompt\'s validator');
+    expect(validate('')).toBe('Name is required');
+    expect(validate('MyPatch.txt')).toBe('Extension must be .esp, .esm, or .esl');
+    expect(validate('MyPatch')).toBe('Extension must be .esp, .esm, or .esl');
+    expect(['A.esp', 'B.ESM', 'C.esl'].map(validate)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // Rival: checking the name across the whole load order, which would also leave out Overwrite
+  // and the other enabled mods.
+  it('picks the enabled mods first, then Overwrite, leaving out the place that holds the name', async () => {
+    showInputBox.mockResolvedValue('mypatch.ESP');
+    const pick = offering();
+
+    const { run } = invoke(new InMemoryMEditClient(), makeMo2());
+    await run();
+
+    expect(pick.offered.map((p) => p.label)).toEqual(['Winning Mod', 'Overwrite']);
+  });
+
+  it('creates nothing and asks for no place when Esc answers the name prompt', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { refused: true, message: 'Failed to create plugin — Bad Request' });
+    showInputBox.mockResolvedValue(undefined);
+
+    const { run, reporter } = invoke(client, makeMo2());
+    await run();
+
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('creates nothing when Esc answers the place pick', async () => {
+    const client = new InMemoryMEditClient();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockResolvedValue(undefined);
+
+    const { run, reporter } = invoke(client, makeMo2());
+    await run();
+
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  // Rival: resolving the folder from the value the pick was built from, which still names a mod
+  // the instance has lost since.
+  it('refuses a mod that vanished between the pick and the answer, naming it, and creates nothing', async () => {
+    const client = new InMemoryMEditClient();
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ choice: 'overwrite' });
+    showQuickPick.mockImplementation((places: Place[]) => {
+      mo2.instance.value = { ...mo2.instance.value, mods: [], paths: { ...mo2.instance.value.paths, modDirs: new Map() } };
+      return Promise.resolve(places.find((p) => p.origin === 'Winning Mod'));
+    });
 
     const { run, reporter } = invoke(client, mo2);
+    await run();
+
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'The mod "Winning Mod" is gone, so "MyPatch.esp" was not created.', detail: undefined },
+    ]);
+  });
+
+  it('refuses a mod that was disabled between the pick and the answer, saying so, and creates nothing', async () => {
+    const client = new InMemoryMEditClient();
+    const mo2 = makeMo2();
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    showQuickPick.mockImplementation((places: Place[]) => {
+      mo2.instance.value = { ...mo2.instance.value, mods: [{ kind: 'mod', name: 'Winning Mod', enabled: false }] };
+      return Promise.resolve(places.find((p) => p.origin === 'Winning Mod'));
+    });
+
+    const { run, reporter } = invoke(client, mo2);
+    await run();
+
+    expect(client.calls).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.', detail: undefined },
+    ]);
+  });
+
+  it('reports the refusal mEdit answered with at error, and lands no toast', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { refused: true, message: 'Could not create "MyPatch.esp" — A file is already there.' });
+    showInputBox.mockResolvedValue('MyPatch.esp');
+    pickOrigin('overwrite');
+
+    const { run, reporter } = invoke(client, makeMo2());
     await run();
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to create plugin — Bad Request', detail: undefined },
+      { severity: 'error', message: 'Could not create "MyPatch.esp" — A file is already there.', detail: undefined },
     ]);
-    expect(appendPlugin).not.toHaveBeenCalled();
     expect(reporter.landings).toEqual([]);
   });
 
-  // ADR-0007: the create landed, so the file exists — only its load-order line is missing, and
-  // the user is told that much rather than a bare "created".
-  it('reports a failed load-order append at error with the refusal as its detail, never the created toast', async () => {
-    const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null, version: 1 });
+  it('reports that every place holds the name, and offers no empty pick', async () => {
     const mo2 = makeMo2();
+    mo2.instance.value = {
+      ...mo2.instance.value,
+      mods: [{ kind: 'mod', name: 'Holding Mod', enabled: true }],
+      plugins: [
+        plugin('MyPatch.esp', 'Holding Mod', '/instance/mods/Holding Mod/MyPatch.esp'),
+        plugin('MyPatch.esp', 'overwrite', '/instance/overwrite/MyPatch.esp'),
+      ],
+    };
     showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ choice: 'overwrite' });
-    vi.mocked(appendPlugin).mockResolvedValue({ applied: false, refusal: 'plugins.txt is read-only' });
 
-    const { run, reporter } = invoke(client, mo2);
+    const { run, reporter } = invoke(new InMemoryMEditClient(), mo2);
     await run();
 
-    expect(reporter.reports).toEqual([{
-      severity: 'error',
-      message: 'Created "MyPatch.esp", but could not add it to the load order.',
-      detail: 'plugins.txt is read-only',
-    }]);
-    expect(reporter.landings).toEqual([]);
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Overwrite and every enabled mod already hold "MyPatch.esp".', detail: undefined },
+    ]);
   });
 
-  // ADR-0015 invariant 2: create plugin writes and returns, and the new row arrives with the
-  // Instance loader's next value.
+  // ADR-0007, invariant 2: create writes only the file and returns; the new row arrives with the
+  // Instance loader's next value, once the watch sees the file, never from the command itself.
   it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/instance/overwrite/MyPatch.esp', origin: 'overwrite', slot: null, version: 1 });
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite', path: '/instance/overwrite/MyPatch.esp' });
     showInputBox.mockResolvedValue('MyPatch.esp');
-    showQuickPick.mockResolvedValue({ choice: 'overwrite' });
-    vi.mocked(appendPlugin).mockResolvedValue({ applied: true, wrote: true });
+    showQuickPick.mockResolvedValue({ label: 'Overwrite', origin: 'overwrite' });
     const mo2 = makeMo2();
     const instance = new FakeInstance(mo2.instance.value);
     const tree = new PluginsTreeProvider({ instance, source: { reorderPlugins: () => Promise.resolve() } });
@@ -226,7 +340,8 @@ describe('registerRevealInExplorerCommand', () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  // commands.md, Where: the palette hands the gesture no row, so it takes the one selected plugin.
+  // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
+  // takes the one selected plugin.
   it('reveals the one selected plugin from the palette', async () => {
     const { run } = invoke(
       (name) => Promise.resolve(`/instance/mods/MyMod/${name}`), [new PluginNode({ name: 'Selected.esp', enabled: true }, 'SomeMod')]);
@@ -258,7 +373,7 @@ describe('registerRevealInExplorerCommand', () => {
   });
 });
 
-// plugins.md, Menus and keys, story 8: copy value copies each selected plugin as its file name and
+// plugins.md, Menus and keys, story 5: copy value copies each selected plugin as its file name and
 // each selected record as `EditorID [FormKey]`, or the FormKey alone with no EditorID, one to a line.
 describe('pluginsCopyValueText', () => {
   const plugin = new PluginNode({ name: 'Alpha.esp', enabled: true }, 'ModA');
