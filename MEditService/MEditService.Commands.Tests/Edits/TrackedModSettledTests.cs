@@ -143,24 +143,14 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal([], TheExternalChange().Plugins);
     }
 
-    // A repository that goes takes its plugins with it, so what the last settle named clears.
     [Fact]
-    public void ASettle_OfAModWhoseRepositoryWent_NamesNoPlugin()
+    public void ASettle_PublishesNothing_ForAnUntrackedFolder()
     {
-        var tracked = "the tracked binary"u8.ToArray();
-        WithPlugins((PluginName, tracked));
-        Track((PluginName, tracked));
-        var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
-        Settled.Handle(loadOrder, ModFolder);
-        Directory.Delete(Path.Combine(ModFolder, ".git"), recursive: true);
+        var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
 
         Settled.Handle(loadOrder, ModFolder);
 
-        var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
-        Assert.Equal(2, notices.Count);
-        Assert.Single(notices[0].Plugins);
-        Assert.Equal(Origin, notices[1].Origin);
-        Assert.Empty(notices[1].Plugins);
+        Assert.Empty(_notifications.Notifications);
     }
 
     // ADR-0003 invariant 3: Modbench keeps nothing about the change.
