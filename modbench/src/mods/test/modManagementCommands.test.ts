@@ -53,7 +53,6 @@ import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/s
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
-import type { EntryRef } from '../../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -424,7 +423,9 @@ const CLASH = 'A separator with this name already exists';
 
 // An instance whose folder for mods holds these folders, as another tool left them.
 // Its mod order lists `entries`, written through the adapter.
-async function instanceHolding(folders: readonly string[], entries: readonly EntryRef[] = []): Promise<string> {
+async function instanceHolding(
+  folders: readonly string[], entries: readonly { kind: 'mod' | 'separator'; name: string }[] = [],
+): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'mod-folders-'));
   for (const folder of folders) await mkdir(join(root, 'mods', folder), { recursive: true });
   await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
