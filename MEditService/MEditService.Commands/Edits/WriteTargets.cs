@@ -384,9 +384,9 @@ internal sealed class WriteTargets(
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,
             $"'{recordType}' is a container record — it owns child records of its own (a cell, a " +
-            "worldspace, a quest) — or the game cannot create it (a placed reference, a landscape, a " +
-            "navmesh, a dialog topic, branch, scene or response, each held inside another record's " +
-            "document). Editing its fields and its FormID works, and so does deleting it; creating " +
-            "one from scratch is not supported.");
+            "worldspace, a quest, a dialog topic) — or the game cannot create it (a placed reference, " +
+            "a landscape, a navmesh, a dialog branch, a scene or a response, each held inside another " +
+            "record's document). Editing its fields and its FormID works, and so does deleting it; " +
+            "creating one from scratch is not supported.");
     }
 }

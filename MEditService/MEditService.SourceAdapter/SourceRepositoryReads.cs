@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
+using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter;
 
@@ -104,14 +105,14 @@ public sealed partial class SourceRepository
 
     /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
     /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
-    public IReadOnlySet<string> NativeFormKeysHeld(PluginAddress plugin) => Native(ReadAll(plugin), plugin);
+    public IReadOnlySet<string> NativeFormKeysHeld(PluginAddress plugin) => Native(ReadAll(plugin), plugin, _release);
 
     /// <summary>The same set as <paramref name="gitRef"/> committed it, so an ID a working-tree
     /// deletion freed stays taken until the plugin is compiled.</summary>
     public IReadOnlySet<string> NativeFormKeysHeldAt(PluginAddress plugin, string gitRef) =>
-        Native(ReadAll(plugin, gitRef), plugin);
+        Native(ReadAll(plugin, gitRef), plugin, _release);
 
-    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginAddress plugin)
+    private static HashSet<string> Native(IReadOnlyList<SourceDocument> documents, PluginAddress plugin, GameRelease release)
     {
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in documents)
@@ -120,7 +121,7 @@ public sealed partial class SourceRepository
 
             // A child inlined in this document is a record of its own with a FormKey of its own, so its
             // ID is as taken as any other.
-            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body)))
+            foreach (var (formKey, _, inAnEmbedSlot) in FormKeysIn(Encoding.UTF8.GetBytes(document.Body), release))
             {
                 if (inAnEmbedSlot) AddIfNative(keys, formKey, plugin);
             }
