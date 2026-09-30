@@ -724,7 +724,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
             gameRelease,
             _schemaReflector.GetSchemas(gameRelease),
-            new PluginStrings(LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path), dataFolderPath));
+            new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), dataFolderPath));
 
     /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered plugin when null, and repairs what differs. <c>NeedsRebuild</c> names a plugin
