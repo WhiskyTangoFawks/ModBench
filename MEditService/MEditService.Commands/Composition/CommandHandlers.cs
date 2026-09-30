@@ -69,6 +69,11 @@ public static class CommandHandlers
             sp.GetRequiredService<TrackService>(),
             sp.GetRequiredService<LoadOrderHolder>()));
 
+        services.AddSingleton(sp => new DecompilePluginHandler(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<IPluginAdapter>(),
+            sp.GetRequiredService<ILogger<DecompilePluginHandler>>()));
+
         services.AddSingleton(sp => new CompilePluginHandler(
             sp.GetRequiredService<PluginCompileService>(),
             sp.GetRequiredService<LoadOrderHolder>()));

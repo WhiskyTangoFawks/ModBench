@@ -620,11 +620,14 @@ export class PluginsTreeProvider
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
-  // The instance value names each mod's folder, whatever the mod manager calls the others.
-  private placeOf(origin: string): 'inMod' | 'inOverwrite' | undefined {
+  // The instance value names each mod's folder, whatever the mod manager calls the others, and
+  // each mod whose folder holds a repository.
+  private placeOf(origin: string): 'inTrackedMod' | 'inUntrackedMod' | 'inOverwrite' | undefined {
     if (origin === OVERWRITE_ORIGIN) return 'inOverwrite';
     const folded = origin.toLowerCase();
-    return [...this.instanceValue.paths.modDirs.keys()].some((mod) => mod.toLowerCase() === folded) ? 'inMod' : undefined;
+    const mod = [...this.instanceValue.paths.modDirs.keys()].find((name) => name.toLowerCase() === folded);
+    if (mod === undefined) return undefined;
+    return this.instanceValue.trackedMods.has(mod) ? 'inTrackedMod' : 'inUntrackedMod';
   }
 
   /** Whether compile applies to any plugin, which compile's palette entry reads. */

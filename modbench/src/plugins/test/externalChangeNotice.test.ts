@@ -95,8 +95,8 @@ describe('noticeExternalChanges — an untracked plugin in a tracked mod', () =>
     client.emit(untracked('ModA', 'C.esp'));
 
     expect(reporter.reports).toEqual([
-      { severity: 'warning', message: 'C.esp in ModA has no plugin source', detail: 'run "Track Plugin…" on it to decompile it' },
-      { severity: 'warning', message: 'D.esp in ModA has no plugin source', detail: 'run "Track Plugin…" on it to decompile it' },
+      { severity: 'warning', message: 'C.esp in ModA has no plugin source', detail: 'run "Decompile Plugin" on it' },
+      { severity: 'warning', message: 'D.esp in ModA has no plugin source', detail: 'run "Decompile Plugin" on it' },
     ]);
   });
 });

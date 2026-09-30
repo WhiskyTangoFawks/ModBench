@@ -44,7 +44,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
 
     private void Tell(string origin, string modFolder, IReadOnlyList<RegisteredPlugin> plugins)
     {
-        var tracked = plugins.ToLookup(plugin => SourceRepository.IsPluginTracked(modFolder, plugin.Name));
+        var tracked = plugins.ToLookup(plugin => SourceRepository.HoldsTreeFor(modFolder, plugin.Name));
         notifications.Publish(new ExternalChangeNotification(origin, [.. tracked[true]
             .Select(plugin => new ChangedPlugin(plugin.Name, hashes.Of(plugin.Path)))
             .Where(plugin => !MatchesLastWrite(modFolder, plugin))]));

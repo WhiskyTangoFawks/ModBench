@@ -22,7 +22,7 @@ import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
-  registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
+  registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
   registerOpenHeaderCommand, conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
@@ -239,6 +239,12 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       mods: instanceMods,
       modOfRow,
     }, trackSelection),
+    registerDecompileCommand({
+      client,
+      progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      reporter: makeReporter(outputChannel, 'plugin.decompile'),
+      ask: askQuestion,
+    }, () => session.pluginsTreeView?.selection ?? []),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),

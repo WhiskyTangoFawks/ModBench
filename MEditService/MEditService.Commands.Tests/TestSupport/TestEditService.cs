@@ -51,6 +51,9 @@ internal static class TestEditService
     internal static TrackHandler TrackHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<TrackHandler>();
 
+    internal static DecompilePluginHandler DecompileHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
+        Over(holder, adapter: adapter).GetRequiredService<DecompilePluginHandler>();
+
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 

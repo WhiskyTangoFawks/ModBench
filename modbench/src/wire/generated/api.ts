@@ -263,6 +263,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/decompile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DecompilePlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/compile": {
         parameters: {
             query?: never;
@@ -594,6 +610,20 @@ export interface components {
             origin: string;
             name: string;
             folder: string;
+        };
+        /** @enum {string} */
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "WriteFailed" | "GitUnavailable";
+        DecompileRefused: {
+            plugin: components["schemas"]["PluginAddress"];
+            refusal: components["schemas"]["DecompileRefusal"];
+            message: string;
+        };
+        DecompileRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
+        DecompileResponse: {
+            applied: components["schemas"]["PluginAddress"][];
+            refused: components["schemas"]["DecompileRefused"][];
         };
         EnumMember: {
             value: string;
@@ -1559,6 +1589,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrackResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DecompilePlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecompileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecompileResponse"];
                 };
             };
             /** @description Bad Request */

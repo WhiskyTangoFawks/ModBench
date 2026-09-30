@@ -252,6 +252,17 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
+  // mods.md, Mod menu: track is offered on a mod with no repository, which only the mod's folder
+  // says (ADR-0007).
+  it('carries each mod whose folder holds a repository as tracked, and no other', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'mods', 'Harder VATS', '.git'), { recursive: true });
+
+    await instance.refresh();
+
+    expect([...instance.value.trackedMods]).toEqual(['Harder VATS']);
+  });
+
   // The Mods tree renders `mods` alone, so a folder with no line reaches the value on a field
   // of its own or mod sync never hears of it.
   it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod', async () => {

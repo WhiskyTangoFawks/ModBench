@@ -1,5 +1,4 @@
 using MEditService.Codec.Serialization;
-using MEditService.SourceAdapter.Tests.TestSupport;
 using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -27,22 +26,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
         Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "Bad.esp")));
         Assert.True(File.Exists(Path.Combine(_modFolder, "plugin-source", "C.esp", "npc_", "C.esp", "000001.json")));
-        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
-    }
-
-    [Fact]
-    public void Track_IntoAnExistingRepository_RefusesAPluginWhoseFilesCannotAllBeWritten_AndCommitsTheRest()
-    {
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, Baseline("A.esp").Files);
-        var editBefore = Git("rev-parse", "refs/heads/edit");
-
-        var refused = SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [UnwritableBaseline("Bad.esp"), Baseline("C.esp")]);
-
-        Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
-        Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
-        Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
+        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
@@ -71,7 +55,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Empty(refused);
         Assert.Equal(["Track SomeMod", "Track A.esp"], SubjectsOnMain());
         Assert.True(SourceRepository.IsTracked(_modFolder));
-        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
+        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
     // ADR-0003: a repository with history but no main is someone else's; Track throws before writing.
