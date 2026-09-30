@@ -123,7 +123,7 @@ divergence 17*
 | A condition | the Run On subject, then the function and the parameters it uses, then the operator, the value, and `AND` or `OR` joining it to the next; the last condition has none |
 | An array element with a key | its key's reading |
 | An array with one element | that element's reading |
-| An array with more than one element | `[n]` |
+| Any other array | `[n]` |
 
 As a user, I want:
 
