@@ -185,12 +185,12 @@ internal sealed class WriteTargets(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // ADR-0012 invariant 2: the game's Data folder and MO2's Overwrite are both origins with no mod
+    // ADR-0012 invariant 2: the game's Data folder and Overwrite are both origins with no mod
     // folder, but neither one's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin) =>
-        string.Equals(plugin.Origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
-            ? $"{plugin.Name} is loaded from Overwrite, which is not a mod and has no mod folder. " +
-              "In MO2, create a mod from Overwrite or move it into an existing mod, then edit it there."
+        PluginOrigin.IsOverwrite(plugin.Origin)
+            ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
+              "folder to hold its source. Move it into a mod, then edit it there."
             : $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
               "Author a patch plugin and edit the override there.";
 

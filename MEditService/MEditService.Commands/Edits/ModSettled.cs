@@ -17,10 +17,9 @@ public sealed class ModSettled
 
     public void Handle(LoadOrderSnapshot loadOrder, string modFolder)
     {
-        // FileFolderOf, not ModFolderOf: the watcher settles Data and Overwrite too, where
-        // ModFolderOf answers null (ADR-0012 invariant 2).
         var plugins = loadOrder.Plugins
-            .Where(plugin => string.Equals(SourceRepository.FileFolderOf(plugin.Path), modFolder, StringComparison.Ordinal))
+            .Where(plugin => string.Equals(
+                LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path), modFolder, StringComparison.Ordinal))
             .ToList();
         // The origin is the mod manager's name for the mod, which only a plugin of it carries.
         if (plugins is not [{ Origin: var origin }, ..]) return;

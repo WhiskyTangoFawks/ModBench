@@ -246,7 +246,7 @@ public sealed class TrackServiceTests
     }
 
     // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no repository for Track to
-    // put a baseline into — the same shape as the Data-origin case above, one origin over.
+    // put a baseline into.
     [Fact]
     public async Task TrackAsync_WithOnlyAnOverwriteOriginPlugin_RefusesWithoutInitializingARepository()
     {

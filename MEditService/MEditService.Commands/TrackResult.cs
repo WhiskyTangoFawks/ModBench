@@ -19,7 +19,7 @@ public enum TrackRefusal
     /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007).</summary>
     DataDirectoryOrigin,
 
-    /// <summary>The origin is MO2's own Overwrite; the way out is moving the plugin into a mod
+    /// <summary>The origin is Overwrite, not a mod; the way out is moving the plugin into one
     /// (ADR-0012 invariant 2).</summary>
     OverwriteOrigin,
 

@@ -71,7 +71,7 @@ public sealed class UntrackedReadOnlyTests
     // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no mod folder either — the
     // same refusal as a Data-directory master, but "author a patch" is not this one's way out.
     [Fact]
-    public void EditingAPluginInOverwrite_IsRefused_NamingMO2sCreateModAsTheWayOut()
+    public void EditingAPluginInOverwrite_IsRefused_NamingOverwriteAsAnOriginNotAMod()
     {
         using var overwrite = SourceModFixture.OverwriteStray(out var strayNpc);
 

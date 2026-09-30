@@ -40,8 +40,8 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
         return fx;
     }
 
-    // The stray sits in its own mod folder MO2 never gave a plugins.txt line for; tracking is per
-    // mod folder, not per line (ADR-0012 invariant 5), so it tracks all the same.
+    // The stray sits in its own mod folder, given no plugins.txt line; tracking is per mod folder,
+    // not per line (ADR-0012 invariant 5), so it tracks all the same.
     private async Task<ScatteredFixtureData> LoadedWithAModFolderStray()
     {
         var built = new PluginFixtureBuilder("api-modfolder-stray")
@@ -56,8 +56,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
         return fx;
     }
 
-    // The stray sits in the instance's overwrite/ folder, which is never a mod (ADR-0012 invariant
-    // 2) — Track always refuses it, so this fixture never calls Track.
+    // The stray sits in the instance's overwrite/ folder, which is never a mod (ADR-0012 invariant 2).
     private async Task<ScatteredFixtureData> LoadedWithAnOverwriteStray()
     {
         var built = new PluginFixtureBuilder("api-overwrite-stray")

@@ -78,7 +78,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public Registration? Registration(PluginAddress address) => Plugin(address)?.Registration;
 
     /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
-    /// MO2's Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
+    /// Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
     /// names.</summary>
     public string? ModFolderOf(PluginAddress plugin) =>
         Plugin(plugin) is { } registered ? ModFolderOf(registered.Origin, registered.Path) : null;
@@ -89,6 +89,10 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         || string.Equals(origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
             ? null
             : Path.GetDirectoryName(pluginPath);
+
+    /// <summary>The folder holding the plugin's file, every origin alike: unlike ModFolderOf, Data
+    /// and Overwrite answer their own folder rather than null.</summary>
+    public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two plugins
     /// that share a filename, so the filename alone does not say which.</summary>

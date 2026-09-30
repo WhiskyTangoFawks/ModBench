@@ -29,10 +29,10 @@ internal sealed class SourceModFixture : IDisposable
         Plugin = new PluginAddress(pluginName, origin);
         _instanceRoot = Directory.CreateTempSubdirectory("medit-source-mod-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
-        var tracked = origin != PluginOrigin.DataDirectory && origin != PluginOrigin.Overwrite;
+        var tracked = origin != PluginOrigin.DataDirectory && !PluginOrigin.IsOverwrite(origin);
 
-        // The game's own Data folder and MO2's Overwrite are never mod folders, and never a
-        // repository either (ADR-0012 invariant 2).
+        // The game's own Data folder and Overwrite are never mod folders, and never a repository
+        // either (ADR-0012 invariant 2).
         ModFolder = origin switch
         {
             PluginOrigin.DataDirectory => GameDirectory,
@@ -75,9 +75,8 @@ internal sealed class SourceModFixture : IDisposable
         return fixture;
     }
 
-    /// <summary>A stray plugin in MO2's Overwrite holding one NPC: registered and loaded, with no
-    /// mod folder at all — the same refusal shape as <see cref="VanillaMaster"/>, for a different
-    /// origin (ADR-0012 invariant 2).</summary>
+    /// <summary>A stray plugin in Overwrite holding one NPC: registered and loaded, with no mod
+    /// folder at all (ADR-0012 invariant 2).</summary>
     internal static SourceModFixture OverwriteStray(out FormKey npc)
     {
         var formKey = FormKey.Null;
