@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -120,73 +119,5 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
         var untracked = Assert.Single(await stream.EventsUntil("untracked-plugins"));
         Assert.Equal(Origin, untracked.GetProperty("origin").GetString());
         Assert.Equal([SecondPlugin], untracked.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
-    }
-
-    // The mark a compile leaves when its write never finishes.
-    private static Task InterruptACompile(string modFolder) =>
-        Assert.ThrowsAnyAsync<InvalidOperationException>(() => CompileJournal.RunBatchAsync(modFolder, [Plugin],
-            _ => throw new InvalidOperationException("simulated crash between the mark and the binary write")));
-
-    private static void AssertNamesThePlugin(JsonElement unfinished)
-    {
-        Assert.Equal(Plugin, unfinished.GetProperty("plugin").GetString());
-        Assert.Equal(Origin, unfinished.GetProperty("origin").GetString());
-    }
-
-    [Fact]
-    public async Task SettlingAModWhoseCompileWasInterrupted_WarnsCompileUnfinished_NamingThePlugin()
-    {
-        var fx = Owned(await Watched());
-        await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
-        using var stream = await Client.NotificationStream();
-
-        ARelease(fx);
-
-        var frames = await stream.FramesThrough("compile-unfinished", _ => true);
-        AssertNamesThePlugin(frames[^1].Data);
-    }
-
-    [Fact]
-    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_NamingThePlugin()
-    {
-        var fx = Owned(await Watched());
-        await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
-        Restart();
-        using var stream = await Client.NotificationStream();
-
-        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-
-        var frames = await stream.FramesThrough("compile-unfinished", _ => true);
-        AssertNamesThePlugin(frames[^1].Data);
-    }
-
-    // The scattered fixture gives each plugin a folder of its own, so the second is written beside
-    // the first and listed by hand.
-    [Fact]
-    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_WhenAnotherTrackedPluginOfTheModCannotBeRead()
-    {
-        var fx = Owned(OneMod());
-        var secondBinary = Path.Combine(OtherTool.ModFolderOf(fx, Origin), SecondPlugin);
-        OtherTool.WritesThePlugin(secondBinary, mod => mod.Npcs.AddNew("SecondNpc").HeightMax = 0.5f);
-        LoadOrderEntry[] plugins =
-            [.. fx.Plugins, new LoadOrderEntry(SecondPlugin, secondBinary, Origin, fx.Plugins.Count, Enabled: true, Winning: true)];
-        (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-        (await Client.Track([(Plugin, Origin), (SecondPlugin, Origin)])).EnsureSuccessStatusCode();
-        await Client.PluginReportsTracked(SecondPlugin);
-        await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
-        Restart();
-        using var stream = await Client.NotificationStream();
-        FileModes.Set(secondBinary, "000");
-        try
-        {
-            (await Client.PutLoadOrder(fx, plugins)).EnsureSuccessStatusCode();
-
-            var frames = await stream.FramesThrough("compile-unfinished", _ => true);
-            AssertNamesThePlugin(frames[^1].Data);
-        }
-        finally
-        {
-            FileModes.Set(secondBinary, "644");
-        }
     }
 }

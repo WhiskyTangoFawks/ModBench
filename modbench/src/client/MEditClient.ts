@@ -35,7 +35,7 @@ export function isRefused(result: unknown): result is WriteRefused {
 
 const NOTIFICATION_KINDS = [
   'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
-  'untracked-plugins', 'compile-unfinished',
+  'untracked-plugins',
 ] as const;
 
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call

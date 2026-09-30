@@ -243,6 +243,6 @@ public sealed class CompiledTree
 
     /// <summary>The mod handed straight to the write, through the temp-and-rename discipline every
     /// plugin replacement shares.</summary>
-    public Task SaveThroughAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
-        PluginWriter.SaveFromModAsync(_mod, pluginPath, loadOrder);
+    public Task<PreparedPluginSave> PrepareSaveAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
+        PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
 }

@@ -322,20 +322,30 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Re-parks the last-compile ref at the working tree just compiled from, without moving HEAD,
-    /// branch or index (ADR-0007).</summary>
-    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256)
+    /// <summary>Parks the working tree just compiled from, then writes the binary. Until the write
+    /// returns, the binaries the ref already names count too (plugins.md, Compile, story 5). Moves no
+    /// HEAD, branch or index (ADR-0007).</summary>
+    public static void ParkCompileSnapshot(string modFolder, string plugin, string binarySha256, Action writeBinary)
     {
         var gitDir = Path.Combine(modFolder, ".git");
         var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
         var tree = WorkingTreeSnapshotTree(gitDir, modFolder);
+        var earlier = ParkedCompileBinarySha256s(modFolder, plugin);
 
-        // commit-tree is plumbing with no --trailer flag, so the trailer line is hand-written at the message
-        // tail.
-        var message = $"Save & Compile: {plugin}\n\nBinary-SHA256: {binarySha256}";
-        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m", message).Trim();
-        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
+        // commit-tree is plumbing with no --trailer flag, so the trailer block is hand-written.
+        string Snapshot(IEnumerable<string> earlierBinaries) => GitCli.Run(
+            gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m",
+            string.Join('\n', [$"Compile: {plugin}", "", $"{BinaryTrailer}: {binarySha256}",
+                .. earlierBinaries.Select(sha => $"{EarlierBinaryTrailer}: {sha}")])).Trim();
+        var landed = Snapshot([]);
+
+        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), Snapshot(earlier));
+        writeBinary();
+        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), landed);
     }
+
+    private const string BinaryTrailer = "Binary-SHA256";
+    private const string EarlierBinaryTrailer = "Earlier-Binary-SHA256";
 
     // The index and every tracked file's working-tree bytes, built on a copy of the index: git stash
     // create would take index.lock, which the user's own commit or rebase may be holding.
@@ -379,17 +389,18 @@ public sealed partial class SourceRepository
         return paths;
     }
 
-    /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref, a baseline or a compile
-    /// snapshot, each holding one plugin. Null when the ref or its trailer is missing.</summary>
-    public static string? ParkedCompileBinarySha256(string modFolder, string plugin)
+    /// <summary>Every binary hash the plugin's last-compile ref names: a baseline's or a landed
+    /// compile's one, or an unfinished compile's with those before it. Empty when the ref is
+    /// missing.</summary>
+    public static IReadOnlyList<string> ParkedCompileBinarySha256s(string modFolder, string plugin)
     {
-        if (!IsTracked(modFolder)) return null;
+        if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin)))
-            return null;
+            return [];
 
-        return ReadTrailer(body, "Binary-SHA256");
+        return [.. ReadTrailers(body, BinaryTrailer), .. ReadTrailers(body, EarlierBinaryTrailer)];
     }
 
     // git speaks forward slashes on every platform, Windows included, while the layout builds

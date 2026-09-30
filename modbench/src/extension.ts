@@ -10,7 +10,6 @@ import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecor
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
-import { warnCompileUnfinished } from './plugins/compileUnfinishedWarning';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { moveToTrash } from './trash';
@@ -160,7 +159,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     toolbox,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
-    { dispose: warnCompileUnfinished(makeReporter(outputChannel, 'compile'), meditClient) },
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),

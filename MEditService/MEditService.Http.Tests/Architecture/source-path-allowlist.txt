@@ -6,9 +6,8 @@
 # the two answer different questions and neither owns the other's name.
 MEditService.Codec/Serialization/HeaderDocument.cs: "RecordData.json": 1
 
-# git ref literals pre-dating the watcher's own git tokens (ADR-0014): a journal file under .git,
-# and a plumbing arg naming HEAD. Neither is layout the watcher asks the repository for;
-# ModFolderWatcher itself names none of these tokens.
-MEditService.SourceAdapter/CompileJournal.cs: ".git": 1
+# git ref literals pre-dating the watcher's own git tokens (ADR-0014): plumbing args naming HEAD.
+# Neither is layout the watcher asks the repository for; ModFolderWatcher itself names no such
+# token.
 MEditService.Commands/Edits/WriteTargets.cs: "HEAD": 1
 MEditService.Index/SourceIngest.cs: "HEAD": 1

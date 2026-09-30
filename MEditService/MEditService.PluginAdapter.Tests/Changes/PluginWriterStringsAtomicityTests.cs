@@ -1,3 +1,4 @@
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -69,12 +70,13 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveFromModAsync_LocalizedMod_CommitsNewStringsContentAtomically()
+    public async Task Commit_LocalizedMod_CommitsNewStringsContentAtomically()
     {
         var originalFiles = ReadStringsFiles();
 
         var modifiedMod = BuildModifiedMod();
-        await PluginWriter.SaveFromModAsync(modifiedMod, _pluginPath);
+        using (var prep = await PluginWriter.PrepareFromModAsync(modifiedMod, _pluginPath))
+            prep.Commit();
 
         // Commit() must have moved the new content into the real Strings/ files — same file names,
         // different bytes (a second save of the same plugin: this is the overwrite path, not a
@@ -89,5 +91,25 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
             Assert.False(bytes.AsSpan().SequenceEqual(afterCommit[name]), $"{name} should differ after Commit() rewrote it");
 
         Assert.Empty(Directory.GetDirectories(_dataFolder, ".medit_tmp_*"));
+    }
+
+    // plugins.md, Compile, story 5: a localized plugin can be left with its strings without its
+    // binary, never with its binary without its strings.
+    [Fact]
+    public async Task Commit_ThatCannotWriteTheStrings_LeavesTheOldBinary()
+    {
+        var before = File.ReadAllBytes(_pluginPath);
+        FileModes.Set(_stringsDir, "500");
+        try
+        {
+            using var prep = await PluginWriter.PrepareFromModAsync(BuildModifiedMod(), _pluginPath);
+            Assert.ThrowsAny<Exception>(prep.Commit);
+        }
+        finally
+        {
+            FileModes.Set(_stringsDir, "700");
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(_pluginPath));
     }
 }

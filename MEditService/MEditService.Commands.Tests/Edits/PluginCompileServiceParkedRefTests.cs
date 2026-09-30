@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Every compile re-parks the last-compile ref only after the binary write lands.</summary>
+/// <summary>Every compile parks what it writes on the last-compile ref before it writes it.</summary>
 public sealed class PluginCompileServiceParkedRefTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
@@ -54,5 +54,27 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Equal(baselineParked, RunGit("rev-parse", ParkedRef).Trim());
+    }
+
+    // plugins.md, Compile, story 5: the record goes down before the binary does, so a compile that
+    // cannot record writes nothing.
+    [Fact]
+    public async Task Compile_ThatCannotParkItsRecord_LeavesTheOldBinary()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, CompileFixture.PluginName);
+        var before = File.ReadAllBytes(pluginPath);
+        _mod.Rewrite<Npc>(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId, npc => npc.HeightMax = 0.75f);
+        var parkedRefs = Path.Combine(GitDir, "refs", "medit", "last-compile");
+        FileModes.Set(parkedRefs, "500");
+        try
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() => CompileService().CompileAsync(_mod.Plugin));
+        }
+        finally
+        {
+            FileModes.Set(parkedRefs, "700");
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(pluginPath));
     }
 }

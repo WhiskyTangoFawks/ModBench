@@ -74,14 +74,4 @@ public static class PluginWriter
         using var prep = await PrepareAsync(pluginPath, gameRelease, loadOrder);
         prep.Commit();
     }
-
-    /// <summary>Compile's entry point: <see cref="SaveAsync"/> for an already-assembled mod.</summary>
-    public static async Task SaveFromModAsync(
-        IMod mod,
-        string pluginPath,
-        IReadOnlyList<string>? loadOrder = null)
-    {
-        using var prep = await PrepareFromModAsync(mod, pluginPath, loadOrder);
-        prep.Commit();
-    }
 }

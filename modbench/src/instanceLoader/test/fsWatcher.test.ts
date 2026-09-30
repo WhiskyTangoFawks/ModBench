@@ -54,7 +54,7 @@ describe('createDebouncedFsWatcher', () => {
     createDebouncedFsWatcher('/instance', 'mods/**', onChange);
     const watcher = present(watchers[0], 'the watcher fsWatcher registered');
 
-    watcher.fireChange('/instance/mods/Foo/.git/MEDIT_COMPILE_JOURNAL');
+    watcher.fireChange('/instance/mods/Foo/.git/index');
     vi.runAllTimers();
     expect(onChange).not.toHaveBeenCalled();
 

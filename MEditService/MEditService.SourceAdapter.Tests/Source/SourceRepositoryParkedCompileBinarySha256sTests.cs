@@ -3,12 +3,12 @@ using MEditService.SourceAdapter.Tests.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-public sealed class SourceRepositoryParkedCompileBinarySha256Tests
+public sealed class SourceRepositoryParkedCompileBinarySha256sTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-parked-sha-").FullName;
 
     [Fact]
-    public void ParkedCompileBinarySha256_ReadsBackWhatParkCompileSnapshotWrote()
+    public void ParkedCompileBinarySha256s_ReadBackWhatParkCompileSnapshotWrote()
     {
         var modFolder = NewModFolder();
         try
@@ -16,9 +16,9 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234");
+            SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", binarySha256: "DEADBEEF1234", writeBinary: () => { });
 
-            Assert.Equal("DEADBEEF1234", SourceRepository.ParkedCompileBinarySha256(modFolder, "Test.esp"));
+            Assert.Equal(["DEADBEEF1234"], SourceRepository.ParkedCompileBinarySha256s(modFolder, "Test.esp"));
         }
         finally
         {
@@ -27,7 +27,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
     }
 
     [Fact]
-    public void ParkedCompileBinarySha256_IsNull_WhenTheRefDoesNotExist()
+    public void ParkedCompileBinarySha256s_AreEmpty_WhenTheRefDoesNotExist()
     {
         var modFolder = NewModFolder();
         try
@@ -37,7 +37,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
             // orphaned-ref case must degrade, never throw.
             PluginBaselines.Track(modFolder, SourcePreset.Edits, files);
 
-            Assert.Null(SourceRepository.ParkedCompileBinarySha256(modFolder, "Other.esp"));
+            Assert.Empty(SourceRepository.ParkedCompileBinarySha256s(modFolder, "Other.esp"));
         }
         finally
         {
@@ -46,12 +46,12 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
     }
 
     [Fact]
-    public void ParkedCompileBinarySha256_IsNull_ForAnUntrackedFolder()
+    public void ParkedCompileBinarySha256s_AreEmpty_ForAnUntrackedFolder()
     {
         var modFolder = NewModFolder();
         try
         {
-            Assert.Null(SourceRepository.ParkedCompileBinarySha256(modFolder, "Test.esp"));
+            Assert.Empty(SourceRepository.ParkedCompileBinarySha256s(modFolder, "Test.esp"));
         }
         finally
         {

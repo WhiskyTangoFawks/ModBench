@@ -152,14 +152,12 @@ public sealed partial class SourceRepository
         return string.Join('\n', lines) + "\n";
     }
 
-    // Last matching line wins — git's own rule for a repeated trailer key.
-    private static string? ReadTrailer(string body, string key)
+    private static IEnumerable<string> ReadTrailers(string body, string key)
     {
         var prefix = $"{key}: ";
         return body.Split('\n')
             .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(line => line[prefix.Length..].Trim())
-            .LastOrDefault();
+            .Select(line => line[prefix.Length..].Trim());
     }
 
     /// <summary>The checked-out branch edits live on (CONTEXT.md's "Edit branch") — one fixed name, since

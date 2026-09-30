@@ -1,4 +1,3 @@
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using MEditService.Watcher.Tests.TestSupport;
 
@@ -92,24 +91,6 @@ public sealed class LoadOrderChangeSettleTests
         await tree.ApplyLoadOrder();
 
         Assert.Empty(Assert.Single(tree.Notifications.Published).ChangedPlugins);
-    }
-
-    [Fact]
-    public async Task ALoad_WarnsCompileUnfinished_AndTellsNoChange_WhenACompileLeftItsMark()
-    {
-        var (tree, modFolder) = TrackedBeforeWatching();
-        using var _ = tree;
-        await Assert.ThrowsAnyAsync<Exception>(() =>
-            CompileJournal.RunBatchAsync(modFolder, [PluginName],
-                __ => throw new InvalidOperationException("simulated crash between source and binary write")));
-        Assert.NotNull(CompileJournal.UnfinishedBatch(modFolder));
-
-        await tree.ApplyLoadOrder();
-
-        var unfinished = Assert.Single(tree.Notifications.Published);
-        Assert.Equal("compile-unfinished", unfinished.Kind);
-        Assert.Equal(Origin, unfinished.Origin);
-        Assert.Equal(PluginName, unfinished.Plugin);
     }
 
     // plugins.md, A row: bytes that cannot be read differ from what Modbench last wrote.

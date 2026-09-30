@@ -151,7 +151,7 @@ internal sealed class WatchedTree : IDisposable
     private static void ParkBinary(string repositoryFolder, string modFolder, string plugin)
     {
         var path = PluginPath(modFolder, plugin);
-        if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(repositoryFolder, plugin, ContentHashOf(path));
+        if (File.Exists(path)) SourceRepository.ParkCompileSnapshot(repositoryFolder, plugin, ContentHashOf(path), writeBinary: () => { });
     }
 
     /// <summary>Drops a plugin from the load order this tree applies, for a reconcile whose plugin
