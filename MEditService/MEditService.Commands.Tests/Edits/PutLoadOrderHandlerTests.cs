@@ -53,6 +53,18 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Equal([a], _holder.Current.Active);
     }
 
+    [Fact]
+    public void Put_TwoActivePluginsOfOneFilename_RefusesWithoutApplying()
+    {
+        var a = Plugin("A.esp");
+        var other = a with { Origin = "ModB" };
+
+        var result = Put(GameRelease.Fallout4, [a, other], a, other);
+
+        Assert.Equal(PutLoadOrderRefusal.InvalidSnapshot, result.Refusal);
+        Assert.Equal(LoadOrderSnapshot.Empty, _holder.Current);
+    }
+
     // A release this build has no Mutagen assembly for is discovered here, synchronously, never
     // inside a reconcile the caller cannot see.
     [Fact]

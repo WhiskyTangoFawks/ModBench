@@ -55,8 +55,6 @@ public static class LoadOrderEndpoints
         // defaulted here.
         if (req.Active is not { } active)
             return Results.Problem("The snapshot must state its active plugins.", statusCode: 400);
-        if (ActiveRefusal(plugins, active) is { } refusal)
-            return Results.Problem(refusal, statusCode: 400);
 
         try
         {
@@ -70,22 +68,5 @@ public static class LoadOrderEndpoints
             logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
             return WriteEndpointMapping.WriteFailure(ex.Message);
         }
-    }
-
-    // ADR-0012: the game loads one file per name, so an active list naming two answers wrong
-    // everywhere a FormID or a winner is read by filename.
-    private static string? ActiveRefusal(IReadOnlyList<LoadOrderPlugin> plugins, IReadOnlyList<PluginAddress> active)
-    {
-        var sent = plugins.Select(p => new PluginAddress(p.Name, p.Origin)).ToHashSet(PluginAddress.Comparer);
-        var stray = active.Where(a => !sent.Contains(a)).Select(a => $"{a.Name} from {a.Origin}").FirstOrDefault();
-        if (stray is not null) return $"The active plugin {stray} is not a plugin in the snapshot.";
-
-        var contested = active
-            .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault(g => g.Count() > 1);
-        return contested is null
-            ? null
-            : $"The snapshot names more than one active {contested.Key}: " +
-              $"{string.Join(", ", contested.Select(a => a.Origin))}. The game loads one file per name.";
     }
 }

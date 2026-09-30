@@ -33,6 +33,9 @@ public sealed class PutLoadOrderHandler
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.UnsupportedGameRelease, ex.Message);
         }
 
+        if (LoadOrderSnapshot.RefusalOf(plugins, active) is { } invalid)
+            return PutLoadOrderResult.Refused(PutLoadOrderRefusal.InvalidSnapshot, invalid);
+
         var snapshot = new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, plugins, active);
         var version = _holder.Apply(snapshot);
         _externalChanges.Check(snapshot);

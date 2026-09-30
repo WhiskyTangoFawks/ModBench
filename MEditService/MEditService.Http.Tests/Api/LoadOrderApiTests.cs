@@ -129,7 +129,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
     // ADR-0013 invariant 3: which plugins are active is Mod Management's to state.
     [Fact]
-    public async Task PutLoadOrder_ThatStatesNoActivePlugins_Returns400()
+    public async Task PutLoadOrder_WithNoActiveField_Returns400()
     {
         var response = await _client.PutAsJsonAsync("/load-order", new
         {

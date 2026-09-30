@@ -61,6 +61,18 @@ public sealed class LoadOrderTests
         Assert.Throws<ArgumentException>(() => Order([Registered("A.esp", "ModA")], Registered("B.esp", "ModB")));
     }
 
+    // ADR-0012: the game loads one file per name.
+    [Fact]
+    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins()
+    {
+        RegisteredPlugin[] plugins = [Registered("A.esp", "ModA"), Registered("A.esp", "ModB")];
+
+        var refusal = LoadOrderSnapshot.RefusalOf(plugins, [.. plugins.Select(p => p.Key)]);
+
+        Assert.Contains("ModA, ModB", refusal, StringComparison.Ordinal);
+        Assert.Throws<ArgumentException>(() => Order(plugins, plugins));
+    }
+
     // ADR-0012 invariant 5 and editor.md's read-only status: a plugin the game does not load, and
     // the game folder's own plugins, are never edited.
     [Fact]

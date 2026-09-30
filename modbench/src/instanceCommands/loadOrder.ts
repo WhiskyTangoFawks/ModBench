@@ -7,7 +7,7 @@ import type {
 } from '../client';
 import type { GameFolder } from '../instanceAdapter/instanceAdapter';
 import {
-  loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
+  loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine, type PluginAddress,
 } from '../instanceLoader/loadOrderSnapshot';
 
 /** The game the instance is for. */
@@ -22,7 +22,7 @@ export interface InstanceGame {
 export interface LoadOrderSource extends InstanceGame {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
-  readonly pluginsLoadedWithNoLine: readonly string[] | undefined;
+  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
 }
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */

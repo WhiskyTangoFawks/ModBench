@@ -22,7 +22,7 @@ const VALUE: LoadOrderSource = {
   gameRelease: 'Fallout4',
   gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
   plugins: [PLUGIN, LINE_WITHOUT_A_FILE],
-  pluginsLoadedWithNoLine: ['Master.esm'],
+  pluginsLoadedWithNoLine: [{ name: 'Master.esm', origin: 'Data' }],
 };
 const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data' };
 const SENT_PLUGINS = [MASTER, { name: PLUGIN.name, path: PLUGIN.path, origin: PLUGIN.origin }];
@@ -68,6 +68,17 @@ describe('put load order', () => {
     await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined });
 
     expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[4])).toEqual(['Morrowind']);
+  });
+
+  // common.md, States, story 5: without the game's masters the snapshot would be wrong, so mEdit
+  // keeps what it holds.
+  it('sends nothing while the game folder\'s plugins cannot be listed', async () => {
+    const client = attachedClient();
+
+    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, pluginsLoadedWithNoLine: undefined });
+
+    expect(client.calls).toEqual([]);
+    expect(result).toEqual({ sent: false });
   });
 
   it('sends nothing while the game directory is unresolved', async () => {

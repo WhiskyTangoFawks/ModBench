@@ -476,6 +476,23 @@ describe('the MO2 Instance adapter', () => {
       }
     });
 
+    // Rival: the Data folder followed alone, so a changed Creation Club list waits for the next focus.
+    it('follows the release\'s Creation Club list at the game folder\'s root', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
+      try {
+        await mkdir(join(game, 'Data'));
+        const watched = adapterAt(root, game);
+        watched.subscribe(() => undefined);
+
+        await (await watched.settings()).gameFolder();
+
+        expect(fire(game, 'Fallout4.ccc')).toBe(true);
+        expect(fire(game, 'Fallout4.ini')).toBe(false);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
     it('follows no game folder when none is found', async () => {
       const watched = adapterAt(root);
       watched.subscribe(() => undefined);

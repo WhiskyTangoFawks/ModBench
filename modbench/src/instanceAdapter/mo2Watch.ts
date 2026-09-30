@@ -1,12 +1,12 @@
-// MO2's watch: every file of the instance, the downloads folder and the game folder's plugins,
-// armed through VS Code's file watcher while anyone listens.
+// MO2's watch: every file of the instance, the downloads folder, and the game folder's plugins and
+// Creation Club list, armed through VS Code's file watcher while anyone listens.
 
 import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
 import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB } from './layout';
 
 /** A folder the settings name, whose watch moves with them. */
-export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins';
+export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins' | 'creationClubList';
 
 function isInstanceChange(path: string): boolean {
   const segments = path.split(/[\\/]/);

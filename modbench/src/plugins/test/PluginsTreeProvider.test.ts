@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderOver, type PluginsDrop } from '../../pluginsCommands/plugins';
-import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../instanceLoader/loadOrderSnapshot';
+import type { LoadOrderPlugin, LoadOrderPluginLine, PluginAddress } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
@@ -62,12 +62,13 @@ function plugin(
 // Every origin these fixtures name, but Data and Overwrite, is one of the instance's mods, and
 // the game folder is found, so the message line says only what the rows do.
 function valueOf(
-  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly string[],
+  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], pluginsLoadedWithNoLine?: readonly (string | PluginAddress)[],
 ): InstanceValue {
   const mods = [...new Set(plugins.map((p) => p.origin))].filter((origin) => origin !== 'Data' && origin !== 'overwrite');
   return instanceValueFixture({
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
-    pluginsLoadedWithNoLine,
+    // A name alone is a game-folder plugin.
+    pluginsLoadedWithNoLine: pluginsLoadedWithNoLine?.map((p) => (typeof p === 'string' ? { name: p, origin: 'Data' } : p)),
     plugins, paths: { overwriteDir: '/instance/overwrite', downloadsDir: '', modDirs: new Map(mods.map((m) => [m, `/instance/mods/${m}`])) },
   });
 }
@@ -173,7 +174,7 @@ function makeTree(
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     publishChangedOutside: PluginsTreeProviderOptions['publishChangedOutside'];
     dataFolderFile: (name: string) => string | undefined;
-    loadedWithNoLine: readonly string[];
+    loadedWithNoLine: readonly (string | PluginAddress)[];
     reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
 ): Harness {
@@ -1096,7 +1097,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   it('resolves a locked row the game loads from a mod to that mod\'s copy, not the game folder\'s', async () => {
     const { tree } = makeTree(
       [plugin({ name: 'Fallout4.esm', slot: 0, origin: 'SomeMod', path: '/instance/mods/SomeMod/Fallout4.esm' })],
-      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: ['Fallout4.esm'] });
+      { dataFolderFile: (name) => `/game/Data/${name}`, loadedWithNoLine: [{ name: 'Fallout4.esm', origin: 'SomeMod' }] });
     const locked = await lockedRowOf(tree);
 
     expect(locked.origin).toBe('SomeMod');
@@ -1660,7 +1661,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
     { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' })),
-      loadedWithNoLine: ['Fallout4.esm'] });
+      loadedWithNoLine: [{ name: 'Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' }] });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
     'states a locked row the game folder provides by the game folder\'s copy, with the mod\'s copy listed %s',

@@ -37,16 +37,33 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         string dataFolderPath, string? instanceRoot, GameRelease gameRelease,
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active)
     {
+        if (RefusalOf(plugins, active) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
         // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
         Plugins = [.. plugins];
-        Active = [.. active.Select(address => Plugin(address) ?? throw new ArgumentException(
-            $"The active plugin {address.Name} from {address.Origin} is not a plugin in the instance."))];
-        _loadOrderIndex = new Dictionary<PluginAddress, int>(PluginAddress.Comparer);
-        foreach (var (plugin, index) in Active.Select((plugin, index) => (plugin, index)))
-            _loadOrderIndex.TryAdd(plugin.Key, index);
+        _loadOrderIndex = active.Select((address, index) => (address, index))
+            .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
+        Active = [.. active.Select(address => Plugin(address)
+            ?? throw new InvalidOperationException($"Expected RefusalOf to have refused {address.Name} from {address.Origin}."))];
+    }
+
+    /// <summary>Why these plugins and active plugins make no snapshot, or null when they do. ADR-0012:
+    /// the game loads one file per name, and a FormID or a winner is read by filename.</summary>
+    public static string? RefusalOf(IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active)
+    {
+        var sent = plugins.Select(p => p.Key).ToHashSet(PluginAddress.Comparer);
+        var stray = active.Where(a => !sent.Contains(a)).Select(a => $"{a.Name} from {a.Origin}").FirstOrDefault();
+        if (stray is not null) return $"The active plugin {stray} is not a plugin in the snapshot.";
+
+        var contested = active
+            .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        return contested is null
+            ? null
+            : $"The snapshot names more than one active {contested.Key}: " +
+              $"{string.Join(", ", contested.Select(a => a.Origin))}. The game loads one file per name.";
     }
 
     public bool IsActive(PluginAddress address) => _loadOrderIndex.ContainsKey(address);

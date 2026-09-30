@@ -99,15 +99,15 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     }
 
     // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
-    // FormKey is the highest-slot plugin that participates.
+    // FormKey is the highest-slot active plugin.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
         List<LoadOrderEntry> registered, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
     {
-        var participates = SnapshotPlugins.Active(registered).ToHashSet();
+        var active = SnapshotPlugins.Active(registered).ToHashSet();
         var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);
         foreach (var (key, slot, records) in perPlugin)
         {
-            if (!participates.Contains(key)) continue;
+            if (!active.Contains(key)) continue;
             foreach (var (record, recordType) in records)
             {
                 var formKey = record.FormKey.ToString();

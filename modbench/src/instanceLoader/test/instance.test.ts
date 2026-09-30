@@ -1212,7 +1212,8 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     await instance.refresh();
 
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual(['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl']);
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual(
+      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data' })));
   });
 
   it('carries a game master an enabled mod provides where the game folder holds none', async () => {
@@ -1224,7 +1225,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
     await instance.refresh();
 
-    expect(instance.value.pluginsLoadedWithNoLine).toEqual(['DLCCoast.esm']);
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
   });
 
   it('carries no answer while the game folder is not found', async () => {

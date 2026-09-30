@@ -66,15 +66,16 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Empty(Diagnose([Row(master, Short)], master));
     }
 
-    // ADR-0012 invariant 5: the game does not load a plugin that is not active.
+    // plugins.md, A row: a malformed plugin is one whose bytes depart from what the Creation Kit
+    // writes, active or not.
     [Theory]
     [InlineData(null, true)]
     [InlineData(0, false)]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreNeverReported(int? slot, bool enabled)
+    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreReported(int? slot, bool enabled)
     {
         var inactive = Plugin(Malformed, slot: slot, enabled: enabled);
 
-        Assert.Empty(Diagnose([Row(inactive, Short)], inactive));
+        Assert.Equal("SomeMod", Assert.Single(Diagnose([Row(inactive, Short)], inactive)).Origin);
     }
 
     // A plugin the Index never opened stamps no rows, and neither does a clean one; a plugin that
@@ -101,25 +102,26 @@ public sealed class MalformedPluginQueryServiceTests
         var winner = Plugin(Malformed, origin: "WinningMod");
         var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
 
-        var reports = Diagnose([Row(overridden, Short), Row(winner, Trailing)], winner, overridden);
+        var reports = Diagnose([Row(overridden, Short)], winner, overridden);
 
-        var report = Assert.Single(reports);
-        Assert.Equal(("WinningMod", "trailing-bytes"), (report.Origin, report.DefectClass));
+        Assert.Equal("LosingMod", Assert.Single(reports).Origin);
     }
 
-    // The load order is the order, and within one plugin the rows keep the order the binary proved
-    // them in.
+    // The load order is the order, a plugin that is not active after every active one, and within
+    // one plugin the rows keep the order the binary proved them in.
     [Fact]
     public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrderThenByRecordOrder()
     {
-        var first = Plugin("First.esp", origin: "FirstMod");
-        var second = Plugin("Second.esp", origin: "SecondMod", slot: 1);
+        var disabled = Plugin("Disabled.esp", origin: "DisabledMod", slot: 0, enabled: false);
+        var second = Plugin("Second.esp", origin: "SecondMod", slot: 2);
+        var first = Plugin("First.esp", origin: "FirstMod", slot: 1);
 
-        var reports = Diagnose([Row(second, Short), Row(first, Short), Row(first, Trailing)], first, second);
+        var reports = Diagnose(
+            [Row(disabled, Short), Row(second, Short), Row(first, Short), Row(first, Trailing)], disabled, second, first);
 
         Assert.Equal(
             [("First.esp", "fixed-size-subrecord-short"), ("First.esp", "trailing-bytes"),
-             ("Second.esp", "fixed-size-subrecord-short")],
+             ("Second.esp", "fixed-size-subrecord-short"), ("Disabled.esp", "fixed-size-subrecord-short")],
             reports.Select(r => (r.Plugin, r.DefectClass)));
     }
 

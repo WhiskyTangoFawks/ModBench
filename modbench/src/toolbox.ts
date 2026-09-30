@@ -330,7 +330,8 @@ async function handleLoadOrder(
   command: () => Promise<PutLoadOrderResult>,
 ): Promise<void> {
   const put = await command();
-  // The game folder not found has its own one Output line; a line per value would repeat it.
+  // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
+  // Output already; a line per value would repeat it.
   if (!put.sent) return;
   const { plugins, active } = put.snapshot;
   outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins, ${active.length} active)`);
@@ -412,8 +413,8 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       return;
     }
     await instanceReady;
-    // No game folder means no snapshot to hand over. The Toolbox, the Plugins view and the Output
-    // already say so, without a notification (common.md, States, story 5).
+    // No game folder, or one whose plugins cannot be listed, means no snapshot to hand over. The
+    // views and the Output already say so, without a notification (common.md, States, story 5).
     if (!loadOrderSnapshotOf(instance.value)) {
       exitEditing(session, client);
       return;

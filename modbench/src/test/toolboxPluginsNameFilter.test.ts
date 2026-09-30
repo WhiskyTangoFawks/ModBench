@@ -314,7 +314,7 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
 });
 
 describe('the Plugins view, given a plugin sync that refused', () => {
-  const SYNC_MESSAGE = 'plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.';
+  const SYNC_MESSAGE = "plugins.txt is not synced: the game's Data folder cannot be listed: EACCES.";
   const NO_RECORD_MATCH = 'No records match armor.sql.';
 
   async function refusedView(recordFilter?: string) {

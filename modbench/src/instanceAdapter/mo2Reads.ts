@@ -1,6 +1,7 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
+import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../ports/errorMessage';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
@@ -70,13 +71,19 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
   return {
     async settings() {
       const iniText = await get(settingsFile(instanceRoot));
+      const game = gameOf(readGameName(iniText));
       return {
         profile: readSelectedProfile(iniText),
-        ...gameOf(readGameName(iniText)),
+        ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(iniText);
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
+          const creationClubList = gameFolder.kind === 'found'
+            ? creationClubListFile(gameFolder.root, game.gameRelease)
+            : undefined;
+          if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
+          else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
           return gameFolder;
         },
         downloadedFiles: async (): Promise<DownloadedFiles> => {

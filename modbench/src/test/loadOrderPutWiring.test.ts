@@ -25,6 +25,7 @@ const APPLIED: LoadOrderOutcome = {
 function valueWith(name: string, overrides: Partial<InstanceValue> = {}): InstanceValue {
   return instanceValueFixture({
     gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
+    pluginsLoadedWithNoLine: [],
     plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data', slot: 0, enabled: true, winning: true }],
     ...overrides,
   });

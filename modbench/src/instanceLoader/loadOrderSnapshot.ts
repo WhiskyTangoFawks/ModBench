@@ -98,21 +98,26 @@ export function providedPluginsOf(
   return provided;
 }
 
+/** A plugin as (origin, filename) (ADR-0012 invariant 1). */
+export type PluginAddress = Pick<LoadOrderPlugin, 'name' | 'origin'>;
+
 /** The plugins the game loads with no line, in load order (ADR-0013 invariant 3): its masters,
- *  then its Creation Club plugins, each where the game can load it from. Undefined while the game
- *  folder cannot be listed. */
+ *  then its Creation Club plugins, each from the mod providing it, else the game folder. */
 export function pluginsLoadedWithNoLineOf(
   gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,
   plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[],
-): string[] | undefined {
+): PluginAddress[] | undefined {
   if (inData.kind !== 'listed') return undefined;
-  const provided = providedPluginsOf(plugins);
+  const providerOf = new Map(plugins
+    .filter((p) => p.path !== undefined && p.winning && p.origin !== DATA_DIRECTORY_ORIGIN)
+    .map((p) => [foldPath(p.name), p.origin] as const));
   const seen = new Set<string>();
-  return [...gameMasters, ...creationClub].filter((name) => {
+  return [...gameMasters, ...creationClub].flatMap((name) => {
     const folded = foldPath(name);
-    if (seen.has(folded) || !(inData.names.has(folded) || provided.has(folded))) return false;
+    const origin = providerOf.get(folded) ?? (inData.names.has(folded) ? DATA_DIRECTORY_ORIGIN : undefined);
+    if (seen.has(folded) || origin === undefined) return [];
     seen.add(folded);
-    return true;
+    return [{ name, origin }];
   });
 }
 
@@ -197,21 +202,23 @@ export function buildLoadOrderRows(
   return [...listed, ...outside, ...strays];
 }
 
-/** ADR-0013's snapshot, read from the current value (ADR-0015); `undefined`, no PUT, without a game
- *  folder. Active: the plugins the game loads with no line, then the winning plugin of each
- *  enabled line, in line order. */
+/** ADR-0013's snapshot, read from the current value (ADR-0015); none without a listable game
+ *  folder. Active: the plugins the game loads with no line, then each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
-  readonly pluginsLoadedWithNoLine: readonly string[] | undefined;
+  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
 }): LoadOrderSnapshotValue | undefined {
-  if (value.gameFolder.kind !== 'found') return undefined;
+  // Without the game's masters the snapshot would be silently wrong (principles.md), so the index
+  // keeps what it holds until the folder can be read (common.md, States, story 5).
+  if (value.gameFolder.kind !== 'found' || value.pluginsLoadedWithNoLine === undefined) return undefined;
   const { dataFolder } = value.gameFolder;
   // The filter states a found game folder's own guarantee, never an unchecked cast.
   const rows = value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined);
-  const winningOf = new Map(rows.filter((p) => p.winning).map((p) => [foldPath(p.name), p] as const));
-  const loadedWithNoLine = (value.pluginsLoadedWithNoLine ?? []).map((name): SnapshotPlugin =>
-    winningOf.get(foldPath(name)) ?? { name, path: join(dataFolder, name), origin: DATA_DIRECTORY_ORIGIN });
+  const addressOf = (p: PluginAddress) => `${foldPath(p.origin)}\u0000${foldPath(p.name)}`;
+  const rowAt = new Map(rows.map((p) => [addressOf(p), p] as const));
+  const loadedWithNoLine = value.pluginsLoadedWithNoLine.map((p): SnapshotPlugin =>
+    rowAt.get(addressOf(p)) ?? { ...p, path: join(dataFolder, p.name) });
   const placed = new Set(loadedWithNoLine.map((p) => foldPath(p.name)));
   const fromLines = rows
     .filter((p): p is LoadOrderPlugin & { slot: number } => p.slot !== null && p.enabled && p.winning)
@@ -224,7 +231,7 @@ export function loadOrderSnapshotOf(value: {
     });
   const sent = new Map<string, SnapshotPlugin>();
   for (const { name, path, origin } of [...loadedWithNoLine, ...rows]) {
-    const key = `${foldPath(origin)}\u0000${foldPath(name)}`;
+    const key = addressOf({ name, origin });
     if (!sent.has(key)) sent.set(key, { name, path, origin });
   }
   return {

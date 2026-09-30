@@ -24,7 +24,7 @@ export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
     profile: value.activeProfile,
     provided: providedPluginsOf(value.plugins),
     inData: value.dataFolderPlugins,
-    loadedWithNoLine: value.pluginsLoadedWithNoLine,
+    loadedWithNoLine: value.pluginsLoadedWithNoLine?.map((plugin) => plugin.name),
   };
 }
 

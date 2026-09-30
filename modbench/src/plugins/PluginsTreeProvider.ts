@@ -409,13 +409,6 @@ export class PluginsTreeProvider
     return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
   }
 
-  // The copy the game loads: the one the Mod override order resolves the name to, else the game
-  // folder's.
-  private lockedOriginOf(name: string): string {
-    const folded = name.toLowerCase();
-    return this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.origin ?? DATA_DIRECTORY_ORIGIN;
-  }
-
   /** Lowercased, and empty before the first render. A live read, not a snapshot. */
   lockedRowUris(): ReadonlySet<string> {
     return this.lastLockedRowUris;
@@ -504,8 +497,8 @@ export class PluginsTreeProvider
   private buildRows(): PluginListNode[] {
     // ADR-0013 invariant 3: Mod Management names the plugins the game loads with no line. While it
     // cannot, a plugins.txt line for one renders as an ordinary row, which is what the file says.
-    const implicitNames = this.instanceValue.pluginsLoadedWithNoLine ?? [];
-    const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
+    const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
+    const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
 
     // One entry per plugins.txt line: the winning plugin of every listed name, in file order
     // (ADR-0013) — an overridden plugin of the same name carries the same slot and is excluded.
@@ -523,7 +516,7 @@ export class PluginsTreeProvider
       return true;
     });
     this.lastOrder = dedupedOrder.map(({ name, origin }) => ({ name, origin }));
-    const lockedRows = implicitNames.map((name) => new ImplicitMasterNode(name, this.lockedOriginOf(name), this.dataFolderFile(name)));
+    const lockedRows = loadedWithNoLine.map(({ name, origin }) => new ImplicitMasterNode(name, origin, this.dataFolderFile(name)));
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     return [
       ...lockedRows,
@@ -612,7 +605,6 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // plugins.md, Menus and keys: compile on a tracked, editable plugin.
   // plugins.md, Menus and keys: compile (tracked). A plugin that is not active has no record to
   // edit, yet its source still compiles.
   private compilable(file: string, origin: string): boolean {

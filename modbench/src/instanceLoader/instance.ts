@@ -4,6 +4,7 @@
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
+  type PluginAddress,
 } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
@@ -86,7 +87,7 @@ export interface InstanceValue {
   readonly dataFolderPlugins: DataFolderPlugins;
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
-  readonly pluginsLoadedWithNoLine: readonly string[] | undefined;
+  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   /** Each mod's conflict/override status, keyed by mod name — the Mods tree's badges (ADR-0015). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */

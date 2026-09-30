@@ -5,7 +5,7 @@ import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
-  type LoadOrderPluginLine,
+  type LoadOrderPluginLine, type PluginAddress,
 } from '../loadOrderSnapshot';
 
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
@@ -258,8 +258,15 @@ describe('loadOrderSnapshotOf', () => {
     ({ name, path: `/mods/${origin}/${name}`, origin, slot, enabled: true, winning: true, ...facts });
   const sent = ({ name, path, origin }: LoadOrderPlugin) => ({ name, path, origin });
   const address = ({ name, origin }: { name: string; origin: string }) => ({ name, origin });
-  const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly string[] = []) =>
+  const snapshotOf = (plugins: LoadOrderPluginRow[], pluginsLoadedWithNoLine: readonly PluginAddress[] = []) =>
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine });
+  const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data' });
+
+  // principles.md, Never silently wrong: a snapshot lacking the game's masters is not sent.
+  it('is undefined — no put at all — while the game folder\'s plugins cannot be listed', () => {
+    expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined }))
+      .toBeUndefined();
+  });
 
   it('is undefined — no put at all — when the game folder is not found', () => {
     expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: NOT_FOUND, pluginsLoadedWithNoLine: [] }))
@@ -288,7 +295,7 @@ describe('loadOrderSnapshotOf', () => {
   it('loads the plugins the game loads with no line first, from the game folder, in the order given', () => {
     const a = row('a.esp', 'ModA', 0);
 
-    const snapshot = snapshotOf([a], ['Master.esm', 'cc.esl']);
+    const snapshot = snapshotOf([a], [inGameFolder('Master.esm'), inGameFolder('cc.esl')]);
 
     expect(snapshot?.active).toEqual([
       { name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }, address(a),
@@ -300,7 +307,7 @@ describe('loadOrderSnapshotOf', () => {
   it('sends a plugin the game loads with no line as the mod that provides it, once', () => {
     const provided = row('Master.esm', 'ModM', null, { enabled: false });
 
-    const snapshot = snapshotOf([provided], ['Master.esm']);
+    const snapshot = snapshotOf([provided], [address(provided)]);
 
     expect(snapshot?.active).toEqual([address(provided)]);
     expect(snapshot?.plugins).toEqual([sent(provided)]);
@@ -311,7 +318,7 @@ describe('loadOrderSnapshotOf', () => {
     const a = row('a.esp', 'ModA', 0);
     const lined = { ...row('master.esm', 'Data', 1, { enabled: false }), path: join('/game/Data', 'master.esm') };
 
-    const snapshot = snapshotOf([a, lined], ['Master.esm']);
+    const snapshot = snapshotOf([a, lined], [inGameFolder('Master.esm')]);
 
     expect(snapshot?.active).toEqual([address(lined), address(a)]);
     expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);

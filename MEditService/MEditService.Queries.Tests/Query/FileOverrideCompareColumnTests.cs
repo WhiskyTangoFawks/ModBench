@@ -84,6 +84,10 @@ public sealed class FileOverrideCompareColumnTests
         var compare = svc.GetCompare(baseRow.Document.FormKey);
 
         Assert.NotNull(compare);
-        Assert.Equal("FromBase", Assert.Single(compare.Overrides).EditorId);
+        var column = Assert.Single(compare.Overrides);
+        Assert.Equal("FromBase", column.EditorId);
+        // The disabled plugin's differing copy is no conflict: nothing the game loads contests it.
+        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
+        Assert.Equal(ConflictThis.OnlyOne, column.ConflictThis);
     }
 }

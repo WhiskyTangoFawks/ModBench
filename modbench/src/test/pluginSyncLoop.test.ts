@@ -429,7 +429,7 @@ describe('pluginSyncArguments', () => {
       gameRelease: 'SkyrimSE',
       gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
       dataFolderPlugins: { kind: 'listed', names: new Set(['skyrim.esm']) },
-      pluginsLoadedWithNoLine: ['Skyrim.esm'],
+      pluginsLoadedWithNoLine: [{ name: 'Skyrim.esm', origin: 'Data' }],
       plugins: [
         { name: 'Mine.esp', path: join('/instance', 'mods', 'My Mod', 'Mine.esp'), origin: 'My Mod', slot: 0, enabled: true, winning: true },
         { name: 'Skyrim.esm', path: join('/game', 'Data', 'Skyrim.esm'), origin: 'Data', slot: 1, enabled: true, winning: true },
