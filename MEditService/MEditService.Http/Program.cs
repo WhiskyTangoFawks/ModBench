@@ -95,7 +95,7 @@ try
     builder.Services.AddSingleton(sp => new ModFolderWatcher(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IRefreshIndex>(),
-        sp.GetRequiredService<TrackedModSettled>(),
+        sp.GetRequiredService<ModSettled>(),
         sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 
     var app = builder.Build();

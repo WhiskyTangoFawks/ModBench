@@ -8,12 +8,12 @@ namespace MEditService.Commands.Edits;
 /// <summary>What the watcher calls when a mod settles or loads (ADR-0003 invariant 3): each tracked
 /// plugin's bytes against what Modbench last wrote, and the untracked plugins; none for an untracked
 /// mod. It keeps and refuses nothing.</summary>
-public sealed class TrackedModSettled
+public sealed class ModSettled
 {
     private readonly INotificationPublisher _notifications;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every handler.
-    internal TrackedModSettled(INotificationPublisher notifications) => _notifications = notifications;
+    internal ModSettled(INotificationPublisher notifications) => _notifications = notifications;
 
     public void Handle(LoadOrderSnapshot loadOrder, string modFolder)
     {

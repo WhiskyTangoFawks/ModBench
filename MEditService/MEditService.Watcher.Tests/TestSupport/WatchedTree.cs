@@ -55,11 +55,11 @@ internal sealed class WatchedTree : IDisposable
 
     /// <summary>The watcher's verb as the composition root builds it, over the port this tree
     /// reads.</summary>
-    internal static TrackedModSettled Settled(InMemoryNotificationPublisher notifications) =>
+    internal static ModSettled Settled(InMemoryNotificationPublisher notifications) =>
         notifications.RegisterIn(new ServiceCollection())
             .AddCommandHandlers()
             .BuildServiceProvider()
-            .GetRequiredService<TrackedModSettled>();
+            .GetRequiredService<ModSettled>();
 
     internal WatchedTree(IndexWriteGate? writeGate = null, TimeSpan? quiet = null, TimeSpan? maxWindow = null)
     {

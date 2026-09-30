@@ -58,15 +58,19 @@ public sealed class ReconcileDoorTests
     }
 
     // plugins.md, States, story 6: the next change to the instance tries again. A file where the
-    // store's folder goes keeps the store from opening until it is gone.
+    // store's folder goes, found where an earlier reconcile left it, keeps the store from opening.
     [Fact]
     public void AFailedReconcile_IsTriedAgain_OnRetry()
     {
         using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp").Build();
+        using (var earlier = Indexes.Open(new LoadOrderHolder()))
+            earlier.Reconcile(new LoadOrderHolder(), data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        var blocker = Path.GetDirectoryName(IndexFiles.In(data.InstanceRoot))
+            ?? throw new InvalidOperationException("The index file sits in a folder.");
+        Directory.Delete(blocker, recursive: true);
+        File.WriteAllText(blocker, "not a folder");
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
-        var blocker = Path.Combine(data.InstanceRoot, "modbench");
-        File.WriteAllText(blocker, "not a folder");
         var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
         index.Reconcile(snapshot, holder.Apply(snapshot));
         Assert.Equal(LoadOrderState.Failed, index.Status.State);

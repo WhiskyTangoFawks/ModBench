@@ -25,13 +25,13 @@ internal sealed class WatchSet : IDisposable
         _overflow = overflow;
     }
 
-    /// <summary>The watch set this snapshot implies, answering the mod folders the load-time settle
-    /// reads: each tracked one and each whose repository went. Null when a newer version was armed
-    /// already or the set is disposed.</summary>
-    public IReadOnlyList<string>? Arm(LoadOrderSnapshot order, long version)
+    /// <summary>The watch set this snapshot implies, answering every watch it armed. Null when a
+    /// newer version was armed already or the set is disposed: that change arms nothing and settles
+    /// nothing.</summary>
+    public IReadOnlyList<ModWatch>? Arm(LoadOrderSnapshot order, long version)
     {
         var wanted = FoldersOf(order);
-        var toSettle = new List<string>();
+        var watches = new List<ModWatch>();
 
         lock (_gate)
         {
@@ -51,17 +51,15 @@ internal sealed class WatchSet : IDisposable
 
             foreach (var (folder, mod) in wanted)
             {
-                if (WatchOf(folder, upgradable: mod.Trackable) is not { } watch) continue;
+                if (WatchOf(folder, isMod: mod.IsMod) is not { } watch) continue;
 
                 watch.ClearRegistrations();
                 foreach (var plugin in mod.Plugins) watch.Register(plugin.Name, plugin.Origin, plugin.Path);
-                var (tracked, moved) = watch.Trackedness();
-                if (tracked) watch.EnsureRecursive();
-                if (tracked || moved) toSettle.Add(folder);
+                watches.Add(watch);
             }
         }
 
-        return toSettle;
+        return watches;
     }
 
     /// <summary>Drops the watch on a folder that is gone from disk. Nothing re-arms it until the
@@ -76,9 +74,9 @@ internal sealed class WatchSet : IDisposable
 
     // The game's own Data folder is never a tracked mod (Track does not apply there), and never
     // recursive: it can hold thousands of files and has no source tree or refs to answer for.
-    private static Dictionary<string, (bool Trackable, List<RegisteredPlugin> Plugins)> FoldersOf(LoadOrderSnapshot order)
+    private static Dictionary<string, (bool IsMod, List<RegisteredPlugin> Plugins)> FoldersOf(LoadOrderSnapshot order)
     {
-        var folders = new Dictionary<string, (bool Trackable, List<RegisteredPlugin> Plugins)>(StringComparer.Ordinal);
+        var folders = new Dictionary<string, (bool IsMod, List<RegisteredPlugin> Plugins)>(StringComparer.Ordinal);
         foreach (var plugin in order.Plugins)
         {
             var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
@@ -93,12 +91,12 @@ internal sealed class WatchSet : IDisposable
 
     // Called under _gate. Lazily arms the folder's watch, recursive only once needed. A vanished
     // mod folder gets no watch, and no throw.
-    private ModWatch? WatchOf(string folder, bool upgradable)
+    private ModWatch? WatchOf(string folder, bool isMod)
     {
         if (_mods.TryGetValue(folder, out var existing)) return existing;
         try
         {
-            var watch = new ModWatch(folder, upgradable, _quiet, _maxWindow, _time, _settle, _overflow);
+            var watch = new ModWatch(folder, isMod, _quiet, _maxWindow, _time, _settle, _overflow);
             _mods[folder] = watch;
             return watch;
         }

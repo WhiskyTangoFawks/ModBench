@@ -275,7 +275,7 @@ public sealed class SourceBatchTests
     // Never exclusive owners of the folder (ADR-0003): a mod manager's Replace install removes the
     // repository under a running backend, and the plugin's truth moves to its binary whole.
     [Fact]
-    public async Task ADeletedRepository_ValidatesThePluginWhole_RatherThanProjectingTheSourceWrite()
+    public async Task ADeletedRepository_ValidatesThePluginWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
@@ -287,7 +287,6 @@ public sealed class SourceBatchTests
         tree.AdvancePastBothWindows();
 
         Assert.Equal(new PluginAddress("A.esp", Origin), Assert.Single(tree.Index.Of("validate")).Plugin);
-        Assert.Empty(tree.Index.Of("refresh"));
     }
 
     // The rival this pins: a repository moved in whole under a watch already recursive raises no

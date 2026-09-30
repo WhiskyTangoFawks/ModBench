@@ -45,7 +45,7 @@ internal sealed class ModWatch : IDisposable
     private readonly TimeSpan _quiet;
     private readonly TimeSpan _maxWindow;
     private readonly GitWatchPaths _git;
-    private readonly bool _upgradable;
+    private readonly bool _isMod;
     private readonly Dictionary<string, PluginEntry> _plugins = new(StringComparer.Ordinal);
     private bool _batchOpen;
     private bool _modTouched;
@@ -55,12 +55,12 @@ internal sealed class ModWatch : IDisposable
     /// <summary>Throws <see cref="ArgumentException"/> when the folder is not on disk, as
     /// FileSystemWatcher does: a vanished mod folder gets no watch.</summary>
     public ModWatch(
-        string modFolder, bool upgradable, TimeSpan quiet, TimeSpan maxWindow,
+        string modFolder, bool isMod, TimeSpan quiet, TimeSpan maxWindow,
         TimeProvider time, Action<ModWatch> settle, Action<ModWatch> overflow)
     {
         ModFolder = modFolder;
         _git = SourceRepository.GitWatchPathsIn(modFolder);
-        _upgradable = upgradable;
+        _isMod = isMod;
         _quiet = quiet;
         _maxWindow = maxWindow;
         _watcher = new FileSystemWatcher(modFolder)
@@ -123,9 +123,9 @@ internal sealed class ModWatch : IDisposable
         lock (_lock) _plugins.Clear();
     }
 
-    /// <summary>Whether the mod is tracked now, and whether that moved since this was last asked.
-    /// A folder the snapshot marks untrackable, the game's own Data folder, never is.</summary>
-    public (bool Tracked, bool Moved) Trackedness()
+    /// <summary>Whether the mod is tracked now, and takes whether that moved since the last take:
+    /// whoever takes a move answers it. The game's own Data folder is never tracked.</summary>
+    public (bool Tracked, bool Moved) TakeTrackedMove()
     {
         var tracked = TrackedNow;
         lock (_lock)
@@ -136,7 +136,7 @@ internal sealed class ModWatch : IDisposable
         }
     }
 
-    private bool TrackedNow => _upgradable && SourceRepository.IsTracked(ModFolder);
+    private bool TrackedNow => _isMod && SourceRepository.IsTracked(ModFolder);
 
     /// <summary>Upgraded, never downgraded: the folder holds a source tree or a repository, so
     /// everything under it routes.</summary>
@@ -251,7 +251,7 @@ internal sealed class ModWatch : IDisposable
     // repository (Track's first write) or the folder every source root shares appear, and from
     // then on everything under the mod matters.
     private bool SourceTreeAppeared(string fullPath) =>
-        _upgradable
+        _isMod
         && !_watcher.IncludeSubdirectories
         && (fullPath.Equals(_git.GitDirectory, StringComparison.Ordinal)
             || _plugins.Values.Any(p => Under(fullPath, p.SourceRoot)));

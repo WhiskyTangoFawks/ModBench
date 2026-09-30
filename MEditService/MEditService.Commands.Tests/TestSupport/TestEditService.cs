@@ -54,8 +54,8 @@ internal static class TestEditService
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
     /// <summary>The watcher's verb over the port a suite reads.</summary>
-    internal static TrackedModSettled Settled(INotificationPublisher notifications) =>
-        Over(new LoadOrderHolder(), notifications: notifications).GetRequiredService<TrackedModSettled>();
+    internal static ModSettled Settled(INotificationPublisher notifications) =>
+        Over(new LoadOrderHolder(), notifications: notifications).GetRequiredService<ModSettled>();
 
     internal static PutLoadOrderHandler PutLoadOrderHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<PutLoadOrderHandler>();

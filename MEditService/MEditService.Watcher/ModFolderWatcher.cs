@@ -25,7 +25,7 @@ public sealed class ModFolderWatcher : IDisposable
     public ModFolderWatcher(
         LoadOrderHolder holder,
         IRefreshIndex index,
-        TrackedModSettled settled,
+        ModSettled settled,
         ILogger logger,
         TimeSpan? quiet = null,
         TimeSpan? maxWindow = null,
@@ -45,7 +45,8 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
     /// <summary>Starts listening to the load-order change (ADR-0013 invariant 1). Each change
-    /// re-arms, settles every tracked mod and reconciles, off the writer's thread.</summary>
+    /// re-arms, settles every tracked mod and every mod whose repository came or went, and
+    /// reconciles, off the writer's thread.</summary>
     public void Subscribe() => _holder.Changed += _onChanged;
 
     // A dedicated thread, not the shared pool: the disk work here should not queue behind whatever
@@ -64,7 +65,7 @@ public sealed class ModFolderWatcher : IDisposable
     {
         try
         {
-            if (Armed(snapshot, version) is not { } toSettle) return;
+            if (Armed(snapshot, version) is not { } armed) return;
 
             // Outside the in-flight scope: the Index owns its own cancellation on disposal, and a
             // disposed watcher speaks for no snapshot.
@@ -75,7 +76,7 @@ public sealed class ModFolderWatcher : IDisposable
                     CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
 
-            foreach (var modFolder in toSettle) RaiseSafely(() => SettleAtLoad(snapshot, modFolder));
+            foreach (var mod in armed) RaiseSafely(() => SettleAtLoad(snapshot, mod));
         }
         finally
         {
@@ -85,7 +86,7 @@ public sealed class ModFolderWatcher : IDisposable
 
     // Null when a newer change was armed already; empty when arming failed, which the log carries,
     // since no status of its own carries an unknown failure as data (unlike the Index).
-    private IReadOnlyList<string>? Armed(LoadOrderSnapshot snapshot, long version)
+    private IReadOnlyList<ModWatch>? Armed(LoadOrderSnapshot snapshot, long version)
     {
         try
         {
@@ -98,10 +99,16 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    private void SettleAtLoad(LoadOrderSnapshot order, string modFolder)
+    // A move taken here needs no validation of its own: the reconcile beside this settle
+    // re-derives the plugins whose truth moved.
+    private void SettleAtLoad(LoadOrderSnapshot order, ModWatch mod)
     {
-        _sinks.Settle(order, modFolder);
-        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", modFolder);
+        var (tracked, movedBeforeTheReconcile) = mod.TakeTrackedMove();
+        if (tracked) mod.EnsureRecursive();
+        if (!tracked && !movedBeforeTheReconcile) return;
+
+        _sinks.Settle(order, mod.ModFolder);
+        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", mod.ModFolder);
     }
 
     // Fired by either of the mod's own timers. A tracked mod's binaries are Commands' comparison; an
@@ -121,13 +128,13 @@ public sealed class ModFolderWatcher : IDisposable
         // index the retry opened.
         RaiseSafely(_sinks.RetryFailedReconcile);
 
-        // A move of tracked-ness moves which truth every plugin of the mod reads, so each is
-        // re-derived whole, which covers whatever the batch named.
-        var (tracked, moved) = mod.Trackedness();
-        if (moved) _validation.Validate(mod.RegisteredKeys, "its repository coming or going");
+        // No reconcile follows a live settle, so a move taken here re-derives every plugin of the
+        // mod whole, which covers whatever the batch named.
+        var (tracked, movedLive) = mod.TakeTrackedMove();
+        if (movedLive) _validation.Validate(mod.RegisteredKeys, "its repository coming or going");
         else if (window.Batch.Count > 0) RaiseSafely(() => _sinks.ProjectSourceBatch(window.Batch));
 
-        if (moved || (tracked && (window.ModTouched || window.Binaries.Count > 0)))
+        if (movedLive || (tracked && (window.ModTouched || window.Binaries.Count > 0)))
             RaiseSafely(() => _sinks.Settle(_holder.Current, mod.ModFolder));
 
         if (!tracked)

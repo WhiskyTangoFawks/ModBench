@@ -161,10 +161,15 @@ public sealed class LoadOrderChangeSettleTests
         await tree.ApplyLoadOrder();
         Assert.Empty(Notices(tree));
 
-        tree.MoveInRepository(modFolder, PluginName);
+        // The binary changes after the repository parked it, in the same window: only a tracked
+        // settle names it.
+        await tree.Observes(() => tree.MoveInRepository(modFolder, PluginName));
+        await tree.Observes(() => tree.MoveInSourceRoot(modFolder, PluginName));
+        await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-by-xedit"u8.ToArray()));
 
         Assert.True(await tree.Settles(() => Notices(tree).Count == 1), "the mod never settled once it was tracked");
         Assert.Equal(Origin, Notices(tree)[0].Origin);
+        Assert.Equal([PluginName], Notices(tree)[0].ChangedPlugins);
     }
 
     // The rival this pins: a repository moved in whole, under a watch already recursive, is one path
@@ -178,9 +183,11 @@ public sealed class LoadOrderChangeSettleTests
         await tree.RemoveRepository(modFolder);
         Assert.True(await tree.Settles(() => Notices(tree).Count == 2), "the mod never settled once its repository went");
 
-        tree.MoveInRepository(modFolder, PluginName);
+        await tree.Observes(() => tree.MoveInRepository(modFolder, PluginName));
+        await tree.Observes(() => tree.WriteFile(PluginPath(tree), "changed-by-xedit"u8.ToArray()));
 
         Assert.True(await tree.Settles(() => Notices(tree).Count == 3), "the mod never settled once its repository returned");
+        Assert.Equal([PluginName], Notices(tree)[2].ChangedPlugins);
     }
 
     // A load order that arrives before the mod's own window closes answers for the mod at load.

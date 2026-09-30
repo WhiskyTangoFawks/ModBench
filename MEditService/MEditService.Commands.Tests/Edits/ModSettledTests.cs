@@ -11,10 +11,10 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>What the watcher calls when a tracked mod settles or loads (ADR-0003 invariant 3): each
-/// tracked plugin's bytes against what Modbench last wrote, and the mod's untracked plugins, told
-/// through the port and kept nowhere.</summary>
-public sealed class TrackedModSettledTests : IDisposable
+/// <summary>What the watcher calls when a mod settles or loads (ADR-0003 invariant 3): each tracked
+/// plugin's bytes against what Modbench last wrote, and the mod's untracked plugins, told through
+/// the port and kept nowhere.</summary>
+public sealed class ModSettledTests : IDisposable
 {
     private const string PluginName = "Test.esp";
     private const string Origin = "TestMod";
@@ -22,7 +22,7 @@ public sealed class TrackedModSettledTests : IDisposable
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-settled-").FullName;
 
-    private TrackedModSettled Settled => TestEditService.Settled(_notifications);
+    private ModSettled Settled => TestEditService.Settled(_notifications);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
