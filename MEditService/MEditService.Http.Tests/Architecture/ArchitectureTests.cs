@@ -84,9 +84,9 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0009: a hash is kept without a read only while the file's stamp, change time included,
-    // matches. .NET exposes no change time, so a .NET LastWriteTime read is modification time alone,
-    // which ADR-0003 rejects: other tools' writes can preserve it.
+    // ADR-0009: a hash is kept unread only while the stamp, change time included, matches. .NET has
+    // no change time, so a .NET LastWriteTime read is modification time alone, which ADR-0003
+    // rejects: other tools' writes can preserve it.
     [Fact]
     public void DiskDerivedState_NeverReadsModificationTimeAlone()
     {
