@@ -1,6 +1,7 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
+using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -24,7 +25,11 @@ public sealed class ValidateUntrackedTests : IDisposable
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("FixtureNpc"), origin: "FixtureMod")
             .BuildScattered();
         _mod = _fixture.Plugins.Single();
-        _index = Indexes.Reconciled(_fixture);
+        var holder = new LoadOrderHolder();
+        var clockPastEveryWrite = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
+        _index = new Indexer(
+            holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, timeProvider: clockPastEveryWrite);
+        _index.Reconcile(holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
     }
 
     public void Dispose()
@@ -45,6 +50,20 @@ public sealed class ValidateUntrackedTests : IDisposable
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.ChangedKeys);
         Assert.Equal(before, _index.Sequence);
+    }
+
+    // A handle that denies sharing makes a read fail, so a clean answer while it is open came from
+    // the hash the stamp kept.
+    [Fact]
+    public void ABinaryWhoseStampHolds_ValidatesCleanWithoutARead()
+    {
+        Validate();
+
+        using var held = new FileStream(_mod.Path, FileMode.Open, FileAccess.Read, FileShare.None);
+        var report = Validate();
+
+        Assert.False(report.NeedsRebuild);
+        Assert.Empty(report.Failures);
     }
 
     [Fact]
