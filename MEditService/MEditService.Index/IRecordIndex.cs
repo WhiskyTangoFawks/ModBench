@@ -27,7 +27,7 @@ internal interface IRecordIndex : IDisposable
 
     /// <summary>ADR-0015 invariant 3: everything projected inside the scope advances
     /// <see cref="Sequence"/> once, when the outermost scope closes, so a whole-plugin projection
-    /// and a settled batch are each one advance. Nested scopes count.</summary>
+    /// and a snapshot's validation are each one advance. Nested scopes count.</summary>
     IDisposable BeginProjection();
 
     /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed:

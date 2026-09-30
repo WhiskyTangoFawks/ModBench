@@ -35,8 +35,8 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal(index.Sequence, notification.Sequence);
     }
 
-    // Where a deletion lands when the watch could not name its key: a burst of deletes wider than one
-    // batch, an overflow, a ref move in the same window, or a document no commit filed.
+    // Where a deletion lands when git could not name its key: a document no commit filed, or a tree
+    // read whole.
     [Fact]
     public void ValidatingAPluginWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
     {
@@ -82,8 +82,8 @@ public sealed class RowsChangedNotificationTests
         Assert.NotNull(index.RequireReads().GetDocument(gained, entry.KeyOf()));
     }
 
-    // Where a gained record lands when the watch could not name its key: a new document no commit
-    // filed. The validate re-derives the plugin whole, and still names the rows.
+    // Where a gained record lands when git could not name its key: a new document no commit filed.
+    // The validate re-derives the plugin whole, and still names the rows.
     [Fact]
     public void ValidatingAPluginThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
     {

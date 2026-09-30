@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -60,9 +58,11 @@ public sealed class Indexer : IQueryIndex, IDisposable
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null)
+        TaskScheduler? refillScheduler = null,
+        IndexWriteGate? writeGate = null)
     {
         _holder = holder;
+        WriteGate = writeGate ?? new IndexWriteGate();
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
@@ -76,7 +76,21 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     // ADR-0013 invariant 4: a plugin that failed to read stays a row in an error state until what it
     // reads from changes. The state recorded alongside it is what changing detects.
-    private readonly Dictionary<PluginAddress, string?> _failedReads = new(PluginAddress.Comparer);
+    private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
+
+    // What a failed read read from: the binary's hash, and for a plugin with a tree, what git named
+    // at its HEAD then. Only the files git names are read (ADR-0009).
+    private sealed record FailedRead(string? Binary, TreeChanges? Tree)
+    {
+        public bool Holds(FailedRead now) =>
+            Binary == now.Binary
+            && (Tree, now.Tree) switch
+            {
+                (null, null) => true,
+                ({ Named: { } then }, { Named: { } named }) => Tree.Head == now.Tree.Head && then.SequenceEqual(named),
+                _ => false,
+            };
+    }
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -105,7 +119,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
-    public IndexWriteGate WriteGate { get; } = new();
+    public IndexWriteGate WriteGate { get; }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -594,59 +608,50 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // While what it reads from is unchanged the error state stands, and the parse is not paid again.
     private bool StillFailing(IRecordIndex index, PluginAddress key, string path)
     {
-        string? failedAt;
+        FailedRead? failedAt;
         lock (_lock)
         {
             if (!_failedReads.TryGetValue(key, out failedAt)) return false;
         }
-        return failedAt != null && ReadStateOf(index, key, path) == failedAt;
+        return failedAt is not null && ReadStateOf(index, key, path, failedAt.Tree?.Head) is { } now && failedAt.Holds(now);
     }
 
     // A failure that says what the plugin already said publishes nothing.
-    private void FailRead(HeldPlugins? held, IRecordIndex index, PluginAddress key, string path, string reason)
+    private void FailRead(HeldPlugins? held, IRecordIndex index, PluginAddress key, string path, string reason) =>
+        Fail(held, key, reason, ReadStateOf(index, key, path, head: null));
+
+    // A file another process held is read again at the next snapshot, whatever it reads from.
+    private void FailReadUntilTheNextSnapshot(HeldPlugins held, PluginAddress key, string reason) =>
+        Fail(held, key, reason, readFrom: null);
+
+    private void Fail(HeldPlugins? held, PluginAddress key, string reason, FailedRead? readFrom)
     {
         var told = held?.SetFailure(key, reason) == true;
-        RecordFailedRead(index, key, path);
+        lock (_lock) _failedReads[key] = readFrom;
         if (told) PublishStatus();
     }
 
     private void RecordFailedRead(IRecordIndex index, PluginAddress key, string path)
     {
-        var state = ReadStateOf(index, key, path);
+        var state = ReadStateOf(index, key, path, head: null);
         lock (_lock) _failedReads[key] = state;
     }
 
-    // What a read of the plugin reads from: its binary's hash, and for a plugin with a tree, git's
-    // HEAD and every file of the tree. Null, which vouches for nothing, when one cannot be read.
-    private string? ReadStateOf(IRecordIndex index, PluginAddress key, string path)
+    // Null, which vouches for nothing, when what the plugin reads from cannot be read: an untracked
+    // binary, or what git names. A tree is asked against the HEAD the failure saw, so a commit since
+    // is a change.
+    private FailedRead? ReadStateOf(IRecordIndex index, PluginAddress key, string path, string? head)
     {
-        if (index.FileContentHash(path) is not { } binary) return null;
+        var binary = index.FileContentHash(path);
         if (LoadOrderSnapshot.ModFolderOf(key.Origin, path) is not { } modFolder
             || !SourceRepository.HoldsTreeFor(modFolder, key.Name))
         {
-            return binary;
+            return binary is null ? null : new FailedRead(binary, null);
         }
 
-        if (SourceRepository.Over(modFolder, _gameRelease).ChangesSince(key, null).Head is not { } head) return null;
-        return TreeContentHash(SourceRepository.RootIn(modFolder, key.Name)) is { } tree ? $"{binary}\0{head}\0{tree}" : null;
-    }
-
-    private static string? TreeContentHash(string root)
-    {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
-            {
-                hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(root, file) + "\0"));
-                hash.AppendData(File.ReadAllBytes(file));
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-        return Convert.ToHexStringLower(hash.GetHashAndReset());
+        var repository = SourceRepository.Over(modFolder, _gameRelease);
+        if ((head ?? repository.ChangesSince(key, null).Head) is not { } since) return null;
+        return repository.ChangesSince(key, since) is { Named: not null } tree ? new FailedRead(binary, tree) : null;
     }
 
     // ADR-0009 invariant 4: a plugin the store has seen, still matching the disk, is registered, not
@@ -842,7 +847,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             {
                 foreach (var failure in report.Failures)
                     _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
-                FailValidation(held, index, plugin, holdsTree, string.Join("; ", report.Failures), transient: false);
+                FailRead(held, index, key, plugin.Path, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
                 return report;
             }
 
@@ -864,21 +869,19 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _logger.LogWarning(ex, "Could not validate {Plugin} ({Origin})", key.Name, key.Origin);
             // A re-read that failed has named its own failure.
             if (!held.IsHeldWithAFailure(key))
-                FailValidation(held, index, plugin, holdsTree, PluginLoadFailure.ReasonFor(ex), transient: ex is IOException or UnauthorizedAccessException);
+            {
+                var reason = ValidationFailure(holdsTree, PluginLoadFailure.ReasonFor(ex));
+                if (ex is IOException or UnauthorizedAccessException) FailReadUntilTheNextSnapshot(held, key, reason);
+                else FailRead(held, index, key, plugin.Path, reason);
+            }
             return new ValidationReport(key, [], NeedsRebuild: false, [PluginLoadFailure.ReasonFor(ex)]);
         }
     }
 
-    // editor.md, States, story 6: the rows stay the last good read, and say why. A file another
-    // process held is read again at the next snapshot, whatever it reads from.
-    private void FailValidation(
-        HeldPlugins held, IRecordIndex index, PluginMetadata plugin, bool holdsTree, string reason, bool transient)
-    {
-        FailRead(held, index, plugin.Key, plugin.Path,
-            $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
-            "what was last read from it.");
-        if (transient) lock (_lock) _failedReads[plugin.Key] = null;
-    }
+    // editor.md, States, story 6: the rows stay the last good read, and say why.
+    private static string ValidationFailure(bool holdsTree, string reason) =>
+        $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
+        "what was last read from it.";
 
     // Once the status answering the version is out, so the views read the load order while this
     // corrects what changed on disk. It waits out a reconcile, and a newer one cancels it.
@@ -897,6 +900,19 @@ public sealed class Indexer : IQueryIndex, IDisposable
         catch (OperationCanceledException ex)
         {
             _logger.LogDebug(ex, "Validation was superseded by a newer reconcile");
+        }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            // Busy, not broken: validation is idempotent, and the next snapshot validates again.
+            _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // No caller waits on this thread, so the failure becomes status data (plugins.md, States,
+            // story 6), and the next snapshot tries again.
+            _logger.LogError(ex, "Validating the index failed unexpectedly");
+            lock (_lock) _failureMessage = ex.Message;
+            PublishStatus();
         }
         finally
         {

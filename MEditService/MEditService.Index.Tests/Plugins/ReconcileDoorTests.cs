@@ -136,7 +136,7 @@ public sealed class ReconcileDoorTests
         Assert.Contains("ModB", index.Status.Message, StringComparison.Ordinal);
     }
 
-    // A superseded reconcile is ordinary (a watcher firing mid-load): never an escaped exception,
+    // A superseded reconcile is ordinary (a recompute mid-load): never an escaped exception,
     // never mistaken for the held-elsewhere refusal, and the survivor finishes Ready for its version.
     [Fact]
     public async Task ASupersededReconcile_NeverEscapes_AndTheSurvivorAnswersReadyForItsOwnVersion()

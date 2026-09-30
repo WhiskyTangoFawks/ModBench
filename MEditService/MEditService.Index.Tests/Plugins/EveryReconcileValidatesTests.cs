@@ -1,6 +1,8 @@
+using DuckDB.NET.Data;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Time.Testing;
 using Mutagen.Bethesda;
@@ -103,6 +105,37 @@ public sealed class EveryReconcileValidatesTests : IDisposable
             && PluginAddress.Comparer.Equals(changed.Plugin, _untracked.KeyOf()));
     }
 
+    // A tracked mod whose repository and binary both went: its rows at HEAD go with the rest, the
+    // committed state of a dirty record included.
+    [Fact]
+    public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent_ItsDirtyRecordsHeadRowsToo()
+    {
+        var document = _index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf());
+        _tracked.HandEdit(document, "TrackedNpc", "EditedByHand");
+        Reconcile();
+        Assert.NotEqual(0, CommittedRowsOf(_tracked));
+
+        Directory.Delete(Path.Combine(_tracked.ModFolderOf(), ".git"), recursive: true);
+        File.Delete(_tracked.Path);
+        Reconcile();
+
+        Assert.Equal(0, CommittedRowsOf(_tracked));
+        Assert.Empty(_index.RequireReads().GetDocuments(_tracked.KeyOf()));
+    }
+
+    // Read off the store itself: every read through the Index answers only for a registered plugin,
+    // and an unindexed one is unregistered.
+    private long CommittedRowsOf(LoadOrderEntry plugin)
+    {
+        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_fixture.InstanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM mirror.records_committed WHERE plugin = $1 AND origin = $2";
+        cmd.Parameters.Add(new DuckDBParameter(plugin.Name));
+        cmd.Parameters.Add(new DuckDBParameter(plugin.Origin));
+        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     [Fact]
     public void AnEqualSnapshot_ReindexesAnUntrackedBinaryThatCameBack()
     {
@@ -135,13 +168,35 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     public void AnEqualSnapshot_OfAPluginWithNoTreeInATrackedMod_PublishesNothing()
     {
         var loosePath = Path.Combine(_tracked.ModFolderOf(), "Loose.esp");
-        new Fallout4Mod(ModKey.FromFileName("Loose.esp"), Fallout4Release.Fallout4).WriteToBinary(loosePath);
+        var loose = new Fallout4Mod(ModKey.FromFileName("Loose.esp"), Fallout4Release.Fallout4);
+        loose.Npcs.AddNew("LooseNpc");
+        loose.WriteToBinary(loosePath);
         LoadOrderEntry[] plugins = [.. _fixture.Plugins, new("Loose.esp", loosePath, _tracked.Origin, 2, Enabled: true, Winning: true)];
         void ReconcileWithLoose() =>
             _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         ReconcileWithLoose();
+        Assert.Contains(
+            _index.RequireReads().GetDocuments(new PluginAddress("Loose.esp", _tracked.Origin)), d => d.EditorId == "LooseNpc");
 
         Assert.Empty(PublishedDuring(ReconcileWithLoose));
+    }
+
+    // Git's status is the tree's stamp (ADR-0009): a tree that failed to read is asked again through
+    // the files git names, and a file it does not name is never opened. One held shut proves it.
+    [Fact]
+    public void AnEqualSnapshot_OfATreeThatFailedToRead_OpensNoFileGitDoesNotName()
+    {
+        var document = _tracked.SourceFileOf(_index.RequireReads().DocumentOf(_trackedNpc, _tracked.KeyOf()));
+        File.Copy(document, Path.Combine(Path.GetDirectoryName(document).Require(), "Backup.json"));
+        Reconcile();
+        Assert.Contains(_index.Status.Failures, f => f.Name == Tracked);
+        var header = Path.Combine(SourceRepository.RootIn(_tracked.ModFolderOf(), Tracked), "RecordData.json");
+
+        using var heldShut = new FileStream(header, FileMode.Open, FileAccess.Read, FileShare.None);
+        var published = PublishedDuring(Reconcile);
+
+        Assert.Empty(published);
+        Assert.Contains(_index.Status.Failures, f => f.Name == Tracked);
     }
 
     [Fact]

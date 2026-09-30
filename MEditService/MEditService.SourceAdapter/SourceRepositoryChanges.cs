@@ -8,9 +8,14 @@ namespace MEditService.SourceAdapter;
 /// when the working tree holds no file there).</summary>
 public sealed record ChangedDocument(string FormKey, string? WorkingTreeText);
 
-/// <summary>HEAD now, null when git cannot read it, and the documents changed since the validated
-/// HEAD, null when git cannot narrow them and only a whole-tree read can say.</summary>
-public sealed record TreeChanges(string? Head, IReadOnlyList<ChangedDocument>? Documents);
+/// <summary>A document file git names, and its working-tree text (null when the working tree holds
+/// no file there).</summary>
+public sealed record NamedFile(string GitPath, string? WorkingTreeText);
+
+/// <summary>HEAD now, null when git cannot read it; the documents changed since the validated HEAD,
+/// null when only a whole-tree read can say; and each document file git named, null when it
+/// could not.</summary>
+public sealed record TreeChanges(string? Head, IReadOnlyList<ChangedDocument>? Documents, IReadOnlyList<NamedFile>? Named);
 
 /// <summary>Git's index is the tree's stamp (ADR-0009): at an unmoved HEAD, a document git status
 /// reports clean holds what HEAD holds.</summary>
@@ -23,42 +28,54 @@ public sealed partial class SourceRepository
     {
         var gitDir = Path.Combine(_modFolder, ".git");
         if (!GitCli.TryRun(gitDir, _modFolder, out var headOutput, "rev-parse", "--verify", "-q", "HEAD^{commit}"))
-            return new TreeChanges(null, null);
+            return new TreeChanges(null, null, null);
         var head = headOutput.Trim();
-        if (validatedHead is null) return new TreeChanges(head, null);
+        if (validatedHead is null) return new TreeChanges(head, null, null);
 
-        if (ChangedPaths(gitDir, plugin, validatedHead, head) is not { } paths) return new TreeChanges(head, null);
+        if (ChangedPaths(gitDir, plugin, validatedHead, head) is not { } paths) return new TreeChanges(head, null, null);
 
+        // The whole-tree read's own rule for which files are documents.
+        var named = paths
+            .Select(path => (Path: path.Key, NewPath: path.Value, FullPath: Path.GetFullPath(
+                Path.Combine(_modFolder, path.Key.Replace('/', Path.DirectorySeparatorChar)))))
+            .Where(path => !CarriesNoRecord(path.FullPath))
+            .Select(path => (path.Path, path.NewPath, path.FullPath, Text: File.Exists(path.FullPath) ? ReadOrNull(path.FullPath) : null))
+            .ToList();
+        var files = named.Select(file => new NamedFile(file.Path, file.Text)).ToList();
+        return new TreeChanges(head, DocumentsNamed(plugin, named, head, validatedHead), files);
+    }
+
+    // Null when a named file says too little to key its document by.
+    private List<ChangedDocument>? DocumentsNamed(
+        PluginAddress plugin, List<(string Path, bool NewPath, string FullPath, string? Text)> named, string head,
+        string validatedHead)
+    {
         var documents = new List<ChangedDocument>();
-        foreach (var (gitPath, newPath) in paths)
+        foreach (var (gitPath, newPath, fullPath, text) in named)
         {
-            var fullPath = Path.GetFullPath(Path.Combine(_modFolder, gitPath.Replace('/', Path.DirectorySeparatorChar)));
-            // The whole-tree read's own rule for which files are documents.
-            if (CarriesNoRecord(fullPath)) continue;
-
             if (!File.Exists(fullPath))
             {
                 var committed = ReadCommittedSourceText(_modFolder, gitPath, head)
                     ?? ReadCommittedSourceText(_modFolder, gitPath, validatedHead);
                 if (committed is null || FormKeyDeclaredIn(committed, fullPath, plugin.Name) is not { } goneFormKey)
-                    return new TreeChanges(head, null);
+                    return null;
                 documents.Add(new ChangedDocument(goneFormKey, null));
                 continue;
             }
 
             // A name not carrying the FormKey its text declares, or a new path beside another document
             // naming that FormKey, is a copy or a hand rename whose twin git does not name.
-            if (ReadOrNull(fullPath) is not { } text
+            if (text is null
                 || FormKeyDeclaredIn(text, fullPath, plugin.Name) is not { } formKey
                 || !FormKey.TryFactory(formKey, out _)
                 || PathCarrying([gitPath], plugin.Name, formKey) is null
                 || (newPath && HoldsAnotherDocumentNaming(plugin, formKey, fullPath)))
             {
-                return new TreeChanges(head, null);
+                return null;
             }
             documents.Add(new ChangedDocument(formKey, text));
         }
-        return new TreeChanges(head, documents);
+        return documents;
     }
 
     /// <summary>Which of <paramref name="formKeys"/> HEAD holds, as a document or as a child another

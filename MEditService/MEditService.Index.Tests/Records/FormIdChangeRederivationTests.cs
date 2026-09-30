@@ -91,7 +91,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var document = Reads.DocumentOf(cellKey, _mod.Plugin);
         var newBody = document.BodyOf().Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
 
-        // Put only — the narrow signal RefreshKeys is, deliberately skipped.
+        // Put only — the next snapshot's validation, deliberately skipped.
         TrackedMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody));
 
         Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, oldNavmeshKey));

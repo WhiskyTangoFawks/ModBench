@@ -36,7 +36,7 @@ public sealed class SourceRepositoryInterfaceScanTests
         Assert.True(
             named.Count == 0,
             "A type outside the Source repository names its git or layout mechanism. The repository "
-            + "answers documents by identity, the facts about a unit and what to watch, and keeps git "
+            + "answers documents by identity and the facts about a unit, and keeps git "
             + "and the layout behind that (ADR-0007), so ask it for the answer as a value:\n"
             + string.Join("\n", named));
     }

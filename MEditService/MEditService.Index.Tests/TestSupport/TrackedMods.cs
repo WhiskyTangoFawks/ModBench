@@ -126,8 +126,8 @@ internal static class TrackedMods
         index.ValidateIndex(entry.KeyOf());
     }
 
-    /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the narrow
-    /// signal for it.</summary>
+    /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the next
+    /// snapshot's validation of the plugin.</summary>
     internal static void Delete(this Indexer index, LoadOrderEntry entry, RecordDocument document)
     {
         var removed = RepositoryOf(entry).Remove(

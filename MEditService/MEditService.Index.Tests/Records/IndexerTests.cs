@@ -38,8 +38,8 @@ public sealed class IndexerTests
     private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
         indexer.Reconcile(snapshot, holder.Apply(snapshot));
 
-    // The binary watch's re-derivation: bytes that differ, then the settle's own poke.
-    private static async Task ReDerive(Indexer indexer, LoadOrderEntry entry)
+    // The next snapshot's re-derivation: bytes that differ, then the validation of the plugin.
+    private static void ReDerive(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
         Assert.True(indexer.Revalidate(entry.KeyOf()));
@@ -72,7 +72,7 @@ public sealed class IndexerTests
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        await ReDerive(indexer, b);
+        ReDerive(indexer, b);
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));
     }

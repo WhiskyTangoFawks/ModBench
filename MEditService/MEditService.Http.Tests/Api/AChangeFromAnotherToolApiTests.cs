@@ -330,7 +330,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Select(f => f.GetProperty("reason").GetString())
             .FirstOrDefault();
 
-    // An earlier projection's frame can name the record too, and a write joining the delete's settle
+    // An earlier projection's frame can name the record too, and a write joining the delete's snapshot
     // is a move that advances nothing: the delete's frame is the one after which the record reads gone.
     private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
     {

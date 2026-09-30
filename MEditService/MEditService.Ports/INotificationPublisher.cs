@@ -25,8 +25,8 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, Keys, Sequence);
 }
 
-/// <summary>The plugin watcher re-indexed or removed a whole binary (ADR-0009) — too many rows to
-/// name, so this names the plugin instead.</summary>
+/// <summary>A validation re-derived or removed a whole plugin (ADR-0009) — too many rows to name, so
+/// this names the plugin instead.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : Notification("plugin-changed")
 {
@@ -48,9 +48,9 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>A mod settled or loaded: each tracked plugin whose bytes differ from what Modbench last
-/// wrote (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out matches; an
-/// untracked mod names none.</summary>
+/// <summary>At a snapshot: each tracked plugin whose bytes differ from what Modbench last wrote
+/// (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out matches; a mod whose
+/// repository went names none.</summary>
 public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
     : Notification("external-change")
 {

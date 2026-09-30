@@ -230,8 +230,8 @@ public sealed class ProgressiveIndexingTests
         await gate.WaitUntilParkedAsync();
         var readsWhileParked = manager.RequireReads();
 
-        // A second snapshot while a reconcile is running is an ordinary event (a watcher firing
-        // during activation), not an edge case.
+        // A second snapshot while a reconcile is running is an ordinary event (a recompute during
+        // activation), not an edge case.
         using var secondAttempting = new ManualResetEventSlim();
         var second = Task.Run(() =>
         {
