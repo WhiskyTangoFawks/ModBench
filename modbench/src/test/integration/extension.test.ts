@@ -2058,8 +2058,6 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
-// re-read of the instance that follows finds that load order unchanged.
 describe('Refresh rebuilds the index, then re-reads the instance', () => {
   // Launched, so the re-read puts the load order.
   beforeEach(async () => {
