@@ -59,19 +59,6 @@ internal static class GitCli
         return new GitCommandFailedException($"git {args[0]} failed ({exitCode}): {stderr}");
     }
 
-    // A git that went from PATH after EnsureOnPath is the same named failure, not a raw Win32Exception.
-    private static Process Start(ProcessStartInfo psi)
-    {
-        try
-        {
-            return Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            throw new GitUnavailableException(ex);
-        }
-    }
-
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string? indexFile, string[] args)
     {
         var psi = new ProcessStartInfo("git")
@@ -89,7 +76,7 @@ internal static class GitCli
         // user is running in the same repository at that moment (ADR-0003).
         psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
 
-        using var process = Start(psi);
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
 

@@ -179,6 +179,10 @@ public sealed partial class SourceRepository
     /// were.</summary>
     public void ReplaceSourceFrom(string pluginFileName, IReadOnlyList<TreeFile> files, string binarySha256)
     {
+        // A mod folder another tool removed is not written back into being.
+        if (!IsTracked(_modFolder))
+            throw new InvalidOperationException($"'{_modFolder}' holds no repository, so {pluginFileName}'s source has nowhere to go.");
+
         var root = RootIn(_modFolder, pluginFileName);
         var before = Directory.Exists(root) ? PreImageOf(root) : new PreImage([], []);
         try
@@ -187,7 +191,7 @@ public sealed partial class SourceRepository
             PristineFileWriter.WriteAll(files, _modFolder);
             ParkDecompiled(pluginFileName, binarySha256);
         }
-        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or GitUnavailableException)
+        catch (Exception cause) when (cause is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             var unrestored = new List<string>();
             TryPutBack(root, () => { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }, unrestored);

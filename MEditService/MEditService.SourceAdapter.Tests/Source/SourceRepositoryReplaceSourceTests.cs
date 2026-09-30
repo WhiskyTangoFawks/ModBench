@@ -16,7 +16,10 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     public SourceRepositoryReplaceSourceTests() =>
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [File("npc_/A.esp/000001.json", "{\"was\":1}")]);
 
-    public void Dispose() => Directory.Delete(_modFolder, recursive: true);
+    public void Dispose()
+    {
+        if (Directory.Exists(_modFolder)) Directory.Delete(_modFolder, recursive: true);
+    }
 
     [Fact]
     public void ReplaceSourceFrom_LeavesExactlyTheNewFiles_AndParksTheBinaryAlone()
@@ -73,6 +76,34 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
     }
 
+    // Another tool removed the mod folder while its plugin was being decompiled: the refusal names that
+    // cause, and no folder is written back into being.
+    [Fact]
+    public void ReplaceSourceFrom_IntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
+    {
+        var repository = Repository;
+        Directory.Delete(_modFolder, recursive: true);
+
+        var refused = Assert.Throws<InvalidOperationException>(() => repository.ReplaceSourceFrom(
+            Plugin, [File("npc_/A.esp/000002.json", "{}")], Sha));
+
+        Assert.Contains("holds no repository", refused.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(_modFolder));
+    }
+
+    // A git step whose working folder another tool removed fails with the OS's own reason, which names
+    // the folder, never as git missing from PATH.
+    [Fact]
+    public void AGitStep_InAModFolderAnotherToolRemoved_FailsNamingTheFolder_NotGit()
+    {
+        Directory.Delete(_modFolder, recursive: true);
+
+        var failure = Assert.ThrowsAny<Exception>(() => SourceRepository.ParkCompileSnapshot(_modFolder, Plugin, Sha));
+
+        Assert.IsNotType<GitUnavailableException>(failure);
+        Assert.Contains(_modFolder, failure.Message, StringComparison.Ordinal);
+    }
+
     private SourceRepository Repository =>
         SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
 
@@ -89,8 +120,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 }
 
-/// <summary>git gone from PATH after the up-front check: the write's git step is the same named
-/// failure, and the source is put back.</summary>
+/// <summary>git gone from PATH after the up-front check: the write's git step fails with the OS's own
+/// reason, and the source is put back.</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
 {
@@ -103,14 +134,14 @@ public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
     public void Dispose() => Directory.Delete(_modFolder, recursive: true);
 
     [Fact]
-    public void ReplaceSourceFrom_WithGitGoneFromPath_ThrowsGitUnavailable_AndLeavesTheSourceAsItWas()
+    public void ReplaceSourceFrom_WithGitGoneFromPath_ThrowsTheOsReason_AndLeavesTheSourceAsItWas()
     {
         var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
         var path = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", string.Empty);
         try
         {
-            Assert.Throws<GitUnavailableException>(() => repository.ReplaceSourceFrom(
+            Assert.Throws<System.ComponentModel.Win32Exception>(() => repository.ReplaceSourceFrom(
                 "A.esp", [new TreeFile("plugin-source/A.esp/npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
         }
         finally

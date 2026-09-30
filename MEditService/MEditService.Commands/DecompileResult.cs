@@ -28,8 +28,7 @@ public enum DecompileRefusal
     /// as it was.</summary>
     WriteFailed,
 
-    /// <summary>git is not on PATH (ADR-0007): the whole selection before any write, or the plugin
-    /// whose write found it gone.</summary>
+    /// <summary>git is not on PATH (ADR-0007), found for the whole selection before any write.</summary>
     GitUnavailable,
 }
 
