@@ -888,8 +888,7 @@ public sealed class RecordQueryServiceTests
     {
         _svc.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
 
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", _manager.FilterSql);
-        Assert.Equal("npcs.sql", _manager.LastFilterSource);
+        Assert.Equal(("SELECT form_key FROM \"NPC_\"", "npcs.sql"), _manager.ActiveFilter);
     }
 
     [Fact]
@@ -899,7 +898,7 @@ public sealed class RecordQueryServiceTests
 
         _svc.ClearFilter();
 
-        Assert.Null(_manager.FilterSql);
+        Assert.Null(_manager.ActiveFilter);
     }
 
     [Fact]

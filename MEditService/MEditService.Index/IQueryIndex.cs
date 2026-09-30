@@ -14,17 +14,31 @@ public interface IQueryIndex
     /// </summary>
     LoadOrderStatus Status { get; }
 
-    /// <summary>The record filter in force, or null. The Index holds it because the rows
-    /// it prunes are the Index's.</summary>
-    string? FilterSql { get; }
+    /// <summary>The record filter in force and the source its SQL came from, or null. The Index
+    /// holds it because the rows it prunes are the Index's.</summary>
+    (string Sql, string Source)? ActiveFilter { get; }
+
+    /// <summary>ADR-0015 invariant 3: how far the projection has landed. 0 with no store held.
+    /// </summary>
+    long Sequence { get; }
+
+    /// <summary>True once <see cref="Sequence"/> reaches <paramref name="atLeast"/>; false, never a
+    /// throw, when <paramref name="timeout"/> elapses first.</summary>
+    Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout);
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
     /// Index has no store to read.</summary>
     IRecordReads RequireReads();
 
+    bool Registers(PluginAddress key);
+
     void SetFilter(string sql, string source);
 
     void ClearFilter();
+
+    /// <summary>ADR-0015 invariant 4: compares by content hash and repairs what differs, for one
+    /// plugin or, when null, every registered one.</summary>
+    IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin);
 
     Task RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

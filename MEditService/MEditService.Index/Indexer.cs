@@ -100,7 +100,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>Whether the store registers this plugin — an endpoint's 404 question, answered
+    /// <summary>Whether the store registers this plugin — validate's 404 question, answered
     /// without handing out the store.</summary>
     public bool Registers(PluginAddress key)
     {
@@ -1035,9 +1035,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
         return true;
     }
-
-    /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
-    public string? FilterSql => ActiveFilter?.Sql;
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
     /// concurrent set never pairs one filter's SQL with another's source.</summary>

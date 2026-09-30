@@ -131,74 +131,25 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] EndpointSymbols =
         [.. Symbols.Except(ReadSideSymbols, StringComparer.Ordinal).Except(GateSymbols, StringComparer.Ordinal)];
 
-    // The one endpoint file that maps the Index's doors, one route each.
-    private const string DoorMappingFile = "MEditService.Http/Endpoints/IndexEndpoints.cs";
-
-    // The Index's doors as the zoom-out captions them, by the member each route calls. Registers
-    // answers the 404 before validate is asked for a plugin nobody holds.
-    private static readonly string[] IndexDoors =
-    [
-        "Status", "RequireReads", "ActiveFilter", "Sequence", "AwaitSequenceAsync", "Registers",
-        "ValidateIndex",
-    ];
-
     [Fact]
-    public void NoEndpoint_ButTheDoorMapping_NamesAnIndexType()
+    public void NoEndpoint_NamesAnIndexType()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], EndpointSymbols)
-            .Where(count => !count.StartsWith(DoorMappingFile + ":", StringComparison.Ordinal))
-            .ToList();
+        var named = Counts(root, [EndpointRoot], [], EndpointSymbols);
 
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
         Assert.True(
             named.Count == 0,
-            "An endpoint names an Index type. A route takes a gesture's handler or a query service, "
-            + "and the write side never reads the Index (ADR-0015 invariant 1), so a row reaching a "
-            + $"handler through the API is the same read by another door. The Index's own doors are "
-            + $"mapped in {DoorMappingFile} alone:\n"
+            "An endpoint names an Index type. A route takes a gesture's handler or a query service: "
+            + "Queries are the only readers of the read model (ADR-0014 invariant 3), and no arrow "
+            + "runs from the HTTP endpoints to the Index:\n"
             + string.Join("\n", named));
     }
 
-    // Every member reached off a parameter declared Indexer, keyed on that declared type rather
-    // than on whatever a handler names the parameter.
-    private static List<string> IndexReceiverMembers(string text) =>
-        [.. Regex.Matches(text, @"\bIndexer\s+(\w+)\b")
-            .Select(m => m.Groups[1].Value)
-            .Distinct(StringComparer.Ordinal)
-            .SelectMany(name => Regex.Matches(text, $@"\b{Regex.Escape(name)}\.(\w+)")
-                .Select(m => m.Groups[1].Value))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)];
-
-    // A member outside the doors above is the watcher's signal or the projection's own machinery;
-    // a door nobody maps is a route that went missing.
-    [Fact]
-    public void TheDoorMapping_NamesOnlyTheIndexer_AndReachesItOnlyThroughItsDoors()
-    {
-        var root = ArchitectureTests.SolutionDirectory();
-        var text = File.ReadAllText(Path.Combine(root, DoorMappingFile.Replace('/', Path.DirectorySeparatorChar)));
-
-        var named = References(text, EndpointSymbols).Select(r => r.Symbol).ToList();
-
-        Assert.Equal(["Indexer"], named);
-        Assert.Equal(IndexDoors.Order(StringComparer.Ordinal), IndexReceiverMembers(text));
-    }
-
-    // The rival a literal `index.` scan misses: the same call through a differently named
-    // Indexer parameter.
-    [Fact]
-    public void TheDoorScan_KeysOnTheIndexerType_NotTheParameterName()
-    {
-        var text = "private static IResult H(Indexer svc) => Results.Ok(svc.SetFilter(\"x\", \"y\"));";
-
-        Assert.Equal(["SetFilter"], IndexReceiverMembers(text));
-    }
-
     // The endpoints reference the Source repository and the watcher as the composition root, and
-    // call neither: a route's one call is to a handler, a query service or an Index door.
+    // call neither: a route's one call is to a handler or a query service.
     private static readonly string[] UndrawnCallees =
         ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch", "IRefreshIndex"];
 

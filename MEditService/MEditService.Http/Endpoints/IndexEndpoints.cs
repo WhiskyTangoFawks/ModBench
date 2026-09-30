@@ -5,14 +5,9 @@ using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>What one reconcile request found. PluginsRebuilt names the plugins that had moved too
-/// far for a per-key refresh and were re-derived whole, whose rows RowsChanged cannot name.</summary>
-public sealed record ReconcileResponse(
-    int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);
-
-/// <summary>The Index's doors, one route each — except setting/clearing the filter and rebuilding,
-/// which are Queries' own. A handler is one door call and the wire translation of its answer
-/// (ADR-0014 invariant 1).</summary>
+/// <summary>The load order's status, sequence and record filter, and the index's validate and
+/// rebuild, each one Queries call and the wire translation of its answer (ADR-0014 invariant 3).
+/// </summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
@@ -94,21 +89,20 @@ public static class IndexEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(Indexer index, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(IndexEndpoints)).LogTrace("Received GetLoadOrderStatus");
-        return Results.Ok(index.Status);
+        return Results.Ok(svc.GetStatus());
     }
 
-    private static IResult GetSequence(Indexer index) => Results.Ok(index.Sequence);
+    private static IResult GetSequence(IRecordQueryService svc) => Results.Ok(svc.GetSequence());
 
-    private static async Task<IResult> AwaitSequence(Indexer index, long atLeast, int timeoutMs = 5000)
+    private static async Task<IResult> AwaitSequence(IRecordQueryService svc, long atLeast, int timeoutMs = 5000)
     {
         if (timeoutMs <= 0)
             return Results.Problem("timeoutMs must be positive.", statusCode: 400);
 
-        var reached = await index.AwaitSequenceAsync(atLeast, TimeSpan.FromMilliseconds(timeoutMs));
-        return Results.Ok(new SequenceAwaitResponse(reached, index.Sequence));
+        return Results.Ok(await svc.AwaitSequence(atLeast, TimeSpan.FromMilliseconds(timeoutMs)));
     }
 
     private static IResult SetFilter(FilterRequest req, IRecordQueryService svc, ILoggerFactory loggerFactory)
@@ -160,14 +154,13 @@ public static class IndexEndpoints
         }
     }
 
-    private static IResult GetFilter(Indexer index, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IRecordQueryService svc, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         logger.LogInformation("Received GetFilter");
         try
         {
-            index.RequireReads();
-            var filter = index.ActiveFilter;
+            var filter = svc.GetFilter();
             return Results.Ok(new FilterResponse(filter?.Sql, filter?.Source));
         }
         catch (NoLoadOrderException ex)
@@ -178,7 +171,7 @@ public static class IndexEndpoints
     }
 
     private static IResult Reconcile(
-        Indexer index, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
+        IRecordQueryService svc, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
     {
         var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -192,18 +185,12 @@ public static class IndexEndpoints
         PluginAddress? key = !string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin)
             ? new PluginAddress(plugin, origin)
             : null;
-        if (key is { } named && !index.Registers(named))
-            return Results.Problem($"No registered plugin '{plugin}' from '{origin}'.", statusCode: 404);
 
         try
         {
-            var reports = index.ValidateIndex(key);
-            return Results.Ok(new ReconcileResponse(
-                reports.Count,
-                reports.Sum(r => r.ChangedKeys.Count),
-                reports.Count(r => r.NeedsRebuild),
-                index.Sequence,
-                [.. reports.SelectMany(r => r.Failures)]));
+            return svc.ValidateIndex(key) is { } validated
+                ? Results.Ok(validated)
+                : Results.Problem($"No registered plugin '{plugin}' from '{origin}'.", statusCode: 404);
         }
         catch (NoLoadOrderException ex)
         {

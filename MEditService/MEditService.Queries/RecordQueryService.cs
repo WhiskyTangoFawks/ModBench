@@ -33,7 +33,7 @@ public sealed class RecordQueryService(
             new(plugin, opened[plugin.Key], masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
-        if (_index.FilterSql is null)
+        if (_index.ActiveFilter is null)
             return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];
 
         // plugins.md: a record filter prunes records and record types, never
@@ -159,9 +159,39 @@ public sealed class RecordQueryService(
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
 
+    public LoadOrderStatus GetStatus() => _index.Status;
+
+    public long GetSequence() => _index.Sequence;
+
+    public async Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout)
+    {
+        var reached = await _index.AwaitSequenceAsync(atLeast, timeout).ConfigureAwait(false);
+        return new SequenceAwaitResponse(reached, _index.Sequence);
+    }
+
+    public (string Sql, string Source)? GetFilter()
+    {
+        RequireReads();
+        return _index.ActiveFilter;
+    }
+
     public void SetFilter(string sql, string source) => _index.SetFilter(sql, source);
 
     public void ClearFilter() => _index.ClearFilter();
+
+    public ReconcileResponse? ValidateIndex(PluginAddress? plugin)
+    {
+        if (plugin is { } named && !_index.Registers(named))
+            return null;
+
+        var reports = _index.ValidateIndex(plugin);
+        return new ReconcileResponse(
+            reports.Count,
+            reports.Sum(r => r.ChangedKeys.Count),
+            reports.Count(r => r.NeedsRebuild),
+            _index.Sequence,
+            [.. reports.SelectMany(r => r.Failures)]);
+    }
 
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
         _index.RebuildStore(gameRelease, instanceRoot);

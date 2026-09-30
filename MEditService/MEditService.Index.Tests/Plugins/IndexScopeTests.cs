@@ -125,7 +125,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var manager = MakeLoadedManager(holder);
         manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.FilterSql);
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.ActiveFilter?.Sql);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeLoadedManager(holder);
         manager.SetFilter("SELECT form_key FROM \"NPC_\"", "filter.sql");
         manager.ClearFilter();
-        Assert.Null(manager.FilterSql);
+        Assert.Null(manager.ActiveFilter);
     }
 
     [Fact]
