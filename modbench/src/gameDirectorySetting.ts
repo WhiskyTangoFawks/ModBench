@@ -2,7 +2,7 @@
 // watches files and takes a resolver, so the composition root turns an edit into the same
 // recompute Refresh's re-read runs.
 
-import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
+import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 
 /** The Toolbox's own settle: a burst of edits (a pasted path, keystroke by keystroke) becomes
  *  one recompute, as a burst of file events does under the Instance's own settle. */

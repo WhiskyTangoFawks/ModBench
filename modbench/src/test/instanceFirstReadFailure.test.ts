@@ -103,7 +103,7 @@ describe('a failed first read across the Toolbox, Mods, Plugins and Downloads vi
       expect(error.iconPath).toEqual(new ThemeIcon('error'));
     }
     expect(channelWrites(channel)).toHaveLength(1);
-    expect(channel.error.mock.calls).toEqual([[`[instance] Failed to read the MO2 instance: ${reason}`]]);
+    expect(channel.error.mock.calls).toEqual([[`[instance] Failed to read the instance: ${reason}`]]);
     expect(showErrorMessage).not.toHaveBeenCalled();
     expect(showWarningMessage).not.toHaveBeenCalled();
     expect(showInformationMessage).not.toHaveBeenCalled();

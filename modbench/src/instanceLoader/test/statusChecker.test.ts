@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import type { Mod, ModlistEntry } from '../instance';
 import { buildFileConflictIndex } from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 
@@ -41,7 +46,7 @@ describe('computeModStatuses', () => {
   });
 
   async function statuses() {
-    const index = await buildFileConflictIndex(entries, instanceRoot, () => {});
+    const index = await buildFileConflictIndex(entries, adapterOver(instanceRoot), () => {});
     return computeModStatuses(entries, index);
   }
 
@@ -66,7 +71,7 @@ describe('computeModStatuses', () => {
 
   it('skips separator entries entirely — no status map entry', async () => {
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
-    const index = await buildFileConflictIndex(withSeparator, instanceRoot, () => {});
+    const index = await buildFileConflictIndex(withSeparator, adapterOver(instanceRoot), () => {});
     const result = computeModStatuses(withSeparator, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
@@ -78,7 +83,7 @@ describe('computeModStatuses', () => {
     try {
       await writeMod(root, 'Garbage', { 'Garbage.esp': 'TES4 masters: NoSuchMaster.esm' });
       const garbageEntries: ModlistEntry[] = [mod('Garbage')];
-      const index = await buildFileConflictIndex(garbageEntries, root, () => {});
+      const index = await buildFileConflictIndex(garbageEntries, adapterOver(root), () => {});
 
       const result = computeModStatuses(garbageEntries, index);
 
@@ -97,7 +102,7 @@ describe('computeModStatuses — case-insensitive conflicts', () => {
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
-    const index = await buildFileConflictIndex(entries, caseFixture, () => {});
+    const index = await buildFileConflictIndex(entries, adapterOver(caseFixture), () => {});
     const statuses = computeModStatuses(entries, index);
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });

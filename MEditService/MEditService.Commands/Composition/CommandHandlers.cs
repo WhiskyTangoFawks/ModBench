@@ -71,7 +71,7 @@ public static class CommandHandlers
 
         // The watcher's verb, not a gesture: built here so the port it publishes through is the
         // composition root's, never borrowed from the watcher that calls it.
-        services.AddSingleton(sp => new TrackedModSettled(sp.GetRequiredService<INotificationPublisher>()));
+        services.AddSingleton(sp => new ModSettled(sp.GetRequiredService<INotificationPublisher>()));
 
         services.AddSingleton(sp => new CompilePluginHandler(
             sp.GetRequiredService<PluginCompileService>(),

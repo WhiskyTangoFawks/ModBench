@@ -1,9 +1,0 @@
-import type * as vscode from 'vscode';
-import { createDebouncedFsWatcher } from './fsWatcher';
-import { MODS_GLOB } from '../instanceAdapter/layout';
-
-/** A mod folder dropped in outside Modbench must appear without a manual refresh. The Instance
- *  passes `debounceMs` 0, since its own `schedule()` already coalesces. */
-export function createModsWatcher(instanceRoot: string, onChange: () => void, debounceMs?: number): vscode.Disposable {
-  return createDebouncedFsWatcher(instanceRoot, MODS_GLOB, onChange, debounceMs);
-}

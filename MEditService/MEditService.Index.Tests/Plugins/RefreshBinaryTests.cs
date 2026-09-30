@@ -18,14 +18,15 @@ public sealed class RefreshBinaryTests : IDisposable
     private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-refresh-binary-instance-").FullName;
     private const string PluginName = "Untracked.esp";
     private const string Origin = "UntrackedMod";
+    private readonly string _modFolder;
     private readonly string _pluginPath;
     private readonly PluginAddress _key = new(PluginName, Origin);
 
     public RefreshBinaryTests()
     {
         _index = Indexes.Open(_holder);
-        var modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
-        _pluginPath = Path.Combine(modFolder, PluginName);
+        _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
+        _pluginPath = Path.Combine(_modFolder, PluginName);
     }
 
     public void Dispose()
@@ -124,6 +125,49 @@ public sealed class RefreshBinaryTests : IDisposable
 
         var identicalBytesResettling = await _index.RefreshBinary(_key, _pluginPath);
         Assert.False(identicalBytesResettling);
+    }
+
+    private string OtherPluginPath => Path.Combine(_gameDirectory, "Other.esp");
+
+    private LoadOrderEntry OtherEntry => new("Other.esp", OtherPluginPath, PluginOrigin.DataDirectory, 1, Enabled: true, Winning: true);
+
+    // A tracked plugin whose repository went reads its binary now, and that binary does not read.
+    private void UntrackedOverAnUnreadableBinary()
+    {
+        WriteValidPlugin(_pluginPath);
+        TrackedMods.Track(_pluginPath, _gameDirectory);
+        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        Directory.Delete(Path.Combine(_modFolder, ".git"), recursive: true);
+        File.WriteAllText(_pluginPath, "not a plugin");
+        var other = new Fallout4Mod(ModKey.FromFileName("Other.esp"), Fallout4Release.Fallout4);
+        other.Npcs.AddNew("OtherNpc");
+        other.WriteToBinary(OtherPluginPath);
+        _index.Reconcile(_holder, _gameDirectory, [Entry, OtherEntry], GameRelease.Fallout4, _instanceRoot);
+    }
+
+    // plugins.md, A row, Plugin: "Failed to read" is the plugin's own status; story 6's failed
+    // index is for a failure of the index itself.
+    [Fact]
+    public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
+    {
+        UntrackedOverAnUnreadableBinary();
+
+        Assert.Equal(LoadOrderState.Ready, _index.Status.State);
+        Assert.Contains(_index.Status.Failures, f => f.Name == PluginName && f.Origin == Origin);
+        Assert.Contains(_index.RequireReads().GetDocuments(new PluginAddress("Other.esp", PluginOrigin.DataDirectory)),
+            d => d.EditorId == "OtherNpc");
+    }
+
+    [Fact]
+    public async Task AReDerivationThatCannotReadTheBinary_ReadsAgainOnceItsBytesChange()
+    {
+        UntrackedOverAnUnreadableBinary();
+
+        WriteValidPlugin(_pluginPath);
+        await _index.RefreshBinary(_key, _pluginPath);
+
+        Assert.DoesNotContain(_index.Status.Failures, f => f.Name == PluginName);
+        Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
     }
 
     // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it

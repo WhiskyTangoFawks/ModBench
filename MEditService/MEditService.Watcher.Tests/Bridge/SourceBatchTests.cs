@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.Watcher.Tests.TestSupport;
 
@@ -272,24 +273,36 @@ public sealed class SourceBatchTests
     }
 
     // Never exclusive owners of the folder (ADR-0003): a mod manager's Replace install removes the
-    // repository under a running backend, and an untracked mod has nothing to project from.
+    // repository under a running backend, and the plugin's truth moves to its binary whole.
     [Fact]
-    public async Task ADeletedRepository_LeavesTheSourceWriteUnprojected()
+    public async Task ADeletedRepository_ValidatesThePluginWhole()
     {
         using var tree = new WatchedTree();
         var modFolder = await OneTrackedMod(tree, "A.esp");
 
-        await tree.Observes(
-            () => WatchedTree.RemoveRepository(modFolder),
-            () => tree.WriteUnnamedDocument(modFolder, "A.esp"));
+        await tree.RemoveRepository(modFolder);
+        await tree.Observes(() => tree.WriteUnnamedDocument(modFolder, "A.esp"));
         Assert.False(SourceRepository.IsTracked(modFolder));
 
         tree.AdvancePastBothWindows();
 
-        // The batch opened and closed; what an untracked mod has is nothing to project from, so
-        // neither door was reached.
-        Assert.Empty(tree.Index.Of("validate"));
-        Assert.Empty(tree.Index.Of("refresh"));
+        Assert.Equal(new PluginAddress("A.esp", Origin), Assert.Single(tree.Index.Of("validate")).Plugin);
+    }
+
+    // The rival this pins: a repository moved in whole under a watch already recursive raises no
+    // source path, so only the move of tracked-ness itself re-derives the plugin.
+    [Fact]
+    public async Task ARepositoryThatReturns_ValidatesThePluginWhole()
+    {
+        using var tree = new WatchedTree();
+        var modFolder = await OneTrackedMod(tree, "A.esp");
+        await tree.RemoveRepository(modFolder);
+        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count == 1), "the repository going never re-derived the plugin");
+
+        tree.MoveInRepository(modFolder, "A.esp");
+
+        Assert.True(await tree.Settles(() => tree.Index.Of("validate").Count == 2), "the repository returning never re-derived the plugin");
+        Assert.Equal(new PluginAddress("A.esp", Origin), tree.Index.Of("validate")[1].Plugin);
     }
 
     // ADR-0015: a closed Index has nowhere for a batch to land, and a refused projection would be

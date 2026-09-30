@@ -1,12 +1,17 @@
 // Uninstall is a multi-file writer, so the composition risk is at its seams: one leg
 // succeeding while silently touching something it should not.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from './fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { uninstallMods } from '../../modlist/modlist';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree,
 } from './corpusFixture';
+import { readModlistEntries } from './adapterOver';
 
 const PROFILE = 'Default';
 
