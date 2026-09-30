@@ -56,7 +56,7 @@ public sealed class TrackedProjectionTests : IDisposable
         PluginBinaries.Touch(_mod.Path);
         var before = _index.Sequence;
 
-        Assert.True(await _index.RefreshBinary(_mod.KeyOf(), _mod.Path));
+        Assert.True(_index.Revalidate(_mod.KeyOf()));
 
         Assert.Equal(before + 1, _index.Sequence);
     }
@@ -68,7 +68,7 @@ public sealed class TrackedProjectionTests : IDisposable
 
         using (_index.BeginProjection())
         {
-            _index.RefreshKeys(_mod.KeyOf(), [_npc]);
+            _index.ValidateIndex(_mod.KeyOf());
             Assert.Empty(_notifications.Notifications.OfType<RowsChangedNotification>());
         }
 
@@ -81,7 +81,6 @@ public sealed class TrackedProjectionTests : IDisposable
     public async Task TwoProjectionsOpenAtOnce_EachLandsItsOwnAdvance_AndNothingIsAnnouncedAheadOfTheStore()
     {
         RenameByHand(_npc, NpcEditorId, "RenamedByHand");
-        RenameByHand(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand");
         var before = _index.Sequence;
         var announced = new ConcurrentBag<long>();
 
@@ -96,7 +95,7 @@ public sealed class TrackedProjectionTests : IDisposable
         {
             using (_index.BeginProjection())
             {
-                _index.RefreshKeys(_mod.KeyOf(), [_npc]);
+                _index.ValidateIndex(_mod.KeyOf());
                 _index.Announce(() => announced.Add(_index.Sequence));
                 firstOpen.Set();
                 Wait(secondOpen);
@@ -107,9 +106,10 @@ public sealed class TrackedProjectionTests : IDisposable
         var second = Task.Run(() =>
         {
             Wait(firstOpen);
+            RenameByHand(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand");
             using (_index.BeginProjection())
             {
-                _index.RefreshKeys(_mod.KeyOf(), [_otherNpc]);
+                _index.ValidateIndex(_mod.KeyOf());
                 _index.Announce(() => announced.Add(_index.Sequence));
                 secondOpen.Set();
                 Wait(firstClosed);

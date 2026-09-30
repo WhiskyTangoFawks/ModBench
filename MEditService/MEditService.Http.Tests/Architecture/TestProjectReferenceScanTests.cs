@@ -19,7 +19,6 @@ public sealed class TestProjectReferenceScanTests
     private static readonly Dictionary<string, string> BoxOfProject = new(StringComparer.Ordinal)
     {
         ["MEditService.Http"] = CompositionRoot,
-        ["MEditService.Watcher"] = "medit_driving.watcher",
         ["MEditService.Commands"] = "medit_core.commands",
         ["MEditService.Queries"] = "medit_core.queries",
         ["MEditService.Index"] = "medit_driven.index",

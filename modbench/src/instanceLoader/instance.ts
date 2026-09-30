@@ -50,6 +50,8 @@ export interface InstanceValue {
   /** Every mod folder as the entry it holds, listed or not: what mod sync compares mod order
    *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
   readonly modFolders: readonly ModFolder[] | undefined;
+  /** The mods whose folder holds a repository (ADR-0007). */
+  readonly trackedMods: ReadonlySet<string>;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
@@ -130,6 +132,7 @@ function pathsOf(
 const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
   modFolders: [],
+  trackedMods: new Set(),
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
@@ -343,7 +346,7 @@ export class Instance implements Subscription {
     const settings = await adapter.settings();
     const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
-    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game] = await Promise.all([
+    const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods] = await Promise.all([
       buildFileConflictIndex(entries, adapter, log),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
@@ -355,6 +358,7 @@ export class Instance implements Subscription {
       settings.gameFolder().then(async (gameFolder) => ({
         gameFolder, dataFolderPlugins: await this.readGameFolderPlugins(gameFolder),
       })),
+      Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
     ]);
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins } = game;
@@ -364,6 +368,7 @@ export class Instance implements Subscription {
     return {
       mods: entries,
       modFolders: modFolders?.all,
+      trackedMods: new Set(trackedMods.flat()),
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,

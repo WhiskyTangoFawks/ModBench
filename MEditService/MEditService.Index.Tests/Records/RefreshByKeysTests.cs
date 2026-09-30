@@ -36,14 +36,14 @@ public sealed class RefreshByKeysTests : IDisposable
 
     private IRecordReads Reads => _index.RequireReads();
 
-    private void Refresh(params string[] formKeys) => _index.RefreshKeys(_mod.KeyOf(), formKeys);
+    private void Refresh() => _index.ValidateIndex(_mod.KeyOf());
 
     [Fact]
     public void ACommitMadeOutsideModbench_MovesTheCommittedRef_OnTheNextRefresh()
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
 
-        Refresh(_npc);
+        Refresh();
 
         var atHead = Reads.HeadDocument(_npc, _mod.KeyOf());
         Assert.NotNull(atHead);
@@ -53,7 +53,7 @@ public sealed class RefreshByKeysTests : IDisposable
         _mod.Git("add", "-A");
         _mod.Git("commit", "-q", "-m", "committed outside Modbench");
 
-        Refresh(_npc);
+        Refresh();
 
         var stack = Reads.GetOverrideStack(_npc);
         Assert.NotNull(stack);
@@ -74,7 +74,7 @@ public sealed class RefreshByKeysTests : IDisposable
         Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
         Assert.Equal("FixtureNpc", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
 
-        Refresh(_npc);
+        Refresh();
 
         Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
     }
@@ -90,7 +90,7 @@ public sealed class RefreshByKeysTests : IDisposable
             .Replace("\"FixtureNpc\"", "\"HandCreated\"", StringComparison.Ordinal);
         TrackedMods.RepositoryOf(_mod).Put(_mod.KeyOf(), new SourceDocument(formKey, "npc_", "HandCreated", body));
 
-        Refresh(formKey);
+        Refresh();
 
         // A document alone cannot say where the tree puts a record, so the plugin is re-derived whole
         // — and the record, its identity row and its EditorID all arrive with it.
@@ -110,7 +110,7 @@ public sealed class RefreshByKeysTests : IDisposable
         // exclusive ownership of the file (ADR-0003).
         File.WriteAllText(_mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf())), "{ this is not json");
 
-        Refresh(_npc);
+        Refresh();
 
         Assert.Equal(before, Reads.DocumentOf(_npc, _mod.KeyOf()).Body);
     }

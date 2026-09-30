@@ -61,29 +61,25 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     }
 
     [Fact]
-    public void Track_LeavesNothingUncommitted_OnTheEditBranch()
+    public void Track_LeavesMainCheckedOut_WithNothingUncommitted()
     {
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [.. SourceOf("A.esp"), .. SourceOf("B.esp")]);
 
+        Assert.Equal(["main"], Git("branch", "--format=%(refname:short)").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
     [Fact]
-    public void Track_IntoAModThatAlreadyHasARepository_AddsOneBaselineCommit_AndLeavesTheEditBranchWhereItWas()
+    public void Track_IntoAModThatAlreadyHasARepository_ThrowsAndChangesNothingOfIt()
     {
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("A.esp"));
         var mainBefore = Git("rev-parse", "refs/heads/main");
-        var editBefore = Git("rev-parse", "refs/heads/edit");
 
-        PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("B.esp"));
+        Assert.Throws<InvalidOperationException>(() => PluginBaselines.Track(_modFolder, SourcePreset.Edits, SourceOf("B.esp")));
 
-        Assert.Equal(["Track SomeMod", "Track A.esp", "Track B.esp"], SubjectsOnMain());
-        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main~1"));
-        Assert.Equal(["plugin-source/B.esp/npc_/B.esp/000001.json"], PathsIn("main"));
-        Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", SourceRepository.LastCompileRef("B.esp")));
-        Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
-        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
-        Assert.Equal(string.Empty, Git("status", "--porcelain"));
+        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, "plugin-source", "B.esp")));
     }
 
     private static List<TreeFile> SourceOf(string plugin) =>

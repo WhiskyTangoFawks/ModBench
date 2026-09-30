@@ -22,6 +22,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/records/copy", typeof(CopyRecordHandler)),
         ("POST", "/plugins/create", typeof(CreatePluginHandler)),
         ("POST", "/plugins/track", typeof(TrackHandler)),
+        ("POST", "/plugins/decompile", typeof(DecompilePluginHandler)),
         ("POST", "/plugins/compile", typeof(CompilePluginHandler)),
         ("POST", "/plugins/{plugin}/records", typeof(CreateRecordHandler)),
         ("PUT", "/load-order", typeof(PutLoadOrderHandler)),

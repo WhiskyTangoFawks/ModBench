@@ -21,25 +21,26 @@ public sealed class LoadOrderHolder
     public (LoadOrderSnapshot Snapshot, long Version)? Held =>
         Volatile.Read(ref _held) is { Snapshot.DataFolderPath.Length: > 0 } held ? (held.Snapshot, held.Version) : null;
 
-    /// <summary>Every reader of a snapshot change subscribes here, wired at composition. Carries
-    /// this Apply's own version, so a subscriber and its caller name the same arrival.</summary>
-    public event Action<LoadOrderSnapshot, long>? Changed;
+    /// <summary>Raised by every Apply, changed or not: an arrival is also the signal that a file may
+    /// have changed (ADR-0013 invariant 1). Carries the version Apply answers.</summary>
+    public event Action<LoadOrderSnapshot, long>? Arrived;
 
     /// <summary>One higher per Apply that changes the load order, for a caller asking whether the
-    /// Index has reconciled it. An equal snapshot is a no-op (ADR-0013 invariant 1), answering the
-    /// current version.</summary>
+    /// Index has reconciled it. An equal snapshot answers the current version.</summary>
     public long Apply(LoadOrderSnapshot snapshot)
     {
-        Arrival next;
+        Arrival arrival;
         lock (_applying)
         {
-            var held = _held;
-            if (snapshot.Equals(held.Snapshot)) return held.Version;
-            next = new Arrival(snapshot, held.Version + 1);
-            Volatile.Write(ref _held, next);
+            arrival = _held;
+            if (!snapshot.Equals(arrival.Snapshot))
+            {
+                arrival = new Arrival(snapshot, arrival.Version + 1);
+                Volatile.Write(ref _held, arrival);
+            }
         }
-        Changed?.Invoke(next.Snapshot, next.Version);
-        return next.Version;
+        Arrived?.Invoke(arrival.Snapshot, arrival.Version);
+        return arrival.Version;
     }
 
     /// <summary>The value a read must have. The one place a read refuses for want of a load order:

@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.TestSupport;
 
 /// <summary>Rewrites a fixture plugin so its bytes differ while its record set does not: the
-/// external change a binary watch settles on, without moving any record a test asserts on.</summary>
+/// external change a validation re-derives on, without moving any record a test asserts on.</summary>
 public static class PluginBinaries
 {
     public static void Touch(string pluginPath)

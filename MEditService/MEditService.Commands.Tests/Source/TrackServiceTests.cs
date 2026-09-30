@@ -169,10 +169,10 @@ public sealed class TrackServiceTests
         }
     }
 
-    // The already-tracked check must fire before the deep-parse loop, or the worst case runs to
+    // The repository check must fire before the deep-parse loop, or the worst case runs to
     // completion before the caller learns the cheap answer was available.
     [Fact]
-    public async Task TrackAsync_OfAPluginAlreadyTracked_RefusesBeforeParsingIt()
+    public async Task TrackAsync_OfAPluginInAModWithARepository_RefusesBeforeParsingIt()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-alreadytracked-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-alreadytracked-game-").FullName;

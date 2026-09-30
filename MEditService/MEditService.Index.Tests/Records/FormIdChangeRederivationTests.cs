@@ -33,7 +33,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var current = Reads.DocumentOf(oldFormKey, _mod.Plugin);
         repository.Put(_mod.Plugin, new SourceDocument(newFormKey, current.RecordType, current.EditorId, newBody));
         repository.Remove(_mod.Plugin, new RecordIdentity(oldFormKey, current.RecordType, current.EditorId));
-        _mod.Index.RefreshKeys(_mod.Plugin, [oldFormKey, newFormKey]);
+        _mod.Index.ValidateIndex(_mod.Plugin);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var document = Reads.DocumentOf(cellKey, _mod.Plugin);
         var newBody = document.BodyOf().Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
 
-        // Put only — the narrow signal RefreshKeys is, deliberately skipped.
+        // Put only — the next snapshot's validation, deliberately skipped.
         TrackedMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody));
 
         Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, oldNavmeshKey));
@@ -129,7 +129,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
         ChangeWorldspaceFormId(fixture, newWorldspaceKey);
         PluginBinaries.Touch(fixture.Entry.Path);
-        Assert.True(await fixture.Index.RefreshBinary(fixture.Plugin, fixture.Entry.Path));
+        Assert.True(fixture.Index.Revalidate(fixture.Plugin));
 
         var after = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(newWorldspaceKey, after.ParentWorldspace);

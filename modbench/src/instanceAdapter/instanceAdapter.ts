@@ -304,6 +304,8 @@ export interface InstanceAdapter {
   /** The folder the plugin file at `pluginFile` sits in when that folder is tracked; undefined when
    *  it is not (ADR-0007). */
   trackedFolderOf(pluginFile: string): Promise<string | undefined>;
+  /** Whether the mod's folder holds a repository (ADR-0007). */
+  modTracked(mod: string): Promise<boolean>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

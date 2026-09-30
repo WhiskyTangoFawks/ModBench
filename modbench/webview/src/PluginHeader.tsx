@@ -60,9 +60,9 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   untracked: {
     label: '(untracked)',
     title:
-      'This plugin\u2019s mod is not tracked, so its records are read-only. '
-      + 'Run \u201cModbench: Track\u2026\u201d on it once to start editing \u2014 '
-      + 'its records become text in the mod\u2019s own git repository, and your edits show up in Source Control.',
+      'This plugin is not tracked, so its records are read-only. '
+      + '\u201cTrack Mod\u2026\u201d, or \u201cDecompile Plugin\u201d in a tracked mod, in this header\u2019s menu '
+      + 'makes it editable \u2014 its records become text in the mod\u2019s own git repository, and your edits show up in Source Control.',
   },
   tracked: {
     label: '(tracked)',

@@ -12,7 +12,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Queries;
-using MEditService.Watcher;
 using Serilog;
 using Serilog.Events;
 
@@ -78,7 +77,6 @@ try
         sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<Indexer>());
-    builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<Indexer>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
@@ -90,17 +88,11 @@ try
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // The Mod watcher of the target architecture: one watch per mod folder in the load order, a
-    // process singleton, and the one listener to the load-order change.
-    builder.Services.AddSingleton(sp => new ModFolderWatcher(
-        sp.GetRequiredService<LoadOrderHolder>(),
-        sp.GetRequiredService<IRefreshIndex>(),
-        sp.GetRequiredService<ModSettled>(),
-        sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 
     var app = builder.Build();
 
-    app.Services.GetRequiredService<ModFolderWatcher>().Subscribe();
+    // ADR-0013 invariant 1: the record index reconciles every arrival of the load order.
+    app.Services.GetRequiredService<Indexer>().Subscribe();
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings

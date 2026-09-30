@@ -48,8 +48,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(
             $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {second}\n",
             TrailersOf("main"));
-        Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
-        Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", "refs/heads/edit"));
+        Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
     [Fact]
@@ -96,51 +95,22 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfAPluginIntoAModThatAlreadyHasARepository_AddsOneBaselineCommit()
+    public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesIt_PointingAtDecompile_AndCommitsNothing()
     {
         WritePlugin("First.esp", "FirstNpc");
         WritePlugin("Second.esp", "SecondNpc");
         await Track("First.esp");
-        var editBefore = Git("rev-parse", "refs/heads/edit");
-
-        var result = await Track("Second.esp");
-
-        Assert.Equal([Key("Second.esp")], result.Landed);
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
-        Assert.Equal(editBefore, Git("rev-parse", "refs/heads/edit"));
-    }
-
-    [Fact]
-    public async Task Track_OfAPluginAlreadyTracked_RefusesIt_AndLandsTheRestOfTheSelection()
-    {
-        WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
-        await Track("First.esp");
+        var mainBefore = Git("rev-parse", "refs/heads/main");
 
         var result = await Track("First.esp", "Second.esp");
 
-        Assert.Equal([Key("Second.esp")], result.Landed);
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal((Key("First.esp"), TrackRefusal.AlreadyTracked), (refused.Plugin, refused.Refusal));
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
-    }
-
-    // plugins.md, Track, story 5: a failure after a plugin's commit landed does not
-    // report that plugin refused. A lock another git holds on the edit branch makes its checkout
-    // fail after every baseline is on main.
-    [Fact]
-    public async Task Track_WhoseEditBranchCheckoutFails_ReportsThePluginsWhoseBaselinesLandedAsLanded()
-    {
-        WritePlugin("First.esp", "FirstNpc");
-        Git("init", "-q", "-b", "main");
-        File.WriteAllText(Path.Combine(_modFolder, ".git", "refs", "heads", "edit.lock"), "");
-
-        var result = await Track("First.esp");
-
-        Assert.Equal([Key("First.esp")], result.Landed);
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp"], SubjectsOnMain());
+        Assert.Empty(result.Landed);
+        Assert.Equal(
+            [(Key("First.esp"), TrackRefusal.AlreadyTracked), (Key("Second.esp"), TrackRefusal.AlreadyTracked)],
+            result.Refused.Select(r => (r.Plugin, r.Refusal)));
+        Assert.All(result.Refused, r => Assert.Contains("decompile", r.Message, StringComparison.Ordinal));
+        Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
+        Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
     }
 
     // ADR-0003: a repository with history but no main is someone else's, and Track writes nothing to it.
@@ -165,20 +135,6 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(logBefore, Git("log", "--all", "--format=%H %s"));
         Assert.Equal(gitignoreBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".gitignore")));
         Assert.Equal(configBefore, File.ReadAllBytes(Path.Combine(_modFolder, ".git", "config")));
-    }
-
-    [Fact]
-    public async Task Track_IntoAModWhosePluginChangedOutsideModbench_TracksThePlugin()
-    {
-        WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
-        await Track("First.esp");
-        WritePlugin("First.esp", "ChangedByAnotherTool");
-
-        var result = await Track("Second.esp");
-
-        Assert.Empty(result.Refused);
-        Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
     }
 
     [Fact]

@@ -79,4 +79,20 @@ public sealed class SourceRepositoryHeldAtHeadTests : IDisposable
 
         Assert.Empty(_repository.HeldAtHead(Plugin, [NpcFormKey, HeaderFormKey]).Require());
     }
+
+    // JSON reads an escaped character as the character, so no text search for the FormKey finds the
+    // document that declares it this way.
+    [Fact]
+    public void ADocumentDeclaringItsFormKeyThroughAJsonEscape_IsHeld()
+    {
+        const string escaped = "000A00:Held.esp";
+        var relativePath = Path.Combine("plugin-source", PluginName, "Npcs", $"EscapedNpc - 000A00_{PluginName}.json");
+        File.WriteAllText(
+            Path.Combine(_modFolder, relativePath),
+            """{"FormKey": "000A00\u003AHeld.esp", "EditorID": "EscapedNpc"}""");
+        Git("add", "--", relativePath.Replace('\\', '/'));
+        Git("commit", "-q", "-m", "a document another tool wrote with an escape");
+
+        Assert.Equal([escaped], _repository.HeldAtHead(Plugin, [escaped]).Require());
+    }
 }

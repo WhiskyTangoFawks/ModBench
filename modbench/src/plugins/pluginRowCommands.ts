@@ -15,6 +15,7 @@ import {
 } from './gestureEntry';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The Plugins tree's one progress surface (ADR-0002): a spinner over the view while the work
@@ -108,7 +109,7 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
     return;
   }
   const addressed = withPlugins.flatMap(pluginsOf);
-  const upstreamVersionByOrigin = upstreamVersionsOf(deps.mods(), withPlugins);
+  const upstreamVersionByOrigin = upstreamVersionByOriginOf(deps.mods(), withPlugins);
   const what = withPlugins.length === 1 ? `"${firstMod}"` : `${withPlugins.length} mods`;
 
   const choice = await pickTrackPreset(`Track ${what}`);
@@ -127,7 +128,7 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
   });
 }
 
-function upstreamVersionsOf(entries: InstanceValue['mods'], mods: readonly string[]): UpstreamVersionByOrigin {
+function upstreamVersionByOriginOf(entries: InstanceValue['mods'], mods: readonly string[]): UpstreamVersionByOrigin {
   return Object.fromEntries(entries.flatMap((entry) =>
     (entry.kind === 'mod' && entry.version !== undefined && mods.includes(entry.name) ? [[entry.name, entry.version]] : [])));
 }
@@ -152,6 +153,62 @@ function reportRefused(
     ],
   }, (name) => name);
   return true;
+}
+
+/** What decompile needs: the call, the view's progress bar, its one confirmation, and how the user
+ *  is told. */
+export interface DecompileDeps {
+  client: Pick<MEditClient, 'decompile'>;
+  progress: PluginsViewProgress;
+  reporter: Reporter;
+  ask: AskQuestion;
+}
+
+/** commands.md, `decompile`: the plugins of Plugins rows, the selection included, of a record tab's
+ *  column header, or of the palette's Plugins selection, asked once. */
+export function registerDecompileCommand(
+  deps: DecompileDeps, viewSelection: () => readonly PluginsTreeNode[],
+): vscode.Disposable {
+  return vscode.commands.registerCommand(
+    'modbench.plugin.decompile',
+    async (clicked?: unknown, selected?: readonly PluginsTreeNode[]) => {
+      const header = columnHeaderOf(clicked);
+      const plugins = header
+        ? [header]
+        : selectionArgument(pluginsGestureEntry(clicked, selected, viewSelection), 'plugin')
+          .map((node) => ({ name: node.plugin.name, origin: node.origin }));
+      if (plugins.length === 0 || !(await confirmDecompile(deps.ask, plugins))) return;
+      await deps.progress.while(async () => {
+        const outcome = await deps.client.decompile(plugins);
+        if (isRefused(outcome)) { deps.reporter.report('error', outcome.message); return; }
+        reportDecompiled(deps.reporter, outcome, plugins.length);
+      });
+    },
+  );
+}
+
+// plugins.md, Decompile: one confirmation for the selection, naming the plugins; it replaces
+// what the working tree holds (commands.md, Confirm what destroys).
+async function confirmDecompile(ask: AskQuestion, plugins: readonly PluginAddress[]): Promise<boolean> {
+  const [only] = plugins;
+  const answer = plugins.length === 1 && only !== undefined
+    ? await ask(`Decompile "${only.name}" in ${only.origin}? Decompile replaces its source in the working tree from its bytes.`,
+      { modal: true }, 'Decompile')
+    : await ask(`Decompile ${plugins.length} plugins? Decompile replaces their source in the working tree from their bytes.`,
+      { modal: true, detail: plugins.map(rowName).join('\n') }, 'Decompile');
+  return answer === 'Decompile';
+}
+
+function reportDecompiled(reporter: Reporter, outcome: SelectionOutcome<PluginAddress>, total: number): void {
+  const [refused] = outcome.refused;
+  if (refused !== undefined) {
+    const what = total === 1 ? `"${refused.item.name}"` : `${outcome.refused.length} of ${total} plugins`;
+    reporter.selectionOutcome(`Could not decompile ${what}.`, outcome, rowName);
+    return;
+  }
+  const [only, ...more] = outcome.landed;
+  if (only === undefined) return;
+  reporter.landed(more.length === 0 ? `Decompiled "${only.name}".` : `Decompiled ${outcome.landed.length} plugins.`);
 }
 
 /** What compile needs: the tracked plugins for the palette's pick, the compile itself, the view's

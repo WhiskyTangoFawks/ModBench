@@ -12,7 +12,8 @@ using Noggog;
 namespace MEditService.Http.Tests.Api;
 
 /// <summary>a-change-from-another-tool: a change from another tool and a change from Modbench are
-/// the same signal, because each read model learns only by watching.</summary>
+/// the same signal, the next snapshot, because each read model learns only through the one
+/// watch.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class AChangeFromAnotherToolApiTests : HostedTests
 {
@@ -43,6 +44,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;
     }
@@ -62,6 +64,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(fx, Origin), Plugin, Npc, "RenamedByAnotherTool");
+        await Client.NextSnapshot(fx);
 
         var rows = await stream.EventsUntil(
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey));
@@ -70,7 +73,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     }
 
     // The old path is gone and the new one declares the same record: it moved, it did not go. The
-    // quest's edits settle the watch before the rename and anchor the frames after it.
+    // quest's edits settle a snapshot before the rename and anchor the frames after it.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("SortedByHand/{0}")]
@@ -82,11 +85,12 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
         using var stream = await Client.NotificationStream();
         OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
         OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
 
-        var frames = await FramesOfTheSettleAnchoredBy(stream, modFolder, quest);
+        var frames = await FramesOfTheSnapshotAnchoredBy(fx, stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
@@ -100,12 +104,13 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var npc = await Client.FirstFormKey(Plugin, Origin);
         OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-        var before = await Client.Sequence();
 
         (await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal("EditedAfterTheRename", (await Client.Record(npc)).GetProperty("editorId").GetString());
+        await Wire.Eventually(
+            async () => (await Client.Record(npc)).GetProperty("editorId").GetString() == "EditedAfterTheRename",
+            "the edit reached the read");
     }
 
     [Theory]
@@ -118,11 +123,9 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var npc = await Client.FirstFormKey(Plugin, Origin);
         OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
         var renamed = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-        var before = await Client.Sequence();
 
         (await Client.Edit(npc, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
-        await Client.SequenceReaches(before + 1);
         Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(modFolder, Plugin, "0.75"));
     }
 
@@ -154,6 +157,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(patch, patchOrigin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(patch);
         var patchFolder = OtherTool.ModFolderOf(fx, patchOrigin);
         OtherTool.RenamesASourceDocument(patchFolder, patch, "\"SharedDialogueQuest\"", "RenamedByHand.json");
@@ -186,11 +190,12 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(modFolder, OtherTool.Beside(original, "Backup/{0}")), detail, StringComparison.Ordinal);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
     }
 
     // A tool that moves by copying and then deleting leaves the record in two documents until the
-    // delete settles.
+    // snapshot after the delete.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("Misnamed - 000900_Shared.esp.json")]
@@ -206,6 +211,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         OtherTool.CopiesASourceDocument(original, copiedTo);
+        await Client.NextSnapshot(fx);
 
         var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
         Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
@@ -213,6 +219,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             Path.GetRelativePath(modFolder, OtherTool.Beside(original, copiedTo)), FailureOf(diagnosed), StringComparison.Ordinal);
 
         OtherTool.DeletesTheFile(original);
+        await Client.NextSnapshot(fx);
 
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
@@ -241,6 +248,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         var copy = ACellCopiedUnderAKeyOfItsOwn(modFolder, cell);
+        await Client.NextSnapshot(fx);
 
         var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
         Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
@@ -266,6 +274,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(Path.GetRelativePath(modFolder, original), detail, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(modFolder, copy), detail, StringComparison.Ordinal);
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
     }
 
@@ -281,9 +290,11 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var stream = await Client.NotificationStream();
         Directory.CreateDirectory(OtherTool.Beside(original, "Backup"));
         OtherTool.EditsASourceDocument(modFolder, Plugin, "OriginalFilter", "SettledFilter");
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("rows-changed", e => Names(e, quest));
 
         OtherTool.CopiesASourceDocument(original, $"Backup/{copiedTo}");
+        await Client.NextSnapshot(fx);
 
         var diagnosed = (await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null))[^1];
         Assert.Contains(Path.GetRelativePath(modFolder, original), FailureOf(diagnosed), StringComparison.Ordinal);
@@ -303,9 +314,11 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var original = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
         using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDocument(original, copiedTo);
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
 
         OtherTool.DeletesTheFile(OtherTool.Beside(original, copiedTo));
+        await Client.NextSnapshot(fx);
 
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
@@ -317,7 +330,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Select(f => f.GetProperty("reason").GetString())
             .FirstOrDefault();
 
-    // An earlier projection's frame can name the record too, and a write joining the delete's settle
+    // An earlier projection's frame can name the record too, and a write joining the delete's snapshot
     // is a move that advances nothing: the delete's frame is the one after which the record reads gone.
     private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
     {
@@ -342,12 +355,15 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var text = File.ReadAllText(original);
         using var stream = await Client.NotificationStream();
         OtherTool.DeletesTheFile(original);
+        await Client.NextSnapshot(fx);
         await TheFrameAfterWhichItReadsGone(stream, npc);
-        var afterTheDelete = await Client.Sequence();
 
         OtherTool.WritesTheFile(OtherTool.Beside(original, writtenTo), text);
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(afterTheDelete + 1);
+        await Wire.Eventually(
+            async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(npc)}", UriKind.Relative))).IsSuccessStatusCode,
+            "the record came back");
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
@@ -361,9 +377,11 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, Cell)).Require();
         using var stream = await Client.NotificationStream();
         OtherTool.CopiesASourceDirectory(original, "RenamedByHand");
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
 
         OtherTool.DeletesTheDirectory(original);
+        await Client.NextSnapshot(fx);
 
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is null);
         Assert.Equal(Cell, (await Client.Record(cell)).GetProperty("editorId").GetString());
@@ -384,13 +402,14 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var text = File.ReadAllText(document);
         using var stream = await Client.NotificationStream();
         OtherTool.DeletesTheDirectory(original);
+        await Client.NextSnapshot(fx);
         await stream.EventsUntil("rows-changed", e => Names(e, container));
-        var afterTheDelete = await Client.Sequence();
 
         OtherTool.WritesTheFile(
             Path.Combine(OtherTool.Beside(original, "RenamedByHand"), Path.GetFileName(document)), text);
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(afterTheDelete + 1);
+        await stream.EventsUntil("rows-changed", e => Names(e, container));
         Assert.Equal(editorId, (await Client.Record(container)).GetProperty("editorId").GetString());
     }
 
@@ -404,15 +423,16 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var container = await Client.FirstFormKey(Plugin, Origin, recordType);
         var directory = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{editorId}\"")).Require();
         Directory.Move(directory, OtherTool.Beside(directory, "RenamedByHand"));
-        var before = await Client.Sequence();
 
         (await Client.Edit(container, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal("EditedAfterTheRename", (await Client.Record(container)).GetProperty("editorId").GetString());
+        await Wire.Eventually(
+            async () => (await Client.Record(container)).GetProperty("editorId").GetString() == "EditedAfterTheRename",
+            "the edit reached the read");
     }
 
-    // Only the folder's own arrival is an event: nothing inside it was watched when it was written.
+    // A folder moved in whole names nothing inside it to any watch.
     [Fact]
     public async Task ARecordInAFolderMovedInByHand_IsRead()
     {
@@ -424,23 +444,26 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var text = File.ReadAllText(original)
             .Replace(npc, added, StringComparison.Ordinal)
             .Replace(Npc, "AddedNpc", StringComparison.Ordinal);
-        var before = await Client.Sequence();
-
         OtherTool.MovesInAFolderHolding(OtherTool.Beside(original, "AddedByHand"), "AddedNpc - 000900_Shared.esp.json", text);
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(before + 1);
+        await Wire.Eventually(
+            async () => (await Client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(added)}", UriKind.Relative))).IsSuccessStatusCode,
+            "the record in the folder was read");
         Assert.Equal("AddedNpc", (await Client.Record(added)).GetProperty("editorId").GetString());
     }
 
-    // A batch publishes the quest's frame before a record it dropped, so only a later batch's frame
-    // bounds everything the first batch published.
-    private static async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSettleAnchoredBy(
-        StreamReader stream, string modFolder, string quest)
+    // A validation publishes the quest's frame before a record it dropped, so only a later
+    // snapshot's frame bounds everything the first one published.
+    private async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSnapshotAnchoredBy(
+        ScatteredFixtureData fx, StreamReader stream, string modFolder, string quest)
     {
         OtherTool.EditsASourceDocument(modFolder, Plugin, "SettledFilter", "AnchorFilter");
+        await Client.NextSnapshot(fx);
         var frames = new List<(string Kind, JsonElement Data)>(
             await stream.FramesThrough("rows-changed", e => Names(e, quest)));
         OtherTool.EditsASourceDocument(modFolder, Plugin, "AnchorFilter", "BoundingFilter");
+        await Client.NextSnapshot(fx);
         frames.AddRange(await stream.FramesThrough("rows-changed", e => Names(e, quest)));
         return frames;
     }
@@ -462,6 +485,7 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
 
         OtherTool.WritesThePlugin(
             fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+        await Client.NextSnapshot(fx);
 
         var changed = await stream.EventsUntil("plugin-changed", e => e.GetProperty("plugin").GetString() == Plugin);
         Assert.Equal(Origin, changed[^1].GetProperty("origin").GetString());
@@ -478,16 +502,14 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var quest = await Client.FirstFormKey(Plugin, Origin, "qust");
-        var before = await Client.Sequence();
         (await Client.Edit(quest, Plugin, Origin, "Filter", "EditedFilter")).EnsureSuccessStatusCode();
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal("EditedFilter", (await Field(quest, "Filter")).GetString());
-        var afterEdit = await Client.Sequence();
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => (await Field(quest, "Filter")).GetString() == "EditedFilter", "the edit reached the read");
 
         OtherTool.RevertsASourceDocument(modFolder, Plugin, "EditedFilter");
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(afterEdit + 1);
-        Assert.Equal("OriginalFilter", (await Field(quest, "Filter")).GetString());
+        await Wire.Eventually(async () => (await Field(quest, "Filter")).GetString() == "OriginalFilter", "the revert reached the read");
     }
 
     // An embedded child lives in its owning cell's document, so the revert of that one file is
@@ -498,15 +520,13 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         var placedRef = await Client.FormKeyNamed(Plugin, Origin, "refr", PlacedRef);
-        var before = await Client.Sequence();
         (await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5)).EnsureSuccessStatusCode();
-        await Client.SequenceReaches(before + 1);
-        Assert.Equal(2.5f, (await Field(placedRef, "Scale")).GetSingle());
-        var afterEdit = await Client.Sequence();
+        await Client.NextSnapshot(fx);
+        await Wire.Eventually(async () => (await Field(placedRef, "Scale")).GetSingle() == 2.5f, "the edit reached the read");
 
         OtherTool.RevertsASourceDocument(modFolder, Plugin, "2.5");
+        await Client.NextSnapshot(fx);
 
-        await Client.SequenceReaches(afterEdit + 1);
-        Assert.Equal(1f, (await Field(placedRef, "Scale")).GetSingle());
+        await Wire.Eventually(async () => (await Field(placedRef, "Scale")).GetSingle() == 1f, "the revert reached the read");
     }
 }

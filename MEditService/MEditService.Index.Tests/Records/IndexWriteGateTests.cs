@@ -35,8 +35,8 @@ public sealed class IndexWriteGateTests
         Assert.Equal(["first-in", "first-out", "second-in"], order);
     }
 
-    // Reentrancy is load-bearing: the source watcher's batch takes the gate and then calls Index
-    // doors that take it again, so a non-reentrant gate would self-deadlock on the ordinary path.
+    // Reentrancy is load-bearing: a validation takes the gate and then calls Index doors that take
+    // it again, so a non-reentrant gate would self-deadlock on the ordinary path.
     [Fact]
     public void TheSameThread_CanEnterTwice()
     {

@@ -13,7 +13,7 @@ import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modlistFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modDir, modlistFile,
   modMetaFile, pluginFolder, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
@@ -122,5 +122,7 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
       const folder = pluginFolder(pluginFile);
       return (await isTracked(folder)) ? folder : undefined;
     },
+
+    modTracked: (mod) => isTracked(modDir(instanceRoot, mod)),
   };
 }

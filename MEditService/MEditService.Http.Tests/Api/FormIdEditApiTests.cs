@@ -37,6 +37,8 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         });
         load.EnsureSuccessStatusCode();
         (await _client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await _client.NextSnapshot(fx, Origin);
+        await _client.PluginReportsTracked(Plugin);
     }
 
     [Fact]
@@ -45,7 +47,6 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         using var fx = BuildOneModOnePlugin();
         await LoadAndTrack(fx);
 
-        var beforeCreate = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         var created = await _client.PostAsJsonAsync($"/plugins/{Plugin}/records", new
         {
             origin = Origin,
@@ -57,8 +58,11 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
 
         // ADR-0014: the create wrote the source tree and returned; the edit below resolves its
-        // target through the Index, so it waits for the Source watcher's projection of that write.
-        Assert.True(await ProjectionLanded(beforeCreate), "the created record never reached the index");
+        // target through the Index, so it waits for the next snapshot's projection of that write.
+        await _client.NextSnapshot(fx, Origin);
+        await Wire.Eventually(
+            async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(oldFormKey)}", UriKind.Relative))).IsSuccessStatusCode,
+            "the created record reached the index");
 
         const string newFormKey = "000F00:Editable.esp";
         var beforeEdit = await _client.GetFromJsonAsync<long>("/load-order/sequence");
@@ -66,6 +70,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         var edited = await _client.Edit(oldFormKey, Plugin, Origin, "FormKey", newFormKey);
         edited.EnsureSuccessStatusCode();
         Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
+        await _client.NextSnapshot(fx, Origin);
 
         // ADR-0015, invariant 3: the rows that changed are named, the old FormKey's and the new
         // one's.
@@ -73,7 +78,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(oldFormKey, named);
 
-        // ADR-0014: the edit's create and delete settle as one batch and that batch is one advance,
+        // ADR-0014: the edit's create and delete land in one validation, and that is one advance,
         // so one await is the whole wait — no poll for an end state.
         Assert.True(await ProjectionLanded(beforeEdit), "the record under its new FormKey never reached the index");
 
@@ -87,8 +92,8 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         Assert.Contains(newFormKey, formKeys);
     }
 
-    // The debounce is 300 ms in the composition root, so the bound is generous; a sleep would be a
-    // guess either way.
+    // Validation runs on the service's own thread, so the bound is generous; a sleep would be a guess
+    // either way.
     private async Task<bool> ProjectionLanded(long before)
     {
         var response = await _client.GetAsync(

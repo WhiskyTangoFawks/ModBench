@@ -5,8 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>detect-external-change: another tool rewrites a tracked plugin, the mod settles, and
-/// the notification stream names the mod and the plugin that changed outside Modbench.</summary>
+/// <summary>detect-external-change: another tool rewrites a tracked plugin, the next snapshot
+/// arrives, and the notification stream names the mod and the plugin that changed outside
+/// Modbench.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class DetectExternalChangeTraceTests : HostedTests
 {
@@ -24,6 +25,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         var fx = Owned(OneMod());
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
+        await Client.NextSnapshot(fx);
         await Client.PluginReportsTracked(Plugin);
         return fx;
     }
@@ -37,6 +39,7 @@ public sealed class DetectExternalChangeTraceTests : HostedTests
         OtherTool.WritesThePlugin(
             fx.Plugins.Single(p => p.Origin == Origin).Path,
             mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
+        await Client.NextSnapshot(fx);
 
         var change = (await stream.EventsUntil("external-change", NamesThePlugin))[^1];
         Assert.Equal(Origin, change.GetProperty("origin").GetString());

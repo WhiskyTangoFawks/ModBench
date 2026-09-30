@@ -11,7 +11,7 @@ type QueryMethod =
 
 type CommandMethod =
   | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
-  | 'copyRecords' | 'compile' | 'editRecord' | 'putLoadOrder';
+  | 'copyRecords' | 'decompile' | 'compile' | 'editRecord' | 'putLoadOrder';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -210,6 +210,9 @@ export class InMemoryMEditClient implements MEditClient {
   }
   copyRecords(...args: Parameters<MEditClient['copyRecords']>): ReturnType<MEditClient['copyRecords']> {
     return this.command('copyRecords', args);
+  }
+  decompile(...args: Parameters<MEditClient['decompile']>): ReturnType<MEditClient['decompile']> {
+    return this.command('decompile', args);
   }
   compile(...args: Parameters<MEditClient['compile']>): ReturnType<MEditClient['compile']> {
     return this.command('compile', args);

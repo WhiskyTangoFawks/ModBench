@@ -674,6 +674,14 @@ describe('the MO2 Instance adapter', () => {
         expect(await adapter.trackedFolderOf(join(root, 'mods', 'Harder VATS', 'Harder VATS.esp'))).toBeUndefined();
       });
     });
+
+    describe('a mod\'s repository', () => {
+      it('answers tracked for a mod whose folder holds one, and not for a mod whose folder holds none', async () => {
+        await mkdir(join(root, 'mods', 'Harder VATS', '.git'));
+
+        expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
+      });
+    });
   });
 
   describe('put and rename in mods/', () => {

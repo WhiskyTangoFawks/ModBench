@@ -189,7 +189,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // path that can change which records match has to re-run it.
 
     [Fact]
-    public async Task RefreshBinary_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
+    public void Validate_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -208,7 +208,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
             var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            await manager.RefreshBinary(plugin.KeyOf(), plugin.Path);
+            manager.Revalidate(plugin.KeyOf());
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
@@ -217,7 +217,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public async Task RefreshBinary_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
+    public void Validate_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -236,7 +236,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
             var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            await manager.RefreshBinary(plugin.KeyOf(), plugin.Path);
+            manager.Revalidate(plugin.KeyOf());
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
@@ -246,7 +246,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // A filter valid over the rows it was set on and not over the rows a re-index lands: the one
     // way a re-materialization can fail after the write it follows is already durable.
     [Fact]
-    public async Task RefreshBinary_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
+    public void Validate_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -269,7 +269,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
             var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            var ex = await Record.ExceptionAsync(() => manager.RefreshBinary(plugin.KeyOf(), plugin.Path));
+            var ex = Record.Exception(() => manager.ValidateIndex(plugin.KeyOf()));
 
             Assert.Null(ex);
             Assert.Contains(entries, e =>
