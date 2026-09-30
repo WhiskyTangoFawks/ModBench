@@ -164,9 +164,27 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
   };
 
   // A separator's folder moves with its line; anything else in mod order is a line alone.
+  // The folder a separator added or renamed would take; a rename within one name's case takes its
+  // own folder, which is never in the way.
+  const folderTaken = (change: ModOrderChange): string | undefined => {
+    if (change.kind === 'addSeparator') return change.separator;
+    if (change.kind !== 'renameSeparator') return undefined;
+    const sameName = entryKey({ kind: 'separator', name: change.to }) === entryKey({ kind: 'separator', name: change.from });
+    return sameName ? undefined : change.to;
+  };
+
+  // A folder already there, listed or not, is never replaced or adopted: the change is refused
+  // before anything moves.
+  const refuseFolderInTheWay = async (change: ModOrderChange): Promise<void> => {
+    const name = folderTaken(change);
+    if (name === undefined) return;
+    const exact = separatorFolderOf(name);
+    const inTheWay = (await folderHolding(context, { kind: 'separator', name }))?.path ?? ((await exists(exact)) ? exact : undefined);
+    if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
+  };
+
   const moveFolders = async (change: ModOrderChange): Promise<Undo | undefined> => {
     if (change.kind === 'addSeparator') {
-      if (await folderHolding(context, { kind: 'separator', name: change.separator })) return undefined;
       const folder = separatorFolderOf(change.separator);
       await ensureDir(folder);
       return () => remove(folder);
@@ -199,6 +217,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
         }
         const undos: Undo[] = [];
         try {
+          for (const change of resolved) await refuseFolderInTheWay(change);
           for (const change of resolved) {
             const undo = await moveFolders(change);
             if (undo) undos.unshift(undo);

@@ -645,6 +645,42 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
       });
 
+      // Rival: no check for a folder already there, so on Linux a rename onto an empty one replaces
+      // it in silence, where Windows refuses.
+      it('refuses a rename onto a folder already there, listed or not, before anything moves', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+        await mkdir(separatorFolder('Core Mods'));
+
+        await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
+          .rejects.toThrow(`The folder "${separatorFolder('Core Mods')}" is in the way`);
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+        expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
+      });
+
+      it('refuses a rename onto a folder that holds the name in another case', async () => {
+        await mkdir(separatorFolder('core mods'));
+
+        await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
+          .rejects.toThrow(/is in the way/);
+
+        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+      });
+
+      // Rival: a folder already there adopted as the new separator's own, and then taken away as
+      // one it made if the line cannot be written.
+      it('refuses adding a separator whose folder is already there', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+        await mkdir(separatorFolder('Orphan'));
+        await writeFile(join(separatorFolder('Orphan'), 'kept.txt'), '');
+
+        await expect(change([{ kind: 'addSeparator', separator: 'Orphan', afterIndex: -1 }])).rejects.toThrow(/is in the way/);
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+        expect(await isThere(join(separatorFolder('Orphan'), 'kept.txt'))).toBe(true);
+      });
+
       // Rival: no undo, so a line that cannot be written leaves the folder renamed alone.
       it('puts the folder back when the renamed line cannot be written', async () => {
         const before = await text(root, DEFAULT_MODLIST);
