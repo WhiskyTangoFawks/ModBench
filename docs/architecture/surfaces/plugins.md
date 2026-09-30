@@ -164,7 +164,7 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
 | Plugin menu | reveal · enable or disable · create record… · track… (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
-| Record-type group menu | create record, except on a group of container records or of a type the game cannot create |
+| Record-type group menu | create record…, except on a group of container records or of a type the game cannot create |
 | Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. |
@@ -262,7 +262,7 @@ As a user, I want:
    selected and opens in the record panel. *catalog `create` under Record, record type Option;
    xEdit selects what it adds*
 2. The new record to take the next free FormKey that neither the working tree nor the last commit
-   uses, and a fresh EditorID unique in the plugin.
+   uses, and no EditorID, as xEdit adds one.
 3. When no FormKey is free, a refusal naming the remedies: clear the light flag, or change a
    record's FormID.
 4. No create record on a group of container records, or of a type the game cannot create. *No dead
