@@ -1,27 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  access, chmod, mkdir, mkdtemp, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
+  access, chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
 } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-// Passthrough, so one test can block or hold a folder's move back, and one can fail a link's
+// Passthrough, so a test can hold a folder's move back, remove a folder mid-walk, or fail a link's
 // stat with an error other than ENOENT: chmod denies nothing when the runner is root.
 const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
   stat: undefined as typeof import('node:fs/promises').stat | undefined,
+  readdir: undefined as typeof import('node:fs/promises').readdir | undefined,
 }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   real.rename = actual.rename;
   real.stat = actual.stat;
-  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat) };
+  real.readdir = actual.readdir;
+  return { ...actual, rename: vi.fn(actual.rename), stat: vi.fn(actual.stat), readdir: vi.fn(actual.readdir) };
 });
 
 const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 const actualStat = present(real.stat, 'the real stat');
+const actualReaddir = present(real.readdir, 'the real readdir');
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
@@ -71,6 +74,7 @@ describe('the MO2 Instance adapter', () => {
   afterEach(async () => {
     vi.mocked(fsRename).mockImplementation(actualRename);
     vi.mocked(stat).mockImplementation(actualStat);
+    vi.mocked(readdir).mockImplementation(actualReaddir);
     await rm(root, { recursive: true, force: true });
   });
 
@@ -570,6 +574,39 @@ describe('the MO2 Instance adapter', () => {
         expect(relativePaths(files.files)).toContain('Stray.esp');
         expect(relativePaths(files.files).some((path) => path.startsWith('F4SE/'))).toBe(true);
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
+      });
+
+      // Rival: one catch around the whole walk, which reads a folder removed mid-walk as an empty
+      // origin.
+      it.each([
+        ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite', 'F4SE/Plugins/SomePlugin.log'],
+        ['a mod\'s folder', mod('Harder VATS'), join('mods', 'Harder VATS'), 'Kept.esp'],
+      ])('skips a subfolder of %s removed mid-walk, and notes it', async (_, origin, folder, kept) => {
+        await writeFile(join(root, folder, 'Kept.esp'), '');
+        await mkdir(join(root, folder, 'Gone'));
+        await writeFile(join(root, folder, 'Gone', 'Lost.esp'), '');
+        vi.mocked(readdir).mockImplementation((async (path: PathLike, options: never) => {
+          if (String(path) === join(root, folder, 'Gone')) await rm(path, { recursive: true });
+          return actualReaddir(path, options);
+        }) as typeof readdir);
+
+        const files = await adapter.originFiles(origin);
+
+        expect(relativePaths(files.files)).toContain(kept);
+        expect(relativePaths(files.files)).not.toContain('Gone/Lost.esp');
+        expect(files.notes).toEqual([expect.stringMatching(/Gone/)]);
+      });
+
+      // Rival: skipping a link in overwrite/ with no word, which drops its file from the picture.
+      it('notes a link in the overwrite folder, which it does not follow', async () => {
+        const target = join(root, 'elsewhere.esp');
+        await writeFile(target, '');
+        await symlink(target, join(root, 'overwrite', 'Linked.esp'));
+
+        const files = await adapter.originFiles({ kind: 'runtimeOutput' });
+
+        expect(relativePaths(files.files)).not.toContain('Linked.esp');
+        expect(files.notes).toEqual([expect.stringMatching(/Linked\.esp/)]);
       });
 
       it('answers no files when there is no overwrite folder', async () => {
