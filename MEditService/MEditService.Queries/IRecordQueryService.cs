@@ -25,8 +25,6 @@ public interface IRecordQueryService
 
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
-    // Mutagen's release data (GameConstants.SmallMasterFlag), not a per-game table — the one
-    // source create-plugin's name prompt and CreatePluginHandler's refusal both read.
     bool GetLightPluginsSupported();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 

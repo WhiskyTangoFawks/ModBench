@@ -84,7 +84,7 @@ describe('registerCreatePluginCommand', () => {
     return { run: present(handlers.get('modbench.plugin.create'), "the create plugin command's registered handler"), reporter };
   }
 
-  const namedQuery = { method: 'getLightPluginsSupported', args: [] };
+  const lightPluginsQuery = { method: 'getLightPluginsSupported', args: [] };
 
   type Place = { label: string; origin: string };
   const offering = (): { offered: Place[] } => {
@@ -108,7 +108,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(client.calls).toEqual([
-      namedQuery,
+      lightPluginsQuery,
       { method: 'createPlugin', args: [{ name: 'MyPatch.esp', origin: 'Winning Mod' }, '/instance/mods/Winning Mod'] },
     ]);
     expect(reporter.landings).toEqual(['Created "MyPatch.esp" in Winning Mod.']);
@@ -148,6 +148,20 @@ describe('registerCreatePluginCommand', () => {
     expect(['A.esp', 'B.ESM'].map(validate)).toEqual([undefined, undefined]);
   });
 
+  it('reports why, and opens no prompt, when mEdit cannot say whether the game has light plugins', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('getLightPluginsSupported', new Error('No load order has been loaded.'));
+
+    const { run, reporter } = invoke(client, makeMo2());
+    await run();
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(client.calls).toEqual([lightPluginsQuery]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not look up whether this game has light plugins.', detail: 'No load order has been loaded.' },
+    ]);
+  });
+
   // Rival: checking the name across the whole load order, which would also leave out Overwrite
   // and the other enabled mods.
   it('picks the enabled mods first, then Overwrite, leaving out the place that holds the name', async () => {
@@ -168,7 +182,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(showQuickPick).not.toHaveBeenCalled();
-    expect(client.calls).toEqual([namedQuery]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([]);
   });
 
@@ -180,7 +194,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, makeMo2());
     await run();
 
-    expect(client.calls).toEqual([namedQuery]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([]);
     expect(reporter.landings).toEqual([]);
   });
@@ -199,7 +213,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([namedQuery]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" is gone, so "MyPatch.esp" was not created.', detail: undefined },
     ]);
@@ -217,7 +231,7 @@ describe('registerCreatePluginCommand', () => {
     const { run, reporter } = invoke(client, mo2);
     await run();
 
-    expect(client.calls).toEqual([namedQuery]);
+    expect(client.calls).toEqual([lightPluginsQuery]);
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'The mod "Winning Mod" was disabled, so "MyPatch.esp" was not created.', detail: undefined },
     ]);

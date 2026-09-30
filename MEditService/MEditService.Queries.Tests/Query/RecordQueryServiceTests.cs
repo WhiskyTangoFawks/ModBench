@@ -823,8 +823,6 @@ public sealed class RecordQueryServiceTests
         Assert.True(ServiceIn(GameRelease.Fallout4).GetLightPluginsSupported());
     }
 
-    // Oblivion's format predates the light-master flag (create-plugin's own pinned seam,
-    // CreatePluginHandlerTests.CreatePlugin_ALightPluginInAReleaseWithoutThem_...).
     [Theory]
     [InlineData(GameRelease.Oblivion)]
     [InlineData(GameRelease.OblivionRE)]

@@ -85,11 +85,16 @@ export function pluginsCopyValueText(
   };
 }
 
-// The one source (create-plugin, story 1): CreatePluginHandler's server-side refusal reads the
-// same Mutagen release fact through Queries, so a game with no light plugins refuses .esl here
-// too, before any place pick.
-async function promptPluginName(client: Pick<MEditClient, 'getLightPluginsSupported'>): Promise<string | undefined> {
-  const lightPluginsSupported = await client.getLightPluginsSupported();
+async function promptPluginName(
+  client: Pick<MEditClient, 'getLightPluginsSupported'>, reporter: Reporter,
+): Promise<string | undefined> {
+  let lightPluginsSupported: boolean;
+  try {
+    lightPluginsSupported = await client.getLightPluginsSupported();
+  } catch (error) {
+    reporter.report('error', 'Could not look up whether this game has light plugins.', errorMessage(error));
+    return undefined;
+  }
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
     validateInput: v => {
@@ -114,7 +119,7 @@ export function registerCreatePluginCommand(
       return;
     }
 
-    const name = await promptPluginName(client);
+    const name = await promptPluginName(client, reporter);
     if (!name) return;
 
     const places = pluginPlaces(mo2.instance.value, name);

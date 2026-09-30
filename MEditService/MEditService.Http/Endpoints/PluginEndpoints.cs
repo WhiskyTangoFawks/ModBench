@@ -65,8 +65,6 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<CreatableRecordType>>()
             .ProducesProblem(503);
 
-        // create-plugin, story 1: the name prompt's own inline .esl refusal reads this, so it
-        // matches CreatePluginHandler's server-side refusal — the one source, Mutagen's release data.
         app.MapGet("/plugins/light-plugins-supported", (IRecordQueryService svc) =>
         {
             try

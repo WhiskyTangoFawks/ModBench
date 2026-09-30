@@ -161,8 +161,6 @@ export interface MEditClient {
   getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
-  // Mutagen's release data, not a per-game table (create-plugin, story 1) — the name prompt's own
-  // inline .esl refusal reads this, matching the backend refusal one source.
   getLightPluginsSupported(): Promise<boolean>;
   // `unfiltered` lists what the record filter hides too.
   getRecords(
