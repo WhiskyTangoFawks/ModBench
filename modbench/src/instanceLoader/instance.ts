@@ -100,15 +100,6 @@ export interface InstanceOptions {
   logReadFailure: (line: string) => void;
 }
 
-// Each listed mod's folder, as the adapter answered the mod folders.
-function modDirsOf(entries: readonly ModlistEntry[], modFolders: readonly ModFolder[] | undefined): Map<string, string> {
-  const folderOf = new Map((modFolders ?? []).filter((folder) => folder.kind === 'mod').map((folder) => [folder.name, folder.path]));
-  return new Map(entries.flatMap((entry) => {
-    const folder = entry.kind === 'mod' ? folderOf.get(entry.name) : undefined;
-    return folder === undefined ? [] : [[entry.name, folder] as const];
-  }));
-}
-
 const emptyValue = (): InstanceValue => ({
   mods: [],
   modFolders: [],
@@ -216,6 +207,19 @@ export class Instance implements Subscription {
     }
     this.linksTold = new Set(skipped.keys());
     return folders;
+  }
+
+  // Each listed mod's folder. A folder of the mod's own name is its folder under any manager's
+  // rule, so only a mod with none asks the adapter, which matches names as the manager does.
+  private async readModDirs(
+    entries: readonly ModlistEntry[], modFolders: readonly ModFolder[] | undefined,
+  ): Promise<Map<string, string>> {
+    if (modFolders === undefined) return new Map();
+    const named = new Map(modFolders.filter((folder) => folder.kind === 'mod').map((folder) => [folder.name, folder.path]));
+    const mods = entries.filter((entry) => entry.kind === 'mod');
+    const dirs = await Promise.all(mods.map(async ({ name }) =>
+      [name, named.get(name) ?? (await this.options.adapter.entryFolder({ kind: 'mod', name }))?.path] as const));
+    return new Map(dirs.filter((dir): dir is readonly [string, string] => dir[1] !== undefined));
   }
 
   // An unreadable Data folder is an answer, never a failed read: the whole value would otherwise
@@ -330,9 +334,10 @@ export class Instance implements Subscription {
     ]);
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins } = game;
-    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
-      ? await this.readInstalledInto(entries, modFolders ?? [])
-      : undefined;
+    const [installedInto, modDirs] = await Promise.all([
+      downloadsOutcome.kind === 'listed' && downloadsOutcome.files ? this.readInstalledInto(entries, modFolders ?? []) : undefined,
+      this.readModDirs(entries, modFolders),
+    ]);
     return {
       mods: entries,
       modFolders,
@@ -356,7 +361,7 @@ export class Instance implements Subscription {
       paths: {
         overwriteDir: runtimeOutput.folder ?? '',
         downloadsDir: downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : undefined,
-        modDirs: modDirsOf(entries, modFolders),
+        modDirs,
       },
     };
   }

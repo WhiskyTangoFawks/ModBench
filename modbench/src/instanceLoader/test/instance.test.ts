@@ -5,8 +5,6 @@ import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
-import { setEnabledInText } from '../../mo2Codecs/modlistText';
-import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameFolder } from '../../instanceAdapter/gameDirectory';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
@@ -155,11 +153,15 @@ const watcherFor = (glob: string): FakeWatcher => {
   return present(found[0], `the sole watcher for ${glob}`);
 };
 
-// MO2, xEdit or the user rewriting the file, with Modbench none the wiser.
-async function enableOutsideModbench(root: string, modName: string): Promise<void> {
-  const path = join(root, DEFAULT_MODLIST);
-  await writeFile(path, setEnabledInText(await readFile(path, 'utf8'), modName, true));
+// MO2, xEdit or the user rewriting a file's bytes, with Modbench none the wiser.
+async function rewriteOutsideModbench(path: string, from: string, to: string): Promise<void> {
+  const text = await readFile(path, 'utf8');
+  expect(text).toContain(from);
+  await writeFile(path, text.replace(from, to));
 }
+
+const enableHarderVatsOutsideModbench = (root: string): Promise<void> =>
+  rewriteOutsideModbench(join(root, DEFAULT_MODLIST), '-Harder VATS', '+Harder VATS');
 
 const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
 
@@ -487,7 +489,7 @@ describe('Instance — built by watching', () => {
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
     const before = instance.sequence;
 
-    await enableOutsideModbench(root, 'Harder VATS');
+    await enableHarderVatsOutsideModbench(root);
     watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
 
     expect(isEnabled(await pastSequence(instance, before), 'Harder VATS')).toBe(true);
@@ -671,7 +673,7 @@ describe('Instance — a value that survives a bad read', () => {
     await readToRest(instance);
     const before = instance.sequence;
 
-    await enableOutsideModbench(root, 'Harder VATS');
+    await enableHarderVatsOutsideModbench(root);
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false); // the event was suppressed
 
     await instance.refresh();
@@ -681,12 +683,9 @@ describe('Instance — a value that survives a bad read', () => {
   });
 });
 
-// Simulates MO2, xEdit or the user rewriting ModOrganizer.ini's own selected_profile — the
-// Instance only ever reads it.
-async function switchProfileOutsideModbench(root: string, profile: string): Promise<void> {
-  const path = join(root, 'ModOrganizer.ini');
-  await writeFile(path, setSelectedProfileInText(await readFile(path, 'utf8'), profile));
-}
+const switchToSecondaryOutsideModbench = (root: string): Promise<void> => rewriteOutsideModbench(
+  join(root, 'ModOrganizer.ini'), 'selected_profile=@ByteArray(Default)', 'selected_profile=@ByteArray(Secondary)',
+);
 
 describe('Instance — downloads, profile and game directory', () => {
   it('carries downloads with status and hidden, the active profile, the resolved game directory and release, from one value', async () => {
@@ -766,7 +765,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
     expect(instance.value.activeProfile).toBe('Default');
 
-    await switchProfileOutsideModbench(root, 'Secondary');
+    await switchToSecondaryOutsideModbench(root);
     await instance.refresh();
 
     expect(instance.value.activeProfile).toBe('Secondary');
@@ -779,7 +778,7 @@ describe('Instance — downloads, profile and game directory', () => {
     await readToRest(instance);
     const before = instance.sequence;
 
-    await switchProfileOutsideModbench(root, 'Secondary');
+    await switchToSecondaryOutsideModbench(root);
     watcherFor('ModOrganizer.ini').fireChange();
 
     const landed = await pastSequenceWithin(instance, before, 2000);
@@ -1063,6 +1062,17 @@ describe('Instance — what a command is handed instead of probing for it', () =
     await instance.refresh();
 
     expect(present(instance.value.modFolders, 'the listed mods/ folders').map((f) => f.name).sort()).toEqual(['Consumer', 'Unlisted Folder']);
+  });
+
+  // Rival: a listed mod matched to its folder by exact name, where the mod manager matches names
+  // by its own rule.
+  it('carries the folder of a listed mod whose line names it in another case', async () => {
+    const { root, instance } = await minimalInstance();
+    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+consumer\n');
+
+    await instance.refresh();
+
+    expect(instance.value.paths.modDirs.get('consumer')).toBe(join(root, 'mods', 'Consumer'));
   });
 
   it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {
