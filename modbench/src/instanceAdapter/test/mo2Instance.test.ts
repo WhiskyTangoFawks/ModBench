@@ -727,8 +727,8 @@ describe('the MO2 Instance adapter', () => {
     it.each<[string, ModOrderChange]>([
       ['adding a mod listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
       ['adding a separator listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'separator', name: 'radfall - all-in-one survival overhaul' } }],
-      ['dropping a mod no longer listed', { kind: 'dropMod', mod: 'No Such Mod' }],
-      ['dropping a separator no longer listed', { kind: 'dropSeparator', separator: 'No Such Sep' }],
+      ['dropping a mod not listed', { kind: 'dropMod', mod: 'No Such Mod' }],
+      ['dropping a separator not listed', { kind: 'dropSeparator', separator: 'No Such Sep' }],
     ])('writes nothing for %s, and says so', async (_, already) => {
       const before = await text(root, DEFAULT_MODLIST);
 

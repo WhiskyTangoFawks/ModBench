@@ -898,9 +898,6 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       await expect(stat(join(dir, 'downloads', 'Long Gone-1-0.7z.meta'))).rejects.toThrow();
     });
 
-    // Mod sync hears the trashed folder and drops its line before the uninstall does. Rival:
-    // dropping the line regardless, which the gone line refuses, reporting a landed uninstall as
-    // part failed.
     // Another tool rewrites the line in another case once the folder has gone. Rival: matching the
     // line by the name the view listed, which keeps it and reports the uninstall whole.
     it('drops a line whose case changed after the folder went', async () => {
@@ -915,6 +912,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect((await readModlist()).some((e) => e.name.toLowerCase() === 'harder vats')).toBe(false);
     });
 
+    // Mod sync hears the trashed folder and drops its line before the uninstall does. Rival: a drop
+    // of a line already gone refused, reporting a landed uninstall as part failed.
     it('lands whole when mod sync dropped the line after the folder went', async () => {
       const syncingTrash = async (path: string) => {
         await trash(path);

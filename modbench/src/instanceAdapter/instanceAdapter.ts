@@ -248,9 +248,9 @@ export interface InstanceAdapter {
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
 
   // Changes.
-  /** Every change lands in one write, its folders with it. A change naming an entry that is not
-   *  there, or adding a separator that is, rejects, and nothing changes. An entry added at the
-   *  winning end that is there, or dropped that is not, changes nothing. */
+  /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a
+   *  separator that is, rejects all of it. Adding at the winning end an entry there, or dropping
+   *  one not there, changes nothing. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
   /** Every change lands in one write. A change naming a plugin that is not there, or adding one
    *  that is, rejects, and nothing is written. */
