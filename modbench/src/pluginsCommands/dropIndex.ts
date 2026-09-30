@@ -7,26 +7,20 @@ export type Drop =
   | { kind: 'losingEnd' };
 
 // Where a block of dragged names lands once its own lines are gone: a drop names the
-// *pre-removal* target, while every move counts its index among the lines that remain. An absent
-// or unknown target is the winning end.
-function dropIndexForMove(
-  order: readonly string[],
-  movedNames: readonly string[],
-  targetName: string | undefined,
-): number {
+// *pre-removal* target, while every move counts its index among the lines that remain.
+function indexAfterRemoval(order: readonly string[], movedNames: readonly string[], targetIndex: number): number {
   const moved = new Set(movedNames);
-  const found = targetName === undefined ? -1 : order.indexOf(targetName);
-  const targetIndex = found < 0 ? order.length : found;
-  let movedBefore = 0;
-  for (const name of order.slice(0, targetIndex)) if (moved.has(name)) movedBefore++;
-  return targetIndex - movedBefore;
+  return targetIndex - order.slice(0, targetIndex).filter((name) => moved.has(name)).length;
 }
 
 /** The index a splice writes the block at, in `plugins.txt`, whose last line wins. The losing end
- *  is index 0 whatever else the list holds, so it needs no reckoning against the order at all. */
+ *  is index 0 whatever else the list holds, so it needs no reckoning against the order at all.
+ *  Throws for a row the order does not list: the block has no place beside it. */
 export function dropIndexIn(order: readonly string[], movedNames: readonly string[], drop: Drop): number {
   if (drop.kind === 'losingEnd') return 0;
-  if (drop.kind === 'winningEnd') return dropIndexForMove(order, movedNames, undefined);
-  const at = dropIndexForMove(order, movedNames, drop.name);
+  if (drop.kind === 'winningEnd') return indexAfterRemoval(order, movedNames, order.length);
+  const target = order.indexOf(drop.name);
+  if (target === -1) throw new Error(`Plugin not found in plugins.txt: ${drop.name}`);
+  const at = indexAfterRemoval(order, movedNames, target);
   return drop.kind === 'before' ? at : at + 1;
 }

@@ -54,8 +54,9 @@ describe('dropIndexIn — a drop in a tree\'s terms → the index a splice write
     expect(dropIndexIn(order, ['E'], { kind: 'after', name: 'B' })).toBe(2);
   });
 
-  it('an unknown target name lands at the end, on either side', () => {
-    expect(dropIndexIn(order, ['A'], { kind: 'before', name: 'Nope' })).toBe(4);
-    expect(dropIndexIn(order, ['A'], { kind: 'after', name: 'Nope' })).toBe(5);
+  // Never silently wrong: a block has no place beside a row that has gone.
+  it('refuses a target that is not in the order, on either side, naming it', () => {
+    expect(() => dropIndexIn(order, ['A'], { kind: 'before', name: 'Nope' })).toThrow('Plugin not found in plugins.txt: Nope');
+    expect(() => dropIndexIn(order, ['A'], { kind: 'after', name: 'Nope' })).toThrow('Plugin not found in plugins.txt: Nope');
   });
 });

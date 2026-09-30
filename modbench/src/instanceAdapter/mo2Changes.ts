@@ -129,10 +129,7 @@ function splicePluginOrderChange(text: string, change: PluginOrderChange): strin
     case 'enable': return setPluginEnabledInText(text, listed(change.plugin), change.enabled);
     case 'move': return movePluginsInText(text, change.plugins.map(listed), change.toIndex);
     case 'add':
-      if (order.some((p) => pluginKey(p.name) === pluginKey(change.plugin))) {
-        throw new Error(`Plugin already in plugins.txt: ${change.plugin}`);
-      }
-      return appendPluginInText(text, change.plugin);
+      return order.some((p) => pluginKey(p.name) === pluginKey(change.plugin)) ? text : appendPluginInText(text, change.plugin);
     case 'drop': return removePluginFromText(text, listed(change.plugin));
   }
 }
