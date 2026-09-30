@@ -284,7 +284,7 @@ export interface InstanceAdapter {
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
   /** Replaces the folder's contents with the staged tree's around each entry `keep` names, and
    *  sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
-   *  holding an entry `keep` names rejects first, naming it. */
+   *  holding a kept name rejects first. */
   upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys, keep: (entry: string) => boolean): Promise<void>;
 
   // Subscribe: the instance changed.

@@ -48,9 +48,9 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
       await rename(staged, folder);
     },
 
-    // The meta the mod had is read before its contents go, so its own keys survive the release. A
-    // release holding an entry the upgrade keeps is refused before anything is removed, whether or
-    // not the folder has one, so no release plants one that every later upgrade refuses.
+    // The meta the mod had is read before its contents go, so its keys survive the release. A
+    // release holding a kept name is refused first, folder has one or not: once planted, every
+    // later upgrade would refuse it.
     async upgradeMod(mod, staged, keys, keep) {
       const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path;
       if (folder === undefined) throw new Error(`No folder holds the mod "${mod}"`);
