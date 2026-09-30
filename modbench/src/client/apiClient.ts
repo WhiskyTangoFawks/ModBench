@@ -14,36 +14,19 @@ type Schemas = components['schemas'];
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
-export type MasterIssue = Schemas['MasterIssue'];
-
 /** The `track-progress` notification's payload, subscribed alongside the in-flight
  *  `POST /plugins/track`. Counts are of *plugins*, not records. */
 export type TrackPhase = Schemas['TrackPhase'];
 export type TrackStatus = Schemas['TrackProgress'];
 
-/** Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
- *  successful (HTTP 200) answer (`succeeded: false` with a `refusalReason`), never an HTTP error. */
-export type CompileResult = Schemas['CompileResult'];
+/** A plugin compile wrote — `POST /plugins/compile` — with the masters its content needs and the
+ *  diagnostics the reference check left. */
+export type CompiledPlugin = Schemas['CompiledPlugin'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
-
-/** One mod's queued question. `plugins`/`trackedFiles` can each be empty; `metaChanged` only
- *  informs the dialog's default button, never acts (ADR-0007). */
-export interface UnansweredExternalChange {
-  origin: string;
-  plugins: string[];
-  trackedFiles: string[];
-  metaChanged: boolean;
-  oldVersion: string | null;
-  newVersion: string | null;
-}
 
 /** ADR-0013: names the plugin that failed — two plugins that share a filename are two
  *  registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
-
-/** Apply's result — a refusal (e.g. a same-record collision) is a typed, successful answer, the
- *  same posture {@link CompileResult} uses. */
-export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
 /** Deliberately not a boolean pair (which carries an "Added implies dirty" invariant every
  *  consumer must remember), and leaves room for a future 'Deleted' without a wire reshape. */
@@ -81,10 +64,10 @@ export interface LoadOrderStatus {
   /** How many plugins the snapshot resolved to — the denominator for progress. Plugins that
    *  fail to open still count toward it. */
   totalPlugins: number;
-  /** Filenames of the plugins whose indexing has completed, in the order they landed. A plugin
-   *  appears here only once it is wholly queryable — strictly later than "opened", which is what
+  /** The plugins whose indexing has completed, in the order they landed. A plugin appears here
+   *  only once it is wholly queryable — strictly later than "opened", which is what
    *  `GET /plugins` reports. */
-  indexedPlugins: string[];
+  indexedPlugins: Schemas['PluginAddress'][];
   /** Whether the winner sweep has run. False means *nothing has looked yet*, which is not the
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;
@@ -110,12 +93,11 @@ function refusalOf(wire: Schemas['LoadOrderStatus']): LoadOrderRefusal | undefin
 }
 
 /** The transform a `load-order-status` payload needs before it is this side's
- *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
- *  consumer keys on filename alone; `state` is kept as `refusal.kind` and `holdsNone`. */
+ *  {@link LoadOrderStatus}: `state` is kept as `refusal.kind` and `holdsNone`. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
-    indexedPlugins: wire.indexedPlugins.map((p) => p.name),
+    indexedPlugins: wire.indexedPlugins,
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
     refusal: refusalOf(wire),

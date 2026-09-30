@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
-import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import {
   ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode, type SortDirection,
 } from './PluginsTreeProvider';
@@ -9,8 +8,7 @@ import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
 import { CellNode, PlacedNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
-import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
-import { appendPlugin } from '../pluginsCommands/plugins';
+import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -87,20 +85,6 @@ export function pluginsCopyValueText(
   };
 }
 
-async function pickPluginDestination(
-  instance: Pick<Instance, 'value'>,
-): Promise<{ path: string; origin: string } | undefined> {
-  const picked = await vscode.window.showQuickPick(PLUGIN_DESTINATION_OPTIONS, {
-    placeHolder: 'Where should the new plugin live?',
-  });
-  if (!picked) return undefined;
-  if (picked.choice === OVERWRITE_ORIGIN) return resolvePluginDestination(instance.value, { kind: OVERWRITE_ORIGIN });
-
-  const modNames = instance.value.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
-  const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });
-  return modName ? resolvePluginDestination(instance.value, { kind: 'existingMod', modName }) : undefined;
-}
-
 function promptPluginName(): Thenable<string | undefined> {
   return vscode.window.showInputBox({
     prompt: 'Enter new plugin name (e.g. MyPatch.esp)',
@@ -112,26 +96,11 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
-// ADR-0007: `appendPlugin` adds the load-order line only once Editing's create has succeeded, so
-// the load order never names a missing file. The row arrives with the Instance loader's next value.
-async function appendCreatedPluginToLoadOrder(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, pluginName: string, reporter: Reporter,
-): Promise<void> {
-  const result = await appendPlugin(instanceRoot, instance.value.activeProfile, pluginName);
-  if (!result.applied) {
-    reporter.report(
-      'error',
-      `Created "${pluginName}", but could not add it to the load order.`,
-      result.refusal,
-    );
-    return;
-  }
-  reporter.landed(`Created "${pluginName}".`);
-}
-
+// create-plugin: the file is the whole gesture. Its plugins.txt line is plugin sync's, once the
+// watch sees the file, so nothing here writes that line or refreshes a view.
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
-  mo2: { instance: Pick<Instance, 'value'>; instanceRoot: string } | undefined,
+  mo2: { instance: Pick<Instance, 'value'> } | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
@@ -143,12 +112,23 @@ export function registerCreatePluginCommand(
     const name = await promptPluginName();
     if (!name) return;
 
-    const destination = await pickPluginDestination(mo2.instance);
-    if (!destination) return; // user cancelled a prompt
+    const places = pluginPlaces(mo2.instance.value, name);
+    if (places.length === 0) {
+      reporter.report('error', `Overwrite and every enabled mod already hold "${name}".`);
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(places, { placeHolder: 'Where should the new plugin live?' });
+    if (!picked) return;
 
-    const result = await client.createPlugin(name, destination.path, destination.origin);
+    const place = placeFolder(mo2.instance.value, picked.origin);
+    if ('lost' in place) {
+      const became = place.lost === 'gone' ? 'is gone' : 'was disabled';
+      reporter.report('error', `The mod "${picked.origin}" ${became}, so "${name}" was not created.`);
+      return;
+    }
+
+    const result = await client.createPlugin({ name, origin: picked.origin }, place.folder);
     if (isRefused(result)) { reporter.report('error', result.message); return; }
-
-    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, result.name, reporter);
+    reporter.landed(`Created "${result.name}" in ${picked.label}.`);
   });
 }

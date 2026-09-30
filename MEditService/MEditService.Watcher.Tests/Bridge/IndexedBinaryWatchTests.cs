@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.Watcher.Tests.TestSupport;
 
 namespace MEditService.Watcher.Tests.Bridge;
@@ -146,7 +145,7 @@ public sealed class IndexedBinaryWatchTests
     }
 
     // A tracked plugin's rows come from its source tree, so re-reading the binary would overwrite
-    // the working tree with the compiled artifact: it is a question for the user, never a re-index.
+    // the working tree with the compiled artifact: it is a notice to the user, never a re-index.
     [Fact]
     public async Task ATrackedPluginWhoseBinaryChanges_IsNeverSilentlyReindexed()
     {
@@ -162,6 +161,6 @@ public sealed class IndexedBinaryWatchTests
 
         Assert.Empty(tree.Index.BinaryPokes);
         Assert.Empty(tree.Index.Of("reindex"));
-        Assert.NotNull(SourceRepository.UnansweredExternalChange(modFolder));
+        Assert.Equal(["Tracked.esp"], tree.Notifications.Published[^1].ChangedPlugins);
     }
 }

@@ -16,10 +16,8 @@ public sealed class WriteRouteSeamTests
         ("POST /records/copy", "CopyRecord"),
         ("POST /plugins/create", "CreatePlugin"),
         ("POST /plugins/track", "Track"),
-        ("POST /plugins/{plugin}/compile", "Compile"),
+        ("POST /plugins/compile", "Compile"),
         ("POST /plugins/{plugin}/records", "CreateRecord"),
-        ("POST /plugins/external-change/absorb", "AbsorbExternalChange"),
-        ("POST /plugins/external-change/keep", "KeepExternalChange"),
         ("PUT /load-order", "PutLoadOrder"),
     ];
 
@@ -41,7 +39,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem("Every destination needs a name and an origin.", statusCode: 400)""",
         """Results.Problem("The replace Option applies to a copy as override only.", statusCode: 400)""",
         """Results.Problem("Plugin name is required.", statusCode: 400)""",
-        """Results.Problem("Destination path and origin are required.", statusCode: 400)""",
+        """Results.Problem("The folder and the origin are required.", statusCode: 400)""",
         """Results.Problem( $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400)""",
         """Results.Problem("Origin is required.", statusCode: 400)""",
         """Results.Problem("At least one plugin is required.", statusCode: 400)""",

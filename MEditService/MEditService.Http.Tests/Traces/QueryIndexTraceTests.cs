@@ -112,6 +112,27 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AQuestionAboutTheCreatableRecordTypes_NamesTheGamesFlatTypesAndNoContainer()
+    {
+        await Loaded();
+        var types = await Client.GetFromJsonAsync<JsonElement>("/record-types/creatable");
+
+        var names = types.EnumerateArray().ToDictionary(
+            t => t.GetProperty("type").GetString().Require(), t => t.GetProperty("displayName").GetString());
+        Assert.Equal("Non-Player Character", names["npc_"]);
+        Assert.DoesNotContain("cell", names.Keys);
+        Assert.DoesNotContain("wrld", names.Keys);
+    }
+
+    [Fact]
+    public async Task AQuestionAboutTheCreatableRecordTypes_BeforeAnyLoadOrder_IsRefusedAsUnavailable()
+    {
+        var response = await Client.GetAsync(new Uri("/record-types/creatable", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AGroupsRecords_CarryTheirNameWhenTheyHaveOne()
     {
         await Loaded();
@@ -157,6 +178,21 @@ public sealed class QueryIndexTraceTests : HostedTests
         var activators = await Client.GetFromJsonAsync<JsonElement>("/records?plugin=Localized.esp&type=acti&limit=10");
 
         Assert.Equal(1, activators.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task AnUnfilteredListing_ListsWhatTheRecordFilterHides()
+    {
+        await Loaded();
+        (await Client.PostAsJsonAsync("/load-order/filter",
+            new { sql = "SELECT 'NoSuchRecord:000000' AS form_key", source = "nothing.sql" })).EnsureSuccessStatusCode();
+
+        var listing = $"/records?plugin={UserPlugin}&type=npc_&limit=10";
+        var filtered = await Client.GetFromJsonAsync<JsonElement>(listing);
+        var unfiltered = await Client.GetFromJsonAsync<JsonElement>($"{listing}&unfiltered=true");
+
+        Assert.Equal(0, filtered.GetProperty("total").GetInt32());
+        Assert.NotEqual(0, unfiltered.GetProperty("total").GetInt32());
     }
 
     [Fact]

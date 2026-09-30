@@ -2,8 +2,9 @@
 # box may reference any layer below it, or the kernel of its own column, never up and never
 # across a column. Two channels carry change up instead of a reference, watch and push, styled
 # as the signal and push classes so a diagram tells them apart from a reference at a glance.
-# Watch runs from the systems of record and from the kernel into a driven adapter: the Instance
-# loader watches files, and the record index listens to the load-order change the kernel raises.
+# Watch runs from the systems of record and from the kernel into a driven adapter. The Instance
+# adapter watches files. The record index listens to the load-order change the kernel raises. A
+# driven adapter's watch reaches its subscriber in the same band.
 # The same-band pairs below are the layer rule's own named exceptions, drawn with the zoom-out's
 # ids so the checker matches them by name; a diagram that needs a different one asks the
 # maintainer, never adds a line here.
@@ -21,14 +22,11 @@ drivers -> driving: {class: ref}
 drivers -> core: {class: ref}
 drivers -> kernel: {class: ref}
 drivers -> driven: {class: ref}
-drivers -> data: {class: ref}
 driving -> core: {class: ref}
 driving -> kernel: {class: ref}
 driving -> driven: {class: ref}
-driving -> data: {class: ref}
 core -> kernel: {class: ref}
 core -> driven: {class: ref}
-core -> data: {class: ref}
 driven -> data: {class: ref}
 
 data -> driven: "watch" {class: signal}

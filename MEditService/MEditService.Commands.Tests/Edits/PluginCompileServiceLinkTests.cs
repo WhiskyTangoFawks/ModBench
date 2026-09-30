@@ -92,7 +92,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             npc => npc.Keywords = [new FormLink<IKeywordGetter>(keyword)]);
 
     private async Task<CompileResult> CompileHost() =>
-        await CompileServices.Over(_loadOrder).CompileAsync(_host, new CompileSource.WorkingTree());
+        await CompileServices.Over(_loadOrder).CompileAsync(_host);
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
@@ -168,7 +168,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
         var result = await CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
-            .CompileAsync(_host, new CompileSource.WorkingTree());
+            .CompileAsync(_host);
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(result.Diagnostics);

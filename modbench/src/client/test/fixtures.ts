@@ -1,4 +1,5 @@
-import type { CompileResult, NotificationEvent, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
+import type { CompiledPlugin, NotificationEvent, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
+import type { InMemoryMEditClient } from '../InMemoryMEditClient';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */
@@ -54,18 +55,22 @@ export function recordSummaryFixture(overrides: Partial<RecordSummary> = {}): Re
   };
 }
 
-/** A `CompileResult` with every required wire member at its neutral (successful, no-diagnostic)
- *  value. */
-export function compileResultFixture(overrides: Partial<CompileResult> = {}): CompileResult {
-  return {
-    succeeded: true,
-    refusalReason: null,
-    diagnostics: [],
-    masters: [],
-    eslContradiction: false,
-    refusal: 'None',
-    ...overrides,
+/** One scripted page answering for every plugin a test browses, as mEdit's listing answers: each
+ *  row is the asked plugin's own (Search's `plugin = $1`). */
+export function listsForThePluginAsked(client: InMemoryMEditClient): InMemoryMEditClient {
+  const scripted = client.getRecords.bind(client);
+  client.getRecords = async (...asked) => {
+    const [plugin, , , , origin] = asked;
+    const page = await scripted(...asked);
+    return { ...page, items: page.items.map((record) => ({ ...record, plugin, origin })) };
   };
+  return client;
+}
+
+/** A `CompiledPlugin` with every required wire member at its neutral (no-master, no-diagnostic)
+ *  value. */
+export function compiledPluginFixture(overrides: Partial<CompiledPlugin> & Pick<CompiledPlugin, 'plugin'>): CompiledPlugin {
+  return { masters: [], diagnostics: [], ...overrides };
 }
 
 /** A `NotificationEvent` with every required wire member at its neutral value. */

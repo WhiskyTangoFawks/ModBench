@@ -22,9 +22,9 @@ public record PluginDiagnosisReport(
 public sealed record PluginRow(
     RegisteredPlugin Plugin,
     PluginContent Content,
-    // MasterIssues (ADR-0012): this plugin's own unresolvable masters, never a transitive fact.
-    // Empty rather than null when every master resolved.
-    IReadOnlyList<MasterIssue> MasterIssues,
+    // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
+    // Null while the snapshot is not indexed: not yet checked, which is not no issues.
+    IReadOnlyList<string>? MasterIssues,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
     // is what a caller uses to decide whether to offer a chevron.
     bool HasMatchingRecords,
@@ -105,3 +105,5 @@ public record CompareResult(
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix from the page it has instead of walking children.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
+
+public record CreatableRecordType(string Type, string DisplayName);

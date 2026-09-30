@@ -34,9 +34,6 @@ public enum RecordEditRefusal
 
     InvalidFormLink,
 
-    /// <summary>Refused per mod, compile included, until the Absorb/Keep dialog is answered; the way out is answering it.</summary>
-    ExternalChangeUnanswered,
-
     /// <summary>Create: no schema table of that name, or the header, which cannot be created this way.</summary>
     RecordTypeNotFound,
 
@@ -130,11 +127,9 @@ public enum RecordEditRefusal
 }
 
 /// <summary><see cref="Message"/> names the way out; a refusal the user cannot act on is dead UI.
-/// Path is the edited path. EslContradiction marks a FormKeySpaceExhausted the removable ESL flag
-/// alone causes, so the frontend can prompt.</summary>
+/// Path is the edited path.</summary>
 public sealed record RecordEditResult(
-    bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, bool EslContradiction = false,
-    string? Path = null)
+    bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null, string? Path = null)
 {
     public static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
 
@@ -142,9 +137,6 @@ public sealed record RecordEditResult(
 
     public static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);
-
-    public static RecordEditResult Refused(RecordEditRefusal refusal, string message, bool eslContradiction) =>
-        new(false, refusal, message, EslContradiction: eslContradiction);
 
     public static RecordEditResult RefusedAt(RecordEditRefusal refusal, string path, string message) =>
         new(false, refusal, message, Path: path);

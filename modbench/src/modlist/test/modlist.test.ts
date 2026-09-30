@@ -121,13 +121,13 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('setModsEnabled flips only the mods not already in the chosen state, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'ENBoost - 12k'], true);
 
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Harder VATS', 'ENBoost - 12k'], refused: [] } });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
-    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+    expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
   });
 
   it('setModsEnabled to a selection already in the chosen state writes nothing', async () => {
@@ -146,7 +146,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('setModsEnabled refuses a gone mod by name while the rest land, in one write', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     const outcome = await setModsEnabled(dir, 'Default', ['Harder VATS', 'No Such Mod'], true);
 
@@ -158,7 +158,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       },
     });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS', '+Harder VATS'));
-    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+    expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
   });
 
   // Rival: a splice per mod, each catching its own read failure into a per-item refusal, which
@@ -517,7 +517,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     it('removes every selected line in one write', async () => {
-      vi.mocked(writeFile).mockClear();
+      vi.mocked(rename).mockClear();
 
       const outcome = await deleteSeparators(dir, 'Default', [UNASSIGNED, RADFALL], trash);
 
@@ -525,13 +525,13 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
         applied: true, outcome: { landed: [{ name: UNASSIGNED }, { name: RADFALL }], refused: [] },
       });
       expect((await readModlist()).every((e) => e.kind === 'mod')).toBe(true);
-      expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+      expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
     });
 
     // The gone separator's folder is still under mods/, as MO2 or another tool may leave it.
     it('refuses a gone separator by name while the others land, in one write, trashing nothing for it', async () => {
       await mkdir(join(dir, 'mods', 'No Such Separator_separator'));
-      vi.mocked(writeFile).mockClear();
+      vi.mocked(rename).mockClear();
 
       const outcome = await deleteSeparators(dir, 'Default', ['No Such Separator', UNASSIGNED], trash);
 
@@ -543,7 +543,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
         },
       });
       expect(trashed).toEqual([unassignedFolder()]);
-      expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+      expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
     });
 
     it('refuses the whole selection once and trashes nothing when modlist.txt cannot be read', async () => {
@@ -657,7 +657,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   it('moveMods refuses a gone mod by name while the others land, in one write', async () => {
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     const outcome = await moveMods(
       dir, 'Default', ['No Such Mod', 'Harder VATS'], { kind: 'separator', name: 'Unassigned (Modlist Development)' }, 'losing');
@@ -670,7 +670,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(names.slice(0, 3)).toEqual([
       'SKK Fast Start new game (Fallout 4)', 'Harder VATS', 'Unassigned (Modlist Development)',
     ]);
-    expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+    expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
   });
 
   it('moveMods to a separator that has gone refuses the whole move, naming it', async () => {
@@ -763,8 +763,8 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     // Order is the one property this suite cannot read off the end state alone: every mock
     // vitest hands out shares one call-order counter, trash included.
     const writeOrderOf = (path: string): number => {
-      const callIdx = vi.mocked(writeFile).mock.calls.findIndex(([p]) => p === path);
-      return present(vi.mocked(writeFile).mock.invocationCallOrder[callIdx], `a writeFile call for ${path}`);
+      const callIdx = vi.mocked(rename).mock.calls.findIndex(([, to]) => to === path);
+      return present(vi.mocked(rename).mock.invocationCallOrder[callIdx], `a rename landing ${path}`);
     };
 
     it('trashes the folder, then removes the line, then marks the download uninstalled, in that order', async () => {
@@ -799,7 +799,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
 
     it('removes every selected mod\'s line in one write', async () => {
-      vi.mocked(writeFile).mockClear();
+      vi.mocked(rename).mockClear();
 
       const outcome = await uninstallMods(
         dir, 'Default', [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], join(dir, 'downloads'), trash);
@@ -808,7 +808,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
         applied: true,
         outcome: { landed: [{ name: 'Harder VATS' }, { name: 'ENBoost - 12k' }], refused: [] },
       });
-      expect(vi.mocked(writeFile).mock.calls.filter(([p]) => p === modlistPath())).toHaveLength(1);
+      expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
     });
 
     it('refuses an unknown mod by name, trashing and marking nothing for it, while the rest land', async () => {
@@ -1051,13 +1051,13 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   let dir: string;
   const modlistPath = () => join(dir, 'profiles', 'Default', 'modlist.txt');
   const readModlist = async () => parseModlist(await readFile(modlistPath(), 'utf8'));
-  const writesToModlist = () => vi.mocked(writeFile).mock.calls.filter(([path]) => path === modlistPath()).length;
+  const writesToModlist = () => vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath()).length;
   const sync = (folders: readonly string[]) => syncMods(dir, 'Default', folders);
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-sync-'));
     await cp(fixture, dir, { recursive: true });
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
@@ -1066,7 +1066,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // Rival: two splices, one per direction, which writes the file twice.
   it('adds a line for a folder with none and drops each line whose folder is gone, in one write', async () => {
     await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     const outcome = await sync([...MOD_FOLDERS, 'Hand Extracted Mod']);
 
@@ -1083,7 +1083,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   // Rival: a splice that always puts the bytes back, which fires the watcher and loops forever.
   it('writes nothing when every folder has a line and every mod line has a folder', async () => {
     await sync([...MOD_FOLDERS, '[NODELETE] Radfall']);
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     expect(await sync([...MOD_FOLDERS, '[NODELETE] Radfall'])).toEqual({ applied: true, added: [], dropped: [] });
     expect(writesToModlist()).toBe(0);
@@ -1108,7 +1108,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
   it('refuses, writing nothing, when mods/ is gone by the time the sync writes', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     await rm(join(dir, 'mods'), { recursive: true });
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     assertRefusal(await sync(MOD_FOLDERS), 'ENOENT');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
@@ -1119,7 +1119,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     const before = await readFile(modlistPath(), 'utf8');
     await rm(join(dir, 'mods'), { recursive: true });
     await writeFile(join(dir, 'mods'), 'not a folder');
-    vi.mocked(writeFile).mockClear();
+    vi.mocked(rename).mockClear();
 
     assertRefusal(await sync(MOD_FOLDERS), 'ENOTDIR');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
@@ -1189,7 +1189,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['Weapons/Armor_separator'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Weapons'))).toEqual([]);
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
@@ -1203,7 +1203,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await sync(MOD_FOLDERS)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods')]);
+    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 
@@ -1349,7 +1349,10 @@ describe('a mod sync between a separator gesture\'s line and its folder', () => 
   it('keeps the line of a separator being renamed, and gives its old folder none', async () => {
     const hold = gap();
     const realRename = present(vi.mocked(rename).getMockImplementation(), 'the real rename');
-    vi.mocked(rename).mockImplementationOnce(async (...args) => { await hold.waitHere(); return realRename(...args); });
+    // The first rename call lands the line's own atomic write; the folder move is the second.
+    vi.mocked(rename)
+      .mockImplementationOnce(async (...args) => realRename(...args))
+      .mockImplementationOnce(async (...args) => { await hold.waitHere(); return realRename(...args); });
     const renaming = renameSeparator(dir, 'Default', 'Unassigned (Modlist Development)', 'Renamed');
     await hold.reachedGap;
 

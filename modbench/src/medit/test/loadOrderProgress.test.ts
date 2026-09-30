@@ -17,17 +17,17 @@ describe('makeReconcileProgressHandler', () => {
   it('applies a tick that landed a new plugin', () => {
     const { applyLoadOrder, onProgress } = handler();
 
-    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
 
-    expect(applyLoadOrder).toHaveBeenCalledWith(['A.esp'], []);
+    expect(applyLoadOrder).toHaveBeenCalledWith([{ name: 'A.esp', origin: 'SomeMod' }], []);
   });
 
   it('does not re-apply a tick that landed nothing new', () => {
     const { applyLoadOrder, onProgress } = handler();
 
-    onProgress(status({ indexedPlugins: ['A.esp'] }));
-    onProgress(status({ indexedPlugins: ['A.esp'] }));
-    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
 
     expect(applyLoadOrder).toHaveBeenCalledTimes(1);
   });
@@ -37,11 +37,11 @@ describe('makeReconcileProgressHandler', () => {
   it('applies a tick that landed a failure even though no new plugin was indexed', () => {
     const { applyLoadOrder, onProgress } = handler();
 
-    onProgress(status({ indexedPlugins: ['A.esp'] }));
-    onProgress(status({ indexedPlugins: ['A.esp'], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
+    onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
     expect(applyLoadOrder).toHaveBeenCalledTimes(2);
-    expect(applyLoadOrder).toHaveBeenLastCalledWith(['A.esp'], [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
+    expect(applyLoadOrder).toHaveBeenLastCalledWith([{ name: 'A.esp', origin: 'SomeMod' }], [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
   });
 });
 
@@ -77,7 +77,7 @@ describe('reportIndexRefusal', () => {
   it('shows nothing, and answers false, for a tick with no refusal message', () => {
     const setStatusText = vi.fn();
 
-    const refused = reportIndexRefusal(status({ indexedPlugins: ['A.esp'] }), { setStatusText });
+    const refused = reportIndexRefusal(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }), { setStatusText });
 
     expect(setStatusText).not.toHaveBeenCalled();
     expect(refused).toBe(false);

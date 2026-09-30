@@ -15,13 +15,12 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
-import { recordResourceUri } from '../recordResourceUri';
 import { fakeUri } from '../../test/vscodeMock';
 import type { WorkingTreeState } from '../../client';
 
 type Listener = (uris: readonly vscode.Uri[]) => void;
 
-function source(state: WorkingTreeState | undefined | ((plugin: string, origin: string, formKey: string) => WorkingTreeState | undefined)) {
+function source(state: WorkingTreeState | undefined | ((uri: vscode.Uri) => WorkingTreeState | undefined)) {
   const listeners: Listener[] = [];
   return {
     workingTreeStateOf: typeof state === 'function' ? state : () => state,
@@ -31,7 +30,7 @@ function source(state: WorkingTreeState | undefined | ((plugin: string, origin: 
 }
 
 describe('RecordDecorationProvider', () => {
-  const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
+  const uri = fakeUri('/a record row');
 
   it('returns undefined when the lookup reports no working-tree change', () => {
     const provider = new RecordDecorationProvider(source('None'));
@@ -58,18 +57,11 @@ describe('RecordDecorationProvider', () => {
     });
   });
 
-  it('passes (plugin, origin, formKey) parsed off the URI to the lookup', () => {
+  it('asks its source about the URI VS Code names', () => {
     const lookup = vi.fn().mockReturnValue('None');
     const provider = new RecordDecorationProvider(source(lookup));
     provider.provideFileDecoration(uri);
-    expect(lookup).toHaveBeenCalledWith('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
-  });
-
-  // The rival: a provider that skips the scheme check would wrongly decorate an unrelated
-  // resourceUri that merely happens to carry a matching lookup key by coincidence.
-  it('returns undefined for a URI outside the medit-record: scheme', () => {
-    const provider = new RecordDecorationProvider(source('Modified'));
-    expect(provider.provideFileDecoration(fakeUri('/tmp/x'))).toBeUndefined();
+    expect(lookup).toHaveBeenCalledWith(uri);
   });
 
   it('fires onDidChangeFileDecorations for exactly the rows its source reads', () => {

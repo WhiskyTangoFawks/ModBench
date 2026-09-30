@@ -215,6 +215,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/record-types/creatable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetCreatableRecordTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -224,7 +240,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a new plugin at the given path/origin (ADR-0007), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer) is responsible for that. */
+        /** @description Writes an empty plugin (a header whose flags its extension sets, no records and no masters) into the given folder, in the release of the held load order. Changes nothing else: no Track, no load order change and no plugins.txt line. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -248,7 +264,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/compile": {
+    "/plugins/compile": {
         parameters: {
             query?: never;
             header?: never;
@@ -278,38 +294,6 @@ export interface paths {
          * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled.
          */
         post: operations["CreateRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/external-change/absorb": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["AbsorbExternalChange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/external-change/keep": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["KeepExternalChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -537,6 +521,10 @@ export interface components {
             parseDiagnosis?: string | null;
             hasChildren: boolean;
         };
+        ChangedPlugin: {
+            name: string;
+            bytesSha256?: string | null;
+        };
         CompareOverride: {
             formKey: string;
             plugin: string;
@@ -562,17 +550,21 @@ export interface components {
             sourceRelativePath: string;
             message: string;
         };
-        CompileRequest: {
-            origin: string;
-            ref?: string | null;
+        CompileRefused: {
+            plugin: components["schemas"]["PluginAddress"];
+            message: string;
         };
-        CompileResult: {
-            succeeded: boolean;
-            refusalReason?: string | null;
-            diagnostics: components["schemas"]["CompileDiagnostic"][];
+        CompileRequest: {
+            plugins: components["schemas"]["PluginAddress"][];
+        };
+        CompileResponse: {
+            applied: components["schemas"]["CompiledPlugin"][];
+            refused: components["schemas"]["CompileRefused"][];
+        };
+        CompiledPlugin: {
+            plugin: components["schemas"]["PluginAddress"];
             masters: string[];
-            eslContradiction: boolean;
-            refusal: components["schemas"]["RecordEditRefusal"];
+            diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
@@ -595,22 +587,19 @@ export interface components {
         };
         /** @enum {string} */
         CopyMode: "New" | "Override";
+        CreatableRecordType: {
+            type: string;
+            displayName: string;
+        };
         CreatePluginRequest: {
-            name: string;
-            path: string;
             origin: string;
+            name: string;
+            folder: string;
         };
         EnumMember: {
             value: string;
             bitValue?: string | null;
             label?: string | null;
-        };
-        ExternalChangeActionRequest: {
-            origin: string;
-        };
-        ExternalChangeActionResponse: {
-            succeeded: boolean;
-            refusalReason?: string | null;
         };
         FieldDiff: {
             fieldName: string;
@@ -721,12 +710,6 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        MasterIssue: {
-            masterName: string;
-            kind: components["schemas"]["MasterIssueKind"];
-        };
-        /** @enum {string} */
-        MasterIssueKind: "DirectlyMissing" | "Unloadable";
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -736,10 +719,7 @@ export interface components {
             sequence: number;
             loadOrderStatus?: components["schemas"]["LoadOrderStatus"] | null;
             trackProgress?: components["schemas"]["TrackProgress"] | null;
-            externalChangeMetaChanged?: boolean | null;
-            externalChangeOldVersion?: string | null;
-            externalChangeNewVersion?: string | null;
-            externalChangeTrackedFiles?: string[] | null;
+            changedPlugins?: components["schemas"]["ChangedPlugin"][] | null;
         };
         PathHop: {
             kind: string;
@@ -769,12 +749,8 @@ export interface components {
         };
         PluginCreatedResponse: {
             name: string;
-            path: string;
             origin: string;
-            /** Format: int32 */
-            slot?: number | null;
-            /** Format: int64 */
-            version: number;
+            path: string;
         };
         PluginDiagnosisReport: {
             plugin: string;
@@ -811,7 +787,7 @@ export interface components {
             isImmutable: boolean;
             participates: boolean;
             origin: string;
-            masterIssues: components["schemas"]["MasterIssue"][];
+            masterIssues?: string[] | null;
             inLoadOrder: boolean;
             enabled: boolean;
             winning: boolean;
@@ -908,7 +884,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -965,7 +941,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "ExternalChangeUnanswered" | "CommitFailed" | "GitUnavailable" | "StoppedByEarlierFailure";
+        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
         TrackRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             preset: string;
@@ -973,7 +949,6 @@ export interface components {
         TrackResponse: {
             applied: components["schemas"]["PluginAddress"][];
             refused: components["schemas"]["PluginAddressRefusal"][];
-            trackedFilesRefusal?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -1486,6 +1461,35 @@ export interface operations {
             };
         };
     };
+    GetCreatableRecordTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatableRecordType"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     CreatePlugin: {
         parameters: {
             query?: never;
@@ -1619,9 +1623,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                plugin: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -1636,7 +1638,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompileResult"];
+                    "application/json": components["schemas"]["CompileResponse"];
                 };
             };
             /** @description Bad Request */
@@ -1650,6 +1652,15 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1730,117 +1741,6 @@ export interface operations {
             };
         };
     };
-    AbsorbExternalChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExternalChangeActionRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrackResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    KeepExternalChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExternalChangeActionRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExternalChangeActionResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     GetRecords: {
         parameters: {
             query?: {
@@ -1850,6 +1750,7 @@ export interface operations {
                 origin?: string;
                 limit?: number;
                 offset?: number;
+                unfiltered?: boolean;
             };
             header?: never;
             path?: never;

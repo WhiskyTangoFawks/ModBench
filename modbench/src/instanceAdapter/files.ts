@@ -2,12 +2,14 @@
 // `instanceadapter` box). A command splices a file's text through its own codec and puts the
 // result through here.
 
-import { existsSync, type Dirent } from 'node:fs';
+import { constants, existsSync, type Dirent } from 'node:fs';
 import {
-  access, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
+  access, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import { modsDir as modsDirOf, modGitDir, profilesDir, settingsFile } from './layout';
+import { basename, dirname, join, relative, sep } from 'node:path';
+import {
+  isTempWriteOf, modsDir as modsDirOf, modGitDir, profilesDir, settingsFile, tempWritePath,
+} from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -95,10 +97,74 @@ export function get(path: string, ifMissing?: string): Promise<string> {
   return readOr(path, ifMissing);
 }
 
-/** Writes `text` to `path` outright — no read-back, no splice, no lock: a landing mod's own
- *  meta.ini, written once into a staged tree nothing else can see yet. */
+// `path` itself when it names no symlink, or a missing path; its resolved real file otherwise —
+// a write must land on what a symlink points at, not replace the link with a plain file.
+async function writeTargetOf(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return path;
+  }
+}
+
+// `target`'s mode, or undefined when there is no file there yet.
+async function modeOf(target: string): Promise<number | undefined> {
+  try {
+    return (await stat(target)).mode;
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return undefined;
+  }
+}
+
+// A crash between this write's own temp file landing and its rename leaves one behind under
+// `target`'s name; the next write for that same target sweeps it before starting its own.
+async function removeStaleTempsFor(target: string): Promise<void> {
+  const dir = dirname(target);
+  const base = basename(target);
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch (err) {
+    if (errnoCode(err) !== 'ENOENT') throw err;
+    return;
+  }
+  await Promise.all(
+    names.filter((name) => isTempWriteOf(base, name))
+      .map((name) => rm(join(dir, name), { force: true })),
+  );
+}
+
+// `err`'s message, with the temp path swapped for `target` — the path the caller asked for and
+// the only one it ever saw.
+function reportedAsTarget(err: unknown, tmp: string, target: string): unknown {
+  if (!(err instanceof Error) || !err.message.includes(tmp)) return err;
+  return Object.assign(new Error(err.message.split(tmp).join(target)), { code: errnoCode(err) });
+}
+
+// A temp file beside the real target, then one rename: never a partial read, never a target
+// left half-written. Not writable is refused before any temp is written.
+async function writeAtomic(path: string, text: string): Promise<void> {
+  const target = await writeTargetOf(path);
+  await removeStaleTempsFor(target);
+  const mode = await modeOf(target);
+  if (mode !== undefined) await access(target, constants.W_OK);
+  const tmp = tempWritePath(target);
+  try {
+    await writeFile(tmp, text);
+    if (mode !== undefined) await chmod(tmp, mode);
+    await fsRename(tmp, target);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw reportedAsTarget(err, tmp, target);
+  }
+}
+
+/** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini,
+ *  whether staged before its tree lands or already live in a mod folder. */
 export function write(path: string, text: string): Promise<void> {
-  return writeFile(path, text);
+  return writeAtomic(path, text);
 }
 
 /** Moves `from` to `to` in one filesystem step — a staged tree landing in `mods/`, or an
@@ -161,7 +227,7 @@ export function putIfChanged(
     const before = await readOr(path, opts.ifMissing);
     const after = await edit(before);
     if (after === before) return { wrote: false };
-    await writeFile(path, after);
+    await writeAtomic(path, after);
     return { wrote: true };
   });
 }

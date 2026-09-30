@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
@@ -162,75 +161,6 @@ public sealed class TrackServiceTests
             // No \r anywhere in the tracked tree.
             foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
                 Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-            Directory.Delete(gameDir, recursive: true);
-        }
-    }
-
-    // The pinned trailer set (Upstream-Version, Binary-SHA256, Meta-SHA256 — ADR-0003)
-    // must ship all three.
-    [Fact]
-    public async Task TrackAsync_WithAMetaIniBesideThePlugin_WritesItsSha256AsATrailer()
-    {
-        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-meta-").FullName;
-        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-meta-game-").FullName;
-        try
-        {
-            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-            mod.Npcs.AddNew("SomeNpc");
-            mod.WriteToBinary(pluginPath);
-
-            var metaBytes = "[General]\nversion=1.2.3\n"u8.ToArray();
-            File.WriteAllBytes(Path.Combine(modFolder, "meta.ini"), metaBytes);
-            var expectedHash = Convert.ToHexString(SHA256.HashData(metaBytes));
-
-            var loadOrder = new LoadOrderSnapshot(
-                gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
-
-            var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
-
-            var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
-            Assert.Contains($"Meta-SHA256: {expectedHash}", body);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-            Directory.Delete(gameDir, recursive: true);
-        }
-    }
-
-    // Positive control's index: no meta.ini beside the plugin (an authored/manually-installed
-    // mod, ADR-0003) means no Meta-SHA256 trailer at all — every BaselineTrailers fact
-    // is optional, this must not fabricate one.
-    [Fact]
-    public async Task TrackAsync_WithNoMetaIni_WritesNoMetaSha256Trailer()
-    {
-        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-nometa-").FullName;
-        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-nometa-game-").FullName;
-        try
-        {
-            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-            mod.Npcs.AddNew("SomeNpc");
-            mod.WriteToBinary(pluginPath);
-
-            var loadOrder = new LoadOrderSnapshot(
-                gameDir, gameDir, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
-
-            var service = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
-            await service.TrackModAsync(loadOrder, "FixtureMod", SourcePreset.Edits);
-
-            var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
-            Assert.DoesNotContain("Meta-SHA256", body);
         }
         finally
         {

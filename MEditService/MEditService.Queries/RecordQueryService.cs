@@ -24,18 +24,13 @@ public sealed class RecordQueryService(
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        // ADR-0012: classified once per call, and only once the projection is complete: a partial
-        // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
-        // reports no issues rather than inventing a third state.
-        var status = _index.Status;
-        IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> masterIssues =
-            status.State == LoadOrderState.Ready
-                ? MasterResolution.Classify(opened, status.Failures)
-                : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
+        var masterIssues = _index.Status.State == LoadOrderState.Ready
+            ? MasterResolution.Classify(_loadOrder.Require(), opened)
+            : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedPlugins();
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords) =>
-            new(plugin, opened[plugin.Key], masterIssues.GetValueOrDefault(plugin.Key) ?? [], hasMatchingRecords,
+            new(plugin, opened[plugin.Key], masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
         if (_index.FilterSql is null)
@@ -51,7 +46,8 @@ public sealed class RecordQueryService(
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
-    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
+    public PagedResult<RecordSummary> GetRecords(
+        string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -71,7 +67,7 @@ public sealed class RecordQueryService(
         }
         var query = new RecordQuery(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
-            GroupOnly: search is null);
+            GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
 
@@ -151,8 +147,25 @@ public sealed class RecordQueryService(
             .ThenBy(r => r.Type, StringComparer.Ordinal)];
     }
 
+    // Sorted as a plugin's groups are, so the pick reads in the order the tree shows.
+    public IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes()
+    {
+        var schemas = RequireSchemas();
+        return [.. CreatableRecordTypes.Of(schemas, _loadOrder.Require().GameRelease)
+            .Select(type => new CreatableRecordType(type, schemas.DisplayNameFor(type)))
+            .OrderBy(r => r.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Type, StringComparer.Ordinal)];
+    }
+
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireReads().GetReferencedBy(targetFormKey);
+
+    public void SetFilter(string sql, string source) => _index.SetFilter(sql, source);
+
+    public void ClearFilter() => _index.ClearFilter();
+
+    public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
+        _index.RebuildStore(gameRelease, instanceRoot);
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,

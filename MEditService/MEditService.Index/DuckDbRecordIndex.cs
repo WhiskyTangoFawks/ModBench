@@ -775,7 +775,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var connection = owner.OpenRead();
             var (where, paramValues) = BuildWhere(
-                query.Plugin?.Name, query.Search, ListingFilter, query.Origin, query.RecordTypes,
+                query.Plugin?.Name, query.Search, query.Unfiltered ? null : ListingFilter, query.Origin, query.RecordTypes,
                 query.GroupOnly ? NavigatorSql.NotHeld("r") : null);
             var dataParams = new List<string>(paramValues);
             var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
@@ -791,7 +791,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 EXISTS (
                     SELECT 1 FROM container_child cc
                     WHERE cc.parent_form_key = r.form_key AND cc.plugin = r.plugin AND cc.origin = r.origin
-                      {InListingFilter("cc", "child_form_key")}
+                      {(query.Unfiltered ? "" : InListingFilter("cc", "child_form_key"))}
                 ) AS has_container_children,
                 r.parse_diagnosis,
                 r.parse_diagnosis IS NOT NULL OR EXISTS (

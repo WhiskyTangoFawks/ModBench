@@ -103,7 +103,7 @@ public sealed class RecordQueryServiceTests
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
-    public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
+    public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
     {
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
@@ -114,9 +114,7 @@ public sealed class RecordQueryServiceTests
         var plugins = svc.GetPlugins();
 
         var patch = Assert.Single(plugins, p => p.Plugin.Name == "Patch.esp");
-        var issue = Assert.Single(patch.MasterIssues);
-        Assert.Equal("Ghost.esm", issue.MasterName);
-        Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
+        Assert.Equal(["Ghost.esm"], patch.MasterIssues);
     }
 
     // ADR-0012 end to end: a whole load order built via the real codec's own reference resolution,
@@ -150,7 +148,7 @@ public sealed class RecordQueryServiceTests
     {
         var plugins = _svc.GetPlugins();
 
-        Assert.Empty(plugins[0].MasterIssues);
+        Assert.Equal([], plugins[0].MasterIssues);
     }
 
     // Matching, sorting and paging are the real Index's own behaviour, covered at
@@ -730,6 +728,46 @@ public sealed class RecordQueryServiceTests
         Assert.Empty(result);
     }
 
+    // --- GET /record-types/creatable ---
+
+    [Fact]
+    public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
+    {
+        var result = _svc.GetCreatableRecordTypes();
+
+        Assert.Equal("Non-Player Character", Assert.Single(result, r => r.Type == "npc_").DisplayName);
+    }
+
+    [Theory]
+    [InlineData(PluginHeader.RecordType)]
+    [InlineData("cell")]
+    [InlineData("wrld")]
+    [InlineData("refr")]
+    [InlineData("dial")]
+    [InlineData("info")]
+    public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryContainerOrHeldType(string recordType)
+    {
+        var result = _svc.GetCreatableRecordTypes();
+
+        Assert.DoesNotContain(result, r => r.Type == recordType);
+    }
+
+    [Fact]
+    public void GetCreatableRecordTypes_IsInNameOrder()
+    {
+        var names = _svc.GetCreatableRecordTypes().Select(r => r.DisplayName).ToList();
+
+        Assert.Equal(names.Order(StringComparer.OrdinalIgnoreCase), names);
+    }
+
+    [Fact]
+    public void GetCreatableRecordTypes_NoLoadOrder_ThrowsNoLoadOrderException()
+    {
+        var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
+    }
+
     // --- GET /records?type=unknown ---
 
     [Fact]
@@ -768,7 +806,7 @@ public sealed class RecordQueryServiceTests
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
         var address = Assert.Single(_svc.GetPlugins(), p => p.Plugin.Name == PluginName).Plugin.Key;
-        _manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer) { address };
 
         var plugins = _svc.GetPlugins();
@@ -781,7 +819,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
-        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
         var plugins = _svc.GetPlugins();
@@ -792,12 +830,42 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPlugins_AfterClearFilter_RestoresAllPlugins()
     {
-        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         _manager.ClearFilter();
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
         Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
+    }
+
+    // --- Queries owns the filter and the rebuild (target-architecture.d2 medit_core.queries) ---
+
+    [Fact]
+    public void SetFilter_ForwardsSqlAndSourceToTheIndex()
+    {
+        _svc.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", _manager.FilterSql);
+        Assert.Equal("npcs.sql", _manager.LastFilterSource);
+    }
+
+    [Fact]
+    public void ClearFilter_ForwardsToTheIndex()
+    {
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        _svc.ClearFilter();
+
+        Assert.Null(_manager.FilterSql);
+    }
+
+    [Fact]
+    public async Task RebuildStore_ForwardsGameReleaseAndInstanceRootToTheIndex()
+    {
+        await _svc.RebuildStore(Release, @"C:\Instance");
+
+        Assert.Equal(Release, _manager.LastRebuildRelease);
+        Assert.Equal(@"C:\Instance", _manager.LastRebuildInstanceRoot);
     }
 }

@@ -41,13 +41,6 @@ internal static class PluginTrees
         CancellationToken cancel = default) =>
         SerializeTree(OpenFor(modPath, gameRelease, strings), cancel);
 
-    /// <summary>A plugin's binary as every record's own document plus the identity a source tree
-    /// files it by. The mod is held here, so the caller never has one (ADR-0005 invariant 2).</summary>
-    internal static IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
-        RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        ModDocuments.IdentifiedRecordsOf(OpenFor(modPath, gameRelease, strings), codec, schemas);
-
     private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
         MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
 
@@ -89,8 +82,8 @@ internal static class PluginTrees
     }
 
     /// <summary>The tree in <paramref name="files"/> compiled to bytes at
-    /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification must
-    /// not drop a .bak beside the real plugin.</summary>
+    /// <paramref name="destinationPath"/>, in place with no rename: a scratch verification, never a
+    /// replacement of the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, TreeDeserializer? deserialize = null,
         CancellationToken cancel = default)
@@ -155,9 +148,7 @@ internal static class PluginTrees
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
 
-    /// <summary>The prefix of the scratch folder a whole-mod read materializes its files in, so a test
-    /// watching for a leak knows what to look for.</summary>
-    internal const string ReadScratchPrefix = "medit-readtree-";
+    private const string ReadScratchPrefix = "medit-readtree-";
 
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
@@ -169,8 +160,8 @@ internal static class PluginTrees
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
         try
         {
-            // Outside the catch below: a tree git holds and this filesystem cannot write is not a
-            // source defect, and a refusal naming the source would misname it.
+            // Outside the catch below: a scratch folder this filesystem cannot write is not a source
+            // defect, and a refusal naming the source would misname it.
             var treeRoot = await MaterializeTree(files, scratchDir, cancel);
 
             // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
@@ -250,8 +241,8 @@ public sealed class CompiledTree
     /// compares the tree against.</summary>
     public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
-    /// <summary>The mod handed straight to the write, through the backup-and-rename discipline
-    /// every plugin replacement shares.</summary>
-    public Task<string> SaveThroughAsync(PluginWriter writer, string pluginPath, IReadOnlyList<string> loadOrder) =>
-        writer.SaveFromModAsync(_mod, pluginPath, loadOrder);
+    /// <summary>The mod written to a temp file beside <paramref name="pluginPath"/>, which the
+    /// returned save renames into place on Commit.</summary>
+    public Task<PreparedPluginSave> PrepareSaveAsync(string pluginPath, IReadOnlyList<string> loadOrder) =>
+        PluginWriter.PrepareFromModAsync(_mod, pluginPath, loadOrder);
 }

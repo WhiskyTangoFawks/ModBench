@@ -1,15 +1,15 @@
 import type { components } from '../wire/generated/api';
 import {
-  type CompileResult,
-  type ExternalChangeActionResult, type NotificationEvent,
-  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
+  type CompiledPlugin, type CompileDiagnostic,
+  type NotificationEvent,
+  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellReferences, type CellSummary,
   type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
-  type UnansweredExternalChange, type PluginLoadFailure,
+  type PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
-import type { SelectionOutcome } from '../ports/selectionOutcome';
+import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
 /** What `editRecord` is handed. Re-exported because a caller of the one write path names this
  *  type, and the client is the seam it reaches the backend through (ADR-0007). */
@@ -34,8 +34,8 @@ export function isRefused(result: unknown): result is WriteRefused {
 }
 
 const NOTIFICATION_KINDS = [
-  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'question-open',
-  'compile-unfinished',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change',
+  'untracked-plugins',
 ] as const;
 
 /** The wire's kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
@@ -93,7 +93,12 @@ export type RebuildIndexOutcome =
   | { rebuilt: false; heldElsewhere: true }
   | { rebuilt: false; heldElsewhere: false; detail: string };
 
+/** `/records` takes a plain `int` limit with no upper bound, so Int32.MaxValue lists every record
+ *  of a group in one page. */
+export const UNLIMITED_RECORDS = 2147483647;
+
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type CreatableRecordType = components['schemas']['CreatableRecordType'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -103,11 +108,13 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
-/** Absorb's answer: each changed plugin landed or refused, and beside them the commit of the mod's
- *  changed tracked files, which is no plugin's and can fail after every plugin landed. */
-export interface AbsorbOutcome extends SelectionOutcome<PluginAddress> {
-  trackedFilesRefusal: string | null;
+
+/** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
+export interface CompileOutcome {
+  landed: readonly CompiledPlugin[];
+  refused: readonly ItemRefusal<PluginAddress>[];
 }
+
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
 /** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
  *  filename can be in two mods, each holding the record. */
@@ -127,15 +134,12 @@ export type RecordFilter = components['schemas']['FilterRequest'];
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
-  createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
+  createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  createRecord(
-    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
-    onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCreateResponse | WriteRefused | undefined>;
+  createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
@@ -144,11 +148,9 @@ export interface MEditClient {
   copyRecords(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
-  compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
-  // Origin-scoped: the mod, not one plugin in it, is the unit both answers cover.
-  // Absorb's WriteRefused is the whole answer refused, with nothing written.
-  absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused>;
-  keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
+  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
+  // invariant 4). A WriteRefused is the call itself refused, with nothing written.
+  compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
@@ -156,18 +158,23 @@ export interface MEditClient {
   // facet (set filter, clear filter, active filter).
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
-  getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
+  getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]>;
+  // The game's, not a plugin's: every plugin of the load order shares it.
+  getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
+  // `unfiltered` lists what the record filter hides too.
+  getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
-  getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
-  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
-  getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
-  getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]>;
-  getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
+  getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
+  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
+  getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences>;
+  getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]>;
+  getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;
@@ -198,7 +205,7 @@ export interface MEditClient {
 
 export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
-  MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult,
-  ExternalChangeActionResult, LoadOrderStatus, LoadOrderRefusal, UnansweredExternalChange, PluginLoadFailure,
+  RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
+  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
+  LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure,
 };

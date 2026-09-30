@@ -37,7 +37,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         Path.Combine("source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
     // Track parks each plugin's last-compile ref at its baseline, so the ref this reads at is the one
-    // Save & Compile parks.
+    // compile parks.
     private SourceRepository Tracked()
     {
         PluginBaselines.Track(

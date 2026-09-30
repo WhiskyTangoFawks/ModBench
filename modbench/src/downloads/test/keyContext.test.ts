@@ -13,8 +13,9 @@ import { ErrorNode } from '../errorNode';
 import { downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
-// commands.md, Where: a palette entry is handed no row, so its `when` reads what the selection
-// holds, and the gesture is absent where it would have nothing to act on.
+// commands.md, The surface supplies the Argument; No dead entries: a palette entry is handed no
+// row, so its `when` reads what the selection holds, and the gesture is absent where it would have
+// nothing to act on.
 describe('what the Downloads palette entries read off the selection', () => {
   const plain = new DownloadNode(downloadRowFixture('plain.7z'));
   const withMeta = new DownloadNode(downloadRowFixture('meta.7z', { hasMeta: true }));

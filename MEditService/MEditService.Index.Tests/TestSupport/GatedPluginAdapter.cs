@@ -52,16 +52,11 @@ internal abstract class DelegatingPluginAdapter(IPluginAdapter inner) : IPluginA
         ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
         inner.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
-    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, RecordTextCodec codec,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        inner.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
-
     public string? DivergenceBetween(ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         inner.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 
-    public Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
-        inner.CreateAndWriteAsync(modKey, destinationPath, gameRelease, smallMaster);
+    public Task<EmptyPluginWrite> CreateAndWriteAsync(ModKey modKey, string folder, GameRelease gameRelease) =>
+        inner.CreateAndWriteAsync(modKey, folder, gameRelease);
 }
 
 /// <summary>Parks a reconcile just before a named plugin's documents are opened until the test

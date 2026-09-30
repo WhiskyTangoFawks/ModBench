@@ -63,7 +63,7 @@ public sealed class CommandsAndEditsPathScanTests
                 "var tree = Path.Combine(modFolder, root);\n");
             Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Commands", "KeepExternalChangeHandler.cs"),
+                Path.Combine(root, "MEditService.Commands", "TrackHandler.cs"),
                 "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
             var counts = Counts(root, ScannedRoots);
@@ -74,7 +74,7 @@ public sealed class CommandsAndEditsPathScanTests
                     "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
                     "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
                     "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
-                    "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
+                    "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
                 ],
                 counts);
 
@@ -83,7 +83,7 @@ public sealed class CommandsAndEditsPathScanTests
             Assert.Contains(
                 "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains(
-                "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
+                "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
                 unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(

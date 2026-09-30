@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type {
-  MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
+  PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
+  NotificationEvent,
 } from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
@@ -12,6 +13,8 @@ import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
+import { isRecordRow } from './gestureEntry';
+import type { RecordGroup } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -45,14 +48,13 @@ export interface PluginListSource {
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
  *  calls. Pulled once per reconcile, never per rendered row; and its attaching, which makes the
  *  locked plugins askable. */
-export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged'>;
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'subscribe'>;
 
 /** The record browser a row's children are delegated to (ADR-0002). `PluginTreeProvider`
  *  satisfies it. */
 export type RecordBrowser = Pick<
   PluginTreeProvider,
   'getPluginChildren' | 'getChildren' | 'getTreeItem' | 'onDidChangeTreeData'
-  | 'setImmutablePlugins' | 'setTrackedPlugins'
 >;
 
 /** One held plugin as the record filter's own state reads it. The reconcile hands these back so
@@ -61,6 +63,9 @@ export interface PluginMatch {
   name: string;
   hasMatchingRecords: boolean;
 }
+
+/** A warning on one plugin's file, as the Problems panel shows it. */
+export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin — the row input (ADR-0015). */
@@ -73,6 +78,9 @@ export interface PluginsTreeProviderOptions {
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
   publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
+   *  such plugin. */
+  publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   /** ADR-0019: this provider states the severity, so a background blip and a failed read do not
    *  land on the same channel level. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -164,35 +172,29 @@ export function pluginFileOf(node: PluginListNode): string {
 interface PluginFacts {
   readOnly?: boolean;
   tracked?: boolean;
-  masterIssues?: MasterIssue[];
+  masterIssues?: string[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
   order?: PluginOrderFacts;
 }
 
-// ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
+// ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
+// under both.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
-  private readonly byName = new Map<string, T>();
 
-  set(name: string, origin: string | undefined, value: T): void {
+  set(name: string, origin: string, value: T): void {
     this.byAddress.set(pluginAddressKey(name, origin), value);
-    this.byName.set(name.toLowerCase(), value);
   }
 
-  // Each index accumulates on its own: the name-only fallback reads as every plugin's lines
-  // together, a plugin's own key as its own. `this` narrows to an array-valued instance.
-  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string | undefined, item: U): void {
+  // `this` narrows to an array-valued instance.
+  append<U>(this: ByPluginAddress<U[]>, name: string, origin: string, item: U): void {
     const addressKey = pluginAddressKey(name, origin);
-    const nameKey = name.toLowerCase();
     this.byAddress.set(addressKey, [...(this.byAddress.get(addressKey) ?? []), item]);
-    this.byName.set(nameKey, [...(this.byName.get(nameKey) ?? []), item]);
   }
 
-  get(name: string, origin: string | undefined): T | undefined {
-    return origin === undefined
-      ? this.byName.get(name.toLowerCase())
-      : this.byAddress.get(pluginAddressKey(name, origin));
+  get(name: string, origin: string): T | undefined {
+    return this.byAddress.get(pluginAddressKey(name, origin));
   }
 
   has(name: string, origin: string): boolean {
@@ -209,31 +211,30 @@ type RowDecoration = {
 // window (ADR-0009 point 5). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
-// plugins.md, A row: the four statuses, in the order that sets the icon. `words` is the
+// plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
 // description's vocabulary; `tooltipLine` is that status's one tooltip line.
 interface PluginStatus {
-  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'malformed';
+  kind: 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
   words: string;
   tooltipLine: string;
 }
 
-// The Malformed status's icon (ADR-0019's warning tier): a malformed plugin still loads and
-// plays, unlike the other three, which are all `failurePrefixIcon()`'s error tier.
-function malformedIcon(): vscode.ThemeIcon {
+// The warning tier's icon (ADR-0019): a plugin changed outside Modbench or malformed still loads and
+// plays, unlike the other three statuses, which are all `failurePrefixIcon()`'s error tier.
+function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
 
-function failedToLoadStatus(failure: string | undefined): PluginStatus | undefined {
+function failedToReadStatus(failure: string | undefined): PluginStatus | undefined {
   if (failure === undefined) return undefined;
-  return { kind: 'failedToLoad', words: 'failed to load', tooltipLine: `Failed to load: ${failure}` };
+  return { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${failure}` };
 }
 
-function masterIssuesStatus(issues: MasterIssue[]): PluginStatus | undefined {
-  if (issues.length === 0) return undefined;
-  const reasons = issues.map((i) =>
-    i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
-  const words = issues.length === 1 ? '1 master issue' : `${issues.length} master issues`;
-  return { kind: 'masterIssues', words, tooltipLine: `${words}: ${reasons.join('; ')}` };
+// "Missing" is MO2's word for a master that is not active, file present or not.
+function masterIssuesStatus(inactiveMasters: string[]): PluginStatus | undefined {
+  if (inactiveMasters.length === 0) return undefined;
+  const words = inactiveMasters.length === 1 ? '1 master issue' : `${inactiveMasters.length} master issues`;
+  return { kind: 'masterIssues', words, tooltipLine: `Missing masters: ${inactiveMasters.join(', ')}` };
 }
 
 function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undefined {
@@ -250,6 +251,17 @@ function factFlags(facts: PluginFacts | undefined): string[] {
   if (facts?.tracked !== undefined) flags.push(facts.tracked ? 'tracked' : 'untracked');
   if (facts?.readOnly === false) flags.push('editable');
   return flags;
+}
+
+// The status's words beyond the row, in its tooltip and the Problems panel.
+const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
+
+function changedOutsideStatus(changed: boolean): PluginStatus | undefined {
+  if (!changed) return undefined;
+  return {
+    kind: 'changedOutside', words: 'changed outside Modbench',
+    tooltipLine: CHANGED_OUTSIDE_TEXT,
+  };
 }
 
 function malformedStatus(diagnosisTexts: string[]): PluginStatus | undefined {
@@ -277,6 +289,7 @@ export class PluginsTreeProvider
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
+  private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -296,8 +309,7 @@ export class PluginsTreeProvider
   // plugins.md, States, story 3: once mEdit names the locked plugins, an unreachable mEdit does not
   // unlock them.
   private lockedNames: readonly string[] | undefined;
-  // Whether the last build had no row at all, which the message line says.
-  private nothingToShow = false;
+  private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
@@ -310,6 +322,7 @@ export class PluginsTreeProvider
     this.records = options.records;
     this.client = options.client;
     this.publishDiagnoses = options.publishDiagnoses;
+    this.publishChangedOutside = options.publishChangedOutside;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
@@ -323,6 +336,19 @@ export class PluginsTreeProvider
     // attaches after the rows were built rebuilds them.
     const unsubscribe = options.client?.onStatusChanged((status) => { if (status === 'attached') this.invalidate(); });
     if (unsubscribe) this.subscriptions.push({ dispose: unsubscribe });
+    const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
+    if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
+  }
+
+  // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
+  // Modbench, so it replaces what the mod's last settle named.
+  private applyExternalChange(event: NotificationEvent): void {
+    this.changedOutsideByMod.set(event.origin, (event.changedPlugins ?? []).map(({ name }) => ({ name, origin: event.origin })));
+    const changed = [...this.changedOutsideByMod.values()].flat();
+    this.changedOutside = new ByPluginAddress<true>();
+    for (const { name, origin } of changed) this.changedOutside.set(name, origin, true);
+    this.publishChangedOutside?.(changed.map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })));
+    this._onDidChangeTreeData.fire(undefined);
   }
 
   dispose(): void {
@@ -347,15 +373,16 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** What the view's message line says about its rows: the game folder not found (common.md,
-   *  States, story 5), else no rows at all (plugins.md, States, story 1), else a record filter
-   *  that matches nothing (States, story 5). */
+  /** The view's message line, first that holds: the game folder not found (common.md, States 5),
+   *  a failed index (plugins.md, States 6), no rows (States 1), a record filter matching nothing
+   *  (States 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    if (this.nothingToShow) return NO_PLUGINS_MESSAGE;
+    if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
+    if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
     }
@@ -383,13 +410,19 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** A plugin row's winning plugin, as the Instance value resolved it, or a locked row's copy in
-   *  the game folder (plugins.md, Menus and keys). `Promise`-wrapped only to keep the caller's
-   *  `await` unchanged. */
+  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1), or the game folder's copy
+   *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
-    if (row.kind === 'implicitMaster') return Promise.resolve(this.dataFolderFile(row.name));
-    const folded = row.plugin.name.toLowerCase();
-    return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
+    const name = pluginFileOf(row);
+    const address = pluginAddressKey(name, row.origin);
+    const listed = this.instanceValue.plugins.find((p) => pluginAddressKey(p.name, p.origin) === address)?.path;
+    return Promise.resolve(listed ?? (row.origin === DATA_DIRECTORY_ORIGIN ? this.dataFolderFile(name) : undefined));
+  }
+
+  /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
+  isEnabled(row: PluginNode): boolean {
+    const address = pluginAddressKey(row.plugin.name, row.origin);
+    return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
   }
 
   // The copy the game loads: the one the Mod override order resolves the name to, else the game
@@ -406,32 +439,50 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (!isRow(element)) return this.identified(await (this.records?.getChildren(element) ?? []), this.pluginAbove.get(element));
-    const file = pluginFileOf(element);
-    return this.identified(await this.expandPluginRow(element, file), { name: file, origin: element.origin });
+    const children = isRow(element)
+      ? await this.expandPluginRow(element, pluginFileOf(element))
+      : await (this.records?.getChildren(element) ?? []);
+    return this.adopted(children, element);
   }
 
-  // The plugin row each row beneath it sits under: a record row's identity names that plugin.
-  private readonly pluginAbove = new WeakMap<PluginsTreeNode, PluginAddress>();
+  /** VS Code's walk up from a row it is asked to reveal. */
+  getParent(element: PluginsTreeNode): PluginsTreeNode | undefined {
+    return this.parentOf.get(element);
+  }
 
-  private identified(children: PluginsTreeNode[], plugin: PluginAddress | undefined): PluginsTreeNode[] {
-    if (plugin === undefined) return children;
+  private readonly parentOf = new WeakMap<PluginsTreeNode, PluginsTreeNode>();
+
+  private adopted(children: PluginsTreeNode[], parent: PluginsTreeNode): PluginsTreeNode[] {
+    const plugin = this.pluginOf(parent);
     for (const child of children) {
-      this.pluginAbove.set(child, plugin);
+      this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
-      if (formKey !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+      if (formKey !== undefined && plugin !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
     }
     return children;
+  }
+
+  private pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
+    let current: PluginsTreeNode | undefined = node;
+    while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
+    return current && { name: pluginFileOf(current), origin: current.origin };
+  }
+
+  /** The row of a record, once mEdit lists it in its group. */
+  async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
+    const address = pluginAddressKey(plugin.name, plugin.origin);
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && pluginAddressKey(row.plugin.name, row.origin) === address);
+    if (pluginRow === undefined) return undefined;
+    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
+    if (group === undefined) return undefined;
+    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
   }
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
   private async expandPluginRow(element: PluginListNode, file: string): Promise<PluginsTreeNode[]> {
     if (this.expansionOverride?.scope === 'everyRow') return [new ErrorNode(this.expansionOverride.message)];
-    if (this.heldFiles?.has(file.toLowerCase()) === true) {
-      // Deliberately not the row's own `origin`: a stated origin means "the plugin the load order
-      // does not name" downstream, which would make every record row read-only. The backend
-      // resolves a load-order filename itself.
-      return this.records?.getPluginChildren(file, undefined, this.conditionsOf(element, file)) ?? noRecordBrowser();
+    if (this.held?.has(file, element.origin) === true) {
+      return this.records?.getPluginChildren(file, element.origin, this.conditionsOf(element, file)) ?? noRecordBrowser();
     }
     // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
     const failure = this.reachableFailureOf(element);
@@ -457,19 +508,18 @@ export class PluginsTreeProvider
   private async builtRows(): Promise<PluginListNode[]> {
     while (!this.cache) {
       const generation = this.rowsGeneration;
-      this.settleRows(generation, await this.implicitMasters());
+      this.settleRowsUnlessInvalidatedSince(generation, await this.implicitMasters());
     }
     return this.cache.rows;
   }
 
-  // A build that asked mEdit before the rows were last invalidated drops out.
-  private settleRows(generation: number, lockedAnswer: readonly string[] | undefined): void {
+  private settleRowsUnlessInvalidatedSince(generation: number, lockedAnswer: readonly string[] | undefined): void {
     if (generation !== this.rowsGeneration) return;
     const rows = this.buildRows(lockedAnswer);
     this.cache = { rows };
-    if ((rows.length === 0) !== this.nothingToShow) {
-      this.nothingToShow = rows.length === 0;
-      this.render(); // the message line reads it
+    if ((rows.length === 0) !== this.lastBuildHadNoRows) {
+      this.lastBuildHadNoRows = rows.length === 0;
+      this.render();
     }
   }
 
@@ -521,7 +571,7 @@ export class PluginsTreeProvider
     return element;
   }
 
-  // plugins.md, The tree, story 5: a disabled plugin's records are not the game's to load, so there
+  // plugins.md, The tree, story 4: a disabled plugin's records are not the game's to load, so there
   // is nothing behind the row to expand into.
   private collapsibleStateOf(element: PluginListNode): vscode.TreeItemCollapsibleState {
     if (element.kind === 'plugin' && !element.plugin.enabled) return vscode.TreeItemCollapsibleState.None;
@@ -542,33 +592,31 @@ export class PluginsTreeProvider
   // stay unset when no status applies.
   private decoratePlugin(row: PluginNode): void {
     const file = row.plugin.name;
-    const joinedOrigin = this.joinOrigin(file, row);
-    const statuses = this.statusesOf(row, joinedOrigin);
+    const statuses = this.statusesOf(row);
     const [first] = statuses;
     if (first !== undefined) {
-      row.iconPath = first.kind === 'malformed' ? malformedIcon() : failurePrefixIcon();
+      row.iconPath = first.kind === 'changedOutside' || first.kind === 'malformed' ? warningIcon() : failurePrefixIcon();
       row.description = statuses.map((s) => s.words).join(', ');
     }
     const lines = [file, row.origin];
-    if (this.facts?.get(file, joinedOrigin)?.readOnly === true) lines.push('read-only');
+    if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    row.contextValue = this.contextValueOf(row, joinedOrigin);
+    row.contextValue = this.contextValueOf(row);
   }
 
   // plugins.md, Menus and keys: what every plugin menu condition reads. Where the plugin lives and
   // whether its line is enabled are the instance value's; tracked and editable wait on mEdit.
-  private contextValueOf(row: PluginNode, joinedOrigin: string | undefined): string {
+  private contextValueOf(row: PluginNode): string {
     const place = this.placeOf(row.origin);
-    const facts = joinedOrigin === undefined ? undefined : this.facts?.get(row.plugin.name, joinedOrigin);
+    const facts = this.facts?.get(row.plugin.name, row.origin);
     return ['plugin', row.plugin.enabled ? 'enabled' : 'disabled', ...(place === undefined ? [] : [place]), ...factFlags(facts)]
       .join(' ');
   }
 
   // What the rows beneath a plugin row state about it: its tracked and editable flags.
   private conditionsOf(row: PluginListNode, file: string): PluginConditions {
-    const joinedOrigin = this.joinOrigin(file, row);
-    const facts = row.kind === 'plugin' && joinedOrigin === undefined ? undefined : this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, row.origin);
     return { tracked: facts?.tracked === true, editable: facts?.readOnly === false };
   }
 
@@ -584,33 +632,35 @@ export class PluginsTreeProvider
     return this.someCompilable;
   }
 
-  // commands.md, Plugin, Where: compile on a tracked, editable plugin.
+  // plugins.md, Menus and keys: compile on a tracked, editable plugin.
   private compilable(file: string, origin: string): boolean {
     const facts = this.facts?.get(file, origin);
     return facts?.tracked === true && facts.readOnly !== true;
   }
 
-  // plugins.md, A row: every status the plugin carries, spec order. `row.origin` joins load
-  // failures; `joinedOrigin` joins every other fact.
-  private statusesOf(row: PluginNode, joinedOrigin: string | undefined): PluginStatus[] {
+  // plugins.md, A row: every status the plugin carries, spec order.
+  private statusesOf(row: PluginNode): PluginStatus[] {
     const file = row.plugin.name;
-    const facts = this.facts?.get(file, joinedOrigin);
+    const facts = this.facts?.get(file, row.origin);
     const statuses = [
-      failedToLoadStatus(this.loadFailures.get(file, row.origin)),
+      failedToReadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
-      malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
+      changedOutsideStatus(this.changedOutside.has(file, row.origin)),
+      malformedStatus(this.diagnoses?.get(file, row.origin) ?? []),
     ];
     return statuses.filter((s): s is PluginStatus => s !== undefined);
   }
 
   // ── the load order and its facts ──────────────────────────────────────────
 
-  private heldFiles?: Set<string>;
+  private held?: ByPluginAddress<true>;
   private facts?: ByPluginAddress<PluginFacts>;
   private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
   private diagnoses?: ByPluginAddress<string[]>;
+  private readonly changedOutsideByMod = new Map<string, readonly PluginAddress[]>();
+  private changedOutside = new ByPluginAddress<true>();
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
   // persists until `applyReconciled` lands the new answer.
   private loadFailures = new ByPluginAddress<string>();
@@ -621,6 +671,8 @@ export class PluginsTreeProvider
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
+  // plugins.md, States 6: why the snapshot's index failed, until the next reconcile ticks.
+  private indexFailure?: string;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
@@ -630,10 +682,11 @@ export class PluginsTreeProvider
   /** A progressive reconcile's tick: a row's children resolve as its plugin lands. Row status
    *  stays as the last reconcile left it until `applyReconciled` lands; expansion tracks only
    *  this reload's own ticks. */
-  applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
+  applyIndexed(indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.expansionOverride = undefined;
-    this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
+    this.indexFailure = undefined;
+    this.held = heldSet(indexedPlugins);
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
     this._onDidChangeTreeData.fire(undefined);
@@ -643,6 +696,7 @@ export class PluginsTreeProvider
    *  overrides every row; `failed` only a row this reload never reached. */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
+    this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
     this.expansionOverride = { scope: refusal.kind === 'heldElsewhere' ? 'everyRow' : 'unheldRow', message: refusal.message };
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -664,14 +718,11 @@ export class PluginsTreeProvider
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
-    this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
+    this.indexFailure = undefined;
+    this.held = heldSet(plugins);
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
     this.applyPluginFacts(plugins);
-    // The record rows' own two contextValue axes, from this same read. A `.git` appearing or
-    // vanishing under `mods/` is a watcher event, and that is a reconcile.
-    this.records?.setImmutablePlugins(plugins.filter((p) => p.isImmutable).map(({ name, origin }) => ({ name, origin })));
-    this.records?.setTrackedPlugins(plugins.filter((p) => p.isTracked).map(({ name, origin }) => ({ name, origin })));
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
@@ -694,8 +745,8 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0013: keyed by filename, reading the `inLoadOrder` plugins — two held plugins can share
-  // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
+  // ADR-0013: the `inLoadOrder` plugins, two of which can share a filename. A failed read is
+  // never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
     try {
@@ -712,14 +763,14 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0017: `masterIssues` is a required, non-nullable array on the wire, so it is read straight
-  // through — a `??` default would compensate for nothing the backend can do.
+  // plugins.md: no `masterIssues` means not yet checked, so the last answer stays until one lands.
   private applyPluginFacts(plugins: PluginMetadata[]): void {
     const facts = new ByPluginAddress<PluginFacts>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
-        readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
+        masterIssues: p.masterIssues ?? this.facts?.get(p.name, p.origin)?.masterIssues,
         order: { masters: p.masters, blueprint: p.isBlueprint },
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);
@@ -750,24 +801,12 @@ export class PluginsTreeProvider
   // "is a filter active" signal has to be threaded in here.
   private isHiddenByFilter(row: PluginListNode): boolean {
     const file = pluginFileOf(row);
-    return this.matches?.get(file, this.joinOrigin(file, row)) === false;
+    return this.matches?.get(file, row.origin) === false;
   }
 
-  // Children expansion only (plugins.md, States 2): this reload's own ticks, joined on the
-  // row's own origin rather than through `joinOrigin`, as a failed plugin is never a held one.
+  // Children expansion only (plugins.md, States 2): this reload's own ticks.
   private reachableFailureOf(row: PluginListNode): string | undefined {
-    const file = pluginFileOf(row);
-    return this.reachableFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
-  }
-
-  // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
-  // the client's answer names no plugin for falls back to the filename.
-  private joinOrigin(file: string, row: PluginListNode): string | undefined {
-    return this.heldOrigin(file, row.kind === 'plugin' ? row.origin : undefined);
-  }
-
-  private heldOrigin(file: string, origin: string | undefined): string | undefined {
-    return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
+    return this.reachableFailures.get(pluginFileOf(row), row.origin);
   }
 
   // ── drag and drop ─────────────────────────────────────────────────────────
@@ -814,7 +853,7 @@ export class PluginsTreeProvider
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {
-      const origin = this.heldOrigin(name, originOf.get(name));
+      const origin = originOf.get(name);
       return origin === undefined ? undefined : this.facts?.get(name, origin)?.order;
     };
   }
@@ -840,11 +879,15 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
   return element instanceof PluginNode || element instanceof ImplicitMasterNode;
 }
 
-// plugins.md, Menus and keys: a record row is every row a record menu sits on.
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
-  if (row.kind === 'record') return row.record.formKey;
-  if (row.kind === 'worldspace' || row.kind === 'cell' || row.kind === 'placed') return row.formKey;
-  return undefined;
+  if (!isRecordRow(row)) return undefined;
+  return row.kind === 'record' ? row.record.formKey : row.formKey;
+}
+
+function heldSet(plugins: readonly PluginAddress[]): ByPluginAddress<true> {
+  const held = new ByPluginAddress<true>();
+  for (const { name, origin } of plugins) held.set(name, origin, true);
+  return held;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

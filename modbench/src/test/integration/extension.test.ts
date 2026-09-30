@@ -101,11 +101,11 @@ const MOCK_PLUGINS: MockPlugin[] = [
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
-  // ADR-0017: a plugin the backend flags with a directly-missing master. Every other entry carries
-  // an empty `masterIssues`, which is what the backend sends when all masters resolved.
+  // ADR-0012 invariant 4: a plugin the backend flags with a master that is not active. Every other
+  // entry carries an empty `masterIssues`, which is what the backend sends when every master is active.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
-    masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
+    masterIssues: ['Ghost.esm'],
   }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
@@ -369,7 +369,7 @@ function createMockBackend(): http.Server {
       return;
     }
     // A plugin row's children come from here once the backend is running.
-    if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
+    if (/^\/plugins\/[^/?]+\/record-types(\?|$)/.test(url)) {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
@@ -553,30 +553,30 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
   });
 });
 
-// ── openEditor ────────────────────────────────────────────────────────────────
+// ── record open ───────────────────────────────────────────────────────────────
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-describe('modbench.openEditor', () => {
+describe('modbench.record.open', () => {
   it('opens a new webview tab when no panel exists', async () => {
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000001',
       label: 'Test Record',
     });
 
-    const tabsAfter = await waitFor('a new tab after openEditor', () => {
+    const tabsAfter = await waitFor('a new tab after record open', () => {
       const count = openTabs().length;
       return count > tabsBefore ? count : undefined;
     });
-    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.openEditor');
+    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.record.open');
   });
 
   it('reuses the existing panel on a second call', async () => {
     const tabsAfterFirst = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000002',
       label: 'Another Record',
     });
@@ -588,18 +588,18 @@ describe('modbench.openEditor', () => {
     assert.strictEqual(
       tabsAfterSecond,
       tabsAfterFirst,
-      'Second modbench.openEditor call should reuse the existing panel, not open a new tab'
+      'Second modbench.record.open call should reuse the existing panel, not open a new tab'
     );
   });
 
   it('updates the panel title when opened for a different record', async () => {
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000010',
       label: 'First Record',
     });
     await waitFor('the panel titled "First Record"', () => openTabs().some(t => t.label === 'First Record') || undefined);
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000011',
       label: 'Second Record',
     });
@@ -621,7 +621,7 @@ describe('modbench.openEditorBeside', () => {
   it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton', async () => {
     // Seed the singleton with a known title first: an implementation that routed through the
     // singleton/retarget path would retarget this panel instead of opening a new tab.
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
     await waitFor('the seed panel', () => openTabs().some(t => t.label === 'Seed Record') || undefined);
 
     const tabsBefore = openTabs().length;
@@ -720,7 +720,7 @@ describe('modbench.openEditorBeside', () => {
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
 import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
-import { publishLoadDiagnoses } from '../../medit/loadDiagnostics';
+import { publishPluginWarnings } from '../../medit/loadDiagnostics';
 // esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
 // here from source is a distinct constructor — `.kind` is what identifies a node across that
 // boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
@@ -752,7 +752,7 @@ describe('the locked row is greyed and carries no Problems badge', () => {
   after(() => collection.dispose());
 
   it('holds none of the diagnostics published on its plugin file', () => {
-    publishLoadDiagnoses(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', defectClass: 'malformed', message: 'malformed', text: 'malformed' }]);
+    publishPluginWarnings(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
 
     const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
     assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);
@@ -1710,7 +1710,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
   });
 
-  // plugins.md, The tree, story 5: the game does not load a disabled plugin's records, so its row
+  // plugins.md, The tree, story 4: the game does not load a disabled plugin's records, so its row
   // shows no expander — viewing it is deferred, as for an overridden plugin.
   it('a disabled plugin row has no expander', async () => {
     const tree = pluginsTree();
@@ -1789,8 +1789,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 });
 
 // ADR-0017: a plugin flagged with a missing master is decorated through the real wiring.
-// MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
-// with no `masterIssues` key, proves an absent field degrades to undecorated.
 describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1827,7 +1825,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const item = tree.getTreeItem(row);
 
-    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing masters: Ghost.esm'),
       `expected a missing-master tooltip, got: ${describeTooltip(item.tooltip)}`);
     // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
@@ -1838,8 +1836,8 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
   });
 
-  // The negative case: `masterIssues` is non-nullable on the wire, so a plugin whose masters all
-  // resolved carries an empty array, and gets no decoration.
+  // The negative case: a plugin whose masters are all active carries an empty array, and gets no
+  // decoration.
   it('leaves a plugin whose masters all resolve undecorated', async () => {
     const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1928,7 +1926,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const beforeTooltip = tree.getTreeItem(before).tooltip;
-    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing masters: Ghost.esm'),
       `expected the row to carry the master-issue tooltip before the reconcile, got: ${describeTooltip(beforeTooltip)}`);
 
     // The next reconcile reports the same plugin with its master issue resolved.
@@ -2220,13 +2218,13 @@ describe('Progressive load', () => {
   });
 
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
-  it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
+  it('decorates a plugin that failed to read the moment it is reported, not at the end', async () => {
     const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', origin: 'Data', reason: 'RACE parse' }] });
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
-      return candidate.description === 'failed to load' ? candidate : undefined;
+      return candidate.description === 'failed to read' ? candidate : undefined;
     });
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
@@ -2309,7 +2307,7 @@ describe('Progressive load', () => {
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
-      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm'),
+      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
@@ -2317,7 +2315,7 @@ describe('Progressive load', () => {
     await launch;
 
     const loaded = await itemFor('MissingMaster.esp');
-    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
@@ -2382,9 +2380,7 @@ describe('Progressive load', () => {
 // common.md, Reporting: a failed destination lookup says what failed and why, and the
 // command resolves rather than escaping as VS Code's raw rejection toast.
 describe('Copy says why its destination lookup failed', () => {
-  // A column header's data-vscode-context payload always carries `origin`, so origin resolution
-  // short-circuits with no HTTP call, and the destination lookup is the first thing to reach the
-  // backend, which holds no load order.
+  // The destination lookup is the first thing to reach the backend, which holds no load order.
   const headerArg = {
     webviewSection: 'recordHeader',
     formKey: 'TestMod.esp:000001',
@@ -2439,7 +2435,7 @@ describe('A field gesture from the palette acts on the focused cell of the recor
 
   it('removes the element the focused cell holds', async () => {
     const formKey = '000801:TestMod.esp';
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey, label: 'Focused Record' });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey, label: 'Focused Record' });
     await waitFor('the record tab', () => openTabs().some((t) => t.label === 'Focused Record') || undefined);
     const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
     present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({

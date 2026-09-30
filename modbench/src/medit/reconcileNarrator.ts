@@ -1,5 +1,6 @@
 import {
-  toLoadOrderStatus, type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginLoadFailure,
+  toLoadOrderStatus, type LoadOrderProgress, type LoadOrderRefusal, type MEditClient, type PluginAddress,
+  type PluginLoadFailure,
 } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 import { makeReconcileProgressHandler, reportIndexRefusal } from './loadOrderProgress';
@@ -7,7 +8,7 @@ import { makeReconcileProgressHandler, reportIndexRefusal } from './loadOrderPro
 export interface ReconcileNarratorDeps {
   /** Opens the Plugins view's progress, closed when `until` settles. */
   showProgress: (until: Promise<void>) => void;
-  applyIndexed: (indexedPlugins: string[], failures: PluginLoadFailure[]) => void;
+  applyIndexed: (indexedPlugins: PluginAddress[], failures: PluginLoadFailure[]) => void;
   /** plugins.md, States 4: the load order's own refusal, handed to the Plugins tree alongside the
    *  status bar so every row names it too. */
   applyRefused: (refusal: LoadOrderRefusal) => void;
@@ -80,6 +81,9 @@ export function createReconcileNarrator(deps: ReconcileNarratorDeps): ReconcileN
 
   const settle = (status: LoadOrderProgress, reconcileSeen: boolean): void => {
     if (status.refusal !== undefined) {
+      if (status.refusal.kind === 'failed' && status.version > settledVersion) {
+        deps.log(`Indexing failed: ${status.refusal.message}`);
+      }
       reportIndexRefusal(status, deps);
       deps.applyRefused(status.refusal);
       markSettled(status.version);

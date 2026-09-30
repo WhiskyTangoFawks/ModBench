@@ -38,8 +38,8 @@ public static class PluginBinaryHash
     public static Task<byte[]> ExactBytesOfFileAsync(string path, CancellationToken cancel = default) =>
         File.ReadAllBytesAsync(path, cancel);
 
-    /// <summary>Every byte of the file, for a caller that hashes several plugins as one classification
-    /// pass rather than one at a time. Null on the same no-evidence terms as <see cref="OfFile"/>.
+    /// <summary>Every byte of the file, for a caller that hashes several plugins in one pass rather than
+    /// one at a time. Null on the same no-evidence terms as <see cref="OfFile"/>.
     /// </summary>
     public static byte[]? BytesOfFile(string path)
     {

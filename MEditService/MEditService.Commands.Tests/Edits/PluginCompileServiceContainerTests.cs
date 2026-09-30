@@ -158,7 +158,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private async Task<(IFallout4ModGetter Mod, IDisposable Handle)> CompileAndReimport()
     {
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, PluginName);
@@ -238,7 +238,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     [Fact]
     public async Task Compile_ForAnEmbeddedChildWithASemanticError_NamesTheContainersOwnSourceFile()
     {
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.WorkingTree());
+        var result = await CompileService().CompileAsync(_plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var diagnostic = Assert.Single(
@@ -248,27 +248,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         Assert.True(File.Exists(full), $"'{diagnostic.SourceRelativePath}' is not a file in the tree.");
         Assert.Equal("RecordData.json", Path.GetFileName(full));
         Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
-    }
-
-    // A container's document is found by scanning the tree, never computed from the identity, so the
-    // ref's own answer is the only one left once the working tree has lost the directory.
-    [Fact]
-    public async Task Compile_AtARef_ForAnEmbeddedChildWithASemanticError_NamesTheContainersDocumentInThatRef()
-    {
-        var cellDirectory = Directory
-            .EnumerateDirectories(
-                Path.Combine(_modFolder, SourceRepository.RootFor(PluginName)), "CellA*", SearchOption.AllDirectories)
-            .Single();
-        Directory.Delete(cellDirectory, recursive: true);
-
-        var result = await CompileService().CompileAsync(_plugin, new CompileSource.AtRef("HEAD"));
-
-        Assert.True(result.Succeeded, result.RefusalReason);
-        var diagnostic = result.Diagnostics.First(d => d.FormKey == _cellATemporaryRef.ToString());
-        Assert.Equal(
-            Path.Combine(Path.GetRelativePath(_modFolder, cellDirectory), "RecordData.json"),
-            diagnostic.SourceRelativePath);
-        Assert.False(File.Exists(Path.Combine(_modFolder, diagnostic.SourceRelativePath)));
     }
 
     [Fact]

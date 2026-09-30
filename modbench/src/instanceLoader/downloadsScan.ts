@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { DownloadEntry } from '../mo2Codecs/downloads';
 import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
 import { factsOf, get, listDir } from '../instanceAdapter/files';
+import { isTempWrite } from '../instanceAdapter/layout';
 import { errnoCode } from '../ports/errno';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
@@ -20,8 +21,10 @@ export async function scanDownloads(downloadsDir: string): Promise<DownloadEntry
   let names: string[];
   try {
     // A folder is never a download of its own — MO2 lists files by the installers' extensions,
-    // never folders — so a subfolder here is skipped before it ever becomes an entry.
-    names = (await listDir(downloadsDir)).filter((dirent) => dirent.isFile()).map((dirent) => dirent.name);
+    // never folders. A write's own temp file is skipped the same way.
+    names = (await listDir(downloadsDir))
+      .filter((dirent) => dirent.isFile() && !isTempWrite(dirent.name))
+      .map((dirent) => dirent.name);
   } catch (err) {
     if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;

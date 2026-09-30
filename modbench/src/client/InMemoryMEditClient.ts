@@ -3,15 +3,14 @@ import { isNotificationKind, type MEditClient, type NotificationKind, type Notif
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getRecords' | 'searchRecords'
+  | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
   | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
   | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
-  | 'copyRecords' | 'compile' | 'absorbUpstreamUpdate'
-  | 'keepAsMyEdit' | 'editRecord' | 'putLoadOrder';
+  | 'copyRecords' | 'compile' | 'editRecord' | 'putLoadOrder';
 
 // Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
 // write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
@@ -214,14 +213,6 @@ export class InMemoryMEditClient implements MEditClient {
   compile(...args: Parameters<MEditClient['compile']>): ReturnType<MEditClient['compile']> {
     return this.command('compile', args);
   }
-  absorbUpstreamUpdate(
-    ...args: Parameters<MEditClient['absorbUpstreamUpdate']>
-  ): ReturnType<MEditClient['absorbUpstreamUpdate']> {
-    return this.command('absorbUpstreamUpdate', args);
-  }
-  keepAsMyEdit(...args: Parameters<MEditClient['keepAsMyEdit']>): ReturnType<MEditClient['keepAsMyEdit']> {
-    return this.command('keepAsMyEdit', args);
-  }
   editRecord(...args: Parameters<MEditClient['editRecord']>): ReturnType<MEditClient['editRecord']> {
     return this.command('editRecord', args);
   }
@@ -230,6 +221,10 @@ export class InMemoryMEditClient implements MEditClient {
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {
     return this.query('getRecordTypes', args);
+  }
+
+  getCreatableRecordTypes(): ReturnType<MEditClient['getCreatableRecordTypes']> {
+    return this.query('getCreatableRecordTypes', []);
   }
   getRecords(...args: Parameters<MEditClient['getRecords']>): ReturnType<MEditClient['getRecords']> {
     return this.query('getRecords', args);

@@ -141,7 +141,7 @@ describe('onPluginCheckboxChanged', () => {
   });
 
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
-    const recordNode = new RecordNode(recordSummaryFixture());
+    const recordNode = new RecordNode(recordSummaryFixture(), 'Data');
 
     await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, '/instance', profile, recordingReporter());
 

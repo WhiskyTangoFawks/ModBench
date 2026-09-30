@@ -5,17 +5,17 @@ import type { PluginDiagnosisReport } from '../client';
 // files live" belongs beside the rows that answer it.
 import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
 
-/** Targets the plugin binary itself — these plugins are pre-Track, so there is no source-tree
- *  file to point at, and one scan answers for the whole load order. Warning severity: a
- *  Malformed plugin still loads and plays. */
-export function publishLoadDiagnoses(
+/** Targets the plugin binary itself, which is where a malformed plugin's diagnoses and a change
+ *  outside Modbench both live, and one call answers for the whole load order. Warning severity:
+ *  such a plugin still loads and plays. */
+export function publishPluginWarnings(
   collection: vscode.DiagnosticCollection,
   originFolder: OriginFolder,
-  reports: PluginDiagnosisReport[],
+  entries: readonly Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>[],
 ): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
-  for (const r of reports) {
+  for (const r of entries) {
     // An origin whose plugins vanished between scan and publish has no file to point at.
     const folder = originFolder(r.origin);
     if (folder === undefined) continue;

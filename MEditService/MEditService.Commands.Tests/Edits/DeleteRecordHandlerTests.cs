@@ -277,19 +277,6 @@ public sealed class DeleteRecordHandlerTests
     }
 
     [Fact]
-    public void DeleteRecords_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
-    {
-        using var mod = SourceEditFixture.Tracked();
-        mod.RaiseExternalChange();
-
-        var result = mod.DeleteHandler.DeleteRecords([new RecordAt(mod.Plugin, mod.Npc.ToString())]);
-
-        var refused = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, refused.Refusal);
-        Assert.True(File.Exists(mod.NpcSourceFile)); // refused before the first door — nothing written
-    }
-
-    [Fact]
     public void DeleteRecords_Refuses_ForAnUnknownFormKey()
     {
         using var mod = SourceEditFixture.Tracked();

@@ -1,22 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { showErrorMessage } = vi.hoisted(() => ({ showErrorMessage: vi.fn() }));
-vi.mock('vscode', () => ({ window: { showErrorMessage } }));
+const { showErrorMessage, handlers } = vi.hoisted(() => ({
+  showErrorMessage: vi.fn(),
+  handlers: new Map<string, (...args: unknown[]) => Promise<void>>(),
+}));
+vi.mock('vscode', () => ({
+  window: { showErrorMessage },
+  commands: { registerCommand: (id: string, handler: (...args: unknown[]) => Promise<void>) => { handlers.set(id, handler); return { dispose: () => {} }; } },
+}));
 
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
-import {
-  runExternalChangeDialogs, messageFor, BASELINE_BUTTON, APPLY_BUTTON,
-} from '../plugins/externalChangeDialog';
-import type { UnansweredExternalChange } from '../client';
+import { registerRecordLifecycleCommands } from '../editor/recordLifecycleCommands';
+import { InMemoryMEditClient } from '../client';
+import { present } from '../ports/present';
 import type { RecordEditEnvelope } from '../wire/messages';
 
 const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'X' };
 
-function unanswered(origin: string): UnansweredExternalChange {
-  return { origin, plugins: ['Fixture.esp'], trackedFiles: [], metaChanged: false, oldVersion: null, newVersion: null };
+const ACCEPT = 'Delete';
+
+// Two questions through one real consumer, one after the other: whether each delete went ahead.
+async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<boolean[]> {
+  const client = new InMemoryMEditClient();
+  client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+  registerRecordLifecycleCommands(client, recordingReporter(), dialog, () => []);
+  const deleteRecord = present(handlers.get('modbench.record.delete'), 'the record delete handler');
+  const offer = async (plugin: string) => {
+    const before = client.calls.length;
+    await deleteRecord({ formKey: `000800:${plugin}`, plugin, origin: 'ModA' });
+    return client.calls.length > before;
+  };
+  return [await offer('A.esp'), await offer('B.esp')];
 }
 
 // Both doubles are driven through a real consumer of the seam, never called directly: a double
@@ -108,27 +125,21 @@ describe('the recording reporter, given a selection\'s outcome', () => {
 
 describe('the scripted dialog', () => {
   it('answers each question with the next scripted answer and records what was asked', async () => {
-    const changes = [unanswered('ModA'), unanswered('ModB')];
-    const dialog = scriptedDialog(BASELINE_BUTTON, APPLY_BUTTON);
+    const dialog = scriptedDialog(undefined, ACCEPT);
 
-    const outcomes = await runExternalChangeDialogs(changes, dialog);
+    const outcomes = await offerTwice(dialog);
 
-    expect(outcomes.map((o) => o.answer)).toEqual(['absorb', 'keep']);
-    // What either question says is externalChangeDialog.test.ts's to pin; what the double owes is
-    // that each question reached it whole, in the order the consumer posed them.
-    expect(dialog.asked.map((q) => q.message)).toEqual(['ModA', 'ModB']);
-    expect(dialog.asked.map((q) => q.detail)).toEqual(changes.map((c) => messageFor(c).detail));
-    // Every fixture here is metaChanged: false, so the default order (pinned by
-    // externalChangeDialog.test.ts) is Apply first for both.
-    expect(dialog.asked.map((q) => q.buttons)).toEqual(changes.map(() => [APPLY_BUTTON, BASELINE_BUTTON]));
+    expect(outcomes).toEqual([false, true]);
+    expect(dialog.asked.map((q) => q.message.match(/in (\S+)/)?.[1])).toEqual(['A.esp', 'B.esp']);
+    expect(dialog.asked.map((q) => q.buttons)).toEqual([[ACCEPT], [ACCEPT]]);
   });
 
   it('answers a question the script did not reach with the native cancel', async () => {
-    const dialog = scriptedDialog(BASELINE_BUTTON);
+    const dialog = scriptedDialog(ACCEPT);
 
-    const outcomes = await runExternalChangeDialogs([unanswered('ModA'), unanswered('ModB')], dialog);
+    const outcomes = await offerTwice(dialog);
 
-    expect(outcomes.map((o) => o.answer)).toEqual(['absorb', 'defer']);
+    expect(outcomes).toEqual([true, false]);
     expect(dialog.asked).toHaveLength(2);
   });
 });

@@ -27,16 +27,14 @@ internal static class WriteEndpointMapping
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
-    /// exactly which, so nobody matches on prose (ADR-0019). eslContradiction marks the one
-    /// refusal a header edit can resolve.</summary>
+    /// exactly which, so nobody matches on prose (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
         {
             // The request is sound; the plugin's present state refuses it until that state changes.
             RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder
-                or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin
-                or RecordEditRefusal.ExternalChangeUnanswered => 409,
+                or RecordEditRefusal.OverriddenPlugin or RecordEditRefusal.UnlistedPlugin => 409,
             RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
             // The envelope itself could not be read as a write: the request is malformed.
             RecordEditRefusal.InvalidEnvelope => 400,
@@ -49,7 +47,6 @@ internal static class WriteEndpointMapping
         {
             ["refusal"] = result.Refusal.ToString(),
             ["path"] = result.Path,
-            ["eslContradiction"] = result.EslContradiction,
         });
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
@@ -60,15 +57,28 @@ internal static class WriteEndpointMapping
         {
             TrackRefusal.PluginNotLoaded => 404,
             // State conflicts: the request is well-formed, and the answer is "not a plugin already
-            // tracked", "not on the game's own Data folder" or "not while a change is unanswered" —
-            // the status RecordEditRefusal.PluginHasNoModFolder uses for the second.
-            TrackRefusal.AlreadyTracked or TrackRefusal.DataDirectoryOrigin or TrackRefusal.ExternalChangeUnanswered => 409,
+            // tracked" or "not on the game's own Data folder" — the status
+            // RecordEditRefusal.PluginHasNoModFolder uses for the second.
+            TrackRefusal.AlreadyTracked or TrackRefusal.DataDirectoryOrigin => 409,
             // The request is sound; the machine lacks git, or git or the disk refused the write.
             TrackRefusal.GitUnavailable or TrackRefusal.CommitFailed => 500,
             // A data problem in the plugin itself, the status the record edits' own refusals use.
             _ => 422,
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
+    /// <summary>Create plugin's own refusal, each found before any write: the status says what kind
+    /// of problem, the refusal extension says exactly which (ADR-0019).</summary>
+    internal static IResult Refusal(PluginCreateRefusal refusal, string? message) => Results.Problem(
+        detail: message,
+        statusCode: refusal switch
+        {
+            PluginCreateRefusal.FolderGone => 404,
+            PluginCreateRefusal.FileExists => 409,
+            // Well-formed, and still not a plugin this game can load.
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = refusal.ToString() });
 
     /// <summary>Put load order's own refusal: a bad request, since the only one this handler
     /// answers is discovered by validating the release, never by touching the Index.</summary>
@@ -86,17 +96,9 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(NoLoadOrderException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>A tracked mod carries no such origin — loaded but untracked, a "not right now".</summary>
-    internal static IResult NotTrackedMod(string origin) =>
-        Results.Problem($"'{origin}' is not a tracked mod in the load order.", statusCode: 503);
-
     /// <summary>An argument the adapter itself refuses — malformed syntax is a 400. Same shape as
     /// <see cref="MalformedFormKey"/>, kept separate because the argument here is never a FormKey.</summary>
     internal static IResult InvalidArgument(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
-
-    /// <summary>The adapter's IOException when a write's destination already holds something — a
-    /// state conflict, not <see cref="WriteFailure"/>'s server fault.</summary>
-    internal static IResult DestinationConflict(IOException ex) => Results.Problem(ex.Message, statusCode: 409);
 
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never

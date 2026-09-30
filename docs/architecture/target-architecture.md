@@ -26,16 +26,15 @@ pictures.
   one. Actors are the zoom-out's boxes, imported by name; time runs down; a message
   is labelled with what moves, never with the call, so a request and its reply are two messages. A
   note on an actor is what it does between messages.
-- [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
-  kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
-  mark. A message class says which kind of payload it is, and a reply takes its
-  request's class. A signal is dashed grey and carries no payload, a watch event or a bare
+- [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer; in a trace the
+  actor's colour is the only layer mark. A message class says which kind of payload it is, and a
+  reply takes its request's class. A signal is dashed grey and carries no payload, a watch event or a bare
   request; a push is dashed purple and names what changed, and the receiver re-reads.
 
 ## The layers
 
 Both columns use the same six names. Drivers: who drives the process. Driving adapters: what
-turns a driver's gesture or a file's change into a call. Core: the rules, one command per
+turns a driver's gesture into a call. Core: the rules, one command per
 gesture. Kernel: read by every Core box and driven adapter. On Modbench it is pure. On mEdit it
 also holds the load order state (ADR-0013, invariant 4). A port lives here when its implementer
 sits above its callers. Both then reference the kernel, and no reference points up or across.
@@ -57,7 +56,7 @@ maintainer, never a line an agent adds.
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them. One watcher, the
-Instance loader's, drives both read models.
+Instance adapter's, drives both read models.
 In mEdit the read model is the record index, over the plugin files and the source tree. In
 Modbench it is the instance value, over the mod manager's files. A command writes a file and forgets, so a change from another tool and a change from
 Modbench are the same signal in both

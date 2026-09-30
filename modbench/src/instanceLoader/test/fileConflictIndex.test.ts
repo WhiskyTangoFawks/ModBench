@@ -253,6 +253,18 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion',
     expect(index.filesByMod.get('ModA')?.map((f) => f.relativePath)).toEqual(['Plugin.esp']);
   });
 
+  // A crash before files.ts's own rename lands leaves one of its temp files beside meta.ini.
+  it('excludes a write\'s own leftover temp file, at the root or nested', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await writeFile(join(modARoot, 'meta.ini.a1b2c3d4e5f6.tmp'), 'stale');
+    await mkdir(join(modARoot, 'textures'), { recursive: true });
+    await writeFile(join(modARoot, 'textures', 'foo.dds.f6e5d4c3b2a1.tmp'), 'stale');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect([...index.files].map((e) => e.relativePath)).toEqual(['Plugin.esp']);
+  });
+
   it('excludes any dot-prefixed file, not only directories', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
     await writeFile(join(modARoot, '.gitignore'), '*\n');

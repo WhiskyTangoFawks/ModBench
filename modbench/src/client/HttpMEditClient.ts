@@ -7,10 +7,10 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type AbsorbOutcome, type BackendStatus, type CellReferences, type CompileResult,
-  type ContainerChildSummary, type ExternalChangeActionResult, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
+  type BackendStatus, type CellReferences, type CompileOutcome,
+  type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
@@ -32,14 +32,6 @@ export interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: (msg: string) => void;
   timeoutMs?: number;
-}
-
-// An esl-contradiction refusal's `error` never carries this extension on any other refusal, so a
-// truthy check is enough.
-function eslContradictionMessage(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null) return undefined;
-  const problem = error as { eslContradiction?: boolean; detail?: string };
-  return problem.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
 }
 
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
@@ -108,14 +100,10 @@ export class HttpMEditClient implements MEditClient {
     op: string;
     failMsg: string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
-    onEslContradiction?: (message: string) => Promise<T | WriteRefused | undefined>;
   }): Promise<T | WriteRefused | undefined> {
     try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
-        const onEslContradiction = spec.onEslContradiction;
-        const eslMessage = onEslContradiction && eslContradictionMessage(error);
-        if (eslMessage) return await onEslContradiction(eslMessage);
         const text = errorText(error);
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
@@ -128,14 +116,14 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  async createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused> {
-    const { error, response, data } = await this.apiClient.POST('/plugins/create', { body: { name, path, origin } });
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
-      return { refused: true, message: `Failed to create plugin — ${text}` };
-    }
-    return data ?? { name, path, origin, slot: null, version: 0 };
+  async createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused> {
+    const failMsg = `Could not create "${plugin.name}"`;
+    const answer = await this.mutate({
+      op: `createPlugin(${plugin.name}, ${plugin.origin})`,
+      failMsg,
+      post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
+    });
+    return answer ?? { refused: true, message: `${failMsg} — no answer` };
   }
 
   /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.
@@ -308,26 +296,17 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** `formKey` is xEdit's typed-FormID path; left undefined, the backend auto-allocates.
-   *  `onEslContradiction` opts in to prompt-and-retry; resolves `undefined` when the caller
-   *  declines the prompt — nothing happened, not a refusal. */
-  async createRecord(
-    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
-    onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCreateResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCreateResponse>({
+  async createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused> {
+    const failMsg = `Could not create a new ${recordType} record in "${plugin}"`;
+    const answer = await this.mutate<RecordCreateResponse>({
       op: `createRecord(${plugin}, ${recordType})`,
-      failMsg: `Could not create a new ${recordType} record in "${plugin}"`,
+      failMsg,
       post: () => this.apiClient.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
-        body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
+        body: { origin, recordType, editorId: null, formKey: null },
       }),
-      onEslContradiction: onEslContradiction && (async (message) => (
-        (await onEslContradiction(message))
-          ? this.createRecord(plugin, origin, recordType, editorId, formKey, onEslContradiction)
-          : undefined
-      )),
     });
+    return answer ?? { refused: true, message: `${failMsg} — no answer` };
   }
 
   async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
@@ -364,44 +343,24 @@ export class HttpMEditClient implements MEditClient {
     };
   }
 
-  /** {@link WriteRefused} on a transport/HTTP failure — distinct from `succeeded: false`, a typed
-   *  refusal the caller reads off the returned `CompileResult` itself. Never refreshes the tree:
-   *  a compiled binary changes only bytes on disk. */
-  async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined> {
-    return this.mutate<CompileResult>({
-      op: `compile(${plugin})`,
-      failMsg: `Could not compile "${plugin}"`,
-      post: () => this.apiClient.POST('/plugins/{plugin}/compile', { params: { path: { plugin } }, body: { origin, ref: atRef ?? null } }),
-    });
-  }
-
-  /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A plugin that
-   *  cannot be read or parsed refuses the whole answer, which arrives as a WriteRefused. */
-  async absorbUpstreamUpdate(origin: string): Promise<AbsorbOutcome | WriteRefused> {
-    const failMsg = `Could not absorb the upstream update for "${origin}"`;
+  /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
+   *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
+   *  disk. */
+  async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
+    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
     const answer = await this.mutate({
-      op: `absorbUpstreamUpdate(${origin})`,
-      failMsg,
-      post: () => this.apiClient.POST('/plugins/external-change/absorb', { body: { origin } }),
+      op: `compile(${counted})`,
+      failMsg: `Could not compile ${counted}`,
+      post: () => this.apiClient.POST('/plugins/compile', {
+        body: { plugins: [...plugins] },
+      }),
     });
-    if (answer === undefined) return { refused: true, message: `${failMsg} — no answer` };
+    if (answer === undefined) return { refused: true, message: `Could not compile ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,
       refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
-      trackedFilesRefusal: answer.trackedFilesRefusal ?? null,
     };
-  }
-
-  /** Origin-scoped. A collision (a record or an already-staged tracked file) with existing
-   *  working-tree dirt is a typed refusal (`succeeded === false`, `refusalReason` naming it),
-   *  never an HTTP error. */
-  async keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
-    return this.mutate<ExternalChangeActionResult>({
-      op: `keepAsMyEdit(${origin})`,
-      failMsg: `Could not keep "${origin}" as your own edit`,
-      post: () => this.apiClient.POST('/plugins/external-change/keep', { body: { origin } }),
-    });
   }
 
   /** ADR-0007: the single write path. A refusal (untracked plugin, a link that would dangle) is
@@ -472,10 +431,10 @@ export class HttpMEditClient implements MEditClient {
     return data ?? [];
   }
 
-  async getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]> {
+  async getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]> {
     return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/record-types', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getRecordTypes(${plugin})`, response, error);
@@ -483,10 +442,20 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
+  async getCreatableRecordTypes(): Promise<CreatableRecordType[]> {
+    return this.withTimeout('getCreatableRecordTypes', async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/record-types/creatable', { signal });
+      this.ensureOk('getCreatableRecordTypes', response, error);
+      return data ?? [];
+    });
+  }
+
+  async getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage> {
     return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/records', {
-        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        params: { query: { plugin, type, offset, limit, origin, ...options } },
         signal,
       });
       this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
@@ -561,10 +530,10 @@ export class HttpMEditClient implements MEditClient {
     return { sql: data.sql, source: data.source };
   }
 
-  async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {
+  async getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]> {
     return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getWorldspaces(${plugin})`, response, error);
@@ -572,10 +541,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks> {
+  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks> {
     return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
-        params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: worldspaceFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
@@ -583,10 +552,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences> {
+  async getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences> {
     return this.withTimeout(`getCellReferences(${plugin}, ${cellFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/references', {
-        params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: cellFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
@@ -594,10 +563,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]> {
+  async getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]> {
     return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
-        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin }, query: { origin } },
         signal,
       });
       this.ensureOk(`getInteriorCells(${plugin})`, response, error);
@@ -605,10 +574,10 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]> {
+  async getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]> {
     return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
-        params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+        params: { path: { plugin, formKey: parentFormKey }, query: { origin } },
         signal,
       });
       this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
