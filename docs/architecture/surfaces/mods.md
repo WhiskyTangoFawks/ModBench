@@ -179,7 +179,7 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 2. A new mod to appear at the winning end of the mod order, disabled, as any folder new in `mods/`
    does.
 3. An upgrade to replace the mod's files in place, and to keep its folder name, its repository and
-   its plugin source (`.git`, `.gitignore` and `source/`). *ADR-0007*
+   its plugin source (`.git`, `.gitignore` and `plugin-source/`). *ADR-0007*
 4. An upgrade to keep every `meta.ini` value the new file does not know, so an unknown version
    never blanks a known one. *ADR-0017, invariant 2*
 5. An upgrade that fails part way to say so, naming the folder and what failed, and not to roll

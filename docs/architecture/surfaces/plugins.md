@@ -223,7 +223,7 @@ As a user, I want:
 1. A pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a line saying
    what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod and the
    phase. *catalog `track`*
-2. `Edits` to track `source/` and `.gitignore`, and `Everything` every file except the plugin
+2. `Edits` to track `plugin-source/` and `.gitignore`, and `Everything` every file except the plugin
    binaries. Neither tracks `meta.ini`. *ADR-0007, invariant 7*
 3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`,
    `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out.
