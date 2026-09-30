@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type { GameFolder, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
@@ -25,6 +26,7 @@ function index(
 }
 
 const DATA_FOLDER = join('/game', 'Data');
+const GAME_FOLDER: GameFolder = { kind: 'found', root: '/game', dataFolder: DATA_FOLDER };
 const OVERWRITE = join('/instance', 'overwrite');
 
 const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
@@ -37,13 +39,13 @@ describe('buildLoadOrderRows', () => {
   it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
   });
 
   it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', () => {
-    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Fallout4.esm']), index({}), [], GAME_FOLDER);
 
     expect(result).toEqual([{ name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data', slot: 0, enabled: true, winning: true }]);
   });
@@ -51,7 +53,7 @@ describe('buildLoadOrderRows', () => {
   it('sends every plugins.txt line in slot order, the `*` prefix as enabled, matched case-insensitively', () => {
     const fakeIndex = index({ 'On.esp': { winner: '/mods/A/On.esp', winnerMod: 'A' } });
 
-    const result = buildLoadOrderRows(lines(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'Mixed.ESP']), fakeIndex, [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['On.esp', 'Off.esp', 'Mixed.ESP'], ['On.esp', 'Mixed.ESP']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'On.esp', path: '/mods/A/On.esp', origin: 'A', slot: 0, enabled: true, winning: true },
@@ -72,7 +74,7 @@ describe('buildLoadOrderRows', () => {
       },
     );
 
-    const result = buildLoadOrderRows(lines(['Other.esp', 'Shared.esp']), fakeIndex, [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Other.esp', 'Shared.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/A/Shared.esp', origin: 'A', slot: 1, enabled: true, winning: true });
     expect(result).toContainEqual({ name: 'Shared.esp', path: '/mods/B/Shared.esp', origin: 'B', slot: 1, enabled: true, winning: false });
@@ -84,7 +86,7 @@ describe('buildLoadOrderRows', () => {
       { C: [{ relativePath: 'Stray.esp', absolutePath: '/mods/C/Stray.esp' }, { relativePath: 'textures/x.dds', absolutePath: '/mods/C/textures/x.dds' }] },
     );
 
-    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'Listed.esp', path: join(DATA_FOLDER, 'Listed.esp'), origin: 'Data', slot: 0, enabled: true, winning: true },
@@ -98,7 +100,7 @@ describe('buildLoadOrderRows', () => {
       { A: [{ relativePath: 'Foo.esp', absolutePath: '/mods/A/Foo.esp' }] },
     );
 
-    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [runtimeOutput('Foo.esp')], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [runtimeOutput('Foo.esp')], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: join(OVERWRITE, 'Foo.esp'), origin: 'overwrite', slot: 0, enabled: true, winning: true },
@@ -107,7 +109,7 @@ describe('buildLoadOrderRows', () => {
   });
 
   it('an unlisted plugin sitting in overwrite/ is sent with no slot, winning-most', () => {
-    const result = buildLoadOrderRows(lines([]), index({}), [runtimeOutput('New.esp'), runtimeOutput('notes.txt')], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines([]), index({}), [runtimeOutput('New.esp'), runtimeOutput('notes.txt')], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'New.esp', path: join(OVERWRITE, 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
@@ -118,7 +120,7 @@ describe('buildLoadOrderRows', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
     const result = buildLoadOrderRows(
-      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], DATA_FOLDER,
+      lines(['Foo.esp']), fakeIndex, [runtimeOutput('Sub/Foo.esp'), runtimeOutput('Sub/Stray.esp')], GAME_FOLDER,
     );
 
     expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }]);
@@ -131,7 +133,7 @@ describe('buildLoadOrderRows', () => {
       'textures/Foo.esp': { winner: '/mods/C/textures/Foo.esp', winnerMod: 'C' },
     });
 
-    const result = buildLoadOrderRows(lines(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), fakeIndex, [], DATA_FOLDER);
+    const result = buildLoadOrderRows(lines(['Foo.esp', 'Bar.esp', 'Fallout4.esm']), fakeIndex, [], GAME_FOLDER);
 
     expect(result).toEqual([
       { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
@@ -142,16 +144,8 @@ describe('buildLoadOrderRows', () => {
 });
 
 describe('resolvePluginPaths', () => {
-  // A defined-but-empty dataFolder is falsy but not undefined: the fallback branches on
-  // definedness, so it still resolves rather than dropping the name.
-  it('resolves the Data-folder fallback for an empty-string dataFolder', () => {
-    const result = resolvePluginPaths(['Fallout4.esm'], index({}), '');
-
-    expect(result.get('Fallout4.esm')).toBe('Fallout4.esm');
-  });
-
-  it('drops a name neither a mod winner nor a dataFolder can resolve', () => {
-    const result = resolvePluginPaths(['Fallout4.esm'], index({}), undefined);
+  it('drops a name neither a mod winner nor a game folder found can resolve', () => {
+    const result = resolvePluginPaths(['Fallout4.esm'], index({}), GAME_FOLDER_NOT_FOUND);
 
     expect(result.has('Fallout4.esm')).toBe(false);
   });

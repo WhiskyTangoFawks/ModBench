@@ -8,7 +8,7 @@ import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths 
 import { factsOf } from './files';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
-import { dataFolderOf, GAME_FOLDER_SETTING, type GameFolder, type GameFolderLook } from './instanceAdapter';
+import { GAME_FOLDER_SETTING, type GameFolder, type GameFolderLook } from './instanceAdapter';
 
 /** What the user set, read fresh on each resolve by whoever built the resolver. */
 export interface GameDirectoryOverrides {
@@ -19,12 +19,6 @@ export interface GameDirectoryOverrides {
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
-
-/** A file at the root of the Data folder of a game folder found, undefined when it was not. */
-export function dataFolderFile(folder: GameFolder, name: string): string | undefined {
-  const dataFolder = dataFolderOf(folder);
-  return dataFolder === undefined ? undefined : join(dataFolder, name);
-}
 
 /** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. */
 export type DetectWinePrefix = () => Promise<string | null>;

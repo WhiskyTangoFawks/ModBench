@@ -137,7 +137,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     inData?: DataFolderPlugins,
     implicit: readonly string[] | null = [],
   ) => syncPlugins(
-    dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()),
+    dir, PROFILE, await providedPluginsIn(dir, PROFILE),
     inData ?? await inDataOnDisk(),
     () => Promise.resolve(implicit ?? undefined));
 
@@ -247,7 +247,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     let asked = false;
 
     const result = await syncPlugins(
-      dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder()), { kind: 'unresolved' },
+      dir, PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' },
       () => { asked = true; return Promise.resolve([]); });
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });

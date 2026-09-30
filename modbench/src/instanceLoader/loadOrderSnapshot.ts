@@ -5,7 +5,7 @@
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import {
-  isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
+  dataFolderFile, isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 
@@ -90,16 +90,16 @@ export function providedPluginsOf(
 }
 
 /** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
- *  files only. A name with no mod winner and no `dataFolder` has no entry — nothing to fall
+ *  files only. A name with no mod winner and no game folder found has no entry — nothing to fall
  *  back to. */
 export function resolvePluginPaths(
   names: readonly string[],
   index: FileConflictIndex,
-  dataFolder: string | undefined,
+  gameFolder: GameFolder,
 ): Map<string, string> {
   const winnerByName = rootLevelWinners(index);
   const entries = names
-    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? (dataFolder !== undefined ? join(dataFolder, name) : undefined)])
+    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? dataFolderFile(gameFolder, name)])
     .filter((entry): entry is [string, string] => entry[1] !== undefined);
   return new Map(entries);
 }
@@ -111,17 +111,17 @@ function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, O
 }
 
 /** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name no mod or
- *  overwrite/ provides takes the Data folder's file of that name; with no Data folder, its row is
- *  line-only, `path` undefined. */
+ *  overwrite/ provides takes the Data folder's file of that name; with no game folder found, its
+ *  row is line-only, `path` undefined. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
   index: FileConflictIndex,
   runtimeOutput: readonly OriginFile[],
-  dataFolder: string | undefined,
+  gameFolder: GameFolder,
 ): (LoadOrderPlugin | LoadOrderPluginLine)[] {
   const names = pluginOrder.map((line) => line.name);
   const overwriteFiles = overwriteRootFiles(runtimeOutput);
-  const pathByName = resolvePluginPaths(names, index, dataFolder);
+  const pathByName = resolvePluginPaths(names, index, gameFolder);
   const winnerModByName = rootLevelWinnerMods(index);
   // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
   // and a case difference must not read as "disabled" or as "a second plugin".

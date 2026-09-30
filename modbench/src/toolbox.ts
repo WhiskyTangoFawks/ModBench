@@ -9,8 +9,7 @@ import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/lo
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
-import { dataFolderFile } from './instanceAdapter/gameDirectory';
-import { dataFolderOf } from './instanceAdapter/instanceAdapter';
+import { dataFolderFile, dataFolderOf } from './instanceAdapter/instanceAdapter';
 import { isMo2Instance } from './instanceAdapter/files';
 import { mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';

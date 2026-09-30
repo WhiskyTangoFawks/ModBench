@@ -6,7 +6,7 @@ import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type 
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { nexusSlugForGame } from '../tables/gamePaths';
 import {
-  dataFolderOf, GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ModlistEntry, type OriginFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
@@ -345,7 +345,7 @@ export class Instance implements Subscription {
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
-      plugins: buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, dataFolderOf(gameFolder)),
+      plugins: buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder),
       downloads: downloadsOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
         : {

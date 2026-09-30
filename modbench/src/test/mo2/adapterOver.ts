@@ -2,6 +2,7 @@ import type { DownloadedFiles, GameFolder, InstanceAdapter, ModlistEntry, Plugin
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
+import { GAME_FOLDER_NOT_FOUND } from './gameFolderNotFound';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -52,14 +53,13 @@ export const readPluginLines = (root: string, profile = 'Default'): Promise<Plug
 export const readActiveProfile = async (root: string): Promise<string> => (await adapterOver(root).settings()).profile;
 
 /** The winners the Instance's value carries for a tree on disk, built through the value's own
- *  builders: a test handing plugin sync its argument fakes no walk of its own. */
-export async function providedPluginsIn(
-  root: string, profile = 'Default', dataFolder?: string,
-): Promise<ReadonlyMap<string, string>> {
+ *  builders: a test handing plugin sync its argument fakes no walk of its own. A Data-folder
+ *  plugin is presence, never provision, so the game folder does not change the answer. */
+export async function providedPluginsIn(root: string, profile = 'Default'): Promise<ReadonlyMap<string, string>> {
   const adapter = adapterOver(root);
   const [entries, lines, runtimeOutput] = await Promise.all([
     adapter.modOrder(profile), adapter.pluginOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' }),
   ]);
   const index = await buildFileConflictIndex(entries, adapter, () => {});
-  return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, dataFolder));
+  return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, GAME_FOLDER_NOT_FOUND));
 }
