@@ -94,14 +94,14 @@ export interface ToolboxDeps {
   referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string;
 }
 
-/** The MO2 side's wiring, which the activation file calls: the Toolbox view and everything below
- *  `modbench.toolbox` in the container is built here and torn down with it. */
+/** The instance side's wiring, which the activation file calls: the Toolbox view and everything
+ *  below `modbench.toolbox` in the container is built here and torn down with it. */
 export interface Toolbox extends vscode.Disposable {
   /** The instance check's answer, and whether the Instance's first value has landed. Exposed for
    *  integration tests, which cannot read a context key. */
   folder: FolderCheck;
   instanceRead: () => boolean;
-  /** Absent together, on the paths with no MO2 instance to read. Exposed for integration
+  /** Absent together, on the paths with no instance to read. Exposed for integration
    *  tests — production reaches all of these through the views. */
   modListProvider?: ModListProvider;
   downloadsProvider?: DownloadsProvider;
@@ -251,8 +251,8 @@ function registerPluginListView(
   own(pluginListView.onDidChangeSelection(showKeyContext));
   own(pluginsTree.onDidChangeTreeData(showKeyContext));
   session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
-  // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
-  // against the tree's own locked row URIs so it never drifts from what is rendered.
+  // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
+  // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
     new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
@@ -461,7 +461,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   // The one Instance adapter over the instance; every consumer reaches the instance through it.
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
-  // ADR-0015: the one Instance over MO2's files, recomputed through the Instance adapter.
+  // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
   const instance = own(new Instance({ adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));

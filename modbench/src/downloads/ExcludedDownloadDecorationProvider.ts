@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 /** Colour only, no badge: Show excluded is additive, so excluded rows sit alongside included ones
- *  and this tint is the only cue telling them apart — MO2 itself draws none. */
+ *  and this tint is the only cue telling them apart — the reference tool draws none. */
 export class ExcludedDownloadDecorationProvider implements vscode.FileDecorationProvider {
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;

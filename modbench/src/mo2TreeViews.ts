@@ -1,5 +1,5 @@
-// The MO2-side trees themselves: a TreeView, its name filter and the disposables' owner are the
-// composition root's, so they sit beside it rather than in the views they render.
+// The instance-side trees themselves: a TreeView, its name filter and the disposables' owner are
+// the composition root's, so they sit beside it rather than in the views they render.
 
 import * as vscode from 'vscode';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './mods/ModListProvider';

@@ -189,8 +189,8 @@ async function includeSelection(
   return outcome;
 }
 
-/** Clicked row only, as MO2 batches no Install and five opened tabs help no one. The palette
- *  hands no row, so open and open .meta take the one selected row. */
+/** Clicked row only, as the reference tool batches no Install and five opened tabs help no one. The
+ *  palette hands no row, so open and open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
   access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
   viewSelection: () => readonly DownloadsTreeNode[],
@@ -224,8 +224,9 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
   return clicked ? [clicked.row] : [];
 }
 
-/** Acts on the whole selection, applying the clicked row's action to a mixed one (MO2's Hide
- *  All). `viewSelection` backs the Delete key and the palette, which get no row argument. */
+/** Acts on the whole selection, applying the clicked row's action to a mixed one (the reference
+ *  tool's Hide All). `viewSelection` backs the Delete key and the palette, which get no row
+ *  argument. */
 export function registerDownloadsMultiRowCommands(
   access: DownloadsAccess, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],

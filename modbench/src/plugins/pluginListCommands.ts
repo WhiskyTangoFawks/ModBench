@@ -27,7 +27,7 @@ export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider
   ];
 }
 
-// The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin
+// The row's own reveal-in-Explorer gesture — an instance-scoped fact (which plugin
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
   pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,
@@ -110,7 +110,7 @@ export function registerCreatePluginCommand(
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.plugin.create', async () => {
     if (!mo2) {
-      reporter.report('error', 'Creating a plugin needs an open MO2 instance workspace.');
+      reporter.report('error', 'Creating a plugin needs an open instance workspace.');
       return;
     }
 

@@ -107,8 +107,9 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
   return refuse(err);
 }
 
-// The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
-// the user own it too — so a claim that disagrees with disk is refused, never reinterpreted.
+// The folder can appear or vanish between the caller's decision and this check — the mod manager,
+// xEdit or the user own it too — so a claim that disagrees with disk is refused, never
+// reinterpreted.
 function mismatchRefusal(target: InstallTarget, targetExists: boolean): string | undefined {
   if (target.kind === 'new' && targetExists) return modNameTaken(target.name);
   if (target.kind === 'upgrade' && !targetExists) {

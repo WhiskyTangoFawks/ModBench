@@ -142,7 +142,7 @@ export function activate(context: vscode.ExtensionContext) {
     originFiles: (origin) => toolbox.originFiles(origin),
     trackedFolderOf: (file) => toolbox.trackedFolderOf(file),
   };
-  // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
+  // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
     outputChannel, session, client: meditClient,
     reporterFor: (tag) => makeReporter(outputChannel, tag),

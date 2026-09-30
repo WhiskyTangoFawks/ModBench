@@ -26,7 +26,7 @@ import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
-/** The Mods tree's view direction writes no MO2 file, so it lives with the view it flips. It
+/** The Mods tree's view direction writes no instance file, so it lives with the view it flips. It
  *  starts losing at the top on each activation, and the context key, which outlives an extension
  *  host restart, is told so. */
 export function registerModListCoreCommands(modListProvider: Pick<ModListProvider, 'setViewDirection'>): vscode.Disposable[] {

@@ -124,8 +124,8 @@ export class PluginNode extends vscode.TreeItem {
   }
 }
 
-/** MO2's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState` has no
- *  non-interactive variant, so a rendered checkbox would invite a toggle the extension must
+/** The reference tool's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState`
+ *  has no non-interactive variant, so a rendered checkbox would invite a toggle the extension must
  *  revert. A lock substitutes (ADR-0017). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
@@ -134,8 +134,8 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     this.id = rowIdentity(this.kind, { name, origin });
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
-    // plugins.md, A plugin the game loads with no line: MO2's one sentence alone — the label
-    // already shows the greyed file name, so the tooltip does not repeat it.
+    // plugins.md, A plugin the game loads with no line: the reference tool's one sentence alone —
+    // the label already shows the greyed file name, so the tooltip does not repeat it.
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
     // Routed through the modbench.openHeader bridge command, as PluginNode's row click is.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
@@ -230,7 +230,7 @@ function failedToReadStatus(failure: string | undefined): PluginStatus | undefin
   return { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${failure}` };
 }
 
-// "Missing" is MO2's word for a master that is not active, file present or not.
+// "Missing" is the reference tool's word for a master that is not active, file present or not.
 function masterIssuesStatus(inactiveMasters: string[]): PluginStatus | undefined {
   if (inactiveMasters.length === 0) return undefined;
   const words = inactiveMasters.length === 1 ? '1 master issue' : `${inactiveMasters.length} master issues`;
@@ -565,8 +565,8 @@ export class PluginsTreeProvider
     element.description = base.description;
     element.iconPath = base.iconPath;
 
-    // ImplicitMasterNode keeps its constructor's decoration untouched: the locked
-    // row's tooltip is MO2's one sentence alone (plugins.md, A plugin the game loads with no line).
+    // ImplicitMasterNode keeps its constructor's decoration untouched: the locked row's tooltip is
+    // the reference tool's one sentence alone (plugins.md, A plugin the game loads with no line).
     if (element.kind === 'plugin') this.decoratePlugin(element);
     return element;
   }

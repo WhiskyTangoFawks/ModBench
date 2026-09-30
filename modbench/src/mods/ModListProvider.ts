@@ -15,7 +15,7 @@ export type SortDirection = 'losingAtTop' | 'winningAtTop';
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 /** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
- *  on: the row stands for MO2's folder, so it is named as the value names that folder. */
+ *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
 export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
@@ -135,9 +135,9 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mods tree over an MO2 instance's active profile — rows, statuses and
+/** Sidebar Mods tree over the instance's active profile — rows, statuses and
  *  the overwrite count all read entirely from the Instance value (ADR-0015); this provider owns
- *  no cache or watcher over MO2's files itself. */
+ *  no cache or watcher over the instance's files itself. */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {

@@ -291,7 +291,7 @@ describe('registerCreatePluginCommand', () => {
     await run();
 
     expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Creating a plugin needs an open MO2 instance workspace.', detail: undefined },
+      { severity: 'error', message: 'Creating a plugin needs an open instance workspace.', detail: undefined },
     ]);
     expect(showInputBox).not.toHaveBeenCalled();
   });

@@ -11,8 +11,8 @@ import type {
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 
-// Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
-// file-icon theme never takes over; a colour is affordable because every row is an archive.
+// Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
+// the file-icon theme never takes over; a colour is affordable because every row is an archive.
 function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
   switch (status) {
     case 'Downloaded':
@@ -24,8 +24,8 @@ function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
   }
 }
 
-// `v%1` is MO2's own version display convention. The icon always carries status, so the
-// description repeats it only for a state other than the Downloaded default.
+// `v%1` is the reference tool's own version display convention. The icon always carries status, so
+// the description repeats it only for a state other than the Downloaded default.
 function downloadDescription(row: DownloadRow): string {
   const version = row.version ? `v${row.version}` : undefined;
   const status = row.status === 'Downloaded' ? undefined : row.status;
@@ -120,8 +120,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Additive, not an exclusive filter, matching MO2's own Show Hidden. The command handler,
-   *  not this, owns the `modbench.downloadedFile.excludedShown` context key. */
+  /** Additive, not an exclusive filter, matching the reference tool's own Show Hidden. The command
+   *  handler, not this, owns the `modbench.downloadedFile.excludedShown` context key. */
   setShowExcluded(show: boolean): void {
     this.showExcluded = show;
     this.invalidate();
@@ -169,8 +169,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     if (element) return []; // flat list — no row has children
     await this.firstRead.settled; // never claim "no downloads" before the Instance has actually read one
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
-    // A folder Modbench cannot resolve is not the folder MO2 names — no rows, so no command has
-    // anything to act on (common.md, States, story 2; scoped to this view alone).
+    // A folder Modbench cannot resolve is not the folder the mod manager names — no rows, so no
+    // command has anything to act on (common.md, States, story 2; scoped to this view alone).
     if (this.instanceValue.downloads.kind === 'unresolved') return [new ErrorNode(this.instanceValue.downloads.reason)];
     this.cache ??= this.build(this.instanceValue.downloads.rows);
     if (!this.filterLower) return this.cache;

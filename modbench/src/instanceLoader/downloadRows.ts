@@ -63,7 +63,8 @@ export function buildDownloadRows(
     if (installedInto.has(archiveKey(file.name))) status = 'Installed';
     return {
       name: file.name,
-      // MO2's displayNameByInfo (downloadmanager.cpp:1410): absent and empty alike fall back.
+      // The reference tool's displayNameByInfo (downloadmanager.cpp:1410): absent and empty alike
+      // fall back.
       displayName: meta?.name || file.name,
       status,
       size: file.size,
@@ -80,6 +81,7 @@ export function buildDownloadRows(
       sidecarPath: file.metaPath,
     };
   });
-  // Newest first, MO2's own arrival order; which column the tree sorts by is the view's.
+  // Newest first, the reference tool's own arrival order; which column the tree sorts by is the
+  // view's.
   return rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
