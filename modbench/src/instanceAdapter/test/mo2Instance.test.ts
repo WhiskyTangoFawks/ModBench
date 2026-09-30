@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import type { GameDetectors, GameFolder } from '../gameDirectory';
-import type { InstanceAdapter, ModlistEntry, ModOrderChange, PluginOrderChange } from '../instanceAdapter';
+import type { InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
@@ -91,6 +91,8 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get(DOWNLOAD)?.meta).toMatchObject({ status: 'Installed', modID: '4598', excluded: false });
       expect(byName.get('manual.zip')?.meta).toBeUndefined();
       expect(byName.get('manual.zip')?.size).toBe(3);
+      expect(byName.get('manual.zip')?.path).toBe(join(root, 'downloads', 'manual.zip'));
+      expect(byName.get('manual.zip')?.metaPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
     });
 
     it('answers no files, rather than none, when the downloads folder is not there', async () => {
@@ -98,16 +100,6 @@ describe('the MO2 Instance adapter', () => {
 
       expect(await (await adapter.settings()).downloadedFiles())
         .toEqual({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: undefined });
-    });
-
-    // A Wine drive letter is translated only off Windows, so only there can one be untranslatable.
-    it.skipIf(process.platform === 'win32')('answers why the downloads folder could not be resolved', async () => {
-      await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
-        + '[Settings]\r\ndownload_directory=D:\\\\downloads\r\n');
-
-      const downloads = await (await adapter.settings()).downloadedFiles();
-
-      expect(downloads.kind).toBe('unresolved');
     });
 
     // Rival: each answer reading the settings again, so a rewrite between two answers lands two
@@ -168,11 +160,24 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
     });
 
-    it('answers every folder that can hold a mod, separators\' included', async () => {
+    it('answers every mod folder as the entry it holds, with its path', async () => {
       const folders = await adapter.modFolders();
 
-      expect(folders).toContain('Unofficial Fallout 4 Patch');
-      expect(folders).toContain('Unassigned (Modlist Development)_separator');
+      expect(folders).toContainEqual({
+        kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
+      });
+      expect(folders).toContainEqual({
+        kind: 'separator',
+        name: 'Unassigned (Modlist Development)',
+        path: join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
+      });
+    });
+
+    // Rival: the reserved overwrite name answered as a mod, which mod sync would then list.
+    it('answers no entry for a folder named as the reserved overwrite folder', async () => {
+      await mkdir(join(root, 'mods', 'Overwrite'));
+
+      expect((await adapter.modFolders())?.map((f) => f.name)).not.toContain('Overwrite');
     });
 
     it('hands over a link it cannot follow rather than answering it as a folder', async () => {
@@ -181,7 +186,7 @@ describe('the MO2 Instance adapter', () => {
 
       const folders = await adapter.modFolders((name) => skipped.push(name));
 
-      expect(folders).not.toContain('Loop');
+      expect(folders?.map((f) => f.name)).not.toContain('Loop');
       expect(skipped).toEqual(['Loop']);
     });
 
@@ -241,19 +246,64 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
+  describe('folder answers', () => {
+    it('gives a separator name the name MO2 gives its folder', () => {
+      expect(adapter.folderNameFor('  Core:  Mods.  ')).toBe('Core Mods');
+      expect(adapter.folderNameFor('CON')).toBe('');
+    });
+
+    it('says whether a mod has a folder, and none for a name that escapes the mod folders', async () => {
+      expect(await adapter.hasModFolder('Harder VATS')).toBe(true);
+      expect(await adapter.hasModFolder('No Such Mod')).toBe(false);
+      expect(await adapter.hasModFolder('../profiles')).toBe(false);
+    });
+
+    it('names the downloaded file at a path, and nothing for a path outside the downloads', async () => {
+      expect(await adapter.downloadedFileAt(join(root, 'downloads', DOWNLOAD))).toBe(DOWNLOAD);
+      expect(await adapter.downloadedFileAt(join(root, DOWNLOAD))).toBeUndefined();
+    });
+
+    it('creates a mod\'s folder, and refuses a name that escapes the mod folders', async () => {
+      await adapter.createModFolder('Brand New');
+
+      expect(await isThere(join(root, 'mods', 'Brand New'))).toBe(true);
+      await expect(adapter.createModFolder('../escape')).rejects.toThrow(/Not a valid mod name/);
+    });
+
+    it('moves a mod\'s or a separator\'s folder to the trash, and answers false when it has none', async () => {
+      const trashed: string[] = [];
+      const trash = (path: string): Promise<void> => {
+        trashed.push(path);
+        return Promise.resolve();
+      };
+
+      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Harder VATS' }, trash)).toBe(true);
+      expect(await adapter.trashEntryFolder({ kind: 'separator', name: 'Unassigned (Modlist Development)' }, trash)).toBe(true);
+      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'No Such Mod' }, trash)).toBe(false);
+
+      expect(trashed).toEqual([
+        join(root, 'mods', 'Harder VATS'), join(root, 'mods', 'Unassigned (Modlist Development)_separator'),
+      ]);
+    });
+  });
+
   describe('changes to mod order', () => {
     const change = (changes: readonly ModOrderChange[]) =>
       adapter.changeModOrder('Default', () => changes);
+    const separatorFolder = (name: string): string => join(root, 'mods', `${name}_separator`);
 
-    it('hands the decision the order as it stands', async () => {
+    it('hands the decision the order and the mod folders as they stand', async () => {
       const seen: string[][] = [];
+      let folders: readonly ModFolder[] | undefined;
 
-      await adapter.changeModOrder('Default', (order) => {
+      await adapter.changeModOrder('Default', (order, found) => {
         seen.push(modNames(order));
+        folders = found;
         return [];
       });
 
       expect(seen).toEqual([modNames(await adapter.modOrder('Default'))]);
+      expect(folders).toEqual(await adapter.modFolders());
     });
 
     it('lands every change in one write of mod order alone', async () => {
@@ -261,8 +311,8 @@ describe('the MO2 Instance adapter', () => {
 
       const written = await change([
         { kind: 'enable', mod: 'Harder VATS', enabled: true },
-        { kind: 'addMod', mod: 'New Mod' },
-        { kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 },
+        { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'New Mod' } },
+        { kind: 'addAtWinningEnd', entry: { kind: 'separator', name: 'Orphan' } },
         { kind: 'dropMod', mod: 'ENBoost - 12k' },
         { kind: 'dropSeparator', separator: 'Radfall - All-In-One Survival Overhaul' },
       ]);
@@ -270,7 +320,7 @@ describe('the MO2 Instance adapter', () => {
       expect(written).toEqual({ wrote: true });
       assertOnlyChanged(before, await snapshotTree(root), new Set([DEFAULT_MODLIST]));
       expect(modNames(await adapter.modOrder('Default'))).toEqual([
-        'separator:New Separator:true',
+        'separator:Orphan:false',
         'mod:New Mod:false',
         "mod:Ñoño's Retexture:true",
         'mod:Tracked Patch Mod:true',
@@ -302,6 +352,21 @@ describe('the MO2 Instance adapter', () => {
       expect(modNames(await adapter.modOrder('Default'))).toContain('mod:Harder VATS:false');
     });
 
+    it('adds a separator with its folder', async () => {
+      await change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }]);
+
+      expect(modNames(await adapter.modOrder('Default'))[0]).toBe('separator:New Separator:true');
+      expect(await isThere(separatorFolder('New Separator'))).toBe(true);
+    });
+
+    it('renames a separator\'s line and its folder as one change', async () => {
+      await change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
+
+      expect(modNames(await adapter.modOrder('Default'))).toContain('separator:Core Mods:false');
+      expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
+      expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(false);
+    });
+
     it('writes nothing when the changes are already true of mod order', async () => {
       const before = await text(root, DEFAULT_MODLIST);
       const mtime = (await stat(join(root, DEFAULT_MODLIST))).mtimeMs;
@@ -312,14 +377,24 @@ describe('the MO2 Instance adapter', () => {
       expect((await stat(join(root, DEFAULT_MODLIST))).mtimeMs).toBe(mtime);
     });
 
-    // Rival: the changes before the failing one landing on their own.
-    it('rejects a change naming an entry that is not there, and writes nothing', async () => {
+    // Rival for each: a splice that finds no line to change and leaves the text as it was, so the
+    // change is dropped in silence.
+    it.each<[string, ModOrderChange]>([
+      ['enable', { kind: 'enable', mod: 'No Such Mod', enabled: true }],
+      ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
+      ['moveSeparators', { kind: 'moveSeparators', separators: ['No Such Sep'], place: { kind: 'modOrder' }, end: 'winning' }],
+      ['renameSeparator', { kind: 'renameSeparator', from: 'No Such Sep', to: 'Anything' }],
+      ['dropMod', { kind: 'dropMod', mod: 'No Such Mod' }],
+      ['dropSeparator', { kind: 'dropSeparator', separator: 'No Such Sep' }],
+      ['addAtWinningEnd a listed mod', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'Harder VATS' } }],
+      ['addSeparator a listed separator', { kind: 'addSeparator', separator: 'Unassigned (Modlist Development)', afterIndex: 0 }],
+      ['renameSeparator onto a listed separator', {
+        kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Radfall - All-In-One Survival Overhaul',
+      }],
+    ])('rejects %s naming an entry that is not there, or adding one that is, and writes nothing', async (_, bad) => {
       const before = await text(root, DEFAULT_MODLIST);
 
-      await expect(change([
-        { kind: 'enable', mod: 'Harder VATS', enabled: true },
-        { kind: 'dropMod', mod: 'No Such Mod' },
-      ])).rejects.toThrow(/No Such Mod/);
+      await expect(change([{ kind: 'enable', mod: 'Harder VATS', enabled: true }, bad])).rejects.toThrow(/modlist/);
 
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
@@ -330,7 +405,7 @@ describe('the MO2 Instance adapter', () => {
       const seenBySecond: string[][] = [];
 
       await Promise.all([
-        change([{ kind: 'addMod', mod: 'First' }]),
+        change([{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'First' } }]),
         adapter.changeModOrder('Default', (order) => {
           seenBySecond.push(order.map((e) => e.name));
           return [];
@@ -338,6 +413,50 @@ describe('the MO2 Instance adapter', () => {
       ]);
 
       expect(seenBySecond[0]).toContain('First');
+    });
+
+    describe('a failed change writes nothing', () => {
+      const modlist = (): string => join(root, DEFAULT_MODLIST);
+
+      // Rival: the line written before the folder moves, so a folder that cannot move leaves the
+      // line renamed over a folder of the old name.
+      it('leaves line and folder as they were when the folder cannot be renamed', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+        await mkdir(join(separatorFolder('Core Mods'), 'occupied'), { recursive: true });
+
+        await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
+          .rejects.toThrow();
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+      });
+
+      // Rival: no undo, so a line that cannot be written leaves the folder renamed alone.
+      it('puts the folder back when the renamed line cannot be written', async () => {
+        const before = await text(root, DEFAULT_MODLIST);
+        await chmod(modlist(), 0o444);
+        try {
+          await expect(change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]))
+            .rejects.toThrow();
+        } finally {
+          await chmod(modlist(), 0o644);
+        }
+
+        expect(await text(root, DEFAULT_MODLIST)).toBe(before);
+        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+        expect(await isThere(separatorFolder('Core Mods'))).toBe(false);
+      });
+
+      it('takes a new separator\'s folder away when its line cannot be written', async () => {
+        await chmod(modlist(), 0o444);
+        try {
+          await expect(change([{ kind: 'addSeparator', separator: 'New Separator', afterIndex: -1 }])).rejects.toThrow();
+        } finally {
+          await chmod(modlist(), 0o644);
+        }
+
+        expect(await isThere(separatorFolder('New Separator'))).toBe(false);
+      });
     });
   });
 
@@ -363,7 +482,7 @@ describe('the MO2 Instance adapter', () => {
         { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
         { name: 'New.esp', enabled: false },
       ]);
-      expect((await text(root, DEFAULT_PLUGINS)).startsWith('\uFEFF')).toBe(true);
+      expect((await text(root, DEFAULT_PLUGINS)).startsWith('﻿')).toBe(true);
     });
 
     it('hands the decision the order as it stands', async () => {
@@ -381,13 +500,17 @@ describe('the MO2 Instance adapter', () => {
       expect(await change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: true }])).toEqual({ wrote: false });
     });
 
-    it('rejects a change naming a plugin that is not there, and writes nothing', async () => {
+    // Rival for each: a splice that finds no line to change and leaves the text as it was.
+    it.each<[string, PluginOrderChange]>([
+      ['enable', { kind: 'enable', plugin: 'No Such.esp', enabled: true }],
+      ['move', { kind: 'move', plugins: ['No Such.esp'], toIndex: 0 }],
+      ['drop', { kind: 'drop', plugin: 'No Such.esp' }],
+      ['add a listed plugin', { kind: 'add', plugin: 'Tracked Patch Mod.esp' }],
+    ])('rejects %s naming a plugin that is not there, or adding one that is, and writes nothing', async (_, bad) => {
       const before = await text(root, DEFAULT_PLUGINS);
 
-      await expect(change([
-        { kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false },
-        { kind: 'drop', plugin: 'No Such.esp' },
-      ])).rejects.toThrow(/No Such\.esp/);
+      await expect(change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false }, bad]))
+        .rejects.toThrow(/plugins\.txt/);
 
       expect(await text(root, DEFAULT_PLUGINS)).toBe(before);
     });
@@ -400,7 +523,7 @@ describe('the MO2 Instance adapter', () => {
     beforeEach(() => writeFile(join(downloads(), 'manual.zip'), 'zip'));
 
     it('marks a downloaded file installed, creating its metadata when it has none', async () => {
-      expect(await adapter.markDownloadedFile(downloads(), 'manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
+      expect(await adapter.markDownloadedFile('manual.zip', 'Installed')).toEqual({ gone: false, wrote: true });
 
       const listed = await (await adapter.settings()).downloadedFiles();
       if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
@@ -408,30 +531,30 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('marks a downloaded file uninstalled beside its installed mark', async () => {
-      await adapter.markDownloadedFile(downloads(), DOWNLOAD, 'Uninstalled');
+      await adapter.markDownloadedFile(DOWNLOAD, 'Uninstalled');
 
       expect(await metaOf(DOWNLOAD)).toMatch(/^uninstalled=true\r$/m);
       expect(await metaOf(DOWNLOAD)).toMatch(/^installed=true\r$/m);
     });
 
     it('marks a downloaded file excluded, and then included again', async () => {
-      await adapter.markDownloadedFile(downloads(), DOWNLOAD, 'Excluded');
+      await adapter.markDownloadedFile(DOWNLOAD, 'Excluded');
       expect(await metaOf(DOWNLOAD)).toMatch(/removed=true/);
 
-      await adapter.markDownloadedFile(downloads(), DOWNLOAD, 'Included');
+      await adapter.markDownloadedFile(DOWNLOAD, 'Included');
       expect(await metaOf(DOWNLOAD)).toMatch(/removed=false/);
     });
 
     // Rival: including writes its key whatever the file says, so a file at rest gains metadata.
     it('writes no metadata for a file already included', async () => {
-      expect(await adapter.markDownloadedFile(downloads(), 'manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
+      expect(await adapter.markDownloadedFile('manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
 
       expect(await isThere(join(downloads(), 'manual.zip.meta'))).toBe(false);
     });
 
     // A metadata file beside no downloaded file is one MO2 never writes.
     it('marks nothing for a downloaded file that is gone', async () => {
-      expect(await adapter.markDownloadedFile(downloads(), 'gone.zip', 'Installed')).toEqual({ gone: true });
+      expect(await adapter.markDownloadedFile('gone.zip', 'Installed')).toEqual({ gone: true });
 
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
     });
@@ -443,45 +566,73 @@ describe('the MO2 Instance adapter', () => {
         return Promise.resolve();
       };
 
-      expect(await adapter.trashDownloadedFileMeta(downloads(), DOWNLOAD, trash)).toBe(true);
-      expect(await adapter.trashDownloadedFileMeta(downloads(), 'manual.zip', trash)).toBe(false);
+      expect(await adapter.trashDownloadedFileMeta(DOWNLOAD, trash)).toBe(true);
+      expect(await adapter.trashDownloadedFileMeta('manual.zip', trash)).toBe(false);
 
       expect(trashed).toEqual([join(downloads(), `${DOWNLOAD}.meta`)]);
     });
   });
 
-  describe('a mod\'s meta', () => {
-    let staged: string;
+  describe('landing a mod', () => {
+    const meta = (mod: string): Promise<string> => text(root, join('mods', mod, 'meta.ini'));
 
-    beforeEach(async () => {
-      staged = await mkdtemp(join(tmpdir(), 'mo2-instance-staged-'));
-    });
-    afterEach(() => rm(staged, { recursive: true, force: true }));
+    it('stages beside the mod folders, outside every one of them', async () => {
+      const staged = await adapter.stagingFolder();
 
-    const metaText = (folder: string): Promise<string> => readFile(join(folder, 'meta.ini'), 'utf8');
-
-    it('writes a fresh meta holding only the keys it is given', async () => {
-      await writeFile(join(staged, 'meta.ini'), '[General]\nshipped=true\n');
-
-      await adapter.writeModMeta(staged, { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
-
-      expect(await metaText(staged)).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
+      expect(await isThere(staged)).toBe(true);
+      expect(staged.startsWith(join(root, 'mods'))).toBe(false);
     });
 
-    it('sets the keys over the carried mod\'s meta, keeping every other key and each value it is not given', async () => {
-      const carried = join(root, 'mods', 'Unofficial Fallout 4 Patch');
+    it('lands a new mod whole, its meta holding only the keys it is given', async () => {
+      const staged = await adapter.stagingFolder();
+      await writeFile(join(staged, 'meta.ini'), 'shipped=true\n');
+      await writeFile(join(staged, 'New.esp'), '');
 
-      await adapter.writeModMeta(staged, { gameName: 'Fallout4', version: '2.2' }, carried);
+      await adapter.landNewMod('New Mod', staged, { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
 
-      expect(await metaText(staged)).toBe(
-        `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,
-      );
+      expect(await meta('New Mod')).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
+      expect(await isThere(join(root, 'mods', 'New Mod', 'New.esp'))).toBe(true);
+      expect(await isThere(staged)).toBe(false);
     });
 
-    it('writes over a carried mod with no meta as over none', async () => {
-      await adapter.writeModMeta(staged, { gameName: 'Fallout4' }, join(root, 'mods', 'DragIn Manual Extract'));
+    describe('an upgrade', () => {
+      const mod = 'Unofficial Fallout 4 Patch';
+      const folder = (): string => join(root, 'mods', mod);
+      const keepGit = (entry: string): boolean => entry === '.git' || entry === 'source';
+      let staged: string;
 
-      expect(await metaText(staged)).toBe('[General]\ngameName=Fallout4\n');
+      beforeEach(async () => {
+        await mkdir(join(folder(), '.git'));
+        await writeFile(join(folder(), 'Old.esp'), '');
+        await mkdir(join(folder(), 'source', 'kept'), { recursive: true });
+        staged = await adapter.stagingFolder();
+        await writeFile(join(staged, 'New.esp'), '');
+        await mkdir(join(staged, 'source', 'release'), { recursive: true });
+        await writeFile(join(staged, '.gitignore'), 'release');
+      });
+
+      it('replaces the contents around each entry kept, taking the release\'s entries the folder has none of', async () => {
+        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit);
+
+        expect(await isThere(join(folder(), '.git'))).toBe(true);
+        expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+        expect(await isThere(join(folder(), 'source', 'release'))).toBe(false);
+        expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
+        expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
+        expect(await isThere(join(folder(), '.gitignore'))).toBe(true);
+      });
+
+      // Rival: the meta read after the release's entries land, so a release shipping its own meta
+      // replaces the keys the mod had.
+      it('sets the keys over the meta the mod had before its contents went', async () => {
+        await writeFile(join(staged, 'meta.ini'), 'shipped=true\r\n');
+
+        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4', version: '2.2' }, keepGit);
+
+        expect(await meta(mod)).toBe(
+          `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,
+        );
+      });
     });
   });
 

@@ -2,8 +2,8 @@
 // suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
 // The top of the file is the winning end. Mutations splice the raw string.
 
-import type { ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
+import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
@@ -18,6 +18,12 @@ const SEPARATOR_SUFFIX = '_separator';
  *  under `mods/`. */
 export const separatorModName = (name: string): string => name + SEPARATOR_SUFFIX;
 
+/** The entry MO2's own name for it holds, a line's or a folder's alike: a separator's carries the
+ *  suffix. */
+export const entryNamed = (modName: string): EntryRef => (modName.endsWith(SEPARATOR_SUFFIX)
+  ? { kind: 'separator', name: modName.slice(0, -SEPARATOR_SUFFIX.length) }
+  : { kind: 'mod', name: modName });
+
 // Deliberately state-insensitive: both prefixes match, and a caller that needs to
 // know which one did reads the prefix itself.
 const matchesModLine = (line: string, name: string): boolean =>
@@ -31,13 +37,7 @@ export function parseModlist(text: string): ModlistEntry[] {
   for (const raw of withoutBom.split(/\r\n|\r|\n/)) {
     const prefix = raw[0];
     if (prefix !== '+' && prefix !== '-') continue; // comment, *, blank
-    const enabled = prefix === '+';
-    const body = raw.slice(1);
-    if (body.endsWith(SEPARATOR_SUFFIX)) {
-      entries.push({ kind: 'separator', name: body.slice(0, -SEPARATOR_SUFFIX.length), enabled });
-    } else {
-      entries.push({ kind: 'mod', name: body, enabled });
-    }
+    entries.push({ ...entryNamed(raw.slice(1)), enabled: prefix === '+' });
   }
   return entries;
 }
@@ -93,6 +93,21 @@ export function insertSeparatorAtIndexInText(
     }
     lines.splice(insertAt, 0, newLine);
     return lines.join('');
+  });
+}
+
+export function renameSeparatorInText(text: string, oldName: string, newName: string): string {
+  return withBomPreserved(text, (bomless) => {
+    for (const { start, end, contentEnd } of lineRanges(bomless)) {
+      const content = bomless.slice(start, contentEnd);
+      if (matchesModLine(content, separatorModName(oldName))) {
+        const eol = bomless.slice(contentEnd, end);
+        // content matched `+`/`-` above, so its first character is that prefix, never absent.
+        const prefix = content.slice(0, 1);
+        return bomless.slice(0, start) + prefix + separatorModName(newName) + eol + bomless.slice(end);
+      }
+    }
+    throw new Error(`Separator not found in modlist: ${oldName}`);
   });
 }
 

@@ -38,6 +38,16 @@ export interface Separator {
 /** One entry in mod order. */
 export type ModlistEntry = Mod | Separator;
 
+/** A mod or a separator, by its kind and name. */
+export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
+
+/** A folder that holds a mod or a separator, decoded into the entry it holds. */
+export interface ModFolder {
+  readonly kind: ModlistEntry['kind'];
+  readonly name: string;
+  readonly path: string;
+}
+
 /** An end of mod order. */
 export type OrderEnd = 'winning' | 'losing';
 
@@ -81,6 +91,9 @@ export interface DownloadMeta {
 /** A downloaded file, with its metadata parsed; `meta` is undefined when it has none. */
 export interface DownloadedFile {
   readonly name: string;
+  readonly path: string;
+  /** Where its metadata is, or would be. */
+  readonly metaPath: string;
   readonly size: number;
   readonly mtimeMs: number;
   readonly meta: DownloadMeta | undefined;
@@ -107,8 +120,9 @@ export interface InstanceSettings {
   downloadedFiles(): Promise<DownloadedFiles>;
 }
 
-/** A change to mod order. A mod added is disabled and lands at the winning end; a separator added
- *  is enabled and lands after the entry at `afterIndex`, or before every entry at -1. */
+/** An entry added at the winning end is disabled; its folder is already there. A separator added
+ *  is enabled, lands after the entry at `afterIndex` or first at -1, and gets a folder; one
+ *  renamed takes its folder. */
 export type ModOrderChange =
   | { readonly kind: 'enable'; readonly mod: string; readonly enabled: boolean }
   | { readonly kind: 'moveMods'; readonly mods: readonly string[]; readonly place: MovePlace; readonly end: OrderEnd }
@@ -118,13 +132,14 @@ export type ModOrderChange =
     readonly place: SeparatorsPlace;
     readonly end: OrderEnd;
   }
-  | { readonly kind: 'addMod'; readonly mod: string }
+  | { readonly kind: 'addAtWinningEnd'; readonly entry: EntryRef }
   | { readonly kind: 'addSeparator'; readonly separator: string; readonly afterIndex: number }
+  | { readonly kind: 'renameSeparator'; readonly from: string; readonly to: string }
   | { readonly kind: 'dropMod'; readonly mod: string }
   | { readonly kind: 'dropSeparator'; readonly separator: string };
 
-/** A change to plugin order. A plugin added is disabled and lands at the winning end; a move lands
- *  its plugins, in their own order, at `toIndex` among the plugins that remain. */
+/** A plugin added is disabled and lands at the winning end; a move lands its plugins, in their own
+ *  order, at `toIndex` among the plugins that remain. */
 export type PluginOrderChange =
   | { readonly kind: 'enable'; readonly plugin: string; readonly enabled: boolean }
   | { readonly kind: 'move'; readonly plugins: readonly string[]; readonly toIndex: number }
@@ -134,13 +149,21 @@ export type PluginOrderChange =
 /** A mark on a downloaded file's metadata: a status its metadata claims, or excluded or not. */
 export type DownloadedFileMark = 'Installed' | 'Uninstalled' | 'Excluded' | 'Included';
 
-/** Decides the changes from the order as it stands when the change lands. */
-export type DecideChanges<Entry, Change> = (order: readonly Entry[]) => readonly Change[] | Promise<readonly Change[]>;
+/** Decides the changes to mod order from the order, and the mod folders, as they stand when the
+ *  changes land. */
+export type DecideModOrder = (
+  order: readonly ModlistEntry[], folders: readonly ModFolder[] | undefined,
+) => readonly ModOrderChange[];
+
+/** Decides the changes to plugin order from the order as it stands when the changes land. */
+export type DecidePluginOrder = (order: readonly PluginEntry[]) => readonly PluginOrderChange[];
 
 /** `wrote` is false when the change was already true of the file, which is then left unwritten. */
 export interface Written {
   readonly wrote: boolean;
 }
+
+export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
 export interface InstanceAdapter {
   settings(): Promise<InstanceSettings>;
@@ -149,24 +172,40 @@ export interface InstanceAdapter {
   modOrder(profile: string): Promise<ModlistEntry[]>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
-  /** Every folder that can hold a mod; undefined when there is no folder for mods at all. A link
-   *  that cannot be followed is no folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<string[] | undefined>;
+  /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
+   *  folder, and is handed to `skippedLink`. */
+  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolder[] | undefined>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+  /** The name the instance gives the folder of an entry asked to be `requested`; empty when
+   *  nothing of it is left. */
+  folderNameFor(requested: string): string;
+  hasModFolder(mod: string): Promise<boolean>;
+  /** The name of the downloaded file at `path`; undefined when `path` is not one. */
+  downloadedFileAt(path: string): Promise<string | undefined>;
 
-  /** `decide` runs against the order the changes land on, and every change lands in one write.
-   *  A change naming an entry that is not there rejects, and nothing is written. */
-  changeModOrder(profile: string, decide: DecideChanges<ModlistEntry, ModOrderChange>): Promise<Written>;
-  changePluginOrder(profile: string, decide: DecideChanges<PluginEntry, PluginOrderChange>): Promise<Written>;
-  /** A downloaded file that is gone gets no mark. */
-  markDownloadedFile(
-    downloadsDir: string, name: string, mark: DownloadedFileMark,
-  ): Promise<{ readonly gone: true } | ({ readonly gone: false } & Written)>;
+  /** Every change lands in one write, its folders with it. A change naming an entry that is not
+   *  there, or adding one that is, rejects, and nothing changes. */
+  changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
+  /** Every change lands in one write. A change naming a plugin that is not there, or adding one
+   *  that is, rejects, and nothing is written. */
+  changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;
+  createModFolder(mod: string): Promise<void>;
+  /** False when the entry has no folder. */
+  trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
+  /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
+   *  resolved. */
+  markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
   /** False when the downloaded file has no metadata. */
-  trashDownloadedFileMeta(downloadsDir: string, name: string, trash: MoveToTrash): Promise<boolean>;
-  /** Writes the metadata of the mod folder `folder` whole: `keys` set over the metadata of the mod
-   *  folder `carriedFrom`, where a key left undefined keeps that value, or over none. */
-  writeModMeta(folder: string, keys: OwnedMetaKeys, carriedFrom?: string): Promise<void>;
+  trashDownloadedFileMeta(name: string, trash: MoveToTrash): Promise<boolean>;
+  /** A fresh folder on the instance's own volume that no watch reaches, for a mod staged before it
+   *  lands; the caller removes it. */
+  stagingFolder(): Promise<string>;
+  /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
+   *  one rename. */
+  landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
+  /** Replaces the mod folder's contents with the staged tree's around each entry `keep` names,
+   *  then sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. */
+  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys, keep: (entry: string) => boolean): Promise<void>;
   selectProfile(profile: string): Promise<Written>;
 }

@@ -3,12 +3,13 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { dirname, join, sep } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
+import type { EntryRef } from './instanceAdapter';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -55,6 +56,20 @@ export const separatorDir = (instanceRoot: string, separatorName: string): strin
   return folder === undefined ? undefined : modDir(instanceRoot, folder);
 };
 
+/** The folder of a mod or separator; `undefined` when its name gives it none. */
+export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefined => {
+  if (entry.kind === 'separator') return separatorDir(instanceRoot, entry.name);
+  const folder = modFolderName(entry.name);
+  return folder === undefined ? undefined : modDir(instanceRoot, folder);
+};
+
+// Beside mods/ rather than inside it: the same volume, so the landing rename is one step, and
+// outside every watcher's glob.
+const STAGING_PREFIX = '.medit-install-';
+
+/** The prefix a fresh staging folder's name is made from. */
+export const stagingPrefix = (instanceRoot: string): string => join(instanceRoot, STAGING_PREFIX);
+
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
 /** MO2's own default when `download_directory` is unset. Every other download path function
@@ -75,6 +90,12 @@ export const pluginsFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), PLUGINS_FILE_NAME);
 
 export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
+
+/** The name of the downloaded file at `path`; undefined when `path` is not one in `downloadsDir`. */
+export const downloadNameAt = (downloadsDir: string, path: string): string | undefined => {
+  const name = basename(path);
+  return downloadFile(downloadsDir, name) === path ? name : undefined;
+};
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);

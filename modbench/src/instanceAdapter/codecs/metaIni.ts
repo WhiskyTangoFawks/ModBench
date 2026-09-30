@@ -1,21 +1,14 @@
 // meta.ini is QSettings::IniFormat. `[installedFiles]` is a QSettings array whose key
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
-import type { InstalledFileId, ModMeta } from '../instanceAdapter';
-import { detectEol, lineRanges } from './lineScan';
+import type { InstalledFileId, ModMeta, OwnedMetaKeys } from '../instanceAdapter';
+import { detectEol, lineRanges } from '../../loadOrderFileCodec/lineScan';
 
 /** A mod folder's metadata file. */
 export const MOD_META_FILE_NAME = 'meta.ini';
 
-/** The keys Modbench owns in meta.ini: written fresh by `writeMetaIni`, or set into
- *  existing text by `setOwnedKeysInText`. */
-export interface MetaKeys {
-  gameName?: string;
-  modid?: string;
-  version?: string;
-  installationFile?: string;
-  installedFiles?: readonly InstalledFileId[];
-}
+// The keys Modbench owns in meta.ini, each written only when present.
+type MetaKeys = Partial<OwnedMetaKeys>;
 
 const OWNED_GENERAL_KEYS = ['gameName', 'modid', 'version', 'installationFile'] as const;
 

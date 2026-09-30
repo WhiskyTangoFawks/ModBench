@@ -19,15 +19,15 @@ const codecsIn = (dir: string, testDir: string, names: readonly string[]): Codec
 const ADAPTER_CODECS = join('instanceAdapter', 'codecs');
 const LOAD_ORDER_FILE_CODEC = join('loadOrderFileCodec', 'pluginsText.ts');
 
-// The kernel's MO2 codecs and the Instance adapter's copies of them both hold MO2's formats until
-// the kernel's copies go; the game's plugins.txt format is the Load-order file codec's.
+// The kernel's MO2 codecs and the Instance adapter's copies of them both hold MO2's formats; the
+// game's plugins.txt format is the Load-order file codec's.
 const CODECS: readonly Codec[] = [
   ...codecsIn('mo2Codecs', join('mo2Codecs', 'test'), ['modlistText', 'pluginsText', 'metaIni', 'modOrganizerIni', 'downloads']),
   ...codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
   ...codecsIn('loadOrderFileCodec', join('loadOrderFileCodec', 'test'), ['pluginsText']),
 ];
 
-const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
+const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
 
 // The guard's own definition file necessarily holds every token as data (its TOKENS list and
 // its rival-plant test); it does not read or write any MO2 file.
