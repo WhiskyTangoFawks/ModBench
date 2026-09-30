@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { OVERWRITE_NODE_KIND, type ModlistNode, type ModNode, type SeparatorNode } from './ModListProvider';
-import type { InstanceValue } from '../instanceLoader/instance';
 
 /** The rows a Mods gesture's Argument is taken from. */
 export interface GestureEntry {
@@ -101,17 +100,6 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),
-  };
-}
-
-/** Each mod with a repository and each with none, for the menus whose row names only a mod: a
- *  record tab's column header offers track or decompile by its plugin's mod (editor.md, Menus and
- *  keys). */
-export function modRepositoryContext(value: Pick<InstanceValue, 'mods' | 'trackedMods'>): { tracked: string[]; untracked: string[] } {
-  const mods = value.mods.filter((entry) => entry.kind === 'mod').map((entry) => entry.name);
-  return {
-    tracked: mods.filter((mod) => value.trackedMods.has(mod)),
-    untracked: mods.filter((mod) => !value.trackedMods.has(mod)),
   };
 }
 

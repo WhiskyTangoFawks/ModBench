@@ -42,6 +42,37 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
     }
 
+    // The parked snapshot is what the working tree holds now, the plugin's untracked source included,
+    // under the gesture that made it.
+    [Fact]
+    public void ReplaceSourceFrom_ParksASnapshotHoldingTheSourceItWrote_NamedForDecompile()
+    {
+        Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
+
+        var parked = SourceRepository.LastCompileRef(Plugin);
+        Assert.Equal(
+            [".gitignore", "plugin-source/A.esp/npc_/A.esp/000002.json"],
+            Git("ls-tree", "-r", "--name-only", parked).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal("{\"now\":2}", Git("show", $"{parked}:plugin-source/A.esp/npc_/A.esp/000002.json"));
+        Assert.Equal("Decompile: A.esp", Git("log", "-1", "--format=%s", parked).Trim());
+    }
+
+    // A branch checked out with no commit yet has no HEAD to park on, so git refuses after every file
+    // is written.
+    [Fact]
+    public void ReplaceSourceFrom_WhoseGitStepFailsAfterTheFilesAreWritten_LeavesTheSourceAndTheRefAsTheyWere()
+    {
+        var refBefore = Git("rev-parse", SourceRepository.LastCompileRef(Plugin));
+        Git("checkout", "-q", "--orphan", "unborn");
+
+        Assert.ThrowsAny<InvalidOperationException>(() => Repository.ReplaceSourceFrom(
+            Plugin, [File("npc_/A.esp/000002.json", "{}")], Sha));
+
+        Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
+        Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
+        Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
+    }
+
     private SourceRepository Repository =>
         SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
 
@@ -56,4 +87,40 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
             .Order(StringComparer.Ordinal)];
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
+}
+
+/// <summary>git gone from PATH after the up-front check: the write's git step is the same named
+/// failure, and the source is put back.</summary>
+[Collection(ProcessEnvironmentCollection.Name)]
+public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
+{
+    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-replace-source-nogit-").FullName;
+
+    public SourceRepositoryReplaceSourceWithoutGitTests() =>
+        PluginBaselines.Track(_modFolder, SourcePreset.Edits,
+            [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{\"was\":1}"u8.ToArray())]);
+
+    public void Dispose() => Directory.Delete(_modFolder, recursive: true);
+
+    [Fact]
+    public void ReplaceSourceFrom_WithGitGoneFromPath_ThrowsGitUnavailable_AndLeavesTheSourceAsItWas()
+    {
+        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
+        var path = Environment.GetEnvironmentVariable("PATH");
+        Environment.SetEnvironmentVariable("PATH", string.Empty);
+        try
+        {
+            Assert.Throws<GitUnavailableException>(() => repository.ReplaceSourceFrom(
+                "A.esp", [new TreeFile("plugin-source/A.esp/npc_/A.esp/000002.json", "{}"u8.ToArray())], "ABCDEF0123"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", path);
+        }
+
+        var root = SourceRepository.RootIn(_modFolder, "A.esp");
+        Assert.Equal(
+            [Path.Combine(root, "npc_", "A.esp", "000001.json")],
+            Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories));
+    }
 }

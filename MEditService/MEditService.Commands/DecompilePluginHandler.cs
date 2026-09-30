@@ -30,7 +30,7 @@ public sealed class DecompilePluginHandler
         }
         catch (GitUnavailableException ex)
         {
-            return new DecompileSelectionResult([], [], ex.Message);
+            return DecompileSelectionResult.WholeSelectionRefused(DecompileRefusal.GitUnavailable, ex.Message);
         }
 
         var landed = new List<PluginAddress>();
@@ -49,7 +49,7 @@ public sealed class DecompilePluginHandler
                 landed.Add(plugin);
             }
         }
-        return new DecompileSelectionResult(landed, refused);
+        return DecompileSelectionResult.PerPlugin(landed, refused);
     }
 
     private async Task<DecompileRefused?> DecompileOneAsync(LoadOrderSnapshot loadOrder, PluginAddress key, CancellationToken cancel)
@@ -76,6 +76,10 @@ public sealed class DecompilePluginHandler
         {
             repository.ReplaceSourceFrom(plugin.Name, files, PluginBinaryHash.TrailerFormOfFile(plugin.Path));
             return null;
+        }
+        catch (GitUnavailableException ex)
+        {
+            return Refuse(DecompileRefusal.GitUnavailable, $"Could not write {plugin.Name}'s source: {ex.Message}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {

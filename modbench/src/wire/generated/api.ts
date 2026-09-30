@@ -612,7 +612,7 @@ export interface components {
             folder: string;
         };
         /** @enum {string} */
-        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "WriteFailed";
+        DecompileRefusal: "None" | "PluginNotLoaded" | "NotInTrackedMod" | "RoundTripFailed" | "MissingLocalizationStrings" | "WriteFailed" | "GitUnavailable";
         DecompileRefused: {
             plugin: components["schemas"]["PluginAddress"];
             refusal: components["schemas"]["DecompileRefusal"];

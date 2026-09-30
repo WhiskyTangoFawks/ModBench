@@ -27,16 +27,38 @@ public enum DecompileRefusal
     /// <summary>The plugin passed its gate, and git or the file system refused the write. Its source is
     /// as it was.</summary>
     WriteFailed,
+
+    /// <summary>git is not on PATH (ADR-0007): the whole selection before any write, or the plugin
+    /// whose write found it gone.</summary>
+    GitUnavailable,
 }
 
 /// <summary>A plugin of the selection that wrote nothing, with the typed refusal and the message
 /// naming the way out.</summary>
 public sealed record DecompileRefused(PluginAddress Plugin, DecompileRefusal Refusal, string Message);
 
-/// <summary>Decompile over a selection answers per plugin (ADR-0019 invariant 4), except when git
-/// cannot be run: <see cref="GitUnavailable"/> says why, and nothing was written.</summary>
-public sealed record DecompileSelectionResult(
-    IReadOnlyList<PluginAddress> Landed, IReadOnlyList<DecompileRefused> Refused, string? GitUnavailable = null)
+/// <summary>A cause no plugin of the selection escapes, found before any write.</summary>
+public sealed record DecompileSelectionRefusal(DecompileRefusal Refusal, string Message);
+
+/// <summary>Decompile over a selection answers per plugin (ADR-0019 invariant 4), except for a cause
+/// no plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
+public sealed class DecompileSelectionResult
 {
-    public bool AllApplied => Refused.Count == 0 && GitUnavailable is null;
+    private DecompileSelectionResult(
+        IReadOnlyList<PluginAddress> landed, IReadOnlyList<DecompileRefused> refused, DecompileSelectionRefusal? selectionRefusal) =>
+        (Landed, Refused, SelectionRefusal) = (landed, refused, selectionRefusal);
+
+    public static DecompileSelectionResult PerPlugin(IReadOnlyList<PluginAddress> landed, IReadOnlyList<DecompileRefused> refused) =>
+        new(landed, refused, selectionRefusal: null);
+
+    public static DecompileSelectionResult WholeSelectionRefused(DecompileRefusal refusal, string message) =>
+        new([], [], new DecompileSelectionRefusal(refusal, message));
+
+    public IReadOnlyList<PluginAddress> Landed { get; }
+
+    public IReadOnlyList<DecompileRefused> Refused { get; }
+
+    public DecompileSelectionRefusal? SelectionRefusal { get; }
+
+    public bool AllApplied => Refused.Count == 0 && SelectionRefusal is null;
 }

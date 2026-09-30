@@ -34,6 +34,7 @@ public sealed class CommandHandlerConventionTests
         typeof(CompileSelectionResult),
         typeof(DecompileRefusal),
         typeof(DecompileRefused),
+        typeof(DecompileSelectionRefusal),
         typeof(DecompileSelectionResult),
         typeof(PluginCreateRefusal),
         typeof(PluginCreateResult),

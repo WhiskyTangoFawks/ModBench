@@ -251,10 +251,11 @@ public static class PluginEndpoints
         try
         {
             var result = await decompileHandler.DecompileAsync(plugins);
-            if (result.GitUnavailable is { } message)
+            if (result.SelectionRefusal is { } selectionRefusal)
             {
-                logger.LogWarning("Refused to decompile {Count} plugin(s): {Message}", plugins.Count, message);
-                return WriteEndpointMapping.WriteFailure(message);
+                logger.LogWarning("Refused to decompile {Count} plugin(s): {Refusal} — {Message}",
+                    plugins.Count, selectionRefusal.Refusal, selectionRefusal.Message);
+                return WriteEndpointMapping.Refusal(selectionRefusal);
             }
             return Results.Ok(new DecompileResponse(result.Landed, result.Refused));
         }
