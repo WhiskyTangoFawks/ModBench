@@ -47,7 +47,7 @@ public sealed class SourceRepositoryLayoutTests
                 modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
             // Everything nests under one root "plugin-source/" folder (the on-disk root Track and Put
-            // both write to), the plugin its own child directory, not a "<plugin>.plugin-source/" sibling
+            // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
             // tree.
             var segments = path.Split(Path.DirectorySeparatorChar);
             Assert.Equal("plugin-source", segments[0]);

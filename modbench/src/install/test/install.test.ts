@@ -331,8 +331,8 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!plugin-source/\n');
   });
 
-  // Rival: matching the old name "source". A release's root Source/ (Skyrim SE's Creation Kit
-  // script sources) is ordinary content now that the plugin source root is plugin-source/.
+  // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation Kit
+  // ships script sources at a release's own root Source/ — ordinary content, not a collision.
   it('upgrades a release that ships a root Source folder, as ordinary content', async () => {
     const name = 'Untracked Target';
     const modDir = await makeExistingMod(root, name, false);

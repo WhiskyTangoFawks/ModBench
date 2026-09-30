@@ -24,8 +24,9 @@ public sealed record GitWatchPaths(string GitDirectory, string Head, string Pack
 /// and the JSON suffix. Everything else asks for a path rather than composing one.</summary>
 public sealed partial class SourceRepository
 {
-    /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. Not
-    /// "source": Skyrim SE ships a root Source/, which collides with it case-insensitively.</summary>
+    /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
+    /// deployer exclusion matches this name at the mod root only, so a nested folder that merely
+    /// shares it still deploys.</summary>
     internal const string RootFolderName = "plugin-source";
 
     /// <summary>The whole-mod door's own name for a container's field file, and for the header's

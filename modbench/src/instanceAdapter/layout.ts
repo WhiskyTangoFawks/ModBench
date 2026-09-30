@@ -114,7 +114,7 @@ export const fileInFolder = (folder: string, relativePath: string): string => jo
 export const isInFolder = (folder: string, file: string): boolean => file.startsWith(folder + sep);
 
 const GIT_DIR = '.git';
-const PLUGIN_SOURCE_FOLDER = 'plugin-source';
+export const PLUGIN_SOURCE_FOLDER = 'plugin-source';
 
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
 export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);

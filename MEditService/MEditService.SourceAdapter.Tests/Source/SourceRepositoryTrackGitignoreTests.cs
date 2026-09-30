@@ -83,14 +83,14 @@ public sealed class SourceRepositoryTrackGitignoreTests
         var modFolder = NewModFolder();
         try
         {
-            Directory.CreateDirectory(Path.Combine(modFolder, "MyPluginSource"));
-            File.WriteAllText(Path.Combine(modFolder, "MyPluginSource", "notes.txt"), "Notes");
+            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
             PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.DoesNotContain("MyPluginSource", committedPaths);
+            Assert.DoesNotContain("My-plugin-source", committedPaths);
         }
         finally
         {
@@ -110,8 +110,8 @@ public sealed class SourceRepositoryTrackGitignoreTests
             WriteMetaIniBesideTheSource(modFolder);
             WritePluginBinaryBesideTheSource(modFolder);
             File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
-            Directory.CreateDirectory(Path.Combine(modFolder, "MyPluginSource"));
-            File.WriteAllText(Path.Combine(modFolder, "MyPluginSource", "notes.txt"), "Notes");
+            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
             var otherPluginFile = new TreeFile(
                 Path.Combine("plugin-source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());

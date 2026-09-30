@@ -63,17 +63,19 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.False(dirt.NeedsStructuralPass);
     }
 
-    // git status lists a staged rename as its new path, then its old path as a bare token with no
-    // status code; read as an entry, "xyz-plugin-source/…" loses three characters and lands in the tree.
+    // A rename's old path rides a bare token with no status code; read as an entry (entry[3..]),
+    // losing three characters must land exactly on the real root.
     [Fact]
     public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile()
     {
-        var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, "xyz-plugin-source", PluginName)).FullName;
+        var rootSegment = SourceRepository.RootFor(PluginName).Split(Path.DirectorySeparatorChar)[0];
+        var lookalikeFolderName = "xyz" + rootSegment;
+        var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
         PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
         var repository = SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
-        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv", $"xyz-plugin-source/{PluginName}/notes.txt", "notes.txt");
+        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv", $"{lookalikeFolderName}/{PluginName}/notes.txt", "notes.txt");
 
         var dirt = repository.DirtOf(Plugin);
 

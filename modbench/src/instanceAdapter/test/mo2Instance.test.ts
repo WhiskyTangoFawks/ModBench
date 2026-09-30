@@ -522,9 +522,8 @@ describe('the MO2 Instance adapter', () => {
         expect(paths).not.toContain('PLUGIN-SOURCE/stray.json');
       });
 
-      // Rival: matching the old name "source". Skyrim SE's Creation Kit ships script sources at a
-      // release's own root Source/, which is ordinary content now that the plugin source root is
-      // named plugin-source/ instead.
+      // Rival: hiding a folder merely named "source". Skyrim SE's Creation Kit ships script sources
+      // at a release's own root Source/ — ordinary content, not the plugin's tracked source.
       it('keeps a root Source folder: it is ordinary content, not the plugin source root', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Source'), { recursive: true });
@@ -1282,14 +1281,14 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
-      // Rival: matching the old name "source". A release's root Source/ (Skyrim SE's Creation Kit
-      // script sources) is ordinary content now that the plugin source root is plugin-source/.
-      it('does not refuse a release holding a root Source or source folder', async () => {
-        await mkdir(join(staged, 'Source'));
+      // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation
+      // Kit ships script sources at a release's own root Source/ — ordinary content, not a collision.
+      it.each(['Source', 'source'])('does not refuse a release holding a root %s folder', async (entry) => {
+        await mkdir(join(staged, entry));
 
         expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: false });
 
-        expect(await isThere(join(folder(), 'Source'))).toBe(true);
+        expect(await isThere(join(folder(), entry))).toBe(true);
         expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 

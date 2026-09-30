@@ -71,8 +71,8 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
     if (dirent.name.startsWith('.') || isTempWrite(dirent.name)) continue;
     const path = join(dir, dirent.name);
     if (dirent.isDirectory()) {
-      // At the mod root only: Papyrus assets ship nested (`Scripts/Source/...`), so a match at any
-      // depth would exclude a mod's own scripts.
+      // At the mod root only: a nested folder that happens to share the name is ordinary content,
+      // not the plugin's tracked source.
       if (dir === walk.root && isPluginSourceFolder(dirent.name)) continue;
       await descend(walk, path, ancestors);
     } else if (dirent.isFile()) {
