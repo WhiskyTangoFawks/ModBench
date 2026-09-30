@@ -282,9 +282,8 @@ export class Instance implements Subscription {
       (entry.kind === 'mod' ? { ...entry, ...(await adapter.modMeta(entry.name)) } : entry)));
   }
 
-  // A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty parse is
-  // re-read after a settle before being believed. A partial parse is not covered — it reads as
-  // a real removal.
+  // A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty one is
+  // re-read after a settle before being believed. A partial parse reads as a real removal.
   private async readMods(profile: string): Promise<ModlistEntry[]> {
     const entries = await this.readModOrder(profile);
     if (entries.length > 0) return entries;

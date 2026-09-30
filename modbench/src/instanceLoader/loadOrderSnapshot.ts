@@ -111,8 +111,8 @@ function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, O
 }
 
 /** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name no mod or
- *  overwrite/ provides takes the Data folder's file of that name; with no game folder found, its
- *  row is line-only, `path` undefined. */
+ *  overwrite/ provides takes the Data folder's file of that name, or is line-only, `path`
+ *  undefined, with no game folder found. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
   index: FileConflictIndex,

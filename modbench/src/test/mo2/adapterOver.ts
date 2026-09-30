@@ -52,9 +52,8 @@ export const readPluginLines = (root: string, profile = 'Default'): Promise<Plug
 
 export const readActiveProfile = async (root: string): Promise<string> => (await adapterOver(root).settings()).profile;
 
-/** The winners the Instance's value carries for a tree on disk, built through the value's own
- *  builders: a test handing plugin sync its argument fakes no walk of its own. A Data-folder
- *  plugin is presence, never provision, so the game folder does not change the answer. */
+/** The winners the Instance's value carries for a tree on disk, through the value's own builders.
+ *  A Data-folder plugin is never provision, so the game folder cannot change the answer. */
 export async function providedPluginsIn(root: string, profile = 'Default'): Promise<ReadonlyMap<string, string>> {
   const adapter = adapterOver(root);
   const [entries, lines, runtimeOutput] = await Promise.all([
