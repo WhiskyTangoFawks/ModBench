@@ -113,8 +113,23 @@ export const fileInFolder = (folder: string, relativePath: string): string => jo
 /** Whether `file` sits anywhere beneath `folder`. */
 export const isInFolder = (folder: string, file: string): boolean => file.startsWith(folder + sep);
 
+const GIT_DIR = '.git';
+const PLUGIN_SOURCE_FOLDER = 'source';
+
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
-export const modGitDir = (modFolder: string): string => join(modFolder, '.git');
+export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);
+
+// Names in a mod folder match without case, as Windows matches them, on every platform alike.
+const nameKey = (name: string): string => name.toLowerCase();
+
+/** Whether an entry at a mod folder's root is its plugin source. */
+export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
+
+const TRACKING_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
+
+/** Whether an entry at a mod folder's root is its tracking — its repository or its plugin source
+ *  (ADR-0007) — which an upgrade keeps and no release supplies. */
+export const isTrackingEntry = (name: string): boolean => TRACKING_ENTRIES.has(nameKey(name));
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.

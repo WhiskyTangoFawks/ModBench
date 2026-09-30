@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { markDownloadInstalled, type InstalledMarkResult } from '../installedMark';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
 // expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
@@ -27,11 +27,7 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 
 const archivePath = (name: string): string => join(root, 'downloads', name);
 
-async function statusOf(name: string) {
-  const listed = await (await adapter.settings()).downloadedFiles();
-  if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
-  return listed.files?.find((file) => file.name === name)?.meta?.status;
-}
+const statusOf = async (name: string) => (await readDownloadedFileMeta(root, name))?.status;
 
 describe('markDownloadInstalled', () => {
   it('marks a downloaded file installed, one with no metadata included', async () => {

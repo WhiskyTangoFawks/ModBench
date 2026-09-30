@@ -11,7 +11,7 @@ import {
   type DownloadsAccess, type DownloadsCommandResult,
 } from '../downloads';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
@@ -40,11 +40,7 @@ async function writeArchive(name: string): Promise<{ name: string; path: string 
   return { name, path };
 }
 
-const statusOf = async (name: string) => {
-  const listed = await (await access.adapter.settings()).downloadedFiles();
-  if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
-  return listed.files?.find((file) => file.name === name)?.meta;
-};
+const statusOf = (name: string) => readDownloadedFileMeta(root, name);
 
 const recordingTrash = (fail: (path: string) => Error | undefined = () => undefined) => {
   const trashed: string[] = [];

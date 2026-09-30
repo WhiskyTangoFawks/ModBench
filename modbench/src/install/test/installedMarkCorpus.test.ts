@@ -9,7 +9,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { markDownloadInstalled } from '../installedMark';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 
 // A metaless archive, as a manual drop into downloads/ is: a mark that creates a sidecar is the
 // one whose touch-set is easiest to read wrong.
@@ -26,11 +26,7 @@ describe('installed mark corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  const statusOf = async (name: string) => {
-    const listed = await (await adapterOver(dir).settings()).downloadedFiles();
-    if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
-    return listed.files?.find((file) => file.name === name)?.meta?.status;
-  };
+  const statusOf = async (name: string) => (await readDownloadedFileMeta(dir, name))?.status;
 
   it('mark installed writes one sidecar and nothing else — never the mod folder', async () => {
     // As MO2 left it after an uninstall: its tab resolves `uninstalled` first, so the mark has

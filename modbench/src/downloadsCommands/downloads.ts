@@ -5,7 +5,7 @@ import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import type { DownloadedFile, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { goneFromDisk, type DownloadedFile, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What a downloads command reaches the instance through. */
 export interface DownloadsAccess {
@@ -39,7 +39,7 @@ async function selectionOutcomeOf<I, T>(
 async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
   try {
     const marked = await access.adapter.markDownloadedFile(name, excluded);
-    if (marked.gone) return { applied: false, refusal: `"${name}" is gone from disk.` };
+    if (marked.gone) return { applied: false, refusal: goneFromDisk(name) };
     return { applied: true, wrote: marked.wrote };
   } catch (err) {
     return refuse(err);

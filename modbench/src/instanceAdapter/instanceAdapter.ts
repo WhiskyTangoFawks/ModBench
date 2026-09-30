@@ -146,6 +146,17 @@ export interface StagedEntry {
   readonly kind: 'folder' | 'file' | 'other';
 }
 
+/** A folder the adapter made for a mod staged before it lands. Only the adapter makes one, so
+ *  removing it can never reach a folder a caller named. */
+export interface StagingFolder {
+  readonly path: string;
+  /** Removes the folder and whatever is left in it. */
+  remove(): Promise<void>;
+}
+
+/** An upgrade refused before anything changed names the tracking entry its release holds. */
+export type Upgraded = { readonly refused: false } | { readonly refused: true; readonly trackingEntry: string };
+
 /** One read of the instance's configuration. Both answers come from that same read. */
 export interface InstanceSettings {
   readonly profile: string;
@@ -205,6 +216,9 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
+/** The refusal of a mark on a downloaded file that is gone. */
+export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
+
 /** What a subscriber disposes of to hear no more. */
 export interface Subscription {
   dispose(): void;
@@ -251,7 +265,6 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
-  stagedEntries(folder: string): Promise<StagedEntry[]>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. A change naming an entry that is not
@@ -272,20 +285,20 @@ export interface InstanceAdapter {
   createModFolder(mod: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
-  /** A fresh folder on the instance's own volume that no watch reaches, for a mod staged before it
-   *  lands; the caller removes it. */
-  stagingFolder(): Promise<string>;
-  /** A fresh staging folder holding a copy of `folder`'s tree; `folder` is left as it was. */
-  stagingFolderOf(folder: string): Promise<string>;
-  /** Removes a staging folder and whatever is left in it. */
-  removeStagingFolder(staged: string): Promise<void>;
   /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
    *  one rename. */
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the folder's contents with the staged tree's around each entry `keep` names, and
-   *  sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
-   *  holding a kept name rejects first. */
-  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys, keep: (entry: string) => boolean): Promise<void>;
+  /** Replaces the folder's contents with the staged tree's around the mod's tracking, and sets
+   *  `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
+   *  holding a tracking entry is refused first. */
+  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<Upgraded>;
+
+  // Staging: the adapter's own ground beside mods/, on the same volume and outside every watch,
+  // where a mod is put before its one rename into mods/. The caller removes what it stages.
+  stagingFolder(): Promise<StagingFolder>;
+  /** A staging folder holding a copy of `folder`'s tree; `folder` is left as it was. */
+  stagingFolderOf(folder: string): Promise<StagingFolder>;
+  stagedEntries(folder: string): Promise<StagedEntry[]>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

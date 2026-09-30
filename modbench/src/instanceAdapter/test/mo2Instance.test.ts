@@ -1061,17 +1061,17 @@ describe('the MO2 Instance adapter', () => {
 
       const staged = await adapter.stagingFolderOf(source);
 
-      expect(staged.startsWith(join(root, 'mods'))).toBe(false);
-      expect(await snapshotTree(staged)).toEqual(before);
+      expect(staged.path.startsWith(join(root, 'mods'))).toBe(false);
+      expect(await snapshotTree(staged.path)).toEqual(before);
       expect(await snapshotTree(source)).toEqual(before);
     });
 
     it('lists a staged folder\'s entries, each a folder or a file', async () => {
       const staged = await adapter.stagingFolder();
-      await mkdir(join(staged, 'Data'));
-      await writeFile(join(staged, 'readme.txt'), '');
+      await mkdir(join(staged.path, 'Data'));
+      await writeFile(join(staged.path, 'readme.txt'), '');
 
-      const entries = await adapter.stagedEntries(staged);
+      const entries = await adapter.stagedEntries(staged.path);
 
       expect([...entries].sort((a, b) => a.name.localeCompare(b.name))).toEqual([
         { name: 'Data', kind: 'folder' }, { name: 'readme.txt', kind: 'file' },
@@ -1080,11 +1080,11 @@ describe('the MO2 Instance adapter', () => {
 
     it('removes a staging folder and what is left in it', async () => {
       const staged = await adapter.stagingFolder();
-      await mkdir(join(staged, 'Wrapper'));
+      await mkdir(join(staged.path, 'Wrapper'));
 
-      await adapter.removeStagingFolder(staged);
+      await staged.remove();
 
-      expect(await isThere(staged)).toBe(false);
+      expect(await isThere(staged.path)).toBe(false);
     });
   });
 
@@ -1094,12 +1094,12 @@ describe('the MO2 Instance adapter', () => {
     it('stages beside the mod folders, outside every one of them', async () => {
       const staged = await adapter.stagingFolder();
 
-      expect(await isThere(staged)).toBe(true);
-      expect(staged.startsWith(join(root, 'mods'))).toBe(false);
+      expect(await isThere(staged.path)).toBe(true);
+      expect(staged.path.startsWith(join(root, 'mods'))).toBe(false);
     });
 
     it('lands a new mod whole, its meta holding only the keys it is given', async () => {
-      const staged = await adapter.stagingFolder();
+      const staged = (await adapter.stagingFolder()).path;
       await writeFile(join(staged, 'meta.ini'), 'shipped=true\n');
       await writeFile(join(staged, 'New.esp'), '');
 
@@ -1113,52 +1113,54 @@ describe('the MO2 Instance adapter', () => {
     describe('an upgrade', () => {
       const mod = 'Unofficial Fallout 4 Patch';
       const folder = (): string => join(root, 'mods', mod);
-      const keepGit = (entry: string): boolean => entry === '.git' || entry === 'source';
       let staged: string;
 
       beforeEach(async () => {
         await mkdir(join(folder(), '.git'));
+        await writeFile(join(folder(), '.gitignore'), 'mine');
         await writeFile(join(folder(), 'Old.esp'), '');
         await mkdir(join(folder(), 'source', 'kept'), { recursive: true });
-        staged = await adapter.stagingFolder();
+        staged = (await adapter.stagingFolder()).path;
         await writeFile(join(staged, 'New.esp'), '');
-        await writeFile(join(staged, '.gitignore'), 'release');
       });
 
-      it('replaces the contents around each entry kept, taking the release\'s entries the folder has none of', async () => {
-        await adapter.upgradeMod('unofficial fallout 4 patch', staged, { gameName: 'Fallout4' }, keepGit);
+      it('replaces the contents around the mod\'s repository and plugin source', async () => {
+        expect(await adapter.upgradeMod('unofficial fallout 4 patch', staged, { gameName: 'Fallout4' })).toEqual({ refused: false });
 
         expect(await isThere(join(folder(), '.git'))).toBe(true);
+        expect(await text(root, join('mods', mod, '.gitignore'))).toBe('mine');
         expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
         expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
-        expect(await isThere(join(folder(), '.gitignore'))).toBe(true);
       });
 
-      // Rival: a release entry the folder keeps skipped in silence, so part of the release never
-      // lands and nothing says so.
-      it('refuses a release holding an entry the folder keeps, before anything is removed', async () => {
-        await mkdir(join(staged, 'source', 'release'), { recursive: true });
+      // Rival: a case-sensitive match. On Windows `Source` is the kept `source`, and the move onto
+      // it fails part way; elsewhere it lands beside it and drops out of the mod's files.
+      it.each(['.git', '.gitignore', 'source', 'Source', '.GITIGNORE'])(
+        'refuses a release holding %s, naming it, before anything is removed',
+        async (entry) => {
+          await mkdir(join(staged, entry));
 
-        await expect(adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/"source"/);
+          expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, trackingEntry: entry });
 
-        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
-        expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
-      });
+          expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
+          expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+        },
+      );
 
       // Rival: refuse only an entry the folder already has, so a first upgrade plants one that
       // every later upgrade then refuses.
-      it('refuses a release holding a kept entry the folder has none of, naming it', async () => {
+      it('refuses a release holding a tracking entry the folder has none of', async () => {
         await rm(join(folder(), 'source'), { recursive: true });
         await mkdir(join(staged, 'source'));
 
-        await expect(adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/"source"/);
+        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, trackingEntry: 'source' });
 
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
       it('refuses a mod no folder holds', async () => {
-        await expect(adapter.upgradeMod('No Such Mod', staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/No folder holds/);
+        await expect(adapter.upgradeMod('No Such Mod', staged, { gameName: 'Fallout4' })).rejects.toThrow(/No folder holds/);
       });
 
       // Rival: the meta read after the release's entries land, so a release shipping its own meta
@@ -1166,7 +1168,7 @@ describe('the MO2 Instance adapter', () => {
       it('sets the keys over the meta the mod had before its contents went', async () => {
         await writeFile(join(staged, 'meta.ini'), 'shipped=true\r\n');
 
-        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4', version: '2.2' }, keepGit);
+        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4', version: '2.2' });
 
         expect(await meta(mod)).toBe(
           `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,

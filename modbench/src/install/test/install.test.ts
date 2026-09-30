@@ -15,7 +15,7 @@ import {
   type InstallAccess,
 } from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import type { Runner } from '../extractArchive';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { present } from '../../ports/present';
@@ -175,12 +175,7 @@ describe('install commands', () => {
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
-  // The adapter's own read of the downloaded file's metadata, so a test never re-derives its format.
-  async function downloadMetaOf(name: string) {
-    const listed = await (await access.adapter.settings()).downloadedFiles();
-    if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
-    return listed.files?.find((file) => file.name === name)?.meta;
-  }
+  const downloadMetaOf = (name: string) => readDownloadedFileMeta(root, name);
 
   it('marks the downloaded file it landed from installed', async () => {
     const file = await downloadedFile('Freshly-1-0.7z');
@@ -336,38 +331,43 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!source/\n');
   });
 
-  // Rival: refuse only a kept entry the mod folder already has. The release would then plant a
-  // .gitignore that every later upgrade refuses, and the repository's own ignore rules with it.
-  it('refuses, naming it, a release that ships a name the upgrade keeps, and leaves the mod as it was', async () => {
-    const name = 'Untracked Target';
-    const modDir = await makeExistingMod(root, name, false);
-    const before = await treeOf(modDir);
-    const shipsGitignore: Runner = async (bin, args) => {
-      await runnerFor()(bin, args);
-      const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
-      await writeFile(join(dest, 'Wrapper', '.gitignore'), '*\n');
-    };
+  // Rival: refuse only a tracking entry the mod folder already has, or match its name with case.
+  // The release would plant a .GITIGNORE or a Source/ beside the mod's own, which every later
+  // upgrade refuses, or which Windows moves onto the kept one part way.
+  it.each(['.GITIGNORE', 'Source'])(
+    'refuses, before any write, a release that ships %s, naming it',
+    async (entry) => {
+      const name = 'Untracked Target';
+      const modDir = await makeExistingMod(root, name, false);
+      const before = await treeOf(modDir);
+      const shipsTracking: Runner = async (bin, args) => {
+        await runnerFor()(bin, args);
+        const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
+        await mkdir(join(dest, 'Wrapper', entry));
+      };
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsGitignore });
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsTracking });
 
-    expect(outcome).toMatchObject({ applied: false });
-    expect(!outcome.applied && outcome.refusal).toContain('".gitignore"');
-    expect(await treeOf(modDir)).toEqual(before);
-  });
+      expect(outcome).toEqual({
+        applied: false,
+        refusal: `Cannot upgrade "${name}": the release holds "${entry}", which is the mod's own repository or plugin source.`,
+      });
+      expect(await treeOf(modDir)).toEqual(before);
+    },
+  );
 
   // mods.md, What install does, story 5: installing again is the recovery, so nothing is undone.
-  it('an upgrade that fails says so, naming the mod and what failed, and that nothing was rolled back', async () => {
+  it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back', async () => {
     const name = 'Untracked Target';
     await makeExistingMod(root, name, false);
     const failing = withAdapter(access, { upgradeMod: () => Promise.reject(errnoError('EACCES', 'permission denied')) });
 
     const outcome = await installFromArchive(failing, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
 
-    expect(outcome).toMatchObject({ applied: false });
-    const refusal = !outcome.applied ? outcome.refusal : '';
-    expect(refusal).toContain(`"${name}"`);
-    expect(refusal).toContain('EACCES: permission denied');
-    expect(refusal).toMatch(/not rolled back/);
+    expect(outcome).toEqual({
+      applied: false,
+      refusal: `Upgrading "${name}" failed partway and was not rolled back: EACCES: permission denied`,
+    });
   });
 
   it('an upgrade with a sidecar version rewrites meta.ini\'s version', async () => {

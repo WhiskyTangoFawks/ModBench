@@ -12,7 +12,7 @@ import {
   deleteDownloads, excludeDownload, excludeDownloads, includeDownload, includeDownloads, type DownloadsAccess,
 } from '../downloads';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
@@ -39,13 +39,8 @@ describe('downloads commands corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // The adapter's own read of the metadata, so a test never re-derives the flag it asserts on. A
-  // file with no metadata is not excluded.
-  async function excludedOf(name: string): Promise<boolean> {
-    const listed = await (await access.adapter.settings()).downloadedFiles();
-    if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
-    return listed.files?.find((file) => file.name === name)?.meta?.excluded ?? false;
-  }
+  // A file with no metadata is not excluded.
+  const excludedOf = async (name: string): Promise<boolean> => (await readDownloadedFileMeta(dir, name))?.excluded ?? false;
 
   const fileOf = (name: string) => ({ name, path: join(dir, 'downloads', name) });
 

@@ -8,7 +8,7 @@ import { markDownloadInstalled } from './installedMark';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
-import type { InstalledFileId, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { InstalledFileId, InstanceAdapter, StagingFolder, Upgraded } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {
@@ -116,9 +116,6 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
   return refuse(err);
 }
 
-// An upgrade keeps the mod's repository and its plugin source (mods.md, What install does, story 3).
-const KEPT_BY_UPGRADE = new Set(['.git', '.gitignore', 'source']);
-
 // The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
 // the user own it too — so a claim that disagrees with disk is refused, never reinterpreted.
 function mismatchRefusal(target: InstallTarget, targetExists: boolean): string | undefined {
@@ -144,10 +141,17 @@ function landStagedMod(
         await adapter.landNewMod(name, stagedRoot, keys);
         return { applied: true, wrote: true, isFomod };
       }
+      let upgraded: Upgraded;
       try {
-        await adapter.upgradeMod(name, stagedRoot, keys, (entry) => KEPT_BY_UPGRADE.has(entry));
+        upgraded = await adapter.upgradeMod(name, stagedRoot, keys);
       } catch (err) {
-        return { applied: false, refusal: `Upgrading "${name}" failed and was not rolled back: ${errorMessage(err)}` };
+        return { applied: false, refusal: `Upgrading "${name}" failed partway and was not rolled back: ${errorMessage(err)}` };
+      }
+      if (upgraded.refused) {
+        return {
+          applied: false,
+          refusal: `Cannot upgrade "${name}": the release holds "${upgraded.trackingEntry}", which is the mod's own repository or plugin source.`,
+        };
       }
       return { applied: true, wrote: true, isFomod };
     } catch (err) {
@@ -157,14 +161,12 @@ function landStagedMod(
 }
 
 // Landing renames the mod root out of the staging folder; whatever is left there goes.
-async function withStaging<T>(
-  access: InstallAccess, stage: () => Promise<string>, use: (staging: string) => Promise<T>,
-): Promise<T> {
+async function withStaging<T>(stage: () => Promise<StagingFolder>, use: (staging: string) => Promise<T>): Promise<T> {
   const staging = await stage();
   try {
-    return await use(staging);
+    return await use(staging.path);
   } finally {
-    await access.adapter.removeStagingFolder(staging);
+    await staging.remove();
   }
 }
 
@@ -188,7 +190,7 @@ export async function installFromArchive(
 ): Promise<InstallCommandResult> {
   try {
     const meta = metaFor({ installationFile: basename(archivePath) }, opts);
-    const outcome = await withStaging(access, () => access.adapter.stagingFolder(), async (staging) => {
+    const outcome = await withStaging(() => access.adapter.stagingFolder(), async (staging) => {
       await extractArchive(archivePath, staging, opts.run);
       return landDetected(access, target, staging, meta, opts.gameName);
     });
@@ -209,7 +211,7 @@ export async function installFromFolder(
 ): Promise<InstallCommandResult> {
   try {
     return await withStaging(
-      access, () => access.adapter.stagingFolderOf(folderPath),
+      () => access.adapter.stagingFolderOf(folderPath),
       (staging) => landDetected(access, target, staging, metaFor({}, opts), opts.gameName),
     );
   } catch (err) {
