@@ -46,7 +46,7 @@ As a user, I want:
 | Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text |
 | Vector | `x, y, z`, as mEdit gives it | a text box | the text |
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
-| Array | collapsed, `[n]` or its elements' readings; expanded, its elements | none: its elements edit | the whole value, as JSON |
+| Array | collapsed, its reading, below; expanded, its elements | none: its elements edit | the whole value, as JSON |
 
 *xEdit's editors by type; xedit.md, divergences 1, 5, 10, 11 and 12; mEdit's answer*
 
@@ -112,8 +112,8 @@ a collection. As a user, I want:
 
 ## Collapsed readings
 
-A collapsed element reads as xEdit summarises it, where xEdit has a summary for it; otherwise it
-reads `{…}`. *xEdit*
+A collapsed element reads by the first row that applies; otherwise it reads `{…}`. *xEdit; xedit.md,
+divergence 17*
 
 | Element | Reads |
 |---|---|
@@ -121,6 +121,9 @@ reads `{…}`. *xEdit*
 | A script property | `Name: Kind = value`, where Kind is the property's kind as the schema names it |
 | An object binding | `Object, Alias[n]`: `None` for -1, `Player` for -2, otherwise the number |
 | A condition | the Run On subject, then the function and the parameters it uses, then the operator, the value, and `AND` or `OR` joining it to the next; the last condition has none |
+| An array element with a key | its key's reading |
+| An array with one element | that element's reading |
+| Any other array | `[n]` |
 
 As a user, I want:
 
