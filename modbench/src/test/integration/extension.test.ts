@@ -1861,12 +1861,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
 
   // An order swap, so the load order itself changes, exercising watcher → sync → PUT end to end.
-  // A write that leaves the load order equal puts nothing.
   async function changePluginsTxt(): Promise<void> {
+    swapped = !swapped;
+    await writePluginsTxt(swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+  }
+
+  async function writePluginsTxt(text: string): Promise<void> {
     const before = putCount();
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
-    swapped = !swapped;
-    fs.writeFileSync(pluginsTxtPath, swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+    fs.writeFileSync(pluginsTxtPath, text);
     await waitFor('a fresh PUT /load-order after plugins.txt changed', () => putCount() > before ? true : undefined);
     // The PUT is answered, but the tree hand-off (GET /plugins → setLoadOrder) follows it
     // asynchronously; wait for that read too — unless the PUT failed, in which case there is none.
@@ -1905,18 +1908,14 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  // update-load-order-file: put on change. The PUT after the equal write carries the swap, so a
-  // PUT for the equal write would have landed first.
-  it('a plugins.txt write that leaves the load order equal puts nothing', async () => {
+  // ADR-0013, invariant 1: the snapshot at every recompute, changed or not.
+  it('a plugins.txt write that leaves the load order equal puts it again', async () => {
     const sent = putLoadOrders.length;
-    const unchanged = fs.readFileSync(pluginsTxtPath, 'utf8');
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, `${unchanged}\n`));
+    const order = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
 
-    await changePluginsTxt();
+    await writePluginsTxt(`${fs.readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
-    const swappedOrder = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
-    assert.deepStrictEqual(putLoadOrders.slice(sent), [swappedOrder],
-      'only the write that changed the load order may put it');
+    assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
 
   // The WeakMap decoration restores each row to its captured original before re-deciding what
@@ -2059,10 +2058,8 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
-// re-read of the instance that follows finds that load order unchanged.
-describe('Refresh rebuilds the index and sends nothing', () => {
-  // Launched, so a re-read that changed the load order would put it.
+describe('Refresh rebuilds the index, then re-reads the instance', () => {
+  // Launched, so the re-read puts the load order.
   beforeEach(async () => {
     await resetMockBackendDetached();
     await enterEditing();
@@ -2070,11 +2067,14 @@ describe('Refresh rebuilds the index and sends nothing', () => {
   });
   after(() => resetMockBackend());
 
-  it('POSTs /index/rebuild and PUTs no load order', async () => {
+  // ADR-0013, invariant 1: the re-read is a recompute, and every recompute puts the snapshot.
+  it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    assert.ok(requestLog.includes('POST /index/rebuild'), 'modbench.instance.refresh must rebuild the index');
-    assert.ok(!requestLog.includes('PUT /load-order'), 'modbench.instance.refresh must send no load order');
+    const rebuilt = requestLog.indexOf('POST /index/rebuild');
+    assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the index');
+    await waitFor('a PUT /load-order after the rebuild',
+      () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
   });
 
   // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,

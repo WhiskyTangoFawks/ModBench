@@ -49,15 +49,6 @@ export async function putLoadOrder(
   return { sent: true, snapshot, outcome: await sender.send(snapshot) };
 }
 
-/** update-load-order-file: the load order is put on change. False with no game folder found, since
- *  there is then nothing to put. */
-export function loadOrderChanged(
-  sender: Pick<LoadOrderSender, 'alreadySent'>, instanceRoot: string, value: LoadOrderSource,
-): boolean {
-  const snapshot = snapshotOf(instanceRoot, value);
-  return snapshot !== undefined && !sender.alreadySent(snapshot);
-}
-
 /** commands.md, `refresh`: mEdit rebuilds the index and reads every plugin again against the
  *  load order it holds; nothing is sent. ADR-0009 invariant 5: held-elsewhere is a refusal apart
  *  from every other failure. */

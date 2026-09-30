@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { Instance, type InstanceValue } from '../instance';
-import { adapterOver } from '../../test/mo2/adapterOver';
+import { adapterOver, STEADY_WINDOW } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -61,6 +61,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   const settingsReads = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
+    window: STEADY_WINDOW,
     adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
@@ -72,12 +73,23 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   };
 }
 
-// The adapter's signal, fired by the test: the watch behind it is the adapter's, and its own suite
-// tests it.
-async function signalledInstance(): Promise<{ instance: Instance; signal: () => void; listeners: ReadonlySet<() => void> }> {
+// The adapter's signal and the window's state, fired by the test: the watch behind the signal is
+// the adapter's, and its own suite tests it. The window starts focused.
+async function signalledInstance(): Promise<{
+  instance: Instance; signal: () => void; windowState: (state: WindowState) => void;
+  listeners: ReadonlySet<unknown>; windowListeners: ReadonlySet<unknown>;
+}> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const listeners = new Set<() => void>();
+  const windowListeners = new Set<(state: WindowState) => void>();
+  const window = {
+    state: { focused: true, active: true },
+    onDidChangeWindowState: (listener: (state: WindowState) => void) => {
+      windowListeners.add(listener);
+      return { dispose: () => { windowListeners.delete(listener); } };
+    },
+  };
   const instance = new Instance({
     adapter: {
       ...adapterOver(root, { gameFolder: resolvesDataFolder }),
@@ -86,10 +98,26 @@ async function signalledInstance(): Promise<{ instance: Instance; signal: () => 
         return { dispose: () => { listeners.delete(listener); } };
       },
     },
+    window,
     log: () => {}, logReadFailure: () => {},
   });
   instances.push(instance);
-  return { instance, signal: () => { for (const listener of [...listeners]) listener(); }, listeners };
+  return {
+    instance,
+    signal: () => { for (const listener of [...listeners]) listener(); },
+    windowState: (state) => {
+      window.state = state;
+      for (const listener of [...windowListeners]) listener(state);
+    },
+    listeners,
+    windowListeners,
+  };
+}
+
+// VS Code's window state: `active` moves when a focused window goes idle or comes back from idle.
+interface WindowState {
+  focused: boolean;
+  active: boolean;
 }
 
 const NONO = 'Ñoño\'s Retexture';
@@ -374,14 +402,14 @@ describe('Instance — the overwrite folder', () => {
 });
 
 describe('Instance — built by watching', () => {
-  it('listens for the adapter\'s signal from construction, before any read, until disposed', async () => {
-    const { instance, listeners } = await signalledInstance();
+  it('listens for the adapter\'s signal and the window\'s state from construction, before any read, until disposed', async () => {
+    const { instance, listeners, windowListeners } = await signalledInstance();
     expect(instance.sequence).toBe(0);
-    expect(listeners.size).toBe(1);
+    expect([listeners.size, windowListeners.size]).toEqual([1, 1]);
 
     instance.dispose();
 
-    expect(listeners.size).toBe(0);
+    expect([listeners.size, windowListeners.size]).toEqual([0, 0]);
   });
 
   it('recomputes once for a burst of the adapter\'s signals', async () => {
@@ -398,6 +426,50 @@ describe('Instance — built by watching', () => {
 
     // The burst's one recompute, plus this refresh — a per-signal recompute would land five more.
     expect(instance.sequence).toBe(before + 2);
+  });
+
+  // ADR-0015: focus is the one signal no watcher can lose.
+  it('recomputes when the window regains focus, and not when it loses it', async () => {
+    const { instance, windowState } = await signalledInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    windowState({ focused: false, active: false });
+    expect(await pastSequenceWithin(instance, before, 1000)).toBe(TIMED_OUT);
+    windowState({ focused: true, active: true });
+    expect(await pastSequenceWithin(instance, before, 2000)).not.toBe(TIMED_OUT);
+  });
+
+  it('recomputes nothing while the window keeps its focus', async () => {
+    const { instance, windowState } = await signalledInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    windowState({ focused: true, active: false });
+    windowState({ focused: true, active: true });
+
+    expect(await pastSequenceWithin(instance, before, 1000)).toBe(TIMED_OUT);
+  });
+
+  it('settles the window regaining focus with the adapter\'s signals, into one recompute', async () => {
+    const { instance, signal, windowState } = await signalledInstance();
+    await instance.refresh();
+    windowState({ focused: false, active: false });
+    const before = instance.sequence;
+
+    fakeSettleClock();
+    try {
+      signal();
+      await vi.advanceTimersByTimeAsync(150);
+      windowState({ focused: true, active: true });
+      await vi.advanceTimersByTimeAsync(150); // the signal's own settle has run out here
+      await instance.refresh();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The focus restarted the settle, so this refresh is the burst's one recompute.
+    expect(instance.sequence).toBe(before + 1);
   });
 
   it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
@@ -939,7 +1011,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // Rival: names the value spells itself, which names one manager over any other's instance.
   it('names the mod manager and its mod-order file as the adapter does, before the first read too', () => {
     const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
-    const instance = new Instance({ adapter, log: () => {}, logReadFailure: () => {} });
+    const instance = new Instance({ window: STEADY_WINDOW, adapter, log: () => {}, logReadFailure: () => {} });
     instances.push(instance);
 
     expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
@@ -949,6 +1021,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // keeps its folders.
   it('names no folder before the first read lands', () => {
     const instance = new Instance({
+      window: STEADY_WINDOW,
       adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
       log: () => {}, logReadFailure: () => {},
     });
@@ -976,6 +1049,7 @@ async function minimalInstance(): Promise<{
   const readFailureLines: string[] = [];
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
+    window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: () => resolve() }),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
