@@ -90,24 +90,18 @@ internal sealed class FakeReads(
     public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
 }
 
-/// <summary>The IQueryIndex door over a FakeReads: a settable status, since a hand
+/// <summary>The IQueryIndex door over a FakeReads: a settable status and sequence, since a hand
 /// double states what it needs rather than computing it.</summary>
 internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IQueryIndex
 {
     public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
     public (string Sql, string Source)? ActiveFilter { get; private set; }
-    public long Sequence => 0;
+    public long Sequence { get; set; }
     public GameRelease? LastRebuildRelease { get; private set; }
     public string? LastRebuildInstanceRoot { get; private set; }
     public IRecordReads RequireReads() => reads;
 
-    public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) =>
-        throw new NotSupportedException($"{GetType().Name} never projects.");
-
-    public bool Registers(PluginAddress key) => throw new NotSupportedException($"{GetType().Name} never projects.");
-
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin) =>
-        throw new NotSupportedException($"{GetType().Name} never projects.");
+    public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => Task.FromResult(Sequence >= atLeast);
 
     public void SetFilter(string sql, string source) => ActiveFilter = (sql, source);
 
@@ -138,10 +132,8 @@ internal sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
 
     public Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout) => throw ReadsOnly();
-    public bool Registers(PluginAddress key) => throw ReadsOnly();
     public void SetFilter(string sql, string source) => throw ReadsOnly();
     public void ClearFilter() => throw ReadsOnly();
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin) => throw ReadsOnly();
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot) => throw ReadsOnly();
 
     private NotSupportedException ReadsOnly() => new($"{GetType().Name} answers reads only.");

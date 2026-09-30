@@ -100,8 +100,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>Whether the store registers this plugin — validate's 404 question, answered
-    /// without handing out the store.</summary>
+    /// <summary>Whether the store registers this plugin, answered without handing out the store.
+    /// </summary>
     public bool Registers(PluginAddress key)
     {
         lock (_lock) return _index?.RegisteredPlugins().Contains(key, PluginAddress.Comparer) == true;

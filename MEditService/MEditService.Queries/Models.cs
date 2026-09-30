@@ -112,8 +112,3 @@ public record CreatableRecordType(string Type, string DisplayName);
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
-
-/// <summary>What one validate by hash found. PluginsRebuilt names the plugins that had moved too
-/// far for a per-key refresh and were re-derived whole, whose rows RowsChanged cannot name.</summary>
-public sealed record ReconcileResponse(
-    int Plugins, int RowsChanged, int PluginsRebuilt, long Sequence, IReadOnlyList<string> Failures);

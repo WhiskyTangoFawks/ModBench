@@ -179,20 +179,6 @@ public sealed class RecordQueryService(
 
     public void ClearFilter() => _index.ClearFilter();
 
-    public ReconcileResponse? ValidateIndex(PluginAddress? plugin)
-    {
-        if (plugin is { } named && !_index.Registers(named))
-            return null;
-
-        var reports = _index.ValidateIndex(plugin);
-        return new ReconcileResponse(
-            reports.Count,
-            reports.Sum(r => r.ChangedKeys.Count),
-            reports.Count(r => r.NeedsRebuild),
-            _index.Sequence,
-            [.. reports.SelectMany(r => r.Failures)]);
-    }
-
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
         _index.RebuildStore(gameRelease, instanceRoot);
 

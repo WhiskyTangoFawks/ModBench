@@ -1,6 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Queries.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -899,6 +900,58 @@ public sealed class RecordQueryServiceTests
         _svc.ClearFilter();
 
         Assert.Null(_manager.ActiveFilter);
+    }
+
+    [Fact]
+    public void GetFilter_IsTheFilterInForce_WithItsSource()
+    {
+        _manager.SetFilter("SELECT form_key FROM \"NPC_\"", "npcs.sql");
+
+        Assert.Equal(("SELECT form_key FROM \"NPC_\"", "npcs.sql"), _svc.GetFilter());
+    }
+
+    [Fact]
+    public void GetFilter_WithNoLoadOrder_RefusesRatherThanAnsweringUnfiltered()
+    {
+        var svc = new RecordQueryService(
+            new StubIndex(reads: null), new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
+    }
+
+    // --- the load order's status and the projection's sequence (ADR-0013, ADR-0015 invariant 3) ---
+
+    [Fact]
+    public void GetStatus_IsTheIndexsStatus()
+    {
+        var reconciling = new LoadOrderStatus(LoadOrderState.Reconciling, 3, [], false, []);
+        _manager.Status = reconciling;
+
+        Assert.Equal(reconciling, _svc.GetStatus());
+    }
+
+    [Fact]
+    public void GetSequence_IsTheIndexsSequence()
+    {
+        _manager.Sequence = 7;
+
+        Assert.Equal(7, _svc.GetSequence());
+    }
+
+    [Fact]
+    public async Task AwaitSequence_Reached_AnswersTheSequenceObserved_NotTheBound()
+    {
+        _manager.Sequence = 7;
+
+        Assert.Equal(new SequenceAwaitResponse(true, 7), await _svc.AwaitSequence(5, TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task AwaitSequence_NotReached_AnswersFalseAndTheSequenceObserved()
+    {
+        _manager.Sequence = 3;
+
+        Assert.Equal(new SequenceAwaitResponse(false, 3), await _svc.AwaitSequence(5, TimeSpan.FromSeconds(1)));
     }
 
     [Fact]

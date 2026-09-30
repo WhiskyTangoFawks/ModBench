@@ -1,4 +1,7 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
+using MEditService.Index;
+using MEditService.Queries;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
@@ -120,38 +123,56 @@ public sealed class WriteSideIndexScanTests
     // a handler is the write side reading its own effect through the API.
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
-    private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
+    // The rebuild's refusal is the Index's own exception, and it crosses Queries' RebuildStore
+    // unchanged (ADR-0009 invariant 5), so no signature carries it.
+    private static readonly string[] IndexTypesQueriesThrow = ["IndexHeldElsewhereException"];
 
-    // The read routes name the query services by definition, and the gate has its own fact below,
-    // so what is left is the store, the Indexer and the read surface.
-    private static readonly string[] ReadSideSymbols =
-        ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
-         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
+    // Read off the assemblies, so a type the Index adds is forbidden the day it lands. What a query
+    // service's own members take or answer crosses the endpoint as it is.
+    private static string[] IndexTypesNoQuerySignatureCarries() =>
+        [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
+            .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes()
+                .SelectMany(SignatureTypes)
+                .SelectMany(Unwrapped)
+                .Select(SourceName), StringComparer.Ordinal)
+            .Except(IndexTypesQueriesThrow, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)];
 
-    private static readonly string[] EndpointSymbols =
-        [.. Symbols.Except(ReadSideSymbols, StringComparer.Ordinal).Except(GateSymbols, StringComparer.Ordinal)];
+    private static IEnumerable<Type> SignatureTypes(Type type) =>
+        type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType))
+            .Concat(type.GetProperties().Select(p => p.PropertyType));
+
+    private static IEnumerable<Type> Unwrapped(Type type) =>
+        type.GetElementType() is { } element ? Unwrapped(element)
+        : type.IsGenericType ? type.GetGenericArguments().SelectMany(Unwrapped).Append(type.GetGenericTypeDefinition())
+        : [type];
+
+    private static string SourceName(Type type) => type.Name.Split('`')[0];
 
     [Fact]
-    public void NoEndpoint_NamesAnIndexType()
+    public void NoEndpoint_NamesAnIndexType_ButWhatAQueryServiceHandsIt()
     {
         var root = ArchitectureTests.SolutionDirectory();
+        var forbidden = IndexTypesNoQuerySignatureCarries();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], EndpointSymbols);
+        var named = Counts(root, [EndpointRoot], [], forbidden);
 
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
+        Assert.Contains("Indexer", forbidden);
         Assert.True(
             named.Count == 0,
-            "An endpoint names an Index type. A route takes a gesture's handler or a query service: "
-            + "Queries are the only readers of the read model (ADR-0014 invariant 3), and no arrow "
-            + "runs from the HTTP endpoints to the Index:\n"
+            "An endpoint names an Index type no query service hands it. A route takes a gesture's "
+            + "handler or a query service: Queries are the only readers of the read model (ADR-0014 "
+            + "invariant 3), and no arrow runs from the HTTP endpoints to the Index:\n"
             + string.Join("\n", named));
     }
 
     // The endpoints reference the Source repository and the watcher as the composition root, and
     // call neither: a route's one call is to a handler or a query service.
     private static readonly string[] UndrawnCallees =
-        ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch", "IRefreshIndex"];
+        ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch"];
 
     [Fact]
     public void NoEndpoint_NamesTheSourceRepositoryOrTheWatcher()
@@ -167,22 +188,6 @@ public sealed class WriteSideIndexScanTests
             "An endpoint names the Source repository or the Mod watcher. Neither arrow is drawn from "
             + "the HTTP endpoints; resolution under the load order is Commands' to hide, and the "
             + "watcher is told nothing:\n"
-            + string.Join("\n", named));
-    }
-
-    [Fact]
-    public void NoEndpoint_NamesTheIndexWriteGate()
-    {
-        var root = ArchitectureTests.SolutionDirectory();
-
-        var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], GateSymbols);
-
-        Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
-        Assert.True(
-            named.Count == 0,
-            "An endpoint names the Index's write gate. A record gesture writes its system of record "
-            + "and returns (ADR-0015 invariant 2), so the gate stays the Indexer's own:\n"
             + string.Join("\n", named));
     }
 

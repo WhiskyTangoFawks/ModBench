@@ -5,13 +5,11 @@ using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 
-/// <summary>The load order's status, sequence and record filter, and the index's validate and
-/// rebuild, each one Queries call and the wire translation of its answer (ADR-0014 invariant 3).
-/// </summary>
+/// <summary>The load order's status, sequence and record filter, and the index's rebuild, each one
+/// Queries call and the wire translation of its answer (ADR-0014 invariant 3).</summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
-    private const string IndexTag = "Index";
 
     public static IEndpointRouteBuilder MapIndexEndpoints(this IEndpointRouteBuilder app)
     {
@@ -54,23 +52,6 @@ public static class IndexEndpoints
             .WithTags(LoadOrderTag)
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
-
-        // ADR-0015 invariants 2 and 4: the Index's second way of learning of change. POST because it
-        // is a gesture with an effect, not state.
-        app.MapPost("/index/reconcile", Reconcile)
-            .WithName("ReconcileIndex")
-            .WithTags(IndexTag)
-            .WithDescription(
-                "Validates the index by content hash against the systems of record its rows came " +
-                "from — each source document at both refs for a tracked plugin, the binary for an " +
-                "untracked one — and refreshes what differs. Name one plugin with plugin and origin " +
-                "together, or omit both to check every registered plugin. Rows it changes are " +
-                "published on /notifications/stream as they land.")
-            .Produces<ReconcileResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(503)
-            .ProducesProblem(500);
 
         // ADR-0009 invariant 5: Refresh's own first step. The PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds the
@@ -167,40 +148,6 @@ public static class IndexEndpoints
         {
             logger.LogError(ex, "No load order when getting filter");
             return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-    }
-
-    private static IResult Reconcile(
-        IRecordQueryService svc, ILoggerFactory loggerFactory, string? plugin = null, string? origin = null)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(IndexEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received ReconcileIndex for {Plugin} ({Origin})", plugin ?? "every plugin", origin);
-        }
-
-        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
-            return Results.Problem("Name a plugin with both plugin and origin, or neither to check every plugin.", statusCode: 400);
-
-        PluginAddress? key = !string.IsNullOrWhiteSpace(plugin) && !string.IsNullOrWhiteSpace(origin)
-            ? new PluginAddress(plugin, origin)
-            : null;
-
-        try
-        {
-            return svc.ValidateIndex(key) is { } validated
-                ? Results.Ok(validated)
-                : Results.Problem($"No registered plugin '{plugin}' from '{origin}'.", statusCode: 404);
-        }
-        catch (NoLoadOrderException ex)
-        {
-            logger.LogWarning(ex, "No load order when reconciling the index");
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "Failed to reconcile the index");
-            return Results.Problem(ex.Message, statusCode: 500);
         }
     }
 

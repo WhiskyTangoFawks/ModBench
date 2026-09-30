@@ -1,5 +1,4 @@
 using MEditService.Index;
-using MEditService.LoadOrder;
 using MEditService.Ports;
 using Mutagen.Bethesda;
 
@@ -36,9 +35,5 @@ public interface IRecordQueryService
     (string Sql, string Source)? GetFilter();
     void SetFilter(string sql, string source);
     void ClearFilter();
-
-    /// <summary>Null when <paramref name="plugin"/> names a plugin the Index does not
-    /// register.</summary>
-    ReconcileResponse? ValidateIndex(PluginAddress? plugin);
     Task RebuildStore(GameRelease gameRelease, string instanceRoot);
 }

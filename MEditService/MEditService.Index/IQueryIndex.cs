@@ -4,9 +4,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014 invariant 3: the Index as Queries sees it — its reads, plus the filter and
-/// rebuild (target-architecture.d2 medit_core.queries). Every member has a caller in
-/// <c>MEditService.Queries</c>.</summary>
+/// <summary>ADR-0014 invariant 3: the Index as Queries, its only reader, sees it — the reads, the
+/// status, the sequence and the filter, plus setting and clearing the filter and the rebuild
+/// (target-architecture.d2 medit_core.queries).</summary>
 public interface IQueryIndex
 {
     /// <summary>Where the projection is and what it has established so far (ADR-0013): anything
@@ -30,15 +30,9 @@ public interface IQueryIndex
     /// Index has no store to read.</summary>
     IRecordReads RequireReads();
 
-    bool Registers(PluginAddress key);
-
     void SetFilter(string sql, string source);
 
     void ClearFilter();
-
-    /// <summary>ADR-0015 invariant 4: compares by content hash and repairs what differs, for one
-    /// plugin or, when null, every registered one.</summary>
-    IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin);
 
     Task RebuildStore(GameRelease gameRelease, string instanceRoot);
 }
