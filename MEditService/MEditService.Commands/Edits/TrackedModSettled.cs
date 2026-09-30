@@ -17,14 +17,19 @@ public sealed class TrackedModSettled
 
     public void Handle(LoadOrderSnapshot loadOrder, string modFolder)
     {
-        if (!SourceRepository.IsTracked(modFolder)) return;
-
         var plugins = loadOrder.Plugins
             .Where(plugin => string.Equals(
                 LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path), modFolder, StringComparison.Ordinal))
             .ToList();
         // The origin is the mod manager's name for the mod, which only a plugin of it carries.
         if (plugins is not [{ Origin: var origin }, ..]) return;
+
+        // A mod whose repository went has no tracked plugin left to differ.
+        if (!SourceRepository.IsTracked(modFolder))
+        {
+            _notifications.Publish(new ExternalChangeNotification(origin, []));
+            return;
+        }
 
         // plugins.md, Compile, story 5: an interrupted compile is a warning, not a change.
         if (CompileJournal.UnfinishedBatch(modFolder) is { } unfinished)

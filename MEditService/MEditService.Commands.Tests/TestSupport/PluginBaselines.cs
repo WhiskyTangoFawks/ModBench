@@ -13,7 +13,7 @@ internal static class PluginBaselines
     internal static IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> Of(IEnumerable<TreeFile> files) =>
     [
         .. files.GroupBy(file => PluginRootOf(file.RelativePath), StringComparer.Ordinal)
-            .Select(plugin => ((IReadOnlyList<TreeFile>)[.. plugin], new BaselineTrailers(plugin.Key, null, null, null))),
+            .Select(plugin => ((IReadOnlyList<TreeFile>)[.. plugin], new BaselineTrailers(plugin.Key, null, null))),
     ];
 
     private static string PluginRootOf(string relativePath) =>

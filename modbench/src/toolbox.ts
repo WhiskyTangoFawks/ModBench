@@ -7,7 +7,7 @@ import {
 } from './medit/reconcileNarrator';
 import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { publishChangedOutside, publishLoadDiagnoses } from './medit/loadDiagnostics';
+import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf, gameDirectoryResolver } from './instanceAdapter/gameDirectory';
 import { downloadsDirectoryResolver } from './instanceAdapter/downloadsDirectory';
@@ -229,10 +229,10 @@ function registerPluginListView(
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
-    publishDiagnoses: (reports) => publishLoadDiagnoses(
+    publishDiagnoses: (reports) => publishPluginWarnings(
       deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
-    publishChangedOutside: (plugins) => publishChangedOutside(
-      changedOutsideDiagnostics, (origin) => originFolder(instance.value.plugins, origin), plugins),
+    publishChangedOutside: (warnings) => publishPluginWarnings(
+      changedOutsideDiagnostics, (origin) => originFolder(instance.value.plugins, origin), warnings),
   }));
   session.pluginsTree = pluginsTree;
   const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {

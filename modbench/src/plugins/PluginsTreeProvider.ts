@@ -62,6 +62,9 @@ export interface PluginMatch {
   hasMatchingRecords: boolean;
 }
 
+/** A warning on one plugin's file, as the Problems panel shows it. */
+export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
+
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin — the row input (ADR-0015). */
   instance: InstanceView;
@@ -73,8 +76,9 @@ export interface PluginsTreeProviderOptions {
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
   publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
-  /** The Changed outside Modbench status's other surface, the Problems panel: every such plugin. */
-  publishChangedOutside?: (plugins: readonly PluginAddress[]) => void;
+  /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
+   *  such plugin. */
+  publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   /** ADR-0019: this provider states the severity, so a background blip and a failed read do not
    *  land on the same channel level. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
@@ -248,11 +252,14 @@ function factFlags(facts: PluginFacts | undefined): string[] {
   return flags;
 }
 
+// The status's words beyond the row, in its tooltip and the Problems panel.
+const CHANGED_OUTSIDE_TEXT = 'Changed outside Modbench: its bytes differ from what Modbench last wrote.';
+
 function changedOutsideStatus(changed: boolean): PluginStatus | undefined {
   if (!changed) return undefined;
   return {
     kind: 'changedOutside', words: 'changed outside Modbench',
-    tooltipLine: 'Changed outside Modbench: its bytes differ from what Modbench last wrote.',
+    tooltipLine: CHANGED_OUTSIDE_TEXT,
   };
 }
 
@@ -281,7 +288,7 @@ export class PluginsTreeProvider
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
-  private readonly publishChangedOutside?: (plugins: readonly PluginAddress[]) => void;
+  private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
@@ -336,13 +343,11 @@ export class PluginsTreeProvider
   // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
   // Modbench, so it replaces what the mod's last settle named.
   private applyExternalChange(event: NotificationEvent): void {
-    for (const [key, plugin] of this.changedOutside) {
-      if (plugin.origin === event.origin) this.changedOutside.delete(key);
-    }
-    for (const { name } of event.changedPlugins ?? []) {
-      this.changedOutside.set(pluginAddressKey(name, event.origin), { name, origin: event.origin });
-    }
-    this.publishChangedOutside?.([...this.changedOutside.values()]);
+    this.changedOutsideByMod.set(event.origin, (event.changedPlugins ?? []).map(({ name }) => ({ name, origin: event.origin })));
+    const changed = [...this.changedOutsideByMod.values()].flat();
+    this.changedOutside = new ByPluginAddress<true>();
+    for (const { name, origin } of changed) this.changedOutside.set(name, origin, true);
+    this.publishChangedOutside?.(changed.map(({ name, origin }) => ({ plugin: name, origin, text: CHANGED_OUTSIDE_TEXT })));
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -625,7 +630,7 @@ export class PluginsTreeProvider
       failedToLoadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
-      changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(pluginAddressKey(file, joinedOrigin))),
+      changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),
       malformedStatus(this.diagnoses?.get(file, joinedOrigin) ?? []),
     ];
     return statuses.filter((s): s is PluginStatus => s !== undefined);
@@ -638,7 +643,8 @@ export class PluginsTreeProvider
   private someCompilable = false;
   private matches?: ByPluginAddress<boolean>;
   private diagnoses?: ByPluginAddress<string[]>;
-  private readonly changedOutside = new Map<string, PluginAddress>();
+  private readonly changedOutsideByMod = new Map<string, readonly PluginAddress[]>();
+  private changedOutside = new ByPluginAddress<true>();
   // Row status only (plugins.md, A row: "no blink") — merges across a reload's ticks and
   // persists until `applyReconciled` lands the new answer.
   private loadFailures = new ByPluginAddress<string>();

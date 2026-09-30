@@ -927,7 +927,7 @@ export interface components {
             pluginsTotal: number;
         };
         /** @enum {string} */
-        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable" | "StoppedByEarlierFailure";
+        TrackRefusal: "None" | "PluginNotLoaded" | "AlreadyTracked" | "DataDirectoryOrigin" | "RoundTripFailed" | "MissingLocalizationStrings" | "CommitFailed" | "GitUnavailable";
         TrackRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             preset: string;

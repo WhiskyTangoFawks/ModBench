@@ -356,21 +356,16 @@ public sealed partial class SourceRepository
 
     /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
     /// clean.</summary>
-    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
-        [.. ParseStatus(modFolder).Select(e => e.Path)];
-
-    // A rename/copy's old path rides a second NUL-terminated token with no code of its own — dropped
-    // below rather than misread as an unrelated entry.
-    private readonly record struct StatusEntry(string Path, char IndexStatus, char WorktreeStatus);
-
-    private static List<StatusEntry> ParseStatus(string modFolder)
+    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
     {
         if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "status", "--porcelain=v1", "-z")) return [];
 
-        var entries = new List<StatusEntry>();
+        // A rename/copy's old path rides a second NUL-terminated token with no code of its own —
+        // skipped rather than misread as an unrelated entry.
+        var paths = new List<string>();
         var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var i = 0;
         while (i < tokens.Length)
@@ -378,14 +373,14 @@ public sealed partial class SourceRepository
             var entry = tokens[i];
             i++;
             if (entry.Length < 4) continue;
-            entries.Add(new StatusEntry(entry[3..], entry[0], entry[1]));
+            paths.Add(entry[3..]);
             if (entry[0] is 'R' or 'C') i++;
         }
-        return entries;
+        return paths;
     }
 
     /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref, a baseline or a compile
-    /// snapshot, each holding one plugin. Null degrades to asking the dialog.</summary>
+    /// snapshot, each holding one plugin. Null when the ref or its trailer is missing.</summary>
     public static string? ParkedCompileBinarySha256(string modFolder, string plugin)
     {
         if (!IsTracked(modFolder)) return null;

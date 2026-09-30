@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Fallout4;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The gestures a scalar FormLink column has: a write that lands, and the
-/// <c>RefuseIfBlocked</c> doors, which close before any column is looked up.</summary>
+/// <c>RefuseUnlessTrackedAndLoaded</c> doors, which close before any column is looked up.</summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -48,7 +48,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
             "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
-    // RefuseIfBlocked runs before any
+    // RefuseUnlessTrackedAndLoaded runs before any
     // column is even looked up, so this inherits unconditionally of Apply.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginIsUntracked()
@@ -62,8 +62,8 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
     }
 
-    // The other RefuseIfBlocked outcome (a vanilla/DLC master with no mod folder to Track at all),
-    // the same unconditional-of-Apply gate as the untracked case above.
+    // The other RefuseUnlessTrackedAndLoaded outcome (a vanilla/DLC master with no mod folder to
+    // Track at all), the same unconditional-of-Apply gate as the untracked case above.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginHasNoModFolder()
     {

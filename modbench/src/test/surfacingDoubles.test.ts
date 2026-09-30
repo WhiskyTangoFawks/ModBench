@@ -116,8 +116,6 @@ describe('the scripted dialog', () => {
     const outcomes = await offerTwice(dialog);
 
     expect(outcomes).toEqual([false, true]);
-    // What the question says is eslFlagRemovalPrompt.test.ts's to pin; what the double owes is that
-    // each question reached it whole, in the order the consumer posed them.
     expect(dialog.asked.map((q) => q.message.split('"')[1])).toEqual(['A.esl', 'B.esl']);
     expect(dialog.asked.map((q) => q.buttons)).toEqual([[ACCEPT], [ACCEPT]]);
   });

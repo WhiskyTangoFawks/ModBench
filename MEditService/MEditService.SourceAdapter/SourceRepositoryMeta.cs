@@ -1,27 +1,12 @@
-using System.Security.Cryptography;
-
 namespace MEditService.SourceAdapter;
 
-/// <summary>What the mod folder's <c>meta.ini</c> says, as the repository answers it: the upstream
-/// version, and the file's own hash, opaque and never interpreted. Both null when there is no such
-/// file (ADR-0003).</summary>
-public sealed record ModMetaFacts(string? UpstreamVersion, string? MetaSha256);
-
-/// <summary>The mod folder's own meta file, which the layout names and nothing outside the
-/// repository reads.</summary>
+/// <summary>The mod folder's own meta file, <c>meta.ini</c>, read as a source and never tracked
+/// content (ADR-0003): the layout names it and nothing outside the repository reads it.</summary>
 public sealed partial class SourceRepository
 {
-    /// <summary>What Track's baseline trailers record, from one pass over the folder.</summary>
-    public static ModMetaFacts MetaFactsIn(string modFolder) =>
-        new(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder));
-}
-
-/// <summary><c>meta.ini</c> read as a source, never tracked content (ADR-0003).</summary>
-internal static class MetaIni
-{
-    /// <summary>The <c>version=</c> value, or null when absent — authored/manually-installed mods
-    /// routinely have neither file nor line.</summary>
-    internal static string? ReadVersion(string modFolder)
+    /// <summary>The <c>version=</c> value Track's baseline trailers record, or null when absent —
+    /// authored and manually-installed mods routinely have neither file nor line.</summary>
+    public static string? UpstreamVersionIn(string modFolder)
     {
         var metaPath = Path.Combine(modFolder, "meta.ini");
         if (!File.Exists(metaPath)) return null;
@@ -34,12 +19,5 @@ internal static class MetaIni
         }
 
         return null;
-    }
-
-    /// <summary>SHA-256 of <c>meta.ini</c>'s raw bytes, or null when absent — opaque, never interpreted.</summary>
-    internal static string? ComputeSha256(string modFolder)
-    {
-        var metaPath = Path.Combine(modFolder, "meta.ini");
-        return File.Exists(metaPath) ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(metaPath))) : null;
     }
 }

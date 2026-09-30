@@ -19,7 +19,7 @@ internal static class PristineFileWriter
 
 /// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007 invariant 6),
 /// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
-public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
+public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
 
 /// <summary>The two <c>.gitignore</c> presets ADR-0007 names: Edits tracks source only; Everything
 /// additionally tracks assets. Plugin binaries and <c>meta.ini</c> are ignored in both.</summary>
@@ -148,7 +148,6 @@ public sealed partial class SourceRepository
     {
         List<string> lines = [subject, "", $"Plugin: {trailers.Plugin}"];
         if (trailers.UpstreamVersion is { } upstreamVersion) lines.Add($"Upstream-Version: {upstreamVersion}");
-        if (trailers.MetaSha256 is { } metaSha256) lines.Add($"Meta-SHA256: {metaSha256}");
         if (trailers.BinarySha256 is { } binarySha256) lines.Add($"Binary-SHA256: {binarySha256}");
         return string.Join('\n', lines) + "\n";
     }

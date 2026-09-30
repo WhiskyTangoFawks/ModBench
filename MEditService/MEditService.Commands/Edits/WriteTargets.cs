@@ -37,9 +37,9 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out var openedRepository) is { } blocked) return blocked;
+        if (RefuseUnlessTrackedAndLoaded(plugin, out var openedRepository) is { } blocked) return blocked;
         var repository = openedRepository
-            ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         try
@@ -104,10 +104,10 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out var openedDestinationRepository)
+        if (RefuseUnlessTrackedAndLoaded(destinationPlugin, out var openedDestinationRepository)
             is { } blocked) return blocked;
         var destinationRepository = openedDestinationRepository
-            ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
+            ?? throw new InvalidOperationException("Expected RefuseUnlessTrackedAndLoaded to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
@@ -146,7 +146,7 @@ internal sealed class WriteTargets(
             $"EditorID rather than the record: {why}");
 
     // The six record gestures enter here first.
-    internal RecordEditResult? RefuseIfBlocked(PluginAddress plugin, out SourceRepository? repository)
+    internal RecordEditResult? RefuseUnlessTrackedAndLoaded(PluginAddress plugin, out SourceRepository? repository)
     {
         repository = null;
 

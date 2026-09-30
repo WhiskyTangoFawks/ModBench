@@ -95,7 +95,7 @@ public sealed class LoadOrderChangeSettleTests
     }
 
     [Fact]
-    public async Task ALoad_WarnsCompileUnfinished_AndTellsNoChange_WhenAJournalMarkerIsUnanswered()
+    public async Task ALoad_WarnsCompileUnfinished_AndTellsNoChange_WhenACompileLeftItsMark()
     {
         var (tree, modFolder) = TrackedBeforeWatching();
         using var _ = tree;

@@ -31,7 +31,7 @@ public sealed class SourceRepositoryTrackTests : IDisposable
     {
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits,
-            [(SourceOf("Test.esp"), new BaselineTrailers("Test.esp", UpstreamVersion: null, MetaSha256: null, BinarySha256: "ABCDEF0123"))]);
+            [(SourceOf("Test.esp"), new BaselineTrailers("Test.esp", UpstreamVersion: null, BinarySha256: "ABCDEF0123"))]);
 
         Assert.Equal("Track Test.esp", Git("log", "-1", "--format=%s", "main").Trim());
         Assert.Equal("Plugin: Test.esp\nBinary-SHA256: ABCDEF0123", Git("log", "-1", "--format=%(trailers:only,unfold)", "main").Trim());

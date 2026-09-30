@@ -8,7 +8,7 @@ import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
   type WorldspaceSummary, type WorldspaceBlocks, type InteriorCellBlock, type RecordSummary, type CellReferences,
-  type ContainerChildSummary, type CellSummary, type PlacedSummary, type PluginAddress,
+  type ContainerChildSummary, type CellSummary, type PlacedSummary,
 } from '../../client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -172,7 +172,7 @@ function makeTree(
     instance: FakeInstance;
     client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
-    publishChangedOutside: (plugins: readonly PluginAddress[]) => void;
+    publishChangedOutside: PluginsTreeProviderOptions['publishChangedOutside'];
     dataFolderFile: (name: string) => string | undefined;
     implicitMasters: () => Promise<readonly string[] | undefined>;
     reporter: PluginsTreeProviderOptions['reporter'];
@@ -3077,18 +3077,21 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
     expect((await rowItem(h)).description).toBeUndefined();
   });
 
-  it('publishes every plugin that changed outside Modbench for the Problems panel, each mod\'s settle replacing its own', () => {
-    const published: (readonly PluginAddress[])[] = [];
-    const h = makeTree([A_ROW()], { publishChangedOutside: (plugins) => published.push(plugins) });
+  it('publishes a warning on every plugin that changed outside Modbench for the Problems panel, each mod\'s settle replacing its own', () => {
+    const published: string[][] = [];
+    const h = makeTree([A_ROW()], {
+      publishChangedOutside: (warnings) => published.push(warnings.map((w) => `${w.origin}/${w.plugin}: ${w.text}`)),
+    });
 
     settled(h, 'SomeMod', 'A.esp');
     settled(h, 'OtherMod', 'C.esp');
     settled(h, 'SomeMod');
 
+    const said = ': Changed outside Modbench: its bytes differ from what Modbench last wrote.';
     expect(published).toEqual([
-      [{ name: 'A.esp', origin: 'SomeMod' }],
-      [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'C.esp', origin: 'OtherMod' }],
-      [{ name: 'C.esp', origin: 'OtherMod' }],
+      [`SomeMod/A.esp${said}`],
+      [`SomeMod/A.esp${said}`, `OtherMod/C.esp${said}`],
+      [`OtherMod/C.esp${said}`],
     ]);
   });
 });

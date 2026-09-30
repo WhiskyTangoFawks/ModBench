@@ -88,18 +88,6 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             ? null
             : Path.GetDirectoryName(pluginPath);
 
-    /// <summary>The folder every plugin under one origin shares, for a gesture the mod folder is the
-    /// unit of. Null when no registered plugin carries the origin.</summary>
-    public string? ModFolderOfOrigin(string origin) =>
-        Plugins.FirstOrDefault(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)) is { } plugin
-            ? ModFolderOf(plugin.Origin, plugin.Path)
-            : null;
-
-    /// <summary>Every plugin the mod holds, for a gesture the mod is the unit of — Absorb and
-    /// Keep.</summary>
-    public IReadOnlyList<RegisteredPlugin> PluginsOfOrigin(string origin) =>
-        [.. Plugins.Where(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))];
-
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two plugins
     /// that share a filename, so the filename alone does not say which.</summary>
     public RegisteredPlugin? Plugin(PluginAddress address) => Plugins.FirstOrDefault(c => SameAddress(c, address));

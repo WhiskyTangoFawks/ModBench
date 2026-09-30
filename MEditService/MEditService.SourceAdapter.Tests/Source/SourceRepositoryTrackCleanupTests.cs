@@ -96,7 +96,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     }
 
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
-        ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null, null));
+        ([new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null));
 
     // The first file lands where the second needs a directory, so the write fails after some of the
     // plugin's files are already on disk.
@@ -104,7 +104,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         ([
             new TreeFile($"source/{plugin}/npc_", "{}"u8.ToArray()),
             new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),
-        ], new BaselineTrailers(plugin, null, null, null));
+        ], new BaselineTrailers(plugin, null, null));
 
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);

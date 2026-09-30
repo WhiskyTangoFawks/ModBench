@@ -35,7 +35,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfBothPluginsOfAMod_CommitsTheModsOwnFiles_ThenEachPluginOnItsOwn()
     {
-        var metaSha256 = WriteMetaIni("[General]\nversion=1.2.3\n");
+        WriteMetaIni("[General]\nversion=1.2.3\n");
         var first = WritePlugin("First.esp", "FirstNpc");
         var second = WritePlugin("Second.esp", "SecondNpc");
 
@@ -44,10 +44,10 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
         Assert.Equal(
-            $"Plugin: First.esp\nUpstream-Version: 1.2.3\nMeta-SHA256: {metaSha256}\nBinary-SHA256: {first}\n",
+            $"Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {first}\n",
             TrailersOf("main~1"));
         Assert.Equal(
-            $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nMeta-SHA256: {metaSha256}\nBinary-SHA256: {second}\n",
+            $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {second}\n",
             TrailersOf("main"));
         Assert.Equal("edit", Git("symbolic-ref", "--short", "HEAD").Trim());
         Assert.Equal(Git("rev-parse", "refs/heads/main"), Git("rev-parse", "refs/heads/edit"));
@@ -56,7 +56,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfAModWithNoRecordedVersion_LeavesTheVersionOutOfEverySubjectAndTrailer()
     {
-        var metaSha256 = WriteMetaIni("[General]\ngameName=Fallout4\n");
+        WriteMetaIni("[General]\ngameName=Fallout4\n");
         var first = WritePlugin("First.esp", "FirstNpc");
         var second = WritePlugin("Second.esp", "SecondNpc");
 
@@ -64,8 +64,8 @@ public sealed class TrackCommitShapeTests : IDisposable
 
         Assert.Empty(result.Refused);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
-        Assert.Equal($"Plugin: First.esp\nMeta-SHA256: {metaSha256}\nBinary-SHA256: {first}\n", TrailersOf("main~1"));
-        Assert.Equal($"Plugin: Second.esp\nMeta-SHA256: {metaSha256}\nBinary-SHA256: {second}\n", TrailersOf("main"));
+        Assert.Equal($"Plugin: First.esp\nBinary-SHA256: {first}\n", TrailersOf("main~1"));
+        Assert.Equal($"Plugin: Second.esp\nBinary-SHA256: {second}\n", TrailersOf("main"));
     }
 
     [Fact]
@@ -231,12 +231,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         }
     }
 
-    private string WriteMetaIni(string text)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
-        File.WriteAllBytes(Path.Combine(_modFolder, "meta.ini"), bytes);
-        return Convert.ToHexString(SHA256.HashData(bytes));
-    }
+    private void WriteMetaIni(string text) => File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), text);
 
     // The binary's own SHA-256, computed here from the bytes on disk.
     private string WritePlugin(string name, string editorId)

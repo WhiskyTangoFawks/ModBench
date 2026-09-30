@@ -1,37 +1,17 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import type { PluginAddress, PluginDiagnosisReport } from '../client';
+import type { PluginDiagnosisReport } from '../client';
 // Type only, so nothing of Mod Management is linked in: the contract for "where this origin's
 // files live" belongs beside the rows that answer it.
 import type { OriginFolder } from '../instanceLoader/loadOrderSnapshot';
 
-/** Targets the plugin binary itself — these plugins are pre-Track, so there is no source-tree
- *  file to point at, and one scan answers for the whole load order. Warning severity: a
- *  Malformed plugin still loads and plays. */
-export function publishLoadDiagnoses(
+/** Targets the plugin binary itself, which is where a malformed plugin's diagnoses and a change
+ *  outside Modbench both live, and one call answers for the whole load order. Warning severity:
+ *  such a plugin still loads and plays. */
+export function publishPluginWarnings(
   collection: vscode.DiagnosticCollection,
   originFolder: OriginFolder,
-  reports: PluginDiagnosisReport[],
-): void {
-  publishOnPluginFiles(collection, originFolder, reports);
-}
-
-/** plugins.md, A row: a warning on each plugin file whose bytes differ from what Modbench last
- *  wrote. */
-export function publishChangedOutside(
-  collection: vscode.DiagnosticCollection,
-  originFolder: OriginFolder,
-  plugins: readonly PluginAddress[],
-): void {
-  publishOnPluginFiles(collection, originFolder, plugins.map((p) => ({
-    plugin: p.name, origin: p.origin, text: 'Changed outside Modbench: its bytes differ from what Modbench last wrote.',
-  })));
-}
-
-function publishOnPluginFiles(
-  collection: vscode.DiagnosticCollection,
-  originFolder: OriginFolder,
-  entries: readonly { plugin: string; origin: string; text: string }[],
+  entries: readonly Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>[],
 ): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
