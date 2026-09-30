@@ -10,7 +10,6 @@ import type { MoveToTrash } from '../ports/trash';
 import {
   createEmptyMod,
   deleteSeparators,
-  folderNamesOf,
   insertSeparator,
   moveMods,
   moveSeparators,
@@ -53,7 +52,7 @@ export function registerModEnableCommands(
     if (modNames.length === 0) return;
     const verb = enabled ? 'enable' : 'disable';
     const profile = instance.value.activeProfile;
-    const result = await setModsEnabled(access.instanceRoot, profile, modNames, enabled);
+    const result = await setModsEnabled(access, profile, modNames, enabled);
     if (!result.applied) {
       reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
       return;
@@ -104,7 +103,7 @@ export function registerModMoveCommand(
     if (modNames.length > 0 && separatorNames.length === 0) {
       const target = given ?? await pick(modsMovePick(entries, direction, modNames), 'Move to…');
       if (!target) return;
-      report('mod', modNames.length, await moveMods(access.instanceRoot, activeProfile, modNames, target.place, target.end));
+      report('mod', modNames.length, await moveMods(access, activeProfile, modNames, target.place, target.end));
     } else if (separatorNames.length > 0 && modNames.length === 0) {
       const target = given ?? await pick(separatorsMovePick(entries, direction, separatorNames), 'Move above…');
       if (!target) return;
@@ -113,7 +112,7 @@ export function registerModMoveCommand(
         return;
       }
       report('separator', separatorNames.length,
-        await moveSeparators(access.instanceRoot, activeProfile, separatorNames, target.place, target.end));
+        await moveSeparators(access, activeProfile, separatorNames, target.place, target.end));
     }
   });
 }
@@ -140,7 +139,7 @@ export function registerModContextCommands(
         if (mods.length === 0) return;
         if (!(await confirmUninstall(mods.map((m) => m.name), ask))) return;
         const profile = instance.value.activeProfile;
-        const result = await uninstallMods(access.instanceRoot, profile, mods, instance.value.paths.downloadsDir, trash);
+        const result = await uninstallMods(access, profile, mods, trash);
         if (!result.applied) {
           reporter.report('error', 'Failed to uninstall mods.', result.refusal);
           return;
@@ -158,8 +157,8 @@ export function registerModContextCommands(
       }),
   ];
 }
-function separatorNamePrompt(instance: Pick<Instance, 'value'>, own?: string): (value: string) => string | undefined {
-  return (value) => (value === '' ? undefined : separatorNameRefusal(instance.value.mods, value, own));
+function separatorNamePrompt(access: ModlistAccess, own?: string): (value: string) => Promise<string | undefined> {
+  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, value, own));
 }
 
 export function registerSeparatorCommands(
@@ -172,30 +171,30 @@ export function registerSeparatorCommands(
         if (!node) return;
         const oldName = node.separator.name;
         const newName = await vscode.window.showInputBox({
-          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(instance, oldName),
+          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, oldName),
         });
         if (!newName || newName === oldName) return;
         await reportFailure(reporter, 'Failed to rename separator.', async () => {
-          applyOrThrow(await renameSeparator(access.instanceRoot, instance.value.activeProfile, oldName, newName));
+          applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
         });
       }),
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
         const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(instance),
+          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(access),
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;
         await reportFailure(reporter, 'Failed to add separator.', async () => {
           applyOrThrow(await insertSeparator(
-            access.instanceRoot, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
+            access, instance.value.activeProfile, name, { kind: anchor.kind, name: anchor.name }));
         });
       }),
       registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
-        const result = await deleteSeparators(access.instanceRoot, instance.value.activeProfile, names, trash);
+        const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
         if (!result.applied) {
           reporter.report('error', 'Failed to delete separators.', result.refusal);
           return;
@@ -223,7 +222,7 @@ export function registerCreateEmptyModCommand(
     if (!name) return;
     try {
       const profile = instance.value.activeProfile;
-      const outcome = await createEmptyMod(access.instanceRoot, profile, name, folderNamesOf(instance.value.modFolders ?? []));
+      const outcome = await createEmptyMod(access, profile, name);
       applyOrThrow(outcome);
       if (outcome.lineRefusal !== undefined) {
         reporter.report(
@@ -241,9 +240,10 @@ export function registerOpenFolderCommand(
 ): vscode.Disposable {
   return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
     const anchor = entry.clicked ?? entry.focused;
-    const target = (anchor instanceof ModNode || anchor instanceof OverwriteNode) ? folderOf(instance, anchor) : undefined;
-    if (!target) return;
+    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode)) return;
+    const target = folderOf(instance, anchor);
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
+      if (target.folder === undefined) throw new Error('No folder holds it.');
       await vscode.commands.executeCommand('revealInExplorer', target.folder);
     });
   });
@@ -261,10 +261,10 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 // path function, and the value carries its answer.
 function folderOf(
   instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
-): { name: string; folder: vscode.Uri } | undefined {
+): { name: string; folder: vscode.Uri | undefined } {
   if (node.kind === OVERWRITE_NODE_KIND) return { name: 'Overwrite', folder: vscode.Uri.file(instance.value.paths.overwriteDir) };
   const folder = instance.value.paths.modDirs.get(node.mod.name);
-  return folder === undefined ? undefined : { name: node.mod.name, folder: vscode.Uri.file(folder) };
+  return { name: node.mod.name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
 }
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a

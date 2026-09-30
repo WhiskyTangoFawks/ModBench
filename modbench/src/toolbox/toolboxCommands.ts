@@ -26,7 +26,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
         { placeHolder: 'Switch profile' },
       );
       if (!picked || picked.label === active) return;
-      const outcome = await switchProfile(access.instanceRoot, picked.label, profiles);
+      const outcome = await switchProfile(access, picked.label, profiles);
       if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
     }),
     vscode.commands.registerCommand('modbench.settings.open', () =>

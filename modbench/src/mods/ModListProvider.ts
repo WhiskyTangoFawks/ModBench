@@ -336,7 +336,7 @@ export class ModListProvider
   // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const profile = this.instanceValue.activeProfile;
-    const result = await setModsEnabledCommand(this.access.instanceRoot, profile, [modName], enabled);
+    const result = await setModsEnabledCommand(this.access, profile, [modName], enabled);
     if (!result.applied) throw new Error(result.refusal);
     const refusal = result.outcome.refused[0];
     if (refusal) throw new Error(refusal.reason);

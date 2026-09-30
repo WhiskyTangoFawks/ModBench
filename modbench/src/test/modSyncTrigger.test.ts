@@ -15,7 +15,6 @@ import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
 import { accessTo, adapterOver } from './mo2/adapterOver';
-import { modsDir } from '../instanceAdapter/layout';
 import { present } from '../ports/present';
 
 const MOD = 'Freshly Installed Mod';
@@ -122,26 +121,27 @@ describe('registerModSync — driven by the Instance value', () => {
     const { root, instance, channel, syncs } = await wiredInstance();
     const settled = await modlistText(root);
     const before = instance.sequence;
-    await rm(modsDir(root), { recursive: true, force: true });
+    await rm(join(root, 'mods'), { recursive: true, force: true });
 
-    watcherFor('mods/**').fireDelete(modsDir(root));
+    watcherFor('mods/**').fireDelete(join(root, 'mods'));
     await pastSequence(instance, before);
     await syncs[syncs.length - 1];
 
     expect(await modlistText(root)).toBe(settled);
     expect(channel.error).toHaveBeenCalledTimes(1);
-    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining(modsDir(root)));
+    expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('there is no folder for mods'));
   });
 
   // The folders come off the value, so the command never lists mods/.
   // Rival: a trigger that lists the directory itself and hands that instead.
   it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
-    const { root, instance, handed } = await wiredInstance();
+    const { root, instance, handed, syncs } = await wiredInstance();
     const before = instance.sequence;
     await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
 
     watcherFor('mods/**').fireCreate(join(root, 'mods', 'Hand Extracted Mod'));
     const value = await pastSequence(instance, before);
+    await syncs[syncs.length - 1];
 
     expect(handed[handed.length - 1]).toBe(value.modFolders);
     expect(value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
