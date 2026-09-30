@@ -2060,8 +2060,8 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
 
 // commands.md, `refresh`: mEdit reads every plugin again against the load order it holds, and the
 // re-read of the instance that follows finds that load order unchanged.
-describe('Refresh rebuilds the index and sends nothing', () => {
-  // Launched, so a re-read that changed the load order would put it.
+describe('Refresh rebuilds the index, then re-reads the instance', () => {
+  // Launched, so the re-read puts the load order.
   beforeEach(async () => {
     await resetMockBackendDetached();
     await enterEditing();
@@ -2069,11 +2069,14 @@ describe('Refresh rebuilds the index and sends nothing', () => {
   });
   after(() => resetMockBackend());
 
-  it('POSTs /index/rebuild and PUTs no load order', async () => {
+  // ADR-0013, invariant 1: the re-read is a recompute, and every recompute puts the snapshot.
+  it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
-    assert.ok(requestLog.includes('POST /index/rebuild'), 'modbench.instance.refresh must rebuild the index');
-    assert.ok(!requestLog.includes('PUT /load-order'), 'modbench.instance.refresh must send no load order');
+    const rebuilt = requestLog.indexOf('POST /index/rebuild');
+    assert.ok(rebuilt !== -1, 'modbench.instance.refresh must rebuild the index');
+    await waitFor('a PUT /load-order after the rebuild',
+      () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
   });
 
   // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,
