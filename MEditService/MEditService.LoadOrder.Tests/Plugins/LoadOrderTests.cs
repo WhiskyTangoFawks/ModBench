@@ -153,4 +153,26 @@ public sealed class LoadOrderTests
         Assert.Equal("ModB", pluginB.Origin);
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModC")));
     }
+
+    // ADR-0012 invariant 2: the game's Data folder and Overwrite are origins, not mods — neither
+    // one is a folder a repository can live in.
+    [Fact]
+    public void ModFolderOf_OnDataDirectoryOrOverwrite_IsNull()
+    {
+        var order = Order(
+            Registered("Vanilla.esp", PluginOrigin.DataDirectory, slot: 0),
+            Registered("Stray.esp", PluginOrigin.Overwrite, slot: 1));
+
+        Assert.Null(order.ModFolderOf(new PluginAddress("Vanilla.esp", PluginOrigin.DataDirectory)));
+        Assert.Null(order.ModFolderOf(new PluginAddress("Stray.esp", PluginOrigin.Overwrite)));
+    }
+
+    [Fact]
+    public void ModFolderOf_OnAMod_IsThePluginsContainingFolder()
+    {
+        var plugin = Registered("A.esp", "ModA", slot: 0);
+        var order = Order(plugin);
+
+        Assert.Equal(Path.Combine(@"C:\MO2\mods", "ModA"), order.ModFolderOf(plugin.Key));
+    }
 }

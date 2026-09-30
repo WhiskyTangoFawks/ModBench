@@ -77,16 +77,22 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>The three facts one plugin is registered with, or null when it is not registered.</summary>
     public Registration? Registration(PluginAddress address) => Plugin(address)?.Registration;
 
-    /// <summary>The folder holding the plugin's file, or null for a master resolved from the game's
-    /// own Data directory (Track does not apply there) or a plugin none registered here names.</summary>
+    /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
+    /// Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
+    /// names.</summary>
     public string? ModFolderOf(PluginAddress plugin) =>
         Plugin(plugin) is { } registered ? ModFolderOf(registered.Origin, registered.Path) : null;
 
     /// <summary>The same rule for a caller already holding a plugin's origin and path.</summary>
     public static string? ModFolderOf(string origin, string pluginPath) =>
         string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(origin, PluginOrigin.Overwrite, StringComparison.OrdinalIgnoreCase)
             ? null
             : Path.GetDirectoryName(pluginPath);
+
+    /// <summary>The folder holding the plugin's file, every origin alike: unlike ModFolderOf, Data
+    /// and Overwrite answer their own folder rather than null.</summary>
+    public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two plugins
     /// that share a filename, so the filename alone does not say which.</summary>

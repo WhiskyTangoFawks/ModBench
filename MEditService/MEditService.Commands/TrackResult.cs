@@ -19,6 +19,10 @@ public enum TrackRefusal
     /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007).</summary>
     DataDirectoryOrigin,
 
+    /// <summary>The origin is Overwrite, not a mod; the way out is moving the plugin into one
+    /// (ADR-0012 invariant 2).</summary>
+    OverwriteOrigin,
+
     /// <summary>ADR-0006 decision 2's gate: the plugin does not survive its own source, or cannot be
     /// read or deep-parsed at all. A data problem in the plugin, not a state conflict.</summary>
     RoundTripFailed,
