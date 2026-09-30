@@ -651,7 +651,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  it('plugin menu: reveal, enable or disable, track, compile, compile from main, copy value', () => {
+  it('plugin menu: reveal, enable or disable, create record, track, compile, copy value', () => {
     expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
@@ -661,6 +661,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
+      ['modbench.record.create', '3_create'],
       ['modbench.plugin.compile', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
@@ -679,7 +680,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ['in the game folder', 'plugin enabled untracked editable'],
     ['tracked but read-only', 'plugin enabled inMod tracked'],
     ['not yet described by mEdit', 'plugin enabled inMod'],
-  ])('plugin menu on a plugin %s: neither track nor compile', (_what, contextValue) => {
+  ])('plugin menu on a plugin %s: neither track, create record nor compile', (_what, contextValue) => {
     expect(menuOf(contextValue)).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
@@ -699,6 +700,11 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
     expect(menuOf('recordType untracked editable')).toEqual([]);
     expect(menuOf('recordType tracked')).toEqual([]);
+  });
+
+  // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records.
+  it.each(['worldspaces', 'interiorCells'])('offers no create record on the %s group', (contextValue) => {
+    expect(menuOf(contextValue).map(([command]) => command)).not.toContain('modbench.record.create');
   });
 
   it.each(['record', 'worldspace', 'cell', 'placed'])(
@@ -924,7 +930,7 @@ describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
     ['modbench.plugin.track', 'modbench.plugin.allUntrackedInMod'],
-    ['modbench.record.create', 'modbench.plugin.singleEditableRecordType'],
+    ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
     ['modbench.record.copy', 'modbench.plugin.allRecords'],
   ] as const;
@@ -1224,7 +1230,7 @@ const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: reado
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
   {
     gesture: 'record open', removedBy: '#963',
-    ids: ['modbench.openEditor', 'modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
+    ids: ['modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
     outOfPalette: ['modbench.openHeader'],
   },
   { gesture: 'track', removedBy: '#1064', ids: ['modbench.plugin.track'], outOfPalette: [] },

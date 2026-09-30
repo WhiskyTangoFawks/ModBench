@@ -211,10 +211,14 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   });
 
   // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
-  it('create sees exactly one selected record type whose plugin is tracked and editable', () => {
-    expect(context([weapons]).singleEditableRecordType).toBe(true);
-    expect(context([untrackedWeapons]).singleEditableRecordType).toBe(false);
-    expect(context([weapons, alpha]).singleEditableRecordType).toBe(false);
+  it('create sees exactly one selected record type or plugin that is tracked and editable', () => {
+    expect(context([weapons]).singleCreatable).toBe(true);
+    expect(context([compilable]).singleCreatable).toBe(true);
+    expect(context([untrackedWeapons]).singleCreatable).toBe(false);
+    expect(context([trackedReadOnly]).singleCreatable).toBe(false);
+    expect(context([untracked]).singleCreatable).toBe(false);
+    expect(context([weapons, compilable]).singleCreatable).toBe(false);
+    expect(context([own]).singleCreatable).toBe(false);
   });
 
   // No item is sent that the gesture would refuse.

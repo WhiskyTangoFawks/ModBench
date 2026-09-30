@@ -13,6 +13,8 @@ import { lockedRowUri } from './ImplicitMasterDecorationProvider';
 import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
+import { isRecordRow } from './gestureEntry';
+import type { RecordGroup } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -308,8 +310,7 @@ export class PluginsTreeProvider
   // plugins.md, States, story 3: once mEdit names the locked plugins, an unreachable mEdit does not
   // unlock them.
   private lockedNames: readonly string[] | undefined;
-  // Whether the last build had no row at all, which the message line says.
-  private nothingToShow = false;
+  private lastBuildHadNoRows = false;
   private lastLockedRowUris: ReadonlySet<string> = new Set();
 
   constructor(options: PluginsTreeProviderOptions) {
@@ -381,7 +382,7 @@ export class PluginsTreeProvider
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
-    if (this.nothingToShow) return NO_PLUGINS_MESSAGE;
+    if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
     }
@@ -438,22 +439,44 @@ export class PluginsTreeProvider
 
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
-    if (!isRow(element)) return this.identified(await (this.records?.getChildren(element) ?? []), this.pluginAbove.get(element));
-    const file = pluginFileOf(element);
-    return this.identified(await this.expandPluginRow(element, file), { name: file, origin: element.origin });
+    const children = isRow(element)
+      ? await this.expandPluginRow(element, pluginFileOf(element))
+      : await (this.records?.getChildren(element) ?? []);
+    return this.adopted(children, element);
   }
 
-  // The plugin row each row beneath it sits under: a record row's identity names that plugin.
-  private readonly pluginAbove = new WeakMap<PluginsTreeNode, PluginAddress>();
+  /** VS Code's walk up from a row it is asked to reveal. */
+  getParent(element: PluginsTreeNode): PluginsTreeNode | undefined {
+    return this.parentOf.get(element);
+  }
 
-  private identified(children: PluginsTreeNode[], plugin: PluginAddress | undefined): PluginsTreeNode[] {
-    if (plugin === undefined) return children;
+  private readonly parentOf = new WeakMap<PluginsTreeNode, PluginsTreeNode>();
+
+  private adopted(children: PluginsTreeNode[], parent: PluginsTreeNode): PluginsTreeNode[] {
+    const plugin = this.pluginOf(parent);
     for (const child of children) {
-      this.pluginAbove.set(child, plugin);
+      this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
-      if (formKey !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
+      if (formKey !== undefined && plugin !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
     }
     return children;
+  }
+
+  /** The plugin row a row sits under, or is: the rows beneath it are read without its origin. */
+  pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
+    let current: PluginsTreeNode | undefined = node;
+    while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
+    return current && { name: pluginFileOf(current), origin: current.origin };
+  }
+
+  /** The row of a record, once mEdit lists it in its group. */
+  async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
+    const address = pluginAddressKey(plugin.name, plugin.origin);
+    const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && pluginAddressKey(row.plugin.name, row.origin) === address);
+    if (pluginRow === undefined) return undefined;
+    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
+    if (group === undefined) return undefined;
+    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
   }
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
@@ -489,19 +512,18 @@ export class PluginsTreeProvider
   private async builtRows(): Promise<PluginListNode[]> {
     while (!this.cache) {
       const generation = this.rowsGeneration;
-      this.settleRows(generation, await this.implicitMasters());
+      this.settleRowsUnlessInvalidatedSince(generation, await this.implicitMasters());
     }
     return this.cache.rows;
   }
 
-  // A build that asked mEdit before the rows were last invalidated drops out.
-  private settleRows(generation: number, lockedAnswer: readonly string[] | undefined): void {
+  private settleRowsUnlessInvalidatedSince(generation: number, lockedAnswer: readonly string[] | undefined): void {
     if (generation !== this.rowsGeneration) return;
     const rows = this.buildRows(lockedAnswer);
     this.cache = { rows };
-    if ((rows.length === 0) !== this.nothingToShow) {
-      this.nothingToShow = rows.length === 0;
-      this.render(); // the message line reads it
+    if ((rows.length === 0) !== this.lastBuildHadNoRows) {
+      this.lastBuildHadNoRows = rows.length === 0;
+      this.render();
     }
   }
 
@@ -869,11 +891,9 @@ function isRow(element: PluginsTreeNode): element is PluginListNode {
   return element instanceof PluginNode || element instanceof ImplicitMasterNode;
 }
 
-// plugins.md, Menus and keys: a record row is every row a record menu sits on.
 function recordFormKeyOf(row: PluginsTreeNode): string | undefined {
-  if (row.kind === 'record') return row.record.formKey;
-  if (row.kind === 'worldspace' || row.kind === 'cell' || row.kind === 'placed') return row.formKey;
-  return undefined;
+  if (!isRecordRow(row)) return undefined;
+  return row.kind === 'record' ? row.record.formKey : row.formKey;
 }
 
 function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginAddress<string> {

@@ -47,6 +47,22 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginRecordTypeCount>>();
 
+        app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
+        {
+            try
+            {
+                return Results.Ok(svc.GetCreatableRecordTypes());
+            }
+            catch (NoLoadOrderException ex)
+            {
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            }
+        })
+            .WithName("GetCreatableRecordTypes")
+            .WithTags(Tag)
+            .Produces<IReadOnlyList<CreatableRecordType>>()
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
             .WithTags(Tag)

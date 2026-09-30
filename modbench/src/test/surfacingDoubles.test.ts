@@ -1,25 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { showErrorMessage } = vi.hoisted(() => ({ showErrorMessage: vi.fn() }));
-vi.mock('vscode', () => ({ window: { showErrorMessage } }));
+const { showErrorMessage, handlers } = vi.hoisted(() => ({
+  showErrorMessage: vi.fn(),
+  handlers: new Map<string, (...args: unknown[]) => Promise<void>>(),
+}));
+vi.mock('vscode', () => ({
+  window: { showErrorMessage },
+  commands: { registerCommand: (id: string, handler: (...args: unknown[]) => Promise<void>) => { handlers.set(id, handler); return { dispose: () => {} }; } },
+}));
 
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
-import { offerEslFlagRemoval } from '../editor/eslFlagRemovalPrompt';
+import { registerRecordLifecycleCommands } from '../editor/recordLifecycleCommands';
+import { InMemoryMEditClient } from '../client';
+import { FakeLogOutputChannel } from './fakeOutputChannel';
+import { present } from '../ports/present';
 import type { RecordEditEnvelope } from '../wire/messages';
 
 const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'X' };
 
-const ACCEPT = 'Remove ESL Flag and Compile';
+const ACCEPT = 'Delete';
 
-// Two questions through one real consumer, one after the other.
-function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<boolean[]> {
-  const repository = { editRecord: () => Promise.resolve({ applied: true as const }) };
-  const offer = (name: string) =>
-    offerEslFlagRemoval({ name, origin: 'ModA' }, 'why', 'Compile', repository, dialog, recordingReporter());
-  return (async () => [await offer('A.esl'), await offer('B.esl')])();
+// Two questions through one real consumer, one after the other: whether each delete went ahead.
+async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<boolean[]> {
+  const client = new InMemoryMEditClient();
+  client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+  registerRecordLifecycleCommands(client, new FakeLogOutputChannel(), recordingReporter(), dialog, () => []);
+  const deleteRecord = present(handlers.get('modbench.record.delete'), 'the record delete handler');
+  const offer = async (plugin: string) => {
+    const before = client.calls.length;
+    await deleteRecord({ formKey: `000800:${plugin}`, plugin, origin: 'ModA' });
+    return client.calls.length > before;
+  };
+  return [await offer('A.esp'), await offer('B.esp')];
 }
 
 // Both doubles are driven through a real consumer of the seam, never called directly: a double
@@ -116,7 +131,7 @@ describe('the scripted dialog', () => {
     const outcomes = await offerTwice(dialog);
 
     expect(outcomes).toEqual([false, true]);
-    expect(dialog.asked.map((q) => q.message.split('"')[1])).toEqual(['A.esl', 'B.esl']);
+    expect(dialog.asked.map((q) => q.message.match(/in (\S+)/)?.[1])).toEqual(['A.esp', 'B.esp']);
     expect(dialog.asked.map((q) => q.buttons)).toEqual([[ACCEPT], [ACCEPT]]);
   });
 

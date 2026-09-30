@@ -71,14 +71,12 @@ export function registerTrackCommand(
   // that row is one of several selected, in one call and one pick.
   return registerPluginsGesture('modbench.plugin.track', viewSelection, async (entry) => {
     const nodes = pluralArgument(entry, 'plugin');
-    if (nodes.length === 0) return;
-
     const addressed: PluginAddress[] = nodes.map((node) => ({ name: node.plugin.name, origin: node.origin }));
+    const [first] = addressed;
+    if (!first) return;
     const report = (outcome: SelectionOutcome<PluginAddress>) => {
       reporter.selectionOutcome(`Could not track ${outcome.refused.length} of ${nodes.length} plugins.`, outcome, rowName);
     };
-    const [first] = addressed;
-    if (!first) return;
 
     const choice = await pickTrackPreset(nodes.length === 1 ? `Track "${first.name}"` : `Track ${nodes.length} plugins`);
     if (!choice) return;
@@ -89,12 +87,11 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      const outcome = result;
       // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
-      if (outcome.landed.length > 0) await onTracked();
-      const [only, ...more] = outcome.landed;
-      if (outcome.refused.length > 0) report(outcome);
-      else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${outcome.landed.length} plugins.`);
+      if (result.landed.length > 0) await onTracked();
+      const [only, ...more] = result.landed;
+      if (result.refused.length > 0) report(result);
+      else if (only) reporter.landed(more.length === 0 ? `Tracked "${only.name}".` : `Tracked ${result.landed.length} plugins.`);
     });
   });
 }
@@ -203,7 +200,7 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
     const pluginName = node && pluginFileOf(node);
     if (!pluginName) return;
-    void vscode.commands.executeCommand('modbench.openEditor', {
+    void vscode.commands.executeCommand('modbench.record.open', {
       formKey: headerFormKeyFor(pluginName), label: pluginName,
     });
   });

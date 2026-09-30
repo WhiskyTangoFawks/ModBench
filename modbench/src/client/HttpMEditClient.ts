@@ -10,7 +10,7 @@ import {
   type BackendStatus, type CellReferences, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
-  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
   type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
@@ -32,14 +32,6 @@ export interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: (msg: string) => void;
   timeoutMs?: number;
-}
-
-// An esl-contradiction refusal's `error` never carries this extension on any other refusal, so a
-// truthy check is enough.
-function eslContradictionMessage(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null) return undefined;
-  const problem = error as { eslContradiction?: boolean; detail?: string };
-  return problem.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
 }
 
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
@@ -108,14 +100,10 @@ export class HttpMEditClient implements MEditClient {
     op: string;
     failMsg: string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
-    onEslContradiction?: (message: string) => Promise<T | WriteRefused | undefined>;
   }): Promise<T | WriteRefused | undefined> {
     try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
-        const onEslContradiction = spec.onEslContradiction;
-        const eslMessage = onEslContradiction && eslContradictionMessage(error);
-        if (eslMessage) return await onEslContradiction(eslMessage);
         const text = errorText(error);
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
@@ -308,26 +296,17 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** `formKey` is xEdit's typed-FormID path; left undefined, the backend auto-allocates.
-   *  `onEslContradiction` opts in to prompt-and-retry; resolves `undefined` when the caller
-   *  declines the prompt — nothing happened, not a refusal. */
-  async createRecord(
-    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
-    onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCreateResponse | WriteRefused | undefined> {
-    return this.mutate<RecordCreateResponse>({
+  async createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused> {
+    const failMsg = `Could not create a new ${recordType} record in "${plugin}"`;
+    const answer = await this.mutate<RecordCreateResponse>({
       op: `createRecord(${plugin}, ${recordType})`,
-      failMsg: `Could not create a new ${recordType} record in "${plugin}"`,
+      failMsg,
       post: () => this.apiClient.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
-        body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
+        body: { origin, recordType, editorId: null, formKey: null },
       }),
-      onEslContradiction: onEslContradiction && (async (message) => (
-        (await onEslContradiction(message))
-          ? this.createRecord(plugin, origin, recordType, editorId, formKey, onEslContradiction)
-          : undefined
-      )),
     });
+    return answer ?? { refused: true, message: `${failMsg} — no answer` };
   }
 
   async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
@@ -463,10 +442,20 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
+  async getCreatableRecordTypes(): Promise<CreatableRecordType[]> {
+    return this.withTimeout('getCreatableRecordTypes', async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/record-types/creatable', { signal });
+      this.ensureOk('getCreatableRecordTypes', response, error);
+      return data ?? [];
+    });
+  }
+
+  async getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage> {
     return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/records', {
-        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }), ...options } },
         signal,
       });
       this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);

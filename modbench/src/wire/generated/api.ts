@@ -215,6 +215,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/record-types/creatable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetCreatableRecordTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -571,6 +587,10 @@ export interface components {
         };
         /** @enum {string} */
         CopyMode: "New" | "Override";
+        CreatableRecordType: {
+            type: string;
+            displayName: string;
+        };
         CreatePluginRequest: {
             origin: string;
             name: string;
@@ -1447,6 +1467,35 @@ export interface operations {
             };
         };
     };
+    GetCreatableRecordTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatableRecordType"][];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     CreatePlugin: {
         parameters: {
             query?: never;
@@ -1707,6 +1756,7 @@ export interface operations {
                 origin?: string;
                 limit?: number;
                 offset?: number;
+                unfiltered?: boolean;
             };
             header?: never;
             path?: never;

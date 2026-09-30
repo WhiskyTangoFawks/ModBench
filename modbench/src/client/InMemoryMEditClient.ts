@@ -3,7 +3,7 @@ import { isNotificationKind, type MEditClient, type NotificationKind, type Notif
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
 type QueryMethod =
-  | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getRecords' | 'searchRecords'
+  | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
   | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
@@ -221,6 +221,10 @@ export class InMemoryMEditClient implements MEditClient {
   getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.query('getDiagnoses', []); }
   getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {
     return this.query('getRecordTypes', args);
+  }
+
+  getCreatableRecordTypes(): ReturnType<MEditClient['getCreatableRecordTypes']> {
+    return this.query('getCreatableRecordTypes', []);
   }
   getRecords(...args: Parameters<MEditClient['getRecords']>): ReturnType<MEditClient['getRecords']> {
     return this.query('getRecords', args);

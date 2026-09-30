@@ -1216,8 +1216,8 @@ describe('PluginsTreeProvider — the sort direction', () => {
 
     expect(fired).toBe(true);
     const after = [...(await tree.getChildren())].reverse();
-    expect(after).toHaveLength(before.length);
-    after.forEach((row, i) => expect(row).toBe(before[i]));
+    expect(after).toEqual(before);
+    expect(new Set([...before, ...after]).size).toBe(before.length);
   });
 
   it('keeps the order of the groups and records beneath a plugin', async () => {
@@ -1259,12 +1259,7 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
   let dir: string;
   const node = (name: string) => new PluginNode({ name, enabled: true }, 'SomeMod');
   const LINES = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
-  const BELOW_THE_LAST_ROW = 'below the last row';
-  const LOCKED_ROW = 'the locked Fallout4.esm';
-  const targetOf = (target: string) => {
-    if (target === BELOW_THE_LAST_ROW) return undefined;
-    return target === LOCKED_ROW ? new ImplicitMasterNode('Fallout4.esm', 'Data') : node(target);
-  };
+  const LOCKED_ROW = new ImplicitMasterNode('Fallout4.esm', 'Data');
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-sorted-drop-'));
@@ -1279,14 +1274,14 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
   // The view before each drop: losing at the top is Fallout4.esm, A … E; winning at the top is
   // E … A, Fallout4.esm.
   it.each([
-    ['losingAtTop', ['E.esp'], 'B.esp', ['A.esp', 'E.esp', 'B.esp', 'C.esp', 'D.esp']],
-    ['losingAtTop', ['A.esp'], BELOW_THE_LAST_ROW, ['B.esp', 'C.esp', 'D.esp', 'E.esp', 'A.esp']],
-    ['losingAtTop', ['C.esp'], LOCKED_ROW, ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp']],
-    ['winningAtTop', ['A.esp'], 'D.esp', ['B.esp', 'C.esp', 'D.esp', 'A.esp', 'E.esp']],
-    ['winningAtTop', ['A.esp', 'B.esp'], 'D.esp', ['C.esp', 'D.esp', 'A.esp', 'B.esp', 'E.esp']],
-    ['winningAtTop', ['E.esp'], BELOW_THE_LAST_ROW, ['E.esp', 'A.esp', 'B.esp', 'C.esp', 'D.esp']],
-    ['winningAtTop', ['C.esp'], LOCKED_ROW, ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp']],
-  ] as const)('%s: %j dropped on %s lands as shown', async (direction, moved, target, onDisk) => {
+    { direction: 'losingAtTop', moved: ['E.esp'], where: 'B.esp', target: node('B.esp'), onDisk: ['A.esp', 'E.esp', 'B.esp', 'C.esp', 'D.esp'] },
+    { direction: 'losingAtTop', moved: ['A.esp'], where: 'below the last row', target: undefined, onDisk: ['B.esp', 'C.esp', 'D.esp', 'E.esp', 'A.esp'] },
+    { direction: 'losingAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, onDisk: ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp'] },
+    { direction: 'winningAtTop', moved: ['A.esp'], where: 'D.esp', target: node('D.esp'), onDisk: ['B.esp', 'C.esp', 'D.esp', 'A.esp', 'E.esp'] },
+    { direction: 'winningAtTop', moved: ['A.esp', 'B.esp'], where: 'D.esp', target: node('D.esp'), onDisk: ['C.esp', 'D.esp', 'A.esp', 'B.esp', 'E.esp'] },
+    { direction: 'winningAtTop', moved: ['E.esp'], where: 'below the last row', target: undefined, onDisk: ['E.esp', 'A.esp', 'B.esp', 'C.esp', 'D.esp'] },
+    { direction: 'winningAtTop', moved: ['C.esp'], where: 'the locked Fallout4.esm', target: LOCKED_ROW, onDisk: ['C.esp', 'A.esp', 'B.esp', 'D.esp', 'E.esp'] },
+  ] as const)('$direction: $moved dropped on $where lands as shown', async ({ direction, moved, target, onDisk }) => {
     const tree = new PluginsTreeProvider({
       instance: new FakeInstance(valueOf(LINES.map((name, slot) => plugin({ name, slot })))),
       source: writesTo(dir),
@@ -1297,7 +1292,7 @@ describe('PluginsTreeProvider — a drop lands where it is shown, in either sort
     const dt = new DataTransfer();
     tree.handleDrag(moved.map(node), dt, NONE);
 
-    await tree.handleDrop(targetOf(target), dt, NONE);
+    await tree.handleDrop(target, dt, NONE);
 
     expect((await readPluginLines(dir)).map((line) => line.name)).toEqual(onDisk);
   });
@@ -1335,31 +1330,44 @@ describe('PluginsTreeProvider — the locked plugins arrive with mEdit', () => {
     expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp', 'plugin New.esp']);
   });
 
-  // The answer asked for before mEdit attached lands after the attach, either before the rows are
-  // asked for again or after the fresh answer has.
-  it.each(['before', 'after'] as const)(
-    'never shows an answer asked for before mEdit attached, landing %s the fresh one is asked for', async (landing) => {
-      let answerTheFirstAsk: (names: readonly string[]) => void = () => {};
-      let asked = 0;
-      const implicitMasters = (): Promise<readonly string[] | undefined> => (asked++ === 0
-        ? new Promise((resolve) => { answerTheFirstAsk = resolve; })
-        : Promise.resolve(['Fallout4.esm']));
-      const h = makeTree(LINES(), { implicitMasters });
-      const beforeAttach = h.tree.getChildren();
-      await vi.waitFor(() => expect(asked).toBe(1));
+  // The first ask is held until the test answers it; every later ask names Fallout4.esm.
+  function staleFirstAnswer() {
+    let answerTheFirstAsk: (names: readonly string[]) => void = () => {};
+    let asked = 0;
+    const implicitMasters = (): Promise<readonly string[] | undefined> => (asked++ === 0
+      ? new Promise((resolve) => { answerTheFirstAsk = resolve; })
+      : Promise.resolve(['Fallout4.esm']));
+    const h = makeTree(LINES(), { implicitMasters });
+    const beforeAttach = h.tree.getChildren();
+    return { h, beforeAttach, asked: () => asked, answerTheFirstAsk: (names: readonly string[]) => answerTheFirstAsk(names) };
+  }
 
-      h.client.setStatus('attached');
-      if (landing === 'before') {
-        answerTheFirstAsk(['Stale.esm']);
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-      const afterAttach = shapeOf(h.tree);
-      if (landing === 'after') answerTheFirstAsk(['Stale.esm']);
-      await beforeAttach;
+  it('never shows an answer asked for before mEdit attached, landing before the fresh one is asked for', async () => {
+    const { h, beforeAttach, asked, answerTheFirstAsk } = staleFirstAnswer();
+    await vi.waitFor(() => expect(asked()).toBe(1));
 
-      expect(await afterAttach).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-      expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
-    });
+    h.client.setStatus('attached');
+    answerTheFirstAsk(['Stale.esm']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const afterAttach = shapeOf(h.tree);
+    await beforeAttach;
+
+    expect(await afterAttach).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
+    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
+  });
+
+  it('never shows an answer asked for before mEdit attached, landing after the fresh one is asked for', async () => {
+    const { h, beforeAttach, asked, answerTheFirstAsk } = staleFirstAnswer();
+    await vi.waitFor(() => expect(asked()).toBe(1));
+
+    h.client.setStatus('attached');
+    const afterAttach = shapeOf(h.tree);
+    answerTheFirstAsk(['Stale.esm']);
+    await beforeAttach;
+
+    expect(await afterAttach).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
+    expect(await shapeOf(h.tree)).toEqual(['implicitMaster Fallout4.esm', 'plugin Mod.esp']);
+  });
 });
 
 // The implicit block has no plugins.txt line, so a drop onto it lands at file-index 0 —
@@ -2334,9 +2342,13 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
   it('builds every row, at every level, collapsed', async () => {
     const { tree } = await heldTree([A_ROW(), plugin({ name: 'Off.esp', slot: 1, enabled: false })]);
 
-    const states = (await everyRow(tree)).map((row) => tree.getTreeItem(row).collapsibleState);
+    const rows = await everyRow(tree);
+    const states = rows.map((row) => tree.getTreeItem(row).collapsibleState);
 
-    expect(states.length).toBeGreaterThan(10);
+    expect([...new Set(rows.map((row) => row.kind))].sort()).toEqual([
+      'cell', 'interiorBlock', 'interiorCells', 'interiorSubBlock', 'placed', 'placedGroup', 'plugin', 'record',
+      'recordType', 'worldspace', 'worldspaces',
+    ]);
     expect(states.filter((state) => state === vscode.TreeItemCollapsibleState.Expanded)).toEqual([]);
   });
 
@@ -3393,5 +3405,70 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     expect(await landing).toBeUndefined();
     const [row] = await h.tree.getChildren();
     expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+});
+
+// plugins.md, Pickers, Create record: the new record is selected, which VS Code does by walking
+// up from its row to the plugin row.
+describe('PluginsTreeProvider — the row of a record create wrote', () => {
+  const NPCS = { plugin: { name: 'A.esp', origin: 'SomeMod' }, recordType: 'npc_' };
+  const NEW_NPC = '000900:A.esp';
+  const listing = (...formKeys: string[]) => makeClient({
+    recordTypes: [{ type: 'acti', count: 1, displayName: 'Activator' }, { type: 'npc_', count: formKeys.length, displayName: 'Non-Player Character' }],
+    records: { items: formKeys.map((formKey) => recordSummary({ formKey, plugin: 'A.esp' })), total: formKeys.length },
+  });
+  async function heldWith(client: InMemoryMEditClient): Promise<Harness> {
+    const rows = [A_ROW(), B_ROW()];
+    const h = makeTree(rows, { client });
+    await reconcile(h, rows.map((p) => held(p.name, { origin: p.origin })));
+    return h;
+  }
+
+  it('finds the record\'s row beneath its plugin and its group, once mEdit lists it', async () => {
+    const { tree } = await heldWith(listing('000800:A.esp', '000900:A.esp'));
+
+    const row = expectInstanceOf(await tree.recordRow(NPCS, NEW_NPC), RecordNode);
+
+    expect(row.record.formKey).toBe('000900:A.esp');
+  });
+
+  it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {
+    const { tree } = await heldWith(listing('000900:A.esp'));
+    const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
+
+    const group = expectInstanceOf(tree.getParent(row), RecordTypeNode);
+    const pluginRow = expectInstanceOf(tree.getParent(group), PluginNode);
+
+    expect([group.recordType, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['npc_', 'A.esp', undefined]);
+  });
+
+  // The Plugins view reads a held plugin's records without its origin, so a group row does not
+  // carry it: the plugin row above it does.
+  it('names the plugin of a group row, and of a plugin row, by (origin, filename)', async () => {
+    const { tree } = await heldWith(listing('000900:A.esp'));
+    const [pluginRow] = await tree.getChildren();
+    const group = present((await tree.getChildren(pluginRow)).find((row) => row.kind === 'recordType'), 'a group row');
+
+    expect([tree.pluginOf(group), tree.pluginOf(present(pluginRow, 'the plugin row'))])
+      .toEqual([{ name: 'A.esp', origin: 'SomeMod' }, { name: 'A.esp', origin: 'SomeMod' }]);
+  });
+
+  it('finds nothing while mEdit does not list the record yet', async () => {
+    const { tree } = await heldWith(listing('000800:A.esp'));
+
+    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
+  });
+
+  it('finds nothing under a plugin of the same name from another origin', async () => {
+    const { tree } = await heldWith(listing('000900:A.esp'));
+
+    expect(await tree.recordRow({ ...NPCS, plugin: { name: 'A.esp', origin: 'OtherMod' } }, NEW_NPC)).toBeUndefined();
+  });
+
+  it('finds nothing while the name filter hides its plugin', async () => {
+    const { tree } = await heldWith(listing('000900:A.esp'));
+    tree.setFilter('B.esp');
+
+    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
   });
 });

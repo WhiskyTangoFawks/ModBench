@@ -23,7 +23,7 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
     this.contextValue = 'referencedByGroup';
     this.iconPath = new vscode.ThemeIcon('references');
     this.command = {
-      command: 'modbench.openEditor',
+      command: 'modbench.record.open',
       title: 'Open Record',
       arguments: [{ formKey, label: recordLabel }],
     };

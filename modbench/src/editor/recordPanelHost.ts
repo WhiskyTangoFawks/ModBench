@@ -31,7 +31,7 @@ export interface EditorCommandDeps {
   recordBadgeSource: RecordBadgeSource;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
-    | 'createRecord' | 'deleteRecords' | 'copyRecords'
+    | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
@@ -88,13 +88,13 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       },
       focusedCell: () => focusedCells.current(),
     }),
-    // Editor owns the record gestures (create/delete/copy) — registered once, here,
+    // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
       meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
-    vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
+    vscode.commands.registerCommand('modbench.record.open', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),

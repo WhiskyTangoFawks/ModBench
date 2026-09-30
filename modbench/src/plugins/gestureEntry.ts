@@ -78,6 +78,8 @@ export function selectionArgument<K extends ArgumentKind>(entry: GestureEntry, .
 /** The rows that stand for a record: the record menu's rows (plugins.md, Menus and keys). */
 export const RECORD_ROW_KINDS = ['record', 'worldspace', 'cell', 'placed'] as const;
 
+export const isRecordRow = isOf(RECORD_ROW_KINDS);
+
 /** The rows that stand for a plugin file: a plugins.txt line, or a plugin the game loads with
  *  none. */
 export const PLUGIN_ROW_KINDS = ['plugin', 'implicitMaster'] as const;
@@ -108,7 +110,7 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
   readonly allUntrackedInMod: boolean;
-  readonly singleEditableRecordType: boolean;
+  readonly singleCreatable: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
   readonly selectionToggle?: 'enable' | 'disable';
@@ -122,7 +124,7 @@ export function pluginsKeyContext(
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
     allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
-    singleEditableRecordType: hasFlags(onlySelected(selection, 'recordType'), 'tracked', 'editable'),
+    singleCreatable: hasFlags(onlySelected(selection, 'plugin', 'recordType'), 'tracked', 'editable'),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

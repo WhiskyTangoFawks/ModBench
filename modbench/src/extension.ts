@@ -32,6 +32,8 @@ import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
 import { noticeExternalChanges } from './plugins/externalChangeNotice';
+import { registerRecordCreateCommand } from './plugins/createRecordCommand';
+import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { errorMessage } from './ports/errorMessage';
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
@@ -220,7 +222,7 @@ interface PluginRowCommandDeps {
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands (create/delete/copy — Editor's own registration).
+// editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
   const { session, client, outputChannel, notifyConflictsComputed } = deps;
   return [
@@ -235,6 +237,15 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
+    registerRecordCreateCommand({
+      client, reporter: makeReporter(outputChannel, 'record.create'),
+      pluginOf: (row) => session.pluginsTree?.pluginOf(row),
+      createdRecords: createdRecordSelection({
+        client, reporter: makeReporter(outputChannel, 'record.create'),
+        rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),
+        view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
+      }),
+    }, () => session.pluginsTreeView?.selection ?? []),
     registerOpenHeaderCommand(),
   ];
 }

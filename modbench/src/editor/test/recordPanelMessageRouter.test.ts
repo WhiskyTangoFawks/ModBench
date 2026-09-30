@@ -116,7 +116,7 @@ describe('routeRecordPanelMessage', () => {
       { type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, makeDeps());
 
     expect(executeCommand).toHaveBeenCalledWith(
-      'modbench.openEditor', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
+      'modbench.record.open', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
   });
 
   it('LOG forwards the message at its own level', async () => {

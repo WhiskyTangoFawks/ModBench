@@ -93,7 +93,12 @@ export type RebuildIndexOutcome =
   | { rebuilt: false; heldElsewhere: true }
   | { rebuilt: false; heldElsewhere: false; detail: string };
 
+/** `/records` takes a plain `int` limit with no upper bound, so Int32.MaxValue lists every record
+ *  of a group in one page. */
+export const UNLIMITED_RECORDS = 2147483647;
+
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type CreatableRecordType = components['schemas']['CreatableRecordType'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
 export type InteriorCellBlock = components['schemas']['InteriorCellBlock'];
 export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock'];
@@ -134,10 +139,7 @@ export interface MEditClient {
   track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  createRecord(
-    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
-    onEslContradiction?: (message: string) => Promise<boolean>,
-  ): Promise<RecordCreateResponse | WriteRefused | undefined>;
+  createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
@@ -157,7 +159,12 @@ export interface MEditClient {
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
-  getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
+  // The game's, not a plugin's: every plugin of the load order shares it.
+  getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
+  // `unfiltered` lists what the record filter hides too.
+  getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */

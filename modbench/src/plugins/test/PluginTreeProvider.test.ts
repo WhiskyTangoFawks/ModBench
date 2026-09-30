@@ -269,12 +269,12 @@ describe('RecordTypeNode', () => {
 // ── RecordNode ────────────────────────────────────────────────────────────────
 
 describe('RecordNode', () => {
-  it('wires .command to modbench.openEditor with formKey and label', () => {
+  it('wires .command to modbench.record.open with formKey and label', () => {
     const record = makeRecord(0);
     const node = new RecordNode(record);
 
     expect(node.command).toEqual({
-      command: 'modbench.openEditor',
+      command: 'modbench.record.open',
       title: 'Open Record',
       arguments: [{ formKey: record.formKey, label: record.editorId }],
     });
@@ -693,7 +693,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
     const [record] = await provider.getChildren(recordType);
 
-    expect(expectInstanceOf(record, RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
+    expect(expectInstanceOf(record, RecordNode).command).toMatchObject({ command: 'modbench.record.open' });
   });
 
   it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
@@ -1031,7 +1031,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     expect(expectInstanceOf(children[0], RecordNode).record.editorId).toBe('TopicA');
     // Standard record-row affordances — same command every ordinary
     // RecordNode gets, so a container child opens in the record editor exactly like any other row.
-    expect(expectInstanceOf(children[0], RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
+    expect(expectInstanceOf(children[0], RecordNode).command).toMatchObject({ command: 'modbench.record.open' });
   });
 
   // dial1 has a genuine container child and dial2 has none: a "dial" child with no children must

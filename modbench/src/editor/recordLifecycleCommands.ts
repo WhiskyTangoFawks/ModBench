@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
-import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
 import { resolveOrigin } from './resolveOrigin';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
@@ -30,33 +29,6 @@ export function recordIdentity(arg: unknown): RecordIdentity | undefined {
   }
   if (!n.formKey || !n.plugin) return undefined;
   return { formKey: n.formKey, plugin: n.plugin, origin: n.origin, editorId: n.editorId };
-}
-
-export interface RecordTypeIdentity {
-  plugin: string;
-  origin?: string;
-  recordType: string;
-}
-
-export function recordTypeIdentity(arg: unknown): RecordTypeIdentity | undefined {
-  if (!arg || typeof arg !== 'object') return undefined;
-  const n = arg as { plugin?: string; origin?: string; recordType?: string };
-  if (!n.plugin || !n.recordType) return undefined;
-  return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
-}
-
-// A node's own `origin` when the row already carries it (ADR-0012), else derived from
-// `getPlugins()`; reports and returns undefined when neither answers.
-function makeResolveOriginOrReport(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel, reporter: Reporter,
-): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
-  return async (node) => {
-    const origin = node.origin ?? await resolveOrigin(client, node.pluginName, (msg) => outputChannel.info(msg));
-    if (!origin) {
-      reporter.report('error', `Could not resolve which mod "${node.pluginName}" belongs to.`);
-    }
-    return origin;
-  };
 }
 
 function recordName(formKey: string, editorId: string | undefined): string {
@@ -105,40 +77,16 @@ async function addressRecords(
   return { addressed, unaddressed };
 }
 
-type RecordLifecycleClient = Pick<MEditClient,
-  | 'createRecord' | 'deleteRecords' | 'getPlugins'
-  // `editRecord`: create's own ESL-flag-removal retry (`offerEslFlagRemoval`), not a record write
-  // of its own.
-  | 'editRecord'>;
+type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords' | 'getPlugins'>;
 
-/** ADR-0018: xEdit hosts its Add and Remove in its tree's context menu, not the grid. */
+/** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so both take the Plugins selection.
+  // The palette hands no row, so delete takes the Plugins selection.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
-  const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel, reporter);
-
   return [
-    // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
-    // by editing its EditorID, matching xEdit's own gesture.
-    vscode.commands.registerCommand('modbench.record.create', async (arg?: unknown) => {
-      const [only, ...rest] = viewSelection();
-      const identity = recordTypeIdentity(arg ?? (rest.length === 0 ? only : undefined));
-      if (!identity) return;
-      const origin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
-      if (!origin) return;
-
-      const result = await client.createRecord(
-        identity.plugin, origin, identity.recordType, undefined, undefined,
-        message => offerEslFlagRemoval({ name: identity.plugin, origin }, message, 'Create the Record', client, ask, reporter),
-      );
-      if (!result) return; // the ESL prompt was declined — nothing happened
-      if (isRefused(result)) { reporter.report('error', result.message); return; }
-      reporter.landed(`Created ${result.formKey}.`);
-    }),
-
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
     vscode.commands.registerCommand('modbench.record.delete', async (clicked?: unknown, selected?: unknown[]) => {
       const identities = clicked === undefined ? selectedRecords(undefined, viewSelection()) : selectedRecords(clicked, selected);

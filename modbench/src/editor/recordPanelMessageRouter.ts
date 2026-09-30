@@ -75,7 +75,7 @@ const HANDLERS: {
   ) => Promise<void> | void;
 } = {
   [WEBVIEW_TO_EXTENSION.OPEN_RECORD]: async (_deps, m) => {
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: m.formKey, label: m.formKey });
   },
   [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
   [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),

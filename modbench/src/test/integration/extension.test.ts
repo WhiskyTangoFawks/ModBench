@@ -553,30 +553,30 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
   });
 });
 
-// ── openEditor ────────────────────────────────────────────────────────────────
+// ── record open ───────────────────────────────────────────────────────────────
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
-describe('modbench.openEditor', () => {
+describe('modbench.record.open', () => {
   it('opens a new webview tab when no panel exists', async () => {
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000001',
       label: 'Test Record',
     });
 
-    const tabsAfter = await waitFor('a new tab after openEditor', () => {
+    const tabsAfter = await waitFor('a new tab after record open', () => {
       const count = openTabs().length;
       return count > tabsBefore ? count : undefined;
     });
-    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.openEditor');
+    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.record.open');
   });
 
   it('reuses the existing panel on a second call', async () => {
     const tabsAfterFirst = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000002',
       label: 'Another Record',
     });
@@ -588,18 +588,18 @@ describe('modbench.openEditor', () => {
     assert.strictEqual(
       tabsAfterSecond,
       tabsAfterFirst,
-      'Second modbench.openEditor call should reuse the existing panel, not open a new tab'
+      'Second modbench.record.open call should reuse the existing panel, not open a new tab'
     );
   });
 
   it('updates the panel title when opened for a different record', async () => {
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000010',
       label: 'First Record',
     });
     await waitFor('the panel titled "First Record"', () => openTabs().some(t => t.label === 'First Record') || undefined);
 
-    await vscode.commands.executeCommand('modbench.openEditor', {
+    await vscode.commands.executeCommand('modbench.record.open', {
       formKey: 'Fallout4.esm:000011',
       label: 'Second Record',
     });
@@ -621,7 +621,7 @@ describe('modbench.openEditorBeside', () => {
   it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton', async () => {
     // Seed the singleton with a known title first: an implementation that routed through the
     // singleton/retarget path would retarget this panel instead of opening a new tab.
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
     await waitFor('the seed panel', () => openTabs().some(t => t.label === 'Seed Record') || undefined);
 
     const tabsBefore = openTabs().length;
@@ -2439,7 +2439,7 @@ describe('A field gesture from the palette acts on the focused cell of the recor
 
   it('removes the element the focused cell holds', async () => {
     const formKey = '000801:TestMod.esp';
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey, label: 'Focused Record' });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey, label: 'Focused Record' });
     await waitFor('the record tab', () => openTabs().some((t) => t.label === 'Focused Record') || undefined);
     const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
     present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({

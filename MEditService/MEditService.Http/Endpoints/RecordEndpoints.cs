@@ -19,13 +19,14 @@ public static class RecordEndpoints
             string? search,
             string? origin = null,
             int limit = 50,
-            int offset = 0) =>
+            int offset = 0,
+            bool unfiltered = false) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
             }
-            var result = svc.GetRecords(type, plugin, search, limit, offset, origin);
+            var result = svc.GetRecords(type, plugin, search, limit, offset, origin, unfiltered);
             return Results.Ok(result);
         })
         .WithName("GetRecords")

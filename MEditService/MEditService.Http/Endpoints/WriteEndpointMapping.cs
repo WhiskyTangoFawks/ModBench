@@ -27,8 +27,7 @@ internal static class WriteEndpointMapping
         result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
-    /// exactly which, so nobody matches on prose (ADR-0019). eslContradiction marks the one
-    /// refusal a header edit can resolve.</summary>
+    /// exactly which, so nobody matches on prose (ADR-0019).</summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
@@ -48,7 +47,6 @@ internal static class WriteEndpointMapping
         {
             ["refusal"] = result.Refusal.ToString(),
             ["path"] = result.Path,
-            ["eslContradiction"] = result.EslContradiction,
         });
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
