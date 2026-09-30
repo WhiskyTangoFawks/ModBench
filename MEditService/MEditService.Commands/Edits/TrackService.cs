@@ -32,7 +32,7 @@ public sealed class TrackService(
         LoadOrderSnapshot loadOrder,
         IReadOnlyList<PluginAddress> plugins,
         SourcePreset preset,
-        IReadOnlyDictionary<string, string> upstreamVersions,
+        IReadOnlyDictionary<string, string> upstreamVersionByOrigin,
         CancellationToken cancel = default)
     {
         try
@@ -55,7 +55,8 @@ public sealed class TrackService(
                 var plugin = selection[done];
                 SetProgress(plugin.Origin, TrackPhase.Parsing, done, selection.Count);
                 var outcome = await VerifyAsync(
-                    loadOrder, plugin, onParsed: () => SetProgress(plugin.Origin, TrackPhase.Serializing, done, selection.Count), cancel);
+                    loadOrder, plugin, upstreamVersionByOrigin.GetValueOrDefault(plugin.Origin),
+                    onParsed: () => SetProgress(plugin.Origin, TrackPhase.Serializing, done, selection.Count), cancel);
                 if (outcome.Verified is { } passed) verified.Add(passed);
                 if (outcome.Refused is { } refusal) refused.Add(refusal);
                 SetProgress(plugin.Origin, TrackPhase.Serializing, done + 1, selection.Count);
@@ -64,7 +65,7 @@ public sealed class TrackService(
             SetProgress(verified.FirstOrDefault()?.Plugin.Origin, TrackPhase.Committing, selection.Count, selection.Count);
             var landed = new List<PluginAddress>();
             foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
-                Commit(mod.Key, preset, [.. mod], upstreamVersions, landed, refused);
+                Commit(mod.Key, preset, [.. mod], landed, refused);
 
             return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin));
         }
@@ -79,20 +80,16 @@ public sealed class TrackService(
             [.. items.OrderBy(item => selection.FindIndex(p => PluginAddress.Comparer.Equals(p, keyOf(item))))];
     }
 
-    private sealed record VerifiedPlugin(PluginAddress Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, string BinarySha256);
+    private sealed record VerifiedPlugin(PluginAddress Plugin, string ModFolder, IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers);
 
     private sealed record Verification(VerifiedPlugin? Verified, TrackRefused? Refused);
 
     // One repository per mod folder: the plugins that passed their gate, committed one at a time.
     private void Commit(
         string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
-        IReadOnlyDictionary<string, string> upstreamVersions, List<PluginAddress> landed, List<TrackRefused> refused)
+        List<PluginAddress> landed, List<TrackRefused> refused)
     {
-        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
-        [
-            .. plugins.Select(v => (v.Files, new BaselineTrailers(
-                v.Plugin.Name, upstreamVersions.GetValueOrDefault(v.Plugin.Origin), v.BinarySha256))),
-        ];
+        IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines = [.. plugins.Select(v => (v.Files, v.Trailers))];
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Tracking {PluginCount} plugin(s) into {ModFolder}: {FileCount} source files",
@@ -131,7 +128,7 @@ public sealed class TrackService(
 
     // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006 decision 2).
     private async Task<Verification> VerifyAsync(
-        LoadOrderSnapshot loadOrder, PluginAddress key, Action onParsed, CancellationToken cancel)
+        LoadOrderSnapshot loadOrder, PluginAddress key, string? upstreamVersion, Action onParsed, CancellationToken cancel)
     {
         Verification Refuse(TrackRefusal refusal, string message) => new(null, new TrackRefused(key, refusal, message));
 
@@ -199,7 +196,10 @@ public sealed class TrackService(
             return Refuse(TrackRefusal.RoundTripFailed, refusal);
 
         return new Verification(
-            new VerifiedPlugin(key, modFolder, pristineFiles, PluginBinaryHash.TrailerFormOfFile(plugin.Path)), null);
+            new VerifiedPlugin(
+                key, modFolder, pristineFiles,
+                new BaselineTrailers(key.Name, upstreamVersion, PluginBinaryHash.TrailerFormOfFile(plugin.Path))),
+            null);
     }
 
     // ADR-0006 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every

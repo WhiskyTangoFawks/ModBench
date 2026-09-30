@@ -13,7 +13,7 @@ import {
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
   type RebuildIndexOutcome, type CopyItem, type CopyMode,
   type RecordAddress, type RecordCreateResponse, type RecordEditOutcome, type RecordPage,
-  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus,
+  type RecordFilter, type ReferenceResult, type PluginAddress, type TrackStatus, type UpstreamVersionByOrigin,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused, isRefused,
 } from './MEditClient';
 import { errorMessage } from '../ports/errorMessage';
@@ -274,7 +274,7 @@ export class HttpMEditClient implements MEditClient {
    *  cause no plugin escapes, git missing, refuses the whole selection. */
   async track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
-    upstreamVersions: Parameters<MEditClient['track']>[2],
+    upstreamVersionByOrigin: UpstreamVersionByOrigin,
     options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
@@ -284,7 +284,7 @@ export class HttpMEditClient implements MEditClient {
       const answer = await this.mutate({
         op: `track(${counted})`,
         failMsg: `Could not track ${counted}`,
-        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset, upstreamVersions } }),
+        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset, upstreamVersionByOrigin } }),
       });
       if (answer === undefined) return { refused: true, message: `Could not track ${counted} — no answer` };
       if (isRefused(answer)) return answer;

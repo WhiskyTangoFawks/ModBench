@@ -50,13 +50,12 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.True((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
     }
 
-    // ADR-0007 invariant 7: the version comes from the request, and mEdit reads no mod manager file.
     [Fact]
     public async Task Tracking_RecordsTheRequestsUpstreamVersion_InTheBaselinesSubjectAndTrailers()
     {
         await Loaded();
 
-        var tracked = await Client.Track([(Plugin, Origin)], upstreamVersions: new Dictionary<string, string> { [Origin] = "1.2.3" });
+        var tracked = await Client.Track([(Plugin, Origin)], upstreamVersionByOrigin: new Dictionary<string, string> { [Origin] = "1.2.3" });
 
         tracked.EnsureSuccessStatusCode();
         var modFolder = OtherTool.ModFolderOf(_instance, Origin);

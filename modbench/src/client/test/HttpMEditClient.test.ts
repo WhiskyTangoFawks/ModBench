@@ -311,7 +311,7 @@ describe('HttpMEditClient — tracking plugins answers per plugin', () => {
       refused: [{ item: second, reason: 'Second.esp does not round-trip.' }],
     });
     const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/track$/.test(req.url));
-    expect(await request?.json()).toEqual({ plugins: [first, second], preset: 'Edits', upstreamVersions: { ModA: '1.2.3' } });
+    expect(await request?.json()).toEqual({ plugins: [first, second], preset: 'Edits', upstreamVersionByOrigin: { ModA: '1.2.3' } });
   });
 
   it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {

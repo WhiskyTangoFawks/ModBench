@@ -108,6 +108,7 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 /** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
+export type UpstreamVersionByOrigin = components['schemas']['TrackRequest']['upstreamVersionByOrigin'];
 
 /** Compile's answer: each plugin compiled, with its diagnostics, or refused with its reason. */
 export interface CompileOutcome {
@@ -136,10 +137,8 @@ export interface MEditClient {
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
-  // `upstreamVersions` is keyed by origin and holds only the mods the mod manager records a version for.
   track(
-    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
-    upstreamVersions: components['schemas']['TrackRequest']['upstreamVersions'],
+    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', upstreamVersionByOrigin: UpstreamVersionByOrigin,
     options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;

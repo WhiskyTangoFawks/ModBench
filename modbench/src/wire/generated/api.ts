@@ -934,7 +934,7 @@ export interface components {
         TrackRequest: {
             plugins: components["schemas"]["PluginAddress"][];
             preset: string;
-            upstreamVersions: {
+            upstreamVersionByOrigin: {
                 [key: string]: string;
             };
         };

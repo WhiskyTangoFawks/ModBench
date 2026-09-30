@@ -36,12 +36,12 @@ internal static class Wire
 
     internal static Task<HttpResponseMessage> Track(
         this HttpClient client, IEnumerable<(string Plugin, string Origin)> plugins, string preset = "Edits",
-        IReadOnlyDictionary<string, string>? upstreamVersions = null) =>
+        IReadOnlyDictionary<string, string>? upstreamVersionByOrigin = null) =>
         client.PostAsJsonAsync("/plugins/track", new
         {
             plugins = plugins.Select(p => new { name = p.Plugin, origin = p.Origin }),
             preset,
-            upstreamVersions = upstreamVersions ?? new Dictionary<string, string>(),
+            upstreamVersionByOrigin = upstreamVersionByOrigin ?? new Dictionary<string, string>(),
         });
 
     internal static Task<HttpResponseMessage> Compile(

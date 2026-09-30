@@ -246,14 +246,14 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 
-    private Task<TrackSelectionResult> Track(IReadOnlyDictionary<string, string> upstreamVersions, params string[] plugins) =>
-        Track(TestAdapters.Mutagen(), upstreamVersions, plugins);
+    private Task<TrackSelectionResult> Track(IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins) =>
+        Track(TestAdapters.Mutagen(), upstreamVersionByOrigin, plugins);
 
     private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins) =>
         Track(adapter, new Dictionary<string, string>(), plugins);
 
     private Task<TrackSelectionResult> Track(
-        IPluginAdapter adapter, IReadOnlyDictionary<string, string> upstreamVersions, params string[] plugins)
+        IPluginAdapter adapter, IReadOnlyDictionary<string, string> upstreamVersionByOrigin, params string[] plugins)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
@@ -261,7 +261,7 @@ public sealed class TrackCommitShapeTests : IDisposable
             .ToList();
         var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(entries));
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, upstreamVersions);
+            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, upstreamVersionByOrigin);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

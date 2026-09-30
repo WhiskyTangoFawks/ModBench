@@ -173,7 +173,7 @@ public sealed partial class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // meta.ini is never tracked content (ADR-0003) and plugin binaries are the compiled
+    // meta.ini is never tracked content (ADR-0007 invariant 7) and plugin binaries are the compiled
     // artifact; both are ignored in every preset.
     private static string GitignoreContent(SourcePreset preset) => preset switch
     {

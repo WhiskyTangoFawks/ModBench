@@ -204,7 +204,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = await trackHandler.TrackAsync(plugins, preset, req.UpstreamVersions ?? new Dictionary<string, string>());
+            var result = await trackHandler.TrackAsync(plugins, preset, req.UpstreamVersionByOrigin ?? new Dictionary<string, string>());
             if (result.SelectionRefusal is { } selectionRefusal)
             {
                 logger.LogWarning("Refused to track {Count} plugin(s): {Refusal} — {Message}",
@@ -308,9 +308,9 @@ public record PluginCreatedResponse(string Name, string Origin, string Path);
 public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
 // Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything"); a repository that
-// already stands keeps its own .gitignore. UpstreamVersions is keyed by origin; a mod with none
-// recorded is absent.
-public record TrackRequest(IReadOnlyList<PluginAddress> Plugins, string Preset, IReadOnlyDictionary<string, string> UpstreamVersions);
+// already stands keeps its own .gitignore.
+public record TrackRequest(
+    IReadOnlyList<PluginAddress> Plugins, string Preset, IReadOnlyDictionary<string, string> UpstreamVersionByOrigin);
 
 /// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
 public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
