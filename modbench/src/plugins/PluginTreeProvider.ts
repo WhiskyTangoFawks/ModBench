@@ -9,11 +9,8 @@ import { recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
+import { UNLIMITED_RECORDS } from '../client';
 export { headerFormKeyFor } from './formKeyIdentity';
-
-// The backend's `/records` `limit` query param is a plain `int`, no upper bound enforced —
-// Int32.MaxValue as "no limit" fetches every record of a type in one call.
-export const UNLIMITED_RECORDS = 2147483647;
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.

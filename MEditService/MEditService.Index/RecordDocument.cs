@@ -37,7 +37,7 @@ public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<O
 
 /// <summary><c>GroupOnly</c> lists a group: in FormID order, without a record another record holds.
 /// Otherwise records list by EditorID. <c>Plugin</c> and <c>Origin</c> filter apart
-/// (ADR-0012).</summary>
+/// (ADR-0012). <c>Unfiltered</c> lists what the record filter hides too.</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
@@ -45,7 +45,8 @@ public sealed record RecordQuery(
     string? Search = null,
     int Limit = 50,
     int Offset = 0,
-    bool GroupOnly = false);
+    bool GroupOnly = false,
+    bool Unfiltered = false);
 
 /// <summary>One record type's row count for one plugin, from one grouped query.</summary>
 public record RecordTypeCount(string Type, int Count, bool HasParseFailure);

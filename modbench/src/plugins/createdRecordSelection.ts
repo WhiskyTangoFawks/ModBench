@@ -1,36 +1,36 @@
 import * as vscode from 'vscode';
-import type { MEditClient, NotificationEvent } from '../client';
+import { UNLIMITED_RECORDS, type MEditClient, type PluginAddress } from '../client';
+import type { Reporter } from '../ports/reporter';
+import { errorMessage } from '../ports/errorMessage';
 import { pluginAddressKey } from './trackedRepositories';
-import { UNLIMITED_RECORDS } from './PluginTreeProvider';
 
-/** A plugin's group of one record type: the plugin as (origin, filename). */
+/** A plugin's group of one record type. */
 export interface RecordGroup {
-  plugin: string;
-  origin: string;
+  plugin: PluginAddress;
   recordType: string;
 }
 
 export interface CreatedRecordSelectionDeps<Row> {
-  client: Pick<MEditClient, 'subscribe' | 'getRecords' | 'getActiveFilter'>;
+  client: Pick<MEditClient, 'subscribe' | 'getRecords'>;
+  reporter: Reporter;
   rowOf(group: RecordGroup, formKey: string): Promise<Row | undefined>;
   view: { reveal(row: Row, options: { select: boolean; focus: boolean }): PromiseLike<void> };
 }
 
-/** rows-changed names no type and no addition. A record the record filter hides is listed by no
- *  group, so it is the one key the change names beyond the group's listing. */
+/** rows-changed names no type and no addition, so the new record is the one its group newly
+ *  lists. The listing is unfiltered: a record the filter hides is never taken for the new one. */
 export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row>): {
   selectWhenListed(group: RecordGroup): Promise<() => void>;
 } {
   let forgetLatest: (() => void) | undefined;
 
-  const listing = async (group: RecordGroup): Promise<string[]> =>
-    (await deps.client.getRecords(group.plugin, group.recordType, 0, UNLIMITED_RECORDS, group.origin)).items.map((r) => r.formKey);
+  const listing = async ({ plugin, recordType }: RecordGroup): Promise<string[]> =>
+    (await deps.client.getRecords(plugin.name, recordType, 0, UNLIMITED_RECORDS, plugin.origin, { unfiltered: true }))
+      .items.map((r) => r.formKey);
 
-  const created = async (group: RecordGroup, before: ReadonlySet<string>, event: NotificationEvent): Promise<string | undefined> => {
-    const listed = (await listing(group)).find((formKey) => !before.has(formKey));
-    if (listed !== undefined) return listed;
-    const [only, ...more] = event.keys.filter((formKey) => !before.has(formKey));
-    return more.length === 0 && (await deps.client.getActiveFilter()) !== null ? only : undefined;
+  const reportUnselected = (group: RecordGroup, error: unknown): void => {
+    deps.reporter.report(
+      'warning', `Could not select and open the new ${group.recordType} record in "${group.plugin.name}".`, errorMessage(error));
   };
 
   const selectAndOpen = async (group: RecordGroup, formKey: string): Promise<void> => {
@@ -42,17 +42,30 @@ export function createdRecordSelection<Row>(deps: CreatedRecordSelectionDeps<Row
   return {
     async selectWhenListed(group) {
       forgetLatest?.();
-      const listed = await listing(group).catch(() => undefined);
-      if (listed === undefined) return () => {};
-      const before = new Set(listed);
-      const address = pluginAddressKey(group.plugin, group.origin);
-      const unsubscribe = deps.client.subscribe('rows-changed', (event) => {
-        if (pluginAddressKey(event.plugin, event.origin) !== address) return;
-        void created(group, before, event).catch(() => undefined).then(async (formKey) => {
-          if (formKey === undefined || forgetLatest !== forget) return;
+      let before: ReadonlySet<string>;
+      try {
+        before = new Set(await listing(group));
+      } catch (error) {
+        reportUnselected(group, error);
+        return () => {};
+      }
+      const address = pluginAddressKey(group.plugin.name, group.plugin.origin);
+      const settle = async (): Promise<void> => {
+        let created: string | undefined;
+        try {
+          created = (await listing(group)).find((formKey) => !before.has(formKey));
+        } catch (error) {
+          if (forgetLatest !== forget) return;
           forget();
-          await selectAndOpen(group, formKey);
-        });
+          reportUnselected(group, error);
+          return;
+        }
+        if (created === undefined || forgetLatest !== forget) return;
+        forget();
+        await selectAndOpen(group, created);
+      };
+      const unsubscribe = deps.client.subscribe('rows-changed', (event) => {
+        if (pluginAddressKey(event.plugin, event.origin) === address) void settle();
       });
       const forget = () => {
         unsubscribe();

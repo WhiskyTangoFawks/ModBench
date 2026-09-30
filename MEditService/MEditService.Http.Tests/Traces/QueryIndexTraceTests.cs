@@ -181,6 +181,21 @@ public sealed class QueryIndexTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task AnUnfilteredListing_ListsWhatTheRecordFilterHides()
+    {
+        await Loaded();
+        (await Client.PostAsJsonAsync("/load-order/filter",
+            new { sql = "SELECT 'NoSuchRecord:000000' AS form_key", source = "nothing.sql" })).EnsureSuccessStatusCode();
+
+        var listing = $"/records?plugin={UserPlugin}&type=npc_&limit=10";
+        var filtered = await Client.GetFromJsonAsync<JsonElement>(listing);
+        var unfiltered = await Client.GetFromJsonAsync<JsonElement>($"{listing}&unfiltered=true");
+
+        Assert.Equal(0, filtered.GetProperty("total").GetInt32());
+        Assert.NotEqual(0, unfiltered.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
     public async Task AContainersChildren_CarryTheirName()
     {
         await Loaded();

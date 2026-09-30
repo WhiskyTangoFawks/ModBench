@@ -450,10 +450,12 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
+  async getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage> {
     return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
       const { data, error, response } = await this.apiClient.GET('/records', {
-        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }), ...options } },
         signal,
       });
       this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);

@@ -3411,7 +3411,8 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 // plugins.md, Pickers, Create record: the new record is selected, which VS Code does by walking
 // up from its row to the plugin row.
 describe('PluginsTreeProvider — the row of a record create wrote', () => {
-  const NEW_NPC = { plugin: 'A.esp', origin: 'SomeMod', recordType: 'npc_', formKey: '000900:A.esp' };
+  const NPCS = { plugin: { name: 'A.esp', origin: 'SomeMod' }, recordType: 'npc_' };
+  const NEW_NPC = '000900:A.esp';
   const listing = (...formKeys: string[]) => makeClient({
     recordTypes: [{ type: 'acti', count: 1, displayName: 'Activator' }, { type: 'npc_', count: formKeys.length, displayName: 'Non-Player Character' }],
     records: { items: formKeys.map((formKey) => recordSummary({ formKey, plugin: 'A.esp' })), total: formKeys.length },
@@ -3426,14 +3427,14 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
   it('finds the record\'s row beneath its plugin and its group, once mEdit lists it', async () => {
     const { tree } = await heldWith(listing('000800:A.esp', '000900:A.esp'));
 
-    const row = expectInstanceOf(await tree.recordRow(NEW_NPC), RecordNode);
+    const row = expectInstanceOf(await tree.recordRow(NPCS, NEW_NPC), RecordNode);
 
     expect(row.record.formKey).toBe('000900:A.esp');
   });
 
   it('walks from the record\'s row up through its group to its plugin row, and no further', async () => {
     const { tree } = await heldWith(listing('000900:A.esp'));
-    const row = present(await tree.recordRow(NEW_NPC), 'the new record\'s row');
+    const row = present(await tree.recordRow(NPCS, NEW_NPC), 'the new record\'s row');
 
     const group = expectInstanceOf(tree.getParent(row), RecordTypeNode);
     const pluginRow = expectInstanceOf(tree.getParent(group), PluginNode);
@@ -3441,22 +3442,33 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     expect([group.recordType, pluginRow.plugin.name, tree.getParent(pluginRow)]).toEqual(['npc_', 'A.esp', undefined]);
   });
 
+  // The Plugins view reads a held plugin's records without its origin, so a group row does not
+  // carry it: the plugin row above it does.
+  it('names the plugin of a group row, and of a plugin row, by (origin, filename)', async () => {
+    const { tree } = await heldWith(listing('000900:A.esp'));
+    const [pluginRow] = await tree.getChildren();
+    const group = present((await tree.getChildren(pluginRow)).find((row) => row.kind === 'recordType'), 'a group row');
+
+    expect([tree.pluginOf(group), tree.pluginOf(present(pluginRow, 'the plugin row'))])
+      .toEqual([{ name: 'A.esp', origin: 'SomeMod' }, { name: 'A.esp', origin: 'SomeMod' }]);
+  });
+
   it('finds nothing while mEdit does not list the record yet', async () => {
     const { tree } = await heldWith(listing('000800:A.esp'));
 
-    expect(await tree.recordRow(NEW_NPC)).toBeUndefined();
+    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
   });
 
   it('finds nothing under a plugin of the same name from another origin', async () => {
     const { tree } = await heldWith(listing('000900:A.esp'));
 
-    expect(await tree.recordRow({ ...NEW_NPC, origin: 'OtherMod' })).toBeUndefined();
+    expect(await tree.recordRow({ ...NPCS, plugin: { name: 'A.esp', origin: 'OtherMod' } }, NEW_NPC)).toBeUndefined();
   });
 
   it('finds nothing while the name filter hides its plugin', async () => {
     const { tree } = await heldWith(listing('000900:A.esp'));
     tree.setFilter('B.esp');
 
-    expect(await tree.recordRow(NEW_NPC)).toBeUndefined();
+    expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
   });
 });

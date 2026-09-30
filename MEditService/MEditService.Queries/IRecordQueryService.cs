@@ -8,7 +8,8 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRow> GetPlugins();
     // origin (ADR-0012): which plugin named `plugin` to browse. Optional because most callers have
     // only a filename; omitted, it is resolved server-side from the load order.
-    PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null);
+    PagedResult<RecordSummary> GetRecords(
+        string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey);

@@ -51,7 +51,8 @@ public sealed class RecordQueryService(
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
-    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
+    public PagedResult<RecordSummary> GetRecords(
+        string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
@@ -71,7 +72,7 @@ public sealed class RecordQueryService(
         }
         var query = new RecordQuery(
             RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
-            GroupOnly: search is null);
+            GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
 

@@ -7,9 +7,9 @@ namespace MEditService.Codec.Schema;
 /// or a record one holds, has no containment a new record could be placed into.</summary>
 public static class CreatableRecordTypes
 {
-    public static IEnumerable<string> Of(IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
-    {
-        var dispatch = RecordTypeDispatch.For(release);
-        return schemas.Keys.Where(type => dispatch.FolderNameFor(type) is not null);
-    }
+    public static IEnumerable<string> Of(IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release) =>
+        schemas.Keys.Where(type => Includes(type, release));
+
+    public static bool Includes(string recordType, GameRelease release) =>
+        RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null;
 }

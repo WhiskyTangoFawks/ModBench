@@ -93,6 +93,10 @@ export type RebuildIndexOutcome =
   | { rebuilt: false; heldElsewhere: true }
   | { rebuilt: false; heldElsewhere: false; detail: string };
 
+/** `/records` takes a plain `int` limit with no upper bound, so Int32.MaxValue lists every record
+ *  of a group in one page. */
+export const UNLIMITED_RECORDS = 2147483647;
+
 export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 export type CreatableRecordType = components['schemas']['CreatableRecordType'];
 export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
@@ -157,7 +161,10 @@ export interface MEditClient {
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
-  getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
+  // `unfiltered` lists what the record filter hides too.
+  getRecords(
+    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+  ): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */

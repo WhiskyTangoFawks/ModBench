@@ -239,9 +239,10 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
+      pluginOf: (row) => session.pluginsTree?.pluginOf(row),
       createdRecords: createdRecordSelection({
-        client,
-        rowOf: (group, formKey) => session.pluginsTree?.recordRow({ ...group, formKey }) ?? Promise.resolve(undefined),
+        client, reporter: makeReporter(outputChannel, 'record.create'),
+        rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),
         view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
       }),
     }, () => session.pluginsTreeView?.selection ?? []),

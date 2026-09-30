@@ -1,35 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, uriFrom } from '../../test/vscodeMock';
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn() }));
-vi.mock('vscode', () => ({ commands: { executeCommand }, TreeItem, TreeItemCollapsibleState, ThemeIcon, Uri: { from: uriFrom } }));
+vi.mock('vscode', () => ({ commands: { executeCommand } }));
 
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient, UNLIMITED_RECORDS, type MEditClient } from '../../client';
 import { recordSummaryFixture } from '../../client/test/fixtures';
+import { recordingReporter } from '../../test/surfacingDoubles';
 import { createdRecordSelection } from '../createdRecordSelection';
 
-const NPCS = { plugin: 'MyPatch.esp', origin: 'ModA', recordType: 'npc_' };
+const NPCS = { plugin: { name: 'MyPatch.esp', origin: 'ModA' }, recordType: 'npc_' };
 const OLD = '000800:MyPatch.esp';
+const HIDDEN = '000801:MyPatch.esp';
 const NEW = '000900:MyPatch.esp';
 const OTHER_TYPE = '000901:MyPatch.esp';
 
-function rowsChanged(keys: string[], origin = NPCS.origin) {
-  return { kind: 'rows-changed', plugin: NPCS.plugin, origin, keys, sequence: 1 };
+function rowsChanged(keys: string[], origin = NPCS.plugin.origin) {
+  return { kind: 'rows-changed', plugin: NPCS.plugin.name, origin, keys, sequence: 1 };
 }
 
-const page = (...formKeys: string[]) => ({
-  items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: NPCS.plugin })), total: formKeys.length,
+const page = (formKeys: readonly string[]) => ({
+  items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: NPCS.plugin.name })), total: formKeys.length,
 });
 
-// The Plugins view as the selection reads it: a row for each record the tree shows.
+// mEdit as the selection reads it: the group's records, and among them the ones the record filter
+// shows.
 function harness(shown: (formKey: string) => boolean = () => true) {
-  const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getRecords', page(OLD));
-  client.setQueryAnswer('getActiveFilter', null);
+  const stream = new InMemoryMEditClient();
+  const group = { records: [OLD] as string[], failure: undefined as Error | undefined };
+  const reads: unknown[][] = [];
+  const getRecords: MEditClient['getRecords'] = (...args) => {
+    reads.push(args);
+    if (group.failure) return Promise.reject(group.failure);
+    return Promise.resolve(page(args[5]?.unfiltered === true ? group.records : group.records.filter(shown)));
+  };
+  const reporter = recordingReporter();
   const revealed: string[] = [];
   const selection = createdRecordSelection<string>({
-    client,
-    rowOf: (group, formKey) => Promise.resolve(group.recordType === NPCS.recordType && shown(formKey) ? `row ${formKey}` : undefined),
+    client: { subscribe: (kind, listener) => stream.subscribe(kind, listener), getRecords },
+    reporter,
+    rowOf: (address, formKey) => Promise.resolve(address.recordType === NPCS.recordType && shown(formKey) ? `row ${formKey}` : undefined),
     view: {
       reveal: (row, options) => {
         revealed.push(`${row} ${JSON.stringify(options)}`);
@@ -39,7 +48,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   const opened = () => executeCommand.mock.calls;
-  return { client, selection, revealed, settle, opened };
+  return { stream, group, reads, reporter, selection, revealed, settle, opened };
 }
 
 const OPEN_NEW = ['modbench.record.open', { formKey: NEW, label: NEW }];
@@ -50,151 +59,151 @@ beforeEach(() => { executeCommand.mockReset(); });
 // panel. The view finds it from the watch, and uses no result of create.
 describe('createdRecordSelection', () => {
   it('selects the record its group newly lists at the plugin\'s next change, then opens it as a click does', async () => {
-    const { client, selection, revealed, settle, opened } = harness();
+    const { stream, group, selection, revealed, settle, opened } = harness();
     await selection.selectWhenListed(NPCS);
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
     expect(revealed).toEqual([`row ${NEW} {"select":true,"focus":true}`]);
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('reads the group it waits on, by (origin, filename)', async () => {
-    const { client, selection } = harness();
+  it('reads the whole group it waits on, by (origin, filename), what the record filter hides too', async () => {
+    const { reads, selection } = harness();
 
     await selection.selectWhenListed(NPCS);
 
-    expect(client.calls.filter((c) => c.method === 'getRecords').map((c) => c.args))
-      .toEqual([['MyPatch.esp', 'npc_', 0, expect.any(Number), 'ModA']]);
+    expect(reads).toEqual([['MyPatch.esp', 'npc_', 0, UNLIMITED_RECORDS, 'ModA', { unfiltered: true }]]);
   });
 
   it('waits past a change to a plugin of the same name from another origin', async () => {
-    const { client, selection, settle, opened } = harness();
+    const { stream, group, selection, settle, opened } = harness();
     await selection.selectWhenListed(NPCS);
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    group.records.push(NEW);
 
-    client.emit(rowsChanged([NEW], 'ModB'));
+    stream.emit(rowsChanged([NEW], 'ModB'));
     await settle();
     expect(opened()).toEqual([]);
 
-    client.emit(rowsChanged([NEW]));
+    stream.emit(rowsChanged([NEW]));
     await settle();
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
   it('waits past a change after which the group lists nothing new', async () => {
-    const { client, selection, settle, opened } = harness();
+    const { stream, group, selection, settle, opened } = harness();
     await selection.selectWhenListed(NPCS);
 
-    client.emit(rowsChanged([OLD, OTHER_TYPE]));
+    stream.emit(rowsChanged([OLD, OTHER_TYPE]));
     await settle();
     expect(opened()).toEqual([]);
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('opens the record, selecting nothing, when the view shows no row for it', async () => {
-    const { client, selection, revealed, settle, opened } = harness(() => false);
+  // Never silently wrong: a change the watch brings first is not the new record.
+  it.each([['of another type', OTHER_TYPE], ['of this type that the filter hides', HIDDEN]])(
+    'opens nothing for a changed record %s while a record filter is in force', async (_what, changed) => {
+      const { stream, group, selection, settle, opened } = harness((formKey) => formKey === OLD);
+      group.records.push(HIDDEN);
+      await selection.selectWhenListed(NPCS);
+
+      stream.emit(rowsChanged([changed]));
+      await settle();
+      group.records.push(NEW);
+      stream.emit(rowsChanged([NEW]));
+      await settle();
+
+      expect(opened()).toEqual([OPEN_NEW]);
+    });
+
+  it('opens a new record the record filter hides, selecting nothing', async () => {
+    const { stream, group, selection, revealed, settle, opened } = harness((formKey) => formKey === OLD);
     await selection.selectWhenListed(NPCS);
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
     expect(revealed).toEqual([]);
     expect(opened()).toEqual([OPEN_NEW]);
-  });
-
-  it('opens the one record the change names that the group did not list, when the record filter hides it', async () => {
-    const { client, selection, revealed, settle, opened } = harness(() => false);
-    await selection.selectWhenListed(NPCS);
-
-    client.setQueryAnswer('getActiveFilter', { sql: 'SELECT 1', source: 'weapons.sql' });
-    client.emit(rowsChanged([OLD, NEW]));
-    await settle();
-
-    expect(revealed).toEqual([]);
-    expect(opened()).toEqual([OPEN_NEW]);
-  });
-
-  it('opens nothing for a record the group does not list while no record filter is in force', async () => {
-    const { client, selection, settle, opened } = harness();
-    await selection.selectWhenListed(NPCS);
-
-    client.emit(rowsChanged([OTHER_TYPE]));
-    await settle();
-
-    expect(opened()).toEqual([]);
   });
 
   it('opens once, though the watch names the record again', async () => {
-    const { client, selection, settle, opened } = harness();
+    const { stream, group, selection, settle, opened } = harness();
     await selection.selectWhenListed(NPCS);
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
+    group.records.push(NEW);
 
-    client.emit(rowsChanged([NEW]));
-    client.emit(rowsChanged([NEW]));
+    stream.emit(rowsChanged([NEW]));
+    stream.emit(rowsChanged([NEW]));
     await settle();
-    client.emit(rowsChanged([NEW]));
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
   it('waits only for the latest create', async () => {
-    const { client, selection, settle, opened } = harness();
+    const { stream, group, selection, settle, opened } = harness();
     await selection.selectWhenListed({ ...NPCS, recordType: 'acti' });
     await selection.selectWhenListed(NPCS);
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  it('awaits nothing, and lets create go on, when mEdit cannot list the group', async () => {
-    const { client, selection, settle, opened } = harness();
-    client.setQueryFailureOnce('getRecords', new Error('mEdit is not running'));
+  it('says it will not select the new record when mEdit cannot list its group, and lets create go on', async () => {
+    const { stream, group, reporter, selection, settle, opened } = harness();
+    group.failure = new Error('mEdit is not running');
 
-    const forget = await selection.selectWhenListed(NPCS);
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    await selection.selectWhenListed(NPCS);
+    group.failure = undefined;
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
-    expect(forget).toEqual(expect.any(Function));
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Could not select and open the new npc_ record in "MyPatch.esp".', detail: 'mEdit is not running',
+    }]);
     expect(opened()).toEqual([]);
   });
 
-  it('waits past a change after which mEdit cannot list the group', async () => {
-    const { client, selection, settle, opened } = harness();
+  it('says it did not select the new record when mEdit cannot list its group after the change, and stops waiting', async () => {
+    const { stream, group, reporter, selection, settle, opened } = harness();
     await selection.selectWhenListed(NPCS);
 
-    client.setQueryFailureOnce('getRecords', new Error('mEdit is not running'));
-    client.emit(rowsChanged([NEW]));
+    group.failure = new Error('mEdit is not running');
+    stream.emit(rowsChanged([NEW]));
     await settle();
-    expect(opened()).toEqual([]);
+    group.failure = undefined;
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
+    await settle();
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
-    await settle();
-    expect(opened()).toEqual([OPEN_NEW]);
+    expect(reporter.reports).toEqual([{
+      severity: 'warning', message: 'Could not select and open the new npc_ record in "MyPatch.esp".', detail: 'mEdit is not running',
+    }]);
+    expect(opened()).toEqual([]);
   });
 
-  it('hears nothing once forgotten', async () => {
-    const { client, selection, settle, opened } = harness();
+  it('stops listening once forgotten', async () => {
+    const { stream, group, reads, selection, settle, opened } = harness();
     const forget = await selection.selectWhenListed(NPCS);
     forget();
 
-    client.setQueryAnswer('getRecords', page(OLD, NEW));
-    client.emit(rowsChanged([NEW]));
+    group.records.push(NEW);
+    stream.emit(rowsChanged([NEW]));
     await settle();
 
+    expect(reads).toHaveLength(1);
     expect(opened()).toEqual([]);
   });
 });

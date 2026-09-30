@@ -507,6 +507,19 @@ describe('HttpMEditClient — the record filter', () => {
 // putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
 // lifetime, and the deliberate-abort outcome ('abandoned') that is not a WriteRefused-shaped
 // failure.
+describe('HttpMEditClient — a group\'s records', () => {
+  it('asks for what the record filter hides too, only when told to', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
+    const client = makeClient(fetch);
+
+    await client.getRecords('MyPatch.esp', 'npc_', 0, 10, 'ModA');
+    await client.getRecords('MyPatch.esp', 'npc_', 0, 10, 'ModA', { unfiltered: true });
+
+    const queries = fetch.mock.calls.map((call) => new URL(call[0].url).searchParams.get('unfiltered'));
+    expect(queries).toEqual([null, 'true']);
+  });
+});
+
 describe('HttpMEditClient — putLoadOrder', () => {
   const plugins = [
     { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },

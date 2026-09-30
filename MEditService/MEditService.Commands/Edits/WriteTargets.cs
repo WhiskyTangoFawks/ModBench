@@ -380,7 +380,7 @@ internal sealed class WriteTargets(
     // group of its own, which the message names.
     internal static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
     {
-        if (RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null) return null;
+        if (CreatableRecordTypes.Includes(recordType, release)) return null;
 
         return RecordEditResult.Refused(
             RecordEditRefusal.ContainerRecordNotYetSupported,

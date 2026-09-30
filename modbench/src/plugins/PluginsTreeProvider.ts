@@ -14,6 +14,7 @@ import { IndexingNode, type PluginConditions, type PluginTreeNode, type PluginTr
 import { ErrorNode } from './errorNode';
 import { pluginAddressKey } from './trackedRepositories';
 import { isRecordRow } from './gestureEntry';
+import type { RecordGroup } from './createdRecordSelection';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 
@@ -373,11 +374,6 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // The view's message line is read on each change of the rows.
-  private rereadMessageLine(): void {
-    this.render();
-  }
-
   /** What the view's message line says about its rows: the game folder not found (common.md,
    *  States, story 5), else no rows at all (plugins.md, States, story 1), else a record filter
    *  that matches nothing (States, story 5). */
@@ -457,32 +453,30 @@ export class PluginsTreeProvider
   private readonly parentOf = new WeakMap<PluginsTreeNode, PluginsTreeNode>();
 
   private adopted(children: PluginsTreeNode[], parent: PluginsTreeNode): PluginsTreeNode[] {
-    const pluginRow = this.pluginRowOf(parent);
+    const plugin = this.pluginOf(parent);
     for (const child of children) {
       this.parentOf.set(child, parent);
       const formKey = recordFormKeyOf(child);
-      if (formKey !== undefined && pluginRow !== undefined) {
-        child.id = rowIdentity(child.kind, { name: pluginFileOf(pluginRow), origin: pluginRow.origin }, formKey);
-      }
+      if (formKey !== undefined && plugin !== undefined) child.id = rowIdentity(child.kind, plugin, formKey);
     }
     return children;
   }
 
-  private pluginRowOf(node: PluginsTreeNode): PluginListNode | undefined {
+  /** The plugin row a row sits under, or is: the rows beneath it are read without its origin. */
+  pluginOf(node: PluginsTreeNode): PluginAddress | undefined {
     let current: PluginsTreeNode | undefined = node;
     while (current !== undefined && !isRow(current)) current = this.parentOf.get(current);
-    return current;
+    return current && { name: pluginFileOf(current), origin: current.origin };
   }
 
-  /** The row of a record, once mEdit lists it in its plugin's group of its type; the plugin as
-   *  (origin, filename). */
-  async recordRow(record: { plugin: string; origin: string; recordType: string; formKey: string }): Promise<PluginsTreeNode | undefined> {
-    const address = pluginAddressKey(record.plugin, record.origin);
+  /** The row of a record, once mEdit lists it in its group. */
+  async recordRow({ plugin, recordType }: RecordGroup, formKey: string): Promise<PluginsTreeNode | undefined> {
+    const address = pluginAddressKey(plugin.name, plugin.origin);
     const pluginRow = (await this.rows()).find((row) => row.kind === 'plugin' && pluginAddressKey(row.plugin.name, row.origin) === address);
     if (pluginRow === undefined) return undefined;
-    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === record.recordType);
+    const group = (await this.getChildren(pluginRow)).find((row) => row.kind === 'recordType' && row.recordType === recordType);
     if (group === undefined) return undefined;
-    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === record.formKey);
+    return (await this.getChildren(group)).find((row) => row.kind === 'record' && row.record.formKey === formKey);
   }
 
   // plugins.md, States 2-4: what a plugin row expands into, in precedence order.
@@ -529,7 +523,7 @@ export class PluginsTreeProvider
     this.cache = { rows };
     if ((rows.length === 0) !== this.lastBuildHadNoRows) {
       this.lastBuildHadNoRows = rows.length === 0;
-      this.rereadMessageLine();
+      this.render();
     }
   }
 
