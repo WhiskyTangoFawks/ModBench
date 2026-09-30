@@ -2,7 +2,6 @@
 // taking changes in domain words. A mod manager is one implementation of it; MO2's is
 // `mo2Instance.ts`.
 
-import { join } from 'node:path';
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
@@ -36,17 +35,6 @@ export type GameFolder =
     readonly looked: readonly GameFolderLook[];
     readonly setting: string;
   };
-
-/** The Data folder of a game folder found, undefined when it was not. */
-export function dataFolderOf(folder: GameFolder): string | undefined {
-  return folder.kind === 'found' ? folder.dataFolder : undefined;
-}
-
-/** A file at the root of the Data folder of a game folder found, undefined when it was not. */
-export function dataFolderFile(folder: GameFolder, name: string): string | undefined {
-  const dataFolder = dataFolderOf(folder);
-  return dataFolder === undefined ? undefined : join(dataFolder, name);
-}
 
 /** A Nexus mod and file id pair recorded as installed into a mod. */
 export interface InstalledFileId {

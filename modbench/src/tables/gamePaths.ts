@@ -1,5 +1,7 @@
 // Every per-game fact needed to find an install and speak to Nexus, keyed by Mutagen's
-// GameRelease.
+// GameRelease, and where a plugin sits in an install.
+
+import { join } from 'node:path';
 
 export interface GamePathInfo {
   /** MO2's own spelling, as `ModOrganizer.ini`'s `gameName=` writes it. */
@@ -52,4 +54,18 @@ export function nexusSlugForGame(mo2Name: string): string {
  *  the autodetector's signal to give up rather than guess a folder. */
 export function gamePathInfoForRelease(release: string): GamePathInfo | undefined {
   return GAME_PATHS[release];
+}
+
+/** A game folder as plain data: found, with its Data folder, or not found. */
+export type GameFolderData = { readonly kind: 'found'; readonly dataFolder: string } | { readonly kind: 'notFound' };
+
+/** The Data folder of a game folder found, undefined when it was not. */
+export function dataFolderOf(folder: GameFolderData): string | undefined {
+  return folder.kind === 'found' ? folder.dataFolder : undefined;
+}
+
+/** A file at the root of the Data folder of a game folder found, undefined when it was not. */
+export function dataFolderFile(folder: GameFolderData, name: string): string | undefined {
+  const dataFolder = dataFolderOf(folder);
+  return dataFolder === undefined ? undefined : join(dataFolder, name);
 }

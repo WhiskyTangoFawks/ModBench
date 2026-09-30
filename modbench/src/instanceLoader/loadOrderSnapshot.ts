@@ -5,9 +5,10 @@
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import {
-  dataFolderFile, isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
+  isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
 } from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
+import { dataFolderFile } from '../tables/gamePaths';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';

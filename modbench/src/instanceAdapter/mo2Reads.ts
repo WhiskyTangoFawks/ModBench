@@ -7,9 +7,10 @@ import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
+import { dataFolderOf } from '../tables/gamePaths';
 import { factsOf, get, listDir } from './files';
 import {
-  dataFolderOf, type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
+  type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
