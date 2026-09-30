@@ -433,7 +433,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
 }
 
 
-interface Mo2Side {
+interface InstanceSide {
   instance: Instance;
   instanceRoot: string;
   firstRead: FirstReadMark;
@@ -449,7 +449,7 @@ interface Mo2Side {
   pluginsSelection: () => readonly PluginsTreeNode[];
 }
 
-function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Side {
+function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): InstanceSide {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
     setStatusText, notifyConflictsComputed, reporterFor, ask, trash, extensionId,
@@ -608,17 +608,17 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   };
 
   const opened = openedFolder(deps.outputChannel);
-  const mo2 = opened.folder === 'instance' ? buildMo2Side(own, opened.instanceRoot, deps) : undefined;
+  const side = opened.folder === 'instance' ? buildInstanceSide(own, opened.instanceRoot, deps) : undefined;
 
-  const provider = own(new ToolboxProvider({ instance: mo2?.instance }));
+  const provider = own(new ToolboxProvider({ instance: side?.instance }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
-  own(registerCreatePluginCommand(client, mo2?.instance, reporterFor('newPlugin')));
-  // Registered here, not inside buildMo2Side: Referenced By's own copy reaches this regardless
+  own(registerCreatePluginCommand(client, side?.instance, reporterFor('newPlugin')));
+  // Registered here, not inside buildInstanceSide: Referenced By's own copy reaches this regardless
   // of whether the folder is an instance.
   own(registerCopyValueCommand(
     [
-      { text: mo2 ? modsCopyValueText(() => mo2.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
-      { text: mo2 ? pluginsCopyValueText(() => mo2.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
+      { text: side ? modsCopyValueText(() => side.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
+      { text: side ? pluginsCopyValueText(() => side.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
       { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
     ],
     reporterFor,
@@ -626,14 +626,14 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
 
   return {
     folder: opened.folder,
-    instanceRead: () => mo2?.firstRead.landed ?? false,
-    modListProvider: mo2?.modListProvider,
-    downloadsProvider: mo2?.downloadsProvider,
-    pluginsTree: mo2?.pluginsTree,
-    instance: mo2?.instance,
-    enterEditing: mo2?.enterEditing,
-    originFiles: (origin) => mo2?.originFiles(origin),
-    trackedFolderOf: (pluginFile) => mo2?.trackedFolderOf(pluginFile) ?? Promise.resolve(undefined),
+    instanceRead: () => side?.firstRead.landed ?? false,
+    modListProvider: side?.modListProvider,
+    downloadsProvider: side?.downloadsProvider,
+    pluginsTree: side?.pluginsTree,
+    instance: side?.instance,
+    enterEditing: side?.enterEditing,
+    originFiles: (origin) => side?.originFiles(origin),
+    trackedFolderOf: (pluginFile) => side?.trackedFolderOf(pluginFile) ?? Promise.resolve(undefined),
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;
