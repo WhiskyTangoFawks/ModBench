@@ -100,13 +100,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    /// <summary>Whether the store registers this plugin, answered without handing out the store.
-    /// </summary>
-    public bool Registers(PluginAddress key)
-    {
-        lock (_lock) return _index?.RegisteredPlugins().Contains(key, PluginAddress.Comparer) == true;
-    }
-
     // ADR-0009 invariant 4: the hash the store's rows for this plugin were built from, or null when
     // it holds no validated rows for it.
     private string? IndexedContentHash(PluginAddress key)

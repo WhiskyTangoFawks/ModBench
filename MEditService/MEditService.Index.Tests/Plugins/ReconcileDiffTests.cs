@@ -115,7 +115,7 @@ public sealed class ReconcileDiffTests
         Assert.Equal(opened, opens.OpenedTotal);
         // Still registered and still in the load order — browsable at its slot — but a disabled
         // plugin competes for nothing.
-        Assert.True(index.Registers(bKey));
+        Assert.NotEmpty(ReadsOf(index).GetDocuments(bKey));
         var b = OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey));
         Assert.Equal(1, b.LoadOrderIndex);
         Assert.False(b.IsWinner);
@@ -152,7 +152,6 @@ public sealed class ReconcileDiffTests
         Assert.Equal(stack.Single(e => e.Plugin.Equals(modA)).LoadOrderIndex, stack.Single(e => e.Plugin.Equals(modB)).LoadOrderIndex);
 
         // Both plugins are registered — the overridden one is browsable, not absent.
-        Assert.True(index.Registers(modB));
         Assert.NotEmpty(ReadsOf(index).GetDocuments(modB));
 
         // Reprioritising the mods flips which plugin wins — SQL-only, like every other move.
@@ -183,7 +182,6 @@ public sealed class ReconcileDiffTests
 
         var readsAfterLeaving = ReadsOf(index);
         Assert.DoesNotContain(readsAfterLeaving.OpenedPlugins.Keys, k => k.Name == "B.esp");
-        Assert.False(index.Registers(bKey));
         Assert.Empty(readsAfterLeaving.GetDocuments(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
         Assert.Equal("A.esm", WinnerOf(index, npc));
@@ -227,7 +225,7 @@ public sealed class ReconcileDiffTests
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdOpens.OpenedTotal);
-            Assert.False(third.Registers(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
+            Assert.Empty(ReadsOf(third).GetDocuments(new PluginAddress("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }

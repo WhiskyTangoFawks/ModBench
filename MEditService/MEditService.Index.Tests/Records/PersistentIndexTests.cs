@@ -86,9 +86,7 @@ public sealed class PersistentIndexTests : IDisposable
         using var second = Launched([beta]);
 
         Assert.Equal(0, second.Opens.OpenedTotal);
-        Assert.False(second.Index.Registers(alpha.KeyOf()));
         Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
-        Assert.True(second.Index.Registers(beta.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
 
         // Alpha's rows outlived its registration: naming it again costs no open.
