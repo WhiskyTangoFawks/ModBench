@@ -1,4 +1,5 @@
 using MEditService.Index;
+using MEditService.Ports;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
@@ -26,6 +27,12 @@ public interface IRecordQueryService
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
+    // ADR-0013 invariant 4: answered in every state, "no load order yet" included.
+    LoadOrderStatus GetStatus();
+    long GetSequence();
+    Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);
+
+    (string Sql, string Source)? GetFilter();
     void SetFilter(string sql, string source);
     void ClearFilter();
     Task RebuildStore(GameRelease gameRelease, string instanceRoot);

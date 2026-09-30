@@ -128,11 +128,9 @@ public class RegistrationScopingTests
         Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
 
-        fx.Reconcile(fx.WithoutBeta);
-
         // Unregistered, not unindexed: Register_AfterUnregister_AnswersAgainWithoutReindex is the
         // rows' own witness.
-        Assert.False(fx.Index.Registers(BetaKey));
+        fx.Reconcile(fx.WithoutBeta);
 
         // Documents.
         Assert.Null(reads.GetDocument(fx.BetaNpcFk));
@@ -220,7 +218,6 @@ public class RegistrationScopingTests
         File.Delete(betaPath);
         Assert.True(await fx.Index.RefreshBinary(BetaKey, betaPath));
 
-        Assert.False(fx.Index.Registers(BetaKey));
         Assert.Empty(fx.Reads.GetDocuments(BetaKey));
 
         var beta = new Fallout4Mod(ModKey.FromFileName(BetaKey.Name), Fallout4Release.Fallout4);

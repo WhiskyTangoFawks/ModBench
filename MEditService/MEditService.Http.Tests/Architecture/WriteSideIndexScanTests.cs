@@ -1,4 +1,7 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
+using MEditService.Index;
+using MEditService.Queries;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
@@ -120,87 +123,56 @@ public sealed class WriteSideIndexScanTests
     // a handler is the write side reading its own effect through the API.
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
-    private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
+    // The rebuild's refusal is the Index's own exception, and it crosses Queries' RebuildStore
+    // unchanged (ADR-0009 invariant 5), so no signature carries it.
+    private static readonly string[] IndexTypesQueriesThrow = ["IndexHeldElsewhereException"];
 
-    // The read routes name the query services by definition, and the gate has its own fact below,
-    // so what is left is the store, the Indexer and the read surface.
-    private static readonly string[] ReadSideSymbols =
-        ["IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
-         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService"];
+    // Read off the assemblies, so a type the Index adds is forbidden the day it lands. What a query
+    // service's own members take or answer crosses the endpoint as it is.
+    private static string[] IndexTypesNoQuerySignatureCarries() =>
+        [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
+            .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes()
+                .SelectMany(SignatureTypes)
+                .SelectMany(Unwrapped)
+                .Select(SourceName), StringComparer.Ordinal)
+            .Except(IndexTypesQueriesThrow, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)];
 
-    private static readonly string[] EndpointSymbols =
-        [.. Symbols.Except(ReadSideSymbols, StringComparer.Ordinal).Except(GateSymbols, StringComparer.Ordinal)];
+    private static IEnumerable<Type> SignatureTypes(Type type) =>
+        type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType))
+            .Concat(type.GetProperties().Select(p => p.PropertyType));
 
-    // The one endpoint file that maps the Index's doors, one route each.
-    private const string DoorMappingFile = "MEditService.Http/Endpoints/IndexEndpoints.cs";
+    private static IEnumerable<Type> Unwrapped(Type type) =>
+        type.GetElementType() is { } element ? Unwrapped(element)
+        : type.IsGenericType ? type.GetGenericArguments().SelectMany(Unwrapped).Append(type.GetGenericTypeDefinition())
+        : [type];
 
-    // The Index's doors as the zoom-out captions them, by the member each route calls. Registers
-    // answers the 404 before validate is asked for a plugin nobody holds.
-    private static readonly string[] IndexDoors =
-    [
-        "Status", "RequireReads", "ActiveFilter", "Sequence", "AwaitSequenceAsync", "Registers",
-        "ValidateIndex",
-    ];
+    private static string SourceName(Type type) => type.Name.Split('`')[0];
 
     [Fact]
-    public void NoEndpoint_ButTheDoorMapping_NamesAnIndexType()
+    public void NoEndpoint_NamesAnIndexType_ButWhatAQueryServiceHandsIt()
     {
         var root = ArchitectureTests.SolutionDirectory();
+        var forbidden = IndexTypesNoQuerySignatureCarries();
 
         var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], EndpointSymbols)
-            .Where(count => !count.StartsWith(DoorMappingFile + ":", StringComparison.Ordinal))
-            .ToList();
+        var named = Counts(root, [EndpointRoot], [], forbidden);
 
         Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
+        Assert.Contains("Indexer", forbidden);
         Assert.True(
             named.Count == 0,
-            "An endpoint names an Index type. A route takes a gesture's handler or a query service, "
-            + "and the write side never reads the Index (ADR-0015 invariant 1), so a row reaching a "
-            + $"handler through the API is the same read by another door. The Index's own doors are "
-            + $"mapped in {DoorMappingFile} alone:\n"
+            "An endpoint names an Index type no query service hands it. A route takes a gesture's "
+            + "handler or a query service: Queries are the only readers of the read model (ADR-0014 "
+            + "invariant 3), and no arrow runs from the HTTP endpoints to the Index:\n"
             + string.Join("\n", named));
     }
 
-    // Every member reached off a parameter declared Indexer, keyed on that declared type rather
-    // than on whatever a handler names the parameter.
-    private static List<string> IndexReceiverMembers(string text) =>
-        [.. Regex.Matches(text, @"\bIndexer\s+(\w+)\b")
-            .Select(m => m.Groups[1].Value)
-            .Distinct(StringComparer.Ordinal)
-            .SelectMany(name => Regex.Matches(text, $@"\b{Regex.Escape(name)}\.(\w+)")
-                .Select(m => m.Groups[1].Value))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)];
-
-    // A member outside the doors above is the watcher's signal or the projection's own machinery;
-    // a door nobody maps is a route that went missing.
-    [Fact]
-    public void TheDoorMapping_NamesOnlyTheIndexer_AndReachesItOnlyThroughItsDoors()
-    {
-        var root = ArchitectureTests.SolutionDirectory();
-        var text = File.ReadAllText(Path.Combine(root, DoorMappingFile.Replace('/', Path.DirectorySeparatorChar)));
-
-        var named = References(text, EndpointSymbols).Select(r => r.Symbol).ToList();
-
-        Assert.Equal(["Indexer"], named);
-        Assert.Equal(IndexDoors.Order(StringComparer.Ordinal), IndexReceiverMembers(text));
-    }
-
-    // The rival a literal `index.` scan misses: the same call through a differently named
-    // Indexer parameter.
-    [Fact]
-    public void TheDoorScan_KeysOnTheIndexerType_NotTheParameterName()
-    {
-        var text = "private static IResult H(Indexer svc) => Results.Ok(svc.SetFilter(\"x\", \"y\"));";
-
-        Assert.Equal(["SetFilter"], IndexReceiverMembers(text));
-    }
-
     // The endpoints reference the Source repository and the watcher as the composition root, and
-    // call neither: a route's one call is to a handler, a query service or an Index door.
+    // call neither: a route's one call is to a handler or a query service.
     private static readonly string[] UndrawnCallees =
-        ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch", "IRefreshIndex"];
+        ["SourceRepository", "ModFolderWatcher", "WatchSet", "ModWatch"];
 
     [Fact]
     public void NoEndpoint_NamesTheSourceRepositoryOrTheWatcher()
@@ -216,22 +188,6 @@ public sealed class WriteSideIndexScanTests
             "An endpoint names the Source repository or the Mod watcher. Neither arrow is drawn from "
             + "the HTTP endpoints; resolution under the load order is Commands' to hide, and the "
             + "watcher is told nothing:\n"
-            + string.Join("\n", named));
-    }
-
-    [Fact]
-    public void NoEndpoint_NamesTheIndexWriteGate()
-    {
-        var root = ArchitectureTests.SolutionDirectory();
-
-        var walked = ScannedFiles(root, [EndpointRoot], []).Count;
-        var named = Counts(root, [EndpointRoot], [], GateSymbols);
-
-        Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
-        Assert.True(
-            named.Count == 0,
-            "An endpoint names the Index's write gate. A record gesture writes its system of record "
-            + "and returns (ADR-0015 invariant 2), so the gate stays the Indexer's own:\n"
             + string.Join("\n", named));
     }
 

@@ -40,8 +40,8 @@ public sealed class HeldPluginsTests
         held.Reconcile(snapshot, version);
 
         Assert.Equal(["Fallout4.esm", UserPlugin], held.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.True(held.Registers(Key("Fallout4.esm")));
-        Assert.True(held.Registers(Key(UserPlugin)));
+        Assert.Contains(Key("Fallout4.esm"), held.RequireReads().OpenedPlugins.Keys);
+        Assert.Contains(Key(UserPlugin), held.RequireReads().OpenedPlugins.Keys);
     }
 
     [Fact]
@@ -167,14 +167,15 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Registers_TheHeldPlugin_AndFalseForAnUnknownPluginOrOrigin()
+    public void OpenedPlugins_HoldTheHeldPlugin_AndNoUnknownPluginOrOrigin()
     {
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
         using var held = Open(data);
 
-        Assert.True(held.Registers(Key("CaseMod.esp")));
-        Assert.False(held.Registers(Key("Unknown.esp")));
-        Assert.False(held.Registers(Key("CaseMod.esp", "SomeOtherOrigin")));
+        var opened = held.RequireReads().OpenedPlugins;
+        Assert.True(opened.ContainsKey(Key("CaseMod.esp")));
+        Assert.False(opened.ContainsKey(Key("Unknown.esp")));
+        Assert.False(opened.ContainsKey(Key("CaseMod.esp", "SomeOtherOrigin")));
     }
 
     // ── Mutation in place ───────────────────────────────────────────────────────
@@ -191,7 +192,6 @@ public sealed class HeldPluginsTests
 
         held.Reconcile(holder, data.DataFolder, [data.Plugins.Single() with { Enabled = false }], GameRelease.Fallout4);
 
-        Assert.True(held.Registers(Key("A.esp")));
         Assert.False(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
         Assert.Contains(Key("A.esp"), held.RequireReads().OpenedPlugins.Keys);
     }
@@ -208,7 +208,6 @@ public sealed class HeldPluginsTests
         held.Reconcile(holder, data.DataFolder, [.. data.Plugins.Where(p => p.Name == "B.esp")], GameRelease.Fallout4);
 
         Assert.Equal(["B.esp"], held.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.False(held.Registers(removed));
         Assert.DoesNotContain(removed, held.RequireReads().OpenedPlugins.Keys);
     }
 

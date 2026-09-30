@@ -87,11 +87,10 @@ public sealed class IndexerTests
 
         Reconcile(indexer, holder, snapshot);
 
-        Assert.All(snapshot.Plugins, plugin => Assert.True(indexer.Registers(plugin.Key)));
+        Assert.All(snapshot.Plugins, plugin => Assert.NotEmpty(indexer.RequireReads().GetDocuments(plugin.Key)));
         Assert.Equal(
             snapshot.Plugins.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
             indexer.RequireReads().OpenedPlugins.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
-        Assert.False(indexer.Registers(new PluginAddress("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
     // Header flags, the master list and the record count are read out of the file when the plugin is
