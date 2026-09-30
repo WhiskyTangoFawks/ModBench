@@ -205,11 +205,9 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread: registrations made equal to
-    /// the snapshot, never-held plugins indexed, one winner sweep, then every plugin validated by
-    /// content (ADR-0009 invariant 4). Every outcome becomes status data, published once
-    /// <paramref name="version"/> is answered; a reconcile that changes nothing publishes
-    /// nothing.</summary>
+    /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread, then every plugin validated
+    /// (ADR-0009 invariant 4). Every outcome becomes status data, published once
+    /// <paramref name="version"/> is answered; one that changes nothing publishes nothing.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
 
     // The arrival is read once the exclusive right is held, so a refill reconciles the load order
@@ -817,9 +815,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         return reports;
     }
 
-    // plugins.md, A row, Plugin, "Failed to read": one plugin that cannot be read is flagged with
-    // its reason, and the plugins after it are still validated. A plugin whose last read failed is
-    // read whole again once what it reads from changed, which is what lifts the failure (ADR-0003).
+    // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
+    // rest are still validated. A failed one is read whole again once what it reads from changed.
     private ValidationReport ValidateOne(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
         var key = plugin.Key;
@@ -883,9 +880,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         if (transient) lock (_lock) _failedReads[plugin.Key] = null;
     }
 
-    // Every file, once the status answering the version is out: the views read the load order
-    // while validation corrects what changed on disk. It waits out a reconcile rather than
-    // cancelling one, and a newer reconcile cancels it and validates again.
+    // Once the status answering the version is out, so the views read the load order while this
+    // corrects what changed on disk. It waits out a reconcile, and a newer one cancels it.
     private void ValidateEveryPlugin()
     {
         _exclusive.Enter();
@@ -1145,8 +1141,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own
-    /// (ADR-0013 invariant 1). Each reconciles the snapshot held when it runs, so an arrival that a
-    /// newer one overtook reconciles the newer.</summary>
+    /// (ADR-0013 invariant 1): the snapshot held when it runs, so an overtaken arrival reconciles
+    /// the newer.</summary>
     public void Subscribe() => _holder.Arrived += OnArrived;
 
     private void OnArrived(LoadOrderSnapshot snapshot, long version) =>

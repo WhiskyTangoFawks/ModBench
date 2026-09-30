@@ -7,7 +7,7 @@ namespace MEditService.Commands;
 
 /// <summary>Validates the game release, prepends the forced plugins (ADR-0013 invariant 2), applies
 /// the result to Load order state and checks it for external changes (ADR-0003 invariant 3). The
-/// Index's reconcile is a subscription wired at composition.</summary>
+/// Index reconciles on its own subscription.</summary>
 public sealed class PutLoadOrderHandler
 {
     private readonly LoadOrderHolder _holder;

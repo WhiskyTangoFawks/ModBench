@@ -11,8 +11,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Http.Tests.Traces;
 
 /// <summary>edit-record: the envelope goes down to the source tree and the next snapshot's
-/// projection comes back up, so the editor sees an applied reply or a typed refusal, then a
-/// rows-changed push, then its own re-read.</summary>
+/// projection comes back up: an applied reply or a typed refusal, then a rows-changed push, then
+/// the editor's own re-read.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class EditRecordTraceTests : HostedTests
 {
