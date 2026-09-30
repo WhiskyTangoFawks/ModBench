@@ -321,7 +321,7 @@ public sealed partial class SourceRepository
     private bool HoldsAtRef(PluginAddress plugin, string formKey, string gitRef) =>
         ReadAll(plugin, gitRef).Any(document =>
             document.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)
-            || FormKeysIn(System.Text.Encoding.UTF8.GetBytes(document.Body))
+            || FormKeysIn(System.Text.Encoding.UTF8.GetBytes(document.Body), _release)
                 .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
@@ -473,10 +473,10 @@ public sealed partial class SourceRepository
             return true;
         }
 
-        private static bool Carried(
+        private bool Carried(
             string documentPath, string formKey, Func<(string FormKey, bool AtRoot, bool InAnEmbedSlot), bool> where) =>
             DocumentBytes(documentPath) is { } bytes
-            && FormKeysIn(bytes).Any(k => where(k) && k.FormKey.Equals(formKey, StringComparison.Ordinal));
+            && FormKeysIn(bytes, _release).Any(k => where(k) && k.FormKey.Equals(formKey, StringComparison.Ordinal));
 
         private void Scan()
         {
@@ -489,7 +489,7 @@ public sealed partial class SourceRepository
                     if (CarriesNoRecord(documentPath)) continue;
                     if (DocumentBytes(documentPath) is not { } bytes) continue;
 
-                    var keys = FormKeysIn(bytes);
+                    var keys = FormKeysIn(bytes, _release);
                     if (keys.FirstOrDefault(k => k.AtRoot).FormKey is not { } root) continue;
 
                     if (!byRoot.TryGetValue(root, out var declaring)) byRoot[root] = declaring = [];
@@ -527,8 +527,9 @@ public sealed partial class SourceRepository
 
     // The codec writes a link as a bare string and a child as an object with a FormKey of its
     // own, so the slot a key sits under tells the two apart. Malformed text yields what it read.
-    private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes)
+    private static List<(string FormKey, bool AtRoot, bool InAnEmbedSlot)> FormKeysIn(byte[] bytes, GameRelease release)
     {
+        var embeddedSlotNames = ContainerSlots.For(release).EmbeddedSlotsOf(null).ToHashSet(StringComparer.Ordinal);
         var found = new List<(string, bool, bool)>();
         var reader = new Utf8JsonReader(bytes);
 
@@ -555,7 +556,7 @@ public sealed partial class SourceRepository
                     case JsonTokenType.String when atFormKey:
                         var formKey = reader.GetString()
                             ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
-                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
+                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth, embeddedSlotNames)));
                         break;
                 }
                 atFormKey = false;
@@ -577,17 +578,14 @@ public sealed partial class SourceRepository
 
     // A child record's own FormKey sits inside the slot its container embeds it in, at any depth: a
     // worldspace embeds its TopCell, which embeds its placed references.
-    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth)
+    private static bool UnderAnEmbedSlot(List<string?> openedBy, int keyDepth, HashSet<string> embeddedSlotNames)
     {
         for (var depth = 0; depth < keyDepth && depth < openedBy.Count; depth++)
         {
-            if (openedBy[depth] is { } member && EmbedSlotNames.Contains(member)) return true;
+            if (openedBy[depth] is { } member && embeddedSlotNames.Contains(member)) return true;
         }
         return false;
     }
-
-    private static readonly HashSet<string> EmbedSlotNames =
-        ContainerChildFields.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
 
     private static ReadOnlySpan<byte> FormKeyPropertyName => "FormKey"u8;
 }

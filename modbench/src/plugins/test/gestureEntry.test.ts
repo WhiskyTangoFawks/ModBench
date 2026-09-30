@@ -17,7 +17,7 @@ import {
 } from '../gestureEntry';
 import { ImplicitMasterNode, PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { CellNode, RecordNode, RecordTypeNode } from '../PluginTreeProvider';
-import { recordSummaryFixture } from '../../client/test/fixtures';
+import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 
 const pluginRow = (name: string, origin = 'SomeMod') => new PluginNode({ name, enabled: true }, origin);
 const lockedRow = (name: string) => new ImplicitMasterNode(name, 'Data');
@@ -178,8 +178,11 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite'), 'plugin enabled inOverwrite untracked editable');
   const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inMod tracked editable');
   const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inMod tracked');
-  const weapons = new RecordTypeNode('Alpha.esp', 'weap', 3, 'Weapon', 'ModA', false, { tracked: true, editable: true });
-  const untrackedWeapons = new RecordTypeNode('Beta.esp', 'weap', 3, 'Weapon', 'ModB');
+  const weapons = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModA', { tracked: true, editable: true });
+  const untrackedWeapons = new RecordTypeNode('Beta.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModB');
+  const quests = new RecordTypeNode(
+    'Alpha.esp', recordTypeCountFixture({ type: 'qust', count: 1, displayName: 'Quest', isCreatable: false }), 'ModA', { tracked: true, editable: true },
+  );
   const own = new RecordNode(recordSummaryFixture({ formKey: '000800:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: true });
   const immutable = new RecordNode(recordSummaryFixture({ formKey: '000801:Alpha.esp', plugin: 'Alpha.esp' }), 'ModA', { tracked: true, editable: false });
   const untrackedRecord = new RecordNode(recordSummaryFixture({ formKey: '000802:Beta.esp', plugin: 'Beta.esp' }), 'ModB', { tracked: false, editable: true });
@@ -219,6 +222,12 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([untracked]).singleCreatable).toBe(false);
     expect(context([weapons, compilable]).singleCreatable).toBe(false);
     expect(context([own]).singleCreatable).toBe(false);
+  });
+
+  // plugins.md, Create record, story 4 ("No dead entries"): a container type's group, tracked and
+  // editable though it is, sends a type the server refuses — the palette must not offer it.
+  it('create does not see a tracked, editable group of a type the game cannot create', () => {
+    expect(context([quests]).singleCreatable).toBe(false);
   });
 
   // No item is sent that the gesture would refuse.

@@ -103,9 +103,10 @@ public static class RecordDocumentEdits
     private static IEnumerable<IMajorRecordInternal> EmbeddedDescendants(IMajorRecordGetter container)
     {
         var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
+        var embeddedSlots = ContainerChildFields.EmbeddedSlotsFor(container.GetType());
         foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container).ToList())
         {
-            if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
+            if (!embeddedSlots.Contains((containerType, slotName))) continue;
 
             yield return (IMajorRecordInternal)child;
             foreach (var deeper in EmbeddedDescendants(child)) yield return deeper;

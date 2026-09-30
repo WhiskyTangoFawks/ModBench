@@ -720,6 +720,28 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("Non-Player Character", npc.DisplayName);
     }
 
+    // The group menu's create entry reads this instead of a second, package.json-side list
+    // (plugins.md, Menus and keys: no create on a group of container records).
+    [Fact]
+    public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint()
+    {
+        _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
+        {
+            [PluginKey] =
+            [
+                new RecordTypeCount("npc_", 1, HasParseFailure: false),
+                new RecordTypeCount("qust", 1, HasParseFailure: false),
+            ],
+        };
+
+        var creatable = _svc.GetCreatableRecordTypes().Select(r => r.Type).ToHashSet(StringComparer.Ordinal);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
+
+        Assert.Contains("npc_", creatable);
+        Assert.DoesNotContain("qust", creatable);
+        foreach (var row in result) Assert.Equal(creatable.Contains(row.Type), row.IsCreatable);
+    }
+
     [Fact]
     public void GetPluginRecordTypes_ExcludesHeader()
     {
@@ -764,6 +786,7 @@ public sealed class RecordQueryServiceTests
     [InlineData("refr")]
     [InlineData("dial")]
     [InlineData("info")]
+    [InlineData("qust")]
     public void GetCreatableRecordTypes_LeavesOutTheHeaderAndEveryContainerOrHeldType(string recordType)
     {
         var result = _svc.GetCreatableRecordTypes();

@@ -696,10 +696,11 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 
   // plugins.md, Menus and keys, story 4: no record edit on an untracked plugin.
-  it('record-type group menu: create record, only where its plugin is tracked and editable', () => {
-    expect(menuOf('recordType tracked editable')).toEqual([['modbench.record.create', '3_create']]);
-    expect(menuOf('recordType untracked editable')).toEqual([]);
-    expect(menuOf('recordType tracked')).toEqual([]);
+  it('record-type group menu: create record, only where its plugin is tracked, editable and the type is creatable', () => {
+    expect(menuOf('recordType tracked editable creatable')).toEqual([['modbench.record.create', '3_create']]);
+    expect(menuOf('recordType untracked editable creatable')).toEqual([]);
+    expect(menuOf('recordType tracked creatable')).toEqual([]);
+    expect(menuOf('recordType tracked editable')).toEqual([]);
   });
 
   // plugins.md, Create record, story 4: the Worldspace and Cell groups hold container records.

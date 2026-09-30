@@ -50,6 +50,9 @@ public sealed class CreateRecordHandlerTests
     [Theory]
     [InlineData("cell")]
     [InlineData("refr")]
+    // A quest is stored flat (its topics, branches and scenes embed in its own document), but it
+    // still owns them as children — plugins.md, Create record, story 4.
+    [InlineData("qust")]
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
         using var mod = SourceEditFixture.Tracked();

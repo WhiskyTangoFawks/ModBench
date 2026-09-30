@@ -121,10 +121,16 @@ export function pluginsKeyContext(
   selection: readonly PluginsTreeNode[], isEnabled: (row: RowOf<'plugin'>) => boolean,
 ): PluginsKeyContext {
   const firstPlugin = selection.find(isOf(['plugin']));
+  const creatableCandidate = onlySelected(selection, 'plugin', 'recordType');
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
     allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
-    singleCreatable: hasFlags(onlySelected(selection, 'plugin', 'recordType'), 'tracked', 'editable'),
+    // A record-type row also states whether its type is creatable; a plugin row carries no such
+    // fact and needs none — its own pick lists only creatable types (plugins.md, Create record,
+    // story 1; "No dead entries").
+    singleCreatable: creatableCandidate !== undefined
+      && hasFlags(creatableCandidate, 'tracked', 'editable')
+      && (creatableCandidate.kind !== 'recordType' || hasFlags(creatableCandidate, 'creatable')),
     allDeletableRecords: every(selection, (row) => isOf(RECORD_ROW_KINDS)(row) && hasFlags(row, 'tracked', 'editable')),
     allRecords: every(selection, isOf(RECORD_ROW_KINDS)),
     selectionToggle: firstPlugin && (isEnabled(firstPlugin) ? 'disable' : 'enable'),

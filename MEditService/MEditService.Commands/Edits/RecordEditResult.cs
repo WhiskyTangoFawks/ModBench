@@ -46,7 +46,7 @@ public enum RecordEditRefusal
     /// <summary>A typed refusal, not an exception: a full plugin is an ordinary outcome, never conflated with "no usable load order".</summary>
     FormKeySpaceExhausted,
 
-    /// <summary>No flat source path: a container's own directory, or a child embedded in one. A new
+    /// <summary>A container record (it owns child records), or a type the game cannot create. A new
     /// record has no containment until a gesture asks for it, which is a UX decision.</summary>
     ContainerRecordNotYetSupported,
 

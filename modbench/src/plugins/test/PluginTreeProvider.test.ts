@@ -19,7 +19,7 @@ import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
-import { listsForThePluginAsked } from '../../client/test/fixtures';
+import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,13 +54,14 @@ function makeRecord(
 }
 
 function makeClient(overrides: Partial<{
-  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
+  recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean; isCreatable?: boolean }[];
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
   client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
+    isCreatable: rt.isCreatable ?? true,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
@@ -121,6 +122,22 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 
     expect(typeNode.label).toBe('Activator');
     expect(typeNode.recordType).toBe('acti');
+  });
+
+  // plugins.md, Create record, story 4.
+  it('carries the backend\'s isCreatable verdict onto the group\'s contextValue', async () => {
+    const repo = makeClient({
+      recordTypes: [
+        { type: 'npc_', count: 1, isCreatable: true },
+        { type: 'qust', count: 1, isCreatable: false },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const [npc, qust] = expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode);
+
+    expect(present(npc, 'the npc_ group').contextValue).toContain('creatable');
+    expect(present(qust, 'the qust group').contextValue).not.toContain('creatable');
   });
 });
 
@@ -247,18 +264,24 @@ describe('RecordTypeNode', () => {
   it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
     // The tree must show "Weapon", not "weap" — but recordType (used for
     // caching, commands, contextValue) stays the raw signature.
-    const node = new RecordTypeNode('MyPlugin.esp', 'weap', 42, 'Weapon', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'weap', count: 42, displayName: 'Weapon' }), 'Data');
     expect(node.label).toBe('Weapon');
     expect(node.recordType).toBe('weap');
   });
 
   it('shows formatted count as description', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 1234, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 1234 }), 'Data');
     expect(node.description).toBe('1,234');
   });
 
   it('states no record edit when no one has described its plugin', () => {
-    const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 10, 'WEAP', 'Data');
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'WEAP', count: 10 }), 'Data');
+    expect(node.contextValue).toBe('recordType untracked creatable');
+  });
+
+  // plugins.md, Create record, story 4: no create record on a group of container records.
+  it('states no create on a container type\'s group (a quest, say)', () => {
+    const node = new RecordTypeNode('MyPlugin.esp', recordTypeCountFixture({ type: 'qust', count: 3, displayName: 'Quest', isCreatable: false }), 'Data');
     expect(node.contextValue).toBe('recordType untracked');
   });
 });
@@ -488,8 +511,8 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), TRACKED);
 
     expect(states).toEqual([
-      'recordType tracked editable', 'record tracked editable',
-      'recordType tracked editable', 'record tracked editable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable',
+      'recordType tracked editable creatable', 'record tracked editable', 'record tracked editable',
       'worldspace tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
       'cell tracked editable', 'placed tracked editable', 'placed tracked editable',
@@ -500,7 +523,10 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   it('states an untracked plugin untracked on every row beneath it', async () => {
     const states = await rowsBeneath(new PluginTreeProvider(spatialClient()), { tracked: false, editable: true });
 
-    expect(new Set(states.map((state) => state.split(' ').slice(1).join(' ')))).toEqual(new Set(['untracked editable']));
+    // Conditions only: creatable is a per-type fact, not a plugin condition, so it is dropped here.
+    const CONDITION_WORDS = new Set(['tracked', 'untracked', 'editable']);
+    const conditionsOf = (state: string) => state.split(' ').filter((w) => CONDITION_WORDS.has(w)).join(' ');
+    expect(new Set(states.map(conditionsOf))).toEqual(new Set(['untracked editable']));
   });
 });
 
@@ -644,8 +670,8 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 
   it('gives a group an expander only when it holds a record', () => {
-    expect(new RecordTypeNode('M.esp', 'weap', 1, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
-    expect(new RecordTypeNode('M.esp', 'weap', 0, 'weap', 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 1 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.Collapsed);
+    expect(new RecordTypeNode('M.esp', recordTypeCountFixture({ type: 'weap', count: 0 }), 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new WorldspacesNode('M.esp', 'Worldspace', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
     expect(new InteriorCellsNode('M.esp', 'Cell', 0, 'Data').collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
@@ -699,7 +725,7 @@ describe('PluginTreeProvider fetch failures', () => {
     const repo = makeClient();
     repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
-    const node = new RecordTypeNode('Plugin0.esp', 'WEAP', 5, 'WEAP', 'Data');
+    const node = new RecordTypeNode('Plugin0.esp', recordTypeCountFixture({ type: 'WEAP', count: 5 }), 'Data');
 
     const children = await provider.getChildren(node);
 
