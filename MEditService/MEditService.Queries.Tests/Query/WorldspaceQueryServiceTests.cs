@@ -64,9 +64,8 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for the Index side; this service takes
-    // the load order itself from the holder.
-    private sealed class StubIndex(IRecordReads reads) : IQueryIndex
+    // The reads' presence is what "no load order" means for the Index side.
+    private sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
@@ -79,18 +78,8 @@ public class WorldspaceQueryServiceTests
             throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
 
-    private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
-    {
-        var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, plugins));
-        return holder;
-    }
-
-    private static RegisteredPlugin Plugin(string name, string origin) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
-
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubIndex(new StubReader(cells)), Holder());
+        new(new StubIndex(new StubReader(cells)));
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -101,7 +90,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("ccc:M.esp", "CellC", 1, 0, 0, 0, 40, 2),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
@@ -125,7 +114,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("a2:M.esp", "CellA2", 0, 0, 0, 0, 4, 4),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         // Three distinct blocks, ascending by (X, Y): (0,0), (0,1), (1,0).
         Assert.Equal(
@@ -139,13 +128,13 @@ public class WorldspaceQueryServiceTests
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
     }
 
+    // The reads are what "no load order" means for this service: origin travels in from the
+    // caller, so RequireReads() is the one guard.
     [Fact]
-    public void WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation()
+    public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException()
     {
-        // The reads are there; what is missing is a snapshot in the kernel, and that alone must
-        // produce a clear NoLoadOrderException rather than a read against the reserved origin.
-        var svc = new WorldspaceQueryService(new StubIndex(new StubReader([])), new LoadOrderHolder());
-        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp"));
+        var svc = new WorldspaceQueryService(new StubIndex(reads: null));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", "Data"));
     }
 
     [Fact]
@@ -155,9 +144,9 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        var result = svc.GetWorldspaces("M.esp");
+        var result = svc.GetWorldspaces("M.esp", "Data");
 
         Assert.Equal(2, result.Count);
         Assert.Equal("0001:M.esp", result[0].FormKey);
@@ -165,27 +154,13 @@ public class WorldspaceQueryServiceTests
         Assert.Null(result[1].EditorId);
     }
 
-    // GetWorldspaces must not call GetRecords with no origin: the same class of bug as the other
-    // worldspace-tree reads, one hop further away. Verifies the plumbing resolves the load order's
-    // real origin and passes it down, independent of DuckDB.
+    // GetWorldspaces must forward the caller's origin into GetRecords untouched: the same class of
+    // bug as the other worldspace-tree reads, one hop further away.
     [Fact]
-    public void GetWorldspaces_ResolvesRealOriginFromLoadOrder_AndPassesItToGetRecords()
+    public void GetWorldspaces_PassesGivenOriginToSearch()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
-
-        svc.GetWorldspaces("M.esp");
-
-        Assert.Equal("ModA", reader.LastSearchOrigin);
-    }
-
-    // A caller that already knows which plugin it is browsing states it explicitly, and that must win
-    // over what the load order would resolve.
-    [Fact]
-    public void GetWorldspaces_ExplicitOrigin_OverridesResolvedOrigin()
-    {
-        var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -193,10 +168,10 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_ExplicitOrigin_OverridesResolvedOrigin()
+    public void GetWorldspaceBlocks_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -204,27 +179,24 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void GetInteriorCells_ExplicitOrigin_OverridesResolvedOrigin()
+    public void GetInteriorCells_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
         svc.GetInteriorCells("M.esp", origin: "ModB");
 
         Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
     }
 
-    // The omitted-origin path stays pinned by a real assertion, not just "it doesn't throw" —
-    // WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation above only proves the no-load-order guard
-    // and asserts nothing about real content flowing through with the load-order-resolved origin.
     [Fact]
-    public void GetInteriorCells_OmittedOrigin_ReturnsRealContent()
+    public void GetInteriorCells_ReturnsRealContent()
     {
         var svc = Service([
             new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0),
         ]);
 
-        var result = svc.GetInteriorCells("M.esp");
+        var result = svc.GetInteriorCells("M.esp", "Data");
 
         Assert.Equal("IntCell", Assert.Single(Assert.Single(Assert.Single(result).SubBlocks).Cells).EditorId);
     }
@@ -237,7 +209,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         Assert.Single(result.TopCells);
         Assert.Equal("TopCell", result.TopCells[0].EditorId);
@@ -255,7 +227,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("second:M.esp", "SecondBlockless", null, null, null, null, 0, 0),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         Assert.Equal(2, result.TopCells.Count);
         Assert.Equal(new string?[] { "FirstBlockless", "SecondBlockless" }, result.TopCells.Select(c => c.EditorId).ToArray());
@@ -273,7 +245,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, "Concord"),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
@@ -288,7 +260,7 @@ public class WorldspaceQueryServiceTests
             new CellLocationSummary("bbb:M.esp", "CellB", 1, 0, 0, 0, 2, 2),
         ]);
 
-        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
         var failing = result.Blocks.Single(b => b is { X: 0, Y: 0 });
         Assert.True(failing.HasParseFailure);
@@ -307,9 +279,9 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data", HasParseFailure: true),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, "WorldB", "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
+        var svc = new WorldspaceQueryService(new StubIndex(reader));
 
-        var result = svc.GetWorldspaces("M.esp");
+        var result = svc.GetWorldspaces("M.esp", "Data");
 
         Assert.True(result.Single(w => w.FormKey == "0001:M.esp").HasParseFailure);
         Assert.False(result.Single(w => w.FormKey == "0002:M.esp").HasParseFailure);

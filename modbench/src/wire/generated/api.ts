@@ -1459,6 +1459,15 @@ export interface operations {
                     "application/json": components["schemas"]["PluginRecordTypeCount"][];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     GetCreatableRecordTypes: {
@@ -1767,6 +1776,15 @@ export interface operations {
                     "application/json": components["schemas"]["RecordSummaryPagedResult"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     GetRecord: {
@@ -2067,6 +2085,15 @@ export interface operations {
                     "application/json": components["schemas"]["ContainerChildSummary"][];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -2098,6 +2125,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorldspaceSummary"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Internal Server Error */
@@ -2134,6 +2170,15 @@ export interface operations {
                     "application/json": components["schemas"]["WorldspaceBlocks"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -2168,6 +2213,15 @@ export interface operations {
                     "application/json": components["schemas"]["CellReferences"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -2199,6 +2253,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InteriorCellBlock"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Internal Server Error */

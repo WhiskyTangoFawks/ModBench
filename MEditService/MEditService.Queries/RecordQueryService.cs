@@ -56,17 +56,16 @@ public sealed class RecordQueryService(
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
+        // A plugin filter with no origin would match every plugin sharing that filename; an origin
+        // with no plugin filter names half an identity the same way (ADR-0012 invariant 1).
+        if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
+            throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
+
         PluginName? pluginFilter = null;
-        string? resolvedOrigin = null;
-        if (plugin != null)
-        {
-            // The caller states which plugin when it knows (a tree row does); otherwise resolve from
-            // the load order, since a bare filename is all most callers have.
-            pluginFilter = plugin;
-            resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
-        }
+        if (!string.IsNullOrWhiteSpace(plugin)) pluginFilter = plugin;
+        var originFilter = string.IsNullOrWhiteSpace(origin) ? null : origin;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search, Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
@@ -130,12 +129,9 @@ public sealed class RecordQueryService(
         return (classification, classification.ConflictAll);
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin)
     {
         var reads = RequireReads();
-        // Stated by the caller when it knows which plugin it is browsing (a tree row does),
-        // else resolved server-side from the load order.
-        origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var schemas = RequireSchemas();
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it

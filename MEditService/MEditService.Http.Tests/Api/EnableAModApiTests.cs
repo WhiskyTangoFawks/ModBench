@@ -36,19 +36,19 @@ public sealed class EnableAModApiTests : HostedTests
         Assert.True(optional.GetProperty("participates").GetBoolean());
         Assert.Equal(
             "OptionalNpc",
-            (await Client.Record(await Client.FirstFormKey(OptionalPlugin))).GetProperty("editorId").GetString());
+            (await Client.Record(await Client.FirstFormKey(OptionalPlugin, OptionalMod))).GetProperty("editorId").GetString());
     }
 
     [Fact]
     public async Task DisablingAMod_TakesItsPluginBackOut_AndItsRecordsStopAnswering()
     {
         (await Client.PutLoadOrder(_instance, BaseMod, OptionalMod)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(OptionalPlugin);
+        var formKey = await Client.FirstFormKey(OptionalPlugin, OptionalMod);
 
         (await Client.PutLoadOrder(_instance, BaseMod)).EnsureSuccessStatusCode();
 
         Assert.DoesNotContain(await Client.Plugins(), p => p.GetProperty("name").GetString() == OptionalPlugin);
-        var records = await Client.GetAsync(new Uri($"/records?plugin={OptionalPlugin}&type=npc_", UriKind.Relative));
+        var records = await Client.GetAsync(new Uri($"/records?plugin={OptionalPlugin}&origin={OptionalMod}&type=npc_", UriKind.Relative));
         records.EnsureSuccessStatusCode();
         Assert.DoesNotContain(formKey, await records.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }

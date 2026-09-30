@@ -57,9 +57,8 @@ public class ContainerChildQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for the Index side; this service takes
-    // the load order itself from the holder.
-    private sealed class StubIndex(IRecordReads reads) : IQueryIndex
+    // The reads' presence is what "no load order" means for the Index side.
+    private sealed class StubIndex(IRecordReads? reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
@@ -71,16 +70,6 @@ public class ContainerChildQueryServiceTests
         public Task RebuildStore(GameRelease gameRelease, string instanceRoot) =>
             throw new NotSupportedException($"{GetType().Name} answers reads only.");
     }
-
-    private static LoadOrderHolder Holder(params RegisteredPlugin[] plugins)
-    {
-        var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, plugins));
-        return holder;
-    }
-
-    private static RegisteredPlugin Plugin(string name, string origin) =>
-        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     [Fact]
     public void GetChildren_Quest_KeepsTheIndexsOrder_WhateverTheChildrensTypes()
@@ -102,9 +91,9 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
 
         Assert.Equal(
             ["dlbr1:M.esp", "dial2:M.esp", "scen1:M.esp", "dial1:M.esp"],
@@ -131,9 +120,9 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
 
         Assert.True(result.Single(r => r.FormKey == "dial1:M.esp").HasContainerChildren);
         Assert.False(result.Single(r => r.FormKey == "dial2:M.esp").HasContainerChildren);
@@ -155,21 +144,19 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "dial1:M.esp");
+        var result = svc.GetChildren("M.esp", "dial1:M.esp", "Data");
 
         Assert.Equal(["info2:M.esp", "info1:M.esp"], result.Select(r => r.FormKey).ToArray());
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
     }
 
-    // Explicit origin overrides load-order resolution, the same shape every other
-    // spatial-tree read already has (ADR-0012).
     [Fact]
-    public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
+    public void GetChildren_PassesGivenOriginToReads()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder(Plugin("M.esp", "ModA")));
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
@@ -195,15 +182,12 @@ public class ContainerChildQueryServiceTests
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
         var svc = new ContainerChildQueryService(
-            new StubIndex(reader), Holder(), loggerFactory.CreateLogger<ContainerChildQueryService>());
+            new StubIndex(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
-        // Origin is omitted here (no plugin of that name), so PluginOriginResolver resolves it to the
-        // reserved PluginOrigin.DataDirectory value ("Data") — the same fallback every other
-        // caller of that resolver gets.
         Assert.Equal(
             "Container child dial-missing:M.esp of qust1:M.esp in M.esp (Data) is indexed in " +
             "container_child but Search(dial) did not return it; omitting.",
@@ -216,19 +200,18 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
+        var svc = new ContainerChildQueryService(new StubIndex(reader));
 
-        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+        var result = svc.GetChildren("M.esp", "qust1:M.esp", "Data");
 
         Assert.Empty(result);
         Assert.Empty(reader.SearchedRecordTypes);
     }
 
     [Fact]
-    public void GetChildren_NoLoadOrder_ThrowsInvalidOperation()
+    public void GetChildren_NoReads_ThrowsNoLoadOrderException()
     {
-        // The reads are there; what is missing is a snapshot in the kernel.
-        var svc = new ContainerChildQueryService(new StubIndex(new StubReader([])), new LoadOrderHolder());
-        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
+        var svc = new ContainerChildQueryService(new StubIndex(reads: null));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp", "Data"));
     }
 }
