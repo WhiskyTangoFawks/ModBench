@@ -2677,9 +2677,9 @@ function expectString(value: unknown): string {
   return value;
 }
 
-// plugins.md, Menus and keys: a plugin row states whether its line is enabled, whether it is in a
-// mod with or without a repository or in Overwrite, whether it is tracked and whether it is
-// editable, which every menu condition reads.
+// plugins.md, Menus and keys: a plugin row states its line's enabled state, whether its mod has a
+// repository or it is in Overwrite, and whether it is tracked and editable, which every menu
+// condition reads.
 describe('PluginsTreeProvider — the row states its conditions', () => {
   const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 

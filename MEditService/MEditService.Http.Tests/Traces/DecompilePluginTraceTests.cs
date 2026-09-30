@@ -116,9 +116,9 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
     }
 
-    // The hand-off again: decompile's working-tree write reaches the answers through the watch, with no
-    // load order put in between. The plugin's own new bytes do not: a tracked plugin reads from its
-    // source (ADR-0007 invariant 3).
+    // Decompile's working-tree write reaches the answers through the watch, with no load order put in
+    // between. The new bytes alone do not: a tracked plugin reads from its source (ADR-0007
+    // invariant 3).
     [Fact]
     public async Task DecompilingATrackedPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
     {

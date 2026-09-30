@@ -161,9 +161,8 @@ describe('PluginHeader — untracked signposting', () => {
     expect(screen.getByText('(untracked)')).toBeTruthy();
   });
 
-  // editor.md, A column's header: the tooltip names Track, and decompile in a tracked mod, as this
-  // header's menu shows them. A signpost naming an item that does not exist verbatim is a dead end,
-  // so a rename must break this case instead.
+  // editor.md, A column's header: the tooltip names track and decompile as this header's menu
+  // shows them. A signpost naming an item that does not exist verbatim is a dead end.
   it('names track and decompile exactly as the header\'s menu shows them', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
 
