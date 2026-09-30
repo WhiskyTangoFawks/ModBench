@@ -8,8 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>The Track gesture's door takes the plugins and the preset; the load order it tracks
-/// against is the holder's, read here and never handed in (ADR-0013 invariant 4).</summary>
+/// <summary>The Track gesture's door takes the plugins, the preset and the upstream versions; the
+/// load order it tracks against is the holder's, read here and never handed in (ADR-0013 invariant
+/// 4).</summary>
 public sealed class TrackHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -55,7 +56,7 @@ public sealed class TrackHandlerTests : IDisposable
         var handler = TestEditService.TrackHandler(_holder);
 
         await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits));
+            () => handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits, new Dictionary<string, string>()));
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public sealed class TrackHandlerTests : IDisposable
         _holder.Apply(Snapshot);
         var handler = TestEditService.TrackHandler(_holder);
 
-        var result = await handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits);
+        var result = await handler.TrackAsync([new PluginAddress(PluginName, Origin)], SourcePreset.Edits, new Dictionary<string, string>());
 
         Assert.Equal([new PluginAddress(PluginName, Origin)], result.Landed);
         Assert.True(SourceRepository.HoldsTreeFor(_modFolder, PluginName));

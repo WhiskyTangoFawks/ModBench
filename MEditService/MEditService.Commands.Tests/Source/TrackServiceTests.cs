@@ -31,7 +31,7 @@ public sealed class TrackServiceTests
             var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits);
+                .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits, new Dictionary<string, string>());
 
             var refused = Assert.Single(result.Refused);
             Assert.Equal(TrackRefusal.PluginNotLoaded, refused.Refusal);
@@ -309,7 +309,8 @@ public sealed class TrackServiceTests
             var result = await service.TrackAsync(
                 loadOrder,
                 [new PluginAddress("Stray.esp", PluginOrigin.Overwrite), new PluginAddress("Fixture.esp", "FixtureMod")],
-                SourcePreset.Edits);
+                SourcePreset.Edits,
+                new Dictionary<string, string>());
 
             Assert.Equal([new PluginAddress("Fixture.esp", "FixtureMod")], result.Landed);
             var refused = Assert.Single(result.Refused);

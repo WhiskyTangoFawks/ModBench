@@ -51,6 +51,20 @@ public sealed class DecompilePluginTraceTests : HostedTests
     }
 
     [Fact]
+    public async Task Tracking_RecordsTheRequestsUpstreamVersion_InTheBaselinesSubjectAndTrailers()
+    {
+        await Loaded();
+
+        var tracked = await Client.Track([(Plugin, Origin)], upstreamVersionByOrigin: new Dictionary<string, string> { [Origin] = "1.2.3" });
+
+        tracked.EnsureSuccessStatusCode();
+        var modFolder = OtherTool.ModFolderOf(_instance, Origin);
+        Assert.Equal(
+            $"Track {Plugin} 1.2.3\n\nPlugin: {Plugin}\nUpstream-Version: 1.2.3",
+            GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "show", "-s", "--format=%s%n%n%(trailers:only,unfold,key=Plugin,key=Upstream-Version)", "main").TrimEnd('\n'));
+    }
+
+    [Fact]
     public async Task TrackingNoPlugin_Is400()
     {
         await Loaded();
