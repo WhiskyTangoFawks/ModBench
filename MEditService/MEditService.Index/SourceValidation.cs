@@ -70,7 +70,7 @@ internal sealed class SourceValidation(
             return new ValidationReport(key, [], NeedsRebuild: true, failures);
         }
 
-        return Reconcile(key, modFolder, onDisk, HeldDocuments(key), treeFullyRead, validateCommitted: true, failures);
+        return Reconcile(key, modFolder, onDisk, HeldDocuments(key), treeFullyRead, committedAlso: [], failures);
     }
 
     // Every document git names, and every one the index holds as dirty: git leaves that one unnamed
@@ -90,7 +90,7 @@ internal sealed class SourceValidation(
         foreach (var (formKey, headBody) in RestoredDocuments(key, modFolder, namedKeys))
             onDisk[formKey] = headBody;
 
-        return Reconcile(key, modFolder, onDisk, held, treeFullyRead: true, validateCommitted: headMoved, []);
+        return Reconcile(key, modFolder, onDisk, held, treeFullyRead: true, committedAlso: headMoved ? namedKeys : null, []);
     }
 
     // A new path declaring a record HEAD holds, with no named path giving it up: a copy, whose
@@ -120,7 +120,7 @@ internal sealed class SourceValidation(
     // for every row derived from it.
     private ValidationReport Reconcile(
         PluginAddress key, string modFolder, IReadOnlyDictionary<string, string> onDisk,
-        Dictionary<string, string> held, bool treeFullyRead, bool validateCommitted, List<string> failures)
+        Dictionary<string, string> held, bool treeFullyRead, IEnumerable<string>? committedAlso, List<string> failures)
     {
         // A document the index never saw moves which records the plugin has, which only a rebuild
         // expresses; the report names the records gained. Concluded from a whole tree only.
@@ -147,8 +147,11 @@ internal sealed class SourceValidation(
             .Select(d => d.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        // At an unmoved HEAD the committed rows stand as the last validation left them.
-        var goneAtHead = validateCommitted ? ValidateCommitted(key, modFolder, held.Keys, drifted, failures) : [];
+        // Null at an unmoved HEAD, where the committed rows stand as the last validation left them.
+        // Every other record git names is a document, deleted in the working tree or not.
+        var goneAtHead = committedAlso is null
+            ? []
+            : ValidateCommitted(key, modFolder, held.Keys.Union(committedAlso, StringComparer.Ordinal), drifted, failures);
 
         // Before the refresh: a record whose document left HEAD keeps its working-tree rows, and the
         // refresh below would otherwise re-read a committed baseline this is about to retire.
@@ -191,8 +194,8 @@ internal sealed class SourceValidation(
         }
 
         var blobs = listing.Values.ToHashSet(StringComparer.Ordinal);
-        // Only records the working tree still files a document for. A record held at HEAD alone says
-        // nothing about whether it was a document or an embedded child, so it fails closed.
+        // Only records known to be documents. A record held at HEAD alone and named by no path could
+        // be an embedded child, so it fails closed.
         foreach (var formKey in documents)
         {
             if (HeadBody(key, formKey) is not { } headBody) continue;

@@ -126,6 +126,25 @@ public sealed class ValidateThroughGitTests : IDisposable
         Assert.Null(Reads.GetDocument(created, _mod.KeyOf()));
     }
 
+    // HEAD held back from the deletion would make the same bytes coming back a clean record rather
+    // than one the working tree adds.
+    [Fact]
+    public void ADeletionCommittedOutsideModbench_LeavesNothingAtHead()
+    {
+        var file = NpcFile;
+        var text = File.ReadAllText(file);
+        File.Delete(file);
+        Validate();
+        _mod.Git("commit", "-q", "-am", "a deletion committed outside Modbench");
+        Validate();
+
+        File.WriteAllText(file, text);
+        Validate();
+
+        var listing = Reads.Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
+    }
+
     [Fact]
     public void ACommitOutsideModbench_MovesTheRecordAtHead()
     {
