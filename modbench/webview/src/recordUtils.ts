@@ -24,16 +24,19 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 // immutable and named by the load order, while a plugin the load order doesn't name (ADR-0012) is
 // immutable *because* it isn't.
 export type ColumnStatus =
-  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
+  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'overwrite' | 'untracked' | 'tracked';
+
+// ADR-0012, invariant 2: Overwrite is an origin, not a mod. Origins compare ignoring case.
+const isOverwriteOrigin = (origin: string): boolean => origin.toLowerCase() === 'overwrite';
 
 /** Ordered by what the user can do about it: a parse failure and an immutable column come first,
- *  since nothing the user does about tracking lifts either — naming the wrong way out is worse
- *  than naming none. */
+ *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
 export function columnStatus(
-  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null,
+  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null, origin = '',
 ): ColumnStatus {
   if (parseDiagnosis != null) return 'parseFailure';
   if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+  if (isOverwriteOrigin(origin)) return 'overwrite';
   return isTracked ? 'tracked' : 'untracked';
 }
 

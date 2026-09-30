@@ -54,6 +54,12 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
       + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
       + 'decided in the Mods and Plugins views.',
   },
+  // editor.md, Columns, A column's header, Status table: Overwrite's own row, worded as the
+  // table's tooltip column states it, naming no gesture this header's menu lacks.
+  overwrite: {
+    label: '(in Overwrite)',
+    title: 'Overwrite is not a mod, and a plugin moved into a mod can be tracked.',
+  },
   // The friction is deliberate (ADR-0007): editing someone else's plugin is the community's
   // anti-pattern. The label still says it is one command deep — a read-only column with no stated
   // way out reads as a defect.
@@ -82,7 +88,7 @@ export function PluginHeader({
   override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
-  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis);
+  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis, o.origin);
   // Parse failure's reason ends with this column's own diagnosis, so it is composed rather than
   // tabled. Every other state's reason is the table's alone.
   const title = STATUS_TEXT[status].title + (o.parseDiagnosis == null ? '' : ` ${o.parseDiagnosis}`);

@@ -192,6 +192,46 @@ describe('PluginHeader — untracked signposting', () => {
   });
 });
 
+// editor.md, Columns, A column's header, Status table: Overwrite is not a mod (ADR-0012
+// invariant 2), so its column names its own reason rather than "(untracked)", which this header's
+// menu offers no Track or Decompile item for.
+describe('PluginHeader — Overwrite', () => {
+  it('shows "(in Overwrite)", not "(untracked)", for a column whose plugin is in Overwrite', () => {
+    render(<PluginHeader {...baseProps()} override={override({ origin: 'overwrite' })} isTracked={false} />);
+
+    expect(screen.queryByText('(untracked)')).toBeNull();
+    expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
+  });
+
+  // ADR-0012: origins compare ignoring case.
+  it('shows "(in Overwrite)" for a case-mismatched spelling of the origin', () => {
+    render(<PluginHeader {...baseProps()} override={override({ origin: 'Overwrite' })} isTracked={false} />);
+
+    expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
+  });
+
+  it('is exactly the table\'s tooltip, and never names Track Mod… or Decompile Plugin', () => {
+    render(<PluginHeader {...baseProps()} override={override({ origin: 'overwrite' })} isTracked={false} />);
+
+    const title = screen.getByText('(in Overwrite)').getAttribute('title');
+    expect(title).toBe('Overwrite is not a mod, and a plugin moved into a mod can be tracked.');
+    expect(title).not.toMatch(/Track Mod/);
+    expect(title).not.toMatch(/Decompile/);
+  });
+
+  it('disables the Partial Form toggle for an Overwrite column — no write can land', () => {
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ origin: 'overwrite', isPartialFormable: true, isPartialForm: true })}
+        isTracked={false}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+});
+
 describe('PluginHeader — Partial Form toggle', () => {
   it('does not render the toggle for a column whose record type can never carry the flag', () => {
     render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: false })} />);
