@@ -31,7 +31,7 @@ function valueWith(name: string, overrides: Partial<InstanceValue> = {}): Instan
 }
 
 const sourceOf = (value: InstanceValue): LoadOrderSource =>
-  ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameRelease });
+  ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
 
 function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);

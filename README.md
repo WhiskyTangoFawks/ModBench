@@ -61,19 +61,20 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
                      the mEdit client, and every plugin gesture (ADR-0017)
   src/downloads/     Downloads view — the downloads/ tree, its row actions and the upgrade pick
   src/editor/        Editor view — the record panel's host, the active record and Referenced By
-  src/modlist/       modlist commands — the splice of modlist.txt
-  src/pluginsCommands/   plugins commands — the splice of plugins.txt
+  src/modlist/       modlist commands — the mods and separators in mod order, and mod sync
+  src/pluginsCommands/   plugins commands — enable, disable and move plugins, and plugin sync
   src/instanceCommands/  instance commands — switch profile, put load order, refresh
-  src/downloadsCommands/ downloads commands — exclude, include and delete: the splice of a download's .meta
+  src/downloadsCommands/ downloads commands — exclude, include and delete a downloaded file
   src/install/       install — a new mod, or an upgrade over one
   src/deploy/        deploy commands — makes the game see the instance's resolved files (drawn, not built yet)
   src/client/        the mEdit client — one port over the backend's commands, queries,
                      notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0002)
-  src/mo2Codecs/, src/wire/, src/tables/, src/ports/
-                     the kernel — the MO2 file codecs, the generated API types and webview
-                     protocol, the per-release tables, and the report / ask / trash port
-  src/instanceLoader/   the Instance loader — the instance value, built only by watching
-  src/instanceAdapter/  the Instance adapter — the one reader and writer of the instance
+  src/loadOrderFileCodec/, src/wire/, src/tables/, src/ports/
+                     the kernel — the game's plugins.txt codec, the generated API types and
+                     webview protocol, the per-release tables, and the report / ask / trash port
+  src/instanceLoader/   the Instance loader — the instance value, rebuilt on the adapter's signal
+  src/instanceAdapter/  the Instance adapter — the one reader and writer of the instance; MO2's
+                        implementation holds its layout, its watch and its file codecs
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172), one project
                    per box of docs/architecture/
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via

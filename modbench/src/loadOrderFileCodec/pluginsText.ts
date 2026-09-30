@@ -18,7 +18,7 @@ export interface PluginEntry {
   enabled: boolean;
 }
 
-// MO2 never writes padded lines, but a hand-edited plugins.txt can, so reads trim.
+// A hand-edited plugins.txt can pad a line, so reads trim.
 // Writes cannot use this: it collapses away the marker's real byte offset.
 const trimmedEntryContent = (line: string): string => lineContent(line).trim();
 

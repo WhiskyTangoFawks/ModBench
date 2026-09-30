@@ -1,5 +1,5 @@
-// Each instance file's format lives in its codec module, and nothing else names it; MO2's own
-// directory and file names live in `layout.ts`, and nothing else spells them.
+// Each instance file's format and name live in its codec and nowhere else: MO2's in the Instance
+// adapter, the game's plugins.txt in the Load-order file codec; MO2's directories in `layout.ts`.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -19,37 +19,46 @@ const codecsIn = (dir: string, testDir: string, names: readonly string[]): Codec
 const ADAPTER_CODECS = join('instanceAdapter', 'codecs');
 const LOAD_ORDER_FILE_CODEC = join('loadOrderFileCodec', 'pluginsText.ts');
 
-// The kernel's MO2 codecs and the Instance adapter's copies of them both hold MO2's formats; the
-// game's plugins.txt format is the Load-order file codec's.
-const CODECS: readonly Codec[] = [
-  ...codecsIn('mo2Codecs', join('mo2Codecs', 'test'), ['modlistText', 'pluginsText', 'metaIni', 'modOrganizerIni', 'downloads']),
-  ...codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
-  ...codecsIn('loadOrderFileCodec', join('loadOrderFileCodec', 'test'), ['pluginsText']),
-];
+interface Format {
+  readonly codecs: readonly Codec[];
+  readonly tokens: readonly string[];
+}
 
-const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
+// MO2's formats are the Instance adapter's codecs'; the game's plugins.txt format is the Load-order
+// file codec's.
+const MANAGER_FORMATS: Format = {
+  codecs: codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
+  tokens: [
+    '+', '-', '_separator', '[General]', 'selected_profile', 'gameName', 'gamePath',
+    'download_directory', 'installed', 'uninstalled', 'removed',
+  ],
+};
+const GAME_FORMAT: Format = {
+  codecs: codecsIn('loadOrderFileCodec', join('loadOrderFileCodec', 'test'), ['pluginsText']),
+  tokens: ['*'],
+};
+const FORMATS = [MANAGER_FORMATS, GAME_FORMAT];
+const CODECS = FORMATS.flatMap((format) => format.codecs);
+const TOKENS = FORMATS.flatMap((format) => format.tokens);
+
+const LINE_SCANS = [join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
 
 // The guard's own definition file necessarily holds every token as data (its TOKENS list and
-// its rival-plant test); it does not read or write any MO2 file.
+// its rival-plant test); it does not read or write any instance file.
 const SELF = 'formatLiteralScan.test.ts';
 
-const TOKENS = [
-  '+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath',
-  'download_directory', 'installed', 'uninstalled', 'removed',
-];
-
-// MO2's layout: the names of the directories and files the extension touches, each against its
-// spellers. A directory is the Instance adapter's; a file's own name is its codec's.
+// The layout's names, each against its spellers: MO2's directories are the Instance adapter's
+// layout's and a file's own name its codec's. The game's plugins.txt is the Load-order file codec's.
 const LAYOUT_OWNERS: Record<string, readonly string[]> = {
   profiles: [join('instanceAdapter', 'layout.ts')],
   mods: [join('instanceAdapter', 'layout.ts')],
   downloads: [join('instanceAdapter', 'layout.ts')],
-  overwrite: [join('mo2Codecs', 'modlistText.ts'), join(ADAPTER_CODECS, 'modlistText.ts')],
-  'modlist.txt': [join('mo2Codecs', 'modlistText.ts'), join(ADAPTER_CODECS, 'modlistText.ts')],
-  'plugins.txt': [join('mo2Codecs', 'pluginsText.ts'), LOAD_ORDER_FILE_CODEC],
-  'ModOrganizer.ini': [join('mo2Codecs', 'modOrganizerIni.ts'), join(ADAPTER_CODECS, 'modOrganizerIni.ts')],
-  'meta.ini': [join('mo2Codecs', 'metaIni.ts'), join(ADAPTER_CODECS, 'metaIni.ts')],
-  '.meta': [join('mo2Codecs', 'downloads.ts'), join(ADAPTER_CODECS, 'downloads.ts')],
+  overwrite: [join(ADAPTER_CODECS, 'modlistText.ts')],
+  'modlist.txt': [join(ADAPTER_CODECS, 'modlistText.ts')],
+  'ModOrganizer.ini': [join(ADAPTER_CODECS, 'modOrganizerIni.ts')],
+  'meta.ini': [join(ADAPTER_CODECS, 'metaIni.ts')],
+  '.meta': [join(ADAPTER_CODECS, 'downloads.ts')],
+  'plugins.txt': [LOAD_ORDER_FILE_CODEC],
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
 
@@ -78,9 +87,12 @@ function tokenLeaks(sourceText: string, fileName: string): string[] {
   return TOKENS.filter((tok) => literals.has(tok));
 }
 
-function isAllowed(path: string): boolean {
-  if (basename(path) === SELF) return true;
-  return CODECS.some(({ file, test }) => path.endsWith(sep + file) || path.endsWith(sep + test));
+const isCodecOrItsTest = (path: string, { file, test }: Codec): boolean => path.endsWith(sep + file) || path.endsWith(sep + test);
+
+// The tokens `path` may spell: its format's, when it is one of that format's codecs or their tests.
+function allowedTokens(path: string): ReadonlySet<string> {
+  if (basename(path) === SELF) return new Set(TOKENS);
+  return new Set(FORMATS.filter((format) => format.codecs.some((codec) => isCodecOrItsTest(path, codec))).flatMap((f) => f.tokens));
 }
 
 const allFiles = (roots: readonly string[]): string[] =>
@@ -91,14 +103,14 @@ const allFiles = (roots: readonly string[]): string[] =>
 function findLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
   for (const path of allFiles(roots)) {
-    if (isAllowed(path)) continue;
-    const found = tokenLeaks(readFileSync(path, 'utf8'), path);
+    const allowed = allowedTokens(path);
+    const found = tokenLeaks(readFileSync(path, 'utf8'), path).filter((token) => !allowed.has(token));
     if (found.length > 0) leaks[path] = found;
   }
   return leaks;
 }
 
-describe('mo2 kernel format literals', () => {
+describe('format literals', () => {
   it('covers the whole extension source tree', () => {
     expect(allFiles(SRC_ROOTS).length).toBeGreaterThan(100);
   });
@@ -109,17 +121,18 @@ describe('mo2 kernel format literals', () => {
     expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
   });
 
-  // Rival: a CODECS entry renamed, deleted, or never naming its own marker — proof the
+  // Rival: a codec entry renamed, deleted, or never naming its own format's marker — proof the
   // list is load-bearing, not decorative.
-  it('every codec file exists and names at least one token', () => {
-    for (const { file } of CODECS) {
-      const path = join(EXTENSION_SRC, file);
-      const found = tokenLeaks(readFileSync(path, 'utf8'), path);
-      expect(found.length).toBeGreaterThan(0);
+  it('every codec file exists and names at least one token of its own format', () => {
+    for (const { codecs, tokens } of FORMATS) {
+      for (const { file } of codecs) {
+        const path = join(EXTENSION_SRC, file);
+        expect(tokenLeaks(readFileSync(path, 'utf8'), path).filter((token) => tokens.includes(token))).not.toEqual([]);
+      }
     }
   });
 
-  it('appear only in their own kernel module or its own test, nowhere else in either tree', () => {
+  it('appear only in their own format\'s codec or its own test, nowhere else in either tree', () => {
     expect(findLeaks(SRC_ROOTS)).toEqual({});
   });
 
@@ -159,7 +172,7 @@ describe('mo2 kernel format literals', () => {
       const planted = join(dir, 'someOtherComponent.test.ts');
       await writeFile(planted, "const line = (enabled: boolean) => enabled ? '+' : '-';\n");
       expect(tokenLeaks(readFileSync(planted, 'utf8'), planted)).toEqual(expect.arrayContaining(['+', '-']));
-      expect(isAllowed(planted)).toBe(false);
+      expect(allowedTokens(planted)).toEqual(new Set());
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -180,21 +193,36 @@ describe('mo2 kernel format literals', () => {
     expect(tokenLeaks(src, 'x.ts')).toEqual(expect.arrayContaining(['_separator', '+']));
   });
 
-  it('allows a codec module’s own test file', () => {
-    expect(isAllowed(join('src', 'mo2Codecs', 'test', 'pluginsText.test.ts'))).toBe(true);
-    expect(isAllowed(join('src', 'instanceAdapter', 'test', 'codecs', 'modlistText.test.ts'))).toBe(true);
-    expect(isAllowed(join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'))).toBe(true);
+  it('allows a codec module’s own test file its own format\'s tokens', () => {
+    expect(allowedTokens(join('src', 'instanceAdapter', 'test', 'codecs', 'modlistText.test.ts'))).toEqual(new Set(MANAGER_FORMATS.tokens));
+    expect(allowedTokens(join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'))).toEqual(new Set(GAME_FORMAT.tokens));
   });
 
-  it('does not allow a file in a codec box that is not a codec module or its test', () => {
-    expect(isAllowed(join('src', 'mo2Codecs', 'test', 'layout.test.ts'))).toBe(false);
-    expect(isAllowed(join('src', 'instanceAdapter', 'mo2Instance.ts'))).toBe(false);
+  it('allows no token to a file in a codec box that is not a codec module or its test', () => {
+    expect(allowedTokens(join('src', 'instanceAdapter', 'test', 'layout.test.ts'))).toEqual(new Set());
+    expect(allowedTokens(join('src', 'instanceAdapter', 'mo2Instance.ts'))).toEqual(new Set());
   });
 
   // Rival: the Instance adapter's MO2 codecs taking the game's plugins.txt format back, which
   // puts the game's format inside one mod manager's implementation.
   it('the Instance adapter holds no plugins.txt codec of its own', () => {
-    expect(isAllowed(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toBe(false);
+    expect(allowedTokens(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toEqual(new Set());
+  });
+
+  // Rival: an MO2 codec spelling the game's enabled marker, or the game's codec spelling MO2's.
+  it('catches a format\'s marker planted in the other format\'s codec', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-format-literal-scan-'));
+    try {
+      await mkdir(join(dir, 'instanceAdapter', 'codecs'), { recursive: true });
+      await mkdir(join(dir, 'loadOrderFileCodec'));
+      const managerCodec = join(dir, 'instanceAdapter', 'codecs', 'modlistText.ts');
+      const gameCodec = join(dir, 'loadOrderFileCodec', 'pluginsText.ts');
+      await writeFile(managerCodec, "export const marks = ['+', '*'];\n");
+      await writeFile(gameCodec, "export const marks = ['*', '_separator'];\n");
+      expect(findLeaks([dir])).toEqual({ [managerCodec]: ['*'], [gameCodec]: ['_separator'] });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   // Rival: a lineScan.ts added to the list — it holds no format token of its own, only the
@@ -208,7 +236,7 @@ describe('mo2 kernel format literals', () => {
   });
 });
 
-// ── MO2's layout: directory and file names ────────────────────────────────
+// ── The layout: directory and file names ──────────────────────────────────
 
 // A module specifier names this repo's own tree, never the MO2 instance; a literal type, as in
 // `Pick<InstanceValue, 'mods'>`, names a property.
@@ -264,7 +292,7 @@ function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   return leaks;
 }
 
-describe('mo2 layout names', () => {
+describe('layout names', () => {
   // Rival: a name dropped from its owner, which frees every other file to spell it again with
   // the production assertion still green.
   it('every name is spelled by each file that owns it', () => {
@@ -304,7 +332,7 @@ describe('mo2 layout names', () => {
   });
 
   it('does not flag a module specifier', () => {
-    expect(layoutLeaks("import { buildDownloadRows } from '../mo2Codecs/downloads';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks("import { parseDownloadMeta } from './codecs/downloads';\n", 'x.ts')).toEqual([]);
   });
 
   it('does not flag a literal type, which can never be a path', () => {

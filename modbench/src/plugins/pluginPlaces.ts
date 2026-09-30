@@ -24,11 +24,15 @@ export function pluginPlaces(value: Pick<InstanceValue, 'mods' | 'plugins'>, nam
   ].filter((place) => !holds(place.origin));
 }
 
-/** The place's folder, or what became of a mod between the pick and the answer. */
-export type PlaceFolder = { readonly folder: string } | { readonly lost: 'gone' | 'disabled' };
+/** The place's folder; or what became of a mod between the pick and the answer, or that the
+ *  value names no folder for Overwrite yet. */
+export type PlaceFolder = { readonly folder: string } | { readonly lost: 'gone' | 'disabled' | 'unread' };
 
 export function placeFolder(value: Pick<InstanceValue, 'mods' | 'paths'>, origin: string): PlaceFolder {
-  if (origin === OVERWRITE_ORIGIN) return { folder: value.paths.overwriteDir };
+  if (origin === OVERWRITE_ORIGIN) {
+    const folder = value.paths.overwriteDir;
+    return folder === undefined ? { lost: 'unread' } : { folder };
+  }
   const mod = value.mods.find((entry) => entry.kind === 'mod' && entry.name === origin);
   const folder = value.paths.modDirs.get(origin);
   if (mod === undefined || folder === undefined) return { lost: 'gone' };

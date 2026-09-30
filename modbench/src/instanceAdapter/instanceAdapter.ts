@@ -1,11 +1,11 @@
 // The Instance adapter's interface: a repository over one instance, answering parsed reads and
-// taking changes in domain words. A mod manager is one implementation of it; MO2's is
-// `mo2Instance.ts`.
+// taking changes in domain words. Each mod manager is one implementation of it, beside it in this
+// box, and names itself through `names`.
 
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
 
-export { pluginKey, type PluginEntry } from '../loadOrderFileCodec/pluginsText';
+export type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 export { isPluginFile } from './pluginFile';
 
 /** The reserved origin of the files the game wrote at run time (ADR-0012). */
@@ -13,6 +13,12 @@ export { OVERWRITE_DIR_NAME as OVERWRITE_ORIGIN } from './codecs/modlistText';
 
 /** The setting that names the game folder outright, and so the one that fixes a folder not found. */
 export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
+
+/** What the user set, read fresh on each resolve by whoever built the resolver. */
+export interface GameDirectoryOverrides {
+  /** The game folder outright (`GAME_FOLDER_SETTING`). */
+  gameDirectory?: string;
+}
 
 /** One place Modbench looked for the game folder, and what it found there. */
 export interface GameFolderLook {
@@ -165,7 +171,10 @@ export type Upgraded = { readonly refused: false } | { readonly refused: true; r
 /** One read of the instance's configuration. Both answers come from that same read. */
 export interface InstanceSettings {
   readonly profile: string;
+  /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
+  /** Mutagen's release of that game; undefined when the tables hold none for it. */
+  readonly gameRelease: string | undefined;
   gameFolder(): Promise<GameFolder>;
   downloadedFiles(): Promise<DownloadedFiles>;
 }
@@ -221,6 +230,18 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
+/** The refusal of a new mod whose name a folder already holds: one wording for create and install. */
+export const modNameTakenRefusal = (name: string): string =>
+  `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
+
+/** Why a new mod may not take `name`, trimmed: a folder already holds a mod of that name, matched
+ *  as the manager matches names. Undefined for a free name, or a blank one. */
+export async function newModNameRefusal(adapter: Pick<InstanceAdapter, 'entryFolder'>, name: string): Promise<string | undefined> {
+  const trimmed = name.trim();
+  if (!trimmed) return undefined;
+  return (await adapter.entryFolder({ kind: 'mod', name: trimmed })) === undefined ? undefined : modNameTakenRefusal(trimmed);
+}
+
 /** The refusal of a mark on a downloaded file that is gone. */
 export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
 
@@ -248,8 +269,15 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
+/** How a message names the mod manager and the file it keeps mod order in. */
+export interface ManagerNames {
+  readonly manager: string;
+  readonly modOrderFile: string;
+}
+
 export interface InstanceAdapter {
   // Parsed reads.
+  readonly names: ManagerNames;
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
   profiles(): Promise<string[]>;
@@ -273,6 +301,9 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  /** The folder the plugin file at `pluginFile` sits in when that folder is tracked; undefined when
+   *  it is not (ADR-0007). */
+  trackedFolderOf(pluginFile: string): Promise<string | undefined>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

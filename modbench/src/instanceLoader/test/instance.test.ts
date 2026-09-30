@@ -61,7 +61,6 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   const settingsReads = { count: 0 };
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
-    instanceRoot: root,
     adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
@@ -80,7 +79,6 @@ async function signalledInstance(): Promise<{ instance: Instance; signal: () => 
   roots.push(root);
   const listeners = new Set<() => void>();
   const instance = new Instance({
-    instanceRoot: root,
     adapter: {
       ...adapterOver(root, { gameFolder: resolvesDataFolder }),
       subscribe: (listener) => {
@@ -700,7 +698,8 @@ describe('Instance — downloads, profile and game directory', () => {
       }),
     );
     expect(instance.value.activeProfile).toBe('Default');
-    expect(instance.value.gameRelease).toBe('Fallout 4');
+    expect(instance.value.gameName).toBe('Fallout 4');
+    expect(instance.value.gameRelease).toBe('Fallout4');
     expect(instance.value.nexusSlug).toBe('fallout4');
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
@@ -905,7 +904,7 @@ describe('Instance — downloads, profile and game directory', () => {
   it('builds one value from one generation of the ini, even when it is rewritten mid-recompute', async () => {
     const { root, instance, setResolver } = await realInstance();
     await instance.refresh();
-    const beforeRelease = instance.value.gameRelease;
+    const beforeName = instance.value.gameName;
     const ini = join(root, 'ModOrganizer.ini');
     setResolver(async () => {
       const text = await readFile(ini, 'utf8');
@@ -915,11 +914,11 @@ describe('Instance — downloads, profile and game directory', () => {
 
     await instance.refresh();
 
-    expect(instance.value.gameRelease).toBe(beforeRelease);
+    expect(instance.value.gameName).toBe(beforeName);
     // Positive control: the rewrite is real, and the next recompute does read it.
     setResolver(resolvesNotFound);
     await instance.refresh();
-    expect(instance.value.gameRelease).toBe('Rewritten Mid Recompute');
+    expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
   });
 
   it('carries the paths a view renders: overwrite/, downloads/ and each listed mod’s own folder, where it has one', async () => {
@@ -937,17 +936,26 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
   });
 
+  // Rival: names the value spells itself, which names one manager over any other's instance.
+  it('names the mod manager and its mod-order file as the adapter does, before the first read too', () => {
+    const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
+    const instance = new Instance({ adapter, log: () => {}, logReadFailure: () => {} });
+    instances.push(instance);
+
+    expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
+  });
+
   // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
   // keeps its folders.
   it('names no folder before the first read lands', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
+      adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
       log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
 
     expect(instance.sequence).toBe(0);
-    expect(instance.value.paths).toEqual({ overwriteDir: '', downloadsDir: undefined, modDirs: new Map() });
+    expect(instance.value.paths).toEqual({ overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() });
   });
 });
 
@@ -968,7 +976,6 @@ async function minimalInstance(): Promise<{
   const readFailureLines: string[] = [];
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
-    instanceRoot: root,
     adapter: adapterOver(root, { gameFolder: () => resolve() }),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),

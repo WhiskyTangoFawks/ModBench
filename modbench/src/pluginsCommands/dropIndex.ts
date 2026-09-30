@@ -1,4 +1,4 @@
-import { pluginKey } from '../instanceAdapter/instanceAdapter';
+import { pluginKey } from '../loadOrderFileCodec/pluginsText';
 
 /** Where a drag landed, in a tree's own terms: the row it was dropped on and which side of it
  *  the block takes, or an end of the list. Which side a tree means is its view direction's. */
