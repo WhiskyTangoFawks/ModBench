@@ -4,7 +4,7 @@
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import { copyTree, ensureDir, get, listDir, makeTempDir, remove, rename, write } from './files';
 import type { InstanceAdapter, ModMeta, OwnedMetaKeys, StagedEntry, StagingFolder } from './instanceAdapter';
-import { fileInFolder, isTrackingEntry, modMetaFileIn, modsDir, stagingPrefix } from './layout';
+import { fileInFolder, isRepositoryOrPluginSource, modMetaFileIn, modsDir, stagingPrefix } from './layout';
 import { folderHolding, newModFolder, type Mo2Context } from './mo2Context';
 
 export type Mo2Landing = Pick<InstanceAdapter,
@@ -53,11 +53,11 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
       const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path;
       if (folder === undefined) throw new Error(`No folder holds the mod "${mod}"`);
       const released = (await listDir(staged)).map((d) => d.name);
-      const trackingEntry = released.find(isTrackingEntry);
-      if (trackingEntry !== undefined) return { refused: true, trackingEntry };
+      const repositoryOrPluginSourceEntry = released.find(isRepositoryOrPluginSource);
+      if (repositoryOrPluginSourceEntry !== undefined) return { refused: true, repositoryOrPluginSourceEntry };
       const carried = await get(modMetaFileIn(folder), '');
       for (const { name } of await listDir(folder)) {
-        if (!isTrackingEntry(name)) await remove(fileInFolder(folder, name));
+        if (!isRepositoryOrPluginSource(name)) await remove(fileInFolder(folder, name));
       }
       for (const name of released) await rename(fileInFolder(staged, name), fileInFolder(folder, name));
       await write(modMetaFileIn(folder), setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));

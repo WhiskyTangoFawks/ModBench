@@ -339,13 +339,13 @@ describe('install commands', () => {
       const name = 'Untracked Target';
       const modDir = await makeExistingMod(root, name, false);
       const before = await treeOf(modDir);
-      const shipsTracking: Runner = async (bin, args) => {
+      const shipsRepositoryOrPluginSource: Runner = async (bin, args) => {
         await runnerFor()(bin, args);
         const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
         await mkdir(join(dest, 'Wrapper', entry));
       };
 
-      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsTracking });
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsRepositoryOrPluginSource });
 
       expect(outcome).toEqual({
         applied: false,

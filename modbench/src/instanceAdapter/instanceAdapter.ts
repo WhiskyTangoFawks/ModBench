@@ -154,8 +154,9 @@ export interface StagingFolder {
   remove(): Promise<void>;
 }
 
-/** An upgrade refused before anything changed names the tracking entry its release holds. */
-export type Upgraded = { readonly refused: false } | { readonly refused: true; readonly trackingEntry: string };
+/** An upgrade refused before anything changed names the entry of the mod's repository or plugin
+ *  source that its release holds. */
+export type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
 
 /** One read of the instance's configuration. Both answers come from that same read. */
 export interface InstanceSettings {
@@ -288,9 +289,9 @@ export interface InstanceAdapter {
   /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
    *  one rename. */
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the folder's contents with the staged tree's around the mod's tracking, and sets
-   *  `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
-   *  holding a tracking entry is refused first. */
+  /** Replaces the folder's contents with the staged tree's around the mod's repository and plugin
+   *  source, and sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined.
+   *  A release holding an entry of either is refused first. */
   upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<Upgraded>;
 
   // Staging: the adapter's own ground beside mods/, on the same volume and outside every watch,

@@ -150,7 +150,7 @@ function landStagedMod(
       if (upgraded.refused) {
         return {
           applied: false,
-          refusal: `Cannot upgrade "${name}": the release holds "${upgraded.trackingEntry}", which is the mod's own repository or plugin source.`,
+          refusal: `Cannot upgrade "${name}": the release holds "${upgraded.repositoryOrPluginSourceEntry}", which is the mod's own repository or plugin source.`,
         };
       }
       return { applied: true, wrote: true, isFomod };

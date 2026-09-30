@@ -1141,7 +1141,7 @@ describe('the MO2 Instance adapter', () => {
         async (entry) => {
           await mkdir(join(staged, entry));
 
-          expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, trackingEntry: entry });
+          expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: entry });
 
           expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
           expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
@@ -1150,11 +1150,11 @@ describe('the MO2 Instance adapter', () => {
 
       // Rival: refuse only an entry the folder already has, so a first upgrade plants one that
       // every later upgrade then refuses.
-      it('refuses a release holding a tracking entry the folder has none of', async () => {
+      it('refuses a release holding a repository or plugin source entry the folder has none of', async () => {
         await rm(join(folder(), 'source'), { recursive: true });
         await mkdir(join(staged, 'source'));
 
-        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, trackingEntry: 'source' });
+        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'source' });
 
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });

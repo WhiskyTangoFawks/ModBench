@@ -125,11 +125,11 @@ const nameKey = (name: string): string => name.toLowerCase();
 /** Whether an entry at a mod folder's root is its plugin source. */
 export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
 
-const TRACKING_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
+const REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
 
-/** Whether an entry at a mod folder's root is its tracking — its repository or its plugin source
- *  (ADR-0007) — which an upgrade keeps and no release supplies. */
-export const isTrackingEntry = (name: string): boolean => TRACKING_ENTRIES.has(nameKey(name));
+/** Whether an entry at a mod folder's root is its repository or its plugin source (ADR-0007),
+ *  which an upgrade keeps and no release supplies. */
+export const isRepositoryOrPluginSource = (name: string): boolean => REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES.has(nameKey(name));
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
