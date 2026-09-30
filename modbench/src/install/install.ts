@@ -1,19 +1,15 @@
 // A new target is one rename (ADR-0015 invariant 2); an upgrade is never renamed away, so its
 // identity and every watcher armed on it survive the release.
 
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
-import {
-  MOD_META_FILE_NAME, parseMetaIni, setOwnedKeysInText, writeMetaIni, type InstalledFileId, type OwnedMetaKeys,
-} from '../mo2Codecs/metaIni';
-import { downloadFile, modsDir as modsDirOf } from '../instanceAdapter/layout';
-import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../instanceAdapter/files';
+import { copyTree, remove } from '../instanceAdapter/files';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import type { DownloadedFile, InstalledFileId, InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
 export interface InstallAccess {
@@ -91,9 +87,6 @@ export interface InstallOptions {
   /** ModOrganizer.ini's `gameName`, handed in from the value: meta.ini's own key, so nothing
    *  here re-reads the ini. */
   gameName: string;
-  /** Rename primitive; defaults to fs.rename. Injectable so the cross-volume refusal is
-   *  testable without a real second volume. */
-  renameFn?: (from: string, to: string) => Promise<void>;
   /** Extraction runner; defaults to spawning a system 7-Zip. */
   run?: Runner;
   /** The download's Nexus identity, when installing from one — meta.ini's `installedFiles`
@@ -102,10 +95,6 @@ export interface InstallOptions {
   fileID?: string;
   version?: string;
 }
-
-// Beside mods/ rather than inside it: same volume, so the rename is atomic, and outside every
-// watcher's glob, so nothing ever observes the half-built tree.
-const STAGING_PREFIX = '.medit-install-';
 
 // Serialized per instance root: the collision check and the rename must not interleave with
 // another install, or two of the same name both pass the check.
@@ -128,48 +117,8 @@ function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommand
   return refuse(err);
 }
 
-// meta.ini is written into the staged tree first, so the folder is never seen without it, then
-// the whole tree lands in one rename — the folder appears complete in one filesystem event.
-async function landNewMod(
-  modsDir: string, modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
-  renameFn: (from: string, to: string) => Promise<void>,
-): Promise<void> {
-  await write(join(stagedRoot, MOD_META_FILE_NAME), writeMetaIni(keys));
-  await ensureDir(modsDir);
-  await renameFn(stagedRoot, modDir);
-}
-
-// An owned key the identity does not supply falls back to the old meta.ini's own value: the
-// merge with what was already there is this caller's job, not `setOwnedKeysInText`'s.
-function keysForUpgrade(gameName: string, meta: InstallMeta, oldMetaText: string): OwnedMetaKeys {
-  const old = parseMetaIni(oldMetaText);
-  return {
-    gameName,
-    modid: meta.modid ?? old.nexusId,
-    version: meta.version ?? old.version,
-    installationFile: meta.installationFile ?? old.archiveFilename,
-    installedFiles: meta.installedFiles ?? old.installedFiles,
-  };
-}
-
-// Every entry but `.git` is removed, the staged tree's entries move in, and meta.ini is set
-// through the existing-text write, so a foreign key never moves. Nothing past the first removal
-// is rolled back on failure.
-async function landUpgrade(
-  modDir: string, stagedRoot: string, gameName: string, meta: InstallMeta,
-  renameFn: (from: string, to: string) => Promise<void>,
-): Promise<void> {
-  const oldMetaText = await get(join(modDir, MOD_META_FILE_NAME), '');
-  const keys = keysForUpgrade(gameName, meta, oldMetaText);
-  for (const entry of await listDir(modDir)) {
-    if (entry.name === '.git') continue;
-    await remove(join(modDir, entry.name));
-  }
-  for (const entry of await listDir(stagedRoot)) {
-    await renameFn(join(stagedRoot, entry.name), join(modDir, entry.name));
-  }
-  await write(join(modDir, MOD_META_FILE_NAME), setOwnedKeysInText(oldMetaText, keys));
-}
+// An upgrade keeps the mod's repository and its plugin source (mods.md, What install does, story 3).
+const KEPT_BY_UPGRADE = new Set(['.git', '.gitignore', 'source']);
 
 // The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
 // the user own it too — so a claim that disagrees with disk is refused, never reinterpreted.
@@ -182,28 +131,24 @@ function mismatchRefusal(target: InstallTarget, targetExists: boolean): string |
 }
 
 function landStagedMod(
-  instanceRoot: string, target: InstallTarget, stagedRoot: string, meta: InstallMeta, isFomod: boolean,
-  gameName: string, renameFn: (from: string, to: string) => Promise<void>,
+  access: InstallAccess, target: InstallTarget, stagedRoot: string, meta: InstallMeta, isFomod: boolean, gameName: string,
 ): Promise<InstallCommandResult> {
   const { name } = target;
-  return withInstallLock(instanceRoot, async (): Promise<InstallCommandResult> => {
-    const modsDir = modsDirOf(instanceRoot);
-    const modDir = join(modsDir, name);
-    const refusal = mismatchRefusal(target, await exists(modDir));
+  const { adapter } = access;
+  return withInstallLock(access.instanceRoot, async (): Promise<InstallCommandResult> => {
+    const holding = await adapter.entryFolder({ kind: 'mod', name });
+    const refusal = mismatchRefusal(target, holding !== undefined);
     if (refusal) return { applied: false, refusal };
+    const keys = { gameName, ...meta };
     try {
       if (target.kind === 'new') {
-        await landNewMod(modsDir, modDir, stagedRoot, { gameName, ...meta }, renameFn);
+        await adapter.landNewMod(name, stagedRoot, keys);
         return { applied: true, wrote: true, isFomod };
       }
       try {
-        await landUpgrade(modDir, stagedRoot, gameName, meta, renameFn);
+        await adapter.upgradeMod(name, stagedRoot, keys, (entry) => KEPT_BY_UPGRADE.has(entry));
       } catch (err) {
-        return {
-          applied: false,
-          refusal: `Upgrading "${name}" failed partway and was not rolled back: ${
-            errorMessage(err)}`,
-        };
+        return { applied: false, refusal: `Upgrading "${name}" failed and was not rolled back: ${errorMessage(err)}` };
       }
       return { applied: true, wrote: true, isFomod };
     } catch (err) {
@@ -212,8 +157,8 @@ function landStagedMod(
   });
 }
 
-async function withStaging<T>(instanceRoot: string, use: (staging: string) => Promise<T>): Promise<T> {
-  const staging = await makeTempDir(join(instanceRoot, STAGING_PREFIX));
+async function withStaging<T>(access: InstallAccess, use: (staging: string) => Promise<T>): Promise<T> {
+  const staging = await access.adapter.stagingFolder();
   try {
     return await use(staging);
   } finally {
@@ -226,49 +171,40 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
 }
 
-/** Extracts into staging and moves the detected mod root in, then marks the download it came
- *  from installed — a failed mark is reported beside the landed install, never instead of it. */
+/** Extracts into staging and moves the detected mod root in, then marks the downloaded file it
+ *  is, if it is one of `downloadedFiles` — a failed mark is reported beside the landed install,
+ *  never instead of it. */
 export async function installFromArchive(
-  instanceRoot: string, target: InstallTarget, archivePath: string, downloadsDir: string | undefined, opts: InstallOptions,
+  access: InstallAccess, target: InstallTarget, archivePath: string,
+  downloadedFiles: readonly Pick<DownloadedFile, 'name' | 'path'>[], opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    const outcome = await withStaging(instanceRoot, async (staging) => {
+    const outcome = await withStaging(access, async (staging) => {
       await extractArchive(archivePath, staging, opts.run);
       const { sourceDir, isFomod } = await detectRoot(staging);
       return landStagedMod(
-        instanceRoot, target, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod,
-        opts.gameName, opts.renameFn ?? rename);
+        access, target, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod, opts.gameName);
     });
     if (!outcome.applied) return outcome;
-    return { ...outcome, ...(await markedInstalled(downloadsDir, archivePath)) };
+    const downloaded = downloadedFiles.find((file) => file.path === archivePath);
+    if (downloaded === undefined) return outcome;
+    const marked = await markDownloadInstalled(access.adapter, downloaded.name);
+    return marked.applied ? outcome : { ...outcome, downloadRefusal: marked.refusal };
   } catch (err) {
     return refuse(err);
   }
 }
 
-// Only an archive that IS a download has a sidecar to mark; one the user picked from anywhere
-// else has none, or the folder is unresolved, and writing a `.meta` for it would invent a row.
-async function markedInstalled(
-  downloadsDir: string | undefined, archivePath: string,
-): Promise<{ downloadRefusal?: string }> {
-  if (downloadsDir === undefined) return {};
-  const name = basename(archivePath);
-  if (archivePath !== downloadFile(downloadsDir, name)) return {};
-  const marked = await markDownloadInstalled(downloadsDir, name);
-  return marked.applied ? {} : { downloadRefusal: marked.refusal };
-}
-
 /** Copies the folder into staging first: the source belongs to the user, so it is never the
  *  thing renamed away. */
 export async function installFromFolder(
-  instanceRoot: string, target: InstallTarget, folderPath: string, opts: InstallOptions,
+  access: InstallAccess, target: InstallTarget, folderPath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    return await withStaging(instanceRoot, async (staging) => {
+    return await withStaging(access, async (staging) => {
       const { sourceDir, isFomod } = await detectRoot(folderPath);
       await copyTree(sourceDir, staging);
-      return landStagedMod(
-        instanceRoot, target, staging, metaFor({}, opts), isFomod, opts.gameName, opts.renameFn ?? rename);
+      return landStagedMod(access, target, staging, metaFor({}, opts), isFomod, opts.gameName);
     });
   } catch (err) {
     return refuse(err);

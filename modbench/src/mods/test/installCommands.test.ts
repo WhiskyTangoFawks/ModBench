@@ -40,6 +40,7 @@ vi.mock('../../install/install', async (importOriginal) => ({
 import { registerModInstallCommands, type ModInstallDeps } from '../installCommands';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
@@ -51,19 +52,14 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 // Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
 // against Fallout 4 and reach meta.ini wrong for every other install.
 const GAME_RELEASE = 'Skyrim Special Edition';
-// Deliberately not the naive '/instance/downloads' join: a call site that re-derives the folder
-// instead of reading the value's own `paths.downloadsDir` would pass against that guess too.
-const DOWNLOADS_DIR = '/elsewhere/MyDownloads';
+// The downloaded files the value lists, which install matches the picked archive against.
+const DOWNLOADED = [downloadRowFixture('foo.7z')];
+const ACCESS = accessTo('/instance');
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
-    access: accessTo('/instance'),
-    instance: {
-      value: instanceValueFixture({
-        gameRelease: GAME_RELEASE,
-        paths: { overwriteDir: '', downloadsDir: DOWNLOADS_DIR, modDirs: new Map() },
-      }),
-    },
+    access: ACCESS,
+    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE, downloads: { kind: 'listed', rows: DOWNLOADED } }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -141,7 +137,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', DOWNLOADS_DIR, { gameName: GAME_RELEASE },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', DOWNLOADED, { gameName: GAME_RELEASE },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -183,7 +179,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
     );
     expect(succeeded).toEqual({ installed: true });
   });

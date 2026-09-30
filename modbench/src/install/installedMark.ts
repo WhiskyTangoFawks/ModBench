@@ -1,16 +1,14 @@
-import { setInstalledInText } from '../mo2Codecs/downloads';
-import { spliceDownloadMeta } from '../instanceAdapter/downloadMeta';
 import { refuse } from '../ports/refuse';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 export type InstalledMarkResult =
   | { applied: true }
   | { applied: false; refusal: string };
 
-/** Writes only the key MO2's Downloads tab reads. */
-export async function markDownloadInstalled(downloadsDir: string, name: string): Promise<InstalledMarkResult> {
+export async function markDownloadInstalled(adapter: InstanceAdapter, name: string): Promise<InstalledMarkResult> {
   try {
-    await spliceDownloadMeta(downloadsDir, name, setInstalledInText);
-    return { applied: true };
+    const marked = await adapter.markDownloadedFile(name, 'Installed');
+    return marked.gone ? { applied: false, refusal: `"${name}" is gone from disk.` } : { applied: true };
   } catch (err) {
     return refuse(err);
   }
