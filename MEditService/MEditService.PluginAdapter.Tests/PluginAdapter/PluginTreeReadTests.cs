@@ -19,38 +19,50 @@ public sealed class PluginTreeReadTests
     // The adapter's own scratch prefix, spelled here as a leak watcher sees it on disk.
     private const string ScratchPrefix = "medit-readtree-";
 
-    // Other sessions share the temp folder, so a test asserts only on the folders its own read added.
-    private static HashSet<string> ScratchFolders() =>
-        [.. Directory.GetDirectories(Path.GetTempPath(), $"{ScratchPrefix}*")];
-
     [Fact]
     public async Task ReadTree_OfAFileItCannotWrite_Throws_AndLeavesNoScratchFolderBehind()
     {
-        var before = ScratchFolders();
-        var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
+        var scratchRoot = Directory.CreateTempSubdirectory("readtree-scratch-root-").FullName;
+        try
+        {
+            var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
 
-        await Assert.ThrowsAnyAsync<IOException>(() => Adapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4));
+            await Assert.ThrowsAnyAsync<IOException>(
+                () => MutagenPluginAdapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4, scratchRoot));
 
-        Assert.Empty(ScratchFolders().Except(before));
+            Assert.Empty(Directory.GetDirectories(scratchRoot));
+        }
+        finally
+        {
+            Directory.Delete(scratchRoot, recursive: true);
+        }
     }
 
     [Fact]
     public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis_AndLeavesNoScratchFolderBehind()
     {
-        var before = ScratchFolders();
-        var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
+        var scratchRoot = Directory.CreateTempSubdirectory("readtree-scratch-root-").FullName;
+        try
+        {
+            var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-        var (tree, diagnosis, _) = await Adapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4);
+            var (tree, diagnosis, _) =
+                await MutagenPluginAdapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4, scratchRoot);
 
-        Assert.Null(tree);
-        Assert.NotNull(diagnosis);
-        Assert.Empty(ScratchFolders().Except(before));
+            Assert.Null(tree);
+            Assert.NotNull(diagnosis);
+            Assert.Empty(Directory.GetDirectories(scratchRoot));
+        }
+        finally
+        {
+            Directory.Delete(scratchRoot, recursive: true);
+        }
     }
 
     // A malformed FormKey names its file by the absolute path it was read from, which shows the
-    // scratch folder the read used: the one the glob above must find.
+    // scratch folder the read used.
     [Fact]
-    public async Task ReadTree_OfAMalformedFormKey_ReadsInAScratchFolderTheGlobFinds_AndRemovesIt()
+    public async Task ReadTree_OfAMalformedFormKey_ReadsInAScratchFolder_AndRemovesIt()
     {
         var race = string.Empty;
         using var data = new PluginFixtureBuilder("readtree-scratch")

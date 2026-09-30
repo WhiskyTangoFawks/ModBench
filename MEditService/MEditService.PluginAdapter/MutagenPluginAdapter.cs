@@ -103,7 +103,17 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel);
+        PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel: cancel);
+
+    // Not on IPluginAdapter: a test's seam onto the scratch folder's parent, so a leak-watching test
+    // names its own folder instead of the system temp folder every process shares.
+    public static Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
+        IReadOnlyList<TreeFile> files,
+        RecordTextCodec codec,
+        GameRelease gameRelease,
+        string scratchRoot,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadTreeAsync(files, codec, gameRelease, scratchRoot, cancel);
 
     public Task WriteFromTreeAsync(
         IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
