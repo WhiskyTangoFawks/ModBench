@@ -8,9 +8,7 @@ import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_G
 /** A folder the settings name, whose watch moves with them. */
 export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins';
 
-// `.git` itself coming or going is a change, and inside it only what a commit moves: HEAD, a ref
-// or the packed refs. A commit moves the record index's rows at HEAD and changes nothing else.
-function isHeard(path: string): boolean {
+function isInstanceChange(path: string): boolean {
   const segments = path.split(/[\\/]/);
   const gitIndex = segments.lastIndexOf('.git');
   if (gitIndex === -1) return true;
@@ -52,7 +50,7 @@ export function mo2Watch(instanceRoot: string): Mo2Watch {
   };
   const watch = (base: string, glob: string): Subscription =>
     watchFiles(base, glob, (path) => {
-      if (isHeard(path)) changed();
+      if (isInstanceChange(path)) changed();
     });
   const armed = (): boolean => listeners.size > 0;
 

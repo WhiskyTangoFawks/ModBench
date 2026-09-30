@@ -374,7 +374,6 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(5);
     });
 
-    // A commit moves the record index's rows at HEAD and changes nothing else in the instance.
     it.each(['HEAD', 'refs/heads/main', 'packed-refs', ''])(
       'hears .git/%s in a mod\'s git repository', (inside) => {
         let signals = 0;
@@ -383,6 +382,17 @@ describe('the MO2 Instance adapter', () => {
         expect(fire(root, join('mods/Harder VATS/.git', inside), join('mods/Harder VATS/git', inside))).toBe(true);
         expect(signals).toBe(1);
       });
+
+    it('tells a ref from git\'s bookkeeping in a Windows path', () => {
+      let signals = 0;
+      adapterAt(root).subscribe(() => { signals++; });
+      const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
+
+      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\index');
+      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\refs\\heads\\main');
+
+      expect(signals).toBe(1);
+    });
 
     // Rival: every path under a mod heard alike, so git's own bookkeeping reads as a change.
     it.each(['index', 'objects/ab/cdef', 'logs/HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'HEAD.lock'])(

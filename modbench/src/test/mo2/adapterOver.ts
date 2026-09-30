@@ -18,7 +18,10 @@ export interface AdapterAnswers {
 export const NO_DOWNLOADS: DownloadedFiles = { kind: 'unresolved', reason: 'this test reads no downloads' };
 
 /** A window whose focus never changes, for a test whose subject is not the recompute's triggers. */
-export const STEADY_FOCUS: InstanceOptions['windowFocus'] = () => ({ dispose: () => {} });
+export const STEADY_WINDOW: InstanceOptions['window'] = {
+  state: { focused: true },
+  onDidChangeWindowState: () => ({ dispose: () => {} }),
+};
 
 /** What every command family reaches the instance through, over `root`. */
 export function accessTo(root: string, answers: AdapterAnswers = {}): { instanceRoot: string; adapter: InstanceAdapter } {

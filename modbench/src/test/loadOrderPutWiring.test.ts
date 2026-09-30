@@ -51,12 +51,12 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
     },
   };
   const channel = { error: vi.fn() };
-  const onConnect = vi.fn();
+  const onMEditStarted = vi.fn();
   const owned: vscode.Disposable[] = [];
   const puts = registerLoadOrderPut(
     (d) => { owned.push(d); return d; }, instance, client,
     async () => { await putLoadOrder(sender, ROOT, sourceOf(current)); },
-    onConnect,
+    onMEditStarted,
     channel,
   );
   const sender = createLoadOrderSender(client);
@@ -75,7 +75,7 @@ function wired(status: 'attached' | 'starting', first: InstanceValue) {
       return plugins.map((p) => p.name).join(',');
     });
   const dispose = (): void => { for (const d of owned) d.dispose(); };
-  return { client, puts, land, sent, channel, onConnect, dispose };
+  return { client, puts, land, sent, channel, onMEditStarted, dispose };
 }
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -83,7 +83,7 @@ const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve
 describe('the load order is put at every recompute', () => {
   it('puts a load order equal to the last one put', async () => {
     const { puts, land, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     for (const value of [valueWith('A.esp'), valueWith('B.esp'), valueWith('B.esp', { overwriteFileCount: 3 })]) {
       land(value);
@@ -95,7 +95,7 @@ describe('the load order is put at every recompute', () => {
 
   it('puts nothing without a game folder, and keeps what mEdit holds', async () => {
     const { puts, land, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     land(instanceValueFixture());
     await settled();
@@ -110,7 +110,7 @@ describe('the load order is put at every recompute', () => {
     const puts = registerLoadOrderPut(
       (d) => d, instance, new InMemoryMEditClient(), () => Promise.reject(new Error('boom')), () => {},
       channel);
-    await puts.putOnConnect().catch(() => {});
+    await puts.putOnMEditStarted().catch(() => {});
 
     land(valueWith('B.esp'), 1);
     await settled();
@@ -119,33 +119,33 @@ describe('the load order is put at every recompute', () => {
   });
 });
 
-describe('the load order is put on connect', () => {
-  it('puts a value that arrived while mEdit was detached on connect, once', async () => {
+describe('the load order is put when mEdit started', () => {
+  it('puts a value that arrived while mEdit was detached when mEdit started, once', async () => {
     const { client, puts, land, sent } = wired('starting', valueWith('A.esp'));
 
     land(valueWith('B.esp'));
     await settled();
     client.setStatus('attached');
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
     await settled();
 
     expect(sent()).toEqual(['B.esp']);
   });
 
-  it('puts on connect the load order the backend before it already had', async () => {
+  it('puts when mEdit started the load order the backend before it already had', async () => {
     const { client, puts, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     client.setStatus('disconnected');
     client.setStatus('attached');
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     expect(sent()).toEqual(['A.esp', 'A.esp']);
   });
 
-  it('puts no change between the backend going and the next connect', async () => {
+  it('puts no change between the backend going and mEdit next starting', async () => {
     const { client, puts, land, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     client.setStatus('stopped');
     land(valueWith('B.esp'));
@@ -159,7 +159,7 @@ describe('the load order is put on connect', () => {
   // A backend the client attached to without owning it can restart under a live status.
   it('puts on a stream reopen, with no value landing after it', async () => {
     const { client, puts, sent } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     client.reconnected();
     await settled();
@@ -167,7 +167,7 @@ describe('the load order is put on connect', () => {
     expect(sent()).toEqual(['A.esp', 'A.esp']);
   });
 
-  it('puts nothing on a stream reopen before the connect has put', async () => {
+  it('puts nothing on a stream reopen before mEdit started', async () => {
     const { client, sent } = wired('attached', valueWith('A.esp'));
 
     client.reconnected();
@@ -178,7 +178,7 @@ describe('the load order is put on connect', () => {
 
   it('puts nothing once disposed', async () => {
     const { client, puts, land, sent, dispose } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    await puts.putOnMEditStarted();
 
     dispose();
     land(valueWith('B.esp'));
@@ -190,30 +190,30 @@ describe('the load order is put on connect', () => {
 });
 
 // Plugin sync asks mEdit which plugins load with no line, so it runs again at the same moment.
-describe('a connect runs what waits on mEdit', () => {
+describe('mEdit starting runs what waits on mEdit', () => {
   // Rival: a second attach detector of its own, which runs on an `attached` status alone.
-  it('on the connect and on a stream reopen after it, never on a reopen before it', async () => {
-    const { client, puts, onConnect } = wired('attached', valueWith('A.esp'));
+  it('when mEdit started and on a stream reopen after it, never on a reopen before it', async () => {
+    const { client, puts, onMEditStarted } = wired('attached', valueWith('A.esp'));
     client.reconnected();
     await settled();
-    expect(onConnect).not.toHaveBeenCalled();
+    expect(onMEditStarted).not.toHaveBeenCalled();
 
-    await puts.putOnConnect();
-    expect(onConnect).toHaveBeenCalledTimes(1);
+    await puts.putOnMEditStarted();
+    expect(onMEditStarted).toHaveBeenCalledTimes(1);
 
     client.reconnected();
     await settled();
-    expect(onConnect).toHaveBeenCalledTimes(2);
+    expect(onMEditStarted).toHaveBeenCalledTimes(2);
   });
 
   it('not on a status change alone', async () => {
-    const { client, puts, onConnect } = wired('attached', valueWith('A.esp'));
-    await puts.putOnConnect();
+    const { client, puts, onMEditStarted } = wired('attached', valueWith('A.esp'));
+    await puts.putOnMEditStarted();
 
     client.setStatus('disconnected');
     client.setStatus('attached');
     await settled();
 
-    expect(onConnect).toHaveBeenCalledTimes(1);
+    expect(onMEditStarted).toHaveBeenCalledTimes(1);
   });
 });

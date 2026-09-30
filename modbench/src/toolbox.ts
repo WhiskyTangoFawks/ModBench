@@ -116,41 +116,41 @@ export interface Toolbox extends vscode.Disposable {
 }
 
 export interface LoadOrderPuts {
-  /** The put that follows a connect, sent whatever the backend before it had: the backend just
+  /** The put when mEdit started, sent whatever the backend before it had: the backend just
    *  attached holds no load order. Until it runs, no recompute puts. */
-  putOnConnect(): Promise<void>;
+  putOnMEditStarted(): Promise<void>;
 }
 
-// commands.md, put load order: put at every recompute and when mEdit started, running `onConnect`
-// at each start. Nothing is put while detached; a stream reopen is a start, the process behind it
-// perhaps another.
+// commands.md, put load order: put at every recompute and when mEdit started, running
+// `onMEditStarted` at each start. Nothing is put while detached; a stream reopen is a start, the
+// process behind it perhaps another.
 export function registerLoadOrderPut(
   own: Own,
   instance: Pick<Instance, 'subscribe'>,
   client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
   put: () => Promise<void>,
-  onConnect: () => void,
+  onMEditStarted: () => void,
   channel: { error(msg: string): void },
 ): LoadOrderPuts {
-  let connectPutRan = false;
+  let startPutRan = false;
   const putLogged = (): void => {
     void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
   };
   own({ dispose: client.onStatusChanged((status) => {
-    if (status !== 'attached') connectPutRan = false;
+    if (status !== 'attached') startPutRan = false;
   }) });
   own({ dispose: client.onReconnected(() => {
-    if (!connectPutRan) return;
-    onConnect();
+    if (!startPutRan) return;
+    onMEditStarted();
     putLogged();
   }) });
   own(instance.subscribe(() => {
-    if (connectPutRan) putLogged();
+    if (startPutRan) putLogged();
   }));
   return {
-    putOnConnect: () => {
-      connectPutRan = true;
-      onConnect();
+    putOnMEditStarted: () => {
+      startPutRan = true;
+      onMEditStarted();
       return put();
     },
   };
@@ -461,7 +461,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const access = { instanceRoot, adapter };
   // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
   const instance = own(new Instance({
-    adapter, windowFocus: vscode.window.onDidChangeWindowState, log, logReadFailure: (line) => outputChannel.error(line),
+    adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
@@ -532,14 +532,14 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
-  // ADR-0013: a landed Instance recompute and a connect put the load order, never a gesture.
+  // ADR-0013: a landed Instance recompute and mEdit starting put the load order, never a gesture.
   const loadOrderPuts = registerLoadOrderPut(
     own, instance, client, putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
       session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
-      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnConnect(),
+      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnMEditStarted(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));

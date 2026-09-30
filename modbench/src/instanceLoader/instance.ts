@@ -1,6 +1,5 @@
-// The Instance: one read model over the instance (ADR-0015). It recomputes one whole value from the
-// Instance adapter's parsed reads whenever the adapter signals that the instance changed, and
-// whenever the window regains focus.
+// The Instance: one read model over the instance (ADR-0015), recomputed whole from the Instance
+// adapter's parsed reads.
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -99,15 +98,16 @@ export type ReadFailureListener = () => void;
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
-/** As much of VS Code's window state as the recompute reads. */
-export interface WindowFocus {
-  readonly focused: boolean;
+/** As much of VS Code's window as the recompute reads. */
+export interface FocusWindow {
+  readonly state: { readonly focused: boolean };
+  onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
 }
 
 export interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
-  windowFocus: (listener: (state: WindowFocus) => void) => Subscription;
+  window: FocusWindow;
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
@@ -174,8 +174,10 @@ export class Instance implements Subscription {
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter.names);
     this.changes = options.adapter.subscribe(() => this.schedule());
-    this.focus = options.windowFocus(({ focused }) => {
-      if (focused) this.schedule();
+    let focused = options.window.state.focused;
+    this.focus = options.window.onDidChangeWindowState((state) => {
+      if (state.focused && !focused) this.schedule();
+      focused = state.focused;
     });
   }
 
