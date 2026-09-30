@@ -26,6 +26,23 @@ internal static class Wire
             gameRelease = "Fallout4",
         });
 
+    /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
+    /// validates every file (ADR-0009 invariant 4).</summary>
+    internal static async Task NextSnapshot(this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
+        (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
+
+    /// <summary>Polls until <paramref name="holds"/>: validation runs on the service's own thread, and
+    /// a validation that finds nothing publishes nothing to wait on.</summary>
+    internal static async Task Eventually(Func<Task<bool>> holds, string what)
+    {
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (!await holds())
+        {
+            Assert.True(elapsed.Elapsed < Patience, $"never: {what}");
+            await Task.Delay(50);
+        }
+    }
+
     private static IEnumerable<LoadOrderEntry> Listed(ScatteredFixtureData fx, string[] origins) =>
         origins.Length == 0
             ? fx.Plugins
@@ -108,9 +125,8 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Track's write reaches the answers through the watch it armed (ADR-0015 invariant 2),
-    /// on the watcher's own thread, so the answer is polled until it reports the plugin tracked.
-    /// </summary>
+    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015 invariant 2), on the
+    /// service's own thread, so the answer is polled until it reports the plugin tracked.</summary>
     internal static async Task PluginReportsTracked(this HttpClient client, string name)
     {
         var elapsed = System.Diagnostics.Stopwatch.StartNew();

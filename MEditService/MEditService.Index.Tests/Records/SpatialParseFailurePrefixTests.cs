@@ -189,7 +189,7 @@ public sealed class SpatialParseFailurePrefixTests
         {
             _adapter.Unreadable = formKey;
             PluginBinaries.Touch(_path);
-            Assert.True(_index.RefreshBinary(Plugin, _path).GetAwaiter().GetResult());
+            Assert.True(_index.Revalidate(Plugin));
         }
 
         public void Dispose()

@@ -32,8 +32,8 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
 }
 
 /// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry — a
-/// record gesture never takes the gate (ADR-0015 invariant 2), and the source watcher's batch logs
-/// it rather than propagating (ADR-0019).</summary>
+/// record gesture never takes the gate (ADR-0015 invariant 2), and a snapshot's validation logs it
+/// rather than propagating (ADR-0019).</summary>
 public sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";

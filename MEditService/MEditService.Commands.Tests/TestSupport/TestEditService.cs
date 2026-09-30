@@ -23,6 +23,7 @@ internal static class TestEditService
         new ServiceCollection()
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
+            .AddSingleton(TimeProvider.System)
             .AddSingleton(notifications ?? new InMemoryNotificationPublisher())
             .AddSingleton(adapter ?? new MutagenPluginAdapter())
             .AddSingleton<RecordTextCodec>()
@@ -56,10 +57,7 @@ internal static class TestEditService
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
-    /// <summary>The watcher's verb over the port a suite reads.</summary>
-    internal static ModSettled Settled(INotificationPublisher notifications) =>
-        Over(new LoadOrderHolder(), notifications: notifications).GetRequiredService<ModSettled>();
-
-    internal static PutLoadOrderHandler PutLoadOrderHandler(LoadOrderHolder holder, IPluginAdapter? adapter = null) =>
-        Over(holder, adapter: adapter).GetRequiredService<PutLoadOrderHandler>();
+    internal static PutLoadOrderHandler PutLoadOrderHandler(
+        LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null) =>
+        Over(holder, adapter: adapter, notifications: notifications).GetRequiredService<PutLoadOrderHandler>();
 }

@@ -17,7 +17,7 @@ public sealed class SourcePathLiteralScanTests
     private static readonly string[] ScannedRoots =
         ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter"];
 
     // The repository's own files: the partials of SourceRepository — only inside Source itself.
     private const string RepositoryFilePrefix = "SourceRepository";

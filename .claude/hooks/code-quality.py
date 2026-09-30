@@ -39,7 +39,6 @@ CS_PROJECTS = {
     "MEditService/MEditService.Ports": "MEditService.Ports",
     "MEditService/MEditService.Queries": "MEditService.Queries",
     "MEditService/MEditService.SourceAdapter": "MEditService.SourceAdapter",
-    "MEditService/MEditService.Watcher": "MEditService.Watcher",
     "MEditService/MEditService.Codec.Tests": "MEditService.Codec.Tests",
     "MEditService/MEditService.Commands.Tests": "MEditService.Commands.Tests",
     "MEditService/MEditService.Http.Tests": "MEditService.Http.Tests",
@@ -49,7 +48,6 @@ CS_PROJECTS = {
     "MEditService/MEditService.Ports.Tests": "MEditService.Ports.Tests",
     "MEditService/MEditService.Queries.Tests": "MEditService.Queries.Tests",
     "MEditService/MEditService.SourceAdapter.Tests": "MEditService.SourceAdapter.Tests",
-    "MEditService/MEditService.Watcher.Tests": "MEditService.Watcher.Tests",
     "MEditService/MEditService.TestSupport": "MEditService.TestSupport",
 }
 # These two never reach the SARIF log even at 'suggestion' severity; only `dotnet format`

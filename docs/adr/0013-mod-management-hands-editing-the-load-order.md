@@ -4,9 +4,9 @@ Modbench's data is two layers. The file layer is the mods and their files, resol
 The record layer is the plugins and their records, resolved by plugin order. A plugin file is where
 the two meet. Mod Management owns the file layer: both orders and every file of the mod manager,
 read through the Instance adapter. Editing owns the record layer and reads none of the mod
-manager's files. Mod Management hands Editing one snapshot: every plugin in the instance, and the
-active plugins, in load order ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)). It
-sends the snapshot whenever anything that feeds it changes, and a fact about a mod that Editing
+manager's files. Mod Management hands Editing one snapshot: the game release, every plugin in the instance, and
+the active plugins, in load order ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)). It
+sends the snapshot at every recompute of the instance value, and a fact about a mod that Editing
 needs arrives as data too. Modbench is one tool
 ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)), so Editing reconciles the snapshot
 it is handed and never reloads.
@@ -14,12 +14,12 @@ it is handed and never reloads.
 ## Strategic invariants
 
 1. **The snapshot arrives whole, as state, and is reconciled.** Mod Management builds it from one
-   instance value ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md), invariant
-   6), so its two halves never come from two reads. It sends the snapshot on activation and
-   whenever either half changes. Editing compares each half with the one it holds. Changed
-   plugins index only what the record index has never seen. They drop the rows of each plugin
-   whose file left. Changed active plugins run one winner sweep, and read or drop no row. A
-   snapshot identical to the current state is a no-op.
+   instance value ([ADR-0015](0015-edits-reach-the-read-model-through-the-watcher.md), invariant 6),
+   so its two halves never come from two reads. It sends the snapshot at every recompute of that
+   value, changed or not: the snapshot is also the signal that a file may have changed. Editing
+   compares each half with the one it holds. Changed plugins index only what the record index has
+   never seen. They drop the rows of each plugin whose file left. Changed active plugins run one
+   winner sweep, and read or drop no row.
 2. **The snapshot names every plugin in the instance
    ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)), each as origin, filename and
    path.** It names the files on disk, never deploy's links. Mod order, `plugins.txt` and enabled
@@ -36,8 +36,8 @@ it is handed and never reloads.
 
 ## Derived tactical observations
 
-- Opening the record index keeps the last active plugins it held. The snapshot sent on activation
-  corrects them.
+- Opening the record index keeps the last active plugins it held. The snapshot sent when mEdit
+  starts corrects them.
 
 ## Alternatives rejected
 

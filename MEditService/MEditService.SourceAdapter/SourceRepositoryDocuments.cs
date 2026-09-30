@@ -51,13 +51,6 @@ public sealed partial class SourceRepository
         return FormKeyDeclaredIn(Encoding.UTF8.GetString(StripUtf8Bom(bytes)), filePath, pluginFileName);
     }
 
-    /// <summary>The FormKey HEAD's document at <paramref name="filePath"/> declares, whatever the working
-    /// tree holds there now. Null when HEAD holds no document there or it declares none.</summary>
-    public static string? FormKeyCommittedAt(string modFolder, string filePath, string pluginFileName) =>
-        ReadCommittedSourceText(modFolder, Path.GetRelativePath(modFolder, filePath)) is { } committed
-            ? FormKeyDeclaredIn(committed, filePath, pluginFileName)
-            : null;
-
     /// <summary>Every document in the working tree by the FormKey it declares, and a line for each file
     /// that could not be read as one. A FormKey two documents declare throws
     /// <see cref="AmbiguousSourceUnitException"/>.</summary>

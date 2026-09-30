@@ -8,12 +8,13 @@ import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_G
 /** A folder the settings name, whose watch moves with them. */
 export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins';
 
-// Narrower than "`.git` anywhere in the path": the directory entry itself appearing or
-// disappearing is a change a listener still needs.
-function isInsideGitDir(path: string): boolean {
+function isInstanceChange(path: string): boolean {
   const segments = path.split(/[\\/]/);
   const gitIndex = segments.lastIndexOf('.git');
-  return gitIndex !== -1 && gitIndex !== segments.length - 1;
+  if (gitIndex === -1) return true;
+  const [first, ...rest] = segments.slice(gitIndex + 1);
+  if (first === undefined || first === 'refs') return true;
+  return rest.length === 0 && (first === 'HEAD' || first === 'packed-refs');
 }
 
 // Each change beneath `base` that matches `glob`, created, changed or deleted alike.
@@ -49,7 +50,7 @@ export function mo2Watch(instanceRoot: string): Mo2Watch {
   };
   const watch = (base: string, glob: string): Subscription =>
     watchFiles(base, glob, (path) => {
-      if (!isInsideGitDir(path)) changed();
+      if (isInstanceChange(path)) changed();
     });
   const armed = (): boolean => listeners.size > 0;
 

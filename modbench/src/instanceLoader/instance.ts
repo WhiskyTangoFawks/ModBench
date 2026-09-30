@@ -1,5 +1,5 @@
-// The Instance: one read model over the instance (ADR-0015). It recomputes one whole value from the
-// Instance adapter's parsed reads whenever the adapter signals that the instance changed.
+// The Instance: one read model over the instance (ADR-0015), recomputed whole from the Instance
+// adapter's parsed reads.
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -100,9 +100,16 @@ export type ReadFailureListener = () => void;
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
+/** As much of VS Code's window as the recompute reads. */
+export interface FocusWindow {
+  readonly state: { readonly focused: boolean };
+  onDidChangeWindowState(listener: (state: { readonly focused: boolean }) => void): Subscription;
+}
+
 export interface InstanceOptions {
   /** The one reader of the instance; each recompute reads its settings once. */
   adapter: InstanceAdapter;
+  window: FocusWindow;
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
@@ -162,12 +169,19 @@ export class Instance implements Subscription {
 
   private readonly changes: Subscription;
 
+  private readonly focus: Subscription;
+
   // The mod folder links already told as skipped, so each is one Output line until it changes.
   private linksTold: ReadonlySet<string> = new Set();
 
   constructor(private readonly options: InstanceOptions) {
     this.current = emptyValue(options.adapter.names);
     this.changes = options.adapter.subscribe(() => this.schedule());
+    let focused = options.window.state.focused;
+    this.focus = options.window.onDidChangeWindowState((state) => {
+      if (state.focused && !focused) this.schedule();
+      focused = state.focused;
+    });
   }
 
   /** Never undefined and never partial: before the first read it is the empty value at
@@ -219,6 +233,7 @@ export class Instance implements Subscription {
   dispose(): void {
     clearTimeout(this.timer);
     this.changes.dispose();
+    this.focus.dispose();
     this.subscribers = [];
     this.failureListeners = [];
   }

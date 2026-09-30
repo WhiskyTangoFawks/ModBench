@@ -6,7 +6,9 @@ MO2 is one implementation of it, and the only code that names MO2. It answers pa
 changes in domain words, and signals that the instance changed. It hides the layout, every path
 function, the watch, the manager's file formats with their codecs and splices, and whole-file
 writes. `plugins.txt`'s format is the game's, and its codec is the kernel's Load-order file codec.
-It reads which game the instance is for and where that game is. It writes no deployment, which is
+The watch covers every file in the instance. Inside `.git/` it covers only `HEAD`, `refs/` and
+`packed-refs`: a commit moves the record index's rows at HEAD and changes nothing else. It reads
+which game the instance is for and where that game is. It writes no deployment, which is
 deploy's.
 
 - Every read treats only ENOENT (`errnoCode(err) === 'ENOENT'`) as empty and rethrows the rest. A

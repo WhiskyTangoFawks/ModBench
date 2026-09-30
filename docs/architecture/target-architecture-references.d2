@@ -13,13 +13,6 @@ medit_drivers: "MEDIT · Drivers — its clients; Modbench is the right column, 
 medit_driving.http -> medit_core.commands {class: ref}
 medit_driving.http -> medit_core.queries {class: ref}
 medit_driving.http -> medit_kernel.ports {class: ref}
-medit_driving.watcher -> medit_core.commands {class: ref}
-medit_driving.watcher -> medit_kernel.loadorder {class: ref}
-medit_driving.watcher -> medit_driven.index {class: ref}
-medit_driving.watcher -> medit_driven.sourceadapter {class: ref}
-medit_driving.watcher -> medit_data.plugin {class: store}
-medit_driving.watcher -> medit_data.source {class: store}
-medit_driving.watcher -> modbench_data.mo2 {class: store}
 # mEdit: core (the kernel by the band's rule, not drawn)
 medit_core.commands -> medit_driven.sourceadapter {class: ref}
 medit_core.commands -> medit_driven.pluginadapter {class: ref}

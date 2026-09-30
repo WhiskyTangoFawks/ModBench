@@ -13,14 +13,8 @@ queries.label: Queries
 sourceadapter: @../target-architecture.medit_driven.sourceadapter
 sourceadapter.label: Source adapter
 source: @../target-architecture.medit_data.source
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
-store: @../target-architecture.medit_driven.index.store
-store.label: Store
-port: @../target-architecture.medit_kernel.ports
-port.label: Ports
 
 create: "create, on a plugin: the type pick first" {
   editor -> client: "the record types the game can create" {class: query}
@@ -41,14 +35,7 @@ sourceadapter -> source: documents {class: edit}
 commands -> http: "applied or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> editor: "applied or refusal, per item" {class: edit}
-source -> watcher: source changed {class: signal}
-watcher -> indexer: source changed {class: signal}
-sourceadapter -> indexer: documents (tracked) {class: query}
-indexer -> store: rows {class: query}
-store -> port: "rows changed: keys, sequence" {class: push}
-port -> http: publish {class: push}
-http -> client: stream {class: push}
-client -> editor: rows changed {class: push}
+indexer."the next snapshot: index-load-order"
 
 refused: "refused, nothing written for that record" {
   commands -> http: "the refusal" {class: edit}

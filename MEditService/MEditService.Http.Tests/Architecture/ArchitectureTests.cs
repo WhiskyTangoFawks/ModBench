@@ -9,7 +9,6 @@ using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using MEditService.Watcher;
 
 namespace MEditService.Http.Tests.Architecture;
 
@@ -18,7 +17,7 @@ namespace MEditService.Http.Tests.Architecture;
 public sealed class ArchitectureTests
 {
     // Every box's own assembly, reached through one type each: a seam is an interface in whichever
-    // box publishes it, and one box's assembly would leave the other nine unscanned.
+    // box publishes it, and one box's assembly would leave the other eight unscanned.
     private static readonly Assembly[] Boxes =
     [
         typeof(RecordTextCodec).Assembly,
@@ -30,7 +29,6 @@ public sealed class ArchitectureTests
         typeof(INotificationPublisher).Assembly,
         typeof(IRecordQueryService).Assembly,
         typeof(SourceRepository).Assembly,
-        typeof(ModFolderWatcher).Assembly,
     ];
 
     // Where a DTO's own shape decides identity: the read side's models, and the wire records the
@@ -84,13 +82,15 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0009: the index validates itself by content hash; an mtime shortcut passes the
-    // persistence tests, which rewrite files, and then trusts a file another tool touched.
+    // ADR-0009: a hash is kept unread only while the stamp, change time included, matches. .NET has
+    // no change time, so a .NET LastWriteTime read is modification time alone, which ADR-0003
+    // rejects: other tools' writes can preserve it.
     [Fact]
-    public void DiskDerivedState_NeverReadsLastWriteTime()
+    public void DiskDerivedState_NeverReadsModificationTimeAlone()
     {
         var offenders = Offenders(SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
-        Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
+        Assert.True(offenders.Count == 0,
+            "Modification time read without change time in:\n" + string.Join("\n", offenders));
     }
 
     // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
@@ -124,14 +124,14 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013 invariant 1: the put-load-order handler is the only writer, the watcher's own
+    // ADR-0013 invariant 1: the put-load-order handler is the only writer, the Index's own
     // subscription the only reconciler — a second of either makes the Index's Status lie.
     [Fact]
-    public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyFromTheWatcher()
+    public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyByTheIndex()
     {
         var root = SolutionDirectory();
-        // The watcher, the one listener to the change, is the one caller of the reconcile door.
-        string[] reconcilers = ["ModFolderWatcher.cs", "WatcherSinks.cs"];
+        // The Index reconciles on its own subscription, so no box calls its reconcile door.
+        string[] reconcilers = [];
         string[] writers = ["PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
@@ -260,7 +260,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
-        var offenders = new[] { typeof(Indexer), typeof(IQueryIndex), typeof(IRefreshIndex), typeof(IRecordReads) }
+        var offenders = new[] { typeof(Indexer), typeof(IQueryIndex), typeof(IRecordReads) }
             .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
             .Where(m => VisibleOutsideItsType(m.Member))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
@@ -436,7 +436,7 @@ public sealed class ArchitectureTests
     private static readonly string[] Projects =
     ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-         "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher"];
+         "MEditService.Queries", "MEditService.SourceAdapter"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

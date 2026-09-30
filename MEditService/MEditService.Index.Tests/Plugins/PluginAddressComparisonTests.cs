@@ -97,12 +97,12 @@ public sealed class PluginAddressComparisonTests : IDisposable
     // The rival this pins: a held-plugins lookup comparing name and origin its own way, which would
     // miss the plugin the gone report names, unindex nothing and still announce a change.
     [Fact]
-    public async Task AGoneReportUnderAnotherCase_FindsTheHeldPluginStillOnDisk_AndAnnouncesNothing()
+    public void AValidationUnderAnotherCase_FindsTheHeldPluginStillOnDisk_AndAnnouncesNothing()
     {
         var entry = _fixture.Plugins.Single();
         var published = _notifications.Notifications.Count;
 
-        await _index.RefreshBinary(OtherCase, Path.Combine(_fixture.GameDirectory, "a-superseded-path", entry.Name));
+        _index.ValidateIndex(OtherCase);
 
         Assert.NotEmpty(_index.RequireReads().GetDocuments(entry.KeyOf()));
         Assert.Empty(_notifications.Notifications.Skip(published).OfType<PluginChangedNotification>());

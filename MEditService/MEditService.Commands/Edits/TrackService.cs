@@ -102,7 +102,7 @@ public sealed class TrackService(
             // on main landed all the same (plugins.md, Track, story 5).
             logger.LogError(ex, "Could not finish tracking into {ModFolder}", modFolder);
             failed = [.. plugins
-                .Where(v => !SourceRepository.IsPluginTracked(modFolder, v.Plugin.Name))
+                .Where(v => !SourceRepository.HoldsTreeFor(modFolder, v.Plugin.Name))
                 .Select(v => (v.Plugin.Name, ex.Message))];
         }
 

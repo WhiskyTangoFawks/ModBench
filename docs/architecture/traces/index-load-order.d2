@@ -1,4 +1,4 @@
-# Index the load order, purple.
+# Index the load order.
 ...@../styles
 shape: sequence_diagram
 instanceloader: @../target-architecture.modbench_driven.instanceloader
@@ -13,8 +13,6 @@ commands: @../target-architecture.medit_core.commands
 commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 codec: @../target-architecture.medit_kernel.codec
@@ -30,14 +28,14 @@ port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
-instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
-client -> http: "snapshot: every plugin · the active plugins" {class: loadorder}
+instancecommands -> client: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
+client -> http: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
 http -> commands: put load order {class: loadorder}
-commands -> loadorder: snapshot {class: query}
+commands -> loadorder: snapshot {class: loadorder}
 commands -> http: "applied: the version" {class: loadorder}
 http -> client: the version {class: loadorder}
-loadorder -> watcher: the snapshot changed {class: signal}
-watcher -> indexer: reconcile {class: signal}
+loadorder -> indexer: "a snapshot arrived" {class: signal}
+indexer."validate every plugin"
 codec -> indexer: schema {class: query}
 sourceadapter -> indexer: documents (tracked) {class: query}
 pluginadapter -> indexer: bytes (untracked) {class: query}
@@ -46,6 +44,7 @@ loadorder -> indexer: the active plugins {class: query}
 indexer."winners and conflicts"
 indexer -> port: "index status: reconciling · ready · held elsewhere · failed" {class: push}
 store -> port: "rows changed: keys, sequence" {class: push}
+indexer -> port: "plugin changed: the plugin, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
-client -> views: "index status · rows changed" {class: push}
+client -> views: "index status · rows changed · plugin changed" {class: push}

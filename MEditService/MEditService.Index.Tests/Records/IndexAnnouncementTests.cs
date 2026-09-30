@@ -71,7 +71,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         PluginBinaries.Touch(_pluginPath);
-        Assert.True(await _index.RefreshBinary(Key, _pluginPath));
+        Assert.True(_index.Revalidate(Key));
 
         TheOnePluginChanged();
     }
@@ -83,19 +83,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         File.Delete(_pluginPath);
-        Assert.True(await _index.RefreshBinary(Key, _pluginPath));
-
-        TheOnePluginChanged();
-    }
-
-    [Fact]
-    public async Task ABinaryIndexedForTheFirstTime_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
-    {
-        File.WriteAllText(_pluginPath, "not a plugin");
-        ReconcileHeld();
-
-        WriteValidPlugin(_pluginPath);
-        Assert.True(await _index.RefreshBinary(Key, _pluginPath));
+        Assert.True(_index.Revalidate(Key));
 
         TheOnePluginChanged();
     }
@@ -108,7 +96,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
 
-        Assert.False(await _index.RefreshBinary(Key, _pluginPath));
+        Assert.False(_index.Revalidate(Key));
 
         Assert.Empty(SinceReconcile.OfType<PluginChangedNotification>());
     }

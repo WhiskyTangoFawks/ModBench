@@ -8,7 +8,7 @@ holds the domain words whose usual meaning would mislead.
 ## Strategic invariants
 
 1. **Six layers; a write passes through the core, and a read takes the shortest path down.** Front
-   end; driving adapters, the API and the watchers on the mEdit side, the views on the Modbench
+   end; driving adapters, the API on the mEdit side, the views on the Modbench
    side; the core; the shared kernel both sides read; driven adapters; the systems of record. A
    write reaches a system of record through the core, which holds the rules that refuse it, and
    then a driven adapter. A read or a change notice skips a layer that would only pass it on. The

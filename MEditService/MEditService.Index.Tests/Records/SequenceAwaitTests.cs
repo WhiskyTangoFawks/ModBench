@@ -63,7 +63,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);
-        Assert.True(await _index.RefreshBinary(_fixture.Plugins.Single().KeyOf(), path));
+        Assert.True(_index.Revalidate(_fixture.Plugins.Single().KeyOf()));
 
         // The landing already happened above; this wakes the poll due on the fake clock's own
         // timer to re-check, never touching the day-long deadline that answers "not yet".

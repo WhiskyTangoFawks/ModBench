@@ -57,10 +57,11 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
-    // plugins.md, States, story 6: the next change to the instance tries again. A file where the
-    // store's folder goes, found where an earlier reconcile left it, keeps the store from opening.
+    // plugins.md, States, story 6: the next change to the instance tries again, and arrives as the
+    // same snapshot. A file where the store's folder goes, found where an earlier reconcile left
+    // it, keeps the store from opening.
     [Fact]
-    public void AFailedReconcile_IsTriedAgain_OnRetry()
+    public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {
         using var data = new PluginFixtureBuilder("retry-door").WithPlugin("A.esp").Build();
         using (var earlier = Indexes.Open(new LoadOrderHolder()))
@@ -76,14 +77,14 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, index.Status.State);
 
         File.Delete(blocker);
-        index.RetryFailedReconcile();
+        index.Reconcile(snapshot, holder.Apply(snapshot));
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
-    public void AReconcileThatStillFails_IsTriedOncePerRetry()
+    public void AReconcileThatStillFails_IsTriedOncePerEqualSnapshot()
     {
         using var data = new PluginFixtureBuilder("retry-once-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
@@ -93,14 +94,15 @@ public sealed class ReconcileDoorTests
         index.Reconcile(snapshot, holder.Apply(snapshot));
         var before = StatusesPublished(notifications).Length;
 
-        index.RetryFailedReconcile();
+        index.Reconcile(snapshot, holder.Apply(snapshot));
 
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)[before..]).Status.State);
     }
 
-    // The watcher asks on every settle, so a retry of an index that has not failed does nothing.
+    // Every recompute sends the snapshot, so an equal one over an index that has not failed says
+    // nothing.
     [Fact]
-    public void ARetry_OfAnIndexThatHasNotFailed_ReconcilesNothing()
+    public void AnEqualSnapshot_OfAnIndexThatHasNotFailed_PublishesNoStatus()
     {
         using var data = new PluginFixtureBuilder("retry-ready-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
@@ -110,7 +112,7 @@ public sealed class ReconcileDoorTests
         index.Reconcile(snapshot, holder.Apply(snapshot));
         var before = StatusesPublished(notifications).Length;
 
-        index.RetryFailedReconcile();
+        index.Reconcile(snapshot, holder.Apply(snapshot));
 
         Assert.Equal(before, StatusesPublished(notifications).Length);
     }
@@ -134,7 +136,7 @@ public sealed class ReconcileDoorTests
         Assert.Contains("ModB", index.Status.Message, StringComparison.Ordinal);
     }
 
-    // A superseded reconcile is ordinary (a watcher firing mid-load): never an escaped exception,
+    // A superseded reconcile is ordinary (a recompute mid-load): never an escaped exception,
     // never mistaken for the held-elsewhere refusal, and the survivor finishes Ready for its version.
     [Fact]
     public async Task ASupersededReconcile_NeverEscapes_AndTheSurvivorAnswersReadyForItsOwnVersion()
@@ -163,29 +165,27 @@ public sealed class ReconcileDoorTests
         Assert.Equal(second, StatusesPublished(notifications).Last(n => n.Status.State == LoadOrderState.Ready).Status.Version);
     }
 
-    // The rival this pins: publishing only when the reconcile changed something, which would leave
-    // a client that applied an identical resend waiting on a tick that never comes.
+    // An identical resend answers the version already terminal, which the client reads from the
+    // status itself rather than waiting on a tick.
     [Fact]
-    public void AnIdenticalResend_StillPublishesATerminalStatus_ForItsOwnVersion()
+    public void AnIdenticalResend_AnswersTheVersionAlreadyReady_AndPublishesNothing()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("no-op-door").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Open(holder, notifications: notifications);
         var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
-
         var first = holder.Apply(snapshot);
         index.Reconcile(snapshot, first);
+        var before = notifications.Notifications.Count;
+
         var second = holder.Apply(snapshot);
         index.Reconcile(snapshot, second);
 
+        Assert.Equal(first, second);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Equal(second, index.Status.Version);
-        var ready = StatusesPublished(notifications)
-            .Where(n => n.Status.State == LoadOrderState.Ready)
-            .Select(n => n.Status.Version)
-            .ToList();
-        Assert.Equal([first, second], ready);
+        Assert.Equal(first, index.Status.Version);
+        Assert.Equal(before, notifications.Notifications.Count);
     }
 
     // The rival this pins: a door that schedules the reconcile and returns, which would make every

@@ -5,7 +5,6 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -108,7 +107,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var containers = new ContainerDocuments(release, _schemas);
         _pluginIngest = new PluginIngest(Connection, _logger, containers);
         _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas, release);
-        _sourceValidation = new SourceValidation(this, Connection, _logger);
+        _sourceValidation = new SourceValidation(this, Connection, release, _logger);
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
         // acting on the stale set stays here.
@@ -133,6 +132,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginAddress key) => _store.IndexedContentHash(key);
+
+    /// <summary>See <see cref="IRecordIndex.FileContentHash"/>.</summary>
+    public string? FileContentHash(string path) => _store.FileContentHash(path);
 
     /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
     public long Sequence => _store.CurrentSequence();
@@ -463,13 +465,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var workingTreeText = repository.Get(key, identity)?.Body;
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
-        // something that is not a document. Rows stay as they stand until it reads as one again.
+        // something that is not a document. Rows stay as they stand until it reads as one again, and
+        // the caller says why.
         if (workingTreeText != null && !IsDocument(workingTreeText))
         {
-            _logger.LogWarning(
-                "{Plugin} ({Origin})'s source for {FormKey} is not a readable document, so its rows were left as " +
-                "they stand", key.Name, key.Origin, formKey);
-            return;
+            throw new UnreadableSourceDocumentException(
+                $"The source of {formKey} in {key.Name} ({key.Origin}) is not a readable document.");
         }
 
         if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
@@ -556,12 +557,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Validate"/>.</summary>
     public ValidationReport Validate(PluginAddress key, string? modFolder)
     {
-        if (modFolder != null && SourceRepository.IsTracked(modFolder))
-        {
-            return (_sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository."))
-                .Validate(key, modFolder);
-        }
+        var sourceValidation = _sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository.");
+        if (modFolder != null && SourceRepository.HoldsTreeFor(modFolder, key.Name))
+            return sourceValidation.Validate(key, modFolder);
 
+        // Whatever HEAD vouched for is gone with the tree, so a tree that returns is read whole.
+        sourceValidation.Forget(key);
         return ValidateAgainstBinary(key);
     }
 
@@ -600,9 +601,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport(key, [], NeedsRebuild: true, []);
 
-        // A file that cannot be read is no evidence its rows are still true, so it counts as a
-        // mismatch — Store.ValidateAgainstDisk's own rule.
-        return PluginBinaryHash.OfFile(claim.FilePath) == claim.ContentHash
+        return _store.FileContentHash(claim.FilePath) == claim.ContentHash
             ? ValidationReport.Clean(key)
             : new ValidationReport(key, [], NeedsRebuild: true, []);
     }

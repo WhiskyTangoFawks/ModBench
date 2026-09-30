@@ -98,7 +98,7 @@ internal sealed class FormKeyChange(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // Only the tree is put back; the Source watcher lands the restored files. Paths are relative to
+    // Only the tree is put back; the next snapshot lands the restored files. Paths are relative to
     // the mod folder, the form the Source Control panel lists.
     private string RollBackFailedChange(
         SourceRepository.SourceTransaction transaction, SourceRepository repository,

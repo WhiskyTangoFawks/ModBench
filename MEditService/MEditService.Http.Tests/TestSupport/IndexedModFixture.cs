@@ -90,8 +90,8 @@ public sealed class IndexedModFixture : IDisposable
     public static IndexedModFixture TrackedEverything(Action<string>? beforeTrack = null) =>
         new(track: true, PluginName, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
 
-    /// <summary>Tracked, with every projection the index publishes recorded: what a watcher's signal
-    /// reaches the front end as (ADR-0014).</summary>
+    /// <summary>Tracked, with every projection the index publishes recorded: what a snapshot's
+    /// validation reaches the front end as (ADR-0014).</summary>
     public static IndexedModFixture Tracked(INotificationPublisher notifications) =>
         new(track: true, PluginName, notifications: notifications);
 
