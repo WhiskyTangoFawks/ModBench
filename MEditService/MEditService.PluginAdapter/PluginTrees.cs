@@ -155,9 +155,11 @@ internal static class PluginTrees
     /// 2).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
-        CancellationToken cancel = default)
+        string? scratchRoot = null, CancellationToken cancel = default)
     {
-        var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
+        var scratchDir = scratchRoot is null
+            ? Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName
+            : Directory.CreateDirectory(Path.Combine(scratchRoot, ReadScratchPrefix + Path.GetRandomFileName())).FullName;
         try
         {
             // Outside the catch below: a scratch folder this filesystem cannot write is not a source
