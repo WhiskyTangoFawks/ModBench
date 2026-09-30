@@ -285,6 +285,9 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
+  /** The folder the plugin file at `pluginFile` sits in when that folder is tracked; undefined when
+   *  it is not (ADR-0007). */
+  trackedFolderOf(pluginFile: string): Promise<string | undefined>;
 
   // Changes.
   /** Every change lands in one write, its folders with it. Naming an entry not there, or adding a

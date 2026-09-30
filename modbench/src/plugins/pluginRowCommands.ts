@@ -3,7 +3,7 @@ import { isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcom
 import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import {
-  trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type IsTracked, type PluginFolder,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
@@ -257,7 +257,7 @@ interface GitExtensionExports {
 export async function registerHeldTrackedRepositories(
   client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
-  isTracked: IsTracked, pluginFolder: PluginFolder,
+  trackedFolderOf: TrackedFolderOf,
 ): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -269,10 +269,10 @@ export async function registerHeldTrackedRepositories(
     const gitApi = exports.getAPI(1);
 
     const plugins = await client.getPlugins();
-    const folders = await trackedModFoldersOf(plugins, isTracked, pluginFolder);
+    const folders = await trackedFoldersOf(plugins, trackedFolderOf);
     const folderRepositories = await registerTrackedRepositories(
-      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories, pluginFolder));
+      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
+    setPluginRepositories(pluginRepositoriesOf(folders, folderRepositories));
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
   }

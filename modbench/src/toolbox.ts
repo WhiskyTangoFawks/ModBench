@@ -21,6 +21,7 @@ import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { loadOrderSnapshotOf, originFiles, originFolder, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
+import type { TrackedFolderOf } from './plugins/trackedRepositories';
 import { DownloadsProvider } from './downloads/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
@@ -109,6 +110,8 @@ export interface Toolbox extends vscode.Disposable {
   enterEditing?: () => Promise<void>;
   /** Each origin's files in the value on screen; none outside an instance. */
   originFiles: OriginFilesOf;
+  /** The Instance adapter's answer; none outside an instance. */
+  trackedFolderOf: TrackedFolderOf;
 }
 
 export interface LoadOrderPuts {
@@ -441,6 +444,7 @@ interface Mo2Side {
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
   originFiles: OriginFilesOf;
+  trackedFolderOf: TrackedFolderOf;
   // Copy value's Mods and Plugins adapters read these once an instance exists; createToolbox falls
   // back to undefined selection outside one, the same posture as `modListProvider` and its siblings.
   modListSelection: () => readonly ModlistNode[];
@@ -574,6 +578,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
+    trackedFolderOf: (pluginFile) => adapter.trackedFolderOf(pluginFile),
     modListSelection: () => modListView.selection, pluginsSelection,
   };
 }
@@ -630,6 +635,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     instance: mo2?.instance,
     enterEditing: mo2?.enterEditing,
     originFiles: (origin) => mo2?.originFiles(origin),
+    trackedFolderOf: (pluginFile) => mo2?.trackedFolderOf(pluginFile) ?? Promise.resolve(undefined),
     dispose: () => {
       for (const disposable of owned.reverse()) disposable.dispose();
       owned.length = 0;
