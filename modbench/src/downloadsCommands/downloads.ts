@@ -1,15 +1,11 @@
-// A free function per gesture, applied or a refusal (ADR-0015 invariant 2). Each writes and
-// returns — the downloads watcher is how it comes back.
+// A free function per gesture, applied or a refusal (ADR-0015 invariant 2). Each hands the
+// Instance adapter its change and returns — the adapter's signal is how it comes back.
 
-import { parseDownloadMeta, setHiddenInText } from '../mo2Codecs/downloads';
-import { downloadFile } from '../instanceAdapter/layout';
-import { exists } from '../instanceAdapter/files';
-import { spliceDownloadMeta, trashDownloadMeta } from '../instanceAdapter/downloadMeta';
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+import { goneFromDisk, type DownloadedFile, type InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 
 /** What a downloads command reaches the instance through. */
 export interface DownloadsAccess {
@@ -25,58 +21,53 @@ export type DownloadsCommandResult =
 
 // The one selection loop every plural verb shares. `toItem` builds the item a caller sees, so
 // delete's can carry a per-landed note while exclude and include's stays the bare name.
-async function selectionOutcomeOf<T>(
-  names: readonly string[],
-  run: (name: string) => Promise<DownloadsCommandResult>,
-  toItem: (name: string, metaLeftBehind?: string) => T,
+async function selectionOutcomeOf<I, T>(
+  items: readonly I[],
+  run: (item: I) => Promise<DownloadsCommandResult>,
+  toItem: (item: I, metaLeftBehind?: string) => T,
 ): Promise<SelectionOutcome<T>> {
   const landed: T[] = [];
   const refused: ItemRefusal<T>[] = [];
-  for (const name of names) {
-    const outcome = await run(name);
-    if (outcome.applied) landed.push(toItem(name, outcome.metaLeftBehind));
-    else refused.push({ item: toItem(name), reason: outcome.refusal });
+  for (const item of items) {
+    const outcome = await run(item);
+    if (outcome.applied) landed.push(toItem(item, outcome.metaLeftBehind));
+    else refused.push({ item: toItem(item), reason: outcome.refusal });
   }
   return { landed, refused };
 }
 
-// The transform returns `text` untouched when `excluded` already matches, so the splice writes
-// nothing — no `.meta` for a row already at rest. A missing archive is refused first, so a stale
-// row never writes a lone `.meta`.
-async function spliceExcluded(downloadsDir: string, name: string, excluded: boolean): Promise<DownloadsCommandResult> {
+async function mark(access: DownloadsAccess, name: string, excluded: 'Excluded' | 'Included'): Promise<DownloadsCommandResult> {
   try {
-    if (!(await exists(downloadFile(downloadsDir, name)))) {
-      return { applied: false, refusal: `"${name}" is gone from disk.` };
-    }
-    const { wrote } = await spliceDownloadMeta(
-      downloadsDir, name,
-      (text) => (parseDownloadMeta(text).excluded === excluded ? text : setHiddenInText(text, excluded)),
-    );
-    return { applied: true, wrote };
+    const marked = await access.adapter.markDownloadedFile(name, excluded);
+    if (marked.gone) return { applied: false, refusal: goneFromDisk(name) };
+    return { applied: true, wrote: marked.wrote };
   } catch (err) {
     return refuse(err);
   }
 }
 
-/** Excluded is MO2's `removed` key — a separate axis from Status, so this says nothing about
- *  whether the download was ever installed. */
-export function excludeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceExcluded(downloadsDir, name, true);
+/** Excluded is a separate axis from the status, so this says nothing about whether the download
+ *  was ever installed. */
+export function excludeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
+  return mark(access, name, 'Excluded');
 }
 
-export function includeDownload(downloadsDir: string, name: string): Promise<DownloadsCommandResult> {
-  return spliceExcluded(downloadsDir, name, false);
+export function includeDownload(access: DownloadsAccess, name: string): Promise<DownloadsCommandResult> {
+  return mark(access, name, 'Included');
 }
 
 const bareName = (name: string): string => name;
 
-export function excludeDownloads(downloadsDir: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => excludeDownload(downloadsDir, name), bareName);
+export function excludeDownloads(access: DownloadsAccess, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => excludeDownload(access, name), bareName);
 }
 
-export function includeDownloads(downloadsDir: string, names: readonly string[]): Promise<SelectionOutcome<string>> {
-  return selectionOutcomeOf(names, (name) => includeDownload(downloadsDir, name), bareName);
+export function includeDownloads(access: DownloadsAccess, names: readonly string[]): Promise<SelectionOutcome<string>> {
+  return selectionOutcomeOf(names, (name) => includeDownload(access, name), bareName);
 }
+
+/** A downloaded file to delete: its name, and the path it is trashed from. */
+export type DownloadToDelete = Pick<DownloadedFile, 'name' | 'path'>;
 
 /** A landed delete: `metaLeftBehind` is set only when the file's own trash landed but its
  *  `.meta`'s then failed — the delete still applied, so a caller logs this, not a refusal. */
@@ -85,28 +76,28 @@ export interface DeletedDownload {
   metaLeftBehind?: string;
 }
 
-const toDeletedDownload = (name: string, metaLeftBehind?: string): DeletedDownload =>
+const toDeletedDownload = ({ name }: DownloadToDelete, metaLeftBehind?: string): DeletedDownload =>
   metaLeftBehind === undefined ? { name } : { name, metaLeftBehind };
 
 /** Never touches the mod installed from any of them. */
 export function deleteDownloads(
-  downloadsDir: string, names: readonly string[], trash: MoveToTrash,
+  access: DownloadsAccess, files: readonly DownloadToDelete[], trash: MoveToTrash,
 ): Promise<SelectionOutcome<DeletedDownload>> {
-  return selectionOutcomeOf(names, (name) => deleteDownload(downloadsDir, name, trash), toDeletedDownload);
+  return selectionOutcomeOf(files, (file) => deleteDownload(access, file, trash), toDeletedDownload);
 }
 
 // The file is trashed first, so a failure there refuses with the sidecar untouched. Past that
 // point a `.meta` trash failure comes back as `metaLeftBehind` (downloads.md, Reporting story 2).
 async function deleteDownload(
-  downloadsDir: string, name: string, trash: MoveToTrash,
+  access: DownloadsAccess, file: DownloadToDelete, trash: MoveToTrash,
 ): Promise<DownloadsCommandResult> {
   try {
-    await trash(downloadFile(downloadsDir, name));
+    await trash(file.path);
   } catch (err) {
     return refuse(err);
   }
   try {
-    await trashDownloadMeta(downloadsDir, name, trash);
+    await access.adapter.trashDownloadedFileMeta(file.name, trash);
   } catch (err) {
     return { applied: true, wrote: true, metaLeftBehind: errorMessage(err) };
   }

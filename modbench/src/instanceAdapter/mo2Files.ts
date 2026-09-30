@@ -8,14 +8,10 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_DIR_NAME } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles } from './instanceAdapter';
-import { entryDir, isTempWrite, overwriteDir } from './layout';
+import { entryDir, isPluginSourceFolder, isTempWrite, overwriteDir } from './layout';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
-
-// Matched at the mod root only: Papyrus assets ship nested (`Scripts/Source/...`), so a bare
-// name match at any depth would exclude a mod's own scripts.
-const ROOT_SOURCE_FOLDER_NAME = 'source';
 
 interface Walk {
   readonly root: string;
@@ -62,7 +58,9 @@ async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>):
     if (dirent.name.startsWith('.') || isTempWrite(dirent.name)) continue;
     const path = join(dir, dirent.name);
     if (dirent.isDirectory()) {
-      if (dir === walk.root && dirent.name.toLowerCase() === ROOT_SOURCE_FOLDER_NAME) continue;
+      // At the mod root only: Papyrus assets ship nested (`Scripts/Source/...`), so a match at any
+      // depth would exclude a mod's own scripts.
+      if (dir === walk.root && isPluginSourceFolder(dirent.name)) continue;
       await descend(walk, path, ancestors);
     } else if (dirent.isFile()) {
       keep(walk, path);

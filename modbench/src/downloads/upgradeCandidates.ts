@@ -5,8 +5,7 @@ import type { DownloadRow, InstanceValue, Mod } from '../instanceLoader/instance
 
 export type UpgradeTier = 'fileId' | 'installationFile';
 
-// A Windows filename is case-insensitive; this view folds it the same way the status does,
-// without reaching past instanceLoader for mo2Codecs's own copy of the same one-liner.
+// A Windows filename is case-insensitive; this view folds it the same way the status does.
 const foldedFilename = (filename: string): string => filename.toLowerCase();
 
 export interface UpgradeCandidate {
