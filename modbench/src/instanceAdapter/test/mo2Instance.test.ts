@@ -87,6 +87,10 @@ describe('the MO2 Instance adapter', () => {
       expect(settings.gameRelease).toBe('Fallout4');
     });
 
+    it('names MO2 and the file it keeps mod order in', () => {
+      expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt' });
+    });
+
     // Rival: a release guessed from the name, which has the backend answer about another game.
     it('answers no release for a game the tables hold none for', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');

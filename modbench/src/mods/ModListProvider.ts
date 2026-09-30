@@ -114,7 +114,7 @@ export class ModNode extends vscode.TreeItem {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(fileCount: number) {
+  constructor(fileCount: number, manager: string) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
     this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;
@@ -122,7 +122,7 @@ export class OverwriteNode extends vscode.TreeItem {
     this.iconPath = fileCount > 0
       ? new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.red'))
       : new vscode.ThemeIcon('folder');
-    this.tooltip = 'The files tools wrote while MO2 ran them, which win over every mod.';
+    this.tooltip = `The files tools wrote while ${manager} ran them, which win over every mod.`;
   }
 }
 
@@ -302,7 +302,7 @@ export class ModListProvider
   }
 
   private overwriteNode(): OverwriteNode {
-    return new OverwriteNode(this.instanceValue.overwriteFileCount);
+    return new OverwriteNode(this.instanceValue.overwriteFileCount, this.instanceValue.managerNames.manager);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));

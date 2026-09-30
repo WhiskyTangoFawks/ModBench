@@ -149,7 +149,7 @@ export function registerModContextCommands(
         for (const item of result.outcome.landed) {
           if (item.lineRefusal !== undefined) {
             reporter.report('warning',
-              `"${item.name}" was uninstalled, but its modlist.txt line could not be removed.`, item.lineRefusal);
+              `"${item.name}" was uninstalled, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
           } else if (item.markRefusal !== undefined) {
             log(`"${item.name}" was uninstalled, but its downloaded file could not be marked uninstalled: ${item.markRefusal}`);
           }
@@ -207,7 +207,7 @@ export function registerSeparatorCommands(
         for (const item of result.outcome.landed) {
           if (item.lineRefusal !== undefined) {
             reporter.report('warning',
-              `"${item.name}" was deleted, but its modlist.txt line could not be removed.`, item.lineRefusal);
+              `"${item.name}" was deleted, but its ${instance.value.managerNames.modOrderFile} line could not be removed.`, item.lineRefusal);
           }
         }
       }),
@@ -228,7 +228,7 @@ export function registerCreateEmptyModCommand(
       applyOrThrow(outcome);
       if (outcome.lineRefusal !== undefined) {
         reporter.report(
-          'warning', `"${name}" was created, but its modlist.txt line could not be written.`, outcome.lineRefusal);
+          'warning', `"${name}" was created, but its ${instance.value.managerNames.modOrderFile} line could not be written.`, outcome.lineRefusal);
       }
     } catch (err) {
       reporter.report('error', `Failed to create "${name}".`, errorMessage(err));

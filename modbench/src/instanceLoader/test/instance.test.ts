@@ -938,6 +938,15 @@ describe('Instance — downloads, profile and game directory', () => {
 
   // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
   // keeps its folders.
+  // Rival: names the value spells itself, which names one manager over any other's instance.
+  it('names the mod manager and its mod-order file as the adapter does, before the first read too', async () => {
+    const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
+    const instance = new Instance({ adapter, log: () => {}, logReadFailure: () => {} });
+    instances.push(instance);
+
+    expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
+  });
+
   it('names no folder before the first read lands', () => {
     const instance = new Instance({
       adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),

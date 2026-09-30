@@ -7,7 +7,7 @@ import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './
 import { nexusSlugForGame } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ModlistEntry, type OriginFiles, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
@@ -65,6 +65,9 @@ export interface InstanceValue {
   readonly downloads: DownloadsResult;
   /** The profile the mod manager's configuration selects. */
   readonly activeProfile: string;
+  /** How a message names the mod manager and its mod-order file: the adapter's answer, before any
+   *  read too. */
+  readonly managerNames: ManagerNames;
   /** The game as the mod manager's configuration names it. */
   readonly gameName: string;
   /** Mutagen's release of that game; undefined when the tables hold none for it. */
@@ -117,7 +120,7 @@ function pathsOf(
   };
 }
 
-const emptyValue = (): InstanceValue => ({
+const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   mods: [],
   modFolders: [],
   profiles: [],
@@ -126,6 +129,7 @@ const emptyValue = (): InstanceValue => ({
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
+  managerNames,
   gameName: '',
   gameRelease: undefined,
   nexusSlug: '',
@@ -138,7 +142,7 @@ const emptyValue = (): InstanceValue => ({
 });
 
 export class Instance implements Subscription {
-  private current: InstanceValue = emptyValue();
+  private current: InstanceValue;
 
   private seq = 0;
 
@@ -159,6 +163,7 @@ export class Instance implements Subscription {
   private linksTold: ReadonlySet<string> = new Set();
 
   constructor(private readonly options: InstanceOptions) {
+    this.current = emptyValue(options.adapter.names);
     this.changes = options.adapter.subscribe(() => this.schedule());
   }
 
@@ -355,6 +360,7 @@ export class Instance implements Subscription {
           rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto) : [],
         },
       activeProfile: profile,
+      managerNames: adapter.names,
       gameName,
       gameRelease,
       nexusSlug: nexusSlugForGame(gameName),

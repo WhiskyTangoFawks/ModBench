@@ -166,15 +166,16 @@ describe('registerModSync — driven by the Instance value', () => {
 
 const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', modFolders: [] });
 
-function fakeInstance(): { subscribe: Instance['subscribe']; fire: () => void } {
+function fakeInstance(value = FAKE_VALUE): Pick<Instance, 'subscribe' | 'value'> & { fire: () => void } {
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
   let seq = 0;
   return {
+    value,
     subscribe: (cb: (value: InstanceValue, seq: number) => void) => {
       subscriber = cb;
       return { dispose: () => { subscriber = undefined; } };
     },
-    fire: () => { seq += 1; subscriber?.(FAKE_VALUE, seq); },
+    fire: () => { seq += 1; subscriber?.(value, seq); },
   };
 }
 
@@ -239,6 +240,18 @@ describe('registerModSync — outcome handling', () => {
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('/instance/mods does not exist'));
     expect(trigger.message()).toBe('modlist.txt is not synced: /instance/mods does not exist.');
     expect(messageChanged).toHaveBeenCalledTimes(1);
+  });
+
+  // Rival: the mod-order file's name spelled here, which names MO2's file over another manager's.
+  it('names the file mod order is kept in as the value names it', async () => {
+    const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }));
+    const channel = channelDouble();
+    const trigger = registerModSync(instance, () => Promise.resolve<ModSyncResult>(
+      { applied: true, added: ['New Mod'], dropped: [] }), channel);
+    instance.fire();
+    await trigger.settled();
+
+    expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('1 order.txt line(s)'));
   });
 
   // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.

@@ -1,6 +1,6 @@
 // The Instance adapter's interface: a repository over one instance, answering parsed reads and
-// taking changes in domain words. A mod manager is one implementation of it; MO2's is
-// `mo2Instance.ts`.
+// taking changes in domain words. Each mod manager is one implementation of it, beside it in this
+// box, and names itself through `names`.
 
 import type { PluginEntry } from '../loadOrderFileCodec/pluginsText';
 import type { MoveToTrash } from '../ports/trash';
@@ -263,8 +263,15 @@ export interface OriginFiles {
   readonly notes: readonly string[];
 }
 
+/** How a message names the mod manager and the file it keeps mod order in. */
+export interface ManagerNames {
+  readonly manager: string;
+  readonly modOrderFile: string;
+}
+
 export interface InstanceAdapter {
   // Parsed reads.
+  readonly names: ManagerNames;
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
   profiles(): Promise<string[]>;
