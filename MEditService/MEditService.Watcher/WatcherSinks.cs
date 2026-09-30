@@ -7,15 +7,15 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Watcher;
 
 /// <summary>Where a settle lands: the Index's source projection, binary refresh and reconcile, and
-/// Commands' "a tracked mod settled". Each sink logs its own failure, since a timer thread has no
-/// caller to propagate to (ADR-0019).</summary>
+/// Commands' "a mod settled". Each sink logs its own failure, since a timer thread has no caller
+/// to propagate to (ADR-0019).</summary>
 internal sealed class WatcherSinks
 {
     private readonly IRefreshIndex _index;
-    private readonly TrackedModSettled _settled;
+    private readonly ModSettled _settled;
     private readonly ILogger _logger;
 
-    public WatcherSinks(IRefreshIndex index, TrackedModSettled settled, ILogger logger)
+    public WatcherSinks(IRefreshIndex index, ModSettled settled, ILogger logger)
     {
         _index = index;
         _settled = settled;
@@ -26,7 +26,11 @@ internal sealed class WatcherSinks
     /// thread.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => _index.Reconcile(snapshot, version);
 
-    /// <summary>"A tracked mod settled" (ADR-0015 invariant 2), at load and live alike.</summary>
+    /// <summary>plugins.md, States, story 6: the next change to the instance tries a failed
+    /// reconcile again.</summary>
+    public void RetryFailedReconcile() => _index.RetryFailedReconcile();
+
+    /// <summary>"A mod settled" (ADR-0015 invariant 2), at load and live alike.</summary>
     public void Settle(LoadOrderSnapshot order, string modFolder) => _settled.Handle(order, modFolder);
 
     /// <summary>ADR-0009's runtime half: key and path only, never a locally remembered hash. The

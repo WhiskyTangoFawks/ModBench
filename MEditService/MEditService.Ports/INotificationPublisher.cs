@@ -48,9 +48,9 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>A tracked mod settled or loaded: each of its tracked plugins whose bytes differ from what
-/// Modbench last wrote (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out
-/// matches.</summary>
+/// <summary>A mod settled or loaded: each tracked plugin whose bytes differ from what Modbench last
+/// wrote (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out matches; an
+/// untracked mod names none.</summary>
 public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
     : Notification("external-change")
 {
