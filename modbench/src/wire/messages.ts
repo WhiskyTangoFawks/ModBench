@@ -84,9 +84,6 @@ export interface ColumnHeaderContext {
   origin: string;
   // commands.md, compile: the column's plugin is tracked and editable.
   compilable: boolean;
-  // editor.md, Menus and keys: track on the column's plugin's mod, when that plugin is untracked
-  // and not read-only.
-  trackable: boolean;
   preventDefaultContextMenuItems: true;
 }
 

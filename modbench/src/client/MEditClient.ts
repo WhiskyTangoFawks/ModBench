@@ -150,6 +150,9 @@ export interface MEditClient {
   copyRecords(
     records: readonly RecordAddress[], mode: CopyMode, destinations: readonly PluginAddress[], replace: boolean,
   ): Promise<SelectionOutcome<CopyItem> | WriteRefused>;
+  // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
+  // the call itself refused, with nothing written.
+  decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
   // invariant 4). A WriteRefused is the call itself refused, with nothing written.
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;

@@ -173,11 +173,12 @@ describe('what the Plugins palette entries and keys read off the selection', () 
   };
   const alpha = pluginRow('Alpha.esp', 'ModA');
   const beta = pluginRow('Beta.esp', 'ModB');
-  const untracked = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inMod untracked editable');
-  const alsoUntracked = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inMod untracked editable');
+  const untracked = withFlags(pluginRow('Gamma.esp', 'ModC'), 'plugin enabled inUntrackedMod untracked editable');
+  const alsoUntracked = withFlags(pluginRow('Zeta.esp', 'ModZ'), 'plugin enabled inUntrackedMod untracked editable');
   const inOverwrite = withFlags(pluginRow('Eta.esp', 'overwrite'), 'plugin enabled inOverwrite untracked editable');
-  const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inMod tracked editable');
-  const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inMod tracked');
+  const compilable = withFlags(pluginRow('Eps.esp', 'ModE'), 'plugin enabled inTrackedMod tracked editable');
+  const trackedReadOnly = withFlags(pluginRow('Iota.esp', 'ModI'), 'plugin enabled inTrackedMod tracked');
+  const untrackedInTrackedMod = withFlags(pluginRow('Kappa.esp', 'ModE'), 'plugin enabled inTrackedMod untracked editable');
   const weapons = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModA', { tracked: true, editable: true });
   const untrackedWeapons = new RecordTypeNode('Beta.esp', recordTypeCountFixture({ type: 'weap', count: 3, displayName: 'Weapon' }), 'ModB');
   const quests = new RecordTypeNode(
@@ -199,11 +200,18 @@ describe('what the Plugins palette entries and keys read off the selection', () 
     expect(context([weapons]).singlePlugin).toBe(false);
   });
 
-  it('track sees a selection of untracked plugins in mods, every one', () => {
-    expect(context([untracked, alsoUntracked])).toMatchObject({ allUntrackedInMod: true });
-    expect(context([untracked, compilable])).toMatchObject({ allUntrackedInMod: false });
-    expect(context([untracked, inOverwrite])).toMatchObject({ allUntrackedInMod: false });
-    expect(context([])).toMatchObject({ allUntrackedInMod: false });
+  it('track sees a selection of plugins in mods with no repository, every one', () => {
+    expect(context([untracked, alsoUntracked])).toMatchObject({ allInUntrackedMod: true });
+    expect(context([untracked, compilable])).toMatchObject({ allInUntrackedMod: false });
+    expect(context([untracked, inOverwrite])).toMatchObject({ allInUntrackedMod: false });
+    expect(context([])).toMatchObject({ allInUntrackedMod: false });
+  });
+
+  it('decompile sees a selection of plugins in tracked mods, every one', () => {
+    expect(context([compilable, trackedReadOnly, untrackedInTrackedMod])).toMatchObject({ allInTrackedMod: true });
+    expect(context([compilable, untracked])).toMatchObject({ allInTrackedMod: false });
+    expect(context([compilable, inOverwrite])).toMatchObject({ allInTrackedMod: false });
+    expect(context([])).toMatchObject({ allInTrackedMod: false });
   });
 
   it('compile takes exactly one selected tracked, editable plugin', () => {

@@ -347,22 +347,27 @@ describe('ModListProvider', () => {
     const enabled = present(rows.find((n) => n.mod.name === 'UFO4P'), 'the enabled row');
     const disabled = present(rows.find((n) => n.mod.name === 'Disabled Mod'), 'the disabled row');
 
-    expect(enabled.contextValue).toBe('mod hasNexus enabled');
-    expect(disabled.contextValue).toBe('mod disabled');
+    expect(enabled.contextValue).toBe('mod hasNexus enabled untracked');
+    expect(disabled.contextValue).toBe('mod disabled untracked');
   });
 
-  // mods.md, Menus and keys: track on a mod that holds a plugin.
-  it('a mod row states in its contextValue whether the instance value holds a plugin of it', async () => {
+  // mods.md, Menus and keys: track on a mod that has no repository and holds a plugin.
+  it('a mod row states in its contextValue whether the instance value holds a plugin of it, and whether it has no repository', async () => {
     const value = instanceValueFixture({
-      mods: [mod('Patch'), mod('Textures')],
-      plugins: [{ name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', slot: 0, enabled: true, winning: true }],
+      mods: [mod('Patch'), mod('Textures'), mod('Tracked')],
+      trackedMods: new Set(['Tracked']),
+      plugins: [
+        { name: 'Patch.esp', origin: 'Patch', path: '/instance/mods/Patch/Patch.esp', slot: 0, enabled: true, winning: true },
+        { name: 'Tracked.esp', origin: 'Tracked', path: '/instance/mods/Tracked/Tracked.esp', slot: 1, enabled: true, winning: true },
+      ],
     });
     const rows = (await makeProvider([], { instance: new FakeInstance(value) }).getChildren())
       .filter((n): n is ModNode => n instanceof ModNode);
 
     expect(rows.map((n) => [n.mod.name, n.contextValue])).toEqual([
-      ['Textures', 'mod enabled'],
-      ['Patch', 'mod enabled holdsPlugin'],
+      ['Tracked', 'mod enabled holdsPlugin'],
+      ['Textures', 'mod enabled untracked'],
+      ['Patch', 'mod enabled holdsPlugin untracked'],
     ]);
   });
 

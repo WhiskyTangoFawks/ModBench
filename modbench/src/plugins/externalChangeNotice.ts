@@ -2,8 +2,8 @@ import type { MEditClient } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { pluginAddressKey } from './trackedRepositories';
 
-// package.json's title for the gesture that decompiles an untracked plugin of a mod.
-const TRACK_PLUGIN_TITLE = 'Track Plugin…';
+/** package.json's title for the gesture that decompiles an untracked plugin of a tracked mod. */
+export const DECOMPILE_PLUGIN_TITLE = 'Decompile Plugin';
 
 /** plugins.md, Reporting, stories 4 and 5: a warning for each new state of a changed plugin's
  *  bytes, and one for each untracked plugin of a tracked mod once in a session. Returns the
@@ -28,7 +28,7 @@ export function noticeExternalChanges(
       const key = pluginAddressKey(plugin, origin);
       if (toldUntracked.has(key)) continue;
       toldUntracked.add(key);
-      reporter.report('warning', `${plugin} in ${origin} has no plugin source`, `run "${TRACK_PLUGIN_TITLE}" on it to decompile it`);
+      reporter.report('warning', `${plugin} in ${origin} has no plugin source`, `run "${DECOMPILE_PLUGIN_TITLE}" on it`);
     }
   });
 

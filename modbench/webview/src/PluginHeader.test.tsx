@@ -127,7 +127,7 @@ describe('PluginHeader', () => {
   // The copy commands live on the header's native right-click menu (ADR-0017), so there is
   // no rendered button to assert on — only the `data-vscode-context` payload they are gated on.
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
-    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data', { compilable: false, trackable: false }));
+    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data', false));
     const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
     const root = container.firstElementChild;
     if (!root) throw new Error('expected PluginHeader to render a root element');
@@ -135,7 +135,7 @@ describe('PluginHeader', () => {
     if (contextAttr === null) throw new Error('expected the root element to carry a data-vscode-context attribute');
     expect(JSON.parse(contextAttr)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data',
-      compilable: false, trackable: false, preventDefaultContextMenuItems: true,
+      compilable: false, preventDefaultContextMenuItems: true,
     });
   });
 
@@ -161,12 +161,16 @@ describe('PluginHeader — untracked signposting', () => {
     expect(screen.getByText('(untracked)')).toBeTruthy();
   });
 
-  // The exact palette entry, not "contains Track": a signpost naming a command that does not
-  // exist verbatim is a dead end, so a rename must break this case instead.
-  it('names the Track command exactly as the palette shows it', () => {
+  // editor.md, A column's header: the tooltip names Track, and decompile in a tracked mod, as this
+  // header's menu shows them. A signpost naming an item that does not exist verbatim is a dead end,
+  // so a rename must break this case instead.
+  it('names track and decompile exactly as the header\'s menu shows them', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
 
-    expect(screen.getByTitle(/Modbench: Track\u2026/)).toBeTruthy();
+    const title = screen.getByText('(untracked)').closest('[title]')?.getAttribute('title') ?? '';
+    expect(title).toContain('\u201cTrack Mod\u2026\u201d');
+    expect(title).toContain('\u201cDecompile Plugin\u201d');
+    expect(title).toContain('this header\u2019s menu');
   });
 
   it('signposts the patch-plugin path instead for a master that cannot be tracked at all', () => {

@@ -115,9 +115,9 @@ export function arrayParentContext(
 }
 
 export function headerCellContext(
-  formKey: string, plugin: string, origin: string, { compilable, trackable }: Pick<ColumnHeaderContext, 'compilable' | 'trackable'>,
+  formKey: string, plugin: string, origin: string, compilable: boolean,
 ): ColumnHeaderContext {
-  return { webviewSection: 'recordHeader', formKey, plugin, origin, compilable, trackable, preventDefaultContextMenuItems: true };
+  return { webviewSection: 'recordHeader', formKey, plugin, origin, compilable, preventDefaultContextMenuItems: true };
 }
 
 // ADR-0018: a `string` cell's right-click entry is the extended editor's only trigger, since no

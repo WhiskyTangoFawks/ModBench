@@ -59,9 +59,19 @@ function rowIdentity(kind: 'mod' | 'separator', name: string): string {
 
 // A space-separated flag string, matching `downloadContextValue`'s own pattern: package.json's
 // `when` clauses match a flag with `viewItem =~ /\bflag\b/`.
-function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, holdsPlugin: boolean): string {
-  const flags = [mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled', holdsPlugin && 'holdsPlugin'];
+function modContextValue(mod: Pick<Mod, 'nexusId' | 'enabled'>, facts: ModFacts | undefined): string {
+  const flags = [
+    mod.nexusId !== undefined && 'hasNexus', mod.enabled ? 'enabled' : 'disabled',
+    facts?.holdsPlugin === true && 'holdsPlugin', facts?.tracked === false && 'untracked',
+  ];
   return ['mod', ...flags.filter((f): f is string => f !== false)].join(' ');
+}
+
+/** What the instance value says of a mod beyond its entry: whether it holds a plugin, and whether
+ *  its folder holds a repository. */
+export interface ModFacts {
+  readonly holdsPlugin: boolean;
+  readonly tracked: boolean;
 }
 
 /** A separator and the mods it shows: every mod it holds, or only the matching ones when a filter
@@ -88,7 +98,7 @@ function separatorExpander(mods: readonly Mod[], shown: 'allMods' | 'matchingMod
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
   readonly nexusModId: string | undefined;
-  constructor(public readonly mod: Mod, status?: ModStatusResult, public readonly holdsPlugin = false) {
+  constructor(public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts) {
     super(mod.name, vscode.TreeItemCollapsibleState.None);
     this.id = rowIdentity(this.kind, mod.name);
     this.nexusModId = mod.nexusId;
@@ -103,7 +113,7 @@ export class ModNode extends vscode.TreeItem {
       this.description = [this.description, label].filter(Boolean).join(' ');
       this.tooltip = [baseTooltip, label, ...status.conflictLines].filter(Boolean).join('\n');
     }
-    this.contextValue = modContextValue(mod, holdsPlugin);
+    this.contextValue = modContextValue(mod, facts);
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -313,7 +323,9 @@ export class ModListProvider
   }
 
   private toModNode = (m: Mod): ModNode =>
-    new ModNode(m, this.instanceValue.modStatuses.get(m.name), this.modsHoldingPlugin.has(m.name));
+    new ModNode(m, this.instanceValue.modStatuses.get(m.name), {
+      holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
+    });
 
   private separatorChildren(element: SeparatorNode): ModlistNode[] {
     return element.mods.map((m) => {

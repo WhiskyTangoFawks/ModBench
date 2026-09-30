@@ -356,6 +356,34 @@ describe('HttpMEditClient — compiling plugins answers per plugin', () => {
   });
 });
 
+describe('HttpMEditClient — decompiling plugins answers per plugin', () => {
+  const first = { name: 'First.esp', origin: 'ModA' };
+  const second = { name: 'Second.esp', origin: 'ModB' };
+
+  it('sends the whole selection as one call, and reads each decompiled plugin and each refusal with its message', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [first],
+      refused: [{ plugin: second, refusal: 'NotInTrackedMod', message: 'Second.esp is not in a tracked mod.' }],
+    })));
+    const client = makeClient(fetch);
+
+    const outcome = await client.decompile([first, second]);
+
+    expect(outcome).toEqual({ landed: [first], refused: [{ item: second, reason: 'Second.esp is not in a tracked mod.' }] });
+    const request = fetch.mock.calls.map((call) => call[0]).find((req) => /\/plugins\/decompile$/.test(req.url));
+    expect(await request?.json()).toEqual({ plugins: [first, second] });
+  });
+
+  it('resolves a WriteRefused carrying the count and the server text when the whole selection is refused', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, 'git was not found on PATH.')));
+    const client = makeClient(fetch);
+
+    const result = await client.decompile([first, second]);
+
+    expect(result).toEqual({ refused: true, message: 'Could not decompile 2 plugins — git was not found on PATH.' });
+  });
+});
+
 describe('HttpMEditClient — an applied edit', () => {
   it('editRecord carries the new FormKey an edit of the FormID answers with', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, {

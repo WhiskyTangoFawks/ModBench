@@ -347,6 +347,21 @@ export class HttpMEditClient implements MEditClient {
   /** Each plugin compiles or is refused on its own. A cause no plugin escapes, no load order,
    *  refuses the whole selection. Never refreshes the tree: a compiled binary changes only bytes on
    *  disk. */
+  async decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
+    const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
+    const answer = await this.mutate({
+      op: `decompile(${counted})`,
+      failMsg: `Could not decompile ${counted}`,
+      post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins] } }),
+    });
+    if (answer === undefined) return { refused: true, message: `Could not decompile ${counted} — no answer` };
+    if (isRefused(answer)) return answer;
+    return {
+      landed: answer.applied,
+      refused: answer.refused.map((r) => ({ item: r.plugin, reason: r.message })),
+    };
+  }
+
   async compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused> {
     const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
     const answer = await this.mutate({

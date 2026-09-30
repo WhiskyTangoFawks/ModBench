@@ -109,7 +109,8 @@ export function compilableSelected(selection: readonly PluginsTreeNode[]): RowOf
  *  neither is handed a row. */
 export interface PluginsKeyContext {
   readonly singlePlugin: boolean;
-  readonly allUntrackedInMod: boolean;
+  readonly allInUntrackedMod: boolean;
+  readonly allInTrackedMod: boolean;
   readonly singleCreatable: boolean;
   readonly allDeletableRecords: boolean;
   readonly allRecords: boolean;
@@ -124,7 +125,8 @@ export function pluginsKeyContext(
   const creatableCandidate = onlySelected(selection, 'plugin', 'recordType');
   return {
     singlePlugin: onlySelected(selection, ...PLUGIN_ROW_KINDS) !== undefined,
-    allUntrackedInMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'untracked', 'inMod')),
+    allInUntrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inUntrackedMod')),
+    allInTrackedMod: every(selection, (row) => row.kind === 'plugin' && hasFlags(row, 'inTrackedMod')),
     // A record-type row also states whether its type is creatable; a plugin row carries no such
     // fact and needs none — its own pick lists only creatable types (plugins.md, Create record,
     // story 1; "No dead entries").

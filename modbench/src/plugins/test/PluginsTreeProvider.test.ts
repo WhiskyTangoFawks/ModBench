@@ -2678,8 +2678,8 @@ function expectString(value: unknown): string {
 }
 
 // plugins.md, Menus and keys: a plugin row states whether its line is enabled, whether it is in a
-// mod or in Overwrite, whether it is tracked and whether it is editable, which every menu
-// condition reads.
+// mod with or without a repository or in Overwrite, whether it is tracked and whether it is
+// editable, which every menu condition reads.
 describe('PluginsTreeProvider — the row states its conditions', () => {
   const flags = async (h: Harness, index = 0): Promise<string[]> => String((await rowItem(h, index)).contextValue).split(' ');
 
@@ -2687,14 +2687,22 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'untracked', 'editable']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod', 'untracked', 'editable']);
   });
 
-  it('states a tracked, editable plugin in a mod', async () => {
-    const h = makeTree([A_ROW()]);
+  it('states a tracked, editable plugin in a tracked mod', async () => {
+    const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), trackedMods: new Set(['SomeMod']) }) });
     await reconcile(h, [held('A.esp', { isTracked: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'tracked', 'editable']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inTrackedMod', 'tracked', 'editable']);
+  });
+
+  // plugins.md, Reporting, story 5: decompile, not track, puts its source in.
+  it('states an untracked plugin in a tracked mod', async () => {
+    const h = makeTree([A_ROW()], { instance: new FakeInstance({ ...valueOf([A_ROW()]), trackedMods: new Set(['SomeMod']) }) });
+    await reconcile(h, [held('A.esp')]);
+
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inTrackedMod', 'untracked', 'editable']);
   });
 
   // mEdit's `isImmutable`: read-only for editing, as an unlisted plugin is.
@@ -2702,7 +2710,7 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isTracked: true, isImmutable: true })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod', 'tracked']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod', 'tracked']);
   });
 
   it('states a plugin in Overwrite', async () => {
@@ -2731,14 +2739,14 @@ describe('PluginsTreeProvider — the row states its conditions', () => {
     const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod', enabled: false })]);
     await reconcile(h, [held('A.esp', { enabled: false })]);
 
-    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inMod', 'untracked', 'editable']);
+    expect(await flags(h)).toEqual(['plugin', 'disabled', 'inUntrackedMod', 'untracked', 'editable']);
   });
 
   // The enabled flag and where the plugin lives are the instance value's, so they need no mEdit.
   it('states neither tracked nor editable before mEdit answers', async () => {
     const h = makeTree([A_ROW()]);
 
-    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inMod']);
+    expect(await flags(h)).toEqual(['plugin', 'enabled', 'inUntrackedMod']);
   });
 
   it('says whether any plugin compiles, which compile\'s palette entry reads', async () => {
@@ -3253,7 +3261,7 @@ describe('PluginsTreeProvider applies no decoration of its own to a healthy plug
     const names = ['A.esp', 'B.esp'];
     for (const index of [0, 1]) {
       const item = await rowItem(h, index);
-      expect(item.contextValue).toBe('plugin enabled inMod untracked editable');
+      expect(item.contextValue).toBe('plugin enabled inUntrackedMod untracked editable');
       expect(item.description).toBeUndefined();
       expect(item.tooltip).toBe(`${names[index]}\nSomeMod`);
     }

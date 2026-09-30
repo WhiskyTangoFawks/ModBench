@@ -28,6 +28,7 @@ import { ModNode, NO_MODS_MESSAGE, OverwriteNode, SeparatorNode } from '../mods/
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../plugins/gestureEntry';
 import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
+import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
@@ -224,6 +225,9 @@ describe('package.json outside an instance', () => {
     expect(holds('view == modbench.pluginListTree && (viewItem == plugin || viewItem == other)', { ...on, viewItem: 'plugin' })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench', compilable: true })).toBe(true);
     expect(holds("webviewId == 'modbench' && compilable", { webviewId: 'modbench' })).toBe(false);
+    expect(holds('origin in modbench.mod.tracked', { origin: 'A', 'modbench.mod.tracked': ['A'] })).toBe(true);
+    expect(holds('origin in modbench.mod.tracked', { origin: 'B', 'modbench.mod.tracked': ['A'] })).toBe(false);
+    expect(holds('origin in modbench.mod.tracked', { origin: 'A' })).toBe(false);
   });
 
   it('refuses a clause it cannot read, rather than reading it as ungated', () => {
@@ -645,24 +649,53 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(when('modbench.plugin.sortLosingAtTop')).toBe(`${PLUGINS_VIEW} && modbench.plugin.winningAtTop && ${IN_AN_INSTANCE}`);
   });
 
+  // plugins.md, Reporting, stories 3 and 5: the untracked-plugin warning points at decompile by the
+  // title the menus and the palette show.
+  it('the untracked-plugin warning names decompile by its title', () => {
+    const decompile = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.decompile'), 'decompile');
+    expect(DECOMPILE_PLUGIN_TITLE).toBe(decompile.title);
+  });
+
   it('the empty list\'s message names the title bar\'s create plugin', () => {
     const create = present(pkg.contributes.commands.find((c) => c.command === 'modbench.plugin.create'), 'create plugin');
     expect(NO_PLUGINS_MESSAGE).toContain(create.title);
     expect(NO_PLUGINS_MESSAGE).toContain('title bar');
   });
 
-  it('plugin menu: reveal, enable or disable, create record, track, compile, copy value', () => {
-    expect(menuOf('plugin disabled inMod untracked editable')).toEqual([
+  it('plugin menu: reveal, enable or disable, create record, track, decompile, compile, copy value', () => {
+    expect(menuOf('plugin disabled inUntrackedMod untracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
       ['modbench.mod.track', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
-    expect(menuOf('plugin enabled inMod tracked editable')).toEqual([
+    expect(menuOf('plugin enabled inTrackedMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
       ['modbench.record.create', '3_create'],
+      ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
+  // plugins.md, Reporting, story 5: an untracked plugin in a tracked mod is decompiled, not tracked.
+  it('plugin menu on an untracked plugin in a tracked mod: decompile, and neither track nor compile', () => {
+    expect(menuOf('plugin enabled inTrackedMod untracked editable')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.disable', '2_change'],
+      ['modbench.plugin.decompile', '4_sourceControl'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
+  // plugins.md, Menus and keys: track is on the row of a plugin in a mod with no repository before
+  // mEdit has described the plugin, since only the mod's folder decides it.
+  it('plugin menu on a plugin in a mod with no repository that mEdit has not described: track', () => {
+    expect(menuOf('plugin enabled inUntrackedMod')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.disable', '2_change'],
+      ['modbench.mod.track', '4_sourceControl'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
   });
@@ -673,14 +706,12 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(slotOf('modbench.plugin.enable')).toBe(slotOf('modbench.plugin.disable'));
   });
 
-  // plugins.md, Menus and keys: track on an untracked plugin in a mod, compile on a
-  // tracked, editable plugin.
+  // plugins.md, Menus and keys: track in a mod with no repository, decompile in a tracked mod,
+  // compile on a tracked, editable plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
     ['in the game folder', 'plugin enabled untracked editable'],
-    ['tracked but read-only', 'plugin enabled inMod tracked'],
-    ['not yet described by mEdit', 'plugin enabled inMod'],
-  ])('plugin menu on a plugin %s: neither track, create record nor compile', (_what, contextValue) => {
+  ])('plugin menu on a plugin %s: neither track, decompile, create record nor compile', (_what, contextValue) => {
     expect(menuOf(contextValue)).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
@@ -914,24 +945,36 @@ describe('package.json track\'s palette entry', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === 'modbench.mod.track');
     expect(entries.map((e) => e.when)).toEqual([
-      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.holdsModWithPlugin`
+      `focusedView == modbench.modList && ${IN_AN_INSTANCE} && modbench.mod.holdsUntrackedModWithPlugin`
       + ' && modbench.mod.trackRowsIn == modbench.modList'
-      + ` || focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && modbench.plugin.allUntrackedInMod`
+      + ` || focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && modbench.plugin.allInUntrackedMod`
       + ' && modbench.mod.trackRowsIn == modbench.pluginListTree',
     ]);
   });
 });
 
-// editor.md, Menus and keys: the column header offers track on an untracked plugin's mod, before
-// compile.
-describe('package.json track on the record tab', () => {
-  it('is on the column header\'s menu of a trackable plugin, ahead of compile', () => {
-    const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
-    const headerMenu = webviewMenu.filter((e) => e.when.includes('recordHeader'));
-    expect(headerMenu.map((e) => e.command).slice(0, 2)).toEqual(['modbench.mod.track', 'modbench.plugin.compile']);
-    expect(headerMenu.filter((e) => e.command === 'modbench.mod.track').map((e) => e.when)).toEqual([
-      String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && trackable`,
-    ]);
+// editor.md, Menus and keys: the column header offers track in a mod with no repository and
+// decompile in a tracked mod, before compile. The header names its origin, and the Mods fact
+// names the mods of each kind.
+describe('package.json track and decompile on the record tab', () => {
+  const headerMenu = (): MenuEntry[] =>
+    present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
+      .filter((e) => e.when.includes('recordHeader'));
+  const header = { webviewId: 'modbench', webviewSection: 'recordHeader', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
+  const offered = (origin: string) =>
+    headerMenu().filter((e) => holds(e.when, { ...header, origin, compilable: false })).map((e) => e.command);
+
+  it('orders track, decompile, then compile', () => {
+    expect(placed(headerMenu()).map(([command]) => command).slice(0, 3))
+      .toEqual(['modbench.mod.track', 'modbench.plugin.decompile', 'modbench.plugin.compile']);
+  });
+
+  it.each([
+    ['a mod with no repository', 'Untracked', ['modbench.mod.track', 'modbench.record.copy']],
+    ['a tracked mod', 'Tracked', ['modbench.plugin.decompile', 'modbench.record.copy']],
+    ['Overwrite', 'Overwrite', ['modbench.record.copy']],
+  ])('offers on a column of a plugin in %s only what applies', (_what, origin, commands) => {
+    expect(offered(origin)).toEqual(commands);
   });
 });
 
@@ -959,6 +1002,7 @@ describe('package.json compile\'s palette entry', () => {
 describe('package.json Plugins palette entries', () => {
   const PLUGINS_PALETTE = [
     ['modbench.plugin.reveal', 'modbench.plugin.singlePlugin'],
+    ['modbench.plugin.decompile', 'modbench.plugin.allInTrackedMod'],
     ['modbench.record.create', 'modbench.plugin.singleCreatable'],
     ['modbench.record.delete', 'modbench.plugin.allDeletableRecords'],
     ['modbench.record.copy', 'modbench.plugin.allRecords'],
@@ -1133,10 +1177,11 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ]);
   });
 
-  it('mod menu: track only on a mod that holds a plugin', () => {
+  it('mod menu: track only on a mod that has no repository and holds a plugin', () => {
     const track = present(rowMenu(MOD_ROW).find((e) => e.command === 'modbench.mod.track'), 'the mod menu\'s track');
-    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin' })).toBe(true);
-    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled' })).toBe(false);
+    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin untracked' })).toBe(true);
+    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled holdsPlugin' })).toBe(false);
+    expect(holds(track.when, { view: 'modbench.modList', viewItem: 'mod enabled untracked' })).toBe(false);
   });
 
   it('mod menu: enable and disable share one slot', () => {

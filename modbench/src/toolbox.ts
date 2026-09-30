@@ -37,6 +37,7 @@ import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
+import { modRepositoryContext } from './mods/gestureEntry';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
@@ -518,6 +519,13 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
   const { modListView } = createModListView(
     own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
+  const showModRepositories = (value: InstanceValue) => {
+    for (const [name, mods] of Object.entries(modRepositoryContext(value))) {
+      void vscode.commands.executeCommand('setContext', `modbench.mod.${name}`, mods);
+    }
+  };
+  showModRepositories(instance.value);
+  own(instance.subscribe(showModRepositories));
   const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
     reportFailure(reporterFor(logLabel), failMessage, action);
   const promptModName = (

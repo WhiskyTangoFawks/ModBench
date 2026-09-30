@@ -39,13 +39,13 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  conflictsComputedOver, registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
+  conflictsComputedOver, registerTrackCommand, registerCompileCommand, registerDecompileCommand, CompileProblems, type PluginsViewProgress,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { assertAskedOnce, recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compiledPluginFixture } from '../../client/test/fixtures';
 import { present } from '../../ports/present';
@@ -196,7 +196,7 @@ describe('modbench.mod.track', () => {
     const { handler } = invokeTrack(client);
     const header = {
       webviewSection: 'recordHeader', formKey: '000801:Other.esp', plugin: 'Second.esp', origin: 'ModA',
-      compilable: false, trackable: true, preventDefaultContextMenuItems: true,
+      compilable: false, preventDefaultContextMenuItems: true,
     };
 
     await runTrackedWithPreset(handler, EDITS_ITEM, header);
@@ -376,7 +376,7 @@ describe('modbench.plugin.compile', () => {
   const PATCH_FILES = originFiles(
     [{ path: '/instance/mods/ModA/MyPatch.esp', origin: 'ModA' }], 'ModA');
 
-  function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inMod tracked editable'): PluginNode {
+  function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inTrackedMod tracked editable'): PluginNode {
     const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
     node.contextValue = contextValue;
     return node;
@@ -621,6 +621,145 @@ describe('modbench.plugin.compile', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not list the plugins to compile.', detail: 'fetch failed' },
     ]);
+  });
+});
+
+// ── modbench.plugin.decompile ──────────────────────────────────────────────
+
+describe('modbench.plugin.decompile', () => {
+  const FIRST = { name: 'First.esp', origin: 'ModA' };
+  const SECOND = { name: 'Second.esp', origin: 'ModA' };
+
+  function row(plugin: { name: string; origin: string }): PluginNode {
+    const node = new PluginNode({ name: plugin.name, enabled: true }, plugin.origin);
+    node.contextValue = 'plugin enabled inTrackedMod untracked editable';
+    return node;
+  }
+
+  function registered(client: InMemoryMEditClient, answer: string | undefined, viewSelection: readonly PluginNode[] = []) {
+    const reporter = recordingReporter();
+    const ask = scriptedDialog(answer);
+    const progress = { running: false };
+    const decompiledWhileRunning: boolean[] = [];
+    registerDecompileCommand({
+      client: {
+        decompile: (plugins) => {
+          decompiledWhileRunning.push(progress.running);
+          return client.decompile(plugins);
+        },
+      },
+      progress: {
+        while: async (work) => {
+          progress.running = true;
+          try { await work(); } finally { progress.running = false; }
+        },
+        say: () => { /* decompile says nothing in the message line */ },
+      },
+      reporter, ask,
+    }, () => viewSelection);
+    return {
+      handler: present(handlers.get('modbench.plugin.decompile'), 'the decompile command registerDecompileCommand registers'),
+      reporter, ask, decompiledWhileRunning,
+    };
+  }
+
+  const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
+
+  // plugins.md, Decompile: one confirmation, naming the plugin and saying what decompile replaces.
+  it('on a plugin row, asks once naming it, then decompiles it under the view\'s progress bar and lands once', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
+    const { handler, reporter, ask, decompiledWhileRunning } = registered(client, 'Decompile');
+
+    await handler(row(SECOND));
+
+    assertAskedOnce(ask, { messageContains: '"Second.esp"', buttons: ['Decompile'] });
+    expect(ask.asked[0]?.message).toContain('replaces its source in the working tree from its bytes');
+    expect(decompileCalls(client)).toEqual([[[SECOND]]]);
+    expect(decompiledWhileRunning).toEqual([true]);
+    expect(reporter.landings).toEqual(['Decompiled "Second.esp".']);
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('on a selection, asks once naming every plugin, and decompiles them in one call', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { landed: [FIRST, SECOND], refused: [] });
+    const { handler, reporter, ask } = registered(client, 'Decompile');
+    const rows = [row(FIRST), row(SECOND)];
+
+    await handler(rows[0], rows);
+
+    expect(ask.asked).toEqual([{
+      message: 'Decompile 2 plugins? Decompile replaces their source in the working tree from their bytes.',
+      detail: 'First.esp (ModA)\nSecond.esp (ModA)',
+      buttons: ['Decompile'],
+    }]);
+    expect(decompileCalls(client)).toEqual([[[FIRST, SECOND]]]);
+    expect(reporter.landings).toEqual(['Decompiled 2 plugins.']);
+  });
+
+  // commands.md, Esc changes nothing.
+  it('decompiles nothing and says nothing when the confirmation is dismissed', async () => {
+    const client = new InMemoryMEditClient();
+    const { handler, reporter } = registered(client, undefined);
+
+    await handler(row(SECOND));
+
+    expect(decompileCalls(client)).toEqual([]);
+    expect(reporter.reports).toEqual([]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  // editor.md, Menus and keys, story 5: decompile on a column acts on that column's plugin.
+  it('decompiles the plugin a record tab\'s column header names, at its own origin', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
+    const { handler } = registered(client, 'Decompile', [row(FIRST)]);
+
+    await handler({
+      webviewSection: 'recordHeader', formKey: '000801:Second.esp', plugin: 'Second.esp', origin: 'ModA',
+      compilable: false, preventDefaultContextMenuItems: true,
+    });
+
+    expect(decompileCalls(client)).toEqual([[[SECOND]]]);
+  });
+
+  it('from the palette, decompiles the Plugins view\'s selection', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { landed: [FIRST], refused: [] });
+    const { handler } = registered(client, 'Decompile', [row(FIRST)]);
+
+    await handler();
+
+    expect(decompileCalls(client)).toEqual([[[FIRST]]]);
+  });
+
+  it('names each refused plugin and why in one notification while the rest land', async () => {
+    const client = new InMemoryMEditClient();
+    const refusal = 'First.esp does not round-trip through its own source.';
+    client.setCommandResult('decompile', { landed: [SECOND], refused: [{ item: FIRST, reason: refusal }] });
+    const { handler, reporter } = registered(client, 'Decompile');
+    const rows = [row(FIRST), row(SECOND)];
+
+    await handler(rows[0], rows);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not decompile 1 of 2 plugins.', detail: `"First.esp (ModA)" (${refusal})` },
+    ]);
+    expect(reporter.landings).toEqual([]);
+  });
+
+  it('reports a refusal of the whole selection once, and lands nothing', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('decompile', { refused: true, message: 'Could not decompile 1 plugin — git was not found on PATH.' });
+    const { handler, reporter } = registered(client, 'Decompile');
+
+    await handler(row(SECOND));
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not decompile 1 plugin — git was not found on PATH.', detail: undefined },
+    ]);
+    expect(reporter.landings).toEqual([]);
   });
 });
 

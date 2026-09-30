@@ -11,7 +11,8 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  MODS_KEY_ARGS, modsKeyContext, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
+  MODS_KEY_ARGS, modRepositoryContext, modsKeyContext, pluralArgument, registerModsGesture, selectionArgument, singularArgument,
+  type GestureEntry,
 } from '../gestureEntry';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 
@@ -192,11 +193,13 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod], () => false).selectionToggle).toBe('enable');
   });
 
-  it('the palette\'s track sees a selection that holds a mod providing a plugin', () => {
-    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, undefined, true);
-    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsModWithPlugin).toBe(true);
-    expect(modsKeyContext([enabledMod, group], byRow).holdsModWithPlugin).toBe(false);
-    expect(modsKeyContext([], byRow).holdsModWithPlugin).toBe(false);
+  it('the palette\'s track sees a selection that holds a mod with no repository providing a plugin', () => {
+    const withPlugin = new ModNode({ kind: 'mod', name: 'Patch', enabled: true }, undefined, { holdsPlugin: true, tracked: false });
+    const trackedWithPlugin = new ModNode({ kind: 'mod', name: 'Tracked', enabled: true }, undefined, { holdsPlugin: true, tracked: true });
+    expect(modsKeyContext([enabledMod, withPlugin], byRow).holdsUntrackedModWithPlugin).toBe(true);
+    expect(modsKeyContext([enabledMod, trackedWithPlugin], byRow).holdsUntrackedModWithPlugin).toBe(false);
+    expect(modsKeyContext([enabledMod, group], byRow).holdsUntrackedModWithPlugin).toBe(false);
+    expect(modsKeyContext([], byRow).holdsUntrackedModWithPlugin).toBe(false);
   });
 
   it('Space does nothing over a selection with no mod', () => {
@@ -234,5 +237,20 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([enabledMod, disabledMod], byRow)).toMatchObject({ holdsEnabledMod: true, holdsDisabledMod: true });
     expect(modsKeyContext([enabledMod], () => false)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: true });
     expect(modsKeyContext([group], byRow)).toMatchObject({ holdsEnabledMod: false, holdsDisabledMod: false });
+  });
+});
+
+// editor.md, Menus and keys: a column header offers track in a mod with no repository and decompile
+// in a tracked mod, and names only its plugin's mod.
+describe('which mods have a repository, for the column header', () => {
+  it('names each mod with one and each mod with none, and no separator', () => {
+    expect(modRepositoryContext({
+      mods: [
+        { kind: 'mod', name: 'Tracked', enabled: true },
+        { kind: 'separator', name: 'Group', enabled: true },
+        { kind: 'mod', name: 'Untracked', enabled: false },
+      ],
+      trackedMods: new Set(['Tracked']),
+    })).toEqual({ tracked: ['Tracked'], untracked: ['Untracked'] });
   });
 });

@@ -409,6 +409,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.plugin.decompile",
+        "title": "Decompile Plugin",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.plugin.compile",
         "title": "Compile Plugin",
         "category": "Modbench"
@@ -529,7 +534,11 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsModWithPlugin && modbench.mod.trackRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allUntrackedInMod && modbench.mod.trackRowsIn == modbench.pluginListTree"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.holdsUntrackedModWithPlugin && modbench.mod.trackRowsIn == modbench.modList || focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInUntrackedMod && modbench.mod.trackRowsIn == modbench.pluginListTree"
+        },
+        {
+          "command": "modbench.plugin.decompile",
+          "when": "focusedView == modbench.pluginListTree && modbench.folder == instance && modbench.plugin.allInTrackedMod"
         },
         {
           "command": "modbench.plugin.compile",
@@ -814,7 +823,7 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/",
+          "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/ && viewItem =~ /\\bholdsPlugin\\b/ && viewItem =~ /\\buntracked\\b/",
           "group": "4_sourceControl@1"
         },
         {
@@ -909,13 +918,18 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\buntracked\\b/ && viewItem =~ /\\binMod\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binUntrackedMod\\b/",
           "group": "4_sourceControl@1"
+        },
+        {
+          "command": "modbench.plugin.decompile",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\binTrackedMod\\b/",
+          "group": "4_sourceControl@2"
         },
         {
           "command": "modbench.plugin.compile",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
-          "group": "4_sourceControl@2"
+          "group": "4_sourceControl@3"
         },
         {
           "command": "modbench.record.copyValue",
@@ -981,18 +995,23 @@
         },
         {
           "command": "modbench.mod.track",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && trackable",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
           "group": "modbench@9"
+        },
+        {
+          "command": "modbench.plugin.decompile",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
+          "group": "modbench@10"
         },
         {
           "command": "modbench.plugin.compile",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
-          "group": "modbench@10"
+          "group": "modbench@11"
         },
         {
           "command": "modbench.record.copy",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
-          "group": "modbench@11"
+          "group": "modbench@12"
         },
         {
           "command": "modbench.record.openFieldValue",
