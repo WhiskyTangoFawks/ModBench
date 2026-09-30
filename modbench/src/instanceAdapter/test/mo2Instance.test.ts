@@ -585,10 +585,10 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(root, folder, 'Kept.esp'), '');
         await mkdir(join(root, folder, 'Gone'));
         await writeFile(join(root, folder, 'Gone', 'Lost.esp'), '');
-        vi.mocked(readdir).mockImplementation((async (path: PathLike, options: never) => {
+        vi.mocked(readdir).mockImplementation(async (path, options) => {
           if (String(path) === join(root, folder, 'Gone')) await rm(path, { recursive: true });
           return actualReaddir(path, options);
-        }) as typeof readdir);
+        });
 
         const files = await adapter.originFiles(origin);
 
