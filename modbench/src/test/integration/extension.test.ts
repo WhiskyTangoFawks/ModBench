@@ -1861,12 +1861,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
 
   // An order swap, so the load order itself changes, exercising watcher → sync → PUT end to end.
-  // A write that leaves the load order equal puts nothing.
   async function changePluginsTxt(): Promise<void> {
+    swapped = !swapped;
+    await writePluginsTxt(swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+  }
+
+  async function writePluginsTxt(text: string): Promise<void> {
     const before = putCount();
     const pluginReads = requestLog.filter((l) => l === 'GET /plugins').length;
-    swapped = !swapped;
-    fs.writeFileSync(pluginsTxtPath, swapped ? '*MissingMaster.esp\n*TestMod.esp\n' : '*TestMod.esp\n*MissingMaster.esp\n');
+    fs.writeFileSync(pluginsTxtPath, text);
     await waitFor('a fresh PUT /load-order after plugins.txt changed', () => putCount() > before ? true : undefined);
     // The PUT is answered, but the tree hand-off (GET /plugins → setLoadOrder) follows it
     // asynchronously; wait for that read too — unless the PUT failed, in which case there is none.
@@ -1905,18 +1908,14 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  // update-load-order-file: put on change. The PUT after the equal write carries the swap, so a
-  // PUT for the equal write would have landed first.
-  it('a plugins.txt write that leaves the load order equal puts nothing', async () => {
+  // ADR-0013, invariant 1: the snapshot at every recompute, changed or not.
+  it('a plugins.txt write that leaves the load order equal puts it again', async () => {
     const sent = putLoadOrders.length;
-    const unchanged = fs.readFileSync(pluginsTxtPath, 'utf8');
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, `${unchanged}\n`));
+    const order = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
 
-    await changePluginsTxt();
+    await writePluginsTxt(`${fs.readFileSync(pluginsTxtPath, 'utf8')}\n`);
 
-    const swappedOrder = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
-    assert.deepStrictEqual(putLoadOrders.slice(sent), [swappedOrder],
-      'only the write that changed the load order may put it');
+    assert.deepStrictEqual(putLoadOrders.slice(sent), [order]);
   });
 
   // The WeakMap decoration restores each row to its captured original before re-deciding what
