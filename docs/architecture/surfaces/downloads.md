@@ -105,7 +105,7 @@ As a user, I want:
 
 ### The install target
 
-There is no file picker (catalog `install`). As a user, I want:
+There is no file picker: the row supplies the source (commands.md, *The surface supplies the Argument*). As a user, I want:
 
 1. A pick whenever an installed mod shares the file's Nexus mod ID: one item for each such mod,
    showing its name and version, and a last item, "Install as a new mod…".

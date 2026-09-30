@@ -33,6 +33,7 @@ import { recordingReporter } from '../../test/surfacingDoubles';
 import { withUnreadCorpusInstance } from '../../test/mo2/unreadCorpusInstance';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import { accessTo } from '../../test/mo2/adapterOver';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -112,7 +113,7 @@ const makeProvider = (
   extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
 ) => new ModListProvider({
   instance: extra.instance ?? new FakeInstance(valueOf(mods)),
-  instanceRoot: extra.instanceRoot ?? INSTANCE_ROOT,
+  access: accessTo(extra.instanceRoot ?? INSTANCE_ROOT),
 });
 
 // modlist.txt runs winning-first and a separator heads the lines above it: Late Section holds
@@ -297,7 +298,10 @@ describe('ModListProvider', () => {
   // Mod sync is what adds a line, so a folder with no line has no row until the line exists.
   // Rival: a tree that renders the value's folders rather than its lines.
   it('renders no row for a folder in mods/ with no modlist line', async () => {
-    const value = { ...valueOf([mod('Listed')]), modFolders: ['Listed', 'Dropped In'] } as InstanceValue;
+    const value = { ...valueOf([mod('Listed')]), modFolders: [
+      { kind: 'mod', name: 'Listed', path: '/instance/mods/Listed' },
+      { kind: 'mod', name: 'Dropped In', path: '/instance/mods/Dropped In' },
+    ] } as InstanceValue;
     const provider = makeProvider([], { instance: new FakeInstance(value) });
 
     const labels = (await provider.getChildren()).map((n) => n.label);
@@ -421,7 +425,7 @@ describe('ModListProvider', () => {
   // before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
-      const provider = new ModListProvider({ instance, instanceRoot: root });
+      const provider = new ModListProvider({ instance, access: accessTo(root) });
 
       const pending = provider.getChildren();
       await instance.refresh();

@@ -9,6 +9,7 @@
   },
   "references": [
     { "path": "./mo2Codecs" },
+    { "path": "./loadOrderFileCodec" },
     { "path": "./tables" },
     { "path": "./wire" },
     { "path": "./ports" },

@@ -9,12 +9,12 @@ import { tsFiles } from './tsFiles';
 
 const MODBENCH = join(__dirname, '..', '..');
 
-const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+const KERNEL_BOXES = ['mo2Codecs', 'loadOrderFileCodec', 'tables', 'wire', 'ports'];
 
 // The driven column, each with the reference list target-architecture-references.d2 draws for it:
 // the arrows that leave the box, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
+  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
   instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
 };
 

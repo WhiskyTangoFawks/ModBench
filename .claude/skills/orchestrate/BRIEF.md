@@ -24,6 +24,8 @@ Findings are handled in two ways. A bug or debt that your ticket needs, or that 
 
 Root CLAUDE.md's chain of authority governs your work. Your report carries every break and every strategic question in its form.
 
+Resolve before you park. Work a question through the chain on `main`: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words. A caption item covers every need its box's purpose covers, in words other than yours. A question the chain answers is decided: build it, and quote the texts in the report. A park shows the attempt.
+
 Park only for one of these:
 
 - The premise is refuted.

@@ -184,6 +184,7 @@ export default defineConfig(
                     './tsconfig.test.json',
                     './tsconfig.integration.json',
                     './src/mo2Codecs/tsconfig.json',
+                    './src/loadOrderFileCodec/tsconfig.json',
                     './src/tables/tsconfig.json',
                     './src/wire/tsconfig.json',
                     './src/ports/tsconfig.json',

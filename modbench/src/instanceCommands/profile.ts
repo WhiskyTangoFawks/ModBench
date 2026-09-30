@@ -6,6 +6,13 @@ import { settingsFile } from '../instanceAdapter/layout';
 import { readSelectedProfile, setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import { putIfChanged } from '../instanceAdapter/files';
 import { refuse } from '../ports/refuse';
+import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
+
+/** What switch profile reaches the instance through. */
+export interface ProfileAccess {
+  readonly instanceRoot: string;
+  readonly adapter: InstanceAdapter;
+}
 
 /** `wrote` is false when the profile was already selected: no byte changes, so the
  *  ModOrganizer.ini watcher never fires. */

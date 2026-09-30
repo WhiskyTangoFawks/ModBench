@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import type { DownloadRow } from '../../mo2Codecs/downloads';
-import type { DownloadFile } from '../../instanceLoader/instance';
+import type { DownloadFile, DownloadRow } from '../../instanceLoader/instance';
 
 /** A `DownloadFile` with every required member at its neutral value, the two paths named as a
  *  recompute over `instanceRoot` names them. */

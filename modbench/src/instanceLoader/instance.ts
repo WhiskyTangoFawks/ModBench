@@ -16,25 +16,21 @@ import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
 import { createDownloadsWatcher } from './downloadsWatcher';
-import { scanDownloads } from './downloadsScan';
-import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../mo2Codecs/downloads';
-import { SETTINGS_FILE_NAME, readGameName, readSelectedProfile } from '../mo2Codecs/modOrganizerIni';
+import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
+import { SETTINGS_FILE_NAME } from '../mo2Codecs/modOrganizerIni';
 import { nexusSlugForGame } from '../tables/gamePaths';
 import { parseModlist } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
-  modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
-  pluginsFile, profilesDir, settingsFile,
+  modDir, modMetaFile, modlistFile, overwriteDir,
+  pluginsFile, profilesDir,
 } from '../instanceAdapter/layout';
-import { downloadPaths } from '../instanceAdapter/downloadMeta';
-import {
-  GAME_FOLDER_SETTING, dataFolderOf, type GameFolder, type GameDirectoryResolver,
-} from '../instanceAdapter/gameDirectory';
-import type { DownloadsDirectoryResolver } from '../instanceAdapter/downloadsDirectory';
+import { GAME_FOLDER_SETTING, dataFolderOf, type GameFolder } from '../instanceAdapter/gameDirectory';
+import type { InstanceAdapter, ModFolder } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
-import { get, listDir, listFolders } from '../instanceAdapter/files';
+import { get, listDir } from '../instanceAdapter/files';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
@@ -43,18 +39,13 @@ export type { InstalledFileId } from '../mo2Codecs/metaIni';
 export type { Mod, ModlistEntry, Separator } from '../mo2Codecs/modlistText';
 export { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 export type { PluginEntry } from '../mo2Codecs/pluginsText';
-export type { DownloadRow, DownloadStatus } from '../mo2Codecs/downloads';
+export type { DownloadFile, DownloadRow } from './downloadRows';
+export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/gameDirectory';
 
 // How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
 // the wait before an empty modlist read is believed.
 const SETTLE_MS = 200;
-
-/** A downloads/ row with the two paths a view opens or reveals, so that no view joins one. */
-export interface DownloadFile extends DownloadRow {
-  readonly path: string;
-  readonly sidecarPath: string;
-}
 
 /** The rows MO2's configured downloads folder holds, or why Modbench could not resolve that
  *  folder at all — never rows from a folder MO2 is not using (downloads.md, Which files are
@@ -79,9 +70,9 @@ export interface InstancePaths {
 export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
-  /** Every directory under mods/, listed or not: what mod sync compares modlist.txt with, and
-   *  the new-empty-mod refusal's own input. Undefined when there is no mods/ to list. */
-  readonly modFolders: readonly string[] | undefined;
+  /** Every mod folder as the entry it holds, listed or not: what mod sync compares modlist.txt
+   *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
+  readonly modFolders: readonly ModFolder[] | undefined;
   /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
    *  one. */
   readonly profiles: readonly string[];
@@ -127,10 +118,8 @@ export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' |
 
 export interface InstanceOptions {
   instanceRoot: string;
-  /** Where the game is, answered by the Instance adapter for the ini text this recompute read. */
-  resolveGameDirectory: GameDirectoryResolver;
-  /** Where downloads/ resolves to, answered by the Instance adapter the same way. */
-  resolveDownloadsDirectory: DownloadsDirectoryResolver;
+  /** The one reader of the instance; each recompute reads its settings once. */
+  adapter: InstanceAdapter;
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
@@ -146,24 +135,13 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
   }
 }
 
-// A missing mods/ is an answer, not a failed read: a workspace before its first install has
-// none. Any other listing failure is a real one and fails the recompute.
-async function readModFolderNames(
-  instanceRoot: string, skippedLink: (name: string, reason: string) => void,
-): Promise<string[] | undefined> {
-  try {
-    return await listFolders(modsDir(instanceRoot), skippedLink);
-  } catch (err) {
-    if (errnoCode(err) === 'ENOENT') return undefined;
-    throw err;
-  }
-}
-
 // Installed reads every mod folder on disk, not one profile's modlist.txt lines: a folder no
-// profile has synced into its modlist yet still owns its meta.ini's claim.
+// profile has synced into its modlist yet still owns its meta.ini's claim. A separator is never
+// installed from a downloaded file.
 async function readInstalledInto(
-  instanceRoot: string, entries: readonly ModlistEntry[], modFolderNames: readonly string[],
+  instanceRoot: string, entries: readonly ModlistEntry[], modFolders: readonly ModFolder[],
 ): Promise<ReadonlyMap<string, readonly string[]>> {
+  const modFolderNames = modFolders.filter((folder) => folder.kind === 'mod').map((folder) => folder.name);
   // Read once: an active-profile mod's archiveFilename is already in `entries`.
   const knownArchiveFilenames = new Map<string, string | undefined>();
   for (const entry of entries) if (entry.kind === 'mod') knownArchiveFilenames.set(entry.name, entry.archiveFilename);
@@ -322,9 +300,9 @@ export class Instance implements vscode.Disposable {
     this.failureListeners = [];
   }
 
-  private async readModFolders(instanceRoot: string): Promise<string[] | undefined> {
+  private async readModFolders(): Promise<ModFolder[] | undefined> {
     const skipped = new Map<string, string>();
-    const folders = await readModFolderNames(instanceRoot, (name, reason) => skipped.set(name, reason));
+    const folders = await this.options.adapter.modFolders((name, reason) => skipped.set(name, reason));
     for (const [name, reason] of skipped) {
       if (!this.linksTold.has(name)) {
         this.options.log(`[instance] mods/${name} is a link Modbench cannot follow, so it is not a mod folder: ${reason}`);
@@ -408,36 +386,30 @@ export class Instance implements vscode.Disposable {
   }
 
   private async read(): Promise<InstanceValue> {
-    const { instanceRoot, resolveGameDirectory, resolveDownloadsDirectory, log } = this.options;
-    // The ini is read first and every later read is against the profile it names, so a profile
-    // switch mid-recompute cannot mix one profile's modlist with another's plugins.txt.
-    const iniText = await get(settingsFile(instanceRoot));
-    const profile = readSelectedProfile(iniText);
+    const { instanceRoot, adapter, log } = this.options;
+    // The settings are read first and every later read is against the profile they name, so a
+    // profile switch mid-recompute cannot mix one profile's modlist with another's plugins.txt.
+    const settings = await adapter.settings();
+    const { profile, gameName } = settings;
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
     const [index, pluginLines, downloadsOutcome, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
-      // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
-      // generations in one value; the scan runs against the same generation's own resolution.
-      resolveDownloadsDirectory(instanceRoot, iniText).then(async (resolution) => {
-        if (resolution.kind === 'unresolved') return resolution;
-        const { downloadsDir } = resolution;
-        return { kind: 'listed' as const, downloadsDir, downloadEntries: await scanDownloads(downloadsDir) };
-      }),
+      // Both answers come from the settings read above, so a rewrite cannot land two generations
+      // in one value.
+      settings.downloadedFiles(),
       countOverwriteFiles(overwriteDir(instanceRoot)),
-      this.readModFolders(instanceRoot),
+      this.readModFolders(),
       readProfileNames(instanceRoot),
-      // Same reasoning as downloads above; beside the reads above, the game side costs no round trip.
-      resolveGameDirectory(iniText).then(async (gameFolder) => ({
+      settings.gameFolder().then(async (gameFolder) => ({
         gameFolder, dataFolderPlugins: await readDataFolderPlugins(dataFolderOf(gameFolder), log),
       })),
     ]);
     const { gameFolder, dataFolderPlugins } = game;
-    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.downloadEntries
+    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await readInstalledInto(instanceRoot, entries, modFolderNames ?? [])
       : undefined;
-    const gameName = readGameName(iniText);
     // A game folder not found loses only the Data-folder plugins' paths: every
     // plugins.txt line still gets a row, existence/slot/enabled coming from the line
     // itself (see `LoadOrderPluginLine`), not from the game directory.
@@ -465,11 +437,7 @@ export class Instance implements vscode.Disposable {
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
         : {
           kind: 'listed',
-          rows: downloadsOutcome.downloadEntries && installedInto
-            ? buildDownloadRows(downloadsOutcome.downloadEntries, installedInto).map((row) => ({
-              ...row, ...downloadPaths(downloadsOutcome.downloadsDir, row.name),
-            }))
-            : [],
+          rows: downloadsOutcome.files && installedInto ? buildDownloadRows(downloadsOutcome.files, installedInto) : [],
         },
       activeProfile: profile,
       gameRelease: gameName,
