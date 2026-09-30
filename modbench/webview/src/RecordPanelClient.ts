@@ -1,11 +1,11 @@
-import createClient from 'openapi-fetch';
-import type { paths } from '../../src/wire/generated/api';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './columnKey';
 import { parseCompareResult } from './parseCompareResult';
-// `load` fires compare + plugins + status in parallel: a compare failure fails the whole load
-// (the panel has nothing to show), while a plugins/status failure comes back as `null` so the
-// panel leaves that slice of state untouched.
+import { requestRecordLoad } from './nativeBridge';
+
+// `load` asks the host for compare, plugins and status in one round trip: a compare failure fails
+// the whole load, while a plugins/status failure comes back as `null` so the panel leaves that
+// slice of state untouched.
 export type LoadResult =
   | {
       ok: true; result: CompareResult; immutableSet: Set<ColumnKey> | null;
@@ -24,9 +24,8 @@ export type LoadResult =
     }
   | { ok: false; error: string };
 
-// Mirrors the host-side ApiClient (openapi-fetch over the generated `paths` types), so no URL
-// strings are hand-built. ADR-0007: reads only — a refusal has to become a native notification,
-// and only the extension host can show one.
+// The host's mEdit client answers this read (ADR-0002 invariant 2). Reads only — a refusal has to
+// become a native notification, and only the extension host can show one.
 export interface RecordPanelClient {
   // An arrow-typed property, not a method: `load` never needs its own `this`, and this shape
   // lets a test hold a bare reference to it (`vi.mocked(client.load)`) without an
@@ -34,36 +33,21 @@ export interface RecordPanelClient {
   load: (formKey: string) => Promise<LoadResult>;
 }
 
-export function createRecordPanelClient(port: number): RecordPanelClient {
-  const client = createClient<paths>({ baseUrl: `http://localhost:${port}` });
-
+export function createRecordPanelClient(): RecordPanelClient {
   return {
     async load(formKey) {
-      const [cmp, plugins, status] = await Promise.all([
-        client.GET('/records/{formKey}/compare', { params: { path: { formKey } } }),
-        client.GET('/plugins'),
-        // ADR-0013: the same GET /load-order/status the tree poll reads, fetched directly here
-        // rather than round-tripped through the extension host.
-        client.GET('/load-order/status', {}),
-      ]);
-      if (!cmp.response.ok) return { ok: false, error: `HTTP ${cmp.response.status}` };
-      // No cast — this is the generated PluginResponse[] straight off the client.
-      const pluginList = plugins.response.ok ? (plugins.data ?? null) : null;
+      const answer = await requestRecordLoad(formKey);
+      if (!answer.ok) return { ok: false, error: answer.error };
+      // ADR-0012: keyed by compound identity — two entries sharing a filename but differing
+      // in origin must stay distinct Set members, or one origin's mutability wins for both.
+      const pluginList = answer.plugins;
       return {
         ok: true,
-        result: parseCompareResult(cmp.data),
-        // ADR-0012: keyed by compound column identity, not bare plugin name — two entries sharing
-        // a filename but differing in origin must stay distinct Set members, or one origin's
-        // mutability silently wins for both.
+        result: parseCompareResult(answer.compare),
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
-        // plugins.md: same compound-identity keying as immutableSet, filtered the other direction.
-        // Both flags are required non-nullable booleans on the wire, and the extension spawns its
-        // own bundled backend (ADR-0002), so version skew is unreachable.
         notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => !p.inLoadOrder).map(p => columnKey(p.name, p.origin))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
-        // Fails closed — `=== true`, not `?? true`, so a failed or absent status fetch reads as
-        // "not computed".
-        conflictsComputed: status.response.ok && status.data?.conflictsComputed === true,
+        conflictsComputed: answer.conflictsComputed,
       };
     },
   };

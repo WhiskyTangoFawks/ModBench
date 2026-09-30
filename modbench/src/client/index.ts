@@ -7,7 +7,7 @@ export type {
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
   PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
   LoadOrderStatus,
-  LoadOrderRefusal, PluginLoadFailure,
+  LoadOrderRefusal, PluginLoadFailure, CompareResult,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
 export { isRefused, UNLIMITED_RECORDS } from './MEditClient';

@@ -1,7 +1,7 @@
 import type { RecordEditEnvelope } from '../wire/messages';
 import {
   createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
-  toLoadOrderStatus, type ApiClient, type LoadOrderStatus,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus, type CompareResult,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
@@ -508,6 +508,15 @@ export class HttpMEditClient implements MEditClient {
     if (response.status === 404) return [];
     this.ensureOk(`getRecordHolders(${formKey})`, response, error);
     return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
+  }
+
+  // Unlike getRecordHolders, a 404 is not degraded here: the record panel reports any non-OK
+  // compare as one generic load failure.
+  async getComparison(formKey: string): Promise<CompareResult> {
+    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
+    this.ensureOk(`getComparison(${formKey})`, response, error);
+    if (!data) throw new Error(`getComparison(${formKey}): ok response carried no body`);
+    return data;
   }
 
   async getReferences(formKey: string): Promise<ReferenceResult[]> {

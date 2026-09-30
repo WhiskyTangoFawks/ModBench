@@ -177,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
       reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, recordBadgeSource: treeProvider, meditClient, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource: treeProvider, meditClient, outputChannel,
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
