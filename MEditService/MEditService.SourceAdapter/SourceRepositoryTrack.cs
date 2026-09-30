@@ -95,8 +95,8 @@ public sealed partial class SourceRepository
         GitCli.Run(gitDir, workTree, "update-ref", LastCompileRef(trailers.Plugin), commitSha);
     }
 
-    // main's own tree with just the pathspecs restaged from the work tree, through a scratch index: the
-    // real one may hold the user's own staged dirt.
+    // main's own tree with just the pathspecs restaged from the work tree, through a scratch index:
+    // another tool, such as VS Code's own git, may hold the real one's lock on the repository (ADR-0003).
     private static string CommitToMain(
         string gitDir, string workTree, string[] pathspecs, string message)
     {
