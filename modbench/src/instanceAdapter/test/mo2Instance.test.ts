@@ -202,7 +202,7 @@ describe('the MO2 Instance adapter', () => {
     });
 
     it('answers every mod folder as the entry it holds, with its path', async () => {
-      const folders = await adapter.modFolders();
+      const folders = (await adapter.modFolders())?.all;
 
       expect(folders).toContainEqual({
         kind: 'mod', name: 'Unofficial Fallout 4 Patch', path: join(root, 'mods', 'Unofficial Fallout 4 Patch'),
@@ -218,7 +218,14 @@ describe('the MO2 Instance adapter', () => {
     it('answers no entry for a folder named as the reserved overwrite folder', async () => {
       await mkdir(join(root, 'mods', 'Overwrite'));
 
-      expect((await adapter.modFolders())?.map((f) => f.name)).not.toContain('Overwrite');
+      expect((await adapter.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
+    });
+
+    it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
+      const folders = present(await adapter.modFolders(), 'the mod folders');
+
+      expect(folders.holding({ kind: 'mod', name: 'harder vats' })?.path).toBe(join(root, 'mods', 'Harder VATS'));
+      expect(folders.holding({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
     });
 
     it('hands over a link it cannot follow rather than answering it as a folder', async () => {
@@ -227,7 +234,7 @@ describe('the MO2 Instance adapter', () => {
 
       const folders = await adapter.modFolders((name) => skipped.push(name));
 
-      expect(folders?.map((f) => f.name)).not.toContain('Loop');
+      expect(folders?.all.map((f) => f.name)).not.toContain('Loop');
       expect(skipped).toEqual(['Loop']);
     });
 
@@ -600,7 +607,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       expect(seen).toEqual([modNames(await adapter.modOrder('Default'))]);
-      expect(folders).toEqual(await adapter.modFolders());
+      expect(folders).toEqual((await adapter.modFolders())?.all);
       expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 

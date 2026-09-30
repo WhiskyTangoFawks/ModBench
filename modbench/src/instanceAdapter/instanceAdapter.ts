@@ -212,7 +212,7 @@ export interface InstanceAdapter {
   // Get in mods/.
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
-  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolder[] | undefined>;
+  modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolders | undefined>;
   /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */

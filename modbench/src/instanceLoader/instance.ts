@@ -6,7 +6,7 @@ import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type 
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { nexusSlugForGame } from '../tables/gamePaths';
 import { GAME_FOLDER_SETTING, dataFolderOf, type GameFolder } from '../instanceAdapter/gameDirectory';
-import type { InstanceAdapter, ModFolder, ModlistEntry, Subscription } from '../instanceAdapter/instanceAdapter';
+import type { InstanceAdapter, ModFolder, ModFolders, ModlistEntry, Subscription } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -98,6 +98,14 @@ export interface InstanceOptions {
   log: (msg: string) => void;
   /** The failed read's one Output line, written at error level however many views show it. */
   logReadFailure: (line: string) => void;
+}
+
+// Each listed mod's folder, matched as the manager matches names.
+function modDirsOf(entries: readonly ModlistEntry[], modFolders: ModFolders | undefined): Map<string, string> {
+  return new Map(entries.flatMap((entry) => {
+    const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
+    return folder === undefined ? [] : [[entry.name, folder.path] as const];
+  }));
 }
 
 const emptyValue = (): InstanceValue => ({
@@ -197,7 +205,7 @@ export class Instance implements Subscription {
     this.failureListeners = [];
   }
 
-  private async readModFolders(): Promise<ModFolder[] | undefined> {
+  private async readModFolders(): Promise<ModFolders | undefined> {
     const skipped = new Map<string, string>();
     const folders = await this.options.adapter.modFolders((name, reason) => skipped.set(name, reason));
     for (const [name, reason] of skipped) {
@@ -207,19 +215,6 @@ export class Instance implements Subscription {
     }
     this.linksTold = new Set(skipped.keys());
     return folders;
-  }
-
-  // Each listed mod's folder. A folder of the mod's own name is its folder under any manager's
-  // rule, so only a mod with none asks the adapter, which matches names as the manager does.
-  private async readModDirs(
-    entries: readonly ModlistEntry[], modFolders: readonly ModFolder[] | undefined,
-  ): Promise<Map<string, string>> {
-    if (modFolders === undefined) return new Map();
-    const named = new Map(modFolders.filter((folder) => folder.kind === 'mod').map((folder) => [folder.name, folder.path]));
-    const mods = entries.filter((entry) => entry.kind === 'mod');
-    const dirs = await Promise.all(mods.map(async ({ name }) =>
-      [name, named.get(name) ?? (await this.options.adapter.entryFolder({ kind: 'mod', name }))?.path] as const));
-    return new Map(dirs.filter((dir): dir is readonly [string, string] => dir[1] !== undefined));
   }
 
   // An unreadable Data folder is an answer, never a failed read: the whole value would otherwise
@@ -334,13 +329,12 @@ export class Instance implements Subscription {
     ]);
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
     const { gameFolder, dataFolderPlugins } = game;
-    const [installedInto, modDirs] = await Promise.all([
-      downloadsOutcome.kind === 'listed' && downloadsOutcome.files ? this.readInstalledInto(entries, modFolders ?? []) : undefined,
-      this.readModDirs(entries, modFolders),
-    ]);
+    const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
+      ? await this.readInstalledInto(entries, modFolders?.all ?? [])
+      : undefined;
     return {
       mods: entries,
-      modFolders,
+      modFolders: modFolders?.all,
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
@@ -361,7 +355,7 @@ export class Instance implements Subscription {
       paths: {
         overwriteDir: runtimeOutput.folder ?? '',
         downloadsDir: downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : undefined,
-        modDirs,
+        modDirs: modDirsOf(entries, modFolders),
       },
     };
   }
