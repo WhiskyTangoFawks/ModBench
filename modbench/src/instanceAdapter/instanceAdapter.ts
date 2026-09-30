@@ -289,9 +289,9 @@ export interface InstanceAdapter {
   /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
    *  one rename. */
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the folder's contents with the staged tree's around the mod's repository and plugin
-   *  source, and sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined.
-   *  A release holding an entry of either is refused first. */
+  /** Replaces the folder's contents with the staged tree's around its repository and plugin source,
+   *  and sets `keys` over the old meta, keeping each value `keys` leaves undefined. A release
+   *  holding an entry of either is refused first. */
   upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<Upgraded>;
 
   // Staging: the adapter's own ground beside mods/, on the same volume and outside every watch,
