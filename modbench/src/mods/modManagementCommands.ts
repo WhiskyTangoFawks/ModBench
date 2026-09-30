@@ -157,8 +157,10 @@ export function registerModContextCommands(
       }),
   ];
 }
-function separatorNamePrompt(access: ModlistAccess, own?: string): (value: string) => Promise<string | undefined> {
-  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, value, own));
+function separatorNamePrompt(
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, own?: string,
+): (value: string) => Promise<string | undefined> {
+  return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.mods, value, own));
 }
 
 export function registerSeparatorCommands(
@@ -171,7 +173,7 @@ export function registerSeparatorCommands(
         if (!node) return;
         const oldName = node.separator.name;
         const newName = await vscode.window.showInputBox({
-          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, oldName),
+          prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, instance, oldName),
         });
         if (!newName || newName === oldName) return;
         await reportFailure(reporter, 'Failed to rename separator.', async () => {
@@ -182,7 +184,7 @@ export function registerSeparatorCommands(
         const node = singularArgument(entry, 'mod', 'separator');
         if (!node) return;
         const name = await vscode.window.showInputBox({
-          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(access),
+          prompt: 'Separator name', placeHolder: 'My Group', validateInput: separatorNamePrompt(access, instance),
         });
         if (!name) return;
         const anchor = node.kind === 'mod' ? node.mod : node.separator;

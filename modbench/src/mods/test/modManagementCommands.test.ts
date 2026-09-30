@@ -480,6 +480,25 @@ describe('rename separator takes its separator through the gesture entry', () =>
     }
   });
 
+  // mods.md, Rename separator: a separator is a line in mod order, so one whose folder is gone
+  // still has its name. Rival: asking the folders alone.
+  it('refuses in the prompt a name a separator with no folder has, and takes its own', async () => {
+    const root = await instanceHolding([]);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
+
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.rename', groupB);
+
+      const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
+      expect(await validate('Group A')).toBe(CLASH);
+      expect(await validate('Group B')).toBeUndefined();
+      expect(await validate('Mod A')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports the refusal of a name another separator took after the prompt closed', async () => {
     renameSeparator.mockResolvedValue({ applied: false, refusal: CLASH });
     showInputBox.mockResolvedValueOnce('Taken Meanwhile');
@@ -567,6 +586,24 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
       expect(await validate(' Group A. ')).toBe(CLASH);
       expect(await validate('Mod A')).toBeUndefined();
       expect(await validate('')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // mods.md, Add separator: a separator is a line in mod order, so one whose folder is gone still
+  // has its name. Rival: asking the folders alone.
+  it('refuses in the prompt a name a separator with no folder has', async () => {
+    const root = await instanceHolding([]);
+    try {
+      showInputBox.mockResolvedValueOnce(undefined);
+
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      await invoke('modbench.separator.add', modA);
+
+      const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
+      expect(await validate('Group A')).toBe(CLASH);
+      expect(await validate('Mod A')).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -42,7 +42,7 @@ const NOUN = { mod: 'Mod', separator: 'Separator' } as const;
 const notFound = (kind: EntryKind, name: string): string => `${NOUN[kind]} not found in modlist: ${name}`;
 
 // A command names an entry by the name the value listed it under.
-const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
+const isListed = (order: readonly EntryRef[], entry: EntryRef): boolean =>
   order.some((e) => e.kind === entry.kind && e.name === entry.name);
 
 // Decided from mod order as it stands when the changes land, so an item gone since the view last
@@ -88,16 +88,19 @@ export function moveSeparators(
     [{ kind: 'moveSeparators', separators: found, place, end }]);
 }
 
-/** Why `requested` cannot name a separator, or `undefined` when it can: a folder already holds a
- *  separator of that name, matched as the instance matches names. The folder of `own`, the
- *  separator being renamed, is no clash. */
+const SEPARATOR_NAME_CLASH = 'A separator with this name already exists';
+
+/** Why `requested` cannot name a separator, or `undefined` when it can: another separator in
+ *  `order` has that name, or a folder holds a separator of that name, matched as the instance
+ *  matches names. `own` is the separator being renamed, and is no clash. */
 export async function separatorNameRefusal(
-  access: ModlistAccess, requested: string, own?: string,
+  access: ModlistAccess, order: readonly EntryRef[], requested: string, own?: string,
 ): Promise<string | undefined> {
+  if (requested !== own && isListed(order, { kind: 'separator', name: requested })) return SEPARATOR_NAME_CLASH;
   const holding = await access.adapter.entryFolder({ kind: 'separator', name: requested });
   if (holding === undefined) return undefined;
   const ownFolder = own === undefined ? undefined : await access.adapter.entryFolder({ kind: 'separator', name: own });
-  return ownFolder?.path === holding.path ? undefined : 'A separator with this name already exists';
+  return ownFolder?.path === holding.path ? undefined : SEPARATOR_NAME_CLASH;
 }
 
 // The first index of the run of mods directly on the winning side of the separator at `at`.
