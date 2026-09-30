@@ -5,7 +5,6 @@ using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using Microsoft.Extensions.Logging;
@@ -600,9 +599,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport(key, [], NeedsRebuild: true, []);
 
-        // A file that cannot be read is no evidence its rows are still true, so it counts as a
-        // mismatch — Store.ValidateAgainstDisk's own rule.
-        return PluginBinaryHash.OfFile(claim.FilePath) == claim.ContentHash
+        return _store.FileContentHash(claim.FilePath) == claim.ContentHash
             ? ValidationReport.Clean(key)
             : new ValidationReport(key, [], NeedsRebuild: true, []);
     }

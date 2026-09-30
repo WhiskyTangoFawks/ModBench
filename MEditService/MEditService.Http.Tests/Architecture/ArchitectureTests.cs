@@ -84,13 +84,15 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0009: the index validates itself by content hash; an mtime shortcut passes the
-    // persistence tests, which rewrite files, and then trusts a file another tool touched.
+    // ADR-0009: a hash is kept unread only while the stamp, change time included, matches. .NET has
+    // no change time, so a .NET LastWriteTime read is modification time alone, which ADR-0003
+    // rejects: other tools' writes can preserve it.
     [Fact]
-    public void DiskDerivedState_NeverReadsLastWriteTime()
+    public void DiskDerivedState_NeverReadsModificationTimeAlone()
     {
         var offenders = Offenders(SolutionDirectory(), Projects, "LastWriteTime", allowedFiles: []);
-        Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
+        Assert.True(offenders.Count == 0,
+            "Modification time read without change time in:\n" + string.Join("\n", offenders));
     }
 
     // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
