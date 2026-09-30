@@ -8,10 +8,10 @@ import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 
-// The host's watcher the Instance adapter arms, and the Instance's own watcher modules while they
-// last, each calling the factory one level down.
+// The Instance adapter's watch, and the Instance's own watcher modules, each calling the factory
+// one level down.
 const ALLOWED = new Set([
-  'hostFileWatch.ts',
+  join('instanceAdapter', 'mo2Watch.ts'),
   join('instanceLoader', 'instance.ts'),
   join('instanceLoader', 'fsWatcher.ts'),
   join('instanceLoader', 'modsWatcher.ts'),

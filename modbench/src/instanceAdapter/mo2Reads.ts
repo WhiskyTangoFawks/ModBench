@@ -4,18 +4,18 @@
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../ports/errorMessage';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
-import { MOD_META_FILE_NAME, parseMetaIni } from './codecs/metaIni';
-import { modNameKey, parseModlist } from './codecs/modlistText';
+import { parseMetaIni } from './codecs/metaIni';
+import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { exists, factsOf, get, listDir } from './files';
+import { factsOf, get, listDir } from './files';
 import { dataFolderOf, type GameFolder } from './gameDirectory';
 import type { DataFolderPlugins, DownloadedFile, DownloadedFiles, InstanceAdapter } from './instanceAdapter';
 import {
-  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, entryDir,
-  fileInFolder, isInFolder, isTempWrite, mo2FolderName, modlistFile, modMetaFile, overwriteDir, pluginsFile,
-  profilesDir, settingsFile,
+  DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
+  modMetaFile, pluginsFile, profilesDir, settingsFile,
 } from './layout';
-import { listModFolders, readOrAbsent, type Mo2Context } from './mo2Context';
+import { folderHolding, listModFolders, readOrAbsent, type Mo2Context } from './mo2Context';
+import { originFilesIn } from './mo2Files';
 import { isPluginFile } from './pluginFile';
 
 export type Mo2Reads = Omit<InstanceAdapter,
@@ -96,28 +96,8 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
 
     gameFolderPlugins: listGameFolderPlugins,
 
-    folderNameFor: mo2FolderName,
+    entryFolder: (entry) => folderHolding(context, entry),
 
-    async hasModFolder(mod) {
-      const folder = entryDir(instanceRoot, { kind: 'mod', name: mod });
-      return folder !== undefined && exists(folder);
-    },
-
-    async downloadedFileAt(path) {
-      const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));
-      return resolution.kind === 'unresolved' ? undefined : downloadNameAt(resolution.downloadsDir, path);
-    },
-
-    nameKey: modNameKey,
-
-    overwriteFolder: () => overwriteDir(instanceRoot),
-
-    fileInFolder,
-
-    isInFolder,
-
-    isTempWrite,
-
-    isModMetaFile: (relativePath) => relativePath === MOD_META_FILE_NAME,
+    originFiles: (origin) => originFilesIn(instanceRoot, origin),
   };
 }

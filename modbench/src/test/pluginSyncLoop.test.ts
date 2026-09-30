@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../test/mo2/fakeVscodeWatcher';
-import { accessTo } from './mo2/adapterOver';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -17,7 +17,6 @@ import { GAME_FOLDER_NOT_FOUND } from '../test/mo2/gameFolderNotFound';
 import { logGameFolderNotFound } from '../gameFolderNotFoundLog';
 import { registerModSync } from '../modSyncTrigger';
 import { modSyncOver } from '../modlist/modlist';
-import { watchedAdapterOver } from './mo2/watchedAdapterOver';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -84,7 +83,7 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
 
   const instance = new Instance({
     instanceRoot: root,
-    adapter: watchedAdapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
+    adapter: adapterOver(root, { gameFolder: { kind: 'found', root: join(root, 'Game'), dataFolder: join(root, 'Game', 'Data') } }),
     log: () => {}, logReadFailure: () => {},
   });
   instances.push(instance);
@@ -203,7 +202,7 @@ describe('the game folder not found, across the whole instance', () => {
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
     const instance = new Instance({
-      instanceRoot: root, adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
+      instanceRoot: root, adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }), log: write, logReadFailure: write,
     });
     instances.push(instance);
     logGameFolderNotFound(instance, (line) => channel.warn(`[instance] ${line}`));

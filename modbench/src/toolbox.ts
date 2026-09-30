@@ -12,7 +12,6 @@ import { Instance, type InstanceValue } from './instanceLoader/instance';
 import { dataFolderFile, dataFolderOf } from './instanceAdapter/gameDirectory';
 import { isMo2Instance } from './instanceAdapter/files';
 import { mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
-import { watchFilesInHost } from './hostFileWatch';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
   PluginsTreeProvider, type PluginFactsClient, type PluginListSource, type PluginsTreeNode,
@@ -32,13 +31,13 @@ import { pluginSyncOver, reorderOver, type ImplicitMasterSource, type PluginsAcc
 import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
+import { installNameRefusal } from './install/install';
 import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
 import { createModListView, nexusRowInLastSelectedView, registerDownloadsView } from './mo2TreeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
-import { collidingModName } from './mods/modNameCollision';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
 import type { FolderCheck } from './folderContext';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
@@ -456,7 +455,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
   // The one Instance adapter over the instance; every consumer reaches the instance through it.
-  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides, watchFiles: watchFilesInHost });
+  const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
   // ADR-0015: the one Instance over MO2's files, recomputed through the Instance adapter.
   const instance = own(new Instance({ instanceRoot, adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
@@ -515,7 +514,9 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
     own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
   const runModAction = (logLabel: string, failMessage: string, action: () => Promise<void>) =>
     reportFailure(reporterFor(logLabel), failMessage, action);
-  const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
+  const promptModName = (
+    defaultName: string, validateInput?: (value: string) => Thenable<string | undefined> | string | undefined,
+  ) =>
     vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
   const warnIfFomod = (name: string, isFomod: boolean) => {
     if (isFomod)
@@ -559,7 +560,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   const { downloadsProvider, downloadsView } = registerDownloadsView({
     own, access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
-      nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(access, instance, name)),
+      nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
       warnIfFomod,
       log: (line) => outputChannel.warn(`[downloads] ${line}`),
     },
@@ -572,7 +573,7 @@ function buildMo2Side(own: Own, instanceRoot: string, deps: ToolboxDeps): Mo2Sid
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
-    originFiles: (origin) => originFiles(adapter, instance.value.plugins, origin),
+    originFiles: (origin) => originFiles(instance.value.plugins, origin),
     modListSelection: () => modListView.selection, pluginsSelection,
   };
 }

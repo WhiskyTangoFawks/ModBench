@@ -1,7 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  access, chmod, mkdir, mkdtemp, readFile, realpath, rename as fsRename, rm, stat, symlink, writeFile,
+} from 'node:fs/promises';
+import type { PathLike } from 'node:fs';
+import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
+import { present } from '../../ports/present';
+
+vi.mock('vscode', () => fakeVscodeModule());
+// Passthrough, so one test can block or hold a folder's move back.
+const real = vi.hoisted(() => ({ rename: undefined as typeof import('node:fs/promises').rename | undefined }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  real.rename = actual.rename;
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
+
+const actualRename = (from: PathLike, to: PathLike): Promise<void> => present(real.rename, 'the real rename')(from, to);
 import { tmpdir } from 'node:os';
-import { basename, join, matchesGlob } from 'node:path';
+import { join, matchesGlob } from 'node:path';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { OVERWRITE_ORIGIN } from '../instanceAdapter';
 import type { GameDetectors, GameFolder } from '../gameDirectory';
@@ -9,7 +25,6 @@ import type {
   InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
-import type { WatchFiles } from '../mo2Watch';
 import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS, snapshotTree,
 } from '../../test/mo2/corpusFixture';
@@ -22,9 +37,8 @@ const NO_DETECTORS: GameDetectors = {
 const INI = 'ModOrganizer.ini';
 const DOWNLOAD = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 
-const adapterAt = (instanceRoot: string, gameDirectory?: string): InstanceAdapter => mo2InstanceAdapter({
-  instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS, watchFiles: () => ({ dispose: () => undefined }),
-});
+const adapterAt = (instanceRoot: string, gameDirectory?: string): InstanceAdapter =>
+  mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS });
 
 const text = (root: string, relative: string): Promise<string> => readFile(join(root, relative), 'utf8');
 
@@ -47,7 +61,10 @@ describe('the MO2 Instance adapter', () => {
     root = await cloneCorpusFixture();
     adapter = adapterAt(root);
   });
-  afterEach(() => rm(root, { recursive: true, force: true }));
+  afterEach(async () => {
+    vi.mocked(fsRename).mockImplementation(actualRename);
+    await rm(root, { recursive: true, force: true });
+  });
 
   describe('parsed reads', () => {
     it('answers the selected profile and the game from the settings', async () => {
@@ -263,89 +280,78 @@ describe('the MO2 Instance adapter', () => {
   });
 
   describe('the watch', () => {
-    interface ArmedWatch {
-      readonly base: string;
-      readonly glob: string;
-      readonly onChange: (path: string) => void;
-      disposed: boolean;
-    }
+    afterEach(() => {
+      watchers.length = 0;
+    });
 
-    // The host's watcher, doubled: each watch the adapter arms, and a change fired beneath one.
-    function hostWatcher(): {
-      watchFiles: WatchFiles; live: () => ArmedWatch[]; fire: (base: string, relative: string, heardAs?: string) => boolean;
-    } {
-      const armed: ArmedWatch[] = [];
-      const live = (): ArmedWatch[] => armed.filter((w) => !w.disposed);
-      return {
-        watchFiles: (base, glob, onChange) => {
-          const watch: ArmedWatch = { base, glob, onChange, disposed: false };
-          armed.push(watch);
-          return { dispose: () => { watch.disposed = true; } };
-        },
-        live,
-        // `heardAs` stands in for a path the matcher here reads differently than the host does.
-        fire: (base, relative, heardAs = relative) => {
-          const watch = live().find((w) => w.base === base && matchesGlob(heardAs, w.glob));
-          watch?.onChange(join(base, relative));
-          return watch !== undefined;
-        },
-      };
-    }
+    const live = (): FakeWatcher[] => watchers.filter((w) => !w.disposed);
 
-    const watching = (host: ReturnType<typeof hostWatcher>, gameDirectory?: string): InstanceAdapter => mo2InstanceAdapter({
-      instanceRoot: root, gameDirectoryOverrides: () => ({ gameDirectory }), detectors: NO_DETECTORS, watchFiles: host.watchFiles,
+    // `heardAs` stands in for a path the matcher here reads differently than VS Code's does.
+    const fire = (base: string, relative: string, heardAs = relative): boolean => {
+      const watcher = live().find((w) => w.base === base && matchesGlob(heardAs, w.pattern));
+      watcher?.fireChange(join(base, relative));
+      return watcher !== undefined;
+    };
+
+    // Rival: a watch that hears one kind of event, so a deleted mod folder is never heard.
+    it('hears a file created, changed or deleted alike', () => {
+      let signals = 0;
+      adapterAt(root).subscribe(() => { signals++; });
+      const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
+
+      mods?.fireCreate(join(root, 'mods', 'A', 'x.esp'));
+      mods?.fireChange(join(root, 'mods', 'A', 'x.esp'));
+      mods?.fireDelete(join(root, 'mods', 'A'));
+
+      expect(signals).toBe(3);
     });
 
     it('arms nothing until someone listens, and disarms when the last listener leaves', () => {
-      const host = hostWatcher();
-      const watched = watching(host);
-      expect(host.live()).toEqual([]);
+      const watched = adapterAt(root);
+      expect(live()).toEqual([]);
 
       const first = watched.subscribe(() => undefined);
       const second = watched.subscribe(() => undefined);
-      expect(host.live().length).toBeGreaterThan(0);
+      expect(live().length).toBeGreaterThan(0);
 
       first.dispose();
-      expect(host.live().length).toBeGreaterThan(0);
+      expect(live().length).toBeGreaterThan(0);
       second.dispose();
-      expect(host.live()).toEqual([]);
+      expect(live()).toEqual([]);
     });
 
     it('signals a change to every profile\'s two order files, the settings, a mod\'s files and overwrite', () => {
-      const host = hostWatcher();
       let signals = 0;
-      watching(host).subscribe(() => { signals++; });
+      adapterAt(root).subscribe(() => { signals++; });
 
       for (const relative of [
         'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
         'mods/Harder VATS/Textures/a.dds', 'overwrite/F4SE/Plugins/x.ini',
-      ]) expect(host.fire(root, relative), relative).toBe(true);
-      expect(host.fire(root, 'profiles/Default/other.txt')).toBe(false);
+      ]) expect(fire(root, relative), relative).toBe(true);
+      expect(fire(root, 'profiles/Default/other.txt')).toBe(false);
       expect(signals).toBe(5);
     });
 
     // Rival: every path under a mod heard alike, so a git operation inside a tracked mod reads as
     // a change to the instance.
     it('hears nothing inside a mod\'s git repository, but hears the repository folder itself come or go', () => {
-      const host = hostWatcher();
       let signals = 0;
-      watching(host).subscribe(() => { signals++; });
+      adapterAt(root).subscribe(() => { signals++; });
 
-      expect(host.fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/index')).toBe(true);
+      expect(fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/index')).toBe(true);
       expect(signals).toBe(0);
-      expect(host.fire(root, 'mods/Harder VATS/.git', 'mods/Harder VATS/git')).toBe(true);
+      expect(fire(root, 'mods/Harder VATS/.git', 'mods/Harder VATS/git')).toBe(true);
       expect(signals).toBe(1);
     });
 
     // Rival: the downloads folder watched where the instance began, so a download landing in the
     // folder the settings name now is never heard.
     it('follows the downloads folder the last read of the settings resolved, signalling once when it moves', async () => {
-      const host = hostWatcher();
       let signals = 0;
-      const watched = watching(host);
+      const watched = adapterAt(root);
       watched.subscribe(() => { signals++; });
       await (await watched.settings()).downloadedFiles();
-      expect(host.fire(join(root, 'downloads'), 'new.7z')).toBe(true);
+      expect(fire(join(root, 'downloads'), 'new.7z')).toBe(true);
       signals = 0;
 
       await writeFile(join(root, INI), `${await text(root, INI)}download_directory=@ByteArray(Elsewhere)\r\n`);
@@ -354,8 +360,8 @@ describe('the MO2 Instance adapter', () => {
       await (await watched.settings()).downloadedFiles();
       expect(signals).toBe(1);
 
-      expect(host.fire(join(root, 'downloads'), 'old.7z')).toBe(false);
-      expect(host.fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);
+      expect(fire(join(root, 'downloads'), 'old.7z')).toBe(false);
+      expect(fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);
     });
 
     // Rival: a glob of one case, which misses a plugin whose extension another tool wrote in capitals.
@@ -363,73 +369,111 @@ describe('the MO2 Instance adapter', () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
-        const host = hostWatcher();
-        const watched = watching(host, game);
+          const watched = adapterAt(root, game);
         watched.subscribe(() => undefined);
 
         await (await watched.settings()).gameFolder();
 
-        for (const name of ['Fallout4.esm', 'Patch.ESP', 'cc.Esl']) expect(host.fire(join(game, 'Data'), name), name).toBe(true);
-        expect(host.fire(join(game, 'Data'), 'readme.txt')).toBe(false);
+        for (const name of ['Fallout4.esm', 'Patch.ESP', 'cc.Esl']) expect(fire(join(game, 'Data'), name), name).toBe(true);
+        expect(fire(join(game, 'Data'), 'readme.txt')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
       }
     });
 
     it('follows no game folder when none is found', async () => {
-      const host = hostWatcher();
-      const watched = watching(host);
+      const watched = adapterAt(root);
       watched.subscribe(() => undefined);
-      const before = host.live().length;
+      const before = live().length;
 
       await (await watched.settings()).gameFolder();
 
-      expect(host.live()).toHaveLength(before);
+      expect(live()).toHaveLength(before);
     });
   });
 
-  describe('where the loader finds things', () => {
-    it('answers the overwrite folder, named as the origin its files take', () => {
-      expect(adapter.overwriteFolder()).toBe(join(root, OVERWRITE_ORIGIN));
+  describe('get in mods/', () => {
+    it('answers the folder that holds an entry, matched as MO2 matches names, or none', async () => {
+      const harderVats = { kind: 'mod', name: 'Harder VATS', path: join(root, 'mods', 'Harder VATS') };
+
+      expect(await adapter.entryFolder({ kind: 'mod', name: 'Harder VATS' })).toEqual(harderVats);
+      expect(await adapter.entryFolder({ kind: 'mod', name: 'harder vats' })).toEqual(harderVats);
+      expect(await adapter.entryFolder({ kind: 'mod', name: 'No Such Mod' })).toBeUndefined();
+      expect(await adapter.entryFolder({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
     });
 
-    it('answers a file inside a folder, and whether a file is inside one', () => {
-      const folder = join(root, 'mods', 'Harder VATS');
-      const file = adapter.fileInFolder(folder, 'Textures/a.dds');
-
-      expect(adapter.isInFolder(folder, file)).toBe(true);
-      expect(adapter.isInFolder(`${folder} Extra`, file)).toBe(false);
+    // A separator is named as MO2 names its folder, so a name asked for loosely finds it too.
+    it('finds a separator\'s folder by the name MO2 would give it', async () => {
+      expect(await adapter.entryFolder({ kind: 'separator', name: '  unassigned  (Modlist Development)..' })).toMatchObject({
+        kind: 'separator', name: 'Unassigned (Modlist Development)',
+      });
     });
 
-    it('tells its own writes in flight and a mod\'s metadata from a mod\'s content', () => {
-      expect(adapter.isTempWrite(basename(tempWritePath(join(root, 'modlist.txt'))))).toBe(true);
-      expect(adapter.isTempWrite('modlist.txt')).toBe(false);
-      expect(adapter.isModMetaFile('meta.ini')).toBe(true);
-      expect(adapter.isModMetaFile('Textures/meta.ini')).toBe(false);
-    });
+    describe('an origin\'s files', () => {
+      const mod = (name: string) => ({ kind: 'mod' as const, name });
+      const relativePaths = (files: readonly { relativePath: string }[]): string[] => files.map((f) => f.relativePath).sort();
 
-    it('keys an entry\'s name without case, as MO2 matches it', () => {
-      expect(adapter.nameKey('Harder VATS')).toBe(adapter.nameKey('harder vats'));
+      it('walks a mod\'s folder, leaving out its metadata, its root source tree, dot entries and writes in flight', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, 'Textures', 'Source'), { recursive: true });
+        await writeFile(join(folder, 'Textures', 'a.dds'), '');
+        await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
+        await mkdir(join(folder, 'source'), { recursive: true });
+        await writeFile(join(folder, 'source', 'left.json'), '');
+        await mkdir(join(folder, '.git'), { recursive: true });
+        await writeFile(join(folder, '.git', 'HEAD'), '');
+        await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
+
+        const files = await adapter.originFiles(mod('Harder VATS'));
+
+        expect(files.origin).toBe('Harder VATS');
+        expect(files.folder).toBe(folder);
+        expect(relativePaths(files.files)).toEqual(['Textures/Source/kept.psc', 'Textures/a.dds']);
+        expect(files.files.find((f) => f.relativePath === 'Textures/a.dds')?.path).toBe(join(folder, 'Textures', 'a.dds'));
+      });
+
+      it('reads a linked file from where the link points, and notes a broken link rather than failing', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        const target = join(root, 'elsewhere.esp');
+        await writeFile(target, '');
+        await symlink(target, join(folder, 'Linked.esp'));
+        await symlink(join(root, 'nowhere.esp'), join(folder, 'Broken.esp'));
+
+        const files = await adapter.originFiles(mod('Harder VATS'));
+
+        expect(files.files.find((f) => f.relativePath === 'Linked.esp')?.path).toBe(await realpath(target));
+        expect(relativePaths(files.files)).not.toContain('Broken.esp');
+        expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
+      });
+
+      it('answers no files for a mod with no folder, or a name that gives it none', async () => {
+        expect((await adapter.originFiles(mod('No Such Mod'))).files).toEqual([]);
+        expect(await adapter.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], notes: [] });
+      });
+
+      it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
+        const folder = join(root, 'overwrite');
+        await writeFile(join(folder, 'Stray.esp'), '');
+        await writeFile(tempWritePath(join(folder, 'Stray.esp')), '');
+
+        const files = await adapter.originFiles({ kind: 'runtimeOutput' });
+
+        expect(files.origin).toBe(OVERWRITE_ORIGIN);
+        expect(files.folder).toBe(folder);
+        expect(relativePaths(files.files)).toContain('Stray.esp');
+        expect(relativePaths(files.files).some((path) => path.startsWith('F4SE/'))).toBe(true);
+        expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
+      });
+
+      it('answers no files when there is no overwrite folder', async () => {
+        await rm(join(root, 'overwrite'), { recursive: true });
+
+        expect((await adapter.originFiles({ kind: 'runtimeOutput' })).files).toEqual([]);
+      });
     });
   });
 
-  describe('folder answers', () => {
-    it('gives a separator name the name MO2 gives its folder', () => {
-      expect(adapter.folderNameFor('  Core:  Mods.  ')).toBe('Core Mods');
-      expect(adapter.folderNameFor('CON')).toBe('');
-    });
-
-    it('says whether a mod has a folder, and none for a name that escapes the mod folders', async () => {
-      expect(await adapter.hasModFolder('Harder VATS')).toBe(true);
-      expect(await adapter.hasModFolder('No Such Mod')).toBe(false);
-      expect(await adapter.hasModFolder('../profiles')).toBe(false);
-    });
-
-    it('names the downloaded file at a path, and nothing for a path outside the downloads', async () => {
-      expect(await adapter.downloadedFileAt(join(root, 'downloads', DOWNLOAD))).toBe(DOWNLOAD);
-      expect(await adapter.downloadedFileAt(join(root, DOWNLOAD))).toBeUndefined();
-    });
-
+  describe('put and rename in mods/', () => {
     it('creates a mod\'s folder, and refuses a name that escapes the mod folders', async () => {
       await adapter.createModFolder('Brand New');
 
@@ -437,14 +481,14 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.createModFolder('../escape')).rejects.toThrow(/Not a valid mod name/);
     });
 
-    it('moves a mod\'s or a separator\'s folder to the trash, and answers false when it has none', async () => {
+    it('moves the folder that holds a mod or a separator to the trash, and answers false when none does', async () => {
       const trashed: string[] = [];
       const trash = (path: string): Promise<void> => {
         trashed.push(path);
         return Promise.resolve();
       };
 
-      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'Harder VATS' }, trash)).toBe(true);
+      expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'harder vats' }, trash)).toBe(true);
       expect(await adapter.trashEntryFolder({ kind: 'separator', name: 'Unassigned (Modlist Development)' }, trash)).toBe(true);
       expect(await adapter.trashEntryFolder({ kind: 'mod', name: 'No Such Mod' }, trash)).toBe(false);
 
@@ -459,18 +503,21 @@ describe('the MO2 Instance adapter', () => {
       adapter.changeModOrder('Default', () => changes);
     const separatorFolder = (name: string): string => join(root, 'mods', `${name}_separator`);
 
-    it('hands the decision the order and the mod folders as they stand', async () => {
+    it('hands the decision the order and the mod folders as they stand, and which folder holds an entry', async () => {
       const seen: string[][] = [];
       let folders: readonly ModFolder[] | undefined;
+      let holding: ModFolder | undefined;
 
       await adapter.changeModOrder('Default', (order, found) => {
         seen.push(modNames(order));
-        folders = found;
+        folders = found?.all;
+        holding = found?.holding({ kind: 'mod', name: 'harder vats' });
         return [];
       });
 
       expect(seen).toEqual([modNames(await adapter.modOrder('Default'))]);
       expect(folders).toEqual(await adapter.modFolders());
+      expect(holding?.path).toBe(join(root, 'mods', 'Harder VATS'));
     });
 
     it('lands every change in one write of mod order alone', async () => {
@@ -624,6 +671,103 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await isThere(separatorFolder('New Separator'))).toBe(false);
       });
+
+      // Rival: the undos run oldest first, so a separator added and then renamed in one change leaves
+      // its first folder behind.
+      it('puts every folder back newest first', async () => {
+        await chmod(modlist(), 0o444);
+        try {
+          await expect(change([
+            { kind: 'addSeparator', separator: 'Brief', afterIndex: -1 },
+            { kind: 'renameSeparator', from: 'Brief', to: 'Briefer' },
+          ])).rejects.toThrow();
+        } finally {
+          await chmod(modlist(), 0o644);
+        }
+
+        expect(await isThere(separatorFolder('Brief'))).toBe(false);
+        expect(await isThere(separatorFolder('Briefer'))).toBe(false);
+      });
+
+      // Rival: the undos stop at the first that fails, so an older move is never put back.
+      it('tries every put-back when one fails, and names each failure', async () => {
+        await mkdir(separatorFolder('Radfall - All-In-One Survival Overhaul'));
+        const blocked = separatorFolder('Second');
+        vi.mocked(fsRename).mockImplementation((from, to) =>
+          (from === blocked ? Promise.reject(new Error('put-back blocked')) : actualRename(from, to)));
+        await chmod(modlist(), 0o444);
+        try {
+          await expect(change([
+            { kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'First' },
+            { kind: 'renameSeparator', from: 'Radfall - All-In-One Survival Overhaul', to: 'Second' },
+          ])).rejects.toThrow(/not put back: put-back blocked/);
+        } finally {
+          await chmod(modlist(), 0o644);
+        }
+
+        expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
+        expect(await isThere(separatorFolder('First'))).toBe(false);
+      });
+
+      // Rival: the put-back run after the lock is let go, so a change queued behind this one reads
+      // the folders while the moved one is still out of place.
+      it('holds the lock until every folder is back', async () => {
+        const moved = separatorFolder('Core Mods');
+        let open = (): void => undefined;
+        const gate = new Promise<void>((resolve) => { open = resolve; });
+        vi.mocked(fsRename).mockImplementation((from, to) =>
+          (from === moved ? gate.then(() => actualRename(from, to)) : actualRename(from, to)));
+        let sawItBack: boolean | undefined;
+        await chmod(modlist(), 0o444);
+        try {
+          const first = change([{ kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Core Mods' }]);
+          const second = adapter.changeModOrder('Default', (_order, folders) => {
+            sawItBack = folders?.holding({ kind: 'separator', name: 'Unassigned (Modlist Development)' }) !== undefined;
+            return [];
+          });
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          open();
+          await expect(first).rejects.toThrow();
+          await second;
+        } finally {
+          await chmod(modlist(), 0o644);
+        }
+
+        expect(sawItBack).toBe(true);
+      });
+    });
+
+    describe('names, matched as MO2 matches them', () => {
+      it('finds each entry a change names in any case, and writes it as mod order lists it', async () => {
+        await change([
+          { kind: 'enable', mod: 'harder vats', enabled: true },
+          { kind: 'moveMods', mods: ['CRACKED AND SMUDGED PIP-BOY SCREEN'], place: { kind: 'separator', name: 'unassigned (modlist development)' }, end: 'losing' },
+          { kind: 'dropSeparator', separator: 'RADFALL - ALL-IN-ONE SURVIVAL OVERHAUL' },
+        ]);
+
+        const order = modNames(await adapter.modOrder('Default'));
+        expect(order).toContain('mod:Harder VATS:true');
+        expect(order).not.toContain('separator:Radfall - All-In-One Survival Overhaul:false');
+        expect(order.indexOf('mod:Cracked and Smudged Pip-Boy Screen:true'))
+          .toBe(order.indexOf('separator:Unassigned (Modlist Development):false') - 1);
+      });
+
+      it.each<[string, ModOrderChange]>([
+        ['a mod', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
+        ['a separator', { kind: 'addSeparator', separator: 'unassigned (modlist development)', afterIndex: 0 }],
+        ['a rename', { kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'radfall - all-in-one survival overhaul' }],
+      ])('rejects adding %s mod order already lists in another case', async (_, bad) => {
+        await expect(change([bad])).rejects.toThrow(/already in modlist/);
+      });
+
+      // A separator's name is the one MO2 gives its folder (mods.md, Add separator).
+      it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
+        await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', afterIndex: -1 }]);
+
+        expect(modNames(await adapter.modOrder('Default'))[0]).toBe('separator:Core Mods:true');
+        expect(await isThere(separatorFolder('Core Mods'))).toBe(true);
+        await expect(change([{ kind: 'addSeparator', separator: 'CON', afterIndex: -1 }])).rejects.toThrow(/Not a valid separator name/);
+      });
     });
   });
 
@@ -661,6 +805,25 @@ describe('the MO2 Instance adapter', () => {
       });
 
       expect(seen).toEqual([(await adapter.pluginOrder('Default')).map((p) => p.name)]);
+    });
+
+    // ADR-0012: a filename compares as the game compares it, ignoring case.
+    it('finds each plugin a change names in any case, and writes it as plugin order lists it', async () => {
+      await change([
+        { kind: 'enable', plugin: 'tracked patch mod.esp', enabled: false },
+        { kind: 'move', plugins: ['CCSBJFO4003-GRENADE.ESL'], toIndex: 0 },
+        { kind: 'drop', plugin: 'nonasciiretexture.ESP' },
+      ]);
+
+      expect(await adapter.pluginOrder('Default')).toEqual([
+        { name: 'ccSBJFO4003-Grenade.esl', enabled: true },
+        { name: 'Tracked Patch Mod.esp', enabled: false },
+        { name: 'Unofficial Fallout 4 Patch.esp', enabled: true },
+      ]);
+    });
+
+    it('rejects adding a plugin plugin order already lists in another case', async () => {
+      await expect(change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).rejects.toThrow(/already in plugins\.txt/);
     });
 
     it('writes nothing when the changes are already true of plugin order', async () => {
@@ -774,19 +937,32 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder(), 'source', 'kept'), { recursive: true });
         staged = await adapter.stagingFolder();
         await writeFile(join(staged, 'New.esp'), '');
-        await mkdir(join(staged, 'source', 'release'), { recursive: true });
         await writeFile(join(staged, '.gitignore'), 'release');
       });
 
       it('replaces the contents around each entry kept, taking the release\'s entries the folder has none of', async () => {
-        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit);
+        await adapter.upgradeMod('unofficial fallout 4 patch', staged, { gameName: 'Fallout4' }, keepGit);
 
         expect(await isThere(join(folder(), '.git'))).toBe(true);
         expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
-        expect(await isThere(join(folder(), 'source', 'release'))).toBe(false);
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
         expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
         expect(await isThere(join(folder(), '.gitignore'))).toBe(true);
+      });
+
+      // Rival: a release entry the folder keeps skipped in silence, so part of the release never
+      // lands and nothing says so.
+      it('refuses a release holding an entry the folder keeps, before anything is removed', async () => {
+        await mkdir(join(staged, 'source', 'release'), { recursive: true });
+
+        await expect(adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/"source"/);
+
+        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
+        expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+      });
+
+      it('refuses a mod no folder holds', async () => {
+        await expect(adapter.upgradeMod('No Such Mod', staged, { gameName: 'Fallout4' }, keepGit)).rejects.toThrow(/No folder holds/);
       });
 
       // Rival: the meta read after the release's entries land, so a release shipping its own meta

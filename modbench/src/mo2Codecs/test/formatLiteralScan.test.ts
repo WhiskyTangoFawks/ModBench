@@ -27,7 +27,7 @@ const CODECS: readonly Codec[] = [
   ...codecsIn('loadOrderFileCodec', join('loadOrderFileCodec', 'test'), ['pluginsText']),
 ];
 
-const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
+const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
 
 // The guard's own definition file necessarily holds every token as data (its TOKENS list and
 // its rival-plant test); it does not read or write any MO2 file.

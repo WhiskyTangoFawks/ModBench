@@ -34,8 +34,7 @@ import { cloneCorpusFixture } from './mo2/corpusFixture';
 import { expectInstanceOf } from './expectInstanceOf';
 import { present } from '../ports/present';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
-import { accessTo } from './mo2/adapterOver';
-import { watchedAdapterOver } from './mo2/watchedAdapterOver';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 
 const roots: string[] = [];
 const disposables: { dispose(): void }[] = [];
@@ -60,7 +59,7 @@ async function fourViewsOverOneInstance() {
   const log = (msg: string) => { channel.info(msg); };
   const instance = new Instance({
     instanceRoot: root, log, logReadFailure: (line) => { channel.error(line); },
-    adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
   const mods = new ModListProvider({ instance, access: accessTo(root) });
   const plugins = new PluginsTreeProvider({

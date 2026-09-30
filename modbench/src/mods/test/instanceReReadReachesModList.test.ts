@@ -20,14 +20,13 @@ vi.mock('vscode', () => ({
 import { Instance } from '../../instanceLoader/instance';
 import { ModListProvider, ModNode } from '../ModListProvider';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { accessTo, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
-import { watchedAdapterOver } from '../../test/mo2/watchedAdapterOver';
+import { accessTo, adapterOver, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
 
 async function setup() {
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root,
-    adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
     log: () => {},
     logReadFailure: () => {},
   });

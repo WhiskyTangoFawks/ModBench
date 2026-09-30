@@ -2,7 +2,7 @@
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
 import type { InstalledFileId, ModMeta, OwnedMetaKeys } from '../instanceAdapter';
-import { detectEol, lineRanges } from '../../loadOrderFileCodec/lineScan';
+import { detectEol, lineRanges } from './lineScan';
 
 /** A mod folder's metadata file. */
 export const MOD_META_FILE_NAME = 'meta.ini';

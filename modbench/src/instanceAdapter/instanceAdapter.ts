@@ -123,9 +123,9 @@ export interface InstanceSettings {
   downloadedFiles(): Promise<DownloadedFiles>;
 }
 
-/** An entry added at the winning end is disabled; its folder is already there. A separator added
- *  is enabled, lands after the entry at `afterIndex` or first at -1, and gets a folder; one
- *  renamed takes its folder. */
+/** Names match as the manager matches them. An entry added at the winning end is disabled. A
+ *  separator takes its folder's name; one added is enabled, gets its folder, and lands after the
+ *  entry at `afterIndex`, first at -1. */
 export type ModOrderChange =
   | { readonly kind: 'enable'; readonly mod: string; readonly enabled: boolean }
   | { readonly kind: 'moveMods'; readonly mods: readonly string[]; readonly place: MovePlace; readonly end: OrderEnd }
@@ -141,8 +141,9 @@ export type ModOrderChange =
   | { readonly kind: 'dropMod'; readonly mod: string }
   | { readonly kind: 'dropSeparator'; readonly separator: string };
 
-/** A plugin added is disabled and lands at the winning end; a move lands its plugins, in their own
- *  order, at `toIndex` among the plugins that remain. */
+/** Plugin names match as the game matches them, ignoring case (ADR-0012). A plugin added is
+ *  disabled and lands at the winning end; a move lands its plugins, in their own order, at
+ *  `toIndex` among the plugins that remain. */
 export type PluginOrderChange =
   | { readonly kind: 'enable'; readonly plugin: string; readonly enabled: boolean }
   | { readonly kind: 'move'; readonly plugins: readonly string[]; readonly toIndex: number }
@@ -152,11 +153,16 @@ export type PluginOrderChange =
 /** A mark on a downloaded file's metadata: a status its metadata claims, or excluded or not. */
 export type DownloadedFileMark = 'Installed' | 'Uninstalled' | 'Excluded' | 'Included';
 
+/** The mod folders as they stand, and which of them holds an entry, matched as the manager
+ *  matches names. */
+export interface ModFolders {
+  readonly all: readonly ModFolder[];
+  holding(entry: EntryRef): ModFolder | undefined;
+}
+
 /** Decides the changes to mod order from the order, and the mod folders, as they stand when the
- *  changes land. */
-export type DecideModOrder = (
-  order: readonly ModlistEntry[], folders: readonly ModFolder[] | undefined,
-) => readonly ModOrderChange[];
+ *  changes land; `folders` is undefined when there is no folder for mods at all. */
+export type DecideModOrder = (order: readonly ModlistEntry[], folders: ModFolders | undefined) => readonly ModOrderChange[];
 
 /** Decides the changes to plugin order from the order as it stands when the changes land. */
 export type DecidePluginOrder = (order: readonly PluginEntry[]) => readonly PluginOrderChange[];
@@ -173,63 +179,76 @@ export interface Subscription {
   dispose(): void;
 }
 
+/** Where a file's contents come from: a mod, or the files the game wrote at run time. */
+export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
+
+/** One file of an origin, by the relative path the origin's own tree names it with, and where it
+ *  is read from. */
+export interface OriginFile {
+  readonly relativePath: string;
+  readonly path: string;
+}
+
+/** An origin's files: the origin they take, the folder they are in (none for a name that gives
+ *  it none), and each file. `notes` names each entry the listing skipped, one line apiece. */
+export interface OriginFiles {
+  readonly origin: string;
+  readonly folder: string | undefined;
+  readonly files: readonly OriginFile[];
+  readonly notes: readonly string[];
+}
 
 export interface InstanceAdapter {
+  // Parsed reads.
   settings(): Promise<InstanceSettings>;
   /** Every profile's name; none when the instance has no profiles. */
   profiles(): Promise<string[]>;
   modOrder(profile: string): Promise<ModlistEntry[]>;
   /** Empty when the mod has no metadata. */
   modMeta(mod: string): Promise<ModMeta>;
+  pluginOrder(profile: string): Promise<PluginEntry[]>;
+  gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+
+  // Get in mods/.
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
    *  folder, and is handed to `skippedLink`. */
   modFolders(skippedLink?: (name: string, reason: string) => void): Promise<ModFolder[] | undefined>;
-  pluginOrder(profile: string): Promise<PluginEntry[]>;
-  gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
-  /** The name the instance gives the folder of an entry asked to be `requested`; empty when
-   *  nothing of it is left. */
-  folderNameFor(requested: string): string;
-  hasModFolder(mod: string): Promise<boolean>;
-  /** The name of the downloaded file at `path`; undefined when `path` is not one. */
-  downloadedFileAt(path: string): Promise<string | undefined>;
-  /** The key the instance matches an entry's name by. */
-  nameKey(name: string): string;
+  /** The folder that holds `entry`, matched as the manager matches names; undefined when none does. */
+  entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
+  /** An origin's files, none when its folder is not there. */
+  originFiles(origin: FileOrigin): Promise<OriginFiles>;
 
-  /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
-   *  plugins, where the last read of the settings resolved them. */
-  subscribe(listener: () => void): Subscription;
-  /** The folder holding what the game wrote at run time; its files take `OVERWRITE_ORIGIN`. */
-  overwriteFolder(): string;
-  /** A file inside `folder`, by the relative path a source tree names it with. */
-  fileInFolder(folder: string, relativePath: string): string;
-  isInFolder(folder: string, file: string): boolean;
-  /** Whether the file named `name` is one of this adapter's own writes still in flight. */
-  isTempWrite(name: string): boolean;
-  /** Whether the file at `relativePath` in a mod folder is the mod's metadata, not its content. */
-  isModMetaFile(relativePath: string): boolean;
-
+  // Changes.
   /** Every change lands in one write, its folders with it. A change naming an entry that is not
    *  there, or adding one that is, rejects, and nothing changes. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
   /** Every change lands in one write. A change naming a plugin that is not there, or adding one
    *  that is, rejects, and nothing is written. */
   changePluginOrder(profile: string, decide: DecidePluginOrder): Promise<Written>;
-  createModFolder(mod: string): Promise<void>;
-  /** False when the entry has no folder. */
-  trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
   /** False when the downloaded file has no metadata. */
   trashDownloadedFileMeta(name: string, trash: MoveToTrash): Promise<boolean>;
+  selectProfile(profile: string): Promise<Written>;
+
+  // Put and rename in mods/.
+  createModFolder(mod: string): Promise<void>;
+  /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
+  trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** A fresh folder on the instance's own volume that no watch reaches, for a mod staged before it
    *  lands; the caller removes it. */
   stagingFolder(): Promise<string>;
   /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
    *  one rename. */
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the mod folder's contents with the staged tree's around each entry `keep` names,
-   *  then sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. */
+  /** Replaces the folder's contents with the staged tree's around each entry `keep` names, and
+   *  sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
+   *  holding a kept entry rejects first. */
   upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys, keep: (entry: string) => boolean): Promise<void>;
-  selectProfile(profile: string): Promise<Written>;
+
+  // Subscribe: the instance changed.
+  /** Hears that the instance changed: any of its files, the downloads folder and the game folder's
+   *  plugins, where the last read of the settings resolved them. */
+  subscribe(listener: () => void): Subscription;
 }

@@ -34,8 +34,7 @@ import { ModListProvider, SeparatorNode, type ModlistNode, type SortDirection } 
 import { registerModMoveCommand } from '../modManagementCommands';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { accessTo, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
-import { watchedAdapterOver } from '../../test/mo2/watchedAdapterOver';
+import { accessTo, adapterOver, NO_DOWNLOADS } from '../../test/mo2/adapterOver';
 
 type RowName = { kind: 'mod' | 'separator'; name: string };
 
@@ -69,7 +68,7 @@ async function shownAfter(
   const root = await cloneCorpusFixture();
   const instance = new Instance({
     instanceRoot: root, log: () => {}, logReadFailure: () => {},
-    adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
   });
   const provider = new ModListProvider({ instance, access: accessTo(root) });
   try {

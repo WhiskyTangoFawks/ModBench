@@ -20,7 +20,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { Instance, type InstanceValue } from '../instance';
-import { watchedAdapterOver } from '../../test/mo2/watchedAdapterOver';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -65,7 +65,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   let resolve = hooks.resolveGameFolder ?? resolvesDataFolder;
   const instance = new Instance({
     instanceRoot: root,
-    adapter: countingSettings(watchedAdapterOver(root, { gameFolder: () => resolve() }), settingsReads),
+    adapter: countingSettings(adapterOver(root, { gameFolder: () => resolve() }), settingsReads),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });
@@ -417,7 +417,7 @@ describe('Instance — built by watching', () => {
     const pending = new Promise<DownloadedFiles>((resolve) => { resolveDownloadsDir = resolve; });
     const instance = new Instance({
       instanceRoot: root,
-      adapter: watchedAdapterOver(root, { gameFolder: resolvesDataFolder, downloadedFiles: () => pending }),
+      adapter: adapterOver(root, { gameFolder: resolvesDataFolder, downloadedFiles: () => pending }),
       log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
@@ -1004,7 +1004,7 @@ describe('Instance — downloads, profile and game directory', () => {
   // activation joining its own. downloadsDir needs a read first, so it carries no guess.
   it('carries those paths from sequence 0, before any read has landed', () => {
     const instance = new Instance({
-      instanceRoot: '/an/instance', adapter: watchedAdapterOver('/an/instance', { gameFolder: resolvesNotFound }),
+      instanceRoot: '/an/instance', adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
       log: () => {}, logReadFailure: () => {},
     });
     instances.push(instance);
@@ -1033,7 +1033,7 @@ async function minimalInstance(): Promise<{
   let resolve: ResolveGameFolder = resolvesNotFound;
   const instance = new Instance({
     instanceRoot: root,
-    adapter: watchedAdapterOver(root, { gameFolder: () => resolve() }),
+    adapter: adapterOver(root, { gameFolder: () => resolve() }),
     log: (msg) => logs.push(msg),
     logReadFailure: (line) => readFailureLines.push(line),
   });

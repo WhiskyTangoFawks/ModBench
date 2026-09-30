@@ -2,12 +2,11 @@
 // plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
 // prepended by the backend, never listed here.
 
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import { overwriteDir } from '../instanceAdapter/layout';
-import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';
 import { isPluginFile } from '../instanceAdapter/pluginFile';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
 import { pluginSlots } from '../mo2Codecs/pluginsText';
@@ -69,20 +68,14 @@ export interface OriginFiles {
  *  its own. */
 export type OriginFilesOf = (origin: string) => OriginFiles | undefined;
 
-/** How the Instance adapter answers a file inside a folder, and whether a file is inside one. */
-export type FolderFiles = Pick<InstanceAdapter, 'fileInFolder' | 'isInFolder'>;
-
-/** The files of the folder `originFolder` answers, through the Instance adapter's answers.
- *  `undefined` when no row for that origin has a plugin file on disk. */
+/** The files of the folder `originFolder` answers, a source tree's relative path joined beneath
+ *  it. `undefined` when no row for that origin has a plugin file on disk. */
 export function originFiles(
-  folders: FolderFiles, plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
+  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): OriginFiles | undefined {
   const folder = originFolder(plugins, origin);
   if (folder === undefined) return undefined;
-  return {
-    file: (relativePath) => folders.fileInFolder(folder, relativePath),
-    holds: (file) => folders.isInFolder(folder, file),
-  };
+  return { file: (relativePath) => join(folder, relativePath), holds: (file) => file.startsWith(folder + sep) };
 }
 
 /** The plugin files this instance provides, keyed case-folded to the winning plugin's on-disk

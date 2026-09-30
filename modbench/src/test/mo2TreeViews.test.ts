@@ -83,9 +83,8 @@ import { present } from '../ports/present';
 import { recordingReporter } from './surfacingDoubles';
 import { withUnreadCorpusInstance } from './mo2/unreadCorpusInstance';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
-import { accessTo } from './mo2/adapterOver';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 import { syncMessageDouble } from './syncMessageDouble';
-import { watchedAdapterOver } from './mo2/watchedAdapterOver';
 
 const own = <T extends { dispose: () => void }>(d: T): T => d;
 
@@ -100,7 +99,7 @@ const currentBox = currentBoxOf(h.state);
 async function makeInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     instanceRoot: root,
-    adapter: watchedAdapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
+    adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
     log: () => { /* no-op */ },
     logReadFailure: () => { /* no-op */ },
   });

@@ -14,10 +14,9 @@ import { registerModSync } from '../modSyncTrigger';
 import { modSyncOver, type ModSyncResult } from '../modlist/modlist';
 import type { ModFolder } from '../instanceAdapter/instanceAdapter';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
-import { accessTo } from './mo2/adapterOver';
+import { accessTo, adapterOver } from './mo2/adapterOver';
 import { modsDir } from '../instanceAdapter/layout';
 import { present } from '../ports/present';
-import { watchedAdapterOver } from './mo2/watchedAdapterOver';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -65,7 +64,7 @@ async function wiredInstance(): Promise<{
   roots.push(root);
   const instance = new Instance({
     instanceRoot: root,
-    adapter: watchedAdapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
+    adapter: adapterOver(root, { gameFolder: DATA_FOLDER_FOUND }),
     log: () => {},
     logReadFailure: () => {},
   });

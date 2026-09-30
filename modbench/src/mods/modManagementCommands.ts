@@ -218,7 +218,7 @@ export function registerCreateEmptyModCommand(
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => collidingModName(access, instance, value),
+      validateInput: (value) => collidingModName(access, value),
     });
     if (!name) return;
     try {

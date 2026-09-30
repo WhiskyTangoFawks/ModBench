@@ -1,5 +1,5 @@
 // MO2's changes: each file spliced through its own codec under its lock and written whole; a
-// separator's folder moves with its line.
+// separator's folder moves with its line, under the same lock.
 
 import {
   appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText,
@@ -13,12 +13,15 @@ import {
 } from './codecs/modlistText';
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
-import { ensureDir, exists, putIfChanged, remove, rename } from './files';
+import { ensureDir, exists, get, putIfChanged, remove, rename, withLock, write } from './files';
 import type {
-  DownloadedFileMark, EntryRef, InstanceAdapter, ModlistEntry, ModOrderChange, PluginOrderChange,
+  DownloadedFileMark, EntryRef, InstanceAdapter, ModlistEntry, ModOrderChange, MovePlace, PluginOrderChange,
+  SeparatorsPlace,
 } from './instanceAdapter';
-import { downloadFile, entryDir, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
-import { currentDownloadsDir, listModFolders, modFolderOf, type Mo2Context } from './mo2Context';
+import { downloadFile, mo2FolderName, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
+import {
+  currentDownloadsDir, entryKey, folderHolding, listModFolders, modFoldersOf, newModFolder, type Mo2Context,
+} from './mo2Context';
 
 export type Mo2Changes = Pick<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
@@ -28,35 +31,57 @@ type Undo = () => Promise<void>;
 
 const NOUN = { mod: 'Mod', separator: 'Separator' } as const;
 
-function requireListed(order: readonly ModlistEntry[], entry: EntryRef): void {
-  if (!order.some((e) => e.kind === entry.kind && e.name === entry.name)) {
-    throw new Error(`${NOUN[entry.kind]} not found in modlist: ${entry.name}`);
-  }
+// The name mod order lists an entry under, matched as MO2 matches names.
+function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
+  const listed = order.find((e) => entryKey(e) === entryKey(entry));
+  if (listed === undefined) throw new Error(`${NOUN[entry.kind]} not found in modlist: ${entry.name}`);
+  return listed.name;
 }
 
 function requireUnlisted(order: readonly ModlistEntry[], entry: EntryRef): void {
-  if (order.some((e) => e.kind === entry.kind && e.name === entry.name)) {
+  if (order.some((e) => entryKey(e) === entryKey(entry))) {
     throw new Error(`${NOUN[entry.kind]} already in modlist: ${entry.name}`);
   }
 }
 
-// Every entry a change names is checked against the order it lands on, so none is dropped in
-// silence.
-function checkModOrderChange(order: readonly ModlistEntry[], change: ModOrderChange): void {
-  const mod = (name: string): EntryRef => ({ kind: 'mod', name });
-  const separator = (name: string): EntryRef => ({ kind: 'separator', name });
+// A separator takes the name MO2 gives its folder.
+function separatorName(requested: string): string {
+  const name = mo2FolderName(requested);
+  if (name === '') throw new Error(`Not a valid separator name: "${requested}"`);
+  return name;
+}
+
+// The change with each name it names as mod order lists it, and each new name as MO2 gives it; a
+// name that is not there, or one added that is, rejects.
+function resolveModOrderChange(order: readonly ModlistEntry[], change: ModOrderChange): ModOrderChange {
+  const mod = (name: string): string => listedName(order, { kind: 'mod', name });
+  const separator = (name: string): string => listedName(order, { kind: 'separator', name });
+  const separatorsPlace = (place: SeparatorsPlace): SeparatorsPlace =>
+    (place.kind === 'separator' ? { kind: 'separator', name: separator(place.name) } : place);
+  const movePlace = (place: MovePlace): MovePlace =>
+    (place.kind === 'mod' ? { kind: 'mod', name: mod(place.name) } : place.kind === 'ungrouped' ? place : separatorsPlace(place));
   switch (change.kind) {
-    case 'enable': return requireListed(order, mod(change.mod));
-    case 'moveMods': return change.mods.forEach((name) => requireListed(order, mod(name)));
-    case 'moveSeparators': return change.separators.forEach((name) => requireListed(order, separator(name)));
-    case 'addAtWinningEnd': return requireUnlisted(order, change.entry);
-    case 'addSeparator': return requireUnlisted(order, separator(change.separator));
-    case 'renameSeparator':
-      requireListed(order, separator(change.from));
-      if (change.to !== change.from) requireUnlisted(order, separator(change.to));
-      return;
-    case 'dropMod': return requireListed(order, mod(change.mod));
-    case 'dropSeparator': return requireListed(order, separator(change.separator));
+    case 'enable': return { ...change, mod: mod(change.mod) };
+    case 'moveMods': return { ...change, mods: change.mods.map(mod), place: movePlace(change.place) };
+    case 'moveSeparators': return { ...change, separators: change.separators.map(separator), place: separatorsPlace(change.place) };
+    case 'addAtWinningEnd':
+      requireUnlisted(order, change.entry);
+      return change;
+    case 'addSeparator': {
+      const name = separatorName(change.separator);
+      requireUnlisted(order, { kind: 'separator', name });
+      return { ...change, separator: name };
+    }
+    case 'renameSeparator': {
+      const from = separator(change.from);
+      const to = separatorName(change.to);
+      if (entryKey({ kind: 'separator', name: to }) !== entryKey({ kind: 'separator', name: from })) {
+        requireUnlisted(order, { kind: 'separator', name: to });
+      }
+      return { ...change, from, to };
+    }
+    case 'dropMod': return { ...change, mod: mod(change.mod) };
+    case 'dropSeparator': return { ...change, separator: separator(change.separator) };
   }
 }
 
@@ -76,39 +101,29 @@ function spliceModOrderChange(text: string, change: ModOrderChange): string {
   }
 }
 
-const applyModOrderChange = (text: string, change: ModOrderChange): string => {
-  checkModOrderChange(parseModlist(text), change);
-  return spliceModOrderChange(text, change);
-};
+// Plugin filenames match as the game matches them, ignoring case (ADR-0012).
+const pluginKey = (name: string): string => name.toLowerCase();
 
-function checkPluginOrderChange(order: readonly PluginEntry[], change: PluginOrderChange): void {
-  const listed = (plugin: string): boolean => order.some((p) => p.name === plugin);
-  const requireListedPlugin = (plugin: string): void => {
-    if (!listed(plugin)) throw new Error(`Plugin not found in plugins.txt: ${plugin}`);
-  };
-  switch (change.kind) {
-    case 'enable': return requireListedPlugin(change.plugin);
-    case 'move': return change.plugins.forEach(requireListedPlugin);
-    case 'add':
-      if (listed(change.plugin)) throw new Error(`Plugin already in plugins.txt: ${change.plugin}`);
-      return;
-    case 'drop': return requireListedPlugin(change.plugin);
-  }
+function listedPlugin(order: readonly PluginEntry[], plugin: string): string {
+  const listed = order.find((p) => pluginKey(p.name) === pluginKey(plugin));
+  if (listed === undefined) throw new Error(`Plugin not found in plugins.txt: ${plugin}`);
+  return listed.name;
 }
 
 function splicePluginOrderChange(text: string, change: PluginOrderChange): string {
+  const order = parsePlugins(text);
+  const listed = (plugin: string): string => listedPlugin(order, plugin);
   switch (change.kind) {
-    case 'enable': return setPluginEnabledInText(text, change.plugin, change.enabled);
-    case 'move': return movePluginsInText(text, [...change.plugins], change.toIndex);
-    case 'add': return appendPluginInText(text, change.plugin);
-    case 'drop': return removePluginFromText(text, change.plugin);
+    case 'enable': return setPluginEnabledInText(text, listed(change.plugin), change.enabled);
+    case 'move': return movePluginsInText(text, change.plugins.map(listed), change.toIndex);
+    case 'add':
+      if (order.some((p) => pluginKey(p.name) === pluginKey(change.plugin))) {
+        throw new Error(`Plugin already in plugins.txt: ${change.plugin}`);
+      }
+      return appendPluginInText(text, change.plugin);
+    case 'drop': return removePluginFromText(text, listed(change.plugin));
   }
 }
-
-const applyPluginOrderChange = (text: string, change: PluginOrderChange): string => {
-  checkPluginOrderChange(parsePlugins(text), change);
-  return splicePluginOrderChange(text, change);
-};
 
 // Excluded and included leave metadata that already says so untouched, so a file at rest gains
 // no metadata.
@@ -124,17 +139,19 @@ function markIn(text: string, mark: DownloadedFileMark): string {
   }
 }
 
-// The folders each undo puts back, newest first; a failed undo is named beside the failure it
+// Every undo is tried, newest first, and each one that fails is named beside the failure it
 // followed.
 async function undoAll(undos: readonly Undo[], err: unknown): Promise<unknown> {
+  const failures: string[] = [];
   for (const undo of undos) {
     try {
       await undo();
     } catch (undoErr) {
-      return new Error(`${errorMessage(err)}; a folder could not be put back: ${errorMessage(undoErr)}`);
+      failures.push(errorMessage(undoErr));
     }
   }
-  return err;
+  if (failures.length === 0) return err;
+  return new Error(`${errorMessage(err)}; not put back: ${failures.join('; ')}`);
 }
 
 export function mo2Changes(context: Mo2Context): Mo2Changes {
@@ -149,15 +166,15 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
   // A separator's folder moves with its line; anything else in mod order is a line alone.
   const moveFolders = async (change: ModOrderChange): Promise<Undo | undefined> => {
     if (change.kind === 'addSeparator') {
+      if (await folderHolding(context, { kind: 'separator', name: change.separator })) return undefined;
       const folder = separatorFolderOf(change.separator);
-      if (await exists(folder)) return undefined;
       await ensureDir(folder);
       return () => remove(folder);
     }
     if (change.kind === 'renameSeparator') {
-      const from = separatorDir(instanceRoot, change.from);
+      const from = (await folderHolding(context, { kind: 'separator', name: change.from }))?.path;
       const to = separatorFolderOf(change.to);
-      if (from === undefined || from === to || !(await exists(from))) return undefined;
+      if (from === undefined || from === to) return undefined;
       await rename(from, to);
       return () => rename(to, from);
     }
@@ -165,36 +182,49 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
   };
 
   return {
-    async changeModOrder(profile, decide) {
-      const undos: Undo[] = [];
-      try {
-        return await putIfChanged(modlistFile(instanceRoot, profile), async (text) => {
-          const changes = decide(parseModlist(text), await listModFolders(context));
-          const after = changes.reduce(applyModOrderChange, text);
-          for (const change of changes) {
+    // The folders move, the file is written and any move is put back, all under the file's one
+    // lock, so no change queued behind this one sees a folder this one moved and then undid.
+    changeModOrder(profile, decide) {
+      const file = modlistFile(instanceRoot, profile);
+      return withLock(file, async () => {
+        const before = await get(file);
+        const folders = await listModFolders(context);
+        const changes = decide(parseModlist(before), folders && modFoldersOf(folders));
+        let after = before;
+        const resolved: ModOrderChange[] = [];
+        for (const change of changes) {
+          const landing = resolveModOrderChange(parseModlist(after), change);
+          resolved.push(landing);
+          after = spliceModOrderChange(after, landing);
+        }
+        const undos: Undo[] = [];
+        try {
+          for (const change of resolved) {
             const undo = await moveFolders(change);
             if (undo) undos.unshift(undo);
           }
-          return after;
-        });
-      } catch (err) {
-        throw await undoAll(undos, err);
-      }
+          if (after === before) return { wrote: false };
+          await write(file, after);
+          return { wrote: true };
+        } catch (err) {
+          throw await undoAll(undos, err);
+        }
+      });
     },
 
     changePluginOrder(profile, decide) {
       return putIfChanged(pluginsFile(instanceRoot, profile), (text) =>
-        decide(parsePlugins(text)).reduce(applyPluginOrderChange, text));
+        decide(parsePlugins(text)).reduce(splicePluginOrderChange, text));
     },
 
     async createModFolder(mod) {
-      await ensureDir(modFolderOf(context, mod));
+      await ensureDir(newModFolder(context, mod));
     },
 
     async trashEntryFolder(entry, trash) {
-      const folder = entryDir(instanceRoot, entry);
-      if (folder === undefined || !(await exists(folder))) return false;
-      await trash(folder);
+      const folder = await folderHolding(context, entry);
+      if (folder === undefined) return false;
+      await trash(folder.path);
       return true;
     },
 

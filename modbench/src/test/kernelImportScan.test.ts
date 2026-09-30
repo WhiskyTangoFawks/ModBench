@@ -105,12 +105,16 @@ function offenders(): Record<string, string[]> {
 // adapter is the one place a dependency of the wire lives.
 const PACKAGE_IMPORTERS = new Set(['client']);
 
+// The Instance adapter's watch is VS Code's file watcher; every other file of the adapter, and the
+// interface commands import, stays free of the extension host.
+const ADAPTER_WATCH = join(boxRoot('instanceAdapter'), 'mo2Watch.ts');
+
 // A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
 // including the file system — the Instance adapter is the one door onto the instance, and it is
 // one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES;
+  if (spec === 'vscode') return box === 'instanceLoader' || box in VIEW_BOXES || fromFile === ADAPTER_WATCH;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
@@ -229,10 +233,12 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instanceLoader')).toBe(false);
   });
 
-  // Rival: the Instance adapter taking a VS Code type, which puts the extension host behind the
-  // one door onto the instance. The Instance owns the watchers, so vscode is its alone.
-  it('allows vscode in the Instance and refuses it in the Instance adapter', () => {
+  // Rival: the Instance adapter taking a VS Code type beyond its watch, which puts the extension
+  // host behind the interface every command imports (ADR-0002).
+  it('allows vscode in the Instance and in the Instance adapter\'s watch alone', () => {
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceLoader'), 'planted.ts'), 'instanceLoader')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', ADAPTER_WATCH, 'instanceAdapter')).toBe(true);
+    expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'instanceAdapter.ts'), 'instanceAdapter')).toBe(false);
     expect(isAllowedDrivenSpecifier('vscode', join(boxRoot('instanceAdapter'), 'planted.ts'), 'instanceAdapter')).toBe(false);
   });
 

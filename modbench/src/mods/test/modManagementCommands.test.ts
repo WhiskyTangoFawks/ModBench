@@ -7,7 +7,7 @@ interface InputBoxOptionsDouble {
   prompt?: string;
   value?: string;
   placeHolder?: string;
-  validateInput?: (value: string) => string | undefined;
+  validateInput?: (value: string) => Thenable<string | undefined> | string | undefined;
 }
 
 const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuickPick, openExternal } = vi.hoisted(() => ({
@@ -53,6 +53,8 @@ import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/s
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { rm } from 'node:fs/promises';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -111,14 +113,19 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
   });
 
   it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
-    registerCreateEmptyModCommand(accessTo('/instance'), instance, recordingReporter());
-    await invoke('modbench.mod.createEmpty');
+    const root = await cloneCorpusFixture();
+    try {
+      registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter());
+      await invoke('modbench.mod.createEmpty');
 
-    const [options] = showInputBox.mock.calls[0] ?? [];
-    const validateInput = options?.validateInput;
-    if (!validateInput) throw new Error('expected validateInput on the input box options');
-    expect(validateInput('Existing Mod')).toMatch(/"Existing Mod" already exists/);
-    expect(validateInput('A New Name')).toBeUndefined();
+      const [options] = showInputBox.mock.calls[0] ?? [];
+      const validateInput = options?.validateInput;
+      if (!validateInput) throw new Error('expected validateInput on the input box options');
+      expect(await validateInput('Harder VATS')).toMatch(/"Harder VATS" already exists/);
+      expect(await validateInput('A New Name')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('creates the folder and its line, and reports nothing when both land', async () => {

@@ -40,7 +40,6 @@ import {
   registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
-import { adapterOver } from '../../test/mo2/adapterOver';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -247,7 +246,6 @@ describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const PATCH_FILES = originFiles(
-    adapterOver('/instance'),
     [{ path: '/instance/mods/ModA/MyPatch.esp', origin: 'ModA' }], 'ModA');
 
   function row(plugin: { name: string; origin: string }, contextValue = 'plugin enabled inMod tracked editable'): PluginNode {
@@ -509,7 +507,7 @@ describe('CompileProblems', () => {
     const diagnostics = new FakeDiagnosticCollection();
     const plugin = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
 
-    new CompileProblems(diagnostics).publish(plugin, originFiles(adapterOver('/instance'), [plugin], 'overwrite'), diagnosticAt('Source/Stray.psc'));
+    new CompileProblems(diagnostics).publish(plugin, originFiles([plugin], 'overwrite'), diagnosticAt('Source/Stray.psc'));
 
     expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
   });
@@ -523,11 +521,11 @@ describe('CompileProblems', () => {
       { name: 'B.esp', path: '/instance/mods/ModB/B.esp', origin: 'ModB', slot: 2, enabled: true, winning: true },
     ];
     const [a, also, b] = plugins;
-    problems.publish(present(a, 'A.esp'), originFiles(adapterOver('/instance'), plugins, 'ModA'), diagnosticAt('A.esp/Old.json'));
-    problems.publish(present(also, 'Also.esp'), originFiles(adapterOver('/instance'), plugins, 'ModA'), diagnosticAt('Also.esp/Kept.json'));
-    problems.publish(present(b, 'B.esp'), originFiles(adapterOver('/instance'), plugins, 'ModB'), diagnosticAt('B.esp/Other.json'));
+    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/Old.json'));
+    problems.publish(present(also, 'Also.esp'), originFiles(plugins, 'ModA'), diagnosticAt('Also.esp/Kept.json'));
+    problems.publish(present(b, 'B.esp'), originFiles(plugins, 'ModB'), diagnosticAt('B.esp/Other.json'));
 
-    problems.publish(present(a, 'A.esp'), originFiles(adapterOver('/instance'), plugins, 'ModA'), diagnosticAt('A.esp/New.json'));
+    problems.publish(present(a, 'A.esp'), originFiles(plugins, 'ModA'), diagnosticAt('A.esp/New.json'));
 
     expect(publishedPaths(diagnostics)).toEqual([
       '/instance/mods/ModA/Also.esp/Kept.json', '/instance/mods/ModB/B.esp/Other.json', '/instance/mods/ModA/A.esp/New.json',

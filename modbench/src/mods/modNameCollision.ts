@@ -1,13 +1,11 @@
-import type { Instance } from '../instanceLoader/instance';
 import { modNameCollisionRefusal } from '../install/install';
 import type { ModlistAccess } from '../modlist/modlist';
 
-export function collidingModName(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, name: string,
-): string | undefined {
+/** Why a new mod may not take `name`: a folder already holds a mod of that name, matched as the
+ *  instance matches names. Undefined for a free name, or a blank one. */
+export async function collidingModName(access: ModlistAccess, name: string): Promise<string | undefined> {
   const trimmed = name.trim();
   if (!trimmed) return undefined;
-  const key = (entryName: string): string => access.adapter.nameKey(entryName);
-  const collides = instance.value.mods.some((e) => e.kind === 'mod' && key(e.name) === key(trimmed));
-  return collides ? modNameCollisionRefusal(trimmed) : undefined;
+  const holding = await access.adapter.entryFolder({ kind: 'mod', name: trimmed });
+  return holding === undefined ? undefined : modNameCollisionRefusal(trimmed);
 }

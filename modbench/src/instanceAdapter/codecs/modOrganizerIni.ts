@@ -2,7 +2,7 @@
 // MO2 (Qt QSettings) wraps special-character values as `@ByteArray(<value>)`;
 // a profile name needs no wrapping, but MO2 writes one, so we match it.
 
-import { lineRanges } from '../../loadOrderFileCodec/lineScan';
+import { lineRanges } from './lineScan';
 
 /** MO2's settings file, at the instance root. */
 export const SETTINGS_FILE_NAME = 'ModOrganizer.ini';

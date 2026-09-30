@@ -1,11 +1,9 @@
 // MO2's watch: every file of the instance, the downloads folder and the game folder's plugins,
-// armed through the host's own file watcher while anyone listens.
+// armed through VS Code's file watcher while anyone listens.
 
+import * as vscode from 'vscode';
 import type { Subscription } from './instanceAdapter';
 import { MODLIST_GLOB, MODS_GLOB, OVERWRITE_GLOB, PLUGINS_GLOB, SETTINGS_WATCH_GLOB } from './layout';
-
-/** The host's file watcher: hears each change beneath `base` that matches `glob`. */
-export type WatchFiles = (base: string, glob: string, onChange: (path: string) => void) => Subscription;
 
 /** A folder the settings name, whose watch moves with them. */
 export type FollowedFolder = 'downloadedFiles' | 'gameFolderPlugins';
@@ -16,6 +14,16 @@ function isInsideGitDir(path: string): boolean {
   const segments = path.split(/[\\/]/);
   const gitIndex = segments.lastIndexOf('.git');
   return gitIndex !== -1 && gitIndex !== segments.length - 1;
+}
+
+// Each change beneath `base` that matches `glob`, created, changed or deleted alike.
+function watchFiles(base: string, glob: string, onChange: (path: string) => void): Subscription {
+  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(base), glob));
+  const heard = (uri: vscode.Uri): void => onChange(uri.fsPath);
+  watcher.onDidCreate(heard);
+  watcher.onDidChange(heard);
+  watcher.onDidDelete(heard);
+  return watcher;
 }
 
 interface Followed {
@@ -31,7 +39,7 @@ export interface Mo2Watch {
   follow(what: FollowedFolder, base: string | undefined, glob: string): void;
 }
 
-export function mo2Watch(instanceRoot: string, watchFiles: WatchFiles): Mo2Watch {
+export function mo2Watch(instanceRoot: string): Mo2Watch {
   const listeners = new Set<() => void>();
   const followed = new Map<FollowedFolder, Followed>();
   let fixed: Subscription[] = [];

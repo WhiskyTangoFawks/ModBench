@@ -59,6 +59,15 @@ export function modNameCollisionRefusal(name: string): string {
   return `A mod named "${name}" already exists — install its next release from the Downloads view instead.`;
 }
 
+/** Why a new mod may not take `name`: a folder already holds a mod of that name, matched as the
+ *  instance matches names. Undefined for a free name, or a blank one. */
+export async function installNameRefusal(access: InstallAccess, name: string): Promise<string | undefined> {
+  const trimmed = name.trim();
+  if (!trimmed) return undefined;
+  const holding = await access.adapter.entryFolder({ kind: 'mod', name: trimmed });
+  return holding === undefined ? undefined : modNameCollisionRefusal(trimmed);
+}
+
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */
 export type InstallTarget =

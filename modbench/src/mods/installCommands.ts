@@ -3,11 +3,9 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import {
-  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder,
+  ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
 } from '../install/install';
-import type { ModlistAccess } from '../modlist/modlist';
-import { collidingModName } from './modNameCollision';
 
 /** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
  *  name prompt and a refused install are one answer, since each leaves nothing installed. */
@@ -17,11 +15,12 @@ export interface InstallOutcome {
 const NOT_INSTALLED: InstallOutcome = { installed: false };
 
 export interface ModInstallDeps {
-  /** A new mod's name is checked against mod order as modlist commands match names. */
-  access: InstallAccess & ModlistAccess;
+  access: InstallAccess;
   instance: Pick<Instance, 'value'>;
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-  promptModName: (defaultName: string, validate?: (value: string) => string | undefined) => Thenable<string | undefined>;
+  promptModName: (
+    defaultName: string, validate?: (value: string) => Thenable<string | undefined> | string | undefined,
+  ) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
 
@@ -33,7 +32,7 @@ interface SourceKindItem extends vscode.QuickPickItem {
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { access, instance, runModAction, promptModName, warnIfFomod } = deps;
-  const validateName = (name: string) => collidingModName(access, instance, name);
+  const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
     if (!name) return NOT_INSTALLED;
