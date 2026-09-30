@@ -23,10 +23,9 @@ import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
   registerTrackCommand, registerCompileCommand, CompileProblems, type CompileDeps,
-  registerOpenHeaderCommand, registerHeldTrackedRepositories, refreshSourceControlFor,
+  registerOpenHeaderCommand, conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import type { TrackedFolderOf } from './plugins/trackedRepositories';
 import {
   registerFilterCommands, makeShowRecordFilter, type FilterScripts,
 } from './plugins/recordFilterCommands';
@@ -110,14 +109,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Fires on every completed reconcile and on a landed Track: tells every open record panel to
-  // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
-  // (ADR-0007 — the one reliable point to do so).
-  const notifyConflictsComputed = () => {
-    announceConflictsComputed(recordPanels, editsInFlight);
-    void registerHeldTrackedRepositories(
-      meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, (file) => toolbox.trackedFolderOf(file));
-  };
+  // Fires on every completed reconcile and on a landed Track (ADR-0007 — the one reliable point to
+  // register the tracked repositories).
+  const conflictsComputed = conflictsComputedOver(
+    () => announceConflictsComputed(recordPanels, editsInFlight),
+    meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; }, (file) => toolbox.trackedFolderOf(file));
+  const notifyConflictsComputed = () => { void conflictsComputed(); };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
   // safe because VS Code never calls getChildren until createTreeView returns.
@@ -138,9 +135,8 @@ export function activate(context: vscode.ExtensionContext) {
   // compile always asks the generation on screen.
   const pluginRowDeps: PluginRowCommandDeps = {
     session, client: meditClient, outputChannel, compileProblems: new CompileProblems(compileDiagnostics),
-    notifyConflictsComputed,
+    conflictsComputed,
     originFiles: (origin) => toolbox.originFiles(origin),
-    trackedFolderOf: (file) => toolbox.trackedFolderOf(file),
   };
   // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
@@ -217,24 +213,19 @@ interface PluginRowCommandDeps {
   client: HttpMEditClient;
   outputChannel: vscode.LogOutputChannel;
   compileProblems: CompileProblems;
-  notifyConflictsComputed: () => void;
+  conflictsComputed: () => Promise<void>;
   originFiles: OriginFilesOf;
-  trackedFolderOf: TrackedFolderOf;
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, notifyConflictsComputed, trackedFolderOf } = deps;
+  const { session, client, outputChannel, conflictsComputed } = deps;
   return [
     registerTrackCommand(
       { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
       client, makeReporter(outputChannel, 'pluginListTree.track'),
-      async () => {
-        await registerHeldTrackedRepositories(
-          client, outputChannel, (repos) => { session.pluginRepositories = repos; }, trackedFolderOf);
-        notifyConflictsComputed();
-      },
+      conflictsComputed,
       () => session.pluginsTreeView?.selection ?? [],
     ),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),

@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Captures every registerCommand(id, handler) so each row's handler can be invoked directly —
 // the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
-  handlers, registerCommand, showQuickPick, createQuickPick, withProgress, executeCommand,
+  handlers, registerCommand, showQuickPick, createQuickPick, withProgress, executeCommand, openRepository,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
+    openRepository: vi.fn((_uri: unknown) => Promise.resolve({ status: () => Promise.resolve() })),
     registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -30,6 +31,7 @@ import {
 
 vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand },
+  extensions: { getExtension: () => ({ isActive: true, exports: { getAPI: () => ({ openRepository }) } }) },
   window: { showQuickPick, createQuickPick, withProgress },
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range,
@@ -37,7 +39,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
+  conflictsComputedOver, registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../client';
@@ -135,6 +137,23 @@ describe('registerTrackCommand', () => {
     expect(reporter.landings).toEqual(['Tracked "MyMod.esp".']);
     expect(reporter.reports).toEqual([]);
     expect(onTracked).toHaveBeenCalledOnce();
+  });
+
+  // ADR-0007: a landed track tells the record panels, and registers each tracked mod's repository
+  // with vscode.git once. Rival: registering before the notice that registers again.
+  it('a landed track, through the conflicts-computed notice, registers the tracked repository once', async () => {
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('track', { landed: [{ name: 'MyMod.esp', origin: 'ModA' }], refused: [] });
+    const announce = vi.fn();
+    const channel = { warn: vi.fn(), error: vi.fn() };
+    const notice = conflictsComputedOver(announce, client, channel, () => {}, () => Promise.resolve('/mods/ModA'));
+    const { handler } = invokeTrack(client, vi.fn(notice));
+
+    await runTrackedWithPreset(handler, EDITS_ITEM, pluginNode());
+
+    expect(announce).toHaveBeenCalledOnce();
+    expect(openRepository).toHaveBeenCalledOnce();
+    expect(channel.error).not.toHaveBeenCalled();
   });
 
   // commands.md, "A selection is one gesture": one call with the whole selection, asked once, and

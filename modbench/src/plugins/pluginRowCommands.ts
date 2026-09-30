@@ -87,7 +87,7 @@ export function registerTrackCommand(
         onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? first.origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
-      // The row turns tracked when the `.git` the track made reaches the Instance loader's watch.
+      // The row turns tracked when the `.git` the track made reaches the Instance adapter's watch.
       if (result.landed.length > 0) await onTracked();
       const [only, ...more] = result.landed;
       if (result.refused.length > 0) report(result);
@@ -254,8 +254,8 @@ interface GitExtensionExports {
 /** ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native
  *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
  *  narrows the native UI, never blocks reading or editing. */
-export async function registerHeldTrackedRepositories(
-  client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
+async function registerHeldTrackedRepositories(
+  client: Pick<MEditClient, 'getPlugins'>, outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
   trackedFolderOf: TrackedFolderOf,
 ): Promise<void> {
@@ -276,6 +276,17 @@ export async function registerHeldTrackedRepositories(
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
   }
+}
+
+/** A computed reconcile's notice, which a landed track gives too: tells the open record panels,
+ *  then registers each tracked mod's repository with `vscode.git`, once per notice. */
+export function conflictsComputedOver(
+  announce: () => void, ...registration: Parameters<typeof registerHeldTrackedRepositories>
+): () => Promise<void> {
+  return async () => {
+    announce();
+    await registerHeldTrackedRepositories(...registration);
+  };
 }
 
 /** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
