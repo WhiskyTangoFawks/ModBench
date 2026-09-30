@@ -74,6 +74,14 @@ internal sealed class RecordingRefreshIndex(IndexWriteGate? writeGate = null) : 
         lock (_gate) _reconciles.Add((snapshot, version));
     }
 
+    private int _retries;
+
+    /// <summary>How many times the watcher asked for a failed reconcile to be tried again; whether
+    /// one had failed is the Index's own answer.</summary>
+    public int Retries => Volatile.Read(ref _retries);
+
+    public void RetryFailedReconcile() => Interlocked.Increment(ref _retries);
+
     public void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys)
     {
         Refuse();
