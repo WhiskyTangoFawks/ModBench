@@ -894,6 +894,42 @@ describe('PluginTreeProvider spatial origin threading', () => {
     expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
+  // A row that read its facts by filename alone would show one plugin's conditions on the
+  // other's cell or placed-reference row.
+  it('a cell row and a placed-reference row of a shared filename read their own plugin\'s tracked/read-only facts, not the other plugin\'s', async () => {
+    const repo = makeClient();
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false, hasChildren: true }]);
+    repo.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [{ formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }],
+      blocks: [],
+    });
+    repo.setQueryAnswer('getCellReferences', {
+      persistent: [{ formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
+      temporary: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const TRACKED_EDITABLE: PluginConditions = { tracked: true, editable: true };
+    const READ_ONLY: PluginConditions = { tracked: false, editable: false };
+    const wsA = new WorldspacesNode('Shared.esp', 'Worldspace', 1, 'ModA', false, TRACKED_EDITABLE);
+    const wsB = new WorldspacesNode('Shared.esp', 'Worldspace', 1, 'ModB', false, READ_ONLY);
+
+    const expandToPlaced = async (ws: WorldspacesNode): Promise<{ cell: CellNode; placed: PlacedNode }> => {
+      const [worldspace] = expectInstancesOf(await provider.getChildren(ws), WorldspaceNode);
+      const [cell] = expectInstancesOf(await provider.getChildren(present(worldspace, 'the sole WorldspaceNode')), CellNode);
+      const [group] = expectInstancesOf(await provider.getChildren(present(cell, 'the sole CellNode')), PlacedGroupNode);
+      const [placed] = expectInstancesOf(await provider.getChildren(present(group, 'the sole PlacedGroupNode')), PlacedNode);
+      return { cell: present(cell, 'the sole CellNode'), placed: present(placed, 'the sole PlacedNode') };
+    };
+
+    const fromA = await expandToPlaced(wsA);
+    const fromB = await expandToPlaced(wsB);
+
+    expect(fromA.cell.contextValue).toBe('cell tracked editable');
+    expect(fromA.placed.contextValue).toBe('placed tracked editable');
+    expect(fromB.cell.contextValue).toBe('cell untracked');
+    expect(fromB.placed.contextValue).toBe('placed untracked');
+  });
+
 });
 
 // ── browsing a specific plugin of a filename (ADR-0012) ────────────────────────
