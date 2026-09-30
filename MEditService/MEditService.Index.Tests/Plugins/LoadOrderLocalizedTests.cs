@@ -7,9 +7,8 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>A Data-directory-origin plugin, deliberately: the one case with no mod folder, where
-/// <see cref="MEditService.PluginAdapter.PluginStrings"/> must fall back to the game Data
-/// folder.</summary>
+/// <summary>A Data-directory-origin plugin, deliberately: an origin with no mod folder, whose
+/// <see cref="MEditService.PluginAdapter.PluginStrings"/> are the game Data folder's.</summary>
 public sealed class LoadOrderLocalizedTests
 {
     // LoadOrderSnapshot.OpenAll never lets a plugin's open failure escape, recording a PluginLoadFailure and

@@ -683,7 +683,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             }
             var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
                 ?? throw new InvalidOperationException(
-                    $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
+                    $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
             SourceIngest.Ingest(
                 index, modFolder,
                 plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
@@ -879,7 +879,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             {
                 var modFolder = LoadOrderSnapshot.ModFolderOf(metadata.Origin, metadata.Path)
                     ?? throw new InvalidOperationException(
-                        $"'{metadata.Name}' from '{metadata.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
+                        $"'{metadata.Name}' from '{metadata.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
                 SourceIngest.Ingest(
                     index, modFolder,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
