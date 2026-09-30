@@ -49,6 +49,27 @@ public sealed class PluginAddressComparisonTests : IDisposable
             reads.GetDocuments(OtherCase).Select(d => d.FormKey).Order());
     }
 
+    // Mutagen's ModKey compares ignoring case, so a FormKey whose filename differs only in case
+    // names the same record.
+    private string NpcUnderAnotherCase() =>
+        _index.RequireReads().GetDocuments(_fixture.Plugins.Single().KeyOf())
+            .Single(d => d.EditorId == "FromCased").FormKey.ToUpperInvariant();
+
+    [Fact]
+    public void APointReadUnderAnotherCase_AnswersTheRecord()
+    {
+        Assert.Equal("FromCased", _index.RequireReads().GetDocument(NpcUnderAnotherCase())?.EditorId);
+    }
+
+    [Fact]
+    public void AnOverrideStackUnderAnotherCase_HoldsThePluginsCopy()
+    {
+        var stack = _index.RequireReads().GetOverrideStack(NpcUnderAnotherCase());
+
+        Assert.NotNull(stack);
+        Assert.Single(stack.Entries);
+    }
+
     [Fact]
     public void ASearchFilteredUnderAnotherCase_FindsThePluginsRecords()
     {

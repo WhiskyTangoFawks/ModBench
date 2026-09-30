@@ -41,7 +41,7 @@ internal static class NavigatorSql
     internal static string FormIdOrder(string formKey) => $"""
         (SELECT row(fo.is_light, fo.load_order_idx)
          FROM {TableDdlBuilder.RegistrationsRelation} fo
-         WHERE fo.winning AND lower(fo.plugin) = lower(split_part({formKey}, ':', 2))) NULLS LAST,
+         WHERE fo.winning AND fo.plugin = split_part({formKey}, ':', 2)) NULLS LAST,
         lower(split_part({formKey}, ':', 2)), split_part({formKey}, ':', 1)
         """;
 }

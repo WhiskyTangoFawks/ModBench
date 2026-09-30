@@ -132,6 +132,27 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
     }
 
+    // Mutagen's ModKey compares ignoring case, so a master named in another case keeps its load
+    // position in the FormID.
+    [Fact]
+    public void AListing_OrdersARecordWhoseMasterIsNamedInAnotherCase_ByThatMastersPosition()
+    {
+        using var fixture = new PluginFixtureBuilder("medit-sort-cased-master")
+            .WithPlugin("Master.esm", mod => mod.Npcs.AddNew("Mastered"))
+            .WithPlugin("Later.esp", mod =>
+            {
+                mod.Npcs.AddNew("Own");
+                mod.Npcs.Set(new Npc(new FormKey(ModKey.FromFileName("MASTER.ESM"), 0x800), Fallout4Release.Fallout4) { EditorID = "Overridden" });
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+
+        var result = index.RequireReads().Search(new RecordQuery(
+            RecordTypes: ["npc_"], Plugin: new PluginName("Later.esp"), Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0, GroupOnly: true));
+
+        Assert.Equal(["Overridden", "Own"], result.Items.Select(r => r.EditorId));
+    }
+
     [Fact]
     public void ASearchTermsMatches_AreInEditorIdOrder()
     {

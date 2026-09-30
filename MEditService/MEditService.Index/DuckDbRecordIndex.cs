@@ -1224,15 +1224,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             }
             if (search != null)
             {
-                // A FormKey-shaped query resolves against the exact stored form_key rather than an
-                // EditorID substring match; form_key values are stored via FormKey.ToString(), so
-                // round-tripping the query through TryFactory canonicalizes it.
+                // A FormKey-shaped query resolves against form_key rather than an EditorID substring
+                // match; form_key values are stored via FormKey.ToString(), so round-tripping the
+                // query through TryFactory canonicalizes its hex id.
                 if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
                 {
-                    // Case-insensitive: FormKey.TryFactory canonicalizes the hex id but does not
-                    // re-case the ModKey (plugin) portion against known data, so a user-typed
-                    // lowercase plugin name would otherwise miss an exact case-sensitive match.
-                    conditions.Add($"LOWER(form_key) = LOWER(${values.Count + 1})");
+                    conditions.Add($"form_key = ${values.Count + 1}");
                     values.Add(formKey.ToString());
                 }
                 else
