@@ -5,7 +5,7 @@ vi.mock('vscode', () => ({}));
 import { recordOpenIdentity } from '../recordPanelHost';
 
 // plugins.md, Menus and keys: open to the side is on every record row, worldspaces, cells and
-// placed references included. A row states its record structurally, as `recordIdentity` reads it.
+// placed references included. A row states its record structurally, as `recordArgument` reads it.
 describe('recordOpenIdentity — structural, not node-typed', () => {
   it('reads a RecordNode-shaped row', () => {
     expect(recordOpenIdentity({ kind: 'record', label: 'Gun [000801:A.esp]', record: { formKey: '000801:A.esp' } }))

@@ -369,7 +369,7 @@ function createMockBackend(): http.Server {
       return;
     }
     // A plugin row's children come from here once the backend is running.
-    if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
+    if (/^\/plugins\/[^/?]+\/record-types(\?|$)/.test(url)) {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
@@ -2380,9 +2380,7 @@ describe('Progressive load', () => {
 // common.md, Reporting: a failed destination lookup says what failed and why, and the
 // command resolves rather than escaping as VS Code's raw rejection toast.
 describe('Copy says why its destination lookup failed', () => {
-  // A column header's data-vscode-context payload always carries `origin`, so origin resolution
-  // short-circuits with no HTTP call, and the destination lookup is the first thing to reach the
-  // backend, which holds no load order.
+  // The destination lookup is the first thing to reach the backend, which holds no load order.
   const headerArg = {
     webviewSection: 'recordHeader',
     formKey: 'TestMod.esp:000001',

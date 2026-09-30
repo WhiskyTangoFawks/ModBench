@@ -158,23 +158,23 @@ export interface MEditClient {
   // facet (set filter, clear filter, active filter).
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-  getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
+  getRecordTypes(plugin: string, origin: string): Promise<PluginRecordTypeCount[]>;
   // The game's, not a plugin's: every plugin of the load order shares it.
   getCreatableRecordTypes(): Promise<CreatableRecordType[]>;
   // `unfiltered` lists what the record filter hides too.
   getRecords(
-    plugin: string, type: string, offset: number, limit: number, origin?: string, options?: { unfiltered: boolean },
+    plugin: string, type: string, offset: number, limit: number, origin: string, options?: { unfiltered: boolean },
   ): Promise<RecordPage>;
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
-  getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
-  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
-  getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
-  getInteriorCells(plugin: string, origin?: string): Promise<InteriorCellBlock[]>;
-  getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
+  getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
+  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
+  getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences>;
+  getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]>;
+  getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]>;
   implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined>;
   /** Null when mEdit took the filter, or the reason it did not. */
   setFilter(filter: RecordFilter): Promise<string | null>;

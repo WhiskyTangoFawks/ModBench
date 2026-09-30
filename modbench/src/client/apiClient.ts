@@ -64,10 +64,10 @@ export interface LoadOrderStatus {
   /** How many plugins the snapshot resolved to — the denominator for progress. Plugins that
    *  fail to open still count toward it. */
   totalPlugins: number;
-  /** Filenames of the plugins whose indexing has completed, in the order they landed. A plugin
-   *  appears here only once it is wholly queryable — strictly later than "opened", which is what
+  /** The plugins whose indexing has completed, in the order they landed. A plugin appears here
+   *  only once it is wholly queryable — strictly later than "opened", which is what
    *  `GET /plugins` reports. */
-  indexedPlugins: string[];
+  indexedPlugins: Schemas['PluginAddress'][];
   /** Whether the winner sweep has run. False means *nothing has looked yet*, which is not the
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;
@@ -93,12 +93,11 @@ function refusalOf(wire: Schemas['LoadOrderStatus']): LoadOrderRefusal | undefin
 }
 
 /** The transform a `load-order-status` payload needs before it is this side's
- *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
- *  consumer keys on filename alone; `state` is kept as `refusal.kind` and `holdsNone`. */
+ *  {@link LoadOrderStatus}: `state` is kept as `refusal.kind` and `holdsNone`. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
-    indexedPlugins: wire.indexedPlugins.map((p) => p.name),
+    indexedPlugins: wire.indexedPlugins,
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
     refusal: refusalOf(wire),

@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
   Uri: { from: uriFrom },
 }));
 
-import { InMemoryMEditClient, type PluginAddress } from '../../client';
+import { InMemoryMEditClient } from '../../client';
 import { recordSummaryFixture } from '../../client/test/fixtures';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -31,14 +31,9 @@ import { PluginNode, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { RecordNode, RecordTypeNode } from '../PluginTreeProvider';
 
 const PLUGIN_ROW = new PluginNode({ name: 'MyPatch.esp', enabled: true }, 'ModA');
-// As the Plugins view reads them: a group row states no origin; the plugin row above it does.
-const NPC_GROUP = new RecordTypeNode('MyPatch.esp', 'npc_', 3, 'Non-Player Character', undefined, false, { tracked: true, editable: true });
-const OTHER_GROUP = new RecordTypeNode('Other.esp', 'weap', 1, 'Weapon', undefined, false, { tracked: true, editable: true });
-const PLUGIN_OF = new Map<PluginsTreeNode, PluginAddress>([
-  [PLUGIN_ROW, { name: 'MyPatch.esp', origin: 'ModA' }],
-  [NPC_GROUP, { name: 'MyPatch.esp', origin: 'ModA' }],
-  [OTHER_GROUP, { name: 'Other.esp', origin: 'ModB' }],
-]);
+const EDITABLE = { tracked: true, editable: true };
+const NPC_GROUP = new RecordTypeNode('MyPatch.esp', 'npc_', 3, 'Non-Player Character', 'ModA', false, EDITABLE);
+const OTHER_GROUP = new RecordTypeNode('Other.esp', 'weap', 1, 'Weapon', 'ModB', false, EDITABLE);
 const RECORD_ROW = new RecordNode(recordSummaryFixture({ formKey: '000800:MyPatch.esp', plugin: 'MyPatch.esp' }), 'ModA');
 const CREATABLE = [
   { type: 'acti', displayName: 'Activator' }, { type: 'npc_', displayName: 'Non-Player Character' },
@@ -57,7 +52,6 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   const reporter = recordingReporter();
   registerRecordCreateCommand({
     client, reporter,
-    pluginOf: (row) => PLUGIN_OF.get(row),
     createdRecords: {
       selectWhenListed: (group: RecordGroup) => {
         steps.push(`await ${group.plugin.name} ${group.plugin.origin} ${group.recordType}`);
@@ -138,16 +132,14 @@ describe('modbench.record.create', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  it('says so, and creates nothing, when the view does not hold the group\'s plugin row', async () => {
-    const { steps, reporter, create } = harness();
-    const orphan = new RecordTypeNode('Gone.esp', 'npc_', 1, 'Non-Player Character', undefined, false, { tracked: true, editable: true });
+  // ADR-0012 invariant 1: the overridden plugin of the name is indexed too.
+  it('creates in the group\'s own plugin of a shared filename', async () => {
+    const { steps, create } = harness();
+    const overriding = new RecordTypeNode('MyPatch.esp', 'npc_', 3, 'Non-Player Character', 'ModB', false, EDITABLE);
 
-    await create(orphan);
+    await create(overriding);
 
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Could not create a record in "Gone.esp": the Plugins view does not show its plugin.', detail: undefined },
-    ]);
-    expect(steps).toEqual([]);
+    expect(steps).toEqual(['await MyPatch.esp ModB npc_', 'create MyPatch.esp ModB npc_']);
   });
 
   it('lands the new record\'s FormKey', async () => {
