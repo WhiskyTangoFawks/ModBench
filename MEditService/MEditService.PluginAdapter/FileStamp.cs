@@ -64,14 +64,12 @@ internal static class WindowsFileStamp
     private const int FileBasicInfoClass = 0;
     private const long UnixEpochAsFileTime = 116_444_736_000_000_000;
 
-    [StructLayout(LayoutKind.Sequential)]
+    // FILE_BASIC_INFO from <winbase.h>.
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
     private struct FileBasicInfo
     {
-        public long CreationTime;
-        public long LastAccessTime;
-        public long LastWriteTime;
-        public long ChangeTime;
-        public uint FileAttributes;
+        [FieldOffset(16)] public long Modified;
+        [FieldOffset(24)] public long Changed;
     }
 
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW")]
@@ -93,7 +91,7 @@ internal static class WindowsFileStamp
             return null;
         }
         return new FileStamp(
-            RandomAccess.GetLength(file), Nanoseconds(info.LastWriteTime), Nanoseconds(info.ChangeTime));
+            RandomAccess.GetLength(file), Nanoseconds(info.Modified), Nanoseconds(info.Changed));
     }
 
     private static long Nanoseconds(long fileTime) => (fileTime - UnixEpochAsFileTime) * 100;
