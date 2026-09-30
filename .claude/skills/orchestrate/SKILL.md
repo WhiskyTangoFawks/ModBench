@@ -8,7 +8,9 @@ disable-model-invocation: true
 
 Your goal is the delivery of the epic. The executor's goal is its ticket. Deferral belongs to the user. Work inside your goal gets done in this run. A defect the run finds is inside your goal. Root CLAUDE.md's chain of authority decides what reaches the user.
 
-Read tickets and reports, avoid reading source. Every file you open is context you will not have later in the run- spend your context wisely.
+Resolve before you route. A stop, break or question an executor or reviewer raises is a claim until you have worked it through the chain yourself: the principles, the ADRs the work touches, the spec, and CONTEXT.md's words, as they stand on `main`. A caption item covers every need its box's purpose covers, in words other than the claim's. What the chain answers goes back to the lane as the answer, with the texts quoted. Two things reach the user: two documents at one level that disagree, and a need no document speaks to, each with your attempt quoted.
+
+Read tickets, reports and the chain's documents; leave source to the executors. Every source file you open is context you will not have later in the run- spend your context wisely.
 
 Land serially by surface. Tickets that touch one file share a lane. A branch merges alone, and only after it contains current `main`.
 
@@ -63,7 +65,7 @@ When an executor reports committed, work through these in order.
 11. Sort the report's **findings**. A defect the run finds is the run's to fix, whatever ticket or epic it sits under and however old it is. Each finding takes one of four routes:
    - A defect, or a finding that serves the epic, inside the reporting executor's surface: message that executor the finding along with landed-since, and it lands with the ticket.
    - A defect, or a finding that serves the epic, outside that surface: start a fresh executor with a brief you write.
-   - A finding whose root lives in a maintainer's document: a break or a strategic question for the drain, in the chain of authority's form.
+   - A finding whose root lives in a maintainer's document, once resolution leaves it open: a break or a strategic question for the drain, in the chain of authority's form.
    - Anything else is dropped.
 
    A dispatched finding gets no ticket and no comment.
@@ -80,7 +82,9 @@ The run ends when the epic is achieved. Post one comment on the epic. It lists w
 
 ## Unattended mechanics
 
-When an executor parks, comment its question on the ticket, unassign, and continue the lane. The user answers in a session, and the answer lands where its root lives. If an answer lands before the drain, the ticket re-queues at the back.
+When an executor parks, resolve its question. An answer the chain gives goes back to the executor, and the ticket goes on. A question that survives: comment it on the ticket, unassign, and continue the lane.
+
+Authority is `main`. An unmerged branch decides nothing. A maintainer's document that lands on `main` mid-run is the new ground: tell every open executor, and each branch builds to it. The user answers in a session, and the answer lands where its root lives. If an answer lands before the drain, the ticket re-queues at the back.
 
 The transcript carries one artifact, a status line, printed on each status change: `#542 building | #538 landing | #540 landed — 3 queued`. Send a `PushNotification` on a park, a land, and the drain.
 
