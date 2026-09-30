@@ -1,76 +1,54 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { markDownloadInstalled } from '../installedMark';
-import { parseDownloadMeta } from '../../mo2Codecs/downloads';
+import { markDownloadInstalled, type InstalledMarkResult } from '../installedMark';
+import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
+import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
 // expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
-function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {
+function assertRefusal(result: InstalledMarkResult, expectedSubstring: string): void {
   if (result.applied) throw new Error('expected a refusal, got applied:true');
   expect(result.refusal).toContain(expectedSubstring);
 }
 
-// tmpdirs made this test, removed in afterEach even when an assertion above the cleanup failed.
-let roots: string[] = [];
+let root: string;
+let adapter: InstanceAdapter;
 
-afterEach(async () => {
-  await Promise.all(roots.map((downloadsDir) => rm(downloadsDir, { recursive: true, force: true })));
-  roots = [];
+beforeEach(async () => {
+  root = await cloneCorpusFixture();
+  adapter = adapterOver(root);
 });
+afterEach(() => rm(root, { recursive: true, force: true }));
 
-async function makeDownloadsDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'installed-mark-'));
-  roots.push(dir);
-  return dir;
-}
+const archivePath = (name: string): string => join(root, 'downloads', name);
 
-const sidecarPath = (downloadsDir: string, name: string): string => join(downloadsDir, `${name}.meta`);
-
-async function writeArchive(downloadsDir: string, name: string): Promise<string> {
-  const path = join(downloadsDir, name);
-  await writeFile(path, 'archive bytes');
-  return path;
-}
-
-async function writeSidecar(downloadsDir: string, name: string, text: string): Promise<string> {
-  const path = sidecarPath(downloadsDir, name);
-  await writeFile(path, text);
-  return path;
-}
-
-const sidecarOf = async (downloadsDir: string, name: string) =>
-  parseDownloadMeta(await readFile(sidecarPath(downloadsDir, name), 'utf8'));
+const statusOf = async (name: string) => (await readDownloadedFileMeta(root, name))?.status;
 
 describe('markDownloadInstalled', () => {
-  it('sets the sidecar flag MO2’s Downloads tab reads as installed', async () => {
-    const downloadsDir = await makeDownloadsDir();
-    await writeArchive(downloadsDir, 'foo.7z');
-    await writeSidecar(downloadsDir, 'foo.7z', '[General]\r\nmodID=123\r\n');
+  it('marks a downloaded file installed, one with no metadata included', async () => {
+    await writeFile(archivePath('manual.7z'), 'archive bytes');
 
-    expect(await markDownloadInstalled(downloadsDir, 'foo.7z')).toEqual({ applied: true });
+    expect(await markDownloadInstalled(adapter, 'manual.7z')).toEqual({ applied: true });
 
-    expect(await sidecarOf(downloadsDir, 'foo.7z')).toMatchObject({ status: 'Installed', modID: '123' });
-    const text = await readFile(sidecarPath(downloadsDir, 'foo.7z'), 'utf8');
-    expect(text).toContain('installed=true');
-    // MO2's markInstalled writes both keys, and its tab reads `uninstalled` first.
-    expect(text).toContain('uninstalled=false');
+    expect(await statusOf('manual.7z')).toBe('Installed');
   });
 
-  it('writes a sidecar for an archive that had none, so the status survives the install', async () => {
-    const downloadsDir = await makeDownloadsDir();
-    await writeArchive(downloadsDir, 'manual.7z');
+  // Rival: read `gone` as marked, so a file that left the disk reads as done.
+  it('refuses, naming it, a downloaded file gone from disk, and writes it no metadata', async () => {
+    assertRefusal(await markDownloadInstalled(adapter, 'gone.7z'), '"gone.7z" is gone from disk');
 
-    expect(await markDownloadInstalled(downloadsDir, 'manual.7z')).toEqual({ applied: true });
-
-    expect(await sidecarOf(downloadsDir, 'manual.7z')).toMatchObject({ status: 'Installed' });
+    await expect(readFile(`${archivePath('gone.7z')}.meta`, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('refuses, never throws, when the sidecar cannot be written', async () => {
-    const downloadsDir = await makeDownloadsDir();
-    await writeArchive(downloadsDir, 'foo.7z');
-    await mkdir(sidecarPath(downloadsDir, 'foo.7z'));
+  it('refuses, never throws, when the metadata cannot be written', async () => {
+    await writeFile(archivePath('foo.7z'), 'archive bytes');
+    await mkdir(`${archivePath('foo.7z')}.meta`);
 
-    assertRefusal(await markDownloadInstalled(downloadsDir, 'foo.7z'), 'EISDIR');
+    assertRefusal(await markDownloadInstalled(adapter, 'foo.7z'), 'EISDIR');
   });
 });

@@ -1,5 +1,5 @@
-import { downloadFile, downloadSidecarFile } from './layout';
-import { exists, putIfChanged } from './files';
+import { downloadSidecarFile } from './layout';
+import { exists, putIfChanged, removeStaleTempsFor, withLock } from './files';
 import type { MoveToTrash } from '../ports/trash';
 
 /** The one splice of a downloaded file's `.meta`, written whole only when `edit` changed it. A
@@ -10,15 +10,14 @@ export function spliceDownloadMeta(
   return putIfChanged(downloadSidecarFile(downloadsDir, name), edit, { ifMissing: '' });
 }
 
-/** A downloaded file's own path, and its `.meta`'s beside it: what a row opens. */
-export function downloadPaths(downloadsDir: string, name: string): { path: string; sidecarPath: string } {
-  return { path: downloadFile(downloadsDir, name), sidecarPath: downloadSidecarFile(downloadsDir, name) };
-}
-
-/** Moves a downloaded file's `.meta` to the trash; false when it has none. */
-export async function trashDownloadMeta(downloadsDir: string, name: string, trash: MoveToTrash): Promise<boolean> {
+/** Moves a downloaded file's `.meta` to the trash, and removes a write of it a crash left behind;
+ *  false when it has none. Under the `.meta`'s own lock, so no write in flight loses its temp. */
+export function trashDownloadMeta(downloadsDir: string, name: string, trash: MoveToTrash): Promise<boolean> {
   const sidecar = downloadSidecarFile(downloadsDir, name);
-  if (!(await exists(sidecar))) return false;
-  await trash(sidecar);
-  return true;
+  return withLock(sidecar, async () => {
+    await removeStaleTempsFor(sidecar);
+    if (!(await exists(sidecar))) return false;
+    await trash(sidecar);
+    return true;
+  });
 }

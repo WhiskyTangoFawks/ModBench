@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { basename, dirname, join, sep } from 'node:path';
+import { dirname, join, posix, sep, win32 } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -92,11 +92,14 @@ export const pluginsFile = (instanceRoot: string, profile: string): string =>
 
 export const downloadFile = (downloadsDir: string, name: string): string => join(downloadsDir, name);
 
-/** The name of the downloaded file at `path`; undefined when `path` is not one in `downloadsDir`. */
-export const downloadNameAt = (downloadsDir: string, path: string): string | undefined => {
-  const name = basename(path);
-  return downloadFile(downloadsDir, name) === path ? name : undefined;
-};
+/** The name of the downloaded file at `path`; undefined when `path` is not one in `downloadsDir`.
+ *  Windows matches paths without case. */
+export function downloadNameAt(downloadsDir: string, path: string, platform: NodeJS.Platform): string | undefined {
+  const paths = platform === 'win32' ? win32 : posix;
+  const key = (p: string): string => (platform === 'win32' ? paths.normalize(p).toLowerCase() : paths.normalize(p));
+  const name = paths.basename(path);
+  return key(paths.join(downloadsDir, name)) === key(path) ? name : undefined;
+}
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
@@ -110,8 +113,23 @@ export const fileInFolder = (folder: string, relativePath: string): string => jo
 /** Whether `file` sits anywhere beneath `folder`. */
 export const isInFolder = (folder: string, file: string): boolean => file.startsWith(folder + sep);
 
+const GIT_DIR = '.git';
+const PLUGIN_SOURCE_FOLDER = 'source';
+
 /** The git directory whose presence is what "tracked" means (ADR-0007). */
-export const modGitDir = (modFolder: string): string => join(modFolder, '.git');
+export const modGitDir = (modFolder: string): string => join(modFolder, GIT_DIR);
+
+// Names in a mod folder match without case, as Windows matches them, on every platform alike.
+const nameKey = (name: string): string => name.toLowerCase();
+
+/** Whether an entry at a mod folder's root is its plugin source. */
+export const isPluginSourceFolder = (name: string): boolean => nameKey(name) === PLUGIN_SOURCE_FOLDER;
+
+const REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES = new Set([GIT_DIR, '.gitignore', PLUGIN_SOURCE_FOLDER]);
+
+/** Whether an entry at a mod folder's root is its repository or its plugin source (ADR-0007),
+ *  which an upgrade keeps and no release supplies. */
+export const isRepositoryOrPluginSource = (name: string): boolean => REPOSITORY_OR_PLUGIN_SOURCE_ENTRIES.has(nameKey(name));
 
 // Watch patterns, POSIX-separated and relative to the instance root: a `RelativePattern` takes a
 // glob, never a platform path, so these are built as text rather than with `join`.
