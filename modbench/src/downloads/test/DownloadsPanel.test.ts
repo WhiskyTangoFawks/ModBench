@@ -67,16 +67,9 @@ const node = (root: string, name: string, row: Partial<DownloadRow> = {}): Downl
 // shows — the shape every install test not about the pick itself relies on.
 const fakeInstance = (
   mods: InstanceValue['mods'] = [], downloads: readonly DownloadFile[] = [], gameRelease = 'Fallout4',
-  downloadsDir = '',
 ): Pick<Instance, 'value'> => ({
-  value: instanceValueFixture({
-    mods, downloads: { kind: 'listed', rows: downloads }, gameRelease,
-    paths: { overwriteDir: '', downloadsDir, modDirs: new Map() },
-  }),
+  value: instanceValueFixture({ mods, downloads: { kind: 'listed', rows: downloads }, gameRelease }),
 });
-
-// registerDownloadsMultiRowCommands reads only paths.downloadsDir off the instance it is handed.
-const downloadsDirInstance = (root: string): Pick<Instance, 'value'> => fakeInstance([], [], 'Fallout4', join(root, 'downloads'));
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
   kind: 'mod',
@@ -118,6 +111,7 @@ afterEach(async () => {
 async function makeInstanceRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'downloads-panel-'));
   await mkdir(join(root, 'downloads'), { recursive: true });
+  await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout 4\r\n');
   instanceRoots.push(root);
   return root;
 }
@@ -196,12 +190,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
   });
@@ -211,12 +205,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
     invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '123', fileID: '456', version: '2.0' });
     });
   });
@@ -234,12 +228,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
     invoke('modbench.downloads.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(installFromArchive).toHaveBeenCalledTimes(1);
@@ -254,12 +248,12 @@ describe('registerDownloadsSingleRowCommands', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
     });
     expect(await readFile(meta, 'utf8')).toBe(before);
@@ -273,7 +267,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     });
     const report = recordingReporter();
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), report, installDeps(), () => []);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), report, installDeps(), () => []);
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
@@ -282,7 +276,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(report.reports).toEqual([]);
     expect(report.dialogFailures).toEqual([]);
     expect(installFromArchive).toHaveBeenCalledWith(
-      root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+      expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
       { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined });
   });
 
@@ -499,7 +493,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   it('choosing a candidate calls install with the upgrade shape naming that mod', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })], [], 'Fallout4', join(root, 'downloads'));
+    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
@@ -512,7 +506,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'upgrade', name: 'Harder VATS' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'upgrade', name: 'Harder VATS' }, archive,
         { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
       );
     });
@@ -522,7 +516,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   it('choosing "Install as a new mod…" calls install with the new-mod shape', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })], [], 'Fallout4', join(root, 'downloads'));
+    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
@@ -534,7 +528,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '111', fileID: '999', version: undefined },
       );
     });
@@ -543,7 +537,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   it('Esc installs nothing', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })], [], 'Fallout4', join(root, 'downloads'));
+    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
@@ -561,7 +555,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   it('a download with no mod id never shows the pick, even with installed mods present', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })], [], 'Fallout4', join(root, 'downloads'));
+    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
@@ -569,7 +563,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: undefined, fileID: undefined, version: undefined },
       );
     });
@@ -579,7 +573,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   it('a download with a mod id no installed mod carries, and no installationFile match, never shows the pick', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })], [], 'Fallout4', join(root, 'downloads'));
+    const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
@@ -587,7 +581,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
-        root, { kind: 'new', name: 'foo' }, archive, join(root, 'downloads'),
+        expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout4', modID: '222', fileID: undefined, version: undefined },
       );
     });
@@ -637,7 +631,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const metaA = await writeMeta(root, 'a.7z');
     const metaB = await writeMeta(root, 'b.7z');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.exclude', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(async () => {
@@ -653,7 +647,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const already = await writeMeta(root, 'already-excluded.7z', '[General]\r\nremoved=true\r\n');
     const visible = await writeMeta(root, 'visible.7z');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.exclude', node(root, 'visible.7z'), [node(root, 'already-excluded.7z'), node(root, 'visible.7z')]);
 
     await vi.waitFor(async () => {
@@ -670,7 +664,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const excluded = await writeMeta(root, 'excluded.7z', '[General]\r\nremoved=true\r\n');
     const already = await writeMeta(root, 'already-visible.7z');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.include', node(root, 'excluded.7z'), [node(root, 'excluded.7z'), node(root, 'already-visible.7z')]);
 
     expect(await readFile(excluded, 'utf8')).toContain('removed=false');
@@ -684,7 +678,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const report = recordingReporter();
 
     // No archive on disk: the row is stale, so every name in the (one-item) selection refuses.
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), report, scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), report, scriptedDialog(), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
@@ -696,7 +690,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
@@ -709,7 +703,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.include', node(root, 'foo.7z'));
 
     await vi.waitFor(async () => {
@@ -722,7 +716,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     await writeArchive(root, 'foo.7z');
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(1));
@@ -736,7 +730,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     await writeArchive(root, 'foo.7z');
     const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     expect(ask.asked).toHaveLength(1);
@@ -748,7 +742,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(2));
@@ -767,7 +761,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     // No archive for 'gone.7z': a stale row in the selection.
     const reporter = recordingReporter();
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, scriptedDialog(), trash, downloadsLog, () => []);
     const outcome = await invoke(
       'modbench.downloadedFile.exclude',
       node(root, 'b.7z'),
@@ -793,7 +787,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     await writeMeta(root, 'b.7z', '[General]\r\nremoved=true\r\n');
     const reporter = recordingReporter();
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, scriptedDialog(), trash, downloadsLog, () => []);
     const outcome = await invoke(
       'modbench.downloadedFile.include',
       node(root, 'b.7z'),
@@ -815,7 +809,7 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     const root = await makeInstanceRoot();
     const reporter = recordingReporter();
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, scriptedDialog(), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, scriptedDialog(), trash, downloadsLog, () => []);
     const outcome = await invoke('modbench.downloadedFile.exclude', undefined, []);
 
     expect(outcome).toEqual({ landed: [], refused: [] });
@@ -836,7 +830,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     await writeMeta(root, 'a.7z');
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(() => expect(trashedPaths()).toEqual(expect.arrayContaining([a, b])));
@@ -850,7 +844,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog(undefined);
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, ask, trash, downloadsLog, () => []);
     const outcome = await invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     expect(outcome).toEqual({ landed: [], refused: [] });
@@ -872,7 +866,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, ask, trash, downloadsLog, () => []);
     const outcome = await invoke(
       'modbench.downloadedFile.delete',
       node(root, 'b.7z'),
@@ -881,7 +875,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
 
     const refused = { item: { name: 'locked.7z' }, reason: 'EPERM: operation not permitted' };
     expect(outcome).toEqual({ landed: [{ name: 'a.7z' }, { name: 'b.7z' }], refused: [refused] });
-    expect(vi.mocked(deleteDownloads).mock.calls.map((call) => call[1])).toEqual([['a.7z', 'b.7z', 'locked.7z']]);
+    expect(vi.mocked(deleteDownloads).mock.calls.map((call) => call[1].map((file) => file.name))).toEqual([['a.7z', 'b.7z', 'locked.7z']]);
     assertAskedOnce(ask, { messageContains: '3 items', buttons: ['Delete'] });
     expect([await onDisk(a), await onDisk(b), await onDisk(locked)]).toEqual([false, false, true]);
     expect(reporter.selectionOutcomeCalls).toEqual([
@@ -899,7 +893,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     await writeArchive(root, 'foo.7z');
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'), [node(root, 'foo.7z')]);
 
     await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(1));
@@ -913,7 +907,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     await writeArchive(root, 'foo.7z');
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
@@ -929,7 +923,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     await writeArchive(root, 'b.7z');
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, () => []);
     invoke('modbench.downloadedFile.delete', node(root, 'a.7z'), [node(root, 'a.7z'), node(root, 'b.7z')]);
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
@@ -951,7 +945,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     });
     const reporter = recordingReporter();
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, scriptedDialog('Delete'), trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, scriptedDialog('Delete'), trash, downloadsLog, () => []);
     const outcome = await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
 
     expect(outcome).toEqual({ landed: [{ name: 'foo.7z', metaLeftBehind: 'EPERM: operation not permitted' }], refused: [] });
@@ -972,7 +966,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const ask = scriptedDialog('Delete');
     const viewSelection = () => [node(root, 'a.7z'), node(root, 'b.7z')];
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), ask, trash, downloadsLog, viewSelection);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), ask, trash, downloadsLog, viewSelection);
     invoke('modbench.downloadedFile.delete');
 
     await vi.waitFor(() => expect(trashedPaths()).toEqual(expect.arrayContaining([a, b])));
@@ -984,7 +978,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), reporter, ask, trash, downloadsLog, () => []);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), reporter, ask, trash, downloadsLog, () => []);
     const outcome = await invoke('modbench.downloadedFile.delete');
 
     expect(outcome).toEqual({ landed: [], refused: [] });
@@ -1106,7 +1100,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
 
-    registerDownloadsSingleRowCommands(accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => [node(root, 'foo.7z')]);
+    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'foo.7z')]);
     await invoke('modbench.downloadedFile.open');
 
     expect(calledFsPath(openExternal)).toBe(archive);
@@ -1118,7 +1112,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     const meta = await writeMeta(root, 'foo.7z');
 
     registerDownloadsSingleRowCommands(
-      accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => [node(root, 'foo.7z', { hasMeta: true })]);
+      accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'foo.7z', { hasMeta: true })]);
     await invoke('modbench.downloadedFile.openMeta');
 
     expect(calledFsPath(showTextDocument)).toBe(meta);
@@ -1128,7 +1122,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     const root = await makeInstanceRoot();
 
     registerDownloadsSingleRowCommands(
-      accessTo(root), downloadsDirInstance(root), recordingReporter(), installDeps(), () => [node(root, 'a.7z'), node(root, 'b.7z')]);
+      accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'a.7z'), node(root, 'b.7z')]);
     await invoke('modbench.downloadedFile.open');
 
     expect(openExternal).not.toHaveBeenCalled();
@@ -1142,7 +1136,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     const metaB = await writeMeta(root, 'b.7z');
     const selection = [node(root, 'a.7z'), node(root, 'b.7z')];
 
-    registerDownloadsMultiRowCommands(accessTo('/instance'), downloadsDirInstance(root), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => selection);
+    registerDownloadsMultiRowCommands(accessTo(root), fakeInstance(), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => selection);
     await invoke('modbench.downloadedFile.exclude');
     expect([await readFile(metaA, 'utf8'), await readFile(metaB, 'utf8')]).toEqual([
       expect.stringContaining('removed=true'), expect.stringContaining('removed=true'),

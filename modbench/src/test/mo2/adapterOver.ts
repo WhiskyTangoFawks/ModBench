@@ -1,4 +1,6 @@
-import type { DownloadedFiles, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry } from '../../instanceAdapter/instanceAdapter';
+import type {
+  DownloadedFiles, DownloadMeta, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry,
+} from '../../instanceAdapter/instanceAdapter';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
@@ -51,6 +53,13 @@ export const readPluginLines = (root: string, profile = 'Default'): Promise<Plug
   adapterOver(root).pluginOrder(profile);
 
 export const readActiveProfile = async (root: string): Promise<string> => (await adapterOver(root).settings()).profile;
+
+/** A downloaded file's metadata; undefined when it has none. */
+export async function readDownloadedFileMeta(root: string, name: string): Promise<DownloadMeta | undefined> {
+  const listed = await (await adapterOver(root).settings()).downloadedFiles();
+  if (listed.kind !== 'listed') throw new Error(`expected listed, got ${listed.reason}`);
+  return listed.files?.find((file) => file.name === name)?.meta;
+}
 
 /** The winners the Instance's value carries for a tree on disk, through the value's own builders.
  *  A Data-folder plugin is never provision, so the game folder cannot change the answer. */

@@ -144,6 +144,24 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** An entry directly in a staged folder. */
+export interface StagedEntry {
+  readonly name: string;
+  readonly kind: 'folder' | 'file' | 'other';
+}
+
+/** A folder the adapter made for a mod staged before it lands. Only the adapter makes one, so
+ *  removing it can never reach a folder a caller named. */
+export interface StagingFolder {
+  readonly path: string;
+  /** Removes the folder and whatever is left in it. */
+  remove(): Promise<void>;
+}
+
+/** An upgrade refused before anything changed names the entry of the mod's repository or plugin
+ *  source that its release holds. */
+export type Upgraded = { readonly refused: false } | { readonly refused: true; readonly repositoryOrPluginSourceEntry: string };
+
 /** One read of the instance's configuration. Both answers come from that same read. */
 export interface InstanceSettings {
   readonly profile: string;
@@ -203,6 +221,9 @@ export interface Written {
 
 export type Marked = { readonly gone: true } | ({ readonly gone: false } & Written);
 
+/** The refusal of a mark on a downloaded file that is gone. */
+export const goneFromDisk = (name: string): string => `"${name}" is gone from disk.`;
+
 /** What a subscriber disposes of to hear no more. */
 export interface Subscription {
   dispose(): void;
@@ -240,6 +261,9 @@ export interface InstanceAdapter {
   modMeta(mod: string): Promise<ModMeta>;
   pluginOrder(profile: string): Promise<PluginEntry[]>;
   gameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins>;
+  /** The name of the downloaded file at `path`, the paths matched as the platform matches them;
+   *  undefined when `path` is not in the downloads folder, or that folder cannot be resolved. */
+  downloadedFileAt(path: string): Promise<string | undefined>;
 
   // Get in mods/.
   /** Undefined when there is no folder for mods at all. A link that cannot be followed is no
@@ -261,7 +285,8 @@ export interface InstanceAdapter {
   /** A downloaded file that is gone gets no mark. Rejects when the downloads folder cannot be
    *  resolved. */
   markDownloadedFile(name: string, mark: DownloadedFileMark): Promise<Marked>;
-  /** False when the downloaded file has no metadata. */
+  /** False when the downloaded file has no metadata. A write of the metadata a crash left half
+   *  done goes with it. */
   trashDownloadedFileMeta(name: string, trash: MoveToTrash): Promise<boolean>;
   selectProfile(profile: string): Promise<Written>;
 
@@ -270,16 +295,20 @@ export interface InstanceAdapter {
   createModFolder(mod: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
-  /** A fresh folder on the instance's own volume that no watch reaches, for a mod staged before it
-   *  lands; the caller removes it. */
-  stagingFolder(): Promise<string>;
   /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
    *  one rename. */
   landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the folder's contents with the staged tree's around each entry `keep` names, and
-   *  sets `keys` over the meta the mod had, keeping each value `keys` leaves undefined. A release
-   *  holding a kept entry rejects first. */
-  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys, keep: (entry: string) => boolean): Promise<void>;
+  /** Replaces the folder's contents with the staged tree's around its repository and plugin source,
+   *  and sets `keys` over the old meta, keeping each value `keys` leaves undefined. A release
+   *  holding an entry of either is refused first. */
+  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<Upgraded>;
+
+  // Staging: the adapter's own ground beside mods/, on the same volume and outside every watch,
+  // where a mod is put before its one rename into mods/. The caller removes what it stages.
+  stagingFolder(): Promise<StagingFolder>;
+  /** A staging folder holding a copy of `folder`'s tree; `folder` is left as it was. */
+  stagingFolderOf(folder: string): Promise<StagingFolder>;
+  stagedEntries(folder: string): Promise<StagedEntry[]>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

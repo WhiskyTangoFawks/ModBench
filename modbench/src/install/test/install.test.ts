@@ -1,17 +1,23 @@
 // An install is one rename, so the tests observe the effect on disk rather than the steps: what
 // mods/ shows while the install runs, and which other files moved.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, isArchiveName,
+  type InstallAccess,
 } from '../install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
+import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import type { Runner } from '../extractArchive';
-import { writeMetaIni } from '../../mo2Codecs/metaIni';
+import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { present } from '../../ports/present';
 
 // ModOrganizer.ini's own `gameName` in the corpus fixture, which the caller reads off the value.
@@ -62,11 +68,11 @@ async function makeExistingMod(root: string, name: string, tracked: boolean): Pr
     await writeFile(join(modDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   }
   await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
-  // A trailing foreign line: not one of the owned keys `writeMetaIni` renders, so it proves an
-  // upgrade's meta.ini write preserves what it does not own.
-  const meta = writeMetaIni({ gameName: 'Fallout4', modid: '0', version: '1.0.0', installationFile: 'Old-1-0.7z' })
-    + 'category="-1,"\n';
-  await writeFile(join(modDir, 'meta.ini'), meta);
+  // `category` is a key install does not own, so it proves an upgrade keeps what it does not own.
+  await writeFile(
+    join(modDir, 'meta.ini'),
+    '[General]\ngameName=Fallout4\nmodid=0\nversion=1.0.0\ninstallationFile=Old-1-0.7z\ncategory="-1,"\n',
+  );
   return modDir;
 }
 
@@ -87,12 +93,28 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void
   }
 }
 
+// The Instance adapter over the instance, with the members a test replaces.
+const withAdapter = (access: InstallAccess, over: Partial<InstanceAdapter>): InstallAccess =>
+  ({ ...access, adapter: { ...access.adapter, ...over } });
+
+const errnoError = (code: string, message: string): NodeJS.ErrnoException =>
+  Object.assign(new Error(`${code}: ${message}`), { code });
+
 describe('install commands', () => {
   let root: string;
+  let access: InstallAccess;
   let sourceFolder: string;
+
+  // A downloaded file: its archive on disk in the downloads folder.
+  async function downloadedFile(name: string): Promise<{ name: string; path: string }> {
+    const path = join(root, 'downloads', name);
+    await writeFile(path, 'archive bytes');
+    return { name, path };
+  }
 
   beforeEach(async () => {
     root = await cloneCorpusFixture();
+    access = accessTo(root);
     sourceFolder = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
     await writePayload(sourceFolder);
   });
@@ -114,7 +136,7 @@ describe('install commands', () => {
       }
     })();
 
-    const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    const outcome = await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
     observing = false;
     await observer;
 
@@ -131,7 +153,7 @@ describe('install commands', () => {
   it('writes the mod folder and nothing else — no modlist line, no download bookkeeping', async () => {
     const before = await snapshotTree(root);
 
-    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
 
     const after = await snapshotTree(root);
     assertOnlyChanged(before, after, new Set(COMPLETE.map((p) => `mods/${MOD}/${p}`)));
@@ -144,7 +166,7 @@ describe('install commands', () => {
       await writePayload(join(dest, 'Wrapper'));
     };
 
-    await installFromArchive(root, { kind: 'new', name: MOD }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
@@ -153,54 +175,54 @@ describe('install commands', () => {
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
-  it('marks the download it landed from installed, in the sidecar beside it', async () => {
-    const archive = join(root, 'downloads', 'Freshly-1-0.7z');
+  const downloadMetaOf = (name: string) => readDownloadedFileMeta(root, name);
 
-    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+  it('marks the downloaded file it landed from installed', async () => {
+    const file = await downloadedFile('Freshly-1-0.7z');
 
-    expect(outcome).toEqual({ applied: true, wrote: true, isFomod: false });
-    expect(await readFile(`${archive}.meta`, 'utf8')).toContain('installed=true');
-  });
-
-  // Rival: the default downloads/ folder. This archive sits right where that fallback would look,
-  // so a `.meta` here would prove the mark used the fallback instead of skipping it.
-  it('writes no sidecar when the downloads folder is unresolved, unlike the default downloads/ folder', async () => {
-    const archive = join(root, 'downloads', 'Freshly-1-0.7z');
-
-    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, archive, undefined, { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
 
     expect(outcome).toEqual({ applied: true, wrote: true, isFomod: false });
-    await expect(readFile(`${archive}.meta`, 'utf8')).rejects.toThrow();
+    expect(await downloadMetaOf(file.name)).toMatchObject({ status: 'Installed' });
   });
 
-  // Rival: mark by filename alone. A `.meta` would then appear in downloads/ for an archive the
-  // user picked from their own Downloads folder, inventing a row for a file that is not there.
-  it('writes no sidecar for an archive that is not a download', async () => {
-    const archive = join(sourceFolder, 'Elsewhere-1-0.7z');
+  // Rival: mark by filename alone. The downloads folder holds an archive of the same name, so a
+  // mark would appear on a downloaded file the user never installed from.
+  it('marks no downloaded file for an archive that is not one, even one sharing its name', async () => {
+    const file = await downloadedFile('Freshly-1-0.7z');
+    const archive = join(sourceFolder, file.name);
 
-    await installFromArchive(root, { kind: 'new', name: MOD }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run: runnerFor() });
 
-    expect(await treeOf(join(root, 'downloads'))).not.toContain('Elsewhere-1-0.7z.meta');
-    await expect(readFile(`${archive}.meta`, 'utf8')).rejects.toThrow();
+    expect(await downloadMetaOf(file.name)).toBeUndefined();
   });
 
   // The mod IS installed; only the bookkeeping failed, so the refusal rides beside `applied`.
   it('reports a failed mark beside the landed mod rather than as a refusal', async () => {
-    const archive = join(root, 'downloads', 'Freshly-1-0.7z');
-    await rm(join(root, 'downloads'), { recursive: true, force: true });
-    await writeFile(join(root, 'downloads'), 'not a directory');
+    const file = await downloadedFile('Freshly-1-0.7z');
+    await mkdir(`${file.path}.meta`);
 
-    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true, wrote: true });
-    expect(outcome.applied && outcome.downloadRefusal).toMatch(/ENOTDIR|ENOENT/);
+    expect(outcome.applied && outcome.downloadRefusal).toMatch(/EISDIR/);
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
+  });
+
+  // Rival: read `gone` as marked. The value listed the file, but it left the disk before the mark.
+  it('reports a downloaded file gone before its mark beside the landed mod, naming it', async () => {
+    const file = { name: 'Freshly-1-0.7z', path: join(root, 'downloads', 'Freshly-1-0.7z') };
+
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
+
+    expect(outcome).toMatchObject({ applied: true, wrote: true });
+    expect(outcome.applied && outcome.downloadRefusal).toContain('"Freshly-1-0.7z" is gone from disk');
   });
 
   it('a new install writes the sidecar\'s version, same as it writes modid and installedFiles', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
 
-    await installFromArchive(root, { kind: 'new', name: MOD }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=3.0.0');
@@ -209,14 +231,12 @@ describe('install commands', () => {
   // Rival: catch EXDEV and fall back to a recursive copy. The mod folder would then exist, and
   // the applied assertion and the absence assertion both fail.
   it('refuses a cross-volume staging area instead of copying', async () => {
-    const exdev = () => {
-      const err: NodeJS.ErrnoException = new Error('EXDEV: cross-device link not permitted');
-      err.code = 'EXDEV';
-      return Promise.reject(err);
-    };
     const before = await snapshotTree(root);
+    const crossVolume = withAdapter(access, {
+      landNewMod: () => Promise.reject(errnoError('EXDEV', 'cross-device link not permitted')),
+    });
 
-    const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME, renameFn: exdev });
+    const outcome = await installFromFolder(crossVolume, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
 
     expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -224,12 +244,14 @@ describe('install commands', () => {
     expect(!outcome.applied && outcome.refusal).toMatch(/different drives/);
   });
 
-  it('leaves no staging directory behind, on success or on refusal', async () => {
-    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
-    await installFromFolder(root, { kind: 'new', name: 'Harder VATS' }, sourceFolder, { gameName: GAME_NAME });
+  // Rival: remove only the folder the mod root was detected in, which leaves the wrapper's parent.
+  it('leaves nothing beside mods/ behind, on success or on refusal', async () => {
+    const before = await readdir(root);
 
-    const leftovers = (await readdir(root)).filter((name) => name.startsWith('.medit-'));
-    expect(leftovers).toEqual([]);
+    await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+    await installFromFolder(access, { kind: 'new', name: 'Harder VATS' }, sourceFolder, { gameName: GAME_NAME });
+
+    expect((await readdir(root)).sort()).toEqual(before.sort());
   });
 
   // Rival: restore the `exists(modDir)` branch that made an existing folder an upgrade. The
@@ -240,7 +262,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const before = await treeOf(modDir);
 
-    const outcome = await installFromFolder(root, { kind: 'new', name }, sourceFolder, { gameName: GAME_NAME });
+    const outcome = await installFromFolder(access, { kind: 'new', name }, sourceFolder, { gameName: GAME_NAME });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/already exists/);
@@ -252,7 +274,7 @@ describe('install commands', () => {
   it('refuses an upgrade of a folder that is not under mods/, writing nothing', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await installFromFolder(root, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder, { gameName: GAME_NAME });
+    const outcome = await installFromFolder(access, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder, { gameName: GAME_NAME });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/no folder by that name/);
@@ -266,7 +288,7 @@ describe('install commands', () => {
     const oldGitHead = await readFile(join(modDir, '.git', 'HEAD'));
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
@@ -285,10 +307,66 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(COMPLETE);
+  });
+
+  // Rival: keep `.git` alone, as an upgrade once did. The repository's ignore rules and the
+  // plugin source would then go with the release they have nothing to do with.
+  it('upgrades around the repository and the plugin source: .git, .gitignore and source/ survive', async () => {
+    const name = 'Tracked Target';
+    const modDir = await makeExistingMod(root, name, true);
+    await writeFile(join(modDir, '.gitignore'), '*\n!source/\n');
+    await mkdir(join(modDir, 'source', 'Tracked.esp'), { recursive: true });
+    await writeFile(join(modDir, 'source', 'Tracked.esp', 'RecordData.json'), '{}');
+
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+
+    expect(outcome).toMatchObject({ applied: true });
+    expect(await treeOf(modDir)).toEqual(
+      [...COMPLETE, '.git/HEAD', '.gitignore', 'source/Tracked.esp/RecordData.json'].sort(),
+    );
+    expect(await readFile(join(modDir, '.gitignore'), 'utf8')).toBe('*\n!source/\n');
+  });
+
+  // Rival: a case-sensitive match. Windows would move Source/ onto the kept source/ part way;
+  // elsewhere it would land beside it and drop out of the mod's files.
+  it.each(['.GITIGNORE', 'Source'])(
+    'refuses, before any write, a release that ships %s, naming it',
+    async (entry) => {
+      const name = 'Untracked Target';
+      const modDir = await makeExistingMod(root, name, false);
+      const before = await treeOf(modDir);
+      const shipsRepositoryOrPluginSource: Runner = async (bin, args) => {
+        await runnerFor()(bin, args);
+        const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
+        await mkdir(join(dest, 'Wrapper', entry));
+      };
+
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsRepositoryOrPluginSource });
+
+      expect(outcome).toEqual({
+        applied: false,
+        refusal: `Cannot upgrade "${name}": the release holds "${entry}", which is the mod's own repository or plugin source.`,
+      });
+      expect(await treeOf(modDir)).toEqual(before);
+    },
+  );
+
+  // mods.md, What install does, story 5: installing again is the recovery, so nothing is undone.
+  it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back', async () => {
+    const name = 'Untracked Target';
+    await makeExistingMod(root, name, false);
+    const failing = withAdapter(access, { upgradeMod: () => Promise.reject(errnoError('EACCES', 'permission denied')) });
+
+    const outcome = await installFromArchive(failing, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+
+    expect(outcome).toEqual({
+      applied: false,
+      refusal: `Upgrading "${name}" failed partway and was not rolled back: EACCES: permission denied`,
+    });
   });
 
   it('an upgrade with a sidecar version rewrites meta.ini\'s version', async () => {
@@ -296,7 +374,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(root, { kind: 'upgrade', name }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor(), version: '2.0.0' });
+    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor(), version: '2.0.0' });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=2.0.0');
@@ -310,7 +388,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(root, { kind: 'upgrade', name }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=1.0.0');
@@ -324,7 +402,7 @@ describe('install commands', () => {
     const watcher = watch(modDir, () => { fired = true; });
 
     try {
-      const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, join(root, 'downloads'), { gameName: GAME_NAME, run: runnerFor() });
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
       expect(outcome).toMatchObject({ applied: true });
 
       fired = false;
@@ -340,8 +418,8 @@ describe('install commands', () => {
   // the collision refusal.
   it('serializes two new installs of one name — exactly one lands, the loser refuses as a collision', async () => {
     const outcomes = await Promise.all([
-      installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
-      installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
+      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
+      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
     ]);
 
     expect(outcomes.filter((o) => o.applied)).toHaveLength(1);
@@ -351,7 +429,7 @@ describe('install commands', () => {
   });
 
   it('leaves the source folder where the user put it', async () => {
-    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
 
     expect(await treeOf(sourceFolder)).toEqual(PAYLOAD.map((p) => p.split(sep).join('/')).sort());
   });
@@ -359,7 +437,7 @@ describe('install commands', () => {
   it('reports a failed extraction as a refusal, not a throw', async () => {
     const run: Runner = () => Promise.reject(new Error('archive is corrupt'));
 
-    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), join(root, 'downloads'), { gameName: GAME_NAME, run });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), { gameName: GAME_NAME, run });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/corrupt/);

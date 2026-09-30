@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectRoot, DATA_DIRS } from '../detectRoot';
+import { detectRoot as detectRootWith, DATA_DIRS } from '../detectRoot';
+import { adapterOver } from '../../test/mo2/adapterOver';
 
 let dir: string;
 beforeEach(async () => {
@@ -23,6 +28,9 @@ async function scaffold(...paths: string[]): Promise<void> {
     }
   }
 }
+
+// The staged tree is read through the Instance adapter, as install reads it.
+const detectRoot = (staged: string) => detectRootWith(adapterOver(dir), staged);
 
 describe('detectRoot', () => {
   it('points at the Data subfolder when the archive has a Data root', async () => {
