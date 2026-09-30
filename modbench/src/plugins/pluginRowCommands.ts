@@ -251,9 +251,9 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
-/** ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native
- *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
- *  narrows the native UI, never blocks reading or editing. */
+// ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native Source
+// Control group. A logged no-op when `vscode.git` is unavailable: this only narrows the native UI,
+// never blocks reading or editing.
 async function registerHeldTrackedRepositories(
   client: Pick<MEditClient, 'getPlugins'>, outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>,
   setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
