@@ -1,6 +1,6 @@
 // target-architecture.md, Rules the Modbench column draws: only MO2's implementation of the Instance
-// adapter names MO2, and a source scan holds it as gameNameScan.test.ts holds game names: in text,
-// identifiers and file names, across both production trees.
+// adapter names MO2, and a source scan holds it: in text, identifiers and file names, in both
+// production trees.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
