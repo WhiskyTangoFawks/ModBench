@@ -873,6 +873,22 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(metaPath(), 'utf8')).not.toContain('uninstalled=true');
     });
 
+    // Rival: skipping the mark when the downloads folder cannot be resolved, which leaves the
+    // downloaded file claiming a mod that is gone with nothing said.
+    it('carries the mark\'s refusal when the downloads folder cannot be resolved', async () => {
+      const unresolved = new Error('download_directory "Z:\\gone" could not be resolved');
+      const adapter = { ...adapterOver(dir), markDownloadedFile: () => Promise.reject(unresolved) };
+
+      const outcome = await uninstallMods(
+        { adapter }, 'Default', [{ name: 'Unofficial Fallout 4 Patch', archiveFilename: ARCHIVE }], trash);
+
+      expect(outcome).toEqual({
+        applied: true,
+        outcome: { landed: [{ name: 'Unofficial Fallout 4 Patch', markRefusal: unresolved.message }], refused: [] },
+      });
+      expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+    });
+
     // A mod outlives the download it came from, so an uninstall can name an archive that is gone,
     // and a sidecar beside no archive is a file MO2 would never write.
     it('writes no sidecar for an archive that is absent from downloads/', async () => {
@@ -885,6 +901,20 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     // Mod sync hears the trashed folder and drops its line before the uninstall does. Rival:
     // dropping the line regardless, which the gone line refuses, reporting a landed uninstall as
     // part failed.
+    // Another tool rewrites the line in another case once the folder has gone. Rival: matching the
+    // line by the name the view listed, which keeps it and reports the uninstall whole.
+    it('drops a line whose case changed after the folder went', async () => {
+      const recasingTrash = async (path: string) => {
+        await trash(path);
+        await writeFile(modlistPath(), (await readFile(modlistPath(), 'utf8')).replace('-Harder VATS', '-harder vats'));
+      };
+
+      const outcome = await uninstallMods(accessTo(dir), 'Default', [{ name: 'Harder VATS' }], recasingTrash);
+
+      expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
+      expect((await readModlist()).some((e) => e.name.toLowerCase() === 'harder vats')).toBe(false);
+    });
+
     it('lands whole when mod sync dropped the line after the folder went', async () => {
       const syncingTrash = async (path: string) => {
         await trash(path);
@@ -910,9 +940,25 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     it('leaves a line mod sync already wrote in another case, rather than doubling it', async () => {
       await writeFile(modlistPath(), `-new mod\r\n${await readFile(modlistPath(), 'utf8')}`);
 
-      await createEmptyMod(accessTo(dir), 'Default', 'New Mod');
+      const outcome = await createEmptyMod(accessTo(dir), 'Default', 'New Mod');
 
+      expect(outcome).toEqual({ applied: true, wrote: false });
       expect((await readModlist()).filter((e) => e.name.toLowerCase() === 'new mod')).toHaveLength(1);
+    });
+
+    // MO2 knows a mod by its folder's name, and this one is a separator's. Rival: asking for a mod
+    // of that name, which reads it as free and writes a second line for the separator's folder.
+    it('refuses a name a separator\'s folder has, writing no line', async () => {
+      const before = await readFile(modlistPath(), 'utf8');
+      const name = 'Unassigned (Modlist Development)_separator';
+
+      const outcome = await createEmptyMod(accessTo(dir), 'Default', name);
+
+      expect(outcome).toEqual({
+        applied: false,
+        refusal: `A mod named "${name}" already exists — install its next release from the Downloads view instead.`,
+      });
+      expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
 
     // Rival: joining the prompt's name onto mods/ raw, which makes a folder outside it.

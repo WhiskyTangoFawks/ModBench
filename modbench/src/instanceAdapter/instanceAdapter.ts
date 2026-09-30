@@ -69,6 +69,10 @@ export type ModlistEntry = Mod | Separator;
 /** A mod or a separator, by its kind and name. */
 export type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
 
+/** Why a change naming an entry mod order does not list is refused. */
+export const entryNotFound = (entry: EntryRef): string =>
+  `${entry.kind === 'mod' ? 'Mod' : 'Separator'} not found in modlist: ${entry.name}`;
+
 /** A folder that holds a mod or a separator, decoded into the entry it holds. */
 export interface ModFolder {
   readonly kind: ModlistEntry['kind'];
@@ -245,7 +249,8 @@ export interface InstanceAdapter {
 
   // Changes.
   /** Every change lands in one write, its folders with it. A change naming an entry that is not
-   *  there, or adding one that is, rejects, and nothing changes. */
+   *  there, or adding a separator that is, rejects, and nothing changes. An entry added at the
+   *  winning end that is there, or dropped that is not, changes nothing. */
   changeModOrder(profile: string, decide: DecideModOrder): Promise<Written>;
   /** Every change lands in one write. A change naming a plugin that is not there, or adding one
    *  that is, rejects, and nothing is written. */
@@ -258,6 +263,7 @@ export interface InstanceAdapter {
   selectProfile(profile: string): Promise<Written>;
 
   // Put and rename in mods/.
+  /** Refuses a folder already there, whatever it holds, matched as the manager matches names. */
   createModFolder(mod: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;

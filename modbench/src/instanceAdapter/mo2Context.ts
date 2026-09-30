@@ -2,7 +2,7 @@
 // read of ModOrganizer.ini, the watch, and the reads and name rules more than one part uses.
 
 import { errnoCode } from '../ports/errno';
-import { entryNamed, modNameKey, OVERWRITE_DIR_NAME } from './codecs/modlistText';
+import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { get, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
@@ -27,9 +27,10 @@ export async function readOrAbsent<T>(read: () => Promise<T>, absent: T): Promis
   }
 }
 
-/** How MO2 matches an entry's name: without case, a separator by the name it gives its folder. */
+/** How MO2 matches an entry: by the name of its folder, without case, a separator's folder named
+ *  as MO2 names it. A mod named as a separator's folder is that separator. */
 export const entryKey = (entry: EntryRef): string =>
-  `${entry.kind}:${modNameKey(entry.kind === 'separator' ? mo2FolderName(entry.name) : entry.name)}`;
+  modNameKey(entry.kind === 'separator' ? separatorModName(mo2FolderName(entry.name)) : entry.name);
 
 /** The mod folders as entries; the reserved overwrite name holds none. */
 export async function listModFolders(

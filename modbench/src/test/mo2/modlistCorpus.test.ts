@@ -185,7 +185,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   // line. Rival: a sync that also writes into the folder it lists, or rewrites the entries it keeps.
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await syncMods(accessTo(dir), PROFILE, (await adapterOver(dir).modFolders())?.all);
+    const outcome = await syncMods(accessTo(dir), PROFILE, (await adapterOver(dir).modFolders())?.all ?? []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 

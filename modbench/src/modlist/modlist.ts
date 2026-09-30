@@ -1,14 +1,10 @@
-// modlist commands (ADR-0015 invariant 2): a free function per gesture, taking the access, the
-// profile and its own inputs, returning applied or a refusal. Each hands the Instance adapter its
-// change in domain words.
-
 import { refuse } from '../ports/refuse';
 import { errorMessage } from '../ports/errorMessage';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 import type { MoveToTrash } from '../ports/trash';
-import type {
-  DecideModOrder, EntryRef, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, MovePlace, OrderEnd,
-  SeparatorsPlace,
+import {
+  entryNotFound, type DecideModOrder, type EntryRef, type InstanceAdapter, type ModFolder, type ModlistEntry,
+  type ModOrderChange, type MovePlace, type OrderEnd, type SeparatorsPlace,
 } from '../instanceAdapter/instanceAdapter';
 
 /** What a modlist command reaches the instance through. */
@@ -38,9 +34,6 @@ export type ModlistSelectionResult =
 
 type EntryKind = EntryRef['kind'];
 
-const NOUN = { mod: 'Mod', separator: 'Separator' } as const;
-const notFound = (kind: EntryKind, name: string): string => `${NOUN[kind]} not found in modlist: ${name}`;
-
 // A command names an entry by the name the value listed it under.
 const isListed = (order: readonly EntryRef[], entry: EntryRef): boolean =>
   order.some((e) => e.kind === entry.kind && e.name === entry.name);
@@ -54,7 +47,7 @@ async function changeSelection(
   let outcome: SelectionOutcome<string> = { landed: [], refused: [] };
   const result = await changeModOrder(access, profile, (order) => {
     const landed = names.filter((name) => isListed(order, { kind, name }));
-    const refused = names.filter((name) => !landed.includes(name)).map((name) => ({ item: name, reason: notFound(kind, name) }));
+    const refused = names.filter((name) => !landed.includes(name)).map((name) => ({ item: name, reason: entryNotFound({ kind, name }) }));
     outcome = { landed, refused };
     return changesFor(landed);
   });
@@ -157,7 +150,7 @@ async function trashThenUnlist(
     return refuse(err);
   }
   const refused: ItemRefusal<TrashedEntry>[] = names.filter((name) => !isListed(order, { kind, name }))
-    .map((name) => ({ item: { name }, reason: notFound(kind, name) }));
+    .map((name) => ({ item: { name }, reason: entryNotFound({ kind, name }) }));
   const toUnlist: string[] = [];
   const trashed = new Set<string>();
   for (const name of names.filter((n) => isListed(order, { kind, name: n }))) {
@@ -168,9 +161,7 @@ async function trashThenUnlist(
       refused.push({ item: { name }, reason: errorMessage(err) });
     }
   }
-  // A line mod sync dropped once its folder went is already gone.
-  const lines = await changeModOrder(access, profile, (now) =>
-    toUnlist.filter((name) => isListed(now, { kind, name })).map((name) => dropOf({ kind, name })));
+  const lines = await changeModOrder(access, profile, () => toUnlist.map((name) => dropOf({ kind, name })));
   if (lines.applied) return { applied: true, outcome: { landed: toUnlist.map((name) => ({ name })), refused } };
   return {
     applied: true,
@@ -238,7 +229,8 @@ export async function uninstallMods(
   return { applied: true, outcome: { landed, refused: result.outcome.refused } };
 }
 
-/** Whether a folder already holds a mod named `name`, matched as the instance matches names. */
+/** Whether the folder a mod named `name` would take is already there, holding a mod or a separator,
+ *  matched as the instance matches names. */
 export async function modNameTaken(access: ModlistAccess, name: string): Promise<boolean> {
   return (await access.adapter.entryFolder({ kind: 'mod', name })) !== undefined;
 }
@@ -264,9 +256,7 @@ export async function createEmptyMod(access: ModlistAccess, profile: string, nam
   } catch (err) {
     return refuse(err);
   }
-  // A line mod sync already added for the new folder is left alone rather than doubled.
-  const line = await changeModOrder(access, profile, (order) =>
-    (isListed(order, { kind: 'mod', name }) ? [] : [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]));
+  const line = await changeModOrder(access, profile, () => [{ kind: 'addAtWinningEnd', entry: { kind: 'mod', name } }]);
   if (!line.applied) return { applied: true, wrote: false, lineRefusal: line.refusal };
   return line;
 }
@@ -282,10 +272,8 @@ const describeEntry = (entry: EntryRef): string => (entry.kind === 'mod' ? entry
 /** `modbench.mod.sync`, in one write checked against the folders as they stand when it lands: a
  *  disabled line for each of `modFolders` with none, and each line no folder holds dropped.
  *  `added` and `dropped` describe those entries. */
-export async function syncMods(
-  access: ModlistAccess, profile: string, modFolders: readonly ModFolder[] | undefined,
-): Promise<ModSyncResult> {
-  const toSync = new Set((modFolders ?? []).map((folder) => folder.path));
+export async function syncMods(access: ModlistAccess, profile: string, modFolders: readonly ModFolder[]): Promise<ModSyncResult> {
+  const toSync = new Set(modFolders.map((folder) => folder.path));
   let added: string[] = [];
   let dropped: string[] = [];
   const outcome = await changeModOrder(access, profile, (order, folders) => {
@@ -311,5 +299,5 @@ export type ModSyncRun = (value: { readonly activeProfile: string; readonly modF
 
 /** `syncMods` bound to one instance. */
 export function modSyncOver(access: ModlistAccess): ModSyncRun {
-  return (value) => syncMods(access, value.activeProfile, value.modFolders);
+  return (value) => syncMods(access, value.activeProfile, value.modFolders ?? []);
 }

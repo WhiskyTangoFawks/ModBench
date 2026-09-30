@@ -14,9 +14,9 @@ import {
 import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrganizerIni';
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
 import { ensureDir, exists, get, putIfChanged, remove, rename, withLock, write } from './files';
-import type {
-  DownloadedFileMark, EntryRef, InstanceAdapter, ModlistEntry, ModOrderChange, MovePlace, PluginOrderChange,
-  SeparatorsPlace,
+import {
+  entryNotFound, type DownloadedFileMark, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange,
+  type MovePlace, type PluginOrderChange, type SeparatorsPlace,
 } from './instanceAdapter';
 import { downloadFile, mo2FolderName, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
 import {
@@ -29,19 +29,21 @@ export type Mo2Changes = Pick<InstanceAdapter,
 
 type Undo = () => Promise<void>;
 
-const NOUN = { mod: 'Mod', separator: 'Separator' } as const;
+// The entry of `entry`'s kind mod order lists it as, matched as MO2 matches names.
+const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
+  order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-// The name mod order lists an entry under, matched as MO2 matches names.
 function listedName(order: readonly ModlistEntry[], entry: EntryRef): string {
-  const listed = order.find((e) => entryKey(e) === entryKey(entry));
-  if (listed === undefined) throw new Error(`${NOUN[entry.kind]} not found in modlist: ${entry.name}`);
+  const listed = listedAs(order, entry);
+  if (listed === undefined) throw new Error(entryNotFound(entry));
   return listed.name;
 }
 
-function requireUnlisted(order: readonly ModlistEntry[], entry: EntryRef): void {
-  if (order.some((e) => entryKey(e) === entryKey(entry))) {
-    throw new Error(`${NOUN[entry.kind]} already in modlist: ${entry.name}`);
-  }
+const isListed = (order: readonly ModlistEntry[], entry: EntryRef): boolean =>
+  order.some((e) => entryKey(e) === entryKey(entry));
+
+function requireUnlisted(order: readonly ModlistEntry[], separator: string): void {
+  if (isListed(order, { kind: 'separator', name: separator })) throw new Error(`Separator already in modlist: ${separator}`);
 }
 
 // A separator takes the name MO2 gives its folder.
@@ -51,8 +53,24 @@ function separatorName(requested: string): string {
   return name;
 }
 
+// An entry added at the winning end that is listed, or dropped that is not, is already as the
+// change would leave it.
+function alreadyDone(order: readonly ModlistEntry[], change: ModOrderChange): boolean {
+  switch (change.kind) {
+    case 'addAtWinningEnd': return isListed(order, change.entry);
+    case 'dropMod': return listedAs(order, { kind: 'mod', name: change.mod }) === undefined;
+    case 'dropSeparator': return listedAs(order, { kind: 'separator', name: change.separator }) === undefined;
+    case 'enable':
+    case 'moveMods':
+    case 'moveSeparators':
+    case 'addSeparator':
+    case 'renameSeparator':
+      return false;
+  }
+}
+
 // The change with each name it names as mod order lists it, and each new name as MO2 gives it; a
-// name that is not there, or one added that is, rejects.
+// name that is not there, or a separator added that is, rejects.
 function resolveModOrderChange(order: readonly ModlistEntry[], change: ModOrderChange): ModOrderChange {
   const mod = (name: string): string => listedName(order, { kind: 'mod', name });
   const separator = (name: string): string => listedName(order, { kind: 'separator', name });
@@ -64,19 +82,17 @@ function resolveModOrderChange(order: readonly ModlistEntry[], change: ModOrderC
     case 'enable': return { ...change, mod: mod(change.mod) };
     case 'moveMods': return { ...change, mods: change.mods.map(mod), place: movePlace(change.place) };
     case 'moveSeparators': return { ...change, separators: change.separators.map(separator), place: separatorsPlace(change.place) };
-    case 'addAtWinningEnd':
-      requireUnlisted(order, change.entry);
-      return change;
+    case 'addAtWinningEnd': return change;
     case 'addSeparator': {
       const name = separatorName(change.separator);
-      requireUnlisted(order, { kind: 'separator', name });
+      requireUnlisted(order, name);
       return { ...change, separator: name };
     }
     case 'renameSeparator': {
       const from = separator(change.from);
       const to = separatorName(change.to);
       if (entryKey({ kind: 'separator', name: to }) !== entryKey({ kind: 'separator', name: from })) {
-        requireUnlisted(order, { kind: 'separator', name: to });
+        requireUnlisted(order, to);
       }
       return { ...change, from, to };
     }
@@ -174,12 +190,14 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
 
   // A folder already there, listed or not, is never replaced or adopted: the change is refused
   // before anything moves.
+  const refuseFolderTaken = async (entry: EntryRef, folder: string): Promise<void> => {
+    const inTheWay = (await folderHolding(context, entry))?.path ?? ((await exists(folder)) ? folder : undefined);
+    if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
+  };
+
   const refuseFolderInTheWay = async (change: ModOrderChange): Promise<void> => {
     const name = folderTaken(change);
-    if (name === undefined) return;
-    const exact = separatorFolderOf(name);
-    const inTheWay = (await folderHolding(context, { kind: 'separator', name }))?.path ?? ((await exists(exact)) ? exact : undefined);
-    if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
+    if (name !== undefined) await refuseFolderTaken({ kind: 'separator', name }, separatorFolderOf(name));
   };
 
   // A separator's folder moves with its line; anything else in mod order is a line alone.
@@ -211,7 +229,9 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
         let after = before;
         const resolved: ModOrderChange[] = [];
         for (const change of changes) {
-          const landing = resolveModOrderChange(parseModlist(after), change);
+          const order = parseModlist(after);
+          if (alreadyDone(order, change)) continue;
+          const landing = resolveModOrderChange(order, change);
           resolved.push(landing);
           after = spliceModOrderChange(after, landing);
         }
@@ -237,7 +257,9 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
     },
 
     async createModFolder(mod) {
-      await ensureDir(newModFolder(context, mod));
+      const folder = newModFolder(context, mod);
+      await refuseFolderTaken({ kind: 'mod', name: mod }, folder);
+      await ensureDir(folder);
     },
 
     async trashEntryFolder(entry, trash) {
