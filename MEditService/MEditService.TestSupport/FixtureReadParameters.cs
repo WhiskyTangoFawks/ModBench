@@ -21,7 +21,7 @@ public static class FixtureReadParameters
             StringsParam = new StringsReadParameters
             {
                 StringsFolderOverride = strings.Folder,
-                BsaFolderOverride = strings.ModFolder ?? strings.DataFolderPath,
+                BsaFolderOverride = strings.PluginFolder ?? strings.DataFolderPath,
             },
         };
     }

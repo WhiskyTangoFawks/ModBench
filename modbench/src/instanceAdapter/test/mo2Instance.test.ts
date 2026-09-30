@@ -374,17 +374,35 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(5);
     });
 
-    // Rival: every path under a mod heard alike, so a git operation inside a tracked mod reads as
-    // a change to the instance.
-    it('hears nothing inside a mod\'s git repository, but hears the repository folder itself come or go', () => {
+    it.each(['HEAD', 'refs/heads/main', 'packed-refs', ''])(
+      'hears .git/%s in a mod\'s git repository', (inside) => {
+        let signals = 0;
+        adapterAt(root).subscribe(() => { signals++; });
+
+        expect(fire(root, join('mods/Harder VATS/.git', inside), join('mods/Harder VATS/git', inside))).toBe(true);
+        expect(signals).toBe(1);
+      });
+
+    it('tells a ref from git\'s bookkeeping in a Windows path', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
+      const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
 
-      expect(fire(root, 'mods/Harder VATS/.git/index', 'mods/Harder VATS/index')).toBe(true);
-      expect(signals).toBe(0);
-      expect(fire(root, 'mods/Harder VATS/.git', 'mods/Harder VATS/git')).toBe(true);
+      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\index');
+      mods?.fireChange('C:\\MO2\\mods\\Harder VATS\\.git\\refs\\heads\\main');
+
       expect(signals).toBe(1);
     });
+
+    // Rival: every path under a mod heard alike, so git's own bookkeeping reads as a change.
+    it.each(['index', 'objects/ab/cdef', 'logs/HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'HEAD.lock'])(
+      'hears nothing of .git/%s in a mod\'s git repository', (inside) => {
+        let signals = 0;
+        adapterAt(root).subscribe(() => { signals++; });
+
+        expect(fire(root, join('mods/Harder VATS/.git', inside), join('mods/Harder VATS/git', inside))).toBe(true);
+        expect(signals).toBe(0);
+      });
 
     // Rival: the downloads folder watched where the instance began, so a download landing in the
     // folder the settings name now is never heard.

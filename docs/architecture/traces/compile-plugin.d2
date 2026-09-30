@@ -14,8 +14,6 @@ sourceadapter.label: Source adapter
 pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
 plugin: @../target-architecture.medit_data.plugin
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: Mod watcher
 indexer: @../target-architecture.medit_driven.index.indexer
 indexer.label: Indexer
 
@@ -32,8 +30,7 @@ pluginadapter -> plugin: "bytes · a localized plugin's strings" {class: compile
 commands -> http: "applied, with the masters and the diagnostics, or refusal, per item" {class: edit}
 http -> client: "applied or refusal, per item" {class: edit}
 client -> plugins: the outcome {class: edit}
-plugin -> watcher: bytes {class: signal}
-watcher -> indexer: plugin changed {class: signal}
+indexer."the next snapshot: index-load-order"
 
 refused: "refused, before any write" {
   commands -> http: "the refusal" {class: edit}

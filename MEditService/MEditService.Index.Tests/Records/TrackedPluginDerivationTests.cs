@@ -43,15 +43,15 @@ public sealed class TrackedPluginDerivationTests : IDisposable
 
     private bool ReadsAsTracked() => _index.RequireReads().GetTrackedPlugins().Contains(_mod.KeyOf());
 
-    // Track's documents carry the bytes the binary already gave, so the settled Source batch below
-    // moves no row: what it moves is which truth answers for the plugin.
+    // Track's documents carry the bytes the binary already gave, so the validation below moves no
+    // row: what it moves is which truth answers for the plugin.
     [Fact]
     public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_OnceASourceRefreshLands()
     {
         Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
-        _index.RefreshKeys(_mod.KeyOf(), [_npc]);
+        _index.ValidateIndex(_mod.KeyOf());
 
         Assert.True(ReadsAsTracked());
     }

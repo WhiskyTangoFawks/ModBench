@@ -38,11 +38,11 @@ public sealed class IndexerTests
     private static void Reconcile(Indexer indexer, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
         indexer.Reconcile(snapshot, holder.Apply(snapshot));
 
-    // The binary watch's re-derivation: bytes that differ, then the settle's own poke.
-    private static async Task ReDerive(Indexer indexer, LoadOrderEntry entry)
+    // The next snapshot's re-derivation: bytes that differ, then the validation of the plugin.
+    private static void ReDerive(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
-        Assert.True(await indexer.RefreshBinary(entry.KeyOf(), entry.Path));
+        Assert.True(indexer.Revalidate(entry.KeyOf()));
     }
 
     private static string SharedNpc(Indexer indexer) =>
@@ -72,7 +72,7 @@ public sealed class IndexerTests
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        await ReDerive(indexer, b);
+        ReDerive(indexer, b);
 
         Assert.Equal("A.esm", WinnerOf(indexer, npc));
     }
@@ -142,13 +142,13 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(await indexer.RefreshBinary(new PluginAddress("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
+        Assert.True(indexer.Revalidate(new PluginAddress("B.esp", PluginOrigin.DataDirectory)));
 
         Assert.Equal(before + 1, indexer.Sequence);
     }
 
     [Fact]
-    public async Task ASettledBatchNamingSeveralPlugins_AdvancesTheSequenceOnce()
+    public void AValidationOfSeveralPlugins_AdvancesTheSequenceOnce()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("indexer-batch");
@@ -157,11 +157,7 @@ public sealed class IndexerTests
         foreach (var entry in fx.Plugins) PluginBinaries.Touch(entry.Path);
         var before = indexer.Sequence;
 
-        using (indexer.BeginProjection())
-        {
-            foreach (var entry in fx.Plugins)
-                Assert.True(await indexer.RefreshBinary(entry.KeyOf(), entry.Path));
-        }
+        indexer.ValidateIndex(null);
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

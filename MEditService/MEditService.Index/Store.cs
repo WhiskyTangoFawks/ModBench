@@ -22,6 +22,8 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
+    // One per Store, so an open hashes every file (ADR-0009).
+    private readonly PluginFileHashes _hashes;
 
     public DuckDBConnection Connection { get; private set; }
 
@@ -30,6 +32,7 @@ internal sealed class Store : IDisposable
         _logger = logger;
         _databasePath = databasePath;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _hashes = new PluginFileHashes(_timeProvider);
         Connection = Open();
     }
 
@@ -197,7 +200,7 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
+    /// <summary>ADR-0009: validity is by content, and an open hashes every file, since MO2, xEdit
     /// and the user all write these files. Registrations are not cleared (ADR-0013); the first
     /// reconcile corrects them.</summary>
     public List<PluginAddress> ValidateAgainstDisk()
@@ -257,9 +260,9 @@ internal sealed class Store : IDisposable
     // Null when the file cannot be read (mid-write, permissions) counts as a mismatch: an unreadable
     // file is no evidence its rows are still true. Shared with PluginBinaryHash so identical bytes
     // hash identically.
-    private string? FileContentHash(string filePath)
+    internal string? FileContentHash(string filePath)
     {
-        var hash = PluginBinaryHash.OfFile(filePath);
+        var hash = _hashes.Of(filePath);
         if (hash == null) LogUnreadable(filePath);
         return hash;
     }

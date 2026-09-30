@@ -55,6 +55,15 @@ internal static class Indexes
         return index;
     }
 
+    /// <summary>The next snapshot's validation of one plugin (ADR-0009 invariant 4): true when it
+    /// landed a change.</summary>
+    internal static bool Revalidate(this Indexer index, PluginAddress plugin)
+    {
+        var before = index.Sequence;
+        index.ValidateIndex(plugin);
+        return index.Sequence > before;
+    }
+
     /// <summary>The SQL door (ADR-0011): the filter is arbitrary SQL yielding form_key, so what it
     /// matches is the relational schema's own answer. The filter is cleared after, the door being
     /// shared.</summary>

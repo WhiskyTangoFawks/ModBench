@@ -71,7 +71,7 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         Assert.Single(index.RequireReads().GetPluginDiagnoses());
 
         RepairOnDisk();
-        Assert.True(await index.RefreshBinary(Key, _pluginPath));
+        Assert.True(index.Revalidate(Key));
 
         Assert.Empty(index.RequireReads().GetPluginDiagnoses());
     }

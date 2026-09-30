@@ -79,7 +79,6 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
                    per box of docs/architecture/
   MEditService.Http/          the endpoints, the SSE notification adapter, OpenAPI via
                               Swashbuckle, and mEdit's composition root
-  MEditService.Watcher/       one watcher per mod folder the snapshot names
   MEditService.Commands/      one handler per gesture: edit, create, track, compile, put load order
   MEditService.Queries/       compare, references, children — the only readers of the read model
   MEditService.LoadOrder/     the kernel: every plugin in the instance, and the active plugins

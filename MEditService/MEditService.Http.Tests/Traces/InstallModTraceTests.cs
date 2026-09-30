@@ -8,8 +8,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>install-mod: the install renames a folder into mods/ and forgets it. Nothing on the
-/// mEdit side watches mods/, so the folder arrives as the next snapshot: the tail is enable-a-mod's.</summary>
+/// <summary>install-mod: the install renames a folder into mods/ and forgets it. mEdit watches
+/// nothing, so the folder arrives as the next snapshot: the tail is enable-a-mod's.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class InstallModTraceTests : HostedTests
 {

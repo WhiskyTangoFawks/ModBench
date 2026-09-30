@@ -1,8 +1,7 @@
 # Install, both targets.
 ...@../styles
 shape: sequence_diagram
-downloads: @../target-architecture.modbench_driving.downloads
-downloads.label: "Downloads · Mods"
+downloads: "Downloads · Mods" {class: driving}
 instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 install: @../target-architecture.modbench_core.install
@@ -12,8 +11,6 @@ instanceadapter.label: Instance adapter
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nmods/<name>/, meta.ini · downloads/<file>.meta"
 views: "every view" {class: driving}
-watcher: @../target-architecture.medit_driving.watcher
-watcher.label: "Mod watcher\nmEdit"
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
 downloads."the target pick"
@@ -36,8 +33,7 @@ mo2 -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."mod sync: update-load-order-file"
-mo2 -> watcher: changed paths {class: signal}
-watcher."a tracked mod: detect-external-change from here"
+instanceloader."the next snapshot: index-load-order; in a tracked mod, detect-external-change"
 
 refused: "refused, before any write" {
   install -> downloads: "the refusal" {class: loadorder}

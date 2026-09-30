@@ -54,7 +54,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
 
         Assert.Equal([Tracked("Second.esp")], result.Landed);
         Assert.Empty(result.Refused);
-        Assert.True(SourceRepository.IsPluginTracked(_trackedMod, "Second.esp"));
+        Assert.True(SourceRepository.HoldsTreeFor(_trackedMod, "Second.esp"));
         Assert.Contains("SecondNpc", SourceTextOf("Second.esp"), StringComparison.Ordinal);
         Assert.Equal(mainBefore, Git("rev-parse", "refs/heads/main"));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());

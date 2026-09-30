@@ -11,7 +11,7 @@ public sealed class ComparisonDoorBoundaryTests
         {
             "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
             "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
-            "MEditService.Queries", "MEditService.SourceAdapter", "MEditService.Watcher",
+            "MEditService.Queries", "MEditService.SourceAdapter",
         }
             .Select(FindProjectSourceRoot)
             .SelectMany(ScanForMaskConsultation)

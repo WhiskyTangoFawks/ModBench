@@ -45,7 +45,7 @@ import { logGameFolderNotFound } from './gameFolderNotFoundLog';
 import { logDownloadsFolderUnresolved } from './downloadsFolderUnresolvedLog';
 import { registerRefreshCommand, registerToolboxCommands } from './toolbox/toolboxCommands';
 import {
-  loadOrderChanged, putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
+  putLoadOrder, refresh, type LoadOrderSource, type PutLoadOrderResult,
 } from './instanceCommands/loadOrder';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import {
@@ -117,45 +117,41 @@ export interface Toolbox extends vscode.Disposable {
 }
 
 export interface LoadOrderPuts {
-  /** The put that follows a connect, sent whatever the backend before it had: the backend just
+  /** The put when mEdit started, sent whatever the backend before it had: the backend just
    *  attached holds no load order. Until it runs, no recompute puts. */
-  putOnConnect(): Promise<void>;
+  putOnMEditStarted(): Promise<void>;
 }
 
-// update-load-order-file: put on change and on connect, running `onConnect` at each connect.
-// Nothing is put while detached; a stream reopen is a connect, the process behind it perhaps
-// another.
+// commands.md, put load order: put at every recompute and when mEdit started, running
+// `onMEditStarted` at each start. Nothing is put while detached; a stream reopen is a start, the
+// process behind it perhaps another.
 export function registerLoadOrderPut(
   own: Own,
   instance: Pick<Instance, 'subscribe'>,
   client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
-  changed: (value: InstanceValue) => boolean,
   put: () => Promise<void>,
-  onConnect: () => void,
+  onMEditStarted: () => void,
   channel: { error(msg: string): void },
 ): LoadOrderPuts {
-  let connectPutRan = false;
+  let startPutRan = false;
   const putLogged = (): void => {
     void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
   };
   own({ dispose: client.onStatusChanged((status) => {
-    if (status !== 'attached') connectPutRan = false;
+    if (status !== 'attached') startPutRan = false;
   }) });
-  // Deferred past the other reopen listeners, the sender's forgetting what it sent among them.
   own({ dispose: client.onReconnected(() => {
-    void Promise.resolve().then(() => {
-      if (!connectPutRan) return;
-      onConnect();
-      putLogged();
-    });
+    if (!startPutRan) return;
+    onMEditStarted();
+    putLogged();
   }) });
-  own(instance.subscribe((value) => {
-    if (connectPutRan && changed(value)) putLogged();
+  own(instance.subscribe(() => {
+    if (startPutRan) putLogged();
   }));
   return {
-    putOnConnect: () => {
-      connectPutRan = true;
-      onConnect();
+    putOnMEditStarted: () => {
+      startPutRan = true;
+      onMEditStarted();
       return put();
     },
   };
@@ -465,7 +461,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
   // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
-  const instance = own(new Instance({ adapter, log, logReadFailure: (line) => outputChannel.error(line) }));
+  const instance = own(new Instance({
+    adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
+  }));
   const firstRead = own(markFirstReadLanded(instance));
   own(logGameFolderNotFound(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
   own(logDownloadsFolderUnresolved(instance, (line) => outputChannel.warn(`[instance] ${line}`)));
@@ -493,8 +491,10 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     reporter: loadOrderReporter,
   });
   // The value's slice the load order is built from, under the names instance commands give it.
-  const loadOrderSource = (value = instance.value): LoadOrderSource =>
-    ({ plugins: value.plugins, gameFolder: value.gameFolder, gameName: value.gameName, gameRelease: value.gameRelease });
+  const loadOrderSource = (): LoadOrderSource => {
+    const { plugins, gameFolder, gameName, gameRelease } = instance.value;
+    return { plugins, gameFolder, gameName, gameRelease };
+  };
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
@@ -540,15 +540,14 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
-  // ADR-0013: a landed Instance recompute and a connect put the load order, never a gesture.
+  // ADR-0013: a landed Instance recompute and mEdit starting put the load order, never a gesture.
   const loadOrderPuts = registerLoadOrderPut(
-    own, instance, client, (value) => loadOrderChanged(sender, instanceRoot, loadOrderSource(value)),
-    putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
+    own, instance, client, putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
       session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
-      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnConnect(),
+      revealLog: () => outputChannel.show(true), onConnect: () => loadOrderPuts.putOnMEditStarted(),
     }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));

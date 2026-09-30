@@ -12,7 +12,7 @@ import { Instance } from '../instanceLoader/instance';
 import { placeFolder, type PlaceFolder } from '../plugins/pluginPlaces';
 import { syncPlugins } from '../pluginsCommands/plugins';
 import { pluginSyncArguments } from '../pluginSyncTrigger';
-import { accessTo, adapterOver, NO_DOWNLOADS } from './mo2/adapterOver';
+import { accessTo, adapterOver, NO_DOWNLOADS, STEADY_WINDOW } from './mo2/adapterOver';
 
 const PROFILE = 'Default';
 
@@ -39,6 +39,7 @@ describe('a created plugin reaches plugins.txt through plugin sync alone', () =>
     await writeFile(join(dir, 'mods', 'Existing Mod', 'Base.esp'), 'plugin');
     await writeFile(join(dir, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
     instance = new Instance({
+      window: STEADY_WINDOW,
       adapter: adapterOver(dir, {
         gameFolder: { kind: 'found', root: join(dir, 'Game'), dataFolder: join(dir, 'Game', 'Data') },
         downloadedFiles: NO_DOWNLOADS,

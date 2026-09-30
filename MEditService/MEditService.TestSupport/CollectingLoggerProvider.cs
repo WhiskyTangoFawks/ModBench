@@ -13,7 +13,7 @@ public sealed class CollectingLoggerProvider(List<LogEntry> entries) : ILoggerPr
     public void Dispose() { }
 }
 
-/// <summary>Appends under the list's own lock: a watcher or timer thread logs while the test thread
+/// <summary>Appends under the list's own lock: a reconcile or timer thread logs while the test thread
 /// reads, so a reader takes the same lock.</summary>
 public sealed class CollectingLogger(List<LogEntry> entries) : ILogger
 {

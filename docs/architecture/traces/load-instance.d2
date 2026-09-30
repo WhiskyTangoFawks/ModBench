@@ -8,12 +8,12 @@ instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_driven.instanceloader
 instanceloader.label: Instance loader
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
-toolbox: @../target-architecture.modbench_driving.toolbox
-toolbox.label: Toolbox
 instancecommands: @../target-architecture.modbench_core.instancecommands
 instancecommands.label: instance commands
 client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
+toolbox: @../target-architecture.modbench_driving.toolbox
+toolbox.label: Toolbox
 
 mo2 -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
@@ -22,7 +22,7 @@ instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and 
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
-instancecommands -> client: "snapshot: every plugin · the active plugins" {class: loadorder}
+instancecommands -> client: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}

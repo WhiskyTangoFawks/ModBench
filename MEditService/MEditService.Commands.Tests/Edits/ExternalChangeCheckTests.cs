@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
@@ -11,18 +10,26 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>What the watcher calls when a mod settles or loads (ADR-0003 invariant 3): each tracked
-/// plugin's bytes against what Modbench last wrote, and the mod's untracked plugins, told through
-/// the port and kept nowhere.</summary>
-public sealed class ModSettledTests : IDisposable
+/// <summary>Each time the snapshot arrives (ADR-0003 invariant 3): each tracked plugin's bytes against
+/// what Modbench last wrote, and the mod's untracked plugins, told through the port and kept
+/// nowhere.</summary>
+public sealed class ExternalChangeCheckTests : IDisposable
 {
     private const string PluginName = "Test.esp";
     private const string Origin = "TestMod";
 
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-settled-").FullName;
+    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-external-change-").FullName;
 
-    private ModSettled Settled => TestEditService.Settled(_notifications);
+    private readonly Lazy<PutLoadOrderHandler> _handler;
+
+    public ExternalChangeCheckTests() =>
+        _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
+
+    // The snapshot arriving, as the put-load-order door takes it.
+    private void Put(LoadOrderSnapshot snapshot) =>
+        Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
+            [.. snapshot.Plugins.Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning))]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
@@ -56,7 +63,7 @@ public sealed class ModSettledTests : IDisposable
         Assert.Single(_notifications.Notifications.OfType<ExternalChangeNotification>());
 
     [Fact]
-    public void ASettle_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
+    public void ASnapshot_NamesATrackedPlugin_WithTheStateOfItsBytes_WhenTheyDifferFromWhatModbenchLastWrote()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var changed = "changed-by-xedit"u8.ToArray();
@@ -64,7 +71,7 @@ public sealed class ModSettledTests : IDisposable
         Track((PluginName, tracked));
         var loadOrder = WithPlugins((PluginName, changed));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         var notice = TheExternalChange();
         Assert.Equal(Origin, notice.Origin);
@@ -72,14 +79,14 @@ public sealed class ModSettledTests : IDisposable
     }
 
     [Fact]
-    public async Task ASettle_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
+    public async Task ASnapshot_NamesNoPlugin_ForTheBinaryARealCompileJustWrote()
     {
         using var mod = SourceEditFixture.Tracked();
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         var result = await CompileServices.Over(mod.LoadOrder).CompileAsync(mod.Plugin);
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        Settled.Handle(mod.LoadOrder, mod.ModFolder);
+        Put(mod.LoadOrder);
 
         var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
         Assert.Equal(SourceEditFixture.ModFolderOrigin, notice.Origin);
@@ -87,14 +94,14 @@ public sealed class ModSettledTests : IDisposable
     }
 
     [Fact]
-    public void ASettle_NamesATrackedPluginThatCannotBeRead_WithNoState()
+    public void ASnapshot_NamesATrackedPluginThatCannotBeRead_WithNoState()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
         Track((PluginName, tracked));
         File.Delete(Path.Combine(ModFolder, PluginName));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Equal([new ChangedPlugin(PluginName, null)], TheExternalChange().Plugins);
     }
@@ -102,26 +109,26 @@ public sealed class ModSettledTests : IDisposable
     // ADR-0003, Derived tactical observations: a missing ref counts as a change, and Modbench never
     // guesses.
     [Fact]
-    public void ASettle_NamesATrackedPlugin_WhoseLastWriteIsGone()
+    public void ASnapshot_NamesATrackedPlugin_WhoseLastWriteIsGone()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
         Track((PluginName, tracked));
         GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "update-ref", "-d", SourceRepository.LastCompileRef(PluginName));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Equal([new ChangedPlugin(PluginName, Sha256(tracked))], TheExternalChange().Plugins);
     }
 
     [Fact]
-    public void ASettle_NamesTheModsUntrackedPlugins_ApartFromItsChangedOnes()
+    public void ASnapshot_NamesTheModsUntrackedPlugins_ApartFromItsChangedOnes()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked), ("Untracked.esp", "never tracked"u8.ToArray()));
         Track((PluginName, tracked));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
         var untracked = Assert.Single(_notifications.Notifications.OfType<UntrackedPluginsNotification>());
@@ -129,9 +136,9 @@ public sealed class ModSettledTests : IDisposable
         Assert.Equal(["Untracked.esp"], untracked.Plugins);
     }
 
-    // Git shows every tracked file but the binary, so a settle compares the binaries alone.
+    // Git shows every tracked file but the binary, so a snapshot compares the binaries alone.
     [Fact]
-    public void ASettle_NamesNoPlugin_ForAChangedTrackedFileOrMetaIni()
+    public void ASnapshot_NamesNoPlugin_ForAChangedTrackedFileOrMetaIni()
     {
         var tracked = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, tracked));
@@ -141,28 +148,92 @@ public sealed class ModSettledTests : IDisposable
         File.WriteAllText(Path.Combine(ModFolder, "meta.ini"), "version=2.0.0\n");
         File.WriteAllText(Path.Combine(ModFolder, ".gitignore"), "*.esp\n*.esm\n");
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Equal([], TheExternalChange().Plugins);
     }
 
-    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so a mod whose
-    // repository went clears what its last settle named.
     [Fact]
-    public void ASettle_NamesNoPlugin_ForAnUntrackedFolder()
+    public void ASnapshot_TellsNothing_OfAnUntrackedMod()
     {
         var loadOrder = WithPlugins((PluginName, "anything"u8.ToArray()));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
-        var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
+        Assert.Empty(_notifications.Notifications);
+    }
+
+    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so a mod whose
+    // repository went clears what the last snapshot named.
+    [Fact]
+    public void ASnapshot_NamesNoPlugin_OfAModWhoseRepositoryWent()
+    {
+        var tracked = "the tracked binary"u8.ToArray();
+        WithPlugins((PluginName, tracked));
+        Track((PluginName, tracked));
+        var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
+        Put(loadOrder);
+        Assert.Single(TheExternalChange().Plugins);
+
+        Directory.Delete(Path.Combine(ModFolder, ".git"), recursive: true);
+        Put(loadOrder);
+
+        var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
+        Assert.Equal(2, notices.Count);
+        Assert.Equal(Origin, notices[1].Origin);
+        Assert.Empty(notices[1].Plugins);
+    }
+
+    [Fact]
+    public void ASnapshot_TellsNothingMore_OfAModWhoseRepositoryWentBeforeTheLastSnapshot()
+    {
+        var tracked = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, tracked));
+        Track((PluginName, tracked));
+        Put(loadOrder);
+        Directory.Delete(Path.Combine(ModFolder, ".git"), recursive: true);
+        Put(loadOrder);
+        var told = _notifications.Notifications.Count;
+
+        Put(loadOrder);
+
+        Assert.Equal(told, _notifications.Notifications.Count);
+    }
+
+    [Fact]
+    public void ASnapshot_NamesAPlugin_OfAnUntrackedModThatGainedARepository()
+    {
+        var tracked = "the tracked binary"u8.ToArray();
+        var loadOrder = WithPlugins((PluginName, tracked));
+        Put(loadOrder);
+        Track((PluginName, tracked));
+        File.WriteAllBytes(Path.Combine(ModFolder, PluginName), "changed-by-xedit"u8.ToArray());
+
+        Put(loadOrder);
+
+        var notice = TheExternalChange();
         Assert.Equal(Origin, notice.Origin);
-        Assert.Empty(notice.Plugins);
+        Assert.Equal([PluginName], notice.Plugins.Select(p => p.Name));
+    }
+
+    // The game's own Data folder is no mod, so a repository there tracks nothing.
+    [Fact]
+    public void ASnapshot_TellsNothing_OfARepositoryInTheDataFolder()
+    {
+        var bytes = "a plugin in the game's Data folder"u8.ToArray();
+        File.WriteAllBytes(Path.Combine(_instanceRoot, PluginName), bytes);
+        GitProbe.Run(Path.Combine(_instanceRoot, ".git"), _instanceRoot, "init", "-q", "-b", "main");
+        GitProbe.Run(Path.Combine(_instanceRoot, ".git"), _instanceRoot, "commit", "-q", "--allow-empty", "-m", "a repository");
+
+        Put(new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
+            [new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, Path.Combine(_instanceRoot, PluginName), 0, Enabled: true, Winning: true)]));
+
+        Assert.Empty(_notifications.Notifications);
     }
 
     // ADR-0003 invariant 3: Modbench keeps nothing about the change.
     [Fact]
-    public void ASettle_WritesNothing_IntoTheMod()
+    public void ASnapshot_WritesNothing_IntoTheMod()
     {
         var tracked = "the tracked binary"u8.ToArray();
         WithPlugins((PluginName, tracked));
@@ -170,7 +241,7 @@ public sealed class ModSettledTests : IDisposable
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
         var before = FilesUnder(ModFolder);
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Single(TheExternalChange().Plugins);
         Assert.Equal(before, FilesUnder(ModFolder));
@@ -179,15 +250,15 @@ public sealed class ModSettledTests : IDisposable
     // ADR-0015 invariant 2: a restart and a live change are one call, so over the same bytes they
     // tell the same.
     [Fact]
-    public void ASecondSettle_OverTheSameBytes_TellsTheSame()
+    public void ASecondSnapshot_OverTheSameBytes_TellsTheSame()
     {
         var tracked = "the tracked binary"u8.ToArray();
         WithPlugins((PluginName, tracked));
         Track((PluginName, tracked));
         var loadOrder = WithPlugins((PluginName, "changed-by-xedit"u8.ToArray()));
 
-        Settled.Handle(loadOrder, ModFolder);
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
+        Put(loadOrder);
 
         var notices = _notifications.Notifications.OfType<ExternalChangeNotification>().ToList();
         Assert.Equal(2, notices.Count);
@@ -197,20 +268,20 @@ public sealed class ModSettledTests : IDisposable
 
     // plugins.md, Compile, story 5: a compile records what it writes before it writes it.
     [Fact]
-    public void ASettle_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
+    public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
         Track((PluginName, old));
         SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the compiled binary"u8.ToArray()));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
     }
 
     [Fact]
-    public void ASettle_NamesNoPlugin_WhenTwoInterruptedCompilesInARowLeftTheOldBinary()
+    public void ASnapshot_NamesNoPlugin_WhenTwoInterruptedCompilesInARowLeftTheOldBinary()
     {
         var old = "the tracked binary"u8.ToArray();
         var loadOrder = WithPlugins((PluginName, old));
@@ -218,13 +289,13 @@ public sealed class ModSettledTests : IDisposable
         SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the first compile"u8.ToArray()));
         SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash("the second compile"u8.ToArray()));
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
     }
 
     [Fact]
-    public void ASettle_NamesNoPlugin_WhenAnInterruptedCompileLeftTheNewBinary()
+    public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheNewBinary()
     {
         var old = "the tracked binary"u8.ToArray();
         var compiled = "the compiled binary"u8.ToArray();
@@ -233,14 +304,14 @@ public sealed class ModSettledTests : IDisposable
         SourceRepository.ParkCompileSnapshot(ModFolder, PluginName, TrailerHash(compiled));
         File.WriteAllBytes(Path.Combine(ModFolder, PluginName), compiled);
 
-        Settled.Handle(loadOrder, ModFolder);
+        Put(loadOrder);
 
         Assert.Empty(TheExternalChange().Plugins);
     }
 
     // ADR-0003 invariant 3: once the new binary has landed, it alone is what Modbench last wrote.
     [Fact]
-    public async Task ASettle_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
+    public async Task ASnapshot_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
     {
         using var mod = SourceEditFixture.Tracked();
         var pluginPath = mod.LoadOrder.Plugin(mod.Plugin)?.Path ?? throw new InvalidOperationException("Expected the fixture's plugin in its load order.");
@@ -250,7 +321,7 @@ public sealed class ModSettledTests : IDisposable
         Assert.True(result.Succeeded, result.RefusalReason);
         File.WriteAllBytes(pluginPath, before);
 
-        Settled.Handle(mod.LoadOrder, mod.ModFolder);
+        Put(mod.LoadOrder);
 
         var notice = Assert.IsType<ExternalChangeNotification>(Assert.Single(_notifications.Notifications));
         Assert.Equal([new ChangedPlugin(mod.Plugin.Name, Sha256(before))], notice.Plugins);

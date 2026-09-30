@@ -13,9 +13,9 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
-/// watchers' re-projections, deciding nothing — the load order value answers who participates and
+/// validation of every plugin, deciding nothing — the load order value answers who participates and
 /// wins, the schema where a field goes.</summary>
-public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
+public sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -58,9 +58,11 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null,
         TimeProvider? timeProvider = null,
-        TaskScheduler? refillScheduler = null)
+        TaskScheduler? refillScheduler = null,
+        IndexWriteGate? writeGate = null)
     {
         _holder = holder;
+        WriteGate = writeGate ?? new IndexWriteGate();
         _adapter = adapter;
         _schemaReflector = schemaReflector;
         _notifications = notifications;
@@ -72,9 +74,23 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
     }
 
-    // ADR-0013 invariant 4: a plugin that failed to open stays a row in an error state until its
-    // bytes change. The hash recorded alongside it is what changing detects.
-    private readonly Dictionary<PluginAddress, string?> _failedHashes = new(PluginAddress.Comparer);
+    // ADR-0013 invariant 4: a plugin that failed to read stays a row in an error state until what it
+    // reads from changes. The state recorded alongside it is what changing detects.
+    private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
+
+    // What a failed read read from: the binary's hash, and for a plugin with a tree, what git named
+    // at its HEAD then. Only the files git names are read (ADR-0009).
+    private sealed record FailedRead(string? Binary, TreeChanges? Tree)
+    {
+        public bool Holds(FailedRead now) =>
+            Binary == now.Binary
+            && (Tree, now.Tree) switch
+            {
+                (null, null) => true,
+                ({ Named: { } then }, { Named: { } named }) => Tree.Head == now.Tree.Head && then.SequenceEqual(named),
+                _ => false,
+            };
+    }
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // exclusive lock waits until it has. Cancelling without draining would let a teardown dispose
@@ -100,21 +116,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    // ADR-0009 invariant 4: the hash the store's rows for this plugin were built from, or null when
-    // it holds no validated rows for it.
-    private string? IndexedContentHash(PluginAddress key)
-    {
-        lock (_lock) return _index?.IndexedContentHash(key);
-    }
-
-    private static string? ContentHashOnDisk(string pluginPath) => PluginBinaryHash.OfFile(pluginPath);
-
     /// <summary>One per Indexer, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
-    public IndexWriteGate WriteGate { get; } = new();
-
-    public bool Closed => Status.State is LoadOrderState.None;
+    public IndexWriteGate WriteGate { get; }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -214,9 +219,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread: registrations made equal to
-    /// the snapshot, never-held plugins indexed, one winner sweep. Every outcome becomes status data,
-    /// published once <paramref name="version"/> is answered.</summary>
+    /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread, then every plugin validated
+    /// (ADR-0009 invariant 4). Every outcome becomes status data, published once
+    /// <paramref name="version"/> is answered; one that changes nothing publishes nothing.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
 
     // The arrival is read once the exclusive right is held, so a refill reconciles the load order
@@ -224,9 +229,11 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     private void Reconcile(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival)
     {
         long version = 0;
+        bool changed;
         try
         {
-            if (!ReconcileOrRefuse(arrival, ref version)) return;
+            if (ReconcileOrRefuse(arrival, ref version) is not { } reconciled) return;
+            changed = reconciled;
         }
         catch (OperationCanceledException)
         {
@@ -237,28 +244,35 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         catch (IndexHeldElsewhereException ex)
         {
             lock (_lock) _heldElsewhereMessage = ex.Message;
+            changed = true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // ReconcileOrRefuse already logged this at error; there is nothing further up to raise
             // it to, so it becomes status data instead of only a log line.
             lock (_lock) _failureMessage = ex.Message;
+            changed = true;
         }
         // Max, not assign: the exclusive lock is released before this runs, so a newer version's
         // own stamp can land first, and this one must never answer for it downward.
-        lock (_lock) _version = Math.Max(_version, version);
-        PublishStatus();
+        lock (_lock)
+        {
+            changed |= version > _version;
+            _version = Math.Max(_version, version);
+        }
+        if (changed) PublishStatus();
+        ValidateEveryPlugin();
     }
 
     // A superseded reconcile throws OperationCanceledException, leaving its work for its
-    // successor; a second window's hold throws IndexHeldElsewhereException. False when the arrival
-    // resolved to none.
-    private bool ReconcileOrRefuse(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version)
+    // successor; a second window's hold throws IndexHeldElsewhereException. Null when the arrival
+    // resolved to none, and false when the reconcile changed nothing Status reports.
+    private bool? ReconcileOrRefuse(Func<(LoadOrderSnapshot Snapshot, long Version)?> arrival, ref long version)
     {
         EnterExclusive();
         try
         {
-            if (arrival() is not { } resolved) return false;
+            if (arrival() is not { } resolved) return null;
             var (snapshot, arrived) = resolved;
             version = arrived;
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -269,13 +283,18 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
             // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
             // moment this one is asked for, whichever way this one goes.
-            lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
+            bool refusalCleared;
+            lock (_lock)
+            {
+                refusalCleared = _heldElsewhereMessage is not null || _failureMessage is not null;
+                _heldElsewhereMessage = null;
+                _failureMessage = null;
+            }
             RequireOneWinnerPerFilename(snapshot);
 
             var token = BeginReconcile();
             var (held, index) = EnsureScope(snapshot);
-            ReconcileProgressively(held, index, snapshot, token);
-            return true;
+            return ReconcileProgressively(held, index, snapshot, token) || refusalCleared;
         }
         catch (OperationCanceledException ex)
         {
@@ -350,7 +369,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         lock (_lock)
         {
             _indexed.Clear();
-            _failedHashes.Clear();
+            _failedReads.Clear();
             _conflictsComputed = false;
             _plannedCount = 0;
             _heldPlugins = held;
@@ -400,8 +419,9 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
-    // freshly opened index file's last-run rows stop answering as early as possible.
-    private void ReconcileProgressively(
+    // freshly opened index file's last-run rows stop answering as early as possible. False when the
+    // snapshot moved nothing.
+    private bool ReconcileProgressively(
         HeldPlugins held, IRecordIndex index, LoadOrderSnapshot snapshot, CancellationToken token)
     {
         var resolved = snapshot.Plugins;
@@ -409,7 +429,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         var open = held.Plugins.ToDictionary(p => p.Key, PluginAddress.Comparer);
 
         IReadOnlyList<PluginAddress> failed;
-        lock (_lock) failed = [.. _failedHashes.Keys];
+        lock (_lock) failed = [.. _failedReads.Keys];
         // Registered, held, or held only as a failure row — a plugin the snapshot has stopped naming
         // leaves by every one of those doors, so a stale error row cannot outlive its plugin.
         var leaving = index.RegisteredPlugins()
@@ -423,22 +443,19 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             .ToList();
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
-        var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !StillFailing(r)).ToList();
+        var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !StillFailing(index, r.Key, r.Path)).ToList();
         // ADR-0007 invariant 3: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
         var stampedFromSource = index.At(RecordRef.Effective).GetTrackedPlugins();
-        var reDerived = resolved
-            .Where(r => open.ContainsKey(r.Key)
-                        && SourceIngest.HoldsTree(r.Origin, r.Path, r.Name) != stampedFromSource.Contains(r.Key))
-            .ToList();
+        var reDerived = resolved.Where(r => open.ContainsKey(r.Key) && TruthMoved(index, r, stampedFromSource)).ToList();
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
         if (leaving.Count == 0 && moved.Count == 0 && arriving.Count == 0 && reDerived.Count == 0 && conflictsComputed)
         {
             _logger.LogDebug("Load order snapshot is identical to what is held; nothing to reconcile");
-            return;
+            return false;
         }
 
         lock (_lock)
@@ -457,7 +474,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             lock (_lock)
             {
                 _indexed.RemoveAll(i => PluginAddress.Comparer.Equals(new PluginAddress(i.Name, i.Origin), key));
-                _failedHashes.Remove(key);
+                _failedReads.Remove(key);
             }
         }
         if (leaving.Count > 0) PublishStatus();
@@ -489,10 +506,10 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
 
             if (held.Open(plugin) is not { } metadata)
             {
-                lock (_lock) _failedHashes[plugin.Key] = PluginBinaryHash.OfFile(plugin.Path);
+                RecordFailedRead(index, plugin.Key, plugin.Path);
                 continue;
             }
-            lock (_lock) _failedHashes.Remove(plugin.Key);
+            lock (_lock) _failedReads.Remove(plugin.Key);
 
             RegisterOrIndex(held, index, metadata, token);
             // A plugin is browsable the moment it lands, so the rows the filter matches in it must
@@ -518,6 +535,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
                 timer.ElapsedMilliseconds, arriving.Count, moved.Count, leaving.Count, held.Plugins.Count,
                 firstUsableMs, winnersTimer.ElapsedMilliseconds);
         }
+        return true;
+    }
+
+    // A plugin that failed the last re-derivation is not read again until what it reads from changes.
+    private bool TruthMoved(IRecordIndex index, RegisteredPlugin plugin, IReadOnlySet<PluginAddress> stampedFromSource)
+    {
+        var holdsTree = SourceIngest.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+        return holdsTree != stampedFromSource.Contains(plugin.Key) && !StillFailing(index, plugin.Key, plugin.Path);
     }
 
     // A plugin whose folder was tracked or untracked since it was indexed. Nothing here has compared
@@ -540,14 +565,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             try
             {
                 IndexOnePlugin(held, index, metadata, holdsTree, token);
+                lock (_lock) _failedReads.Remove(plugin.Key);
             }
             catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
             {
                 // plugins.md, A row, Plugin: one plugin that cannot be read is that row's "Failed to
                 // read", never the whole index's failure.
                 _logger.LogWarning(ex, "Failed to re-derive {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-                held.SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
-                PublishStatus();
+                FailRead(held, index, plugin.Key, plugin.Path, PluginLoadFailure.ReasonFor(ex));
             }
         }
     }
@@ -580,21 +605,58 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    // While the bytes are unchanged the error state stands, and the parse is not paid again.
-    private bool StillFailing(RegisteredPlugin plugin)
+    // While what it reads from is unchanged the error state stands, and the parse is not paid again.
+    private bool StillFailing(IRecordIndex index, PluginAddress key, string path)
     {
-        string? failedAt;
+        FailedRead? failedAt;
         lock (_lock)
         {
-            if (!_failedHashes.TryGetValue(plugin.Key, out failedAt)) return false;
+            if (!_failedReads.TryGetValue(key, out failedAt)) return false;
         }
-        return failedAt != null && PluginBinaryHash.OfFile(plugin.Path) == failedAt;
+        return failedAt is not null && ReadStateOf(index, key, path, failedAt.Tree?.Head) is { } now && failedAt.Holds(now);
+    }
+
+    // A failure that says what the plugin already said publishes nothing.
+    private void FailRead(HeldPlugins? held, IRecordIndex index, PluginAddress key, string path, string reason) =>
+        Fail(held, key, reason, ReadStateOf(index, key, path, head: null));
+
+    // A file another process held is read again at the next snapshot, whatever it reads from.
+    private void FailReadUntilTheNextSnapshot(HeldPlugins held, PluginAddress key, string reason) =>
+        Fail(held, key, reason, readFrom: null);
+
+    private void Fail(HeldPlugins? held, PluginAddress key, string reason, FailedRead? readFrom)
+    {
+        var told = held?.SetFailure(key, reason) == true;
+        lock (_lock) _failedReads[key] = readFrom;
+        if (told) PublishStatus();
+    }
+
+    private void RecordFailedRead(IRecordIndex index, PluginAddress key, string path)
+    {
+        var state = ReadStateOf(index, key, path, head: null);
+        lock (_lock) _failedReads[key] = state;
+    }
+
+    // Null, which vouches for nothing, when what the plugin reads from cannot be read: an untracked
+    // binary, or what git names. A tree is asked against the HEAD the failure saw, so a commit since
+    // is a change.
+    private FailedRead? ReadStateOf(IRecordIndex index, PluginAddress key, string path, string? head)
+    {
+        var binary = index.FileContentHash(path);
+        if (LoadOrderSnapshot.ModFolderOf(key.Origin, path) is not { } modFolder
+            || !SourceRepository.HoldsTreeFor(modFolder, key.Name))
+        {
+            return binary is null ? null : new FailedRead(binary, null);
+        }
+
+        var repository = SourceRepository.Over(modFolder, _gameRelease);
+        if ((head ?? repository.ChangesSince(key, null).Head) is not { } since) return null;
+        return repository.ChangesSince(key, since) is { Named: not null } tree ? new FailedRead(binary, tree) : null;
     }
 
     // ADR-0009 invariant 4: a plugin the store has seen, still matching the disk, is registered, not
     // indexed; ADR-0015 invariant 4 validates a tracked plugin by content on that same warm path.
-    // True when the plugin answers reads afterwards.
-    private bool RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
+    private void RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         var holdsTree = SourceIngest.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
@@ -610,7 +672,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             // wholly queryable, and a registered one is.
             lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
             PublishStatus();
-            return true;
+            return;
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -637,9 +699,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             // A single plugin with malformed record data must not abort the whole reconcile. Index()
             // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
             _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable", plugin.Name);
-            held.SetFailure(key, PluginLoadFailure.ReasonFor(ex));
-            PublishStatus();
-            return false;
+            FailRead(held, index, key, plugin.Path, PluginLoadFailure.ReasonFor(ex));
+            return;
         }
 
         lock (_lock)
@@ -650,7 +711,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
         }
         PublishStatus();
-        return true;
     }
 
     // Where a plugin's records come from (ADR-0007 invariant 3): a tracked plugin's source tree,
@@ -681,9 +741,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             {
                 _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
-            var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
-                ?? throw new InvalidOperationException(
-                    $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
+            var modFolder = ModFolderHoldingTree(plugin);
             SourceIngest.Ingest(
                 index, modFolder,
                 plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
@@ -706,10 +764,16 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             held.SetFailure(plugin.Key,
                 $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the " +
                 "compiled binary instead — edits made since the last compile are not reflected.");
+            RecordFailedRead(index, plugin.Key, plugin.Path);
         }
 
         IndexFromBinary(held, index, plugin);
     }
+
+    private static string ModFolderHoldingTree(PluginMetadata plugin) =>
+        LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
+            ?? throw new InvalidOperationException(
+                $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
 
     // ADR-0005 invariant 2: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
@@ -726,81 +790,135 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             _schemaReflector.GetSchemas(gameRelease),
             new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), dataFolderPath));
 
-    /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
-    /// every registered plugin when null, and repairs what differs. <c>NeedsRebuild</c> names a plugin
-    /// this call re-derived whole.</summary>
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin)
+    /// <summary>ADR-0015 invariant 4: validates <paramref name="plugin"/>, or every plugin held when
+    /// null, by content, and repairs what differs. <c>NeedsRebuild</c> names a plugin this call
+    /// re-derived whole.</summary>
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin) =>
+        ValidateIndex(plugin, CancellationToken.None);
+
+    private List<ValidationReport> ValidateIndex(PluginAddress? plugin, CancellationToken token)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
         using var _ = WriteGate.Enter();
 
-        var (_, index) = RequireScopeCore();
+        var (held, index) = RequireScopeCore();
         // One advance for everything this validate re-derives, however many plugins it names.
         using var projection = index.BeginProjection();
-        var keys = plugin is { } one ? (IReadOnlyList<PluginAddress>)[one] : index.RegisteredPlugins();
+        // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
+        IReadOnlyList<PluginMetadata> plugins = held.Plugins;
+        if (plugin is { } one) plugins = held.Find(one) is { } found ? [found] : [];
 
-        var order = _holder.Current;
-        var reports = new List<ValidationReport>(keys.Count);
-        foreach (var key in keys)
-            reports.Add(ValidateOne(index, key, order.ModFolderOf(key)));
+        var reports = new List<ValidationReport>(plugins.Count);
+        foreach (var metadata in plugins)
+        {
+            token.ThrowIfCancellationRequested();
+            reports.Add(ValidateOne(held, index, metadata));
+        }
 
         ReapplyFilter();
         return reports;
     }
 
-    // plugins.md, A row, Plugin, "Failed to read": one plugin that cannot be read is flagged with
-    // its reason, and the plugins after it are still validated.
-    private ValidationReport ValidateOne(IRecordIndex index, PluginAddress key, string? modFolder)
+    // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
+    // rest are still validated. A failed one is read whole again once what it reads from changed.
+    private ValidationReport ValidateOne(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
+        var key = plugin.Key;
+        var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
+        var holdsTree = modFolder is not null && SourceRepository.HoldsTreeFor(modFolder, plugin.Name);
         try
         {
+            if (!holdsTree && !File.Exists(plugin.Path))
+            {
+                if (index.IndexedContentHash(key) is not null) UnindexGonePlugin(key);
+                return ValidationReport.Clean(key);
+            }
+
+            // Rows a failed read left say nothing of what the plugin now reads from.
+            if (held.IsHeldWithAFailure(key))
+            {
+                if (!StillFailing(index, key, plugin.Path)) ReindexHeldPlugin(key);
+                return ValidationReport.Clean(key);
+            }
+
             var report = index.Validate(key, modFolder);
-            foreach (var failure in report.Failures)
-                _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
+            if (report.Failures.Count > 0)
+            {
+                foreach (var failure in report.Failures)
+                    _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
+                FailRead(held, index, key, plugin.Path, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
+                return report;
+            }
 
             // Gained records are refreshed by key so the rows that moved are named (ADR-0015,
-            // invariant 3). A plugin whose last read failed is read whole: that lifts the failure
-            // (ADR-0003).
-            var failed = _heldPlugins?.IsHeldWithAFailure(key) == true;
-            if (report.NeedsRebuild && !failed && report.ChangedKeys.Count > 0 && modFolder is { } folder)
+            // invariant 3).
+            if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && modFolder is { } folder)
+            {
                 RefreshByKeysOrReadWhole(index, key, folder, report.ChangedKeys);
-            else if (report.NeedsRebuild || failed) ReindexHeldPlugin(key);
+            }
+            // An untracked plugin's rows went with its file, and the file is back.
+            else if (report.NeedsRebuild || (!holdsTree && index.IndexedContentHash(key) is null))
+            {
+                ReindexHeldPlugin(key);
+            }
             return report;
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
             _logger.LogWarning(ex, "Could not validate {Plugin} ({Origin})", key.Name, key.Origin);
+            // A re-read that failed has named its own failure.
+            if (!held.IsHeldWithAFailure(key))
+            {
+                var reason = ValidationFailure(holdsTree, PluginLoadFailure.ReasonFor(ex));
+                if (ex is IOException or UnauthorizedAccessException) FailReadUntilTheNextSnapshot(held, key, reason);
+                else FailRead(held, index, key, plugin.Path, reason);
+            }
             return new ValidationReport(key, [], NeedsRebuild: false, [PluginLoadFailure.ReasonFor(ex)]);
         }
     }
 
-    /// <summary>ADR-0015 invariant 2's narrow signal: re-projects these keys from the source tree
-    /// under the write gate. An untracked or unheld plugin is a no-op.</summary>
-    public void RefreshKeys(PluginAddress key, IReadOnlyList<string> formKeys)
+    // editor.md, States, story 6: the rows stay the last good read, and say why.
+    private static string ValidationFailure(bool holdsTree, string reason) =>
+        $"Could not validate this plugin's {(holdsTree ? "source tree" : "binary")} ({reason}). Still showing " +
+        "what was last read from it.";
+
+    // Once the status answering the version is out, so the views read the load order while this
+    // corrects what changed on disk. It waits out a reconcile, and a newer one cancels it.
+    private void ValidateEveryPlugin()
     {
-        // Taken before anything reaches _lock or the index: this runs on the Source watcher's timer,
-        // with nothing else ordering it against an in-flight edit.
-        using var _ = WriteGate.Enter();
-
-        var (_, index) = RequireScopeCore();
-        // Every key named here is one logical write, so it lands as one advance.
-        using var projection = index.BeginProjection();
-
-        // Re-derived every call, never remembered from when the watch started: the repository can be
-        // deleted or replaced between the event and this line, and then there is no truth to read.
-        if (SourceRepository.TrackedModFolderOf(_holder.Current, key) is not { } modFolder) return;
-
-        // ADR-0003: a plugin whose last read failed is read whole again, which is what clears the
-        // failure once the tree is sound; a key alone cannot vouch for the rest of the tree.
-        if (_heldPlugins?.IsHeldWithAFailure(key) == true)
+        _exclusive.Enter();
+        try
         {
-            ReindexHeldPlugin(key);
-            return;
+            lock (_lock)
+            {
+                if (_disposed || _heldPlugins is null || _heldElsewhereMessage is not null || _failureMessage is not null)
+                    return;
+            }
+            ValidateIndex(null, BeginReconcile());
         }
-
-        RefreshByKeysOrReadWhole(index, key, modFolder, formKeys);
-        ReapplyFilter();
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogDebug(ex, "Validation was superseded by a newer reconcile");
+        }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            // Busy, not broken: validation is idempotent, and the next snapshot validates again.
+            _logger.LogWarning(ex, "Could not validate the index while another write held it; it is re-checked at the next snapshot");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // No caller waits on this thread, so the failure becomes status data (plugins.md, States,
+            // story 6), and the next snapshot tries again.
+            _logger.LogError(ex, "Validating the index failed unexpectedly");
+            lock (_lock) _failureMessage = ex.Message;
+            PublishStatus();
+        }
+        finally
+        {
+            EndReconcile();
+            ExitExclusive();
+        }
     }
 
     // A tree the keys cannot be read from is diagnosed on the plugin by the whole read, as a first
@@ -827,9 +945,8 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
     // discard uncommitted edits.
     private void ReindexHeldPlugin(PluginAddress key)
     {
-        // Taken before anything reaches _lock: this runs on the watcher's timer. IndexWriteGate is a
-        // Lock, thread-affine, so nothing under this scope may await — the thread that exits must be
-        // the one that entered.
+        // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing
+        // under this scope may await — the thread that exits must be the one that entered.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldPlugin(key);
@@ -877,9 +994,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         {
             try
             {
-                var modFolder = LoadOrderSnapshot.ModFolderOf(metadata.Origin, metadata.Path)
-                    ?? throw new InvalidOperationException(
-                        $"'{metadata.Name}' from '{metadata.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
+                var modFolder = ModFolderHoldingTree(metadata);
                 SourceIngest.Ingest(
                     index, modFolder,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
@@ -887,16 +1002,16 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Could not re-ingest {Plugin} from its source tree", metadata.Name);
-                _heldPlugins?.SetFailure(key,
+                FailRead(_heldPlugins, index, key, metadata.Path,
                     $"Could not re-read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Still " +
                     "showing what was last read from it — the compiled binary is not used for a tracked plugin.");
-                PublishStatus();
                 throw;
             }
 
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        lock (_lock) _failedReads.Remove(key);
         if (_heldPlugins?.ClearFailure(key) == true) PublishStatus();
         AnnouncePluginChanged(index, key);
     }
@@ -912,26 +1027,35 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
+    // A failed read is recorded with the bytes it failed on and rethrown, so those bytes are not
+    // read again until they change.
     private void ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
     {
-        using var documents = OpenDocuments(metadata, gameRelease, dataFolderPath);
-
-        lock (_lock)
+        try
         {
-            index.Index(documents, metadata.Registration, metadata.Key, metadata.Path, DerivedFrom.Binary);
-            index.UpdateWinners(Participating());
-            ReapplyFilter();
+            using var documents = OpenDocuments(metadata, gameRelease, dataFolderPath);
+            lock (_lock)
+            {
+                index.Index(documents, metadata.Registration, metadata.Key, metadata.Path, DerivedFrom.Binary);
+                index.UpdateWinners(Participating());
+                ReapplyFilter();
+            }
         }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            FailRead(_heldPlugins, index, metadata.Key, metadata.Path, PluginLoadFailure.ReasonFor(ex));
+            throw;
+        }
+        lock (_lock) _failedReads.Remove(metadata.Key);
         if (_heldPlugins?.ClearFailure(metadata.Key) == true) PublishStatus();
         AnnouncePluginChanged(index, metadata.Key);
     }
 
     // The file is gone, so its rows go with it. A no-op while the held plugin still exists or with no
-    // load order: the watcher that calls this races teardowns and superseding load orders.
+    // load order.
     private void UnindexGonePlugin(PluginAddress key)
     {
-        // The watcher's timer's other index write — a vanished binary — gated like its sibling
-        // above. Outside _lock, never inside it.
+        // Gated like its sibling above. Outside _lock, never inside it.
         using var _ = WriteGate.Enter();
 
         IRecordIndex index;
@@ -955,78 +1079,6 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             ReapplyFilter();
         }
         AnnouncePluginChanged(index, key);
-    }
-
-    /// <summary>See <see cref="IRefreshIndex.RefreshBinary"/>. Nothing here awaits: the comparison
-    /// and every re-derivation are synchronous under the write gate.</summary>
-    public Task<bool> RefreshBinary(PluginAddress key, string path) => Task.FromResult(RefreshBinaryNow(key, path));
-
-    private bool RefreshBinaryNow(PluginAddress key, string path)
-    {
-        if (!File.Exists(path))
-        {
-            var wasIndexed = IndexedContentHash(key) is not null;
-            UnindexGonePlugin(key);
-            return wasIndexed;
-        }
-
-        if (IndexedContentHash(key) is { } indexedHash)
-        {
-            // A plugin whose last read failed is read whole again, which is what lifts the failure.
-            if (ContentHashOnDisk(path) == indexedHash && _heldPlugins?.IsHeldWithAFailure(key) != true) return false;
-            ReindexHeldPlugin(key);
-            return true;
-        }
-
-        return IndexNotYetHeld(key);
-    }
-
-    /// <summary>See <see cref="IRefreshIndex.RetryFailedReconcile"/>.</summary>
-    public void RetryFailedReconcile()
-    {
-        bool failed;
-        lock (_lock) failed = _failureMessage is not null;
-        if (failed) ReconcileHeld();
-    }
-
-    // A plugin the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
-    // the single-plugin counterpart of ReconcileProgressively's own arriving loop.
-    private bool IndexNotYetHeld(PluginAddress key)
-    {
-        using var _ = WriteGate.Enter();
-
-        HeldPlugins held;
-        IRecordIndex index;
-        lock (_lock)
-        {
-            if (_heldPlugins is not { } h || _index is not { } i) return false;
-            (held, index) = (h, i);
-        }
-
-        if (_holder.Current.Plugin(key) is not { } plugin) return false;
-
-        if (held.Open(plugin) is not { } metadata)
-        {
-            lock (_lock) _failedHashes[key] = PluginBinaryHash.OfFile(plugin.Path);
-            PublishStatus();
-            return false;
-        }
-        lock (_lock) _failedHashes.Remove(key);
-
-        // The sweep is part of the plugin's own projection, so the announcement names the sequence
-        // the winners landed on.
-        using (index.BeginProjection())
-        {
-            if (!RegisterOrIndex(held, index, metadata, CancellationToken.None)) return false;
-
-            lock (_lock)
-            {
-                index.UpdateWinners(Participating());
-                ReapplyFilter();
-            }
-            AnnouncePluginChanged(index, metadata.Key);
-        }
-        return true;
     }
 
     /// <summary>The filter in force and the source its SQL came from, read together so a
@@ -1104,6 +1156,14 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, _refillScheduler);
     }
 
+    /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own
+    /// (ADR-0013 invariant 1): the snapshot held when it runs, so an overtaken arrival reconciles
+    /// the newer.</summary>
+    public void Subscribe() => _holder.Arrived += OnArrived;
+
+    private void OnArrived(LoadOrderSnapshot snapshot, long version) =>
+        Task.Factory.StartNew(ReconcileHeld, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     // Disposal is read with the exclusive right held, which Dispose takes after setting it, so no
     // reconcile opens a store after Dispose.
     private void ReconcileHeld() => Reconcile(() =>
@@ -1134,6 +1194,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
             if (_disposed) return;
             _disposed = true;
         }
+        _holder.Arrived -= OnArrived;
 
         EnterExclusive();
         try
@@ -1156,7 +1217,7 @@ public sealed class Indexer : IQueryIndex, IRefreshIndex, IDisposable
         _index?.Dispose();
         _index = null;
         _indexed.Clear();
-        _failedHashes.Clear();
+        _failedReads.Clear();
         _conflictsComputed = false;
         _plannedCount = 0;
         _heldElsewhereMessage = null;
