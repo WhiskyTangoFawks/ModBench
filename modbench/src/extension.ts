@@ -142,6 +142,7 @@ export function activate(context: vscode.ExtensionContext) {
     conflictsComputed,
     originFiles: (origin) => toolbox.originFiles(origin),
     instancePlugins: () => toolbox.instance?.value.plugins ?? [],
+    instanceMods: () => toolbox.instance?.value.mods ?? [],
     trackSelection: () => toolbox.trackSelection(),
   };
   // The instance side, whole: the Instance, the four views, their gestures and the backend sync.
@@ -222,18 +223,20 @@ interface PluginRowCommandDeps {
   conflictsComputed: () => Promise<void>;
   originFiles: OriginFilesOf;
   instancePlugins: TrackDeps['plugins'];
+  instanceMods: TrackDeps['mods'];
   trackSelection: () => readonly unknown[];
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (delete/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, outputChannel, conflictsComputed, instancePlugins, trackSelection } = deps;
+  const { session, client, outputChannel, conflictsComputed, instancePlugins, instanceMods, trackSelection } = deps;
   return [
     registerTrackCommand({
       progress: { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
       client, reporter: makeReporter(outputChannel, 'mod.track'), onTracked: conflictsComputed,
       plugins: instancePlugins,
+      mods: instanceMods,
       modOfRow,
     }, trackSelection),
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),

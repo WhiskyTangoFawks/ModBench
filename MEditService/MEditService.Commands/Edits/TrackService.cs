@@ -32,6 +32,7 @@ public sealed class TrackService(
         LoadOrderSnapshot loadOrder,
         IReadOnlyList<PluginAddress> plugins,
         SourcePreset preset,
+        IReadOnlyDictionary<string, string> upstreamVersions,
         CancellationToken cancel = default)
     {
         try
@@ -63,7 +64,7 @@ public sealed class TrackService(
             SetProgress(verified.FirstOrDefault()?.Plugin.Origin, TrackPhase.Committing, selection.Count, selection.Count);
             var landed = new List<PluginAddress>();
             foreach (var mod in verified.GroupBy(v => v.ModFolder, StringComparer.Ordinal))
-                Commit(mod.Key, preset, [.. mod], landed, refused);
+                Commit(mod.Key, preset, [.. mod], upstreamVersions, landed, refused);
 
             return TrackSelectionResult.PerPlugin(InSelectionOrder(landed, p => p), InSelectionOrder(refused, r => r.Plugin));
         }
@@ -85,12 +86,12 @@ public sealed class TrackService(
     // One repository per mod folder: the plugins that passed their gate, committed one at a time.
     private void Commit(
         string modFolder, SourcePreset preset, IReadOnlyList<VerifiedPlugin> plugins,
-        List<PluginAddress> landed, List<TrackRefused> refused)
+        IReadOnlyDictionary<string, string> upstreamVersions, List<PluginAddress> landed, List<TrackRefused> refused)
     {
-        var upstreamVersion = SourceRepository.UpstreamVersionIn(modFolder);
         IReadOnlyList<(IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers)> baselines =
         [
-            .. plugins.Select(v => (v.Files, new BaselineTrailers(v.Plugin.Name, upstreamVersion, v.BinarySha256))),
+            .. plugins.Select(v => (v.Files, new BaselineTrailers(
+                v.Plugin.Name, upstreamVersions.GetValueOrDefault(v.Plugin.Origin), v.BinarySha256))),
         ];
         if (logger.IsEnabled(LogLevel.Information))
         {

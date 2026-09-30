@@ -274,6 +274,7 @@ export class HttpMEditClient implements MEditClient {
    *  cause no plugin escapes, git missing, refuses the whole selection. */
   async track(
     plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
+    upstreamVersions: Parameters<MEditClient['track']>[2],
     options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused> {
     const counted = plugins.length === 1 ? '1 plugin' : `${plugins.length} plugins`;
@@ -283,7 +284,7 @@ export class HttpMEditClient implements MEditClient {
       const answer = await this.mutate({
         op: `track(${counted})`,
         failMsg: `Could not track ${counted}`,
-        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset } }),
+        post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset, upstreamVersions } }),
       });
       if (answer === undefined) return { refused: true, message: `Could not track ${counted} — no answer` };
       if (isRefused(answer)) return answer;

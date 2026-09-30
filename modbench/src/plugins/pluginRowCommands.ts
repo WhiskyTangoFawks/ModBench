@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress } from '../client';
 import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
+import type { InstanceValue } from '../instanceLoader/instance';
 import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
 } from './trackedRepositories';
@@ -65,6 +66,7 @@ export interface TrackDeps {
   reporter: Reporter;
   onTracked: () => Promise<void>;
   plugins: () => readonly PluginAddress[];
+  mods: () => InstanceValue['mods'];
   modOfRow: (value: unknown) => string | undefined;
 }
 
@@ -104,6 +106,7 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
     return;
   }
   const addressed = withPlugins.flatMap(pluginsOf);
+  const upstreamVersions = upstreamVersionsOf(deps.mods(), withPlugins);
   const what = withPlugins.length === 1 ? `"${firstMod}"` : `${withPlugins.length} mods`;
 
   const choice = await pickTrackPreset(`Track ${what}`);
@@ -111,7 +114,7 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
 
   await progress.while(async () => {
     progress.say(trackProgressMessage(firstMod, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-    const result = await client.track(addressed, choice.label, {
+    const result = await client.track(addressed, choice.label, upstreamVersions, {
       onProgress: (status) => { progress.say(trackProgressMessage(status.origin ?? firstMod, status)); },
     });
     if (isRefused(result)) { reporter.report('error', result.message); return; }
@@ -120,6 +123,13 @@ async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void
     const refused = reportRefused(reporter, mods, pluginless, { total: addressed.length, outcome: result });
     if (!refused && result.landed.length > 0) reporter.landed(`Tracked ${what}.`);
   });
+}
+
+// ADR-0007 invariant 7: each mod's version as the mod manager records it, keyed by origin; a mod
+// that records none is left out.
+function upstreamVersionsOf(entries: InstanceValue['mods'], mods: readonly string[]): Record<string, string> {
+  return Object.fromEntries(entries.flatMap((entry) =>
+    (entry.kind === 'mod' && entry.version !== undefined && mods.includes(entry.name) ? [[entry.name, entry.version]] : [])));
 }
 
 // commands.md, "each item lands on its own": one notification naming each mod that provides no

@@ -35,11 +35,10 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfBothPluginsOfAMod_CommitsTheModsOwnFiles_ThenEachPluginOnItsOwn()
     {
-        WriteMetaIni("[General]\nversion=1.2.3\n");
         var first = WritePlugin("First.esp", "FirstNpc");
         var second = WritePlugin("Second.esp", "SecondNpc");
 
-        var result = await Track("First.esp", "Second.esp");
+        var result = await Track(UpstreamVersion("1.2.3"), "First.esp", "Second.esp");
 
         Assert.Empty(result.Refused);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
@@ -54,9 +53,9 @@ public sealed class TrackCommitShapeTests : IDisposable
     }
 
     [Fact]
-    public async Task Track_OfAModWithNoRecordedVersion_LeavesTheVersionOutOfEverySubjectAndTrailer()
+    public async Task Track_WithNoUpstreamVersionInTheRequest_LeavesItOutOfEverySubjectAndTrailer_WhateverTheModFolderHolds()
     {
-        WriteMetaIni("[General]\ngameName=Fallout4\n");
+        File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), "[General]\nversion=9.9.9\n");
         var first = WritePlugin("First.esp", "FirstNpc");
         var second = WritePlugin("Second.esp", "SecondNpc");
 
@@ -231,8 +230,6 @@ public sealed class TrackCommitShapeTests : IDisposable
         }
     }
 
-    private void WriteMetaIni(string text) => File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), text);
-
     // The binary's own SHA-256, computed here from the bytes on disk.
     private string WritePlugin(string name, string editorId)
     {
@@ -245,9 +242,18 @@ public sealed class TrackCommitShapeTests : IDisposable
 
     private static PluginAddress Key(string plugin) => new(plugin, ModName);
 
+    private static Dictionary<string, string> UpstreamVersion(string version) => new() { [ModName] = version };
+
     private Task<TrackSelectionResult> Track(params string[] plugins) => Track(TestAdapters.Mutagen(), plugins);
 
-    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins)
+    private Task<TrackSelectionResult> Track(IReadOnlyDictionary<string, string> upstreamVersions, params string[] plugins) =>
+        Track(TestAdapters.Mutagen(), upstreamVersions, plugins);
+
+    private Task<TrackSelectionResult> Track(IPluginAdapter adapter, params string[] plugins) =>
+        Track(adapter, new Dictionary<string, string>(), plugins);
+
+    private Task<TrackSelectionResult> Track(
+        IPluginAdapter adapter, IReadOnlyDictionary<string, string> upstreamVersions, params string[] plugins)
     {
         var entries = Directory.GetFiles(_modFolder, "*.esp")
             .Order(StringComparer.Ordinal)
@@ -255,7 +261,7 @@ public sealed class TrackCommitShapeTests : IDisposable
             .ToList();
         var loadOrder = new LoadOrderSnapshot(_gameDir, _gameDir, GameRelease.Fallout4, SnapshotPlugins.Of(entries));
         return new TrackService(NullLogger<TrackService>.Instance, adapter)
-            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits);
+            .TrackAsync(loadOrder, [.. plugins.Select(Key)], SourcePreset.Edits, upstreamVersions);
     }
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

@@ -42,6 +42,7 @@ import {
   conflictsComputedOver, registerTrackCommand, registerCompileCommand, CompileProblems, type PluginsViewProgress,
 } from '../pluginRowCommands';
 import { originFiles } from '../../instanceLoader/loadOrderSnapshot';
+import type { InstanceValue } from '../../instanceLoader/instance';
 import { InMemoryMEditClient } from '../../client';
 import { PluginNode } from '../PluginsTreeProvider';
 import { recordingReporter } from '../../test/surfacingDoubles';
@@ -97,6 +98,13 @@ describe('modbench.mod.track', () => {
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const INSTANCE_PLUGINS = [FIRST, OTHER, { name: 'Loose.esp', origin: 'overwrite' }, SECOND];
+  // ADR-0007 invariant 7: each track call carries the upstream versions ModA records and ModB does
+  // not. The separator first, named like a mod, is the rival a lookup by name alone falls for.
+  const INSTANCE_MODS: InstanceValue['mods'] = [
+    { kind: 'separator', name: 'ModA', enabled: true },
+    { kind: 'mod', name: 'ModA', enabled: true, version: '1.2.3' },
+    { kind: 'mod', name: 'ModB', enabled: true },
+  ];
 
   // Stands for a Mods row, whose type this box does not import.
   class ModRow extends TreeItem {
@@ -117,6 +125,7 @@ describe('modbench.mod.track', () => {
     registerTrackCommand({
       progress, client, reporter, onTracked,
       plugins: () => INSTANCE_PLUGINS,
+      mods: () => INSTANCE_MODS,
       modOfRow: (value) => (value instanceof ModRow ? value.modName : undefined),
     }, paletteSelection);
     return {
@@ -148,7 +157,7 @@ describe('modbench.mod.track', () => {
 
     const qp = await runTrackedWithPreset(handler, EDITS_ITEM, row(FIRST));
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
     expect(qp.placeholder).toBe('Track "ModA"');
     expect(reporter.landings).toEqual(['Tracked "ModA".']);
     expect(reporter.reports).toEqual([]);
@@ -162,7 +171,7 @@ describe('modbench.mod.track', () => {
 
     await runTrackedWithPreset(handler, EDITS_ITEM, row(SECOND), [row(FIRST), row(SECOND)]);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
   });
 
   // commands.md, "A selection is one gesture": one call with the whole selection, asked once.
@@ -175,7 +184,7 @@ describe('modbench.mod.track', () => {
     const qp = await runTrackedWithPreset(handler, EVERYTHING_ITEM, mods[1], mods);
 
     expect(createQuickPick).toHaveBeenCalledOnce();
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Everything', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Everything', { ModA: '1.2.3' }, expect.anything()] }]);
     expect(qp.placeholder).toBe('Track 2 mods');
     expect(reporter.landings).toEqual(['Tracked 2 mods.']);
   });
@@ -192,7 +201,7 @@ describe('modbench.mod.track', () => {
 
     await runTrackedWithPreset(handler, EDITS_ITEM, header);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
   });
 
   // The palette hands the command no row: it takes the selection of the view last selected in.
@@ -203,7 +212,7 @@ describe('modbench.mod.track', () => {
 
     await runTrackedWithPreset(handler, EDITS_ITEM);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', {}, expect.anything()] }]);
     expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
@@ -214,7 +223,7 @@ describe('modbench.mod.track', () => {
 
     await runTrackedWithPreset(handler, EDITS_ITEM);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[OTHER], 'Edits', {}, expect.anything()] }]);
     expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
@@ -263,7 +272,7 @@ describe('modbench.mod.track', () => {
 
     const qp = await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
 
-    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Edits', expect.anything()] }]);
+    expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND, OTHER], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
     expect(qp.placeholder).toBe('Track 2 mods');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 of 3 mods.', detail: '"ModC" (it provides no plugin)' },
@@ -351,7 +360,7 @@ describe('modbench.mod.track', () => {
 
     expect(said).toContain('Tracking "ModA"…');
 
-    const [, , options] = present(trackSpy.mock.calls[0], 'the track call');
+    const [, , , options] = present(trackSpy.mock.calls[0], 'the track call');
     said.length = 0;
     present(options, 'the track options').onProgress?.({ origin: 'ModB', phase: 'Committing', pluginsDone: 2, pluginsTotal: 2 });
 

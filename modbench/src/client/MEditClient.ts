@@ -136,8 +136,11 @@ export interface MEditClient {
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
   createPlugin(plugin: PluginAddress, folder: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome>;
+  // `upstreamVersions` is keyed by origin and holds only the mods the mod manager records a version for.
   track(
-    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything', options?: { onProgress?: (status: TrackStatus) => void },
+    plugins: readonly PluginAddress[], preset: 'Edits' | 'Everything',
+    upstreamVersions: components['schemas']['TrackRequest']['upstreamVersions'],
+    options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
   // The whole selection is one call; each record lands or is refused on its own (ADR-0019
