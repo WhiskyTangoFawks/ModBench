@@ -5,7 +5,7 @@ import type {
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
   ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
-import { recordResourceUri } from './recordResourceUri';
+import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
 import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
@@ -353,10 +353,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return undefined;
   }
 
-  /** Undefined when nothing has cached this record yet, which the decoration provider reads the
-   *  same as 'None': nothing to badge. */
-  workingTreeStateOf(plugin: string, origin: string, formKey: string): RecordSummary['workingTreeState'] | undefined {
-    return this.cachedRecord(plugin, origin, formKey)?.workingTreeState;
+  /** Undefined for a URI that is not a record row's, and for a record nothing has cached yet, which
+   *  the decoration provider reads the same as 'None': nothing to badge. */
+  workingTreeStateOf(uri: vscode.Uri): RecordSummary['workingTreeState'] | undefined {
+    const identity = parseRecordResourceUri(uri);
+    return identity && this.cachedRecord(identity.plugin, identity.origin, identity.formKey)?.workingTreeState;
   }
 
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {

@@ -39,6 +39,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { readPluginLines } from '../../test/mo2/corpusFixture';
 import { present } from '../../ports/present';
+import { listsForThePluginAsked } from '../../client/test/fixtures';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -1656,10 +1657,10 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     return { group: expectInstanceOf(group, RecordTypeNode), record: expectInstanceOf(record, RecordNode) };
   }
 
-  // An override's own plugin is its master's, which mEdit calls read-only: the row still sits in,
-  // and is edited through, the tracked plugin above it.
+  // An override's FormKey names its master, which mEdit calls read-only; the row is still its
+  // tracked plugin's own.
   it('states an override record under a tracked, editable plugin tracked and editable', async () => {
-    const client = weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: 'Data' }));
+    const client = weaponOf(recordSummary({ formKey: '000001:Fallout4.esm' }));
     const h = makeTree([plugin({ name: 'A.esp', slot: 0 })], { client });
     await reconcile(h, [held('A.esp', { isTracked: true }), held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
 
@@ -1690,7 +1691,7 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
     [plugin({ name: 'Fallout4.esm', slot: null, origin: 'ModA', winning: modCopyWins }), plugin({ name: 'A.esp', slot: 0 })],
-    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm' })),
+    { client: weaponOf(recordSummary({ plugin: 'Fallout4.esm', formKey: '000001:Fallout4.esm', origin: modCopyWins ? 'ModA' : 'Data' })),
       implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
 
   it.each([['last', [DATA_COPY, MOD_COPY]], ['first', [MOD_COPY, DATA_COPY]]])(
@@ -2369,7 +2370,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
   }
 
   async function heldTree(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], instance?: FakeInstance): Promise<Harness> {
-    const h = makeTree(plugins, { client: everyKindOfRecord(), instance });
+    const h = makeTree(plugins, { client: listsForThePluginAsked(everyKindOfRecord()), instance });
     await reconcile(h, plugins.map((p) => held(p.name, { origin: p.origin })));
     return h;
   }

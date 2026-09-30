@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage, type CellSummary, type InteriorCellBlock,
 } from '../../client';
-import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom, fakeUri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, Uri: { from: uriFrom },
@@ -19,6 +19,7 @@ import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
+import { listsForThePluginAsked } from '../../client/test/fixtures';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,9 +39,10 @@ function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
 ): RecordSummary {
   return {
-    // The backend's real shape — Mutagen's FormKey.ToString(): "<hex6>:<ModKey>".
+    // mEdit's real shape: a record row's plugin is the plugin browsed (Search's `plugin = $1`), and
+    // its FormKey, Mutagen's "<hex6>:<ModKey>", names the master it overrides.
     formKey: `${String(i).padStart(6, '0')}:Fallout4.esm`,
-    plugin: 'Fallout4.esm',
+    plugin: 'Plugin0.esp',
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
@@ -323,7 +325,7 @@ describe('RecordNode', () => {
 describe('onDidReadRecords / workingTreeStateOf', () => {
   async function readGroup(repo: InMemoryMEditClient) {
     const provider = new PluginTreeProvider(repo);
-    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Fallout4.esm', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
+    const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode)[0], 'the sole RecordTypeNode');
     const read: (readonly unknown[])[] = [];
     provider.onDidReadRecords((uris) => read.push(uris));
     return { provider, typeNode, read };
@@ -336,7 +338,7 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     const [row] = await provider.getChildren(typeNode);
 
     expect(read).toEqual([[expectInstanceOf(row, RecordNode).resourceUri]]);
-    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+    expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBe('Modified');
   });
 
   it('names nothing when a group answers from its cache', async () => {
@@ -359,9 +361,9 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     provider.refresh();
     await provider.getChildren(typeNode);
 
-    const uri = recordResourceUri(record.plugin, 'ModA', record.formKey);
+    const uri = recordResourceUri(record.plugin, 'Data', record.formKey);
     expect(read).toEqual([[uri], [uri]]);
-    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+    expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBe('Modified');
   });
 
   // ADR-0015 invariant 3: a read answered before mEdit's rows changed is not the rows' state now.
@@ -379,17 +381,28 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     await inFlight;
 
     expect(read).toEqual([]);
-    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBeUndefined();
+    expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBeUndefined();
 
     await provider.getChildren(typeNode);
 
-    expect(read).toEqual([[recordResourceUri(record.plugin, 'ModA', record.formKey)]]);
-    expect(provider.workingTreeStateOf(record.plugin, 'ModA', record.formKey)).toBe('Modified');
+    expect(read).toEqual([[recordResourceUri(record.plugin, 'Data', record.formKey)]]);
+    expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBe('Modified');
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
     const provider = new PluginTreeProvider(makeClient());
-    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', '000001:Fallout4.esm')).toBeUndefined();
+    expect(provider.workingTreeStateOf(recordResourceUri('Plugin0.esp', 'Data', '000001:Fallout4.esm'))).toBeUndefined();
+  });
+
+  // The rival: a lookup that skips the scheme would badge another provider's row whose path
+  // happens to spell a cached record.
+  it('workingTreeStateOf is undefined for a URI outside the medit-record: scheme', async () => {
+    const record = makeRecord(0, 'Modified');
+    const { provider, typeNode } = await readGroup(makeClient({ records: { items: [record], total: 1 } }));
+    await provider.getChildren(typeNode);
+
+    const { path } = recordResourceUri(record.plugin, 'Data', record.formKey);
+    expect(provider.workingTreeStateOf(fakeUri(path))).toBeUndefined();
   });
 });
 
@@ -421,7 +434,7 @@ describe('worldspace, cell and placed rows state their record', () => {
 
 describe('record rows carry their copy identity', () => {
   it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
-    const repo = makeClient();
+    const repo = makeClient({ records: { items: [{ ...makeRecord(0), origin: 'ModA' }], total: 1 } });
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
@@ -442,8 +455,6 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
   const placed = { formKey: '000003:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr', hasParseFailure: false };
 
   function spatialClient(): InMemoryMEditClient {
-    // makeRecord's rows belong to Fallout4.esm: every record row here is an override, whose own
-    // plugin is not the plugin row it sits under.
     const repo = makeClient({
       recordTypes: [{ type: 'WEAP', count: 1 }, { type: 'qust', count: 1 }, { type: 'wrld', count: 1 }, { type: 'cell', count: 1 }],
       records: { items: [makeRecord(0, 'None', true)], total: 1 },
@@ -862,6 +873,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
 // ── browsing a specific plugin of a filename (ADR-0012) ────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
+  const sharedClient = () => listsForThePluginAsked(makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] }));
+
   it('asks the repository for the plugin the row stands for', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
@@ -872,7 +885,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   });
 
   it('carries that plugin through to its record pages', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const repo = sharedClient();
     const provider = new PluginTreeProvider(repo);
 
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Shared.esp', 'ModB'), RecordTypeNode)[0], 'the sole RecordTypeNode');
@@ -882,7 +895,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   });
 
   it('caches each plugin separately, so one plugin\'s page is never served for the other', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const repo = sharedClient();
     const provider = new PluginTreeProvider(repo);
 
     const fromA = present(expectInstancesOf(await provider.getPluginChildren('Shared.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
@@ -897,7 +910,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   // ADR-0012: a plugin is `(origin, filename)`, and both compare without case, as MO2 and a
   // Windows filesystem compare them.
   it('caches one plugin once, whatever case its filename and origin arrive in', async () => {
-    const repo = makeClient({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const repo = sharedClient();
     const provider = new PluginTreeProvider(repo);
 
     const asListed = present(expectInstancesOf(await provider.getPluginChildren('Shared.esp', 'ModA'), RecordTypeNode)[0], 'the sole RecordTypeNode');
@@ -929,7 +942,7 @@ function makeContainerChild(
   formKey: string, recordType: string, editorId: string | null = null, hasContainerChildren = false,
 ): ContainerChildSummary {
   return {
-    formKey, editorId, plugin: 'Fallout4.esm', origin: 'Data',
+    formKey, editorId, plugin: 'Plugin0.esp', origin: 'Data',
     loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType, hasContainerChildren,
     hasParseFailure: false,
   };
@@ -979,7 +992,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(questNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Fallout4.esm', 'qust1:Fallout4.esm', 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Plugin0.esp', 'qust1:Fallout4.esm', 'Data'] });
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect(expectInstanceOf(children[0], RecordNode).record.editorId).toBe('TopicA');
@@ -1022,7 +1035,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(topicNode);
 
-    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Fallout4.esm', 'dial1:Fallout4.esm', 'Data'] });
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Plugin0.esp', 'dial1:Fallout4.esm', 'Data'] });
     expect(children).toHaveLength(1);
   });
 

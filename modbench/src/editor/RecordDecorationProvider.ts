@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import type { WorkingTreeState } from '../client';
-import { parseRecordResourceUri } from './recordResourceUri';
 
 /** Editor's own view of the tree whose rows it badges: a structural shape, not
  *  `PluginTreeProvider` itself, since Editor names no Plugins-view type. */
 export interface RecordBadgeSource {
-  workingTreeStateOf(plugin: string, origin: string, formKey: string): WorkingTreeState | undefined;
+  /** Undefined for a URI that is not one of its record rows. */
+  workingTreeStateOf(uri: vscode.Uri): WorkingTreeState | undefined;
   /** The rows a read from mEdit just answered, so their badges follow that read. */
   onDidReadRecords(listener: (uris: readonly vscode.Uri[]) => void): vscode.Disposable;
 }
@@ -22,9 +22,7 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider, 
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-    const identity = parseRecordResourceUri(uri);
-    if (!identity) return undefined;
-    const state = this.source.workingTreeStateOf(identity.plugin, identity.origin, identity.formKey);
+    const state = this.source.workingTreeStateOf(uri);
     if (state === 'Modified') {
       return { badge: 'M', color: new vscode.ThemeColor('gitDecoration.modifiedResourceForeground'), tooltip: 'Modified' };
     }
