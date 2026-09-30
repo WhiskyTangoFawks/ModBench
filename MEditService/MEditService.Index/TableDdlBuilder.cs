@@ -14,13 +14,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // loudly, so the database enforces the split.
     internal const string MirrorSchema = "mirror";
 
-    // ADR-0012 invariant 1: a plugin's identity compares as the game compares a filename, ignoring
-    // case. Declared on the column, so every comparison, join and grouping does, the SQL door's too.
-    private const string PluginIdentity = "VARCHAR COLLATE NOCASE";
-
-    // A FormKey names its plugin by filename, and Mutagen's ModKey compares that ignoring case, so
-    // every column holding a FormKey or a link to one does too.
-    private const string FormKeyType = "VARCHAR COLLATE NOCASE";
+    // ADR-0012 invariant 1 and Mutagen's ModKey: a plugin's filename compares ignoring case, and so
+    // does a FormKey, which names its plugin by filename.
+    internal const string FilenameIdentity = "COLLATE NOCASE";
 
     // A mirror table carrying a plugin identity, plus which load-order-derived columns its view
     // adds. `registrations` is the registration itself; `mirror.files` must answer for plugins the
@@ -95,6 +91,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateContainerChildTable(connection);
         CreateRecordTypeFailureTable(connection);
         CreateSequenceTable(connection);
+        Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
         // Views after tables, in dependency order: the registered views over every mirror table, then
         // the Head views over the registered `records`/`records_committed`.
@@ -152,9 +149,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records (
-                form_key        {FormKeyType} NOT NULL,
-                plugin          {PluginIdentity} NOT NULL,
-                origin          {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                form_key        VARCHAR {FilenameIdentity} NOT NULL,
+                plugin          VARCHAR {FilenameIdentity} NOT NULL,
+                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type     VARCHAR NOT NULL,
                 editor_id       VARCHAR,
                 "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
@@ -181,9 +178,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.records_committed (
-                form_key        {FormKeyType} NOT NULL,
-                plugin          {PluginIdentity} NOT NULL,
-                origin          {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                form_key        VARCHAR {FilenameIdentity} NOT NULL,
+                plugin          VARCHAR {FilenameIdentity} NOT NULL,
+                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type     VARCHAR NOT NULL,
                 editor_id       VARCHAR,
                 "ref"           VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
@@ -237,8 +234,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static void CreateParticipatingTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {ParticipatingRelation} (
-                plugin {PluginIdentity} NOT NULL,
-                origin {PluginIdentity} NOT NULL,
+                plugin VARCHAR {FilenameIdentity} NOT NULL,
+                origin VARCHAR {FilenameIdentity} NOT NULL,
                 load_order_idx INTEGER NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
@@ -251,9 +248,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {WinnersRelation} (
                 record_ref VARCHAR NOT NULL,
-                form_key   {FormKeyType} NOT NULL,
-                plugin     {PluginIdentity} NOT NULL,
-                origin     {PluginIdentity} NOT NULL
+                form_key   VARCHAR {FilenameIdentity} NOT NULL,
+                plugin     VARCHAR {FilenameIdentity} NOT NULL,
+                origin     VARCHAR {FilenameIdentity} NOT NULL
             )
             """);
     }
@@ -264,8 +261,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
-                plugin {PluginIdentity} NOT NULL,
-                origin {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                plugin VARCHAR {FilenameIdentity} NOT NULL,
+                origin VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 load_order_idx INTEGER,
                 enabled BOOLEAN NOT NULL,
                 winning BOOLEAN NOT NULL,
@@ -280,11 +277,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     internal static void CreateFilesTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.files (
-                plugin        {PluginIdentity} NOT NULL,
-                origin        {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                plugin        VARCHAR {FilenameIdentity} NOT NULL,
+                origin        VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 file_path     VARCHAR NOT NULL,
                 content_hash  VARCHAR NOT NULL,
-                index_version VARCHAR NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);
@@ -292,8 +288,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     internal static void CreatePluginDerivationTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDerivationTable} (
-                plugin       {PluginIdentity} NOT NULL,
-                origin       {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                plugin       VARCHAR {FilenameIdentity} NOT NULL,
+                origin       VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 derived_from VARCHAR NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
@@ -302,8 +298,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     internal static void CreatePluginDiagnosisTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.{PluginDiagnosisTable} (
-                plugin       {PluginIdentity} NOT NULL,
-                origin       {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                plugin       VARCHAR {FilenameIdentity} NOT NULL,
+                origin       VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 ordinal      INTEGER NOT NULL,
                 anchor       VARCHAR,
                 defect_class VARCHAR NOT NULL,
@@ -316,10 +312,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_references (
-                source_form_key {FormKeyType} NOT NULL,
-                source_plugin   {PluginIdentity} NOT NULL,
-                source_origin   {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                target_form_key {FormKeyType} NOT NULL,
+                source_form_key VARCHAR {FilenameIdentity} NOT NULL,
+                source_plugin   VARCHAR {FilenameIdentity} NOT NULL,
+                source_origin   VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                target_form_key VARCHAR {FilenameIdentity} NOT NULL,
                 field_path      VARCHAR NOT NULL,
                 record_type     VARCHAR NOT NULL,
                 editor_id       VARCHAR
@@ -338,9 +334,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_lookup (
-                form_key       {FormKeyType} NOT NULL,
-                plugin         {PluginIdentity} NOT NULL,
-                origin         {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                form_key       VARCHAR {FilenameIdentity} NOT NULL,
+                plugin         VARCHAR {FilenameIdentity} NOT NULL,
+                origin         VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type    VARCHAR NOT NULL,
                 editor_id      VARCHAR
             )
@@ -357,10 +353,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.placement (
-                form_key        {FormKeyType} NOT NULL,
-                plugin          {PluginIdentity} NOT NULL,
-                origin          {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_cell     {FormKeyType} NOT NULL,
+                form_key        VARCHAR {FilenameIdentity} NOT NULL,
+                plugin          VARCHAR {FilenameIdentity} NOT NULL,
+                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                parent_cell     VARCHAR {FilenameIdentity} NOT NULL,
                 placement_group VARCHAR NOT NULL,
                 pos_x           FLOAT,
                 pos_y           FLOAT,
@@ -374,10 +370,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.cell_location (
-                cell_form_key    {FormKeyType} NOT NULL,
-                plugin           {PluginIdentity} NOT NULL,
-                origin           {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_worldspace {FormKeyType},
+                cell_form_key    VARCHAR {FilenameIdentity} NOT NULL,
+                plugin           VARCHAR {FilenameIdentity} NOT NULL,
+                origin           VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                parent_worldspace VARCHAR {FilenameIdentity},
                 block_x          INTEGER,
                 block_y          INTEGER,
                 sub_x            INTEGER,
@@ -403,10 +399,10 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.container_child (
-                child_form_key      {FormKeyType} NOT NULL,
-                plugin               {PluginIdentity} NOT NULL,
-                origin               {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                parent_form_key      {FormKeyType} NOT NULL,
+                child_form_key      VARCHAR {FilenameIdentity} NOT NULL,
+                plugin               VARCHAR {FilenameIdentity} NOT NULL,
+                origin               VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                parent_form_key      VARCHAR {FilenameIdentity} NOT NULL,
                 parent_record_type   VARCHAR NOT NULL,
                 slot_name            VARCHAR NOT NULL,
                 slot_index           INTEGER NOT NULL
@@ -424,8 +420,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     {
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {MirrorSchema}.record_type_failure (
-                plugin          {PluginIdentity} NOT NULL,
-                origin          {PluginIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                plugin          VARCHAR {FilenameIdentity} NOT NULL,
+                origin          VARCHAR {FilenameIdentity} NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type     VARCHAR NOT NULL,
                 parse_diagnosis VARCHAR NOT NULL
             )

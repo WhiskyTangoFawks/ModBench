@@ -11,7 +11,7 @@ namespace MEditService.Index.Tests.Plugins;
 public sealed class PluginAddressComparisonTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("plugin-address-comparison")
-        .WithPlugin("Cased.esp", mod => mod.Npcs.AddNew("FromCased"), origin: "CasedMod")
+        .WithPlugin("Cased.esp", mod => mod.Npcs.AddNew("FromCased").Race.SetTo(mod.Races.AddNew("CasedRace")), origin: "CasedMod")
         .BuildScattered();
 
     private readonly LoadOrderHolder _holder = new();
@@ -49,22 +49,20 @@ public sealed class PluginAddressComparisonTests : IDisposable
             reads.GetDocuments(OtherCase).Select(d => d.FormKey).Order());
     }
 
-    // Mutagen's ModKey compares ignoring case, so a FormKey whose filename differs only in case
-    // names the same record.
-    private string NpcUnderAnotherCase() =>
+    private string UnderAnotherCase(string editorId) =>
         _index.RequireReads().GetDocuments(_fixture.Plugins.Single().KeyOf())
-            .Single(d => d.EditorId == "FromCased").FormKey.ToUpperInvariant();
+            .Single(d => d.EditorId == editorId).FormKey.ToUpperInvariant();
 
     [Fact]
     public void APointReadUnderAnotherCase_AnswersTheRecord()
     {
-        Assert.Equal("FromCased", _index.RequireReads().GetDocument(NpcUnderAnotherCase())?.EditorId);
+        Assert.Equal("FromCased", _index.RequireReads().GetDocument(UnderAnotherCase("FromCased"))?.EditorId);
     }
 
     [Fact]
     public void AnOverrideStackUnderAnotherCase_HoldsThePluginsCopy()
     {
-        var stack = _index.RequireReads().GetOverrideStack(NpcUnderAnotherCase());
+        var stack = _index.RequireReads().GetOverrideStack(UnderAnotherCase("FromCased"));
 
         Assert.NotNull(stack);
         Assert.Single(stack.Entries);
@@ -78,8 +76,12 @@ public sealed class PluginAddressComparisonTests : IDisposable
         Assert.Equal(1, _index.RequireReads().Search(query).Total);
     }
 
-    // The file's rows outlive the index that wrote them, so the next one meets them under whatever
-    // case its load order names the plugin in.
+    [Fact]
+    public void ASqlDoorFilterOnALinkUnderAnotherCase_MatchesTheLinkingRecord()
+    {
+        Assert.Equal(1, _index.Matching($"SELECT form_key FROM npc_ WHERE \"Race\" = '{UnderAnotherCase("CasedRace")}'"));
+    }
+
     [Fact]
     public void AnIndexReopenedUnderAnotherCase_HoldsOneCopyOfItsRecord()
     {

@@ -60,6 +60,7 @@ internal static class RecordViewBuilder
         // Mutagen omits any field equal to its default, so an absent path means "the default", not
         // "unknown" — for a non-nullable field. A nullable one has no default to restore and keeps
         // NULL (ViewDefaultLiteral is null for those).
-        return col.ViewDefaultLiteral is { } fallback ? $"COALESCE({raw}, {fallback})" : raw;
+        var projected = col.ViewDefaultLiteral is { } fallback ? $"COALESCE({raw}, {fallback})" : raw;
+        return col.ApiType == "formKey" ? $"({projected}) {TableDdlBuilder.FilenameIdentity}" : projected;
     }
 }

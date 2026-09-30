@@ -163,7 +163,7 @@ public sealed class PersistentIndexTests : IDisposable
         {
             connection.Open();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE mirror.files SET index_version = 'written-by-another-build'";
+            cmd.CommandText = "UPDATE mirror.index_version SET value = 'written-by-another-build'";
             cmd.ExecuteNonQuery();
         }
 
@@ -171,6 +171,37 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
+    }
+
+    // A file holding no indexed plugin still carries the version its tables were built under.
+    [Fact]
+    public void AFileWrittenUnderAnotherVersion_HoldingNoIndexedPlugin_RebuildsFromScratch()
+    {
+        using (Launched([])) { }
+
+        using (var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}"))
+        {
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                UPDATE mirror.index_version SET value = 'written-by-another-build';
+                CREATE TABLE mirror.left_by_another_build (value INTEGER);
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        using (Launched([])) { }
+
+        Assert.False(TableExists("left_by_another_build"));
+    }
+
+    private bool TableExists(string name)
+    {
+        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{name}'";
+        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;
     }
 
     // A file DuckDB cannot open at all — a storage-format change on upgrade, a truncated

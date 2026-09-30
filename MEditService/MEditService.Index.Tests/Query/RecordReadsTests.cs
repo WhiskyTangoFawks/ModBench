@@ -132,8 +132,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(["Zebra", "Apple"], result.Items.Select(r => r.EditorId));
     }
 
-    // Mutagen's ModKey compares ignoring case, so a master named in another case keeps its load
-    // position in the FormID.
     [Fact]
     public void AListing_OrdersARecordWhoseMasterIsNamedInAnotherCase_ByThatMastersPosition()
     {
