@@ -1,4 +1,4 @@
-// Each MO2 file's format lives in its kernel module, and nothing else names it; MO2's own
+// Each instance file's format lives in its codec module, and nothing else names it; MO2's own
 // directory and file names live in `layout.ts`, and nothing else spells them.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
@@ -8,8 +8,26 @@ import { join, basename, sep } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from '../../test/tsFiles';
 
-const KERNEL_FILES = ['modlistText.ts', 'pluginsText.ts', 'metaIni.ts', 'modOrganizerIni.ts', 'downloads.ts'];
-const KERNEL_TESTS = KERNEL_FILES.map((f) => f.replace(/\.ts$/, '.test.ts'));
+interface Codec {
+  file: string;
+  test: string;
+}
+
+const codecsIn = (dir: string, testDir: string, names: readonly string[]): Codec[] =>
+  names.map((name) => ({ file: join(dir, `${name}.ts`), test: join(testDir, `${name}.test.ts`) }));
+
+const ADAPTER_CODECS = join('instanceAdapter', 'codecs');
+const LOAD_ORDER_FILE_CODEC = join('loadOrderFileCodec', 'pluginsText.ts');
+
+// The kernel's MO2 codecs and the Instance adapter's copies of them both hold MO2's formats until
+// the kernel's copies go; the game's plugins.txt format is the Load-order file codec's.
+const CODECS: readonly Codec[] = [
+  ...codecsIn('mo2Codecs', join('mo2Codecs', 'test'), ['modlistText', 'pluginsText', 'metaIni', 'modOrganizerIni', 'downloads']),
+  ...codecsIn(ADAPTER_CODECS, join('instanceAdapter', 'test', 'codecs'), ['modlistText', 'metaIni', 'modOrganizerIni', 'downloads']),
+  ...codecsIn('loadOrderFileCodec', join('loadOrderFileCodec', 'test'), ['pluginsText']),
+];
+
+const LINE_SCANS = [join('mo2Codecs', 'lineScan.ts'), join(ADAPTER_CODECS, 'lineScan.ts'), join('loadOrderFileCodec', 'lineScan.ts')];
 
 // The guard's own definition file necessarily holds every token as data (its TOKENS list and
 // its rival-plant test); it does not read or write any MO2 file.
@@ -21,22 +39,21 @@ const TOKENS = [
 ];
 
 // MO2's layout: the names of the directories and files the extension touches, each against its
-// one speller. A directory is the Instance adapter's; a file's own name is its codec's.
-const LAYOUT_OWNERS: Record<string, string> = {
-  profiles: join('instanceAdapter', 'layout.ts'),
-  mods: join('instanceAdapter', 'layout.ts'),
-  downloads: join('instanceAdapter', 'layout.ts'),
-  overwrite: join('mo2Codecs', 'modlistText.ts'),
-  'modlist.txt': join('mo2Codecs', 'modlistText.ts'),
-  'plugins.txt': join('mo2Codecs', 'pluginsText.ts'),
-  'ModOrganizer.ini': join('mo2Codecs', 'modOrganizerIni.ts'),
-  'meta.ini': join('mo2Codecs', 'metaIni.ts'),
-  '.meta': join('mo2Codecs', 'downloads.ts'),
+// spellers. A directory is the Instance adapter's; a file's own name is its codec's.
+const LAYOUT_OWNERS: Record<string, readonly string[]> = {
+  profiles: [join('instanceAdapter', 'layout.ts')],
+  mods: [join('instanceAdapter', 'layout.ts')],
+  downloads: [join('instanceAdapter', 'layout.ts')],
+  overwrite: [join('mo2Codecs', 'modlistText.ts'), join(ADAPTER_CODECS, 'modlistText.ts')],
+  'modlist.txt': [join('mo2Codecs', 'modlistText.ts'), join(ADAPTER_CODECS, 'modlistText.ts')],
+  'plugins.txt': [join('mo2Codecs', 'pluginsText.ts'), LOAD_ORDER_FILE_CODEC],
+  'ModOrganizer.ini': [join('mo2Codecs', 'modOrganizerIni.ts'), join(ADAPTER_CODECS, 'modOrganizerIni.ts')],
+  'meta.ini': [join('mo2Codecs', 'metaIni.ts'), join(ADAPTER_CODECS, 'metaIni.ts')],
+  '.meta': [join('mo2Codecs', 'downloads.ts'), join(ADAPTER_CODECS, 'downloads.ts')],
 };
 const LAYOUT_NAMES = Object.keys(LAYOUT_OWNERS);
 
-// The codecs box's own directory, and both production trees the extension ships.
-const KERNEL_DIR = join(__dirname, '..');
+// Both production trees the extension ships.
 const EXTENSION_SRC = join(__dirname, '..', '..');
 const WEBVIEW_SRC = join(__dirname, '..', '..', '..', 'webview', 'src');
 const SRC_ROOTS = [EXTENSION_SRC, WEBVIEW_SRC];
@@ -62,10 +79,8 @@ function tokenLeaks(sourceText: string, fileName: string): string[] {
 }
 
 function isAllowed(path: string): boolean {
-  const name = basename(path);
-  if (name === SELF) return true;
-  if (!path.includes(sep + 'mo2Codecs' + sep)) return false;
-  return KERNEL_FILES.includes(name) || KERNEL_TESTS.includes(name);
+  if (basename(path) === SELF) return true;
+  return CODECS.some(({ file, test }) => path.endsWith(sep + file) || path.endsWith(sep + test));
 }
 
 const allFiles = (roots: readonly string[]): string[] =>
@@ -94,11 +109,11 @@ describe('mo2 kernel format literals', () => {
     expect(allFiles(SRC_ROOTS)).toContain(join(WEBVIEW_SRC, 'RecordPanel.tsx'));
   });
 
-  // Rival: a KERNEL_FILES entry renamed, deleted, or never naming its own marker — proof the
+  // Rival: a CODECS entry renamed, deleted, or never naming its own marker — proof the
   // list is load-bearing, not decorative.
-  it('every kernel file exists and names at least one token', () => {
-    for (const file of KERNEL_FILES) {
-      const path = join(KERNEL_DIR, file);
+  it('every codec file exists and names at least one token', () => {
+    for (const { file } of CODECS) {
+      const path = join(EXTENSION_SRC, file);
       const found = tokenLeaks(readFileSync(path, 'utf8'), path);
       expect(found.length).toBeGreaterThan(0);
     }
@@ -165,20 +180,31 @@ describe('mo2 kernel format literals', () => {
     expect(tokenLeaks(src, 'x.ts')).toEqual(expect.arrayContaining(['_separator', '+']));
   });
 
-  it('allows a kernel module’s own test file', () => {
+  it('allows a codec module’s own test file', () => {
     expect(isAllowed(join('src', 'mo2Codecs', 'test', 'pluginsText.test.ts'))).toBe(true);
+    expect(isAllowed(join('src', 'instanceAdapter', 'test', 'codecs', 'modlistText.test.ts'))).toBe(true);
+    expect(isAllowed(join('src', 'loadOrderFileCodec', 'test', 'pluginsText.test.ts'))).toBe(true);
   });
 
-  it('does not allow a file in the box that is not a kernel module or its test', () => {
+  it('does not allow a file in a codec box that is not a codec module or its test', () => {
     expect(isAllowed(join('src', 'mo2Codecs', 'test', 'layout.test.ts'))).toBe(false);
+    expect(isAllowed(join('src', 'instanceAdapter', 'mo2Instance.ts'))).toBe(false);
   });
 
-  // Rival: lineScan.ts resurrected in the list — it holds no format token of its own, only the
-  // shared EOL/splice machinery every kernel module calls.
-  it('lineScan.ts is not (and cannot honestly be) a kernel file', () => {
-    expect(KERNEL_FILES).not.toContain('lineScan.ts');
-    const text = readFileSync(join(KERNEL_DIR, 'lineScan.ts'), 'utf8');
-    expect(tokenLeaks(text, 'lineScan.ts')).toEqual([]);
+  // Rival: the Instance adapter's MO2 codecs taking the game's plugins.txt format back, which
+  // puts the game's format inside one mod manager's implementation.
+  it('the Instance adapter holds no plugins.txt codec of its own', () => {
+    expect(isAllowed(join('src', 'instanceAdapter', 'codecs', 'pluginsText.ts'))).toBe(false);
+  });
+
+  // Rival: a lineScan.ts added to the list — it holds no format token of its own, only the
+  // shared EOL/splice machinery every codec module calls.
+  it('lineScan.ts is not (and cannot honestly be) a codec file', () => {
+    for (const lineScan of LINE_SCANS) {
+      expect(CODECS.map(({ file }) => file)).not.toContain(lineScan);
+      const path = join(EXTENSION_SRC, lineScan);
+      expect(tokenLeaks(readFileSync(path, 'utf8'), path)).toEqual([]);
+    }
   });
 });
 
@@ -223,15 +249,15 @@ function layoutLeaks(sourceText: string, fileName: string): string[] {
 // independent of the layout module under test.
 const isTestFile = (path: string): boolean => /\.test\.tsx?$/.test(path) || path.split(sep).includes('test');
 
-// A name is allowed only in the one file that owns it; every other name in that same file is
-// still a leak, so no owner is a free-for-all.
+// A name is allowed only in the files that own it; every other name in such a file is still a
+// leak, so no owner is a free-for-all.
 function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
   const leaks: Record<string, string[]> = {};
   for (const path of allFiles(roots)) {
     if (isTestFile(path)) continue;
     const leaked = new Set(layoutLeaks(readFileSync(path, 'utf8'), path));
     const found = Object.entries(LAYOUT_OWNERS)
-      .filter(([name, owner]) => leaked.has(name) && !path.endsWith(owner))
+      .filter(([name, owners]) => leaked.has(name) && !owners.some((owner) => path.endsWith(sep + owner)))
       .map(([name]) => name);
     if (found.length > 0) leaks[path] = found;
   }
@@ -241,10 +267,12 @@ function findLayoutLeaks(roots: readonly string[]): Record<string, string[]> {
 describe('mo2 layout names', () => {
   // Rival: a name dropped from its owner, which frees every other file to spell it again with
   // the production assertion still green.
-  it('every name is spelled by the file that owns it', () => {
-    for (const [name, owner] of Object.entries(LAYOUT_OWNERS)) {
-      const path = join(EXTENSION_SRC, owner);
-      expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toContain(name);
+  it('every name is spelled by each file that owns it', () => {
+    for (const [name, owners] of Object.entries(LAYOUT_OWNERS)) {
+      for (const owner of owners) {
+        const path = join(EXTENSION_SRC, owner);
+        expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toContain(name);
+      }
     }
   });
 

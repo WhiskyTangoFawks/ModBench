@@ -5,7 +5,7 @@
     "outDir": "../../out/projects/instanceAdapter"
   },
   "references": [
-    { "path": "../mo2Codecs" },
+    { "path": "../loadOrderFileCodec" },
     { "path": "../ports" },
     { "path": "../tables" }
   ],

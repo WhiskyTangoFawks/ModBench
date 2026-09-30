@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/loadOrderFileCodec"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

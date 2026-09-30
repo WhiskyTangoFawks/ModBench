@@ -13,12 +13,12 @@ import { tsFiles } from './tsFiles';
 const SRC = join(__dirname, '..');
 
 // One directory per kernel box, as the zoom-out draws the Modbench kernel band.
-const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+const KERNEL_BOXES = ['mo2Codecs', 'loadOrderFileCodec', 'tables', 'wire', 'ports'];
 
 // The driven column, each with the boxes target-architecture-references.d2 lets it reach: the
 // arrows that leave it, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['mo2Codecs', 'ports', 'tables'],
+  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
   instanceLoader: ['mo2Codecs', 'instanceAdapter', 'ports', 'tables'],
 };
 
@@ -144,7 +144,7 @@ async function plantedSpecifiers(source: string): Promise<string[]> {
 
 describe('a kernel box references nothing', () => {
   it('names every box the kernel band draws', () => {
-    expect(KERNEL_BOXES).toEqual(['mo2Codecs', 'tables', 'wire', 'ports']);
+    expect(KERNEL_BOXES).toEqual(['mo2Codecs', 'loadOrderFileCodec', 'tables', 'wire', 'ports']);
   });
 
   it('every box is a real directory holding production files', () => {
@@ -275,9 +275,18 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
     expect(isAllowedDrivenSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });
 
+  // Rival: the Instance adapter taking MO2's codecs from the kernel again, which puts the mod
+  // manager's formats outside its implementation (target-architecture.md, Rules the Modbench
+  // column draws).
+  it('refuses the kernel MO2 codecs in the Instance adapter', () => {
+    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(false);
+  });
+
   it('allows the boxes each one does reference', () => {
     expect(isAllowedDrivenSpecifier('../instanceAdapter/layout', join(boxRoot('instanceLoader'), 'p.ts'), 'instanceLoader')).toBe(true);
-    expect(isAllowedDrivenSpecifier('../mo2Codecs/metaIni', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
+    expect(isAllowedDrivenSpecifier(
+      '../loadOrderFileCodec/pluginsText', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter',
+    )).toBe(true);
     expect(isAllowedDrivenSpecifier('node:fs/promises', join(boxRoot('instanceAdapter'), 'p.ts'), 'instanceAdapter')).toBe(true);
     expect(isAllowedDrivenSpecifier(
       '../instanceLoader/fileConflictIndex', join(boxRoot('pluginsCommands'), 'p.ts'), 'pluginsCommands',

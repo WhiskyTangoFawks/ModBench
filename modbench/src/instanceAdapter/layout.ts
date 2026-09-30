@@ -4,11 +4,11 @@
 
 import { randomBytes } from 'node:crypto';
 import { dirname, join, sep } from 'node:path';
-import { DOWNLOAD_SIDECAR_SUFFIX } from '../mo2Codecs/downloads';
-import { MOD_META_FILE_NAME } from '../mo2Codecs/metaIni';
-import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from '../mo2Codecs/modlistText';
-import { SETTINGS_FILE_NAME } from '../mo2Codecs/modOrganizerIni';
-import { PLUGINS_FILE_NAME } from '../mo2Codecs/pluginsText';
+import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
+import { MOD_META_FILE_NAME } from './codecs/metaIni';
+import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
+import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
+import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
 
 const PROFILES = 'profiles';
 const MODS = 'mods';
@@ -63,8 +63,10 @@ export const defaultDownloadsDir = (instanceRoot: string): string => join(instan
 
 export const settingsFile = (instanceRoot: string): string => join(instanceRoot, SETTINGS_FILE_NAME);
 
-export const modMetaFile = (instanceRoot: string, modName: string): string =>
-  join(modDir(instanceRoot, modName), MOD_META_FILE_NAME);
+/** The meta file of the mod folder `modFolder`, wherever that folder is. */
+export const modMetaFileIn = (modFolder: string): string => join(modFolder, MOD_META_FILE_NAME);
+
+export const modMetaFile = (instanceRoot: string, modName: string): string => modMetaFileIn(modDir(instanceRoot, modName));
 
 export const modlistFile = (instanceRoot: string, profile: string): string =>
   join(profileDir(instanceRoot, profile), MODLIST_FILE_NAME);
