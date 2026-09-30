@@ -752,7 +752,7 @@ describe('the locked row is greyed and carries no Problems badge', () => {
   after(() => collection.dispose());
 
   it('holds none of the diagnostics published on its plugin file', () => {
-    publishPluginWarnings(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', defectClass: 'malformed', message: 'malformed', text: 'malformed' }]);
+    publishPluginWarnings(collection, () => dataFolder, [{ plugin: 'Fallout4.esm', origin: 'Data', text: 'malformed' }]);
 
     const rowUri = present(node.resourceUri, 'the locked row\'s resourceUri');
     assert.deepStrictEqual(vscode.languages.getDiagnostics(rowUri), []);

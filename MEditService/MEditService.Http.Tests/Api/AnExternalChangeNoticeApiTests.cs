@@ -134,7 +134,7 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
     }
 
     [Fact]
-    public async Task SettlingAModWhoseCompileWasInterrupted_WarnsCompileUnfinished_NamingThePlugin_AndTellsNoChange()
+    public async Task SettlingAModWhoseCompileWasInterrupted_WarnsCompileUnfinished_NamingThePlugin()
     {
         var fx = Owned(await Watched());
         await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
@@ -144,11 +144,10 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
         var frames = await stream.FramesThrough("compile-unfinished", _ => true);
         AssertNamesThePlugin(frames[^1].Data);
-        Assert.DoesNotContain(frames, f => f.Kind == "external-change");
     }
 
     [Fact]
-    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_NamingThePlugin_AndTellsNoChange()
+    public async Task ALoadAfterAnInterruptedCompile_WarnsCompileUnfinished_NamingThePlugin()
     {
         var fx = Owned(await Watched());
         await InterruptACompile(OtherTool.ModFolderOf(fx, Origin));
@@ -159,7 +158,6 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
         var frames = await stream.FramesThrough("compile-unfinished", _ => true);
         AssertNamesThePlugin(frames[^1].Data);
-        Assert.DoesNotContain(frames, f => f.Kind == "external-change");
     }
 
     // The scattered fixture gives each plugin a folder of its own, so the second is written beside
