@@ -8,8 +8,9 @@ import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
 import { factsOf, get, listDir } from './files';
-import { dataFolderOf, type GameFolder } from './gameDirectory';
-import type { DataFolderPlugins, DownloadedFile, DownloadedFiles, InstanceAdapter } from './instanceAdapter';
+import {
+  dataFolderOf, type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
+} from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadSidecarFile, isTempWrite, modlistFile,
   modMetaFile, pluginsFile, profilesDir, settingsFile,

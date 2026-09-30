@@ -5,8 +5,7 @@ import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
-import type { GameFolder } from '../../instanceAdapter/gameDirectory';
-import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import type { GameFolder, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());

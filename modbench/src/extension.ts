@@ -20,7 +20,7 @@ import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
-import { GAME_FOLDER_SETTING } from './instanceAdapter/gameDirectory';
+import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import { isTracked } from './instanceAdapter/files';
 import { pluginFolder } from './instanceAdapter/layout';
 import {

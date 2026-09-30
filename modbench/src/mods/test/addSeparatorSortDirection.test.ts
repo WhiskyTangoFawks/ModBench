@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
-import { CORPUS_FIXTURE, cloneCorpusFixture, DEFAULT_MODLIST, readModlistEntries } from '../../test/mo2/corpusFixture';
+import { CORPUS_FIXTURE, cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, DataTransferItem, DataTransfer,
@@ -28,7 +28,7 @@ import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { recordingReporter } from '../../test/surfacingDoubles';
-import { accessTo } from '../../test/mo2/adapterOver';
+import { accessTo, readModlistEntries } from '../../test/mo2/adapterOver';
 
 // The row a real tree over the corpus's own modlist, sorted the given way, hands a right click —
 // not a hand-built fixture. Nothing but the tree is under test here, so no Instance reads a clone.

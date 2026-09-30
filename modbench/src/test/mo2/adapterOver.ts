@@ -1,6 +1,7 @@
-import type { GameFolder } from '../../instanceAdapter/gameDirectory';
-import type { DownloadedFiles, InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
+import type { DownloadedFiles, GameFolder, InstanceAdapter, ModlistEntry, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { mo2InstanceAdapter } from '../../instanceAdapter/mo2Instance';
+import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
+import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
 
 /** The adapter's answers a test fixes in place of asking the machine it runs on. */
 export interface AdapterAnswers {
@@ -38,4 +39,27 @@ export function adapterOver(root: string, answers: AdapterAnswers = {}): Instanc
       };
     },
   };
+}
+
+/** What a test reads back after a command wrote, through the adapter's own reads, so a test never
+ *  re-derives a file format of its own. `profile` defaults to the corpus fixture's. */
+export const readModlistEntries = (root: string, profile = 'Default'): Promise<ModlistEntry[]> =>
+  adapterOver(root).modOrder(profile);
+
+export const readPluginLines = (root: string, profile = 'Default'): Promise<PluginEntry[]> =>
+  adapterOver(root).pluginOrder(profile);
+
+export const readActiveProfile = async (root: string): Promise<string> => (await adapterOver(root).settings()).profile;
+
+/** The winners the Instance's value carries for a tree on disk, built through the value's own
+ *  builders: a test handing plugin sync its argument fakes no walk of its own. */
+export async function providedPluginsIn(
+  root: string, profile = 'Default', dataFolder?: string,
+): Promise<ReadonlyMap<string, string>> {
+  const adapter = adapterOver(root);
+  const [entries, lines, runtimeOutput] = await Promise.all([
+    adapter.modOrder(profile), adapter.pluginOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' }),
+  ]);
+  const index = await buildFileConflictIndex(entries, adapter, () => {});
+  return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, dataFolder));
 }

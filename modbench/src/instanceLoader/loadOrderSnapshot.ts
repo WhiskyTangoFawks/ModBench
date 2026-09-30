@@ -4,10 +4,10 @@
 
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { OVERWRITE_ORIGIN, type OriginFile, type PluginEntry } from '../instanceAdapter/instanceAdapter';
-import { isPluginFile } from '../instanceAdapter/pluginFile';
+import {
+  isPluginFile, OVERWRITE_ORIGIN, type GameFolder, type OriginFile, type PluginEntry,
+} from '../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from './pluginsOutsideLoadOrder';
-import type { GameFolder } from '../instanceAdapter/gameDirectory';
 
 export { OVERWRITE_ORIGIN };
 export type { DataFolderPlugins } from '../instanceAdapter/instanceAdapter';

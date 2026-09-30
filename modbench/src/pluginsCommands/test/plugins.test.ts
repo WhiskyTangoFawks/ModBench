@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+
+vi.mock('vscode', () => fakeVscodeModule());
+
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncPlugins, reorderPlugins, setPluginsEnabled, setPluginsParticipation } from '../plugins';
-import { providedPluginsIn } from '../../test/mo2/corpusFixture';
+import { providedPluginsIn } from '../../test/mo2/adapterOver';
 import { isPluginFile } from '../../instanceAdapter/pluginFile';
 import type { DataFolderPlugins } from '../../instanceLoader/loadOrderSnapshot';
 

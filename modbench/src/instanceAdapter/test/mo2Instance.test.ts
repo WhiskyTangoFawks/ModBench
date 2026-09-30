@@ -27,9 +27,9 @@ import { tmpdir } from 'node:os';
 import { join, matchesGlob } from 'node:path';
 import { mo2InstanceAdapter } from '../mo2Instance';
 import { OVERWRITE_ORIGIN } from '../instanceAdapter';
-import type { GameDetectors, GameFolder } from '../gameDirectory';
+import type { GameDetectors } from '../gameDirectory';
 import type {
-  InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
+  GameFolder, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import {

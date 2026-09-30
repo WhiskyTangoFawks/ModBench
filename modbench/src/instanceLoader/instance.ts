@@ -5,8 +5,10 @@ import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './
 import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
 import { nexusSlugForGame } from '../tables/gamePaths';
-import { GAME_FOLDER_SETTING, dataFolderOf, type GameFolder } from '../instanceAdapter/gameDirectory';
-import type { InstanceAdapter, ModFolder, ModFolders, ModlistEntry, Subscription } from '../instanceAdapter/instanceAdapter';
+import {
+  dataFolderOf, GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
+  type ModlistEntry, type OriginFiles, type Subscription,
+} from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
 
@@ -15,7 +17,7 @@ import { errorMessage } from '../ports/errorMessage';
 export type { InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
-export type { GameFolder, GameFolderLook } from '../instanceAdapter/gameDirectory';
+export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
 
 // How long another tool's write takes to settle: the wait a burst coalesces into one recompute on,
 // and the wait before an empty mod order is believed.
@@ -99,12 +101,18 @@ export interface InstanceOptions {
   logReadFailure: (line: string) => void;
 }
 
-// Each listed mod's folder, matched as the manager matches names.
-function modDirsOf(entries: readonly ModlistEntry[], modFolders: ModFolders | undefined): Map<string, string> {
-  return new Map(entries.flatMap((entry) => {
-    const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
-    return folder === undefined ? [] : [[entry.name, folder.path] as const];
-  }));
+// Each listed mod's folder is matched as the manager matches names.
+function pathsOf(
+  runtimeOutput: OriginFiles, downloaded: DownloadedFiles, entries: readonly ModlistEntry[], modFolders: ModFolders | undefined,
+): InstancePaths {
+  return {
+    overwriteDir: runtimeOutput.folder ?? '',
+    downloadsDir: downloaded.kind === 'listed' ? downloaded.downloadsDir : undefined,
+    modDirs: new Map(entries.flatMap((entry) => {
+      const folder = entry.kind === 'mod' ? modFolders?.holding(entry) : undefined;
+      return folder === undefined ? [] : [[entry.name, folder.path] as const];
+    })),
+  };
 }
 
 const emptyValue = (): InstanceValue => ({
@@ -351,11 +359,7 @@ export class Instance implements Subscription {
       dataFolderPlugins,
       modStatuses: computeModStatuses(entries, index),
       overwriteFileCount: runtimeOutput.files.length,
-      paths: {
-        overwriteDir: runtimeOutput.folder ?? '',
-        downloadsDir: downloadsOutcome.kind === 'listed' ? downloadsOutcome.downloadsDir : undefined,
-        modDirs: modDirsOf(entries, modFolders),
-      },
+      paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
     };
   }
 }

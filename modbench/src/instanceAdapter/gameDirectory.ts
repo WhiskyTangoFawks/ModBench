@@ -8,31 +8,7 @@ import { detectGamePaths, detectWinePrefix, type GameAutodetect, type GamePaths 
 import { factsOf } from './files';
 import { present } from '../ports/present';
 import { errorMessage } from '../ports/errorMessage';
-
-/** The setting that names the game folder outright, and so the one that fixes a folder not found. */
-export const GAME_FOLDER_SETTING = 'modbench.mods.gameDirectory';
-
-/** One place Modbench looked for the game folder, and what it found there. */
-export interface GameFolderLook {
-  readonly place: string;
-  readonly answer: string;
-}
-
-/** Where the game is, or each place Modbench looked for it and why none answered. Not finding it
- *  is an answer, never a failed read: every row that does not need the game folder still shows. */
-export type GameFolder =
-  | {
-    readonly kind: 'found';
-    /** Folder containing the game executable and Data/. */
-    readonly root: string;
-    readonly dataFolder: string;
-  }
-  | {
-    readonly kind: 'notFound';
-    /** In the order Modbench looked; a place after one that refused to fall through is absent. */
-    readonly looked: readonly GameFolderLook[];
-    readonly setting: string;
-  };
+import { dataFolderOf, GAME_FOLDER_SETTING, type GameFolder, type GameFolderLook } from './instanceAdapter';
 
 /** What the user set, read fresh on each resolve by whoever built the resolver. */
 export interface GameDirectoryOverrides {
@@ -43,11 +19,6 @@ export interface GameDirectoryOverrides {
 /** Answers where the game is for one generation of ModOrganizer.ini's text — the Instance's own
  *  read, so a resolution can never come from a different generation than the value it lands in. */
 export type GameDirectoryResolver = (iniText: string) => Promise<GameFolder>;
-
-/** The Data folder of a game folder found, undefined when it was not. */
-export function dataFolderOf(folder: GameFolder): string | undefined {
-  return folder.kind === 'found' ? folder.dataFolder : undefined;
-}
 
 /** A file at the root of the Data folder of a game folder found, undefined when it was not. */
 export function dataFolderFile(folder: GameFolder, name: string): string | undefined {

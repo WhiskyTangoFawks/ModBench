@@ -3,7 +3,7 @@
 // buildFileConflictIndex doesn't walk it either.
 
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';
-import { isPluginFile } from '../instanceAdapter/pluginFile';
+import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 
 /** A plugin file the load order does not hold, addressed the way the backend addresses every
  *  plugin: (origin, filename) plus the physical path to read it from (ADR-0012). */

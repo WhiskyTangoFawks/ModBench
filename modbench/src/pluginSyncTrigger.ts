@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
-import { dataFolderOf } from './instanceAdapter/gameDirectory';
+import { dataFolderOf } from './instanceAdapter/instanceAdapter';
 import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
