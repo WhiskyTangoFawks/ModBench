@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
@@ -80,7 +81,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatPluginsOwnWorldspaces_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatPluginsOwnWorldspaces()
     {
         var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
@@ -88,15 +89,23 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
         Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
+    }
 
-        // Omitted origin still resolves via the load order — the winning plugin (ModA) — since
-        // that is the path every current caller takes.
-        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces");
-        Assert.Equal(["WorldModA"], omitted.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
+    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
+    // filename, so the route refuses rather than picking the load order's winner for it.
+    [Fact]
+    public async Task GetWorldspaces_OmittedOrigin_ReturnsBadRequest()
+    {
+        var (fx, _, _) = BuildTwoPlugins();
+        using var _fx = fx;
+        await PutBothPlugins(fx);
+
+        var omitted = await _client.GetAsync("/plugins/Shared.esp/worldspaces");
+        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
     }
 
     [Fact]
-    public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatPluginsOwnCells_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatPluginsOwnCells()
     {
         var (fx, worldspaceFk, _) = BuildTwoPlugins();
         using var _fx = fx;
@@ -106,14 +115,22 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks?origin=ModB");
         var cellB = modB.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0];
         Assert.Equal("CellModB", cellB.GetProperty("editorId").GetString());
-
-        var omitted = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks");
-        var cellOmitted = omitted.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0];
-        Assert.Equal("CellModA", cellOmitted.GetProperty("editorId").GetString());
     }
 
     [Fact]
-    public async Task GetCellReferences_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetWorldspaceBlocks_OmittedOrigin_ReturnsBadRequest()
+    {
+        var (fx, worldspaceFk, _) = BuildTwoPlugins();
+        using var _fx = fx;
+        await PutBothPlugins(fx);
+        var encodedFk = Uri.EscapeDataString(worldspaceFk);
+
+        var omitted = await _client.GetAsync($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks");
+        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCellReferences_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs()
     {
         var (fx, _, cellFk) = BuildTwoPlugins();
         using var _fx = fx;
@@ -122,13 +139,22 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModB");
         Assert.Equal("RefModB", modB.GetProperty("persistent")[0].GetProperty("editorId").GetString());
-
-        var omitted = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references");
-        Assert.Equal("RefModA", omitted.GetProperty("persistent")[0].GetProperty("editorId").GetString());
     }
 
     [Fact]
-    public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatPluginsOwnInteriorCells_OmittedOrigin_ReturnsLoadOrderWinners()
+    public async Task GetCellReferences_OmittedOrigin_ReturnsBadRequest()
+    {
+        var (fx, _, cellFk) = BuildTwoPlugins();
+        using var _fx = fx;
+        await PutBothPlugins(fx);
+        var encodedFk = Uri.EscapeDataString(cellFk);
+
+        var omitted = await _client.GetAsync($"/plugins/Shared.esp/cells/{encodedFk}/references");
+        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatPluginsOwnInteriorCells()
     {
         var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
@@ -136,9 +162,17 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB");
         Assert.Equal(["InteriorModB"], InteriorEditorIds(modB));
+    }
 
-        var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells");
-        Assert.Equal(["InteriorModA"], InteriorEditorIds(omitted));
+    [Fact]
+    public async Task GetInteriorCells_OmittedOrigin_ReturnsBadRequest()
+    {
+        var (fx, _, _) = BuildTwoPlugins();
+        using var _fx = fx;
+        await PutBothPlugins(fx);
+
+        var omitted = await _client.GetAsync("/plugins/Shared.esp/interior-cells");
+        Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
     }
 
     private static IEnumerable<string?> InteriorEditorIds(JsonElement blocks) =>

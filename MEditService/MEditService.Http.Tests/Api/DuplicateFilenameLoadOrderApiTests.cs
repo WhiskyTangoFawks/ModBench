@@ -100,6 +100,21 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.Equal(1, types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_").GetProperty("count").GetInt32());
     }
 
+    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
+    // filename, so both routes refuse rather than picking one of the two plugins for it.
+    [Fact]
+    public async Task BrowsingByPluginWithoutOrigin_ReturnsBadRequest()
+    {
+        using var fx = BuildTwoPlugins();
+        await PutBothPlugins(fx);
+
+        var records = await _client.GetAsync("/records?plugin=Shared.esp&type=npc_&limit=10");
+        Assert.Equal(HttpStatusCode.BadRequest, records.StatusCode);
+
+        var types = await _client.GetAsync("/plugins/Shared.esp/record-types");
+        Assert.Equal(HttpStatusCode.BadRequest, types.StatusCode);
+    }
+
     [Fact]
     public async Task OverriddenPlugin_IsNotACompareColumn()
     {

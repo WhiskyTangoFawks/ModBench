@@ -14,6 +14,7 @@ public static class WorldspaceEndpoints
         .WithName("GetWorldspaces")
         .WithTags("Worldspaces")
         .Produces<IReadOnlyList<WorldspaceSummary>>()
+        .ProducesProblem(400)
         .ProducesProblem(500);
 
         app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
@@ -22,6 +23,8 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
+            if (string.IsNullOrWhiteSpace(origin))
+                return Results.Problem("Origin is required.", statusCode: 400);
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -37,6 +40,7 @@ public static class WorldspaceEndpoints
         .WithName("GetWorldspaceBlocks")
         .WithTags("Worldspaces")
         .Produces<WorldspaceBlocks>()
+        .ProducesProblem(400)
         .ProducesProblem(500);
 
         app.MapGet("/plugins/{plugin}/cells/{formKey}/references", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
@@ -45,6 +49,8 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
+            if (string.IsNullOrWhiteSpace(origin))
+                return Results.Problem("Origin is required.", statusCode: 400);
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -60,6 +66,7 @@ public static class WorldspaceEndpoints
         .WithName("GetCellReferences")
         .WithTags("Worldspaces")
         .Produces<CellReferences>()
+        .ProducesProblem(400)
         .ProducesProblem(500);
 
         app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc) =>
@@ -68,6 +75,8 @@ public static class WorldspaceEndpoints
             {
                 logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             }
+            if (string.IsNullOrWhiteSpace(origin))
+                return Results.Problem("Origin is required.", statusCode: 400);
             var decoded = Uri.UnescapeDataString(plugin);
             try
             {
@@ -82,6 +91,7 @@ public static class WorldspaceEndpoints
         .WithName("GetInteriorCells")
         .WithTags("Worldspaces")
         .Produces<IReadOnlyList<InteriorCellBlock>>()
+        .ProducesProblem(400)
         .ProducesProblem(500);
 
         return app;
@@ -93,6 +103,8 @@ public static class WorldspaceEndpoints
         {
             logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         }
+        if (string.IsNullOrWhiteSpace(origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
         var decoded = Uri.UnescapeDataString(plugin);
         try
         {

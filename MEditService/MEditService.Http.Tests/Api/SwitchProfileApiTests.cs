@@ -46,7 +46,7 @@ public sealed class SwitchProfileApiTests : HostedTests
 
         (await Client.PutLoadOrder(_instance, "SharedMod", "ModdingMod")).EnsureSuccessStatusCode();
 
-        var record = await Client.Record(await Client.FirstFormKey(OnlyInModding));
+        var record = await Client.Record(await Client.FirstFormKey(OnlyInModding, "ModdingMod"));
         Assert.Equal("ModdingNpc", record.GetProperty("editorId").GetString());
     }
 }

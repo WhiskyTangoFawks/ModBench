@@ -45,7 +45,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     public async Task CompilingAnEditedPlugin_AnswersItApplied_AndItsBytesCarryTheEdit()
     {
         using var fx = await LoadedAndTracked();
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
         var answer = await Answer(await Client.Compile([(Plugin, Origin)]));
@@ -60,8 +60,8 @@ public sealed class CompilePluginTraceTests : HostedTests
     public async Task CompilingASelection_WithAnUntrackedPlugin_CompilesTheOthers_AndRefusesItByName()
     {
         using var fx = await LoadedAndTracked();
-        var formKey = await Client.FirstFormKey(Plugin);
-        var otherFormKey = await Client.FirstFormKey(OtherPlugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
+        var otherFormKey = await Client.FirstFormKey(OtherPlugin, OtherOrigin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
         (await Client.Edit(otherFormKey, OtherPlugin, OtherOrigin, "HeightMax", 0.5)).EnsureSuccessStatusCode();
 
@@ -87,7 +87,7 @@ public sealed class CompilePluginTraceTests : HostedTests
     public async Task Compiling_LeavesNoOtherPluginFileInTheModsRoot()
     {
         using var fx = await LoadedAndTracked();
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
         await Answer(await Client.Compile([(Plugin, Origin)]));

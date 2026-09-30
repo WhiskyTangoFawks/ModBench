@@ -182,24 +182,22 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(expected, recordTypes.OrderBy(t => t, StringComparer.Ordinal));
     }
 
+    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that filename.
     [Fact]
-    public void GetRecords_WithPlugin_ResolvesOriginFromTheLoadOrder()
+    public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException()
     {
-        _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0);
-
-        var query = _reads.LastSearch;
-        Assert.NotNull(query);
-        Assert.Equal(PluginName, query.Plugin);
-        Assert.Equal("Data", query.Origin);
+        Assert.Throws<ArgumentException>(
+            () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
     }
 
     [Fact]
-    public void GetRecords_WithExplicitOrigin_SkipsLoadOrderResolution()
+    public void GetRecords_WithPluginAndOrigin_ForwardsBothUntouchedIntoTheQuery()
     {
         _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0, origin: "OtherOrigin");
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
+        Assert.Equal(PluginName, query.Plugin);
         Assert.Equal("OtherOrigin", query.Origin);
     }
 
@@ -658,7 +656,7 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", RecordCount, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal(RecordCount, npc.Count);
@@ -679,7 +677,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         Assert.True(Assert.Single(result, r => r.Type == "perk").HasParseFailure);
         Assert.False(Assert.Single(result, r => r.Type == "npc_").HasParseFailure);
@@ -695,7 +693,7 @@ public sealed class RecordQueryServiceTests
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal("Non-Player Character", npc.DisplayName);
@@ -715,7 +713,7 @@ public sealed class RecordQueryServiceTests
             ],
         };
 
-        var result = _svc.GetPluginRecordTypes(PluginName);
+        var result = _svc.GetPluginRecordTypes(PluginName, "Data");
 
         Assert.DoesNotContain(result, r => r.Type == "header");
     }
@@ -723,7 +721,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
     {
-        var result = _svc.GetPluginRecordTypes("DoesNotExist.esp");
+        var result = _svc.GetPluginRecordTypes("DoesNotExist.esp", "Data");
 
         Assert.Empty(result);
     }

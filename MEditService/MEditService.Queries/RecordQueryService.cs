@@ -57,16 +57,16 @@ public sealed class RecordQueryService(
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
         PluginName? pluginFilter = null;
-        string? resolvedOrigin = null;
         if (plugin != null)
         {
-            // The caller states which plugin when it knows (a tree row does); otherwise resolve from
-            // the load order, since a bare filename is all most callers have.
+            // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin
+            // sharing that filename — the exact collapse the invariant forbids.
+            if (origin == null)
+                throw new ArgumentException("A plugin filter requires its origin.", nameof(origin));
             pluginFilter = plugin;
-            resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         }
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: origin, Search: search, Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
@@ -130,12 +130,9 @@ public sealed class RecordQueryService(
         return (classification, classification.ConflictAll);
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin)
     {
         var reads = RequireReads();
-        // Stated by the caller when it knows which plugin it is browsing (a tree row does),
-        // else resolved server-side from the load order.
-        origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var schemas = RequireSchemas();
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it

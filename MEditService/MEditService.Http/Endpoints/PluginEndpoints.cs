@@ -40,12 +40,15 @@ public static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
+            if (string.IsNullOrWhiteSpace(origin))
+                return Results.Problem("Origin is required.", statusCode: 400);
             var decoded = Uri.UnescapeDataString(plugin);
             return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<PluginRecordTypeCount>>();
+            .Produces<IReadOnlyList<PluginRecordTypeCount>>()
+            .ProducesProblem(400);
 
         app.MapGet("/record-types/creatable", (IRecordQueryService svc) =>
         {

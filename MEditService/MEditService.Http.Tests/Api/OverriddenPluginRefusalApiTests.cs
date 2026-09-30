@@ -30,7 +30,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheOverriddenPlugin_IsRefused_NamingThePluginItsOriginAndThatTheGameDoesNotLoadIt()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(PluginName, OverriddenOrigin);
+        var formKey = await Client.FirstFormKey(PluginName, OverriddenOrigin);
 
         var response = await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
@@ -47,7 +47,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheOverriddenPlugin_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(PluginName, OverriddenOrigin);
+        var formKey = await Client.FirstFormKey(PluginName, OverriddenOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin));
 
         await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
@@ -59,7 +59,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheWinningPlugin_OfTheSameName_Lands()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(PluginName, WinningOrigin);
+        var formKey = await Client.FirstFormKey(PluginName, WinningOrigin);
 
         var response = await Client.Edit(formKey, PluginName, WinningOrigin, "HeightMax", 0.75);
 

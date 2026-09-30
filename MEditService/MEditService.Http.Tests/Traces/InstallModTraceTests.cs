@@ -47,7 +47,7 @@ public sealed class InstallModTraceTests : HostedTests
         var plugin = await Client.Plugin(Installed);
         Assert.Equal(InstalledMod, plugin.GetProperty("origin").GetString());
         Assert.Equal(1, plugin.GetProperty("loadOrderIndex").GetInt32());
-        var record = await Client.Record(await Client.FirstFormKey(Installed));
+        var record = await Client.Record(await Client.FirstFormKey(Installed, InstalledMod));
         Assert.Equal("InstalledNpc", record.GetProperty("editorId").GetString());
     }
 }

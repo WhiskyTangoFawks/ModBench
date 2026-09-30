@@ -26,12 +26,16 @@ public static class RecordEndpoints
             {
                 logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
             }
+            // ADR-0012 invariant 1: a plugin is (origin, filename) together, so half an identity names nothing.
+            if (string.IsNullOrEmpty(plugin) != string.IsNullOrEmpty(origin))
+                return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
             var result = svc.GetRecords(type, plugin, search, limit, offset, origin, unfiltered);
             return Results.Ok(result);
         })
         .WithName("GetRecords")
         .WithTags("Records")
-        .Produces<PagedResult<RecordSummary>>();
+        .Produces<PagedResult<RecordSummary>>()
+        .ProducesProblem(400);
 
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {

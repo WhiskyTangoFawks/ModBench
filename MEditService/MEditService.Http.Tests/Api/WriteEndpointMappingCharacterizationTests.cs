@@ -47,9 +47,9 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private async Task Track(string origin) =>
         (await _client.Track(origin == DestOrigin ? DestPlugin : Plugin, origin)).EnsureSuccessStatusCode();
 
-    private async Task<string> FirstNpcFormKey(string plugin)
+    private async Task<string> FirstNpcFormKey(string plugin, string origin)
     {
-        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type=npc_");
+        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type=npc_");
         return DocumentNodes.StringValueOf(records.GetProperty("items")[0].GetProperty("formKey"));
     }
 
@@ -69,8 +69,8 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         await Load(fx);
         await Track(Origin);
         await Track(DestOrigin);
-        var locked = await FirstNpcFormKey(Plugin);
-        var writable = await FirstNpcFormKey(DestPlugin);
+        var locked = await FirstNpcFormKey(Plugin, Origin);
+        var writable = await FirstNpcFormKey(DestPlugin, DestOrigin);
         var modFolder = ModFolderOf(fx, Origin);
 
         OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
@@ -126,7 +126,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     {
         using var fx = BuildOneModOnePlugin();
         await Load(fx); // deliberately not tracked
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
 
         var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
 
@@ -141,7 +141,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         using var fx = BuildOneModOnePlugin();
         await Load(fx);
         await Track(Origin);
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
         var modFolder = ModFolderOf(fx, Origin);
 
         OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
@@ -169,7 +169,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         using var fx = BuildSourceAndDestination();
         await Load(fx);
         await Track(DestOrigin); // source deliberately left untracked: a copy reads an untracked source
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
 
         var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
 
@@ -187,7 +187,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx); // destination deliberately left untracked
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
 
         var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
 
@@ -204,7 +204,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         using var fx = BuildSourceAndDestination();
         await Load(fx);
         await Track(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
         var destModFolder = ModFolderOf(fx, DestOrigin);
 
         OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
@@ -228,7 +228,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     {
         using var fx = BuildSourceAndDestination();
         await Load(fx);
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
 
         var response = await _client.Copy([(formKey, Plugin, Origin)], "Override", []);
 
@@ -242,7 +242,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         using var fx = BuildSourceAndDestination();
         await Load(fx);
         await Track(DestOrigin);
-        var formKey = await FirstNpcFormKey(Plugin);
+        var formKey = await FirstNpcFormKey(Plugin, Origin);
         var destination = TreeSnapshot.Of(ModFolderOf(fx, DestOrigin));
 
         var response = await _client.Copy(formKey, (Plugin, Origin), "New", (DestPlugin, DestOrigin), replace: true);

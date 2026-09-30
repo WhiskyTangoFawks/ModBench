@@ -61,7 +61,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndPluginSync()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(UnlistedPlugin, UnlistedOrigin);
+        var formKey = await Client.FirstFormKey(UnlistedPlugin, UnlistedOrigin);
 
         var response = await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
 
@@ -79,7 +79,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(UnlistedPlugin, UnlistedOrigin);
+        var formKey = await Client.FirstFormKey(UnlistedPlugin, UnlistedOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UnlistedOrigin));
 
         await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
@@ -91,7 +91,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginOnADisabledLine_Lands()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKeyIn(DisabledPlugin, DisabledOrigin);
+        var formKey = await Client.FirstFormKey(DisabledPlugin, DisabledOrigin);
 
         var response = await Client.Edit(formKey, DisabledPlugin, DisabledOrigin, "HeightMax", 0.75);
 
@@ -103,7 +103,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAnOverwriteStray_IsAConflictAsUnlisted_WritingNothing()
     {
         using var fx = await LoadedWithAnOverwriteStray();
-        var formKey = await Client.FirstFormKeyIn(StrayPlugin, OverwriteOrigin);
+        var formKey = await Client.FirstFormKey(StrayPlugin, OverwriteOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverwriteOrigin));
 
         var response = await Client.Edit(formKey, StrayPlugin, OverwriteOrigin, "HeightMax", 0.75);

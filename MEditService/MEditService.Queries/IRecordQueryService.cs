@@ -6,15 +6,15 @@ namespace MEditService.Queries;
 public interface IRecordQueryService
 {
     IReadOnlyList<PluginRow> GetPlugins();
-    // origin (ADR-0012): which plugin named `plugin` to browse. Optional because most callers have
-    // only a filename; omitted, it is resolved server-side from the load order.
+    // plugin/origin (ADR-0012 invariant 1): both null browses every plugin; naming one names the
+    // other too — a plugin filter with no origin would match every plugin sharing that filename.
     PagedResult<RecordSummary> GetRecords(
         string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey);
 
-    IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
+    IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string origin);
     IReadOnlyList<CreatableRecordType> GetCreatableRecordTypes();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 

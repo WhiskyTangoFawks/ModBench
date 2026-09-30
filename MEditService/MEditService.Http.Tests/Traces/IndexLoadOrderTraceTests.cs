@@ -40,7 +40,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         var ready = status[^1].GetProperty("loadOrderStatus");
         Assert.True(ready.GetProperty("conflictsComputed").GetBoolean());
 
-        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&origin={Origin}&type=npc_");
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
@@ -76,7 +76,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
     {
         using var fx = OneMod();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin, Origin);
         var before = await Client.Sequence();
 
         OtherTool.WritesThePlugin(

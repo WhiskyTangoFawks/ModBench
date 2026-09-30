@@ -67,7 +67,7 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
         var plugins = await Client.Plugins();
         var perPluginTypes = new Dictionary<string, JsonElement>();
         foreach (var name in new[] { "Base.esm", "Mid.esp", "Top.esp" })
-            perPluginTypes[name] = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{name}/record-types");
+            perPluginTypes[name] = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{name}/record-types?origin=Data");
 
         var winningRecords = new Dictionary<string, object?>();
         foreach (var fk in new[]

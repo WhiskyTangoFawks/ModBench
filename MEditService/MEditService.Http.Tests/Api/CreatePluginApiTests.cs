@@ -198,7 +198,7 @@ public sealed class CreatePluginApiTests : HostedTests
         var fx = Owned(await Loaded());
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Held);
+        var formKey = await Client.FirstFormKey(Held, Origin);
         await Created("Minted.esp", modFolder);
         var before = await Client.Sequence();
 
