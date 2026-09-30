@@ -112,7 +112,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     expect(reporter.reports).toEqual([]);
   });
 
-  it('the prompt\'s validateInput refuses a taken name, in the words collidingModName gives install', async () => {
+  it('the prompt\'s validateInput refuses a taken name, in the words install refuses it with', async () => {
     const root = await cloneCorpusFixture();
     try {
       registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter());

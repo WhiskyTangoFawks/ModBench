@@ -22,7 +22,7 @@ import {
   type MovePlace,
 } from '../modlist/modlist';
 import { endAtTop, isSeparatorsPlace, modsMovePick, moveTargetOf, separatorsMovePick, type MovePickItem } from './movePick';
-import { collidingModName } from './modNameCollision';
+import { installNameRefusal } from '../install/install';
 import { errorMessage } from '../ports/errorMessage';
 import { applyOrThrow } from '../ports/applyOrThrow';
 
@@ -219,7 +219,7 @@ export function registerCreateEmptyModCommand(
   return vscode.commands.registerCommand('modbench.mod.createEmpty', async () => {
     const name = await vscode.window.showInputBox({
       prompt: 'New mod name', placeHolder: 'My New Mod',
-      validateInput: (value) => collidingModName(access, value),
+      validateInput: (value) => installNameRefusal(access, value),
     });
     if (!name) return;
     try {
