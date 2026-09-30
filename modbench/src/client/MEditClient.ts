@@ -2,7 +2,7 @@ import type { components } from '../wire/generated/api';
 import {
   type CompiledPlugin, type CompileDiagnostic,
   type NotificationEvent,
-  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
+  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
   type CellReferences, type CellSummary,
   type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
@@ -205,7 +205,7 @@ export interface MEditClient {
 
 export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
-  MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
+  RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
   LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure,
 };

@@ -710,12 +710,6 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        MasterIssue: {
-            masterName: string;
-            kind: components["schemas"]["MasterIssueKind"];
-        };
-        /** @enum {string} */
-        MasterIssueKind: "DirectlyMissing" | "Unloadable";
         NotificationEvent: {
             kind: string;
             plugin: string;
@@ -793,7 +787,7 @@ export interface components {
             isImmutable: boolean;
             participates: boolean;
             origin: string;
-            masterIssues: components["schemas"]["MasterIssue"][];
+            masterIssues?: string[] | null;
             inLoadOrder: boolean;
             enabled: boolean;
             winning: boolean;

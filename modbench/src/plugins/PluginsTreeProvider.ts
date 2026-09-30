@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type {
-  MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
+  PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
   NotificationEvent,
 } from '../client';
 import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
@@ -172,7 +172,7 @@ export function pluginFileOf(node: PluginListNode): string {
 interface PluginFacts {
   readOnly?: boolean;
   tracked?: boolean;
-  masterIssues?: MasterIssue[];
+  masterIssues?: string[];
   // Whether this plugin holds a record that could not be read into its document.
   parseFailure?: boolean;
   order?: PluginOrderFacts;
@@ -214,7 +214,7 @@ type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 // plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
 // description's vocabulary; `tooltipLine` is that status's one tooltip line.
 interface PluginStatus {
-  kind: 'failedToLoad' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
+  kind: 'failedToRead' | 'masterIssues' | 'unreadableRecords' | 'changedOutside' | 'malformed';
   words: string;
   tooltipLine: string;
 }
@@ -225,17 +225,16 @@ function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
 
-function failedToLoadStatus(failure: string | undefined): PluginStatus | undefined {
+function failedToReadStatus(failure: string | undefined): PluginStatus | undefined {
   if (failure === undefined) return undefined;
-  return { kind: 'failedToLoad', words: 'failed to load', tooltipLine: `Failed to load: ${failure}` };
+  return { kind: 'failedToRead', words: 'failed to read', tooltipLine: `Failed to read: ${failure}` };
 }
 
-function masterIssuesStatus(issues: MasterIssue[]): PluginStatus | undefined {
-  if (issues.length === 0) return undefined;
-  const reasons = issues.map((i) =>
-    i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
-  const words = issues.length === 1 ? '1 master issue' : `${issues.length} master issues`;
-  return { kind: 'masterIssues', words, tooltipLine: `${words}: ${reasons.join('; ')}` };
+// "Missing" is MO2's word for a master that is not active, file present or not.
+function masterIssuesStatus(inactiveMasters: string[]): PluginStatus | undefined {
+  if (inactiveMasters.length === 0) return undefined;
+  const words = inactiveMasters.length === 1 ? '1 master issue' : `${inactiveMasters.length} master issues`;
+  return { kind: 'masterIssues', words, tooltipLine: `Missing masters: ${inactiveMasters.join(', ')}` };
 }
 
 function unreadableRecordsStatus(hasParseFailure: boolean): PluginStatus | undefined {
@@ -374,14 +373,15 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** What the view's message line says about its rows: the game folder not found (common.md,
-   *  States, story 5), else no rows at all (plugins.md, States, story 1), else a record filter
-   *  that matches nothing (States, story 5). */
+  /** The view's message line, first that holds: the game folder not found (common.md, States 5),
+   *  a failed index (plugins.md, States 6), no rows (States 1), a record filter matching nothing
+   *  (States 5). */
   viewMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;
     }
+    if (this.indexFailure !== undefined) return `Indexing failed: ${this.indexFailure}`;
     if (this.lastBuildHadNoRows) return NO_PLUGINS_MESSAGE;
     if (this.recordFilterSource !== undefined && this.matches !== undefined && this.recordFilterMatchesNothing) {
       return `No records match ${this.recordFilterSource}.`;
@@ -649,7 +649,7 @@ export class PluginsTreeProvider
     const file = row.plugin.name;
     const facts = this.facts?.get(file, joinedOrigin);
     const statuses = [
-      failedToLoadStatus(this.loadFailures.get(file, row.origin)),
+      failedToReadStatus(this.loadFailures.get(file, row.origin)),
       masterIssuesStatus(facts?.masterIssues ?? []),
       unreadableRecordsStatus(facts?.parseFailure === true),
       changedOutsideStatus(joinedOrigin !== undefined && this.changedOutside.has(file, joinedOrigin)),
@@ -677,6 +677,8 @@ export class PluginsTreeProvider
   // plugins.md, States 3-4: what an unheld row shows in place of "Still indexing…", and whether
   // that reaches even an already-held row. One field, so the two never disagree on precedence.
   private expansionOverride?: ExpansionOverride;
+  // plugins.md, States 6: why the snapshot's index failed, until the next reconcile ticks.
+  private indexFailure?: string;
   // Bumped by each reconcile step (a tick, a refusal, unreachable, the hand-off), so a slow read
   // answering after a newer step cannot resurrect a stale answer.
   private generation = 0;
@@ -689,6 +691,7 @@ export class PluginsTreeProvider
   applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.expansionOverride = undefined;
+    this.indexFailure = undefined;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
     this.reachableFailures = indexLoadFailures(failures);
     mergeLoadFailures(this.loadFailures, failures);
@@ -699,6 +702,7 @@ export class PluginsTreeProvider
    *  overrides every row; `failed` only a row this reload never reached. */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
+    this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
     this.expansionOverride = { scope: refusal.kind === 'heldElsewhere' ? 'everyRow' : 'unheldRow', message: refusal.message };
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -720,6 +724,7 @@ export class PluginsTreeProvider
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
+    this.indexFailure = undefined;
     this.heldFiles = new Set(plugins.map((p) => p.name.toLowerCase()));
     this.loadFailures = indexLoadFailures(failures);
     this.reachableFailures = this.loadFailures;
@@ -764,14 +769,14 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0017: `masterIssues` is a required, non-nullable array on the wire, so it is read straight
-  // through — a `??` default would compensate for nothing the backend can do.
+  // plugins.md: no `masterIssues` means not yet checked, so the last answer stays until one lands.
   private applyPluginFacts(plugins: PluginMetadata[]): void {
     const facts = new ByPluginAddress<PluginFacts>();
     const matches = new ByPluginAddress<boolean>();
     for (const p of plugins) {
       facts.set(p.name, p.origin, {
-        readOnly: p.isImmutable, tracked: p.isTracked, masterIssues: p.masterIssues, parseFailure: p.hasParseFailure,
+        readOnly: p.isImmutable, tracked: p.isTracked, parseFailure: p.hasParseFailure,
+        masterIssues: p.masterIssues ?? this.facts?.get(p.name, p.origin)?.masterIssues,
         order: { masters: p.masters, blueprint: p.isBlueprint },
       });
       matches.set(p.name, p.origin, p.hasMatchingRecords);

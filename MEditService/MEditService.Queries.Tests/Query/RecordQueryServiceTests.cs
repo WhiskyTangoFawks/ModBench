@@ -103,7 +103,7 @@ public sealed class RecordQueryServiceTests
     // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
-    public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
+    public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
     {
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
@@ -114,9 +114,7 @@ public sealed class RecordQueryServiceTests
         var plugins = svc.GetPlugins();
 
         var patch = Assert.Single(plugins, p => p.Plugin.Name == "Patch.esp");
-        var issue = Assert.Single(patch.MasterIssues);
-        Assert.Equal("Ghost.esm", issue.MasterName);
-        Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
+        Assert.Equal(["Ghost.esm"], patch.MasterIssues);
     }
 
     // ADR-0012 end to end: a whole load order built via the real codec's own reference resolution,
@@ -150,7 +148,7 @@ public sealed class RecordQueryServiceTests
     {
         var plugins = _svc.GetPlugins();
 
-        Assert.Empty(plugins[0].MasterIssues);
+        Assert.Equal([], plugins[0].MasterIssues);
     }
 
     // Matching, sorting and paging are the real Index's own behaviour, covered at

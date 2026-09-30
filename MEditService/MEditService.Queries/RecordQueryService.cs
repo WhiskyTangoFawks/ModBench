@@ -24,18 +24,13 @@ public sealed class RecordQueryService(
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
-        // ADR-0012: classified once per call, and only once the projection is complete: a partial
-        // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
-        // reports no issues rather than inventing a third state.
-        var status = _index.Status;
-        IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> masterIssues =
-            status.State == LoadOrderState.Ready
-                ? MasterResolution.Classify(opened, status.Failures)
-                : new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>();
+        var masterIssues = _index.Status.State == LoadOrderState.Ready
+            ? MasterResolution.Classify(_loadOrder.Require(), opened)
+            : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedPlugins();
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords) =>
-            new(plugin, opened[plugin.Key], masterIssues.GetValueOrDefault(plugin.Key) ?? [], hasMatchingRecords,
+            new(plugin, opened[plugin.Key], masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
         if (_index.FilterSql is null)

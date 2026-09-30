@@ -101,11 +101,11 @@ const MOCK_PLUGINS: MockPlugin[] = [
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
-  // ADR-0017: a plugin the backend flags with a directly-missing master. Every other entry carries
-  // an empty `masterIssues`, which is what the backend sends when all masters resolved.
+  // ADR-0012 invariant 4: a plugin the backend flags with a master that is not active. Every other
+  // entry carries an empty `masterIssues`, which is what the backend sends when every master is active.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
-    masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
+    masterIssues: ['Ghost.esm'],
   }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
@@ -1789,8 +1789,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 });
 
 // ADR-0017: a plugin flagged with a missing master is decorated through the real wiring.
-// MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
-// with no `masterIssues` key, proves an absent field degrades to undecorated.
 describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1827,7 +1825,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const item = tree.getTreeItem(row);
 
-    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing masters: Ghost.esm'),
       `expected a missing-master tooltip, got: ${describeTooltip(item.tooltip)}`);
     // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
@@ -1838,8 +1836,8 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
   });
 
-  // The negative case: `masterIssues` is non-nullable on the wire, so a plugin whose masters all
-  // resolved carries an empty array, and gets no decoration.
+  // The negative case: a plugin whose masters are all active carries an empty array, and gets no
+  // decoration.
   it('leaves a plugin whose masters all resolve undecorated', async () => {
     const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1928,7 +1926,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const beforeTooltip = tree.getTreeItem(before).tooltip;
-    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing masters: Ghost.esm'),
       `expected the row to carry the master-issue tooltip before the reconcile, got: ${describeTooltip(beforeTooltip)}`);
 
     // The next reconcile reports the same plugin with its master issue resolved.
@@ -2220,13 +2218,13 @@ describe('Progressive load', () => {
   });
 
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
-  it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
+  it('decorates a plugin that failed to read the moment it is reported, not at the end', async () => {
     const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', origin: 'Data', reason: 'RACE parse' }] });
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
-      return candidate.description === 'failed to load' ? candidate : undefined;
+      return candidate.description === 'failed to read' ? candidate : undefined;
     });
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
@@ -2309,7 +2307,7 @@ describe('Progressive load', () => {
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
-      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm'),
+      typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the prior reconcile's tooltip to survive the mid-load tick, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
@@ -2317,7 +2315,7 @@ describe('Progressive load', () => {
     await launch;
 
     const loaded = await itemFor('MissingMaster.esp');
-    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
+    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing masters: Ghost.esm'),
       `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),

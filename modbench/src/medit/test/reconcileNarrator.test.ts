@@ -135,6 +135,20 @@ describe('the reconcile narrator', () => {
     expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
+  // plugins.md, States 6: a failed index is one line in the Output, however often its status is
+  // heard again.
+  it('writes a failed index to the Output once', async () => {
+    const { deps, narrator } = narrated();
+    const failed = tick({ refusal: { kind: 'failed', message: 'the reconcile threw something unexpected' } });
+
+    narrator.hear(tick());
+    narrator.hear(failed);
+    narrator.hear(failed);
+    await flushed();
+
+    expect(deps.log.mock.calls).toEqual([['Indexing failed: the reconcile threw something unexpected']]);
+  });
+
   it('answers settled(version) once that version is handed to the views, not when its Ready is heard', async () => {
     let handedOver!: () => void;
     const { narrator } = narrated(() => new Promise<void>((resolve) => { handedOver = resolve; }));

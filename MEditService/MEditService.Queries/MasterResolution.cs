@@ -1,45 +1,25 @@
-using System.Text.Json.Serialization;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 
 namespace MEditService.Queries;
 
-// ADR-0012: a plugin with an unresolvable master is indexed and flagged, never deactivated. A
-// directly-missing master (never attempted) is told apart from one that is itself unloadable
-// so a cascade doesn't read as one undifferentiated error.
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum MasterIssueKind
-{
-    DirectlyMissing,
-    Unloadable,
-}
-
-public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
-
-// Pure and deliberately shallow: only a plugin's own declared Masters are consulted, never a
-// master's masters — a cascade is exactly what ADR-0012 rules out; nothing here deactivates,
-// so there is nothing to propagate.
+// ADR-0012 invariant 4: only a plugin's own declared masters are consulted, never a master's
+// masters, because a master issue never cascades.
 internal static class MasterResolution
 {
-    /// <summary>Per-plugin master issues; a plugin with every master resolved has no entry (never an
-    /// empty list). A master is named by filename, so any plugin of that name resolves it.</summary>
-    public static IReadOnlyDictionary<PluginAddress, IReadOnlyList<MasterIssue>> Classify(
-        IReadOnlyDictionary<PluginAddress, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
+    /// <summary>For each active plugin, the masters in its header that are not active, as MO2's
+    /// <c>PluginList::testMasters</c> finds them. A plugin with none has no entry.</summary>
+    public static IReadOnlyDictionary<PluginAddress, IReadOnlyList<string>> Classify(
+        LoadOrderSnapshot loadOrder, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
-        var loaded = opened.Keys.Select(k => k.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var failed = failures.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var active = loadOrder.Participating;
+        var activeNames = active.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var result = new Dictionary<PluginAddress, IReadOnlyList<MasterIssue>>(PluginAddress.Comparer);
-        foreach (var (key, content) in opened)
+        var result = new Dictionary<PluginAddress, IReadOnlyList<string>>(PluginAddress.Comparer);
+        foreach (var key in active.Select(p => p.Key))
         {
-            var issues = new List<MasterIssue>();
-            foreach (var master in content.Masters)
-            {
-                if (loaded.Contains(master)) continue;
-                var kind = failed.Contains(master) ? MasterIssueKind.Unloadable : MasterIssueKind.DirectlyMissing;
-                issues.Add(new MasterIssue(master, kind));
-            }
-            if (issues.Count > 0) result[key] = issues;
+            if (!opened.TryGetValue(key, out var content)) continue;
+            var inactive = content.Masters.Where(master => !activeNames.Contains(master)).ToList();
+            if (inactive.Count > 0) result[key] = inactive;
         }
         return result;
     }

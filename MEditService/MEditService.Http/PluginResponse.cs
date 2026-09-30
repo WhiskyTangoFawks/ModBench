@@ -20,9 +20,9 @@ public record PluginResponse(
     // that compete for winner or count in a conflict.
     bool Participates,
     string Origin,
-    // MasterIssues (ADR-0012): this plugin's own unresolvable masters, never a transitive fact.
-    // Empty rather than null when every master resolved.
-    IReadOnlyList<MasterIssue> MasterIssues,
+    // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
+    // Null while the snapshot is not indexed: not yet checked, which is not no issues.
+    IReadOnlyList<string>? MasterIssues,
     // InLoadOrder (ADR-0013 invariant 3): derived — the winning plugin of a listed name, enabled
     // or not. False for an overridden plugin or an unlisted file. See PluginMetadata.InLoadOrder.
     bool InLoadOrder,
