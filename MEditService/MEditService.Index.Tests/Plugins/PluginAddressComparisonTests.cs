@@ -6,8 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// The opened-plugins read and the held-plugins lookup share one name comparison, the kernel's
-// PluginAddress.Comparer: a key that differs only in case names the same plugin at both doors.
+// ADR-0012 invariant 1: a key that differs only in case names the same plugin at every door, the
+// opened plugins, the held-plugins lookup and the store's rows alike.
 public sealed class PluginAddressComparisonTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("plugin-address-comparison")
@@ -37,6 +37,38 @@ public sealed class PluginAddressComparisonTests : IDisposable
     public void TheOpenedPlugins_AnswerTheSamePlugin_WhateverTheCase()
     {
         Assert.True(_index.RequireReads().OpenedPlugins.ContainsKey(OtherCase));
+    }
+
+    [Fact]
+    public void AReadUnderAnotherCase_AnswersThePluginsRows()
+    {
+        var reads = _index.RequireReads();
+
+        Assert.Equal(
+            reads.GetDocuments(_fixture.Plugins.Single().KeyOf()).Select(d => d.FormKey).Order(),
+            reads.GetDocuments(OtherCase).Select(d => d.FormKey).Order());
+    }
+
+    [Fact]
+    public void ASearchFilteredUnderAnotherCase_FindsThePluginsRecords()
+    {
+        var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginName(OtherCase.Name), Origin: OtherCase.Origin);
+
+        Assert.Equal(1, _index.RequireReads().Search(query).Total);
+    }
+
+    // The file's rows outlive the index that wrote them, so the next one meets them under whatever
+    // case its load order names the plugin in.
+    [Fact]
+    public void AnIndexReopenedUnderAnotherCase_HoldsOneCopyOfItsRecord()
+    {
+        var entry = _fixture.Plugins.Single();
+        Indexes.Reconciled(_fixture, _fixture.InstanceRoot).Dispose();
+
+        using var reopened = Indexes.Reconciled(_fixture.GameDirectory,
+            [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
+
+        Assert.Equal(1, reopened.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"])).Total);
     }
 
     // The rival this pins: a held-plugins lookup comparing name and origin its own way, which would
