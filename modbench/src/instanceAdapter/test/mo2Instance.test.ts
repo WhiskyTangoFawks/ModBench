@@ -521,8 +521,8 @@ describe('the MO2 Instance adapter', () => {
         await expect(adapter.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
       });
 
-      // mkfifo is POSIX: on Windows neither case can be built, and each fails there.
-      it('notes a FIFO and a link to one, and answers neither as a file', async () => {
+      // mkfifo is POSIX, so Windows has no FIFO to build.
+      it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file', async () => {
         const folder = join(root, 'mods', 'Pipes');
         await mkdir(folder);
         execFileSync('mkfifo', [join(folder, 'pipe')]);
