@@ -29,16 +29,15 @@ function isRootLevelPlugin(relativePath: string): boolean {
 export function findPluginsOutsideLoadOrder(
   index: FileConflictIndex, loadOrder: LoadedPlugin[],
 ): PluginOutsideLoadOrder[] {
-  // Keyed by `origin|filename`: `|` is illegal in a Windows filename and in an MO2 mod-folder
-  // name, so it cannot collide with either half. Case-folded on both halves — a case difference
-  // must not read as "a second plugin".
-  const loaded = new Set(loadOrder.map((p) => `${foldPath(p.origin)}|${foldPath(p.name)}`));
+  // Case-folded on both halves — a case difference must not read as "a second plugin".
+  const addressOf = (origin: string, name: string): string => JSON.stringify([foldPath(origin), foldPath(name)]);
+  const loaded = new Set(loadOrder.map((p) => addressOf(p.origin, p.name)));
 
   const outside: PluginOutsideLoadOrder[] = [];
   for (const [mod, files] of index.filesByMod) {
     for (const file of files) {
       if (!isRootLevelPlugin(file.relativePath)) continue;
-      if (loaded.has(`${foldPath(mod)}|${foldPath(file.relativePath)}`)) continue;
+      if (loaded.has(addressOf(mod, file.relativePath))) continue;
       outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
     }
   }

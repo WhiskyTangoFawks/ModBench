@@ -13,18 +13,17 @@ import { errorMessage } from '../ports/errorMessage';
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
 export type { InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
-export { OVERWRITE_ORIGIN as OVERWRITE_DIR_NAME } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/gameDirectory';
 
-// How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
-// the wait before an empty modlist read is believed.
+// How long another tool's write takes to settle: the wait a burst coalesces into one recompute on,
+// and the wait before an empty mod order is believed.
 const SETTLE_MS = 200;
 
-/** The rows MO2's configured downloads folder holds, or why Modbench could not resolve that
- *  folder at all — never rows from a folder MO2 is not using (downloads.md, Which files are
- *  rows, story 1). */
+/** The rows the mod manager's downloads folder holds, or why Modbench could not resolve that
+ *  folder at all — never rows from a folder the manager is not using (downloads.md, Which files
+ *  are rows, story 1). */
 export type DownloadsResult =
   | { readonly kind: 'listed'; readonly rows: readonly DownloadFile[] }
   | { readonly kind: 'unresolved'; readonly reason: string };
@@ -40,16 +39,15 @@ export interface InstancePaths {
   readonly modDirs: ReadonlyMap<string, string>;
 }
 
-/** One generation of the MO2 side, whole. Every field comes from the same read of disk, so a
+/** One generation of the instance, whole. Every field comes from the same read of disk, so a
  *  consumer holding one can never hold two facts from two generations. */
 export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
-  /** Every mod folder as the entry it holds, listed or not: what mod sync compares modlist.txt
+  /** Every mod folder as the entry it holds, listed or not: what mod sync compares mod order
    *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
   readonly modFolders: readonly ModFolder[] | undefined;
-  /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
-   *  one. */
+  /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
@@ -59,16 +57,17 @@ export interface InstanceValue {
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
-  /** downloads/ rows, `.meta` sidecars folded in — status and excluded included; or the reason
-   *  MO2's configured folder could not be resolved. */
+  /** The downloaded files' rows, their metadata folded in — status and excluded included; or the
+   *  reason their folder could not be resolved. */
   readonly downloads: DownloadsResult;
-  /** ModOrganizer.ini's `selected_profile`. */
+  /** The profile the mod manager's configuration selects. */
   readonly activeProfile: string;
-  /** ModOrganizer.ini's `gameName`. */
+  /** The game the mod manager's configuration names. */
   readonly gameRelease: string;
   /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
   readonly nexusSlug: string;
-  /** Setting, then MO2's `gamePath`, then autodetect; or each place looked when none answered. */
+  /** The setting, then the mod manager's configuration, then detection; or each place looked when
+   *  none answered. */
   readonly gameFolder: GameFolder;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
@@ -218,7 +217,7 @@ export class Instance implements Subscription {
   }
 
   // An unreadable Data folder is an answer, never a failed read: the whole value would otherwise
-  // go stale over a folder no MO2 file names.
+  // go stale over a folder outside the instance.
   private async readGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolderPlugins> {
     const plugins = await this.options.adapter.gameFolderPlugins(gameFolder);
     if (plugins.kind === 'unreadable') this.options.log(`[instance] the game's Data folder could not be listed: ${plugins.reason}`);
@@ -237,14 +236,14 @@ export class Instance implements Subscription {
   }
 
   // A read that throws logs and leaves the last value and the last sequence in place, so a file
-  // MO2 is half-way through writing never empties the trees.
+  // another tool is half-way through writing never empties the trees.
   private async recompute(): Promise<string | undefined> {
     let next: InstanceValue;
     try {
       next = await this.read();
     } catch (err) {
       const failure = errorMessage(err);
-      this.options.logReadFailure(`[instance] Failed to read the MO2 instance: ${failure}`);
+      this.options.logReadFailure(`[instance] Failed to read the instance: ${failure}`);
       this.failure = failure;
       this.notify(this.failureListeners, (listener) => listener());
       return failure;
@@ -275,7 +274,7 @@ export class Instance implements Subscription {
       (entry.kind === 'mod' ? { ...entry, ...(await adapter.modMeta(entry.name)) } : entry)));
   }
 
-  // A truncated modlist.txt parses to no entries, and zero mods is legal, so an empty parse is
+  // A mod order read mid-write can parse to no entries, and zero mods is legal, so an empty parse is
   // re-read after a settle before being believed. A partial parse is not covered — it reads as
   // a real removal.
   private async readMods(profile: string): Promise<ModlistEntry[]> {
@@ -284,7 +283,7 @@ export class Instance implements Subscription {
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
     const confirmed = await this.readModOrder(profile);
     if (confirmed.length > 0) {
-      this.options.log(`[instance] modlist read as empty mid-write; the re-read found ${confirmed.length} entries`);
+      this.options.log(`[instance] mod order read as empty mid-write; the re-read found ${confirmed.length} entries`);
     }
     return confirmed;
   }

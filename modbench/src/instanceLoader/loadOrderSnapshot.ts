@@ -104,8 +104,8 @@ export function resolvePluginPaths(
   return new Map(entries);
 }
 
-// MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
-// too, not just origin classification. Only its root holds plugins.
+// The files the game wrote at run time win over every mod, so a plugin among them wins path
+// resolution too, not just origin classification. Only their root holds plugins.
 function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, OriginFile> {
   return new Map(runtimeOutput.filter((file) => !file.relativePath.includes('/')).map((file) => [foldPath(file.relativePath), file]));
 }

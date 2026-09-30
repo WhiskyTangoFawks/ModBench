@@ -102,7 +102,7 @@ export async function buildFileConflictIndex(
     enabledMods.map(async (mod) => ({ mod, files: await modFiles(adapter, mod.name, log) })),
   );
 
-  // modlist.txt is winning-first, so the FIRST enabled provider wins and later ones only
+  // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
   for (const { mod, files: ownFiles } of listed) {
     filesByMod.set(mod.name, ownFiles);
