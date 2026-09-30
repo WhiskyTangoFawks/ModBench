@@ -25,9 +25,9 @@ public sealed record GitWatchPaths(string GitDirectory, string Head, string Pack
 public sealed partial class SourceRepository
 {
     /// <summary>Plain, not dot-prefixed: the plugin's source is first-class, not hidden metadata. The
-    /// deployer exclusion matches this name at the mod folder root only, so a nested
-    /// <c>Scripts/Source/</c> always deploys.</summary>
-    internal const string RootFolderName = "source";
+    /// deployer exclusion matches this name at the mod root only, so a nested folder that merely
+    /// shares it still deploys.</summary>
+    internal const string RootFolderName = "plugin-source";
 
     /// <summary>The whole-mod door's own name for a container's field file, and for the header's
     /// document at the plugin tree's root.</summary>
@@ -40,8 +40,8 @@ public sealed partial class SourceRepository
     /// <summary>The suffix the layout reads as "this file may hold a record".</summary>
     internal const string JsonSuffix = ".json";
 
-    /// <summary><c>source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling tree: a
-    /// per-plugin suffix guard orphans the tree when its plugin is renamed outside Modbench.</summary>
+    /// <summary><c>plugin-source/&lt;pluginFileName&gt;</c>, one root rather than a per-plugin sibling
+    /// tree: a per-plugin suffix guard orphans the tree when its plugin is renamed outside Modbench.</summary>
     public static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
     /// <summary>The mod's own display name, for a caller naming it in a message without reaching
@@ -475,7 +475,7 @@ public sealed partial class SourceRepository
     }
 
     // A relative path read as the layout's own segments: the one place a segment index means anything.
-    // source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json.
+    // plugin-source / <plugin> / <group folder> / [block levels] / <record directory> / RecordData.json.
     private sealed class LayoutPath(string relativePath)
     {
         private const int RootSegment = 0;

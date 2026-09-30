@@ -42,7 +42,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   pluginscommands: "plugins commands\ninterface: enable, disable, move, plugin sync\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
   instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: nothing; the Instance adapter writes the profile" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a downloaded\nfile's metadata" {class: core}
-  install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nsource/; the installed mark on the downloaded file" {class: core}
+  install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nplugin-source/; the installed mark on the downloaded file" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the winners as an argument\nhides: the rules that refuse a deploy" {class: core}
 }
 

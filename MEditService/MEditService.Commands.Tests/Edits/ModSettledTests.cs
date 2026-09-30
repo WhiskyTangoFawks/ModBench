@@ -49,7 +49,7 @@ public sealed class ModSettledTests : IDisposable
     // Track as the Source adapter records it: a baseline whose trailer names the bytes it was taken from.
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
-            (IReadOnlyList<TreeFile>)[new TreeFile($"source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
+            (IReadOnlyList<TreeFile>)[new TreeFile($"plugin-source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
             new BaselineTrailers(p.Plugin, null, TrailerHash(p.Bytes))))]);
 
     private ExternalChangeNotification TheExternalChange() =>

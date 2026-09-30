@@ -19,7 +19,7 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
             // cannot be found — a real repro of the missing-git-on-PATH environment, not a mock.
             Environment.SetEnvironmentVariable("PATH", string.Empty);
 
-            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var ex = Assert.Throws<GitUnavailableException>(() =>
                 PluginBaselines.Track(modFolder, SourcePreset.Edits, files));
 

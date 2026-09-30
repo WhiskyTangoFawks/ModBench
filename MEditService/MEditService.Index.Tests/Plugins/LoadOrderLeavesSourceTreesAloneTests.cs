@@ -26,9 +26,9 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             mod.Npcs.AddNew("StillHereNpc");
             mod.WriteToBinary(stillHerePath);
 
-            // Per-record text for a plugin absent from disk beside it, an "orphan": under the root "source/"
+            // Per-record text for a plugin absent from disk beside it, an "orphan": under the root "plugin-source/"
             // layout, a plugin folder inside it with no plugin file left.
-            var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
+            var orphanTree = Path.Combine(originFolder, "plugin-source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
             Directory.CreateDirectory(Path.GetDirectoryName(orphanFile) ?? throw new InvalidOperationException($"Expected '{orphanFile}' to have a parent directory."));
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");

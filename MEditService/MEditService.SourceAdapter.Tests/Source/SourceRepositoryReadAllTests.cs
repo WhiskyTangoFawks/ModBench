@@ -34,7 +34,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     // The NPC's own relative path, spelled from the fixture's own constants rather than asked of the
     // repository: Track needs it to seed the pristine commit before any repository exists to ask.
     private static readonly string NpcRelativePath =
-        Path.Combine("source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
+        Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
     // Track parks each plugin's last-compile ref at its baseline, so the ref this reads at is the one
     // compile parks.
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     // The header's own document, at the tree's root. It declares a ModKey, never a FormKey, which is
     // why the FormKey it is filed under is PluginHeader's to compute.
     private static readonly string HeaderRelativePath =
-        Path.Combine("source", PluginName, "RecordData.json");
+        Path.Combine("plugin-source", PluginName, "RecordData.json");
 
     private const string HeaderBody = "{\n  \"ModKey\": \"Fixture.esp\",\n  \"MutagenObjectType\": \"Fallout4Mod\"\n}";
 

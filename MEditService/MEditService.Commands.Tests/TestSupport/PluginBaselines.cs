@@ -17,7 +17,7 @@ internal static class PluginBaselines
     ];
 
     private static string PluginRootOf(string relativePath) =>
-        relativePath.Split('/', '\\') is ["source", var plugin, _, ..]
+        relativePath.Split('/', '\\') is ["plugin-source", var plugin, _, ..]
             ? plugin
             : throw new ArgumentException($"'{relativePath}' is not under a plugin's source root.", nameof(relativePath));
 }

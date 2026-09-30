@@ -32,7 +32,7 @@ function rowName(row: PluginAddress): string {
 type PresetOption = vscode.QuickPickItem & { label: 'Edits' | 'Everything' };
 
 // plugins.md, Track, story 2: what each preset's repository tracks.
-const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EDITS_OPTION: PresetOption = { label: 'Edits', description: 'Keeps plugin-source/ and .gitignore' };
 const EVERYTHING_OPTION: PresetOption = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 const PRESET_OPTIONS: readonly [PresetOption, PresetOption] = [EDITS_OPTION, EVERYTHING_OPTION];
 

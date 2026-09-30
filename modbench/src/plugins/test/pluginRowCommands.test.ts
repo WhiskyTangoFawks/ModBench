@@ -68,7 +68,7 @@ type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
 
 // plugins.md, Track, story 2, in the QuickPick items' own words (plugins.md, Track, story 1:
 // "each with a line saying what it keeps").
-const EDITS_ITEM: PresetItem = { label: 'Edits', description: 'Keeps source/ and .gitignore' };
+const EDITS_ITEM: PresetItem = { label: 'Edits', description: 'Keeps plugin-source/ and .gitignore' };
 const EVERYTHING_ITEM: PresetItem = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 
 // Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers

@@ -46,11 +46,11 @@ public sealed class SourceRepositoryLayoutTests
             var path = Path.GetRelativePath(
                 modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
-            // Everything nests under one root "source/" folder (the on-disk root Track and Put
+            // Everything nests under one root "plugin-source/" folder (the on-disk root Track and Put
             // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
             // tree.
             var segments = path.Split(Path.DirectorySeparatorChar);
-            Assert.Equal("source", segments[0]);
+            Assert.Equal("plugin-source", segments[0]);
             Assert.Equal(pluginFileName, segments[1]);
 
             // The identity survives the round trip: Get, asked with the exact identity Put was
@@ -84,8 +84,8 @@ public sealed class SourceRepositoryLayoutTests
              new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2])]);
 
         Assert.Equal(
-            [Path.Combine("source", "Mixed.ESP", "RecordData.json"),
-             Path.Combine("source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
+            [Path.Combine("plugin-source", "Mixed.ESP", "RecordData.json"),
+             Path.Combine("plugin-source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);
     }
@@ -95,12 +95,12 @@ public sealed class SourceRepositoryLayoutTests
     {
         string[] paths =
         [
-            "source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json",
-            "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
+            "plugin-source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json",
+            "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
         ];
 
         Assert.Equal(
-            "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
+            "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json",
             SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
     }
 
@@ -109,7 +109,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_AContainer_IsTheDocumentOfTheDirectoryWhoseNameCarriesTheFormKey()
     {
-        string[] paths = ["source/Vendor.esp/Cells/0, 0/0, 0/SomeCell - 0012AB_Vendor.esp/RecordData.json"];
+        string[] paths = ["plugin-source/Vendor.esp/Cells/0, 0/0, 0/SomeCell - 0012AB_Vendor.esp/RecordData.json"];
 
         Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
     }
@@ -119,7 +119,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_ThePluginsOwnHeader_IsTheTreesRootDocument()
     {
-        string[] paths = ["source/Vendor.esp/RecordData.json"];
+        string[] paths = ["plugin-source/Vendor.esp/RecordData.json"];
 
         Assert.Equal(
             paths[0],
@@ -132,7 +132,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_ARecordThatIsNotTheHeader_DoesNotMatchTheTreesRootDocument()
     {
-        string[] paths = ["source/Vendor.esp/RecordData.json"];
+        string[] paths = ["plugin-source/Vendor.esp/RecordData.json"];
 
         Assert.Null(SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
     }
@@ -142,7 +142,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_AWindowsSeparatedContainer_IsAnsweredLikeAGitListing()
     {
-        string[] paths = [@"C:\mods\VendorMod\source\Vendor.esp\Cells\0, 0\0, 0\SomeCell - 0012AB_Vendor.esp\RecordData.json"];
+        string[] paths = [@"C:\mods\VendorMod\plugin-source\Vendor.esp\Cells\0, 0\0, 0\SomeCell - 0012AB_Vendor.esp\RecordData.json"];
 
         Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
     }
@@ -151,7 +151,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_AWindowsSeparatedHeaderDocument_IsThePluginsOwnHeader()
     {
-        string[] paths = [@"C:\mods\VendorMod\source\Vendor.esp\RecordData.json"];
+        string[] paths = [@"C:\mods\VendorMod\plugin-source\Vendor.esp\RecordData.json"];
 
         Assert.Equal(
             paths[0],
@@ -163,7 +163,7 @@ public sealed class SourceRepositoryLayoutTests
     public void PathCarrying_NothingHoldingTheFormKey_IsNull()
     {
         Assert.Null(SourceRepository.PathCarrying(
-            ["source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
+            ["plugin-source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
     }
 
     // A listing is read from git and from a directory walk, and neither is promised to be free of an
@@ -171,7 +171,7 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void PathCarrying_APathWithNoSegments_IsPassedOver()
     {
-        string[] paths = ["", "/", "source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
+        string[] paths = ["", "/", "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
 
         Assert.Equal(paths[2], SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
         Assert.Null(SourceRepository.PathCarrying(["", "/"], "Vendor.esp", "000800:Vendor.esp"));

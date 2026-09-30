@@ -463,13 +463,13 @@ describe('the MO2 Instance adapter', () => {
       const mod = (name: string) => ({ kind: 'mod' as const, name });
       const relativePaths = (files: readonly { relativePath: string }[]): string[] => files.map((f) => f.relativePath).sort();
 
-      it('walks a mod\'s folder, leaving out its metadata, its root source tree, dot entries and writes in flight', async () => {
+      it('walks a mod\'s folder, leaving out its metadata, its root plugin source tree, dot entries and writes in flight', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Textures', 'Source'), { recursive: true });
         await writeFile(join(folder, 'Textures', 'a.dds'), '');
         await writeFile(join(folder, 'Textures', 'Source', 'kept.psc'), '');
-        await mkdir(join(folder, 'source'), { recursive: true });
-        await writeFile(join(folder, 'source', 'left.json'), '');
+        await mkdir(join(folder, 'plugin-source'), { recursive: true });
+        await writeFile(join(folder, 'plugin-source', 'left.json'), '');
         await mkdir(join(folder, '.git'), { recursive: true });
         await writeFile(join(folder, '.git', 'HEAD'), '');
         await writeFile(tempWritePath(join(folder, 'Textures', 'b.dds')), '');
@@ -509,17 +509,29 @@ describe('the MO2 Instance adapter', () => {
         expect(paths.filter((path) => path.split('/').some((segment) => segment.startsWith('.')))).toEqual([]);
       });
 
-      it('leaves out a root source folder in any case, and keeps a root folder whose name only starts with source', async () => {
+      it('leaves out a root plugin-source folder in any case, and keeps a root folder whose name only starts with plugin-source', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
-        await mkdir(join(folder, 'SOURCE'), { recursive: true });
-        await writeFile(join(folder, 'SOURCE', 'stray.json'), '');
-        await mkdir(join(folder, 'sourceish'), { recursive: true });
-        await writeFile(join(folder, 'sourceish', 'note.txt'), '');
+        await mkdir(join(folder, 'PLUGIN-SOURCE'), { recursive: true });
+        await writeFile(join(folder, 'PLUGIN-SOURCE', 'stray.json'), '');
+        await mkdir(join(folder, 'plugin-sourceish'), { recursive: true });
+        await writeFile(join(folder, 'plugin-sourceish', 'note.txt'), '');
 
         const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
 
-        expect(paths).toContain('sourceish/note.txt');
-        expect(paths).not.toContain('SOURCE/stray.json');
+        expect(paths).toContain('plugin-sourceish/note.txt');
+        expect(paths).not.toContain('PLUGIN-SOURCE/stray.json');
+      });
+
+      // Rival: hiding a folder merely named "source". Skyrim SE's Creation Kit ships script sources
+      // at a release's own root Source/ — ordinary content, not the plugin's tracked source.
+      it('keeps a root Source folder: it is ordinary content, not the plugin source root', async () => {
+        const folder = join(root, 'mods', 'Harder VATS');
+        await mkdir(join(folder, 'Source'), { recursive: true });
+        await writeFile(join(folder, 'Source', 'Script.psc'), '');
+
+        const paths = relativePaths((await adapter.originFiles(mod('Harder VATS'))).files);
+
+        expect(paths).toContain('Source/Script.psc');
       });
 
       it('follows a linked folder, its files keyed beneath the link\'s own name', async () => {
@@ -1229,7 +1241,7 @@ describe('the MO2 Instance adapter', () => {
         await mkdir(join(folder(), '.git'));
         await writeFile(join(folder(), '.gitignore'), 'mine');
         await writeFile(join(folder(), 'Old.esp'), '');
-        await mkdir(join(folder(), 'source', 'kept'), { recursive: true });
+        await mkdir(join(folder(), 'plugin-source', 'kept'), { recursive: true });
         staged = (await adapter.stagingFolder()).path;
         await writeFile(join(staged, 'New.esp'), '');
       });
@@ -1239,14 +1251,14 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await isThere(join(folder(), '.git'))).toBe(true);
         expect(await text(root, join('mods', mod, '.gitignore'))).toBe('mine');
-        expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
         expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
       });
 
-      // Rival: a case-sensitive match. On Windows `Source` is the kept `source`, and the move onto
-      // it fails part way; elsewhere it lands beside it and drops out of the mod's files.
-      it.each(['.git', '.gitignore', 'source', 'Source', '.GITIGNORE'])(
+      // Rival: a case-sensitive match. On Windows `Plugin-Source` is the kept `plugin-source`, and
+      // the move onto it fails part way; elsewhere it lands beside it and drops out of the mod's files.
+      it.each(['.git', '.gitignore', 'plugin-source', 'Plugin-Source', '.GITIGNORE'])(
         'refuses a release holding %s, naming it, before anything is removed',
         async (entry) => {
           await mkdir(join(staged, entry));
@@ -1254,19 +1266,30 @@ describe('the MO2 Instance adapter', () => {
           expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: entry });
 
           expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
-          expect(await isThere(join(folder(), 'source', 'kept'))).toBe(true);
+          expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
         },
       );
 
       // Rival: refuse only an entry the folder already has, so a first upgrade plants one that
       // every later upgrade then refuses.
       it('refuses a release holding a repository or plugin source entry the folder has none of', async () => {
-        await rm(join(folder(), 'source'), { recursive: true });
-        await mkdir(join(staged, 'source'));
+        await rm(join(folder(), 'plugin-source'), { recursive: true });
+        await mkdir(join(staged, 'plugin-source'));
 
-        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'source' });
+        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'plugin-source' });
 
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
+      });
+
+      // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation
+      // Kit ships script sources at a release's own root Source/ — ordinary content, not a collision.
+      it.each(['Source', 'source'])('does not refuse a release holding a root %s folder', async (entry) => {
+        await mkdir(join(staged, entry));
+
+        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: false });
+
+        expect(await isThere(join(folder(), entry))).toBe(true);
+        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 
       it('refuses a mod no folder holds', async () => {

@@ -11,7 +11,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;
 
     private static TreeFile SourceFile() =>
-        new(Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json"), "{}"u8.ToArray());
+        new(Path.Combine("plugin-source", "Test.esp", "npc_", "Test.esp", "000001.json"), "{}"u8.ToArray());
 
     private static void WriteMetaIniBesideTheSource(string modFolder) =>
         File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "[General]\nversion=1.0\n");
@@ -38,7 +38,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             // Positive control: the sibling source file the same commit really carries, checked
             // through the identical `ls-tree` query — proves absence below means "excluded", not
             // "the commit is empty" or "the query is wrong".
-            Assert.Contains("source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
+            Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
 
             Assert.DoesNotContain("meta.ini", committedPaths);
             Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
@@ -65,7 +65,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.Contains("source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
+            Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
             Assert.DoesNotContain("texture.dds", committedPaths);
         }
         finally
@@ -74,23 +74,23 @@ public sealed class SourceRepositoryTrackGitignoreTests
         }
     }
 
-    // The Edits pattern is root-anchored to the exact literal "source", not "*source*" — an
-    // ordinary top-level folder that merely happens to end with "source" must stay ignored (the
+    // The Edits pattern is root-anchored to the exact literal "plugin-source", not "*source*" — an
+    // ordinary top-level folder that merely happens to end with "plugin-source" must stay ignored (the
     // over-match hazard a suffix pattern would reintroduce).
     [Fact]
-    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithSource()
+    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource()
     {
         var modFolder = NewModFolder();
         try
         {
-            Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
-            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
+            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
             PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.DoesNotContain("MySource", committedPaths);
+            Assert.DoesNotContain("My-plugin-source", committedPaths);
         }
         finally
         {
@@ -110,11 +110,11 @@ public sealed class SourceRepositoryTrackGitignoreTests
             WriteMetaIniBesideTheSource(modFolder);
             WritePluginBinaryBesideTheSource(modFolder);
             File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
-            Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
-            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
+            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
             var otherPluginFile = new TreeFile(
-                Path.Combine("source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
+                Path.Combine("plugin-source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
 
             PluginBaselines.Track(
                 modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile]);
@@ -130,8 +130,8 @@ public sealed class SourceRepositoryTrackGitignoreTests
                 new[]
                 {
                     ".gitignore",
-                    "source/Other.esp/npc_/Other.esp/000002.json",
-                    "source/Test.esp/npc_/Test.esp/000001.json",
+                    "plugin-source/Other.esp/npc_/Other.esp/000002.json",
+                    "plugin-source/Test.esp/npc_/Test.esp/000001.json",
                 }.OrderBy(p => p, StringComparer.Ordinal),
                 committedPaths);
         }

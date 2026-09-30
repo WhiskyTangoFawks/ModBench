@@ -53,13 +53,13 @@ describe('MO2 layout', () => {
   });
 
   it('names a file inside a folder by its relative path', () => {
-    expect(fileInFolder(join(ROOT, 'mods', 'SomeMod'), 'source/Some.esp/x.json'))
-      .toBe(join(ROOT, 'mods', 'SomeMod', 'source', 'Some.esp', 'x.json'));
+    expect(fileInFolder(join(ROOT, 'mods', 'SomeMod'), 'plugin-source/Some.esp/x.json'))
+      .toBe(join(ROOT, 'mods', 'SomeMod', 'plugin-source', 'Some.esp', 'x.json'));
   });
 
   it('holds a file anywhere beneath a folder, and never one in a sibling whose name it prefixes', () => {
     const folder = join(ROOT, 'mods', 'SomeMod');
-    expect(isInFolder(folder, join(folder, 'source', 'x.json'))).toBe(true);
+    expect(isInFolder(folder, join(folder, 'plugin-source', 'x.json'))).toBe(true);
     expect(isInFolder(folder, join(ROOT, 'mods', 'SomeMod2', 'x.json'))).toBe(false);
   });
 
