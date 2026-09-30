@@ -10,7 +10,10 @@ import { parseModlist } from '../../mo2Codecs/modlistText';
 import { parsePlugins } from '../../mo2Codecs/pluginsText';
 import { readSelectedProfile } from '../../mo2Codecs/modOrganizerIni';
 import { buildLoadOrderRows, providedPluginsOf } from '../../instanceLoader/loadOrderSnapshot';
+import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
 import type { ModlistEntry, PluginEntry } from '../../instanceLoader/instance';
+import type { FileOrigin } from '../../instanceAdapter/instanceAdapter';
+import { originFilesIn } from '../../instanceAdapter/mo2Files';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
 // in place by tests asserting its exact contents, so any addition breaks them.
@@ -42,13 +45,12 @@ export const modFolderNames = async (root: string): Promise<string[]> =>
 export async function providedPluginsIn(
   root: string, profile = 'Default', dataFolder?: string,
 ): Promise<ReadonlyMap<string, string>> {
-  const entries = await readModlistEntries(root, profile);
-  const lines = await readPluginLines(root, profile);
-  return providedPluginsOf(await buildLoadOrderRows({
-    readModlist: () => Promise.resolve(entries),
-    readPluginOrder: () => Promise.resolve(lines.map((e) => e.name)),
-    readEnabledPlugins: () => Promise.resolve(lines.filter((e) => e.enabled).map((e) => e.name)),
-  }, root, dataFolder));
+  const originFiles = { originFiles: (origin: FileOrigin) => originFilesIn(root, origin) };
+  const [entries, lines, runtimeOutput] = await Promise.all([
+    readModlistEntries(root, profile), readPluginLines(root, profile), originFilesIn(root, { kind: 'runtimeOutput' }),
+  ]);
+  const index = await buildFileConflictIndex(entries, originFiles, () => {});
+  return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, dataFolder));
 }
 
 /** Caller owns cleanup of the returned temp root. */
