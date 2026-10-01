@@ -1,5 +1,3 @@
-using MEditService.Index;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Queries;
 
@@ -79,20 +77,6 @@ internal static class ConflictRules
         };
     }
 
-    // An override whose master list omits the plugin the FormKey originates in has injected the
-    // record into that plugin's FormID space.
-    public static bool IsInjected(
-        IReadOnlyList<RecordDetail> overrides,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
-    {
-        if (!FormKey.TryFactory(overrides[0].FormKey, out var formKey)) return false;
-        var originPlugin = formKey.ModKey.FileName.String;
-
-        return overrides.Skip(1).Any(o =>
-            pluginMasters.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var masters) &&
-            !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
-    }
-
     // Folds a set of per-cell states into the row-level ConflictAll contribution they imply:
     // any ConflictWins/ConflictLoses => Conflict; else any Override => Override; else NoConflict.
     public static ConflictAll Reduce(IEnumerable<ConflictThis> cellStates)
@@ -113,13 +97,13 @@ internal static class ConflictRules
         };
     }
 
-    // Takes the more severe of the two; OnlyOne and ConflictCritical are terminal and pass through.
+    // Takes the more severe of the two; OnlyOne is terminal and passes through.
     // Explicit severity table so this doesn't depend on enum declaration order.
     public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
         return generic switch
         {
-            ConflictAll.OnlyOne or ConflictAll.ConflictCritical => generic,
+            ConflictAll.OnlyOne => generic,
             _ => Severity(contribution) > Severity(generic) ? contribution : generic,
         };
     }
@@ -129,6 +113,6 @@ internal static class ConflictRules
         ConflictAll.NoConflict => 0,
         ConflictAll.Override => 1,
         ConflictAll.Conflict => 2,
-        _ => 3, // OnlyOne / ConflictCritical: terminal, never expected as a `contribution` argument.
+        _ => 3, // OnlyOne: terminal, never expected as a `contribution` argument.
     };
 }

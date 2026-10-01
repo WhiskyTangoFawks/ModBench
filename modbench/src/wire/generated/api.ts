@@ -566,7 +566,7 @@ export interface components {
             diagnostics: components["schemas"]["CompileDiagnostic"][];
         };
         /** @enum {string} */
-        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
+        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict";
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {

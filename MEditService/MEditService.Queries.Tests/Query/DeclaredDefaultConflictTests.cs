@@ -25,7 +25,7 @@ public sealed class DeclaredDefaultConflictTests
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>("{}"))], "Data");
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideJson))], "Data");
 
-        var result = new ConflictClassifier().Classify([master, spelled], new Dictionary<string, IReadOnlyList<string>>(), GameRelease.Fallout4);
+        var result = new ConflictClassifier().Classify([master, spelled], GameRelease.Fallout4);
         var objectFormat = (Assert.Single(result.Diffs).Children
             ?? throw new InvalidOperationException("Expected the ObjectFormat diff to have children."))
             .Single(c => c.FieldName == "ObjectFormat");
