@@ -327,6 +327,21 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('Esc hands the focus back to the cell without the blur writing the text', () => {
+    const onCommit = vi.fn();
+    render(
+      <table><tbody><tr><td tabIndex={0} data-testid="cell">
+        <ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />
+      </td></tr></tbody></table>);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.getByTestId('cell')).toHaveFocus();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('Esc closes the checkbox editor', () => {
     render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable isFocused onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('false'));
