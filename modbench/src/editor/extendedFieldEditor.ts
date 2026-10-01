@@ -33,6 +33,15 @@ export interface ExtendedFieldEditorDeps {
   reporter: Reporter;
 }
 
+async function showBeside(path: string): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path));
+  await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+}
+
+// Keyed by the temp path, which carries the origin: a cell's open tab is found again, never
+// rewritten or listened to twice.
+const openTabs = new Set<string>();
+
 // A temp file, not a FileSystemProvider: a real file gets native dirty-tracking and the native
 // close prompt for free, so abandoning it commits nothing, and read-only is the OS permission bit
 // VS Code already honors.
@@ -41,6 +50,10 @@ export async function openExtendedFieldEditor(
 ): Promise<void> {
   const { folder, file: path } = deps.fieldFile(params);
   try {
+    if (openTabs.has(path)) {
+      await showBeside(path);
+      return;
+    }
     await mkdir(folder, { recursive: true });
     // A second open of an immutable cell finds a file already `chmod`-ed 0o444 by the first, and
     // writeFile against a non-writable file throws EACCES. ENOENT is the one error to ignore —
@@ -55,8 +68,11 @@ export async function openExtendedFieldEditor(
     await chmod(path, params.readOnly ? 0o444 : 0o644);
 
     const uri = vscode.Uri.file(path);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+    openTabs.add(path);
+    await showBeside(path);
+    // files.readonlyFromPermissions is off by default, so the permission bit alone does not make
+    // the tab read-only.
+    if (params.readOnly) await vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
 
     const saveListener = vscode.workspace.onDidSaveTextDocument(async savedDoc => {
       if (savedDoc.uri.fsPath !== uri.fsPath) return;
@@ -64,6 +80,7 @@ export async function openExtendedFieldEditor(
     });
     const closeListener = vscode.workspace.onDidCloseTextDocument(async closedDoc => {
       if (closedDoc.uri.fsPath !== uri.fsPath) return;
+      openTabs.delete(path);
       saveListener.dispose();
       closeListener.dispose();
       // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced
@@ -74,6 +91,7 @@ export async function openExtendedFieldEditor(
       });
     });
   } catch (err) {
+    openTabs.delete(path);
     // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
     // "explicit action failed" row: error notification + log, not a silent swallow.
     deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));

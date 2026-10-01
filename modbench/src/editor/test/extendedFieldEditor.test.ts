@@ -9,6 +9,7 @@ const openTextDocument = vi.fn<(uri: { fsPath: string }) => Promise<FakeTextDocu
 const showTextDocument = vi.fn<(doc: unknown, opts?: unknown) => Promise<unknown>>();
 const onDidSaveTextDocument = vi.fn<DocEventRegister>();
 const onDidCloseTextDocument = vi.fn<DocEventRegister>();
+const executeCommand = vi.fn<(command: string) => Promise<unknown>>();
 
 vi.mock('vscode', () => ({
   workspace: {
@@ -16,12 +17,13 @@ vi.mock('vscode', () => ({
     onDidSaveTextDocument: (listener: DocEventListener) => onDidSaveTextDocument(listener),
     onDidCloseTextDocument: (listener: DocEventListener) => onDidCloseTextDocument(listener),
   },
+  commands: { executeCommand: (command: string) => executeCommand(command) },
   window: { showTextDocument: (doc: unknown, opts?: unknown) => showTextDocument(doc, opts) },
   Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
   ViewColumn: { One: 1, Beside: -2 },
 }));
 
-import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
@@ -84,6 +86,7 @@ describe('openExtendedFieldEditor', () => {
     onDidCloseTextDocument.mockImplementation(makeFakeDocEvent().register);
     openTextDocument.mockResolvedValue({ uri: { fsPath: '' } });
     showTextDocument.mockResolvedValue(undefined);
+    executeCommand.mockResolvedValue(undefined);
   });
 
   it('writes the value to the deterministic temp path and opens it beside, as a non-preview tab', async () => {
@@ -273,5 +276,50 @@ describe('openExtendedFieldEditor', () => {
     await saveEvent.fire({ uri: { fsPath: path }, getText: () => edited });
 
     expect(deps.onCommit).toHaveBeenCalledWith(edited);
+  });
+
+  const deacon = { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data' };
+
+  it('a second open of a tab still open shows it without rewriting the file or adding a listener', async () => {
+    const tempRoot = await makeTempRoot();
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+    await writeFile(path, 'unsaved edit on disk');
+    const saveRegistrations = onDidSaveTextDocument.mock.calls.length;
+
+    await openExtendedFieldEditor({ ...deacon, value: 'newer', readOnly: false }, makeDeps(tempRoot));
+
+    expect(await readFile(path, 'utf8')).toBe('unsaved edit on disk');
+    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(saveRegistrations);
+    expect(showTextDocument).toHaveBeenCalledTimes(2);
+  });
+
+  it('opened again after its tab closed, writes the value afresh', async () => {
+    const tempRoot = await makeTempRoot();
+    const closeEvent = makeFakeDocEvent();
+    onDidCloseTextDocument.mockImplementation(closeEvent.register);
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+    await closeEvent.fire({ uri: { fsPath: path }, getText: () => 'x' });
+
+    await openExtendedFieldEditor({ ...deacon, value: 'again', readOnly: false }, makeDeps(tempRoot));
+
+    expect(await readFile(path, 'utf8')).toBe('again');
+  });
+
+  it('holds a read-only tab read-only whatever files.readonlyFromPermissions says', async () => {
+    const tempRoot = await makeTempRoot();
+    await openExtendedFieldEditor({ ...deacon, readOnly: true }, makeDeps(tempRoot));
+
+    expect(executeCommand).toHaveBeenCalledWith('workbench.action.files.setActiveEditorReadonlyInSession');
+  });
+
+  it('leaves an editable tab alone', async () => {
+    const tempRoot = await makeTempRoot();
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });
