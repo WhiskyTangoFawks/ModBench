@@ -155,28 +155,30 @@ async function writeAtomic(path: string, text: string): Promise<void> {
   }
 }
 
-/** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini,
- *  whether staged before its tree lands or already live in a mod folder. */
+/** Writes `text` to `path` outright — no read-back, no splice, no lock: install's own meta.ini. */
 export function write(path: string, text: string): Promise<void> {
   return writeAtomic(path, text);
 }
 
-/** Moves `from` to `to` in one filesystem step — a staged tree landing in `mods/`, or an
- *  install's own entries moving into an existing mod folder. */
+/** Moves `from` to `to` in one filesystem step — an install's own entries moving up into a mod folder. */
 export function rename(from: string, to: string): Promise<void> {
   return fsRename(from, to);
 }
 
-/** Copies `from`'s whole tree to `to`, leaving `from` in place — a source folder staged before
- *  its one rename into `mods/`. */
+/** Copies `from`'s whole tree to `to`, leaving `from` in place. */
 export function copyTree(from: string, to: string): Promise<void> {
   return cp(from, to, { recursive: true });
 }
 
-/** A fresh, uniquely-named directory next to `prefix`, for a staged tree no watcher's glob
- *  reaches until its one rename into place. */
+/** A fresh, uniquely-named directory made from `prefix`. */
 export function makeTempDir(prefix: string): Promise<string> {
   return mkdtemp(prefix);
+}
+
+/** Creates `path` alone, its parent already there. Rejects with EEXIST when another tool got
+ *  there first, so the caller owns exactly what it made. */
+export function makeDir(path: string): Promise<void> {
+  return mkdir(path).then(() => undefined);
 }
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */

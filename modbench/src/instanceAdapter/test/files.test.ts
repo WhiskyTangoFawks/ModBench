@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged, isTracked } from '../files';
+import { write, putIfChanged, isTracked, makeDir } from '../files';
 
 // Set by a test, cleared by the mocked `rename` below, which then rejects instead of renaming —
 // a temp file written but never landed, the shape a crash between the two leaves.
@@ -182,5 +182,35 @@ describe('isTracked', () => {
 
   it('is false for a folder with no .git', async () => {
     expect(await isTracked(folder)).toBe(false);
+  });
+});
+
+describe('makeDir', () => {
+  let parent: string;
+
+  beforeEach(async () => {
+    parent = await mkdtemp(join(tmpdir(), 'files-makedir-'));
+  });
+
+  afterEach(async () => {
+    await rm(parent, { recursive: true, force: true });
+  });
+
+  // Rival: a recursive mkdir, which accepts a folder another tool made first, so the caller then owns
+  // and may delete a folder it did not make.
+  it('refuses a folder another tool made first, leaving what it holds', async () => {
+    await mkdir(join(parent, 'taken'));
+    await writeFile(join(parent, 'taken', 'theirs.txt'), 'x');
+
+    await expect(makeDir(join(parent, 'taken'))).rejects.toMatchObject({ code: 'EEXIST' });
+
+    expect(await readFile(join(parent, 'taken', 'theirs.txt'), 'utf8')).toBe('x');
+  });
+
+  it('makes the folder, and not a missing parent', async () => {
+    await makeDir(join(parent, 'made'));
+
+    expect((await stat(join(parent, 'made'))).isDirectory()).toBe(true);
+    await expect(makeDir(join(parent, 'no', 'parent'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

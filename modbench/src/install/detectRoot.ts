@@ -14,11 +14,11 @@ export const DATA_DIRS = new Set([
 /** A `fomod/ModuleConfig.xml` marks a scripted installer: `isFomod` is set but the
  *  tree is left as-is, because the wizard is a separate sub-project. */
 export async function detectRoot(
-  adapter: Pick<InstanceAdapter, 'stagedEntries'>, stagingDir: string,
+  adapter: Pick<InstanceAdapter, 'extractedEntries'>, extractionDir: string,
 ): Promise<{ sourceDir: string; isFomod: boolean }> {
-  let level = stagingDir;
+  let level = extractionDir;
   for (let depth = 0; depth < 32; depth++) {
-    const entries = await adapter.stagedEntries(level);
+    const entries = await adapter.extractedEntries(level);
 
     const fomodDir = entries.find((e) => e.kind === 'folder' && e.name.toLowerCase() === 'fomod');
     if (fomodDir && (await hasModuleConfig(adapter, join(level, fomodDir.name)))) {
@@ -31,7 +31,7 @@ export async function detectRoot(
     const dirs = entries.filter((e) => e.kind === 'folder');
     const files = entries.filter((e) => e.kind === 'file');
     if (dirs.length === 1 && files.length === 0) {
-      const onlyDir = present(dirs[0], 'the sole entry of a single-directory staging level');
+      const onlyDir = present(dirs[0], 'the sole entry of a single-directory level');
       if (!DATA_DIRS.has(onlyDir.name.toLowerCase())) {
         level = join(level, onlyDir.name);
         continue;
@@ -43,7 +43,7 @@ export async function detectRoot(
   return { sourceDir: level, isFomod: false };
 }
 
-async function hasModuleConfig(adapter: Pick<InstanceAdapter, 'stagedEntries'>, fomodDir: string): Promise<boolean> {
-  const entries = await adapter.stagedEntries(fomodDir);
+async function hasModuleConfig(adapter: Pick<InstanceAdapter, 'extractedEntries'>, fomodDir: string): Promise<boolean> {
+  const entries = await adapter.extractedEntries(fomodDir);
   return entries.some((e) => e.kind === 'file' && e.name.toLowerCase() === 'moduleconfig.xml');
 }

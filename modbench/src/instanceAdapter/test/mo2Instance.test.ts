@@ -32,7 +32,7 @@ import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { OVERWRITE_ORIGIN } from '../instanceAdapter';
 import type { GameDetectors } from '../gameDirectory';
 import type {
-  GameFolder, InstanceAdapter, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
+  GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import {
@@ -1241,84 +1241,111 @@ describe('the MO2 Instance adapter', () => {
     });
   });
 
-  describe('staging', () => {
-    it('stages a copy of a folder, leaving the folder as it was', async () => {
-      const source = join(root, 'mods', 'Unofficial Fallout 4 Patch');
-      const before = await snapshotTree(source);
+  describe('extracting a mod', () => {
+    const meta = (mod: string): Promise<string> => text(root, join('mods', mod, 'meta.ini'));
 
-      const staged = await adapter.stagingFolderOf(source);
+    it('lists an extracted folder\'s entries, each a folder or a file', async () => {
+      const extraction = await adapter.extractNewMod('New Mod');
+      await mkdir(join(extraction.path, 'Data'));
+      await writeFile(join(extraction.path, 'readme.txt'), '');
 
-      expect(staged.path.startsWith(join(root, 'mods'))).toBe(false);
-      expect(await snapshotTree(staged.path)).toEqual(before);
-      expect(await snapshotTree(source)).toEqual(before);
-    });
-
-    it('lists a staged folder\'s entries, each a folder or a file', async () => {
-      const staged = await adapter.stagingFolder();
-      await mkdir(join(staged.path, 'Data'));
-      await writeFile(join(staged.path, 'readme.txt'), '');
-
-      const entries = await adapter.stagedEntries(staged.path);
+      const entries = await adapter.extractedEntries(extraction.path);
 
       expect([...entries].sort((a, b) => a.name.localeCompare(b.name))).toEqual([
         { name: 'Data', kind: 'folder' }, { name: 'readme.txt', kind: 'file' },
       ]);
     });
 
-    it('removes a staging folder and what is left in it', async () => {
-      const staged = await adapter.stagingFolder();
-      await mkdir(join(staged.path, 'Wrapper'));
+    describe('a new mod', () => {
+      it('extracts inside the mod\'s own folder and writes nowhere else', async () => {
+        const before = await snapshotTree(root);
 
-      await staged.remove();
+        const extraction = await adapter.extractNewMod('New Mod');
 
-      expect(await isThere(staged.path)).toBe(false);
-    });
-  });
+        expect(extraction.path.startsWith(join(root, 'mods', 'New Mod'))).toBe(true);
+        assertOnlyChanged(before, await snapshotTree(root), new Set());
+        expect(await readdir(join(root, 'mods', 'New Mod'))).toHaveLength(1);
+      });
 
-  describe('landing a mod', () => {
-    const meta = (mod: string): Promise<string> => text(root, join('mods', mod, 'meta.ini'));
+      it('copies a folder in, leaving the folder as it was', async () => {
+        const source = join(root, 'mods', 'Unofficial Fallout 4 Patch');
+        const before = await snapshotTree(source);
+        const extraction = await adapter.extractNewMod('New Mod');
 
-    it('stages beside the mod folders, outside every one of them', async () => {
-      const staged = await adapter.stagingFolder();
+        await extraction.copyIn(source);
 
-      expect(await isThere(staged.path)).toBe(true);
-      expect(staged.path.startsWith(join(root, 'mods'))).toBe(false);
-    });
+        expect(await snapshotTree(extraction.path)).toEqual(before);
+        expect(await snapshotTree(source)).toEqual(before);
+      });
 
-    it('lands a new mod whole, its meta holding only the keys it is given', async () => {
-      const staged = (await adapter.stagingFolder()).path;
-      await writeFile(join(staged, 'meta.ini'), 'shipped=true\n');
-      await writeFile(join(staged, 'New.esp'), '');
+      it('lands whole, its meta holding only the keys it is given', async () => {
+        const extraction = await adapter.extractNewMod('New Mod');
+        await mkdir(join(extraction.path, 'Wrapper'));
+        await writeFile(join(extraction.path, 'Wrapper', 'meta.ini'), 'shipped=true\n');
+        await writeFile(join(extraction.path, 'Wrapper', 'New.esp'), '');
+        await writeFile(join(extraction.path, 'leftover.txt'), '');
 
-      await adapter.landNewMod('New Mod', staged, { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
+        await extraction.land(join(extraction.path, 'Wrapper'), { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
 
-      expect(await meta('New Mod')).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
-      expect(await isThere(join(root, 'mods', 'New Mod', 'New.esp'))).toBe(true);
-      expect(await isThere(staged)).toBe(false);
+        expect(await meta('New Mod')).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
+        expect((await readdir(join(root, 'mods', 'New Mod'))).sort()).toEqual(['New.esp', 'meta.ini']);
+      });
+
+      it('abandoned, takes its whole folder with it', async () => {
+        const extraction = await adapter.extractNewMod('New Mod');
+        await writeFile(join(extraction.path, 'Half.esp'), '');
+
+        await extraction.abandon();
+
+        expect(await isThere(join(root, 'mods', 'New Mod'))).toBe(false);
+      });
+
+      it('refuses a folder already there, matched as the manager matches names, and leaves it', async () => {
+        const before = await snapshotTree(join(root, 'mods', 'Unofficial Fallout 4 Patch'));
+
+        await expect(adapter.extractNewMod('unofficial fallout 4 patch')).rejects.toThrow(/is in the way/);
+
+        expect(await snapshotTree(join(root, 'mods', 'Unofficial Fallout 4 Patch'))).toEqual(before);
+      });
     });
 
     describe('an upgrade', () => {
       const mod = 'Unofficial Fallout 4 Patch';
       const folder = (): string => join(root, 'mods', mod);
-      let staged: string;
+      let extraction: UpgradeExtraction;
 
       beforeEach(async () => {
         await mkdir(join(folder(), '.git'));
         await writeFile(join(folder(), '.gitignore'), 'mine');
         await writeFile(join(folder(), 'Old.esp'), '');
         await mkdir(join(folder(), 'plugin-source', 'kept'), { recursive: true });
-        staged = (await adapter.stagingFolder()).path;
-        await writeFile(join(staged, 'New.esp'), '');
+        extraction = await adapter.extractUpgrade('unofficial fallout 4 patch');
+        await writeFile(join(extraction.path, 'New.esp'), '');
+      });
+
+      it('extracts inside the mod\'s own folder, touching nothing of what it holds', async () => {
+        expect(extraction.path.startsWith(folder())).toBe(true);
+        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
       it('replaces the contents around the mod\'s repository and plugin source', async () => {
-        expect(await adapter.upgradeMod('unofficial fallout 4 patch', staged, { gameName: 'Fallout4' })).toEqual({ refused: false });
+        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: false });
 
         expect(await isThere(join(folder(), '.git'))).toBe(true);
         expect(await text(root, join('mods', mod, '.gitignore'))).toBe('mine');
         expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(false);
         expect(await isThere(join(folder(), 'New.esp'))).toBe(true);
+        expect(await isThere(extraction.path)).toBe(false);
+      });
+
+      it('abandoned, removes the extraction and keeps everything the folder held', async () => {
+        await extraction.abandon();
+
+        expect(await isThere(extraction.path)).toBe(false);
+        expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
+        expect(await isThere(join(folder(), '.git'))).toBe(true);
+        expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 
       // Rival: a case-sensitive match. On Windows `Plugin-Source` is the kept `plugin-source`, and
@@ -1326,9 +1353,9 @@ describe('the MO2 Instance adapter', () => {
       it.each(['.git', '.gitignore', 'plugin-source', 'Plugin-Source', '.GITIGNORE'])(
         'refuses a release holding %s, naming it, before anything is removed',
         async (entry) => {
-          await mkdir(join(staged, entry));
+          await mkdir(join(extraction.path, entry));
 
-          expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: entry });
+          expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: entry });
 
           expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
           expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
@@ -1339,9 +1366,9 @@ describe('the MO2 Instance adapter', () => {
       // every later upgrade then refuses.
       it('refuses a release holding a repository or plugin source entry the folder has none of', async () => {
         await rm(join(folder(), 'plugin-source'), { recursive: true });
-        await mkdir(join(staged, 'plugin-source'));
+        await mkdir(join(extraction.path, 'plugin-source'));
 
-        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'plugin-source' });
+        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: true, repositoryOrPluginSourceEntry: 'plugin-source' });
 
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
@@ -1349,24 +1376,36 @@ describe('the MO2 Instance adapter', () => {
       // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation
       // Kit ships script sources at a release's own root Source/ — ordinary content, not a collision.
       it.each(['Source', 'source'])('does not refuse a release holding a root %s folder', async (entry) => {
-        await mkdir(join(staged, entry));
+        await mkdir(join(extraction.path, entry));
 
-        expect(await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4' })).toEqual({ refused: false });
+        expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: false });
 
         expect(await isThere(join(folder(), entry))).toBe(true);
         expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 
+      it('settles a release nested below the extraction, leaving no wrapper behind', async () => {
+        const root = join(extraction.path, 'Wrapper', 'Data');
+        await mkdir(root, { recursive: true });
+        await writeFile(join(root, 'Nested.esp'), '');
+
+        expect(await extraction.land(root, { gameName: 'Fallout4' })).toEqual({ refused: false });
+
+        expect(await isThere(join(folder(), 'Nested.esp'))).toBe(true);
+        expect(await isThere(extraction.path)).toBe(false);
+        expect(await isThere(join(folder(), 'Wrapper'))).toBe(false);
+      });
+
       it('refuses a mod no folder holds', async () => {
-        await expect(adapter.upgradeMod('No Such Mod', staged, { gameName: 'Fallout4' })).rejects.toThrow(/No folder holds/);
+        await expect(adapter.extractUpgrade('No Such Mod')).rejects.toThrow(/No folder holds/);
       });
 
       // Rival: the meta read after the release's entries land, so a release shipping its own meta
       // replaces the keys the mod had.
       it('sets the keys over the meta the mod had before its contents went', async () => {
-        await writeFile(join(staged, 'meta.ini'), 'shipped=true\r\n');
+        await writeFile(join(extraction.path, 'meta.ini'), 'shipped=true\r\n');
 
-        await adapter.upgradeMod(mod, staged, { gameName: 'Fallout4', version: '2.2' });
+        await extraction.land(extraction.path, { gameName: 'Fallout4', version: '2.2' });
 
         expect(await meta(mod)).toBe(
           `[General]\r\ngameName=Fallout4\r\nmodid=4598\r\nversion=2.2\r\ncategory="-1,"\r\ninstallationFile=${DOWNLOAD}\r\n`,
