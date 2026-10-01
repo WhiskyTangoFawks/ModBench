@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const registerCustomEditorProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
-const executeCommand = vi.fn();
-const setStatusBarMessage = vi.fn();
+const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
+const setStatusBarMessage = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock('vscode', () => ({
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { /* no listeners */ } dispose() { /* nothing held */ } },
