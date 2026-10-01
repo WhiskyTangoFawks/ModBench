@@ -39,6 +39,7 @@ vi.mock('../../downloadsCommands/downloads', async (importOriginal) => {
   return { ...real, deleteDownloads: vi.fn(real.deleteDownloads) };
 });
 
+import * as vscode from 'vscode';
 import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,6 +48,7 @@ import {
   registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
+  installDownloadedFile,
   type DownloadInstallDeps,
 } from '../DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
@@ -91,6 +93,16 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   log: downloadsLog,
   ...over,
 });
+
+// What the composition root wires behind modbench.mod.install for a downloaded file; the command
+// itself belongs to Mods, which hands this flow the row.
+function registerInstall(
+  access: ReturnType<typeof accessTo>, instance: Pick<Instance, 'value'>, reporter: ReturnType<typeof recordingReporter>,
+  deps: DownloadInstallDeps,
+): void {
+  vscode.commands.registerCommand('modbench.mod.install', (downloaded: DownloadNode) =>
+    installDownloadedFile(downloaded.row, access, instance, reporter, deps));
+}
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
 // if the test fails partway through (an inline rm() at the end of a test body
@@ -179,23 +191,22 @@ describe('registerDownloadsSingleRowCommands', () => {
 
   // View on Nexus is the mod's gesture, registered once for both views, so a second
   // registration here would make activation throw.
-  it('registers install, open and open .meta, and leaves view on Nexus to the mod', () => {
-    registerDownloadsSingleRowCommands(accessTo('/instance'), fakeInstance(), recordingReporter(), installDeps(), () => []);
+  it('registers open and open .meta, and leaves install and view on Nexus to the mod', () => {
+    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual([
-      'modbench.downloads.install',
       'modbench.downloadedFile.open',
       'modbench.downloadedFile.openMeta',
     ]);
   });
 
-  it('invoking modbench.downloads.install with a DownloadNode installs that row\'s archive', async () => {
+  it('invoking modbench.mod.install with a DownloadNode installs that row\'s archive', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -209,20 +220,14 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
         expect.objectContaining({ instanceRoot: root }), { kind: 'new', name: 'foo' }, archive,
         { gameName: 'Fallout 4', modID: '123', fileID: '456', version: '2.0' });
     });
-  });
-
-  it('is a no-op when invoked with no node (no row to act on)', () => {
-    registerDownloadsSingleRowCommands(accessTo('/instance'), fakeInstance(), recordingReporter(), installDeps(), () => []);
-    expect(() => invoke('modbench.downloads.install', undefined)).not.toThrow();
-    expect(installFromArchive).not.toHaveBeenCalled();
   });
 
   it('ignores the rest of a multi-selection — only the clicked row is installed', async () => {
@@ -232,8 +237,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -252,8 +257,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -271,8 +276,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     });
     const report = recordingReporter();
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), report, installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), report, installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
     const line = present(downloadsLogLines[0], 'the one recorded Output line');
@@ -291,8 +296,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     let asked = false;
     const nameNewMod = () => { asked = true; return Promise.resolve(undefined); };
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ nameNewMod }), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ nameNewMod }));
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     // The prompt's answer is what install waits on, so the refusal is ordered before any write.
     await vi.waitFor(() => expect(asked).toBe(true));
@@ -307,8 +312,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), report, installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), report, installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
     expect(report.reports).toEqual([{ severity: 'error', message: 'Failed to install "foo.7z".', detail: 'boom' }]);
@@ -321,8 +326,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
   });
@@ -332,7 +337,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     invoke('modbench.downloadedFile.open', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
@@ -342,7 +347,7 @@ describe('registerDownloadsSingleRowCommands', () => {
   });
 
   it('open: is a no-op when invoked with no node', async () => {
-    registerDownloadsSingleRowCommands(accessTo('/instance'), fakeInstance(), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     await invoke('modbench.downloadedFile.open', undefined);
     expect(openExternal).not.toHaveBeenCalled();
   });
@@ -353,7 +358,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
     const report = recordingReporter();
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), report, installDeps(), () => []);
+    registerDownloadsSingleRowCommands(report, () => []);
     invoke('modbench.downloadedFile.open', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
@@ -366,7 +371,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
@@ -376,7 +381,7 @@ describe('registerDownloadsSingleRowCommands', () => {
   });
 
   it('open .meta: is a no-op when invoked with no node', async () => {
-    registerDownloadsSingleRowCommands(accessTo('/instance'), fakeInstance(), recordingReporter(), installDeps(), () => []);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     await invoke('modbench.downloadedFile.openMeta', undefined);
     expect(showTextDocument).not.toHaveBeenCalled();
   });
@@ -387,7 +392,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     showTextDocument.mockRejectedValueOnce(new Error('file changed on disk'));
     const report = recordingReporter();
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), report, installDeps(), () => []);
+    registerDownloadsSingleRowCommands(report, () => []);
     invoke('modbench.downloadedFile.openMeta', node(root, 'foo.7z', { hasMeta: true }));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
@@ -417,8 +422,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -440,8 +445,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -460,8 +465,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -482,8 +487,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -503,8 +508,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
     const nameNewMod = vi.fn();
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps({ nameNewMod }), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps({ nameNewMod }));
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
 
@@ -525,8 +530,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Install as a new mod…', choice: { kind: 'new' } });
 
@@ -545,8 +550,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
     // A macrotask boundary, not a microtask one: the resolved pick still has to unwind through
@@ -562,8 +567,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z'));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -580,8 +585,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '222' }));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', { modID: '222' }));
 
     await vi.waitFor(() => {
       expect(installFromArchive).toHaveBeenCalledWith(
@@ -603,8 +608,8 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerDownloadsSingleRowCommands(accessTo(root), instance, recordingReporter(), installDeps(), () => []);
-    invoke('modbench.downloads.install', node(root, 'Foo.7z', NEXUS_IDS));
+    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'Foo.7z', NEXUS_IDS));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -1176,7 +1181,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
 
-    registerDownloadsSingleRowCommands(accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'foo.7z')]);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z')]);
     await invoke('modbench.downloadedFile.open');
 
     expect(calledFsPath(openExternal)).toBe(archive);
@@ -1187,8 +1192,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
 
-    registerDownloadsSingleRowCommands(
-      accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'foo.7z', { hasMeta: true })]);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'foo.7z', { hasMeta: true })]);
     await invoke('modbench.downloadedFile.openMeta');
 
     expect(calledFsPath(showTextDocument)).toBe(meta);
@@ -1197,8 +1201,7 @@ describe('the Downloads gestures from the palette act on the view\'s selection',
   it('open opens nothing over a selection of several files', async () => {
     const root = await makeInstanceRoot();
 
-    registerDownloadsSingleRowCommands(
-      accessTo(root), fakeInstance(), recordingReporter(), installDeps(), () => [node(root, 'a.7z'), node(root, 'b.7z')]);
+    registerDownloadsSingleRowCommands(recordingReporter(), () => [node(root, 'a.7z'), node(root, 'b.7z')]);
     await invoke('modbench.downloadedFile.open');
 
     expect(openExternal).not.toHaveBeenCalled();

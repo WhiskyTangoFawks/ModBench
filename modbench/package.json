@@ -312,11 +312,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.downloads.install",
-        "title": "Install",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.downloadedFile.open",
         "title": "Open Downloaded File",
         "category": "Modbench"
@@ -429,10 +424,6 @@
         {
           "command": "modbench.record.openFieldValue",
           "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
-        },
-        {
-          "command": "modbench.downloads.install",
-          "when": "false"
         },
         {
           "command": "modbench.mod.viewOnNexus",
@@ -811,7 +802,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.downloads.install",
+          "command": "modbench.mod.install",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
           "group": "downloadActions@1"
         },

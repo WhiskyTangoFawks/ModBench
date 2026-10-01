@@ -1,7 +1,7 @@
-// The Mods view's install gesture: a new mod from an archive or a folder the user picks.
+// The install gesture: a downloaded file handed as the Argument, or an archive or a folder the user picks.
 
 import * as vscode from 'vscode';
-import type { Instance } from '../instanceLoader/instance';
+import type { DownloadFile, Instance } from '../instanceLoader/instance';
 import {
   ARCHIVE_EXTENSIONS, defaultModName, defaultModNameForFolder, installFromArchive, installFromFolder, installNameRefusal,
   type InstallAccess,
@@ -22,16 +22,28 @@ export interface ModInstallDeps {
     defaultName: string, validate?: (value: string) => Thenable<string | undefined> | string | undefined,
   ) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
+  /** The Downloads view's flow for a downloaded file: the target pick, the name and the installed mark.
+   *  Answers whether a mod landed. */
+  installDownloaded: (file: DownloadFile) => Promise<boolean>;
+}
+
+interface DownloadedFileSource {
+  kind: 'download';
+  row: DownloadFile;
+}
+
+function isDownloadedFile(argument: unknown): argument is DownloadedFileSource {
+  return typeof argument === 'object' && argument !== null && 'kind' in argument && argument.kind === 'download' && 'row' in argument;
 }
 
 interface SourceKindItem extends vscode.QuickPickItem {
   sourceKind: 'archive' | 'folder';
 }
 
-// modbench.mod.install: the Mods menu supplies no source, so it asks archive-or-folder first,
+// modbench.mod.install: with no source, as from the Mods menu, it asks archive-or-folder first,
 // before either OS picker opens (mods.md, Create empty mod and install, story 2).
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { access, instance, runModAction, promptModName, warnIfFomod } = deps;
+  const { access, instance, runModAction, promptModName, warnIfFomod, installDownloaded } = deps;
   const validateName = (name: string) => installNameRefusal(access, name);
   const installArchive = async (archivePath: string): Promise<InstallOutcome> => {
     const name = await promptModName(defaultModName(archivePath), validateName);
@@ -58,7 +70,8 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
     return { installed: succeeded };
   };
   return [
-    vscode.commands.registerCommand('modbench.mod.install', async (): Promise<InstallOutcome> => {
+    vscode.commands.registerCommand('modbench.mod.install', async (source?: unknown): Promise<InstallOutcome> => {
+      if (isDownloadedFile(source)) return { installed: await installDownloaded(source.row) };
       const picked = await vscode.window.showQuickPick<SourceKindItem>(
         [
           { label: 'Archive…', description: 'A .zip, .7z or .rar file', sourceKind: 'archive' },

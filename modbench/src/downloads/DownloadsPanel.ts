@@ -90,10 +90,10 @@ async function resolveTarget(
 
 // The row holds the archive's path and its own mod id, file id and version, so the view re-reads
 // no sidecar; install is called for what it is, and install marks the download installed.
-async function installArchive(
+export async function installDownloadedFile(
   row: DownloadFile, access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter,
   deps: DownloadInstallDeps,
-): Promise<void> {
+): Promise<boolean> {
   const { name } = row;
   let downloadRefusal: string | undefined;
   try {
@@ -101,11 +101,11 @@ async function installArchive(
     let choice: InstallChoice = { kind: 'new' };
     if (candidates.length > 0) {
       const picked = await pickUpgradeChoice(name, candidates);
-      if (!picked) return; // Esc: install nothing
+      if (!picked) return false; // Esc: install nothing
       choice = picked;
     }
     const target = await resolveTarget(choice, row.path, deps.nameNewMod);
-    if (!target) return;
+    if (!target) return false;
     const outcome = await installFromArchive(access, target, row.path, {
       gameName: instance.value.gameName, modID: row.modID, fileID: row.fileID, version: row.version,
     });
@@ -115,12 +115,13 @@ async function installArchive(
   } catch (err) {
     // ADR-0019: explicit user action failed -> error notification + log.
     reporter.report('error', `Failed to install "${name}".`, errorMessage(err));
-    return;
+    return false;
   }
-  if (downloadRefusal === undefined) return;
+  if (downloadRefusal === undefined) return true;
   // downloads.md, Reporting story 1: the install landed, so it is not reported as failed — the
   // row still shows Installed, straight off meta.ini, and the failed mark is one Output line.
   deps.log(`"${name}" was installed, but its Downloads status could not be updated: ${downloadRefusal}`);
+  return true;
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
@@ -204,17 +205,13 @@ async function changeExcluded(
   return outcome;
 }
 
-/** Clicked row only, as the reference tool batches no Install and five opened tabs help no one. The
- *  palette hands no row, so open and open .meta take the one selected row. */
+/** Clicked row only, as five opened tabs help no one. The palette hands no row, so open and
+ *  open .meta take the one selected row. */
 export function registerDownloadsSingleRowCommands(
-  access: InstallAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
-  viewSelection: () => readonly DownloadsTreeNode[],
+  reporter: Reporter, viewSelection: () => readonly DownloadsTreeNode[],
 ): vscode.Disposable[] {
   const rowOf = (node?: DownloadNode) => (node ?? singleSelectedFile(viewSelection()))?.row;
   return [
-    vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, access, instance, reporter, install);
-    }),
     vscode.commands.registerCommand('modbench.downloadedFile.open', async (node?: DownloadNode) => {
       const row = rowOf(node);
       if (!row) return;
