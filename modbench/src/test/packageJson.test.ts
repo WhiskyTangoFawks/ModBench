@@ -281,11 +281,8 @@ describe('package.json Toolbox view', () => {
   });
 });
 
-// VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
-// only available way to say Referenced By is sub-functionality of the one Plugins tree, not a
-// sibling of equal standing (ADR-0017).
-describe('package.json "Plugins - …" naming for Referenced By', () => {
-  it('names the Referenced By view "Plugins - Referenced By"', () => {
+describe('package.json names Referenced By', () => {
+  it('names the Referenced By view "Referenced By", the title xEdit gives its tab', () => {
     const referencedByViews = present(
       pkg.contributes.views.modbenchReferencedBy, "contributes.views['modbenchReferencedBy']",
     );
@@ -293,7 +290,29 @@ describe('package.json "Plugins - …" naming for Referenced By', () => {
       referencedByViews.find((v) => v.id === 'modbench.referencedByTree'),
       'the modbench.referencedByTree view entry',
     );
-    expect(view.name).toBe('Plugins - Referenced By');
+    expect(view.name).toBe('Referenced By');
+  });
+});
+
+describe('package.json Referenced By title bar', () => {
+  const REFERENCED_BY_VIEW = 'view == modbench.referencedByTree';
+  const titleBar = (): MenuEntry[] =>
+    present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']").filter((e) => e.when.includes(REFERENCED_BY_VIEW));
+
+  it('offers filter or clear, then sort direction, as icons', () => {
+    expect(placed(titleBar())).toEqual([
+      ['modbench.referencedByTree.filterHere', 'navigation'],
+      ['modbench.referencedByTree.clearFilterHere', 'navigation'],
+      ['modbench.referrer.sortDescending', 'navigation'],
+      ['modbench.referrer.sortAscending', 'navigation'],
+    ]);
+    expect(titleBar().map((e) => e.group)).toEqual(['navigation@1', 'navigation@1', 'navigation@2', 'navigation@2']);
+  });
+
+  it('slot 2 shows the one direction the list is not in', () => {
+    const when = (command: string) => present(titleBar().find((e) => e.command === command), command).when;
+    expect(when('modbench.referrer.sortDescending')).toBe(`${REFERENCED_BY_VIEW} && !modbench.referrer.descending && ${IN_AN_INSTANCE}`);
+    expect(when('modbench.referrer.sortAscending')).toBe(`${REFERENCED_BY_VIEW} && modbench.referrer.descending && ${IN_AN_INSTANCE}`);
   });
 });
 
@@ -404,6 +423,7 @@ describe('package.json filtering is one UX', () => {
     ['modbench.modList', 'modbench.modList.filterHere'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere'],
     ['modbench.downloads', 'modbench.downloads.filterHere'],
+    ['modbench.referencedByTree', 'modbench.referencedByTree.filterHere'],
   ] as const;
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
@@ -432,6 +452,7 @@ describe('package.json filtering is one UX', () => {
     ['modbench.modList', 'modbench.modList.filterHere', 'modbench.modList.clearFilterHere', 'modbench.mod.filterActive'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere', 'modbench.pluginListTree.clearFilterHere', 'modbench.plugin.filterActive'],
     ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'],
+    ['modbench.referencedByTree', 'modbench.referencedByTree.filterHere', 'modbench.referencedByTree.clearFilterHere', 'modbench.referrer.filterActive'],
   ] as const;
 
   it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
@@ -1329,7 +1350,7 @@ const catalog = catalogCommandIds(commandsMarkdown);
 // commands.md, Entry points are not gestures: a title icon or a menu cannot name its view or pass
 // an Option, so an internal command fires the gesture with them.
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
-const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
+const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const DELETE_ENTRY_POINTS = ['modbench.pluginListTree', 'modbench.referencedByTree'].map((view) => `${view}.deleteHere`);
 const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, OPEN_TO_THE_SIDE];

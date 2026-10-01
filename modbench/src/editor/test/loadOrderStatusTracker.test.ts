@@ -31,6 +31,19 @@ describe('trackLoadOrderStatus', () => {
     expect(tracker.current()).toBe(false);
   });
 
+  it('tells its listener each time the answer changes, and not when a tick repeats it', () => {
+    const client = new InMemoryMEditClient();
+    const changed = vi.fn();
+    trackLoadOrderStatus(client, undefined, changed);
+
+    client.emit(tick(false));
+    client.emit(tick(true));
+    client.emit(tick(true));
+    client.setStatus('disconnected');
+
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
   // The rival: a dispose that forgets to unsubscribe, so a tick emitted after disposal still
   // moves the tracker — exactly the leak that would keep a torn-down panel host live.
   it('stops updating once disposed', () => {

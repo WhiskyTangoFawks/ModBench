@@ -90,6 +90,8 @@ export interface ToolboxDeps {
   /** The view copy value and the name filter act on, which each list here makes itself by being
    *  selected in. */
   focusedView: FocusedView;
+  /** The name filters of the lists built outside the Toolbox, which the catalog's filter pair reaches too. */
+  viewFilters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>;
   /** Referenced By's and the record grid's own text for the catalog's one copy value id (Editor's
    *  own adapters): copy value's Mods, Plugins and Downloads adapters are this file's own. */
   referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
@@ -581,6 +583,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     () => deps.focusedView.id(),
     new Map([
       ['modbench.modList', modListFilter], ['modbench.pluginListTree', pluginsFilter], ['modbench.downloads', downloadsFilter],
+      ...deps.viewFilters,
     ]),
     () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   const trackSelection = lastSelectedViewSelection(own, [
