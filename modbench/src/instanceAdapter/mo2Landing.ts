@@ -4,7 +4,9 @@
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
 import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, write } from './files';
 import type { ExtractedEntry, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
-import { extractionPrefix, fileInFolder, isRepositoryOrPluginSource, modMetaFileIn, modsDir } from './layout';
+import {
+  fileInFolder, isRepositoryOrPluginSource, modMetaFileIn, modsDir, newModExtractionPrefix, upgradeExtractionPrefix,
+} from './layout';
 import { errnoCode } from '../ports/errno';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
@@ -40,7 +42,7 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
         if (errnoCode(err) === 'EEXIST') throw new Error(`The folder "${folder}" is in the way`, { cause: err });
         throw err;
       }
-      const path = await makeTempDir(extractionPrefix(folder));
+      const path = await makeTempDir(newModExtractionPrefix(folder));
       return {
         path,
         copyIn: (source) => copyTree(source, path),
@@ -52,7 +54,7 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
     async extractUpgrade(mod) {
       const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path;
       if (folder === undefined) throw new Error(`No folder holds the mod "${mod}"`);
-      const path = await makeTempDir(extractionPrefix(folder));
+      const path = await makeTempDir(upgradeExtractionPrefix(folder));
       return {
         path,
         copyIn: (source) => copyTree(source, path),
