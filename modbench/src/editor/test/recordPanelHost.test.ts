@@ -88,7 +88,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     const opened = executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
     expect(opened.map(([, , , options]) => options)).toEqual([
-      { viewColumn: 1, preview: false }, { viewColumn: 1, preview: false },
+      { viewColumn: -1, preview: false }, { viewColumn: -1, preview: false },
     ]);
   });
 
@@ -101,7 +101,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand).toHaveBeenCalledWith(
       'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
-      { viewColumn: 1, preview: true });
+      { viewColumn: -1, preview: true });
   });
 
   it('opens nothing when the picker is dismissed', async () => {
@@ -189,18 +189,6 @@ describe('modbench.record.openToSide, the menus\' entry point', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
     ]);
-  });
-});
-
-describe('modbench.record.open placed in the active group', () => {
-  it('opens the record as a preview in the group the panel is in, not group one', async () => {
-    register();
-
-    await commandHandlers.get('modbench.record.open')?.({ formKey: '000801:A.esp', placement: 'active' });
-
-    expect(executeCommand).toHaveBeenCalledWith(
-      'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
-      { viewColumn: -1, preview: true });
   });
 });
 

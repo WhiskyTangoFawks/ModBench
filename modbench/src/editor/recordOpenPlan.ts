@@ -2,7 +2,7 @@ import type { RecordAddress } from './recordUri';
 
 export interface RecordOpenPlan {
   addresses: RecordAddress[];
-  column: 'one' | 'beside' | 'active';
+  beside: boolean;
   /** Only a lone record opened in place is a preview, which the next click replaces. */
   preview: boolean;
 }
@@ -16,8 +16,8 @@ function addressOf(node: unknown): RecordAddress | undefined {
   return n.kind === undefined && n.origin !== undefined ? { formKey, origin: n.origin } : { formKey };
 }
 
-function asks(argument: unknown, placement: 'beside' | 'active'): boolean {
-  return typeof argument === 'object' && argument !== null && 'placement' in argument && argument.placement === placement;
+function asksBeside(argument: unknown): boolean {
+  return typeof argument === 'object' && argument !== null && 'placement' in argument && argument.placement === 'beside';
 }
 
 /** A palette entry or key hands over no Argument, so it takes the focused view's selection
@@ -26,8 +26,8 @@ export function recordOpenPlan(argument: unknown, focusedSelection: readonly unk
   const subjects: readonly unknown[] = argument === undefined ? focusedSelection
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  const column = subjects.some(s => asks(s, 'beside')) ? 'beside' : subjects.some(s => asks(s, 'active')) ? 'active' : 'one';
-  return { addresses, column, preview: column !== 'beside' && addresses.length === 1 };
+  const beside = subjects.some(asksBeside);
+  return { addresses, beside, preview: !beside && addresses.length === 1 };
 }
 
 /** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */

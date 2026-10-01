@@ -485,7 +485,7 @@ describe('modbench.record.openReference', () => {
 
   it('opens the record the clicked reference points to, not the record the panel shows', async () => {
     await reference()({ webviewSection: 'cell reference', ...IDENTITY, referenceTarget: '000F:Fallout4.esm' });
-    expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', { formKey: '000F:Fallout4.esm', placement: 'active' });
+    expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', { formKey: '000F:Fallout4.esm' });
   });
 
   it('opens nothing from a cell that holds no reference', async () => {

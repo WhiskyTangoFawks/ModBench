@@ -193,7 +193,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         return;
       }
       const formKey = await pickRecord({ meditClient, reporter }, '', []);
-      if (formKey) await openRecordTab({ formKey }, vscode.ViewColumn.One, true);
+      if (formKey) await openRecordTab({ formKey }, vscode.ViewColumn.Active, true);
     }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
@@ -206,10 +206,10 @@ async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColu
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
-async function openRecordTabs({ addresses, column: placement, preview }: RecordOpenPlan): Promise<void> {
-  let column: vscode.ViewColumn = { one: vscode.ViewColumn.One, beside: vscode.ViewColumn.Beside, active: vscode.ViewColumn.Active }[placement];
+async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
+  let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active;
   for (const address of addresses) {
     await openRecordTab(address, column, preview);
-    if (placement === 'beside') column = vscode.window.tabGroups.activeTabGroup.viewColumn;
+    if (beside) column = vscode.window.tabGroups.activeTabGroup.viewColumn;
   }
 }
