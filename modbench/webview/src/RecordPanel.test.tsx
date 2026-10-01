@@ -1696,9 +1696,9 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     const { container } = renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Readable Name'));
     const label = screen.getAllByText('Name')[0]?.closest('td');
-    expect(label).toBeTruthy();
+    if (!label) throw new Error('no label cell');
 
-    fireEvent.click(label as HTMLElement);
+    fireEvent.click(label);
 
     expect(label).toHaveAttribute('data-focused-cell');
     expect(label).toHaveStyle({ userSelect: 'none' });
