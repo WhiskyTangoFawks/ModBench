@@ -69,7 +69,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
     indexer: "Indexer\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB: every plugin's rows" {class: derived}
   }
-  sourceadapter: "Source adapter\ninterface: get, put, remove, rename\nhides: layout and git" {class: driven}
+  sourceadapter: "Source adapter\ninterface: get, put, remove\nhides: layout and git" {class: driven}
   pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; a file's hash\nhides: the game assemblies; the stamp that skips an unchanged\nfile" {class: driven}
   lib: "driven lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driven}
 }
