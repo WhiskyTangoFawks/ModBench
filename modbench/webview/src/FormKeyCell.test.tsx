@@ -155,7 +155,6 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  // commands.md, Doing nothing is not an error: choosing the record already there writes nothing.
   it('commits nothing when the picked FormKey is the one the cell already holds', async () => {
     const onCommit = vi.fn();
     pickFormKey.mockResolvedValueOnce('000019:Fallout4.esm');

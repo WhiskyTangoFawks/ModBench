@@ -35,13 +35,15 @@ public record OverrideStackEntry(
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
 /// <summary><c>GroupOnly</c> lists a group in FormID order, without held records; otherwise by
-/// EditorID. <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012). <c>Unfiltered</c> lists what
+/// EditorID. <c>SearchFormKey</c> is the FormKey a FormID search resolved to: it matches beside
+/// the EditorID text. <c>Plugin</c> and <c>Origin</c> filter apart (ADR-0012). <c>Unfiltered</c> lists what
 /// the record filter hides too.</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
     PluginName? Plugin = null,
     string? Origin = null,
     string? Search = null,
+    string? SearchFormKey = null,
     int Limit = 50,
     int Offset = 0,
     bool GroupOnly = false,

@@ -21,8 +21,6 @@ function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSu
   };
 }
 
-// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
-// directly, matching the real object's "calling .hide() also fires onDidHide".
 function makeFakeQuickPick() {
   const changeValueListeners: Array<(v: string) => void> = [];
   const acceptListeners: Array<() => void> = [];
@@ -43,8 +41,6 @@ function makeFakeQuickPick() {
   };
   return {
     qp,
-    // Arrow properties, not methods: none needs its own `this`, and destructuring one out
-    // (`const { typeValue } = makeFakeQuickPick()`) must not trip unbound-method.
     typeValue: (v: string) => { qp.value = v; changeValueListeners.forEach(cb => cb(v)); },
     accept: () => { acceptListeners.forEach(cb => cb()); },
     hideWithoutAccept: () => { hideListeners.forEach(cb => cb()); },
@@ -56,14 +52,10 @@ describe('normalizeFormKeyQuery', () => {
     expect(normalizeFormKeyQuery('DogmeatRace [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
   });
 
-  // The identity is the FormKey; the EditorID is decoration. A stale copy (the record was renamed
-  // since) or a hand-edited string must resolve to the reference it names, not the name it carries.
   it('lets the FormKey win when the label and the bracketed FormKey disagree', () => {
     expect(normalizeFormKeyQuery('WrongName [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
   });
 
-  // A VMAD object reference reads "SomeNPC [000123:Foo.esp] [2]" — the alias suffix is a second
-  // bracketed segment. Taking the first match is what makes a copy of that whole cell resolve.
   it('takes the first bracketed segment, so a VMAD alias suffix does not win over the FormKey', () => {
     expect(normalizeFormKeyQuery('SomeNPC [000123:Foo.esp] [2]')).toBe('000123:Foo.esp');
   });
@@ -72,14 +64,11 @@ describe('normalizeFormKeyQuery', () => {
     expect(normalizeFormKeyQuery('DogmeatRace [ 000019:Fallout4.esm ]')).toBe('000019:Fallout4.esm');
   });
 
-  // A bare EditorID and a bare FormKey are both searched as typed.
   it('passes an unbracketed query through untouched', () => {
     expect(normalizeFormKeyQuery('Dogmeat')).toBe('Dogmeat');
     expect(normalizeFormKeyQuery('000019:Fallout4.esm')).toBe('000019:Fallout4.esm');
   });
 
-  // Falling back to the query as typed rather than to the empty string: an empty capture would
-  // blank the results list, which reads as "no matches" for something the user did type.
   it('falls back to the query as typed when the brackets are empty', () => {
     expect(normalizeFormKeyQuery('Foo []')).toBe('Foo []');
     expect(normalizeFormKeyQuery('Foo [  ]')).toBe('Foo [  ]');
@@ -115,16 +104,12 @@ describe('pickRecord', () => {
     expect(qp.value).toBe(record.formKey);
     expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
     expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
-    // "Pre-selected": the seeded record is the active item in the results list — QuickPick has
-    // no InputBox-style valueSelection to also highlight the input text itself.
     expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
 
     qp.hide();
     await dispatchPromise;
   });
 
-  // The seed is the composite the cell displays, not the bare FormKey. Search already normalizes
-  // it; pre-selection must too, or comparing the raw seed against item.formKey stops matching.
   it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
     const record = makeRecord(1, 'Seeded');
     const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
@@ -158,8 +143,6 @@ describe('pickRecord', () => {
     await dispatchPromise;
   });
 
-  // Pasting a whole "EditorID [FormKey]" label copied from a cell searches on the FormKey, not
-  // on the literal — the normalizer's one wiring point.
   it('normalizes a pasted composite label to its FormKey before searching', async () => {
     vi.useFakeTimers();
     const { deps, searchRecords } = fakeDeps();
@@ -234,8 +217,6 @@ describe('pickRecord', () => {
     await vi.advanceTimersByTimeAsync(200);
     vi.useRealTimers();
 
-    // Second (newer) search resolves first; first (stale) resolves after — its late arrival must
-    // not clobber the newer result.
     const secondRecord = makeRecord(9, 'Second');
     resolveSecond({ items: [secondRecord], total: 1 });
     await vi.waitFor(() => expect(qp.items).toHaveLength(1));
@@ -274,8 +255,6 @@ describe('pickRecord', () => {
     expect(qp.dispose).toHaveBeenCalled();
   });
 
-  // common.md, Reporting: a failure inside a dialog I am answering is said by the dialog and
-  // logged, with no second notification.
   it('says a failed search in the picker itself and logs it, without picking anything', async () => {
     const { deps, insideDialog } = fakeDeps(vi.fn().mockRejectedValue(new Error('connection refused')));
     const { qp } = makeFakeQuickPick();

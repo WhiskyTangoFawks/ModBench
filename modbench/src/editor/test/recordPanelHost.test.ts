@@ -98,7 +98,8 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand).toHaveBeenCalledWith(
-      'vscode.openWith', expect.anything(), 'modbench.record', { viewColumn: 1, preview: true });
+      'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
+      { viewColumn: 1, preview: true });
   });
 
   it('opens nothing when the picker is dismissed', async () => {
@@ -107,6 +108,17 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     await open();
 
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses, saying why, when it is given something that names no record', async () => {
+    reporter.report.mockClear();
+    register();
+
+    await commandHandlers.get('modbench.record.open')?.({ kind: 'recordType' });
+
+    expect(reporter.report).toHaveBeenCalledWith('error', 'Could not open a record.', 'What was given names no record.');
+    expect(pickRecord).not.toHaveBeenCalled();
     expect(executeCommand).not.toHaveBeenCalled();
   });
 

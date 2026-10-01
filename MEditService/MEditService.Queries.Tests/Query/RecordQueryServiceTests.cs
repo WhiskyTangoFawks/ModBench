@@ -169,8 +169,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(3, query.Offset);
     }
 
-    // editor-fields.md, References, story 2: a FormID is the game-assigned index, then the ID. A
-    // light plugin counts among the light ones, after FE.
     [Theory]
     [InlineData("01000800", "Patch.esp")]
     [InlineData("0x01000800", "Patch.esp")]
@@ -187,7 +185,43 @@ public sealed class RecordQueryServiceTests
 
         svc.GetRecords(type: null, plugin: null, search: formId, limit: 20, offset: 0);
 
-        Assert.Equal($"000800:{plugin}", ((FakeReads)manager.RequireReads()).LastSearch?.Search);
+        var query = ((FakeReads)manager.RequireReads()).LastSearch;
+        Assert.Equal($"000800:{plugin}", query?.SearchFormKey);
+        Assert.Equal(formId, query?.Search);
+    }
+
+    [Theory]
+    [InlineData("FE000800", "000800:L0.esp")]
+    [InlineData("FE001800", "000800:L1.esp")]
+    [InlineData("FE001FFF", "000FFF:L1.esp")]
+    [InlineData("01000800", "000800:F1.esp")]
+    public void GetRecords_ALightFormIdDecodesItsIndexAndIdSeparately(string formId, string formKey)
+    {
+        var (manager, svc) = Roster(("F0.esm", false, true), ("L0.esp", true, true), ("F1.esp", false, true), ("L1.esp", true, true));
+
+        svc.GetRecords(type: null, plugin: null, search: formId, limit: 20, offset: 0);
+
+        Assert.Equal(formKey, ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
+    }
+
+    [Fact]
+    public void GetRecords_AFormIdCountsOnlyActivePlugins()
+    {
+        var (manager, svc) = Roster(("F0.esm", false, true), ("Off.esp", false, false), ("F1.esp", false, true));
+
+        svc.GetRecords(type: null, plugin: null, search: "01000800", limit: 20, offset: 0);
+
+        Assert.Equal("000800:F1.esp", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
+    }
+
+    [Fact]
+    public void GetRecords_FeIsAFullIndexWhereNoActivePluginIsLight()
+    {
+        var (manager, svc) = Roster([.. Enumerable.Range(0, 255).Select(i => ($"P{i:D3}.esp", false, true))]);
+
+        svc.GetRecords(type: null, plugin: null, search: "FE000800", limit: 20, offset: 0);
+
+        Assert.Equal("000800:P254.esp", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
     }
 
     [Fact]
@@ -196,6 +230,15 @@ public sealed class RecordQueryServiceTests
         _svc.GetRecords(type: null, plugin: null, search: "7F000800", limit: 20, offset: 0);
 
         Assert.Equal("7F000800", _reads.LastSearch?.Search);
+        Assert.Null(_reads.LastSearch?.SearchFormKey);
+    }
+
+    private static (FakeIndex Manager, RecordQueryService Service) Roster(params (string Name, bool Light, bool Active)[] plugins)
+    {
+        var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, "Data", slot, p.Active, Winning: true)).ToList();
+        var opened = plugins.ToDictionary(
+            p => new PluginAddress(p.Name, "Data"), p => new PluginContent(p.Light, false, false, [], 0));
+        return Build(new FakeFixtureData(Release, entries, opened, []));
     }
 
     [Fact]

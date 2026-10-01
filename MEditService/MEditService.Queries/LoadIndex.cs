@@ -30,7 +30,7 @@ internal static class LoadIndex
         if (digits.Length != 8 || !uint.TryParse(digits, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var formId))
             return null;
 
-        var light = formId >> 24 == FormID.SmallMasterMarker;
+        var light = formId >> 24 == FormID.SmallMasterMarker && snapshot.Active.Any(active => IsLight(active.Key, opened));
         var place = (int)(light ? (formId >> 12) & 0xFFF : formId >> 24);
         var id = formId & (light ? 0xFFFu : 0xFFFFFFu);
         var holder = snapshot.Active.Where(active => IsLight(active.Key, opened) == light).ElementAtOrDefault(place);

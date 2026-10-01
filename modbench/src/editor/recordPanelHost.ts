@@ -183,8 +183,12 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       if (plan.addresses.length > 0) return openRecordTabs(plan);
-      if (argument !== undefined) return;
-      const formKey = await pickRecord({ meditClient, reporter: deps.reporterFor('recordPicker') }, '', []);
+      const reporter = deps.reporterFor('recordOpen');
+      if (argument !== undefined) {
+        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
+        return;
+      }
+      const formKey = await pickRecord({ meditClient, reporter }, '', []);
       if (formKey) await openRecordTab({ formKey }, vscode.ViewColumn.One, true);
     }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>

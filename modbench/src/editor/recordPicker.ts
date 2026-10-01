@@ -10,9 +10,8 @@ export interface RecordPickerDeps {
 
 type PickItem = vscode.QuickPickItem & { formKey?: string };
 
-// The same "EditorID [FormKey]" label the picker's items have always
-// rendered — the same composite FormKeyLink/FormKeyCell use to display a resolved reference, so
-// what a reference is *chosen* in and what it is *read back* in are identical.
+// FormKeyLink and FormKeyCell show a resolved reference in this label, so a record is chosen and
+// read back in the same words.
 function toPickItem(r: RecordSummary): PickItem {
   return { label: r.editorId ? `${r.editorId} [${r.formKey}]` : r.formKey, formKey: r.formKey };
 }
