@@ -20,6 +20,7 @@ modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels 
 medit_driving: "MEDIT · Driving adapters — the API" {
   class: band; grid-rows: 1
   http: "HTTP endpoints\ninterface: one endpoint per command and query; the notification\nstream\nhides: the SSE adapter of the notification port; the composition\nroot of mEdit" {class: driving}
+  lib: "driving lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
 }
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
@@ -28,12 +29,14 @@ modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fir
   plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of the instance value and the client by (origin,\nfilename); the external-change notice" {class: driving}
   downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
   editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
+  lib: "driving lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driving}
 }
 
 medit_core: "MEDIT · Core — the write side and the read side; each references Access and the kernel" {
   class: band; grid-rows: 1
   commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\ndecompile, compile, put load order; each\nanswers applied or refusal, per item over a selection\nhides: resolution under the load order; the external-change\ncheck" {class: core}
   queries: "Queries\ninterface: compare, references, children, the plugin list,\nthe malformed-plugin diagnosis, the record\ntypes a game can create; set and clear the record filter · rebuild\nthe index\nhides: the Index's reads" {class: core}
+  lib: "core lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: core}
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
@@ -43,6 +46,7 @@ modbench_core: "MODBENCH · Core — one command per gesture; each writes throug
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a downloaded\nfile's metadata" {class: core}
   install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git, .gitignore and\nplugin-source/; the installed mark on the downloaded file" {class: core}
   deploy: "deploy commands\ninterface: deploy, purge, with the winners as an argument\nhides: the rules that refuse a deploy" {class: core}
+  lib: "core lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: core}
 }
 
 medit_kernel: "MEDIT · Kernel — read by every Core box and driven adapter; a port lives here; Ports reads Load order state; nothing else in the kernel references anything" {
@@ -67,6 +71,7 @@ medit_driven: "MEDIT · Driven adapters — the record index is a view over the 
   }
   sourceadapter: "Source adapter\ninterface: get, put, remove, rename\nhides: layout and git" {class: driven}
   pluginadapter: "Plugin adapter\ninterface: Mutagen read and write; a file's hash\nhides: the game assemblies; the stamp that skips an unchanged\nfile" {class: driven}
+  lib: "driven lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driven}
 }
 modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the one reader and writer of the instance; the instance value is derived from it by watching, and nothing else" {
   class: band; grid-rows: 1
@@ -74,6 +79,7 @@ modbench_driven: "MODBENCH · Driven adapters — the Instance adapter is the on
   instanceadapter: "Instance adapter — a repository; MO2 is one implementation\ninterface: parsed reads: the game and where it is, the profile,\nthe mods in order, the load order, each mod's meta, the\ndownloaded files, the game folder's plugins and its Creation Club\nlist, the manager's name and its mod-order file's name; changes: enable or disable mods and plugins; move mods,\nseparators and plugins in their order; add or drop an entry in\nmod order or plugin order; a downloaded file's metadata, a mod's meta, the\nselected profile; get, put, rename in mods/; subscribe: the\ninstance changed\nhides: layout — the directory structure and every path function;\nthe watch; the manager's file formats, their splices and locks;\nwhole-file writes; how it finds the game folder" {class: driven}
   deployment: "deployment\ninterface: write, remove\nhides: the deployment model and what it writes into the game\nfolder" {class: driven}
   client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
+  lib: "driven lib\ninterface: code two or more of this layer's boxes share\nhides: nothing; it holds no state and no port" {class: driven}
 }
 
 medit_data: "MEDIT · Systems of record" {
