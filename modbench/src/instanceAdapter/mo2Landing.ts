@@ -2,9 +2,10 @@
 // contents. An upgrade replaces the folder's contents in place.
 
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni } from './codecs/metaIni';
-import { copyTree, ensureDir, get, listDir, makeTempDir, remove, rename, write } from './files';
-import type { ExtractedEntry, InstanceAdapter, ModExtraction, ModMeta, OwnedMetaKeys, Upgraded } from './instanceAdapter';
-import { extractionPrefix, fileInFolder, isRepositoryOrPluginSource, modMetaFileIn } from './layout';
+import { copyTree, ensureDir, get, listDir, makeDir, makeTempDir, remove, rename, write } from './files';
+import type { ExtractedEntry, InstanceAdapter, ModMeta, OwnedMetaKeys } from './instanceAdapter';
+import { extractionPrefix, fileInFolder, isRepositoryOrPluginSource, modMetaFileIn, modsDir } from './layout';
+import { errnoCode } from '../ports/errno';
 import { folderHolding, newModFolder, refuseFolderTaken, type Mo2Context } from './mo2Context';
 
 export type Mo2Landing = Pick<InstanceAdapter, 'extractNewMod' | 'extractUpgrade' | 'extractedEntries'>;
@@ -20,22 +21,11 @@ function keysOver(keys: OwnedMetaKeys, carried: ModMeta): OwnedMetaKeys {
   };
 }
 
-async function moveEntriesUp(from: string, into: string): Promise<void> {
-  for (const { name } of await listDir(from)) await rename(fileInFolder(from, name), fileInFolder(into, name));
-}
-
-async function extractionIn(
-  folder: string,
-  land: (extraction: string, root: string, keys: OwnedMetaKeys) => Promise<Upgraded>,
-  abandon: (extraction: string) => Promise<void>,
-): Promise<ModExtraction> {
-  const path = await makeTempDir(extractionPrefix(folder));
-  return {
-    path,
-    copyIn: (source) => copyTree(source, path),
-    land: (root, keys) => land(path, root, keys),
-    abandon: () => abandon(path),
-  };
+// The release's root entries move up into the mod's folder; the rest of the extraction goes.
+async function settleInto(folder: string, extraction: string, root: string, metaText: string): Promise<void> {
+  for (const { name } of await listDir(root)) await rename(fileInFolder(root, name), fileInFolder(folder, name));
+  await remove(extraction);
+  await write(modMetaFileIn(folder), metaText);
 }
 
 export function mo2Landing(context: Mo2Context): Mo2Landing {
@@ -43,39 +33,42 @@ export function mo2Landing(context: Mo2Context): Mo2Landing {
     async extractNewMod(mod) {
       const folder = newModFolder(context, mod);
       await refuseFolderTaken(context, { kind: 'mod', name: mod }, folder);
-      await ensureDir(folder);
-      return extractionIn(
-        folder,
-        async (extraction, root, keys) => {
-          await moveEntriesUp(root, folder);
-          await remove(extraction);
-          await write(modMetaFileIn(folder), writeMetaIni(keys));
-          return { refused: false };
-        },
-        () => remove(folder),
-      );
+      await ensureDir(modsDir(context.instanceRoot));
+      try {
+        await makeDir(folder);
+      } catch (err) {
+        if (errnoCode(err) === 'EEXIST') throw new Error(`The folder "${folder}" is in the way`, { cause: err });
+        throw err;
+      }
+      const path = await makeTempDir(extractionPrefix(folder));
+      return {
+        path,
+        copyIn: (source) => copyTree(source, path),
+        land: (root, keys) => settleInto(folder, path, root, writeMetaIni(keys)),
+        abandon: () => remove(folder),
+      };
     },
 
     async extractUpgrade(mod) {
       const folder = (await folderHolding(context, { kind: 'mod', name: mod }))?.path;
       if (folder === undefined) throw new Error(`No folder holds the mod "${mod}"`);
-      return extractionIn(
-        folder,
-        async (extraction, root, keys) => {
+      const path = await makeTempDir(extractionPrefix(folder));
+      return {
+        path,
+        copyIn: (source) => copyTree(source, path),
+        async land(root, keys) {
           const repositoryOrPluginSourceEntry = (await listDir(root)).map((d) => d.name).find(isRepositoryOrPluginSource);
           if (repositoryOrPluginSourceEntry !== undefined) return { refused: true, repositoryOrPluginSourceEntry };
           const carried = await get(modMetaFileIn(folder), '');
           for (const { name } of await listDir(folder)) {
-            const path = fileInFolder(folder, name);
-            if (path !== extraction && !isRepositoryOrPluginSource(name)) await remove(path);
+            const entry = fileInFolder(folder, name);
+            if (entry !== path && !isRepositoryOrPluginSource(name)) await remove(entry);
           }
-          await moveEntriesUp(root, folder);
-          await remove(extraction);
-          await write(modMetaFileIn(folder), setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
+          await settleInto(folder, path, root, setOwnedKeysInText(carried, keysOver(keys, parseMetaIni(carried))));
           return { refused: false };
         },
-        remove,
-      );
+        abandon: () => remove(path),
+      };
     },
 
     async extractedEntries(folder) {

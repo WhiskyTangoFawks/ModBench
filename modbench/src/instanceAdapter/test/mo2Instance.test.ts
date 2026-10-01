@@ -32,7 +32,7 @@ import { isMo2Instance, mo2InstanceAdapter } from '../mo2Instance';
 import { OVERWRITE_ORIGIN } from '../instanceAdapter';
 import type { GameDetectors } from '../gameDirectory';
 import type {
-  GameFolder, InstanceAdapter, ModExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
+  GameFolder, InstanceAdapter, UpgradeExtraction, ModFolder, ModlistEntry, ModOrderChange, PluginOrderChange,
 } from '../instanceAdapter';
 import { tempWritePath } from '../layout';
 import {
@@ -1285,7 +1285,7 @@ describe('the MO2 Instance adapter', () => {
         await writeFile(join(extraction.path, 'Wrapper', 'New.esp'), '');
         await writeFile(join(extraction.path, 'leftover.txt'), '');
 
-        expect(await extraction.land(join(extraction.path, 'Wrapper'), { gameName: 'Fallout4', installationFile: 'Mod-1.7z' })).toEqual({ refused: false });
+        await extraction.land(join(extraction.path, 'Wrapper'), { gameName: 'Fallout4', installationFile: 'Mod-1.7z' });
 
         expect(await meta('New Mod')).toBe('[General]\ngameName=Fallout4\ninstallationFile=Mod-1.7z\n');
         expect((await readdir(join(root, 'mods', 'New Mod'))).sort()).toEqual(['New.esp', 'meta.ini']);
@@ -1312,7 +1312,7 @@ describe('the MO2 Instance adapter', () => {
     describe('an upgrade', () => {
       const mod = 'Unofficial Fallout 4 Patch';
       const folder = (): string => join(root, 'mods', mod);
-      let extraction: ModExtraction;
+      let extraction: UpgradeExtraction;
 
       beforeEach(async () => {
         await mkdir(join(folder(), '.git'));
@@ -1382,6 +1382,18 @@ describe('the MO2 Instance adapter', () => {
 
         expect(await isThere(join(folder(), entry))).toBe(true);
         expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
+      });
+
+      it('settles a release nested below the extraction, leaving no wrapper behind', async () => {
+        const root = join(extraction.path, 'Wrapper', 'Data');
+        await mkdir(root, { recursive: true });
+        await writeFile(join(root, 'Nested.esp'), '');
+
+        expect(await extraction.land(root, { gameName: 'Fallout4' })).toEqual({ refused: false });
+
+        expect(await isThere(join(folder(), 'Nested.esp'))).toBe(true);
+        expect(await isThere(extraction.path)).toBe(false);
+        expect(await isThere(join(folder(), 'Wrapper'))).toBe(false);
       });
 
       it('refuses a mod no folder holds', async () => {

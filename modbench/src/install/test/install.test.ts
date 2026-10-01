@@ -137,9 +137,10 @@ describe('install commands', () => {
     await rm(sourceFolder, { recursive: true, force: true });
   });
 
-  // Rival: extract into a staging folder beside mods/, as install once did. The observer sees
-  // that folder appear in the instance, and this fails.
+  // Rival: extract into a staging folder beside mods/. The observer sees that folder appear in
+  // the instance, and this fails.
   it('writes nothing outside mods/<name> while it runs, from an archive or a folder', async () => {
+    const FOLDER_MOD = 'Folder Installed Mod';
     const entriesAt = async (): Promise<string[]> =>
       [...await readdir(root), ...(await readdir(join(root, 'mods'))).map((name) => `mods/${name}`)];
     const before = new Set(await entriesAt());
@@ -160,12 +161,16 @@ describe('install commands', () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
     };
 
-    await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: slowly });
-    await installFromFolder(access, { kind: 'new', name: 'Harder VATS' }, sourceFolder, { gameName: GAME_NAME });
+    const outcomes = [
+      await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: slowly }),
+      await installFromFolder(access, { kind: 'new', name: FOLDER_MOD }, sourceFolder, { gameName: GAME_NAME }),
+    ];
     observing = false;
     await observer;
 
-    expect([...seen].filter((path) => path !== `mods/${MOD}` && path !== 'mods/Harder VATS')).toEqual([]);
+    expect(outcomes).toEqual([{ applied: true, wrote: true, isFomod: false }, { applied: true, wrote: true, isFomod: false }]);
+    expect(seen.has(`mods/${MOD}`)).toBe(true); // the observer interleaved with the slow install
+    expect([...seen].filter((path) => path !== `mods/${MOD}` && path !== `mods/${FOLDER_MOD}`)).toEqual([]);
   });
 
   // Rival: append the modlist line from the installer. The touch-set below has no modlist.txt
@@ -253,7 +258,7 @@ describe('install commands', () => {
     const before = await readdir(root);
 
     await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
-    await installFromFolder(access, { kind: 'new', name: 'Harder VATS' }, sourceFolder, { gameName: GAME_NAME });
+    await installFromFolder(access, { kind: 'new', name: 'Folder Installed Mod' }, sourceFolder, { gameName: GAME_NAME });
 
     expect((await readdir(root)).sort()).toEqual(before.sort());
   });

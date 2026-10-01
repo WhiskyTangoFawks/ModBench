@@ -8,7 +8,7 @@ import { markDownloadInstalled } from './installedMark';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
-  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type ModExtraction,
+  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
 } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
@@ -107,15 +107,22 @@ function mismatchRefusal(target: InstallTarget, targetExists: boolean): string |
   return undefined;
 }
 
+type Opened =
+  | { kind: 'new'; extraction: NewModExtraction }
+  | { kind: 'upgrade'; extraction: UpgradeExtraction };
+
 async function settle(
-  extraction: ModExtraction, target: InstallTarget, root: string, meta: InstallMeta, isFomod: boolean, gameName: string,
+  opened: Opened, name: string, root: string, meta: InstallMeta, isFomod: boolean, gameName: string,
 ): Promise<InstallCommandResult> {
-  const { name } = target;
+  const keys = { gameName, ...meta };
+  if (opened.kind === 'new') {
+    await opened.extraction.land(root, keys);
+    return { applied: true, wrote: true, isFomod };
+  }
   let landed;
   try {
-    landed = await extraction.land(root, { gameName, ...meta });
+    landed = await opened.extraction.land(root, keys);
   } catch (err) {
-    if (target.kind === 'new') return refuse(err);
     return { applied: false, refusal: `Upgrading "${name}" failed partway and was not rolled back: ${errorMessage(err)}` };
   }
   if (landed.refused) {
@@ -136,12 +143,15 @@ function extractAndLand(
     const holding = await adapter.entryFolder({ kind: 'mod', name });
     const refusal = mismatchRefusal(target, holding !== undefined);
     if (refusal) return { applied: false, refusal };
-    const extraction = await (target.kind === 'new' ? adapter.extractNewMod(name) : adapter.extractUpgrade(name));
+    const opened: Opened = target.kind === 'new'
+      ? { kind: 'new', extraction: await adapter.extractNewMod(name) }
+      : { kind: 'upgrade', extraction: await adapter.extractUpgrade(name) };
+    const { extraction } = opened;
     let outcome: InstallCommandResult;
     try {
       await fill(extraction);
       const { sourceDir, isFomod } = await detectRoot(adapter, extraction.path);
-      outcome = await settle(extraction, target, sourceDir, meta, isFomod, gameName);
+      outcome = await settle(opened, name, sourceDir, meta, isFomod, gameName);
     } catch (err) {
       outcome = refuse(err);
     }

@@ -157,19 +157,27 @@ export interface ExtractedEntry {
 }
 
 /** A release on its way into a mod's own folder, in a fresh folder of its own inside it. Only the
- *  adapter makes one, so what it removes can never be a folder a caller named. */
+ *  adapter makes one, and it removes only what it made. */
 export interface ModExtraction {
   /** Where the release is extracted. */
   readonly path: string;
   /** Puts a copy of `folder`'s tree in `path`; `folder` is left as it was. */
   copyIn(folder: string): Promise<void>;
-  /** Makes the tree at `root` the mod's contents and sets `keys` over the meta. An
-   *  upgrade replaces the contents around the repository and plugin source, keeps each meta value
-   *  `keys` leaves undefined, and refuses a release holding either. */
-  land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
   /** Undoes the extraction: a new mod's folder goes whole; an upgrade's folder keeps everything
    *  but the extraction. */
   abandon(): Promise<void>;
+}
+
+export interface NewModExtraction extends ModExtraction {
+  /** Makes the tree at `root` the mod's contents, its meta holding `keys` alone. */
+  land(root: string, keys: OwnedMetaKeys): Promise<void>;
+}
+
+export interface UpgradeExtraction extends ModExtraction {
+  /** Replaces the mod's contents with the tree at `root` around its repository and plugin source,
+   *  setting `keys` over the meta and keeping each value `keys` leaves undefined. A release
+   *  holding an entry of either is refused first. */
+  land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
 }
 
 /** An upgrade refused before anything changed names the entry of the mod's repository or plugin
@@ -338,9 +346,9 @@ export interface InstanceAdapter {
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
   /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
    *  matched as the manager matches names. */
-  extractNewMod(mod: string): Promise<ModExtraction>;
+  extractNewMod(mod: string): Promise<NewModExtraction>;
   /** Opens the extraction inside the folder of a mod that is there; rejects when none holds it. */
-  extractUpgrade(mod: string): Promise<ModExtraction>;
+  extractUpgrade(mod: string): Promise<UpgradeExtraction>;
   extractedEntries(folder: string): Promise<ExtractedEntry[]>;
 
   // Subscribe: the instance changed.
