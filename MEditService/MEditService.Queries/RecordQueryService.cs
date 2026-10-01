@@ -94,18 +94,14 @@ public sealed class RecordQueryService(
 
         var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
 
-        // ADR-0012: keyed by the compound column identity — with a second plugin of one filename
-        // loaded, a filename key is ambiguous, and ToDictionary throws outright.
-        var pluginMasters = reads.OpenedPlugins.ToDictionary(
-            kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin), kv => kv.Value.Masters);
-        var (classification, conflictAll) = ClassifyStack(committedOverrides, pluginMasters, resolveFormKey);
+        var (classification, conflictAll) = ClassifyStack(committedOverrides, resolveFormKey);
         // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
-        // any non-Data-origin column and silently default ConflictThis to OnlyOne.
+        // any non-Data-origin column and silently drop its ConflictThis.
         var snapshot = _loadOrder.Require();
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
-                classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
+                classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
                 Origin: o.Origin,
                 LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
                 RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
@@ -118,11 +114,10 @@ public sealed class RecordQueryService(
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var classification = _conflictClassifier.Classify(
-            committedOverrides, pluginMasters, _loadOrder.Require().GameRelease, resolveFormKey);
+            committedOverrides, _loadOrder.Require().GameRelease, resolveFormKey);
         return (classification, classification.ConflictAll);
     }
 

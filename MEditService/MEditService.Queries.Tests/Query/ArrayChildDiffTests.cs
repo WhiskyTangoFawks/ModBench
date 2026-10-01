@@ -9,13 +9,10 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ArrayChildDiffTests
 {
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoMasters =
-        new Dictionary<string, IReadOnlyList<string>>();
-
     private static ClassifyResult Classify(
         IReadOnlyList<RecordDetail> records,
         ConflictClassifier? classifier = null) =>
-        (classifier ?? new ConflictClassifier()).Classify(records, NoMasters, GameRelease.Fallout4);
+        (classifier ?? new ConflictClassifier()).Classify(records, GameRelease.Fallout4);
 
     private static FieldMetadata SortedArrayMeta(string name) =>
         new(name, "array", true, [], [],

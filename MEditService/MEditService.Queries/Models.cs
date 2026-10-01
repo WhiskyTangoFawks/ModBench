@@ -69,7 +69,7 @@ public record CompareOverride(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
-    ConflictThis ConflictThis,
+    ConflictThis? ConflictThis,
     string Origin,
     // xEdit's load index, as the column header's label shows it: `0A`, or `FE:001` for a light plugin.
     string LoadIndex,

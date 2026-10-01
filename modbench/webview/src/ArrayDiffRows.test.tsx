@@ -251,7 +251,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     fireEvent.click(within(required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row")).getByText('▼'));
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
-    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
   });
 
   it('expanded: the struct row loses its own background, and only the differing child is tinted', async () => {
@@ -262,7 +262,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     const x1Row = required(screen.getByText('X1').closest('tr'), "X1's row");
     const x2Row = required(screen.getByText('X2').closest('tr'), "X2's row");
     expect(structRow.style.backgroundColor).toBe('');
-    expect(x1Row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(x1Row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
     expect(x2Row.style.backgroundColor).toBe('');
   });
 
@@ -278,7 +278,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
 
     const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
-    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(structRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
   });
 });
 

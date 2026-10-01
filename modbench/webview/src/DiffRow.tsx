@@ -8,23 +8,16 @@ import { copiedText, modelValue } from './modelValue';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, labelCell, getCellStyle, focusedRowStyle } from './gridStyles';
+import {
+  baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
+} from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
-import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { LABEL_COLUMN } from './columnKey';
-
-
-// NoConflict and OnlyOne are deliberately absent: they paint no background, so an expanded row
-// deferring to its children (`undefined` below) reads the same way they do.
-const ROW_BG: Partial<Record<ConflictAll, string>> = {
-  Override:        'rgba(76,175,80,0.20)',
-  Conflict:        'rgba(255,152,0,0.20)',
-  ConflictCritical: 'rgba(244,67,54,0.20)',
-};
 
 interface RenderCellExtras {
   checkError?: string | null;
@@ -111,6 +104,13 @@ export interface FocusedCell {
   plugin: ColumnKey | null;
 }
 
+function masterOrOnlyOne(
+  value: unknown, key: ColumnKey, columns: readonly Column[],
+): ConflictThis | undefined {
+  if (value == null || columns[0]?.key !== key) return undefined;
+  return columns.length === 1 ? 'OnlyOne' : 'Master';
+}
+
 function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
@@ -193,7 +193,7 @@ export function DiffRow({
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
   // shows the subtree's aggregate only while collapsed.
-  const rowBg = hasChildren && isExpanded ? undefined : ROW_BG[diff.conflictAll];
+  const rowBg = hasChildren && isExpanded ? undefined : rowBackground(diff.conflictAll);
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
   // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
@@ -232,8 +232,10 @@ export function DiffRow({
         // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
         // moment a non-Data-origin column exists.
 
+        // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
+        const cellState = diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
         const cellStyle = {
-          ...baseCell, ...getCellStyle(diff.cellStates[key]), ...columnStyle(key),
+          ...baseCell, ...getCellStyle(cellState), ...columnStyle(key),
         };
         if (collapsedColumns.has(key)) {
           return <td key={key} style={cellStyle} />;
@@ -251,6 +253,8 @@ export function DiffRow({
         // ADR-0018: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
         const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
+        const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
+          .filter(Boolean).join('\n') || undefined;
         const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null;
         // Array ops are offered only on a writable cell.
         const arrayEditable = !!onArrayOp && writable && (isArrayParentRow || isArrayElementRow);
@@ -298,7 +302,7 @@ export function DiffRow({
             <DiskCell
               key={key}
               style={cellStyle}
-              title={cellMeta.readOnlyReason ?? undefined}
+              title={cellTitle}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               copyText={copyText}
@@ -319,7 +323,7 @@ export function DiffRow({
             vscodeContext={vscodeContext}
             key={key}
             style={cellStyle}
-            title={cellMeta.readOnlyReason ?? undefined}
+            title={cellTitle}
             isFocused={isFocused}
             onFocusCell={() => onFocusCell(rowKey, key)}
             copyText={copyText}
