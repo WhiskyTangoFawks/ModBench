@@ -6,21 +6,19 @@ using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
 /// <summary>The write side's shared concerns (ADR-0014): target resolution, its pre-write refusals,
-/// rename on an EditorID change, and FormKey allocation. An internal seam, tested through the
+/// and FormKey allocation. An internal seam, tested through the
 /// gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
     IPluginAdapter adapter,
     RecordTextCodec codec,
-    SchemaReflector schemaReflector,
-    ILogger logger)
+    SchemaReflector schemaReflector)
 {
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
     /// naming a command the user cannot find is worse than none.</summary>
@@ -335,20 +333,7 @@ internal sealed class WriteTargets(
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-    /// <summary>A source unit's leaf name carries its record's EditorID, so an EditorID change moves
-    /// the unit. Never a gesture's only write, so a crash on either side of it leaves the record
-    /// findable by FormKey.</summary>
-    internal void RenameTo(SourceRepository repository, PluginAddress plugin, RecordIdentity target, string? newEditorId)
-    {
-        if (repository.Rename(plugin, target, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "EditorID changed on {FormKey}; moved its source unit from {Old} to {New}",
-                target.FormKey, target.EditorId, newLeaf);
-        }
-    }
-
-    /// <summary>The EditorID a written document's own text names, which is what the rename follows.</summary>
+    /// <summary>The EditorID a written document's own text names, which the put names the unit by.</summary>
     internal static string? EditorIdOf(string text)
     {
         using var document = JsonDocument.Parse(text);

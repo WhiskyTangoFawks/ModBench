@@ -13,7 +13,6 @@ public sealed class SharedConcernScanTests
     private static readonly (string Concern, string Needle)[] Concerns =
     [
         ("target resolution", @"\bUnreadableDocumentFor\b"),
-        ("rename on an EditorID change", @"\bRename\("),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
     ];
@@ -81,24 +80,22 @@ public sealed class SharedConcernScanTests
                 Path.Combine(root, "Layer", "Second.cs"),
                 "if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return why;\n"
                 + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
-            File.WriteAllText(Path.Combine(root, "Layer", "Renamer.cs"), "repository.Rename(plugin, at, editorId);");
             // The module's own file is what the counts are measured against, so it is not one of them.
-            File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Rename(plugin, at, id);");
-            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.Rename(a, b, c);");
+            File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.UnreadableDocumentFor(plugin, id);");
+            File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.UnreadableDocumentFor(a, b);");
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
 
             var counts = Counts(root, ["Layer"]);
 
             Assert.Equal(
                 [
-                    @"Layer/Renamer.cs: \bRename\(: 1",
                     @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
                     @"Layer/Second.cs: \bUnreadableDocumentFor\b: 1",
                 ],
                 counts);
 
             var newReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [@"Layer/Renamer.cs: \bRename\(: 1"], AllowlistPath));
+                () => AssertCountsMatchAllowlist(counts, [@"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1"], AllowlistPath));
             Assert.Contains(@"Layer/Second.cs: \bUnreadableDocumentFor\b: 1", newReference.Message, StringComparison.Ordinal);
 
             var deletedReference = Assert.Throws<Xunit.Sdk.TrueException>(

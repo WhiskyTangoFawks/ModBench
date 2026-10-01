@@ -213,6 +213,17 @@ public sealed class EditRecordHandlerTests : IDisposable
     }
 
     [Fact]
+    public void EditEditorId_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndRenamesNothing()
+    {
+        File.WriteAllText(_mod.NpcSourceFile, "this is not a document");
+
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.True(File.Exists(_mod.NpcSourceFile));
+    }
+
+    [Fact]
     public void EditField_WhenTheRecordsFileHasGoneFromTheTree_Refuses()
     {
         File.Delete(_mod.NpcSourceFile);

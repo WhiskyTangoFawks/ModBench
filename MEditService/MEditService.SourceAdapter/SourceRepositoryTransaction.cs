@@ -48,6 +48,10 @@ public sealed partial class SourceRepository
             // which one document's bytes cannot take back.
             if (repository.LocateToPlace(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
+            // Refused before the tree is touched: the move a changed EditorID makes is a path this
+            // batch holds no bytes for.
+            if (ChangesEditorId(unit, document)) throw NotRestorableRename(unit, identity);
+
             var before = Snapshot(unit.FullPath);
             var minted = LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
             try
@@ -89,6 +93,10 @@ public sealed partial class SourceRepository
             new($"No document in {plugin.Name}'s tree holds {identity.FormKey} and its type has no file of its " +
                 "own, so putting it would create one and mint the levels above it. A batch holds one " +
                 "document's bytes per act, so it cannot put that back — put it outside the batch.");
+
+        private static NotSupportedException NotRestorableRename(SourceUnit unit, RecordIdentity identity) =>
+            new($"Putting {identity.FormKey} under a new EditorID would rename {unit.RelativePath}, and a batch " +
+                "holds the bytes of one path per act, so it cannot put that back — put it outside the batch.");
 
         private static NotSupportedException NotRestorable(SourceUnit unit, RecordIdentity identity) =>
             new($"{identity.FormKey} has a directory of its own at {unit.RelativePath}, and removing it takes " +

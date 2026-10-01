@@ -3,16 +3,11 @@ using MEditService.SourceAdapter;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>Assertions walk the real tree, never git: git tracks files, not directories, so an
-/// empty directory produces no porcelain line. The failing write is an EditorID longer than the
-/// filesystem's per-component limit.</summary>
+/// empty directory produces no porcelain line. The failing write is an EditorID no filesystem
+/// accepts in a name.</summary>
 public sealed class FailedWriteDirectoryCleanupTests
 {
-    // Exceeds the 255-byte per-component limit on every filesystem this runs on.
-    private const string OverLongEditorId =
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    private const string UnwritableEditorId = "Bad\0Name";
 
     private static List<string> EntriesUnderSource(SourceEditFixture mod) =>
         Directory
@@ -31,7 +26,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         var before = EntriesUnderSource(mod);
         Assert.DoesNotContain(before, e => e.EndsWith("Weapons", StringComparison.Ordinal));
 
-        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "weap", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "weap", UnwritableEditorId));
 
         Assert.Equal(before, EntriesUnderSource(mod));
 
@@ -50,7 +45,7 @@ public sealed class FailedWriteDirectoryCleanupTests
 
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
 
-        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", UnwritableEditorId));
 
         Assert.True(Directory.Exists(npcsDirectory));
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
