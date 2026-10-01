@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -105,6 +106,7 @@ public sealed partial class SourceRepository
     public void Put(PluginAddress plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+        if (LocateToPlace(plugin, identity) is { } held) MoveToItsEditorId(held, document);
         var unit = LocateToPlace(plugin, identity)
                    ?? PlaceNewDocument(plugin, identity, placement)
                    ?? throw NoPlaceInTheTree(plugin, identity);
@@ -253,36 +255,34 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>
-    /// computes, and answers the leaf it now has. Null when nothing moved: the header and an inlined
-    /// record have no leaf name of their own.</summary>
-    public string? Rename(PluginAddress plugin, RecordIdentity identity, string? newEditorId)
+    // The leaf name carries the EditorID, so a put that changes it moves the unit first: a crash
+    // between leaves the record at its new name with old content, still found by FormKey. A header
+    // and an embedded record have no leaf of their own, and a leaf something else renamed keeps that
+    // name while the EditorID stays what it was.
+    private void MoveToItsEditorId(SourceUnit unit, SourceDocument document)
     {
-        if (identity.RecordType == PluginHeader.RecordType) return null;
-        // The name it already has, so nothing moves — and a leaf something else renamed keeps that
-        // name rather than being dragged back to the computed one.
-        if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return null;
-        if (Locate(plugin, identity) is not { IsEmbedded: false } unit) return null;
+        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
+            return;
+        if (string.Equals(EditorIdOf(unit.FullPath), document.EditorId, StringComparison.Ordinal)) return;
 
         var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
         var to = Path.Combine(
             PathShape.DirectoryOf(from),
-            LeafNameFor(
-                FormKey.Factory(identity.FormKey), newEditorId, unit.IsDirectoryPerRecord));
-        if (string.Equals(from, to, StringComparison.Ordinal)) return null;
+            LeafNameFor(FormKey.Factory(document.FormKey), document.EditorId, unit.IsDirectoryPerRecord));
+        if (string.Equals(from, to, StringComparison.Ordinal)) return;
 
-        if (unit.IsDirectoryPerRecord)
-        {
-            if (!Directory.Exists(from)) return null;
-            Directory.Move(from, to);
-        }
-        else
-        {
-            if (!File.Exists(from)) return null;
-            File.Move(from, to, overwrite: true);
-        }
+        if (unit.IsDirectoryPerRecord) Directory.Move(from, to);
+        else File.Move(from, to, overwrite: true);
         Forget();
-        return Path.GetFileName(to);
+    }
+
+    private static string? EditorIdOf(string documentPath)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllBytes(documentPath));
+        return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
+            && editorId.ValueKind == JsonValueKind.String
+            ? editorId.GetString()
+            : null;
     }
 
     private static byte[] OwnerBytes(SourceUnit unit) => StripUtf8Bom(File.ReadAllBytes(unit.FullPath));

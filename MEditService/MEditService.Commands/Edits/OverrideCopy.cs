@@ -121,8 +121,7 @@ internal sealed class OverrideCopy
     }
 
     // The destination's embedded children are transplanted onto the replacing record so the copy
-    // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
-    // regenerates canonical names.
+    // cannot delete them.
     private RecordEditResult ReplaceHeldCopy(
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
@@ -134,9 +133,6 @@ internal sealed class OverrideCopy
         var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
             _codec, existing.Body, existing.RecordType, body, identity.RecordType, release);
 
-        // Move first, then write: a crash between leaves the leaf at its new name with old content,
-        // still findable by FormKey. The reverse order leaves two units claiming one FormKey.
-        _targets.RenameTo(destination.Repository, destination.Plugin, existingTarget, replacement.EditorId);
         destination.Repository.Put(
             destination.Plugin,
             new SourceDocument(

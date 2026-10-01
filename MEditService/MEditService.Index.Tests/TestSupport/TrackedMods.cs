@@ -85,16 +85,13 @@ internal static class TrackedMods
         index.ValidateIndex(entry.KeyOf());
     }
 
-    /// <summary>The working tree's copy of <paramref name="document"/> moved to the name
-    /// <paramref name="newEditorId"/> computes and rewritten there, then the next snapshot's
+    /// <summary>The working tree's copy of <paramref name="document"/> put under
+    /// <paramref name="newEditorId"/>, which moves it to the name that computes, then the next snapshot's
     /// validation of the plugin.</summary>
     internal static void Rename(
         this Indexer index, LoadOrderEntry entry, RecordDocument document, string newEditorId, string body)
     {
-        var repository = RepositoryOf(entry);
-        repository.Rename(
-            entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId), newEditorId);
-        repository.Put(
+        RepositoryOf(entry).Put(
             entry.KeyOf(), new SourceDocument(document.FormKey, document.RecordType, newEditorId, body));
         index.ValidateIndex(entry.KeyOf());
     }
