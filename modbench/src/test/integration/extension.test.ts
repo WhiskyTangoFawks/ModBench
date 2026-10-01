@@ -597,7 +597,7 @@ describe('modbench.record.open', () => {
   it('reads a Plugins-tree RecordNode-shaped row from a menu to its own record', async () => {
     const row = { kind: 'record', record: { formKey: 'Fallout4.esm:000030' }, origin: 'Data' };
 
-    await vscode.commands.executeCommand('modbench.record.open', row, [row]);
+    await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
     await waitFor('the RecordNode\'s tab', () => titled('Fallout4.esm:000030') || undefined);
   });
@@ -605,7 +605,7 @@ describe('modbench.record.open', () => {
   it('reads a Plugins-tree PlacedNode-shaped row from a menu to its own record', async () => {
     const row = { kind: 'placed', formKey: 'Fallout4.esm:000040', origin: 'Data' };
 
-    await vscode.commands.executeCommand('modbench.record.open', row, [row]);
+    await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
     await waitFor('the PlacedNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
   });
@@ -617,7 +617,7 @@ describe('modbench.record.open', () => {
       { formKey: 'Fallout4.esm:000060' }, { formKey: 'Fallout4.esm:000061' }, { formKey: 'Fallout4.esm:000062' },
     ];
 
-    await vscode.commands.executeCommand('modbench.record.open', selection[0], selection);
+    await vscode.commands.executeCommand('modbench.record.openToSide', selection[0], selection);
     // Both conditions: a tab can carry its title before the group it landed in finishes settling,
     // and settling into one group (not one per record) is the behavior under test.
     await waitFor('every selected tab in one new group', () =>

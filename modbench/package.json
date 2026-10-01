@@ -136,6 +136,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.record.openToSide",
+        "title": "Open to the Side",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.editField",
         "title": "Edit Record Field",
         "category": "Modbench"
@@ -437,6 +442,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "modbench.record.openToSide",
+          "when": "false"
+        },
         {
           "command": "modbench.record.editField",
           "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
@@ -767,7 +776,7 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.record.open",
+          "command": "modbench.record.openToSide",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@2"
         },
@@ -957,7 +966,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.record.open",
+          "command": "modbench.record.openToSide",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "1_open@1"
         },
