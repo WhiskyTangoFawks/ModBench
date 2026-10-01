@@ -51,7 +51,7 @@ function harness(shown: (formKey: string) => boolean = () => true) {
   return { stream, group, reads, reporter, selection, revealed, settle, opened };
 }
 
-const OPEN_NEW = ['modbench.record.open', { formKey: NEW, label: NEW }];
+const OPEN_NEW = ['modbench.record.open', { formKey: NEW }];
 
 beforeEach(() => { executeCommand.mockReset(); });
 

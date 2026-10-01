@@ -6,6 +6,7 @@ import type {
 import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
+import { headerFormKeyFor } from './formKeyIdentity';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
 import { moveOrderRefusal, type PluginOrderFacts, type PluginOrderFactsOf } from '../pluginsCommands/pluginOrder';
 import { failurePrefixIcon } from './failurePrefixIcon';
@@ -138,6 +139,10 @@ function rowIdentity(kind: string, plugin: PluginAddress, formKey?: string): str
   return [kind, pluginAddressKey(plugin.name, plugin.origin), ...(formKey === undefined ? [] : [formKey])].join(':');
 }
 
+function openHeaderCommand(plugin: string, origin: string): vscode.Command {
+  return { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: headerFormKeyFor(plugin), origin }] };
+}
+
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Overridden plugins are registered
  *  (ADR-0013), not displayed. */
@@ -154,7 +159,7 @@ export class PluginNode extends vscode.TreeItem {
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
     // plugins.md, Menus and keys, story 2: the game loads no disabled plugin's records, so a click
     // on its row only selects it.
-    if (plugin.enabled) this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
+    if (plugin.enabled) this.command = openHeaderCommand(plugin.name, origin);
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -174,8 +179,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     // plugins.md, A plugin the game loads with no line: the reference tool's one sentence alone —
     // the label already shows the greyed file name, so the tooltip does not repeat it.
     this.tooltip = "This plugin can't be disabled or moved (enforced by the game).";
-    // Routed through the modbench.openHeader bridge command, as PluginNode's row click is.
-    this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
+    this.command = openHeaderCommand(name, origin);
     if (path !== undefined) this.resourceUri = lockedRowUri(path);
   }
 }

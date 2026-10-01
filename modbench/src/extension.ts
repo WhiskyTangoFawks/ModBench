@@ -23,7 +23,7 @@ import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
   registerTrackCommand, registerDecompileCommand, registerCompileCommand, CompileProblems, type CompileDeps, type TrackDeps,
-  registerOpenHeaderCommand, conflictsComputedOver, refreshSourceControlFor,
+  conflictsComputedOver, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
 import type { OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
 import {
@@ -254,7 +254,6 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
         view: { reveal: (row, options) => session.pluginsTreeView?.reveal(row, options) ?? Promise.resolve() },
       }),
     }, () => session.pluginsTreeView?.selection ?? []),
-    registerOpenHeaderCommand(),
   ];
 }
 

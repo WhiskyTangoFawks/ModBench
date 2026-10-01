@@ -8,6 +8,7 @@ import type { RecordSummary, MEditClient } from '../client';
 import type { FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
+import { recordTitle } from './recordTitle';
 
 export interface RouteRecordPanelMessageDeps {
   // The FormKey picker's search and the panel's own read — one client serves both, and the
@@ -30,12 +31,14 @@ export interface RouteRecordPanelMessageDeps {
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
   // per panel like `formKeyPicker.reply`.
   reply: (msg: ExtensionToWebview) => void;
+  // Titles the panel from the record its read answered (editor.md, Opening, story 5).
+  setTitle: (title: string) => void;
   // The load-order sweep's latest known answer, read rather than fetched (ADR-0013).
   conflictsComputed: () => boolean;
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'panelId' | 'focusCell' | 'reply'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'panelId' | 'focusCell' | 'reply' | 'setTitle'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it,
  *  and the commands it fires name it. */
@@ -51,6 +54,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     panelId,
     focusCell: (context) => { focusedCells.setCell(panel, context); },
     reply: (m) => { void panel.webview.postMessage(m); },
+    setTitle: (title) => { panel.title = title; },
   };
 }
 
@@ -79,7 +83,7 @@ const HANDLERS: {
   ) => Promise<void> | void;
 } = {
   [WEBVIEW_TO_EXTENSION.OPEN_RECORD]: async (_deps, m) => {
-    await vscode.commands.executeCommand('modbench.record.open', { formKey: m.formKey, label: m.formKey });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: m.formKey });
   },
   [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
   [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),
@@ -230,6 +234,7 @@ async function answerRecordLoad(
     });
     return;
   }
+  deps.setTitle(recordTitle(m.formKey, compare.value?.overrides));
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,

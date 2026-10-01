@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 
 export function buildWebviewHtml(params: {
-  formKey: string | undefined;
+  formKey: string;
   scriptUri: string;
   cspSource: string;
   // Named in the body's webview context, so every right-click menu names the panel it came from.
@@ -18,7 +18,7 @@ export function buildWebviewHtml(params: {
 </head>
 <body data-vscode-context='${JSON.stringify({ panelId })}'>
   <div id="root"></div>
-  <script nonce="${nonce}">window.mEditFormKey = ${JSON.stringify(formKey ?? '')};</script>
+  <script nonce="${nonce}">window.mEditFormKey = ${JSON.stringify(formKey)};</script>
   <script type="module" src="${scriptUri}"></script>
 </body>
 </html>`;

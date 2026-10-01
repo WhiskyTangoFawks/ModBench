@@ -12,8 +12,8 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
-  headerFormKeyFor,
 } from '../PluginTreeProvider';
+import { headerFormKeyFor } from '../formKeyIdentity';
 import { ErrorNode } from '../errorNode';
 import type { PluginConditions, PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
@@ -22,18 +22,6 @@ import { present } from '../../ports/present';
 import { listsForThePluginAsked, recordTypeCountFixture } from '../../client/test/fixtures';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-// vscode.Command's own type leaves `arguments` as `any[]`, so this narrows the first one by hand
-// instead of an unsafe member access straight off it.
-function firstCommandArgument(command: { arguments?: unknown[] } | undefined): Record<string, unknown> {
-  const first = command?.arguments?.[0];
-  if (!isRecord(first)) throw new Error('expected a command argument object');
-  return first;
-}
 
 function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
@@ -306,22 +294,15 @@ describe('RecordTypeNode', () => {
 // ── RecordNode ────────────────────────────────────────────────────────────────
 
 describe('RecordNode', () => {
-  it('wires .command to modbench.record.open with formKey and label', () => {
+  it('wires .command to modbench.record.open with its formKey alone', () => {
     const record = makeRecord(0);
     const node = new RecordNode(record, 'Data');
 
     expect(node.command).toEqual({
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey: record.formKey, label: record.editorId }],
+      arguments: [{ formKey: record.formKey }],
     });
-  });
-
-  it('uses formKey alone as label when editorId is absent', () => {
-    const record: RecordSummary = { ...makeRecord(0), editorId: null };
-    const node = new RecordNode(record, 'Data');
-
-    expect(firstCommandArgument(node.command).label).toBe(record.formKey);
   });
 
   it('states a record of a tracked plugin', () => {

@@ -13,7 +13,9 @@ import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './r
 import { trackConflictsComputed } from './conflictsComputedTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE } from './recordUri';
+import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, type RecordAddress } from './recordUri';
+import { recordOpenPlan, type RecordOpenPlan } from './recordOpenPlan';
+import { recordTitle } from './recordTitle';
 
 export interface EditorCommandDeps {
   context: Pick<vscode.ExtensionContext, 'extensionUri'>;
@@ -34,8 +36,8 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
-  // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
-  // to the one cross-context fact this file needs, not the composition root's session object.
+  // The merged Plugins tree's selection, which the record gestures act on. Narrowed to the one
+  // cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like mergedTreeSelection.
@@ -60,9 +62,9 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
 }
 
 // The document model RecordEditorProvider hands back to VS Code: an opaque handle naming only the
-// FormKey its URI addresses (`undefined` for the no-record-yet picker tab).
+// FormKey its URI addresses.
 class RecordDocument implements vscode.CustomDocument {
-  constructor(readonly uri: vscode.Uri, readonly formKey: string | undefined) {}
+  constructor(readonly uri: vscode.Uri, readonly formKey: string) {}
   dispose(): void { /* no owned resources */ }
 }
 
@@ -74,9 +76,6 @@ interface RecordEditorProviderDeps {
   focusedCells: FocusedCells<vscode.WebviewPanel>;
   panelsById: Map<string, vscode.WebviewPanel>;
   routerDeps: SharedRecordPanelDeps;
-  // The title the opening call chose (editor.md, Opening, story 5) — read once by the editor
-  // VS Code resolves for it. A tab VS Code restores with no such call falls back to the FormKey.
-  pendingTitles: Map<string, string>;
 }
 
 let panelsOpened = 0;
@@ -92,12 +91,10 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 
   resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
     const {
-      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps, pendingTitles,
+      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps,
     } = this.deps;
     const formKey = document.formKey;
-    const key = document.uri.toString();
-    panel.title = pendingTitles.get(key) ?? formKey ?? 'mEdit';
-    pendingTitles.delete(key);
+    panel.title = recordTitle(formKey, undefined);
 
     panel.webview.options = {
       enableScripts: true,
@@ -113,7 +110,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     // FormKey is recorded before the panel is declared active, so a new panel fires the
     // Referenced By retarget exactly once, already carrying it. onDidChangeViewState announces
     // only *gaining* focus: losing it is another panel's event, or removePanel's job.
-    if (formKey) activeRecordTracker.setFormKey(panel, formKey);
+    activeRecordTracker.setFormKey(panel, formKey);
     activeRecordTracker.setActivePanel(panel);
     focusedCells.setActivePanel(panel);
     panel.onDidChangeViewState(() => {
@@ -155,9 +152,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const routerDeps: SharedRecordPanelDeps = {
     ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
   };
-  const pendingTitles = new Map<string, string>();
   const recordEditorProvider = new RecordEditorProvider({
-    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps, pendingTitles,
+    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps,
   });
 
   return [
@@ -185,26 +181,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
-    vscode.commands.registerCommand('modbench.record.open', (args?: { formKey?: string; label?: string }) => {
-      void openRecordTab(pendingTitles, args?.formKey, args?.label ?? args?.formKey ?? 'mEdit', vscode.ViewColumn.One, true);
-    }),
-    // A named "Open to the Side" (ADR-0018), not a right-click side effect. `item`/`allSelected`
-    // mirror VS Code's view/item/context invocation shape, falling back to the tree's current
-    // selection when neither is supplied.
-    vscode.commands.registerCommand('modbench.openEditorBeside',
-      async (item?: unknown, allSelected?: unknown[]) => {
-        const selection = mergedTreeSelection();
-        const nodes: readonly unknown[] = allSelected?.length ? allSelected
-          : selection.length ? selection
-          : item ? [item] : [];
-        const identities = nodes.map(recordOpenIdentity)
-          .filter((i): i is { formKey: string; label: string } => i !== undefined);
-        if (identities.length === 0) return;
-        await openBesideRecordTabs(pendingTitles, identities);
-      }),
-    vscode.commands.registerCommand('modbench.openCompare', () => {
-      void openRecordTab(pendingTitles, undefined, 'mEdit', vscode.ViewColumn.One, true);
-    }),
+    vscode.commands.registerCommand('modbench.record.open', (argument?: unknown, selection?: unknown) =>
+      openRecordTabs(recordOpenPlan(argument, selection))),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.record.showReferencedBy',
@@ -212,34 +190,16 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   ];
 }
 
-// The caller's chosen title has no channel into resolveCustomEditor beyond the URI it is about to
-// open, so it is parked here and read once (editor.md, Opening, story 5).
-async function openRecordTab(
-  pendingTitles: Map<string, string>, formKey: string | undefined, title: string,
-  viewColumn: vscode.ViewColumn, preview: boolean,
-): Promise<void> {
-  const uri = recordUri(formKey);
-  pendingTitles.set(uri.toString(), title);
-  await vscode.commands.executeCommand('vscode.openWith', uri, RECORD_EDITOR_VIEW_TYPE, { viewColumn, preview });
+async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColumn, preview: boolean): Promise<void> {
+  await vscode.commands.executeCommand('vscode.openWith', recordUri(address), RECORD_EDITOR_VIEW_TYPE, { viewColumn, preview });
 }
 
-// Read by shape rather than `instanceof`, so a test can use plain object literals shaped like the
-// real tree nodes.
-export function recordOpenIdentity(node: unknown): { formKey: string; label: string } | undefined {
-  if (!node || typeof node !== 'object') return undefined;
-  const n = node as { kind?: string; record?: { formKey?: string }; formKey?: string; label?: unknown };
-  const formKey = n.kind === 'record' ? n.record?.formKey : n.formKey;
-  if (!formKey) return undefined;
-  return { formKey, label: typeof n.label === 'string' ? n.label : formKey };
-}
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
-async function openBesideRecordTabs(
-  pendingTitles: Map<string, string>, identities: { formKey: string; label: string }[],
-): Promise<void> {
-  let column: vscode.ViewColumn = vscode.ViewColumn.Beside;
-  for (const { formKey, label } of identities) {
-    await openRecordTab(pendingTitles, formKey, label, column, false);
-    column = vscode.window.tabGroups.activeTabGroup.viewColumn;
+async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
+  let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.One;
+  for (const address of addresses) {
+    await openRecordTab(address, column, preview);
+    if (beside) column = vscode.window.tabGroups.activeTabGroup.viewColumn;
   }
 }

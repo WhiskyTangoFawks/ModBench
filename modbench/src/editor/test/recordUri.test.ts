@@ -11,29 +11,30 @@ import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE } from '../recor
 
 describe('recordUri / formKeyOfRecordUri', () => {
   it('round-trips a FormKey through its own URI', () => {
-    const uri = recordUri('Fallout4.esm:000001');
+    const uri = recordUri({ formKey: 'Fallout4.esm:000001' });
     expect(formKeyOfRecordUri(uri)).toBe('Fallout4.esm:000001');
   });
 
   it('gives two different FormKeys two different URIs', () => {
-    expect(recordUri('Fallout4.esm:000001').path).not.toBe(recordUri('Fallout4.esm:000002').path);
+    expect(recordUri({ formKey: 'Fallout4.esm:000001' }).path).not.toBe(recordUri({ formKey: 'Fallout4.esm:000002' }).path);
   });
 
   it('gives the same FormKey the same URI on every call', () => {
-    expect(recordUri('Fallout4.esm:000001')).toEqual(recordUri('Fallout4.esm:000001'));
+    expect(recordUri({ formKey: 'Fallout4.esm:000001' })).toEqual(recordUri({ formKey: 'Fallout4.esm:000001' }));
   });
 
   it('survives a FormKey containing "/"', () => {
-    const uri = recordUri('Weird/Plugin.esp:000001');
+    const uri = recordUri({ formKey: 'Weird/Plugin.esp:000001' });
     expect(formKeyOfRecordUri(uri)).toBe('Weird/Plugin.esp:000001');
   });
 
-  it('reads back undefined for the no-record-yet picker address', () => {
-    expect(formKeyOfRecordUri(recordUri(undefined))).toBeUndefined();
+  it('gives one header FormKey from two origins two URIs (ADR-0012, invariant 1)', () => {
+    const header = '000000:MyPatch.esp';
+    expect(recordUri({ formKey: header, origin: 'ModA' })).not.toEqual(recordUri({ formKey: header, origin: 'ModB' }));
   });
 
-  it('gives the picker address its own URI, distinct from any FormKey', () => {
-    expect(recordUri(undefined).path).not.toBe(recordUri('Fallout4.esm:000001').path);
+  it('reads the same FormKey back from a header address, whatever its origin', () => {
+    expect(formKeyOfRecordUri(recordUri({ formKey: '000000:MyPatch.esp', origin: 'ModA' }))).toBe('000000:MyPatch.esp');
   });
 
   it('names the registered custom editor viewType', () => {
