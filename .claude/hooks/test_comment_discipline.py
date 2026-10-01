@@ -151,6 +151,35 @@ class WriteHook(unittest.TestCase):
         run = hook("a.ts", "// the cap is a constraint from the format\nexport const a = 1;\n")
         self.assertEqual(run.returncode, 0, run.stderr)
 
+    def test_refuses_a_comment_in_a_typescript_test(self):
+        run = hook("a.test.ts", "// the cap is a constraint from the format\nit('caps', () => {});\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_refuses_a_trailing_comment_in_a_csharp_test(self):
+        run = hook("ATests.cs", "var cap = 40; // the format's cap\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_refuses_a_doc_comment_on_a_test_class(self):
+        run = hook("ATests.cs", "/// <summary>The format's cap.</summary>\npublic sealed class ATests { }\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_refuses_a_block_comment_in_a_tsx_test(self):
+        run = hook("a.test.tsx", "/* the format's cap */\nit('caps', () => {});\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+
+    def test_a_test_comment_is_told_to_move_not_to_shrink(self):
+        run = hook("a.test.ts", "// the format's cap\nit('caps', () => {});\n")
+        self.assertIn("test's name", run.stderr)
+        self.assertNotIn("cut it", run.stderr)
+
+    def test_accepts_a_url_in_a_test(self):
+        run = hook("a.test.ts", "const url = 'https://example.com';\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_accepts_a_comment_in_a_test_fixture(self):
+        run = hook("test/fixture.ts", "// the cap is a constraint from the format\nexport const cap = 40;\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_accepts_anything_in_a_gitignored_file(self):
         run = hook(str(ROOT / ".scratch/report.md"), f"Ruling {DATE}: this {HISTORY} held.\n")
         self.assertEqual(run.returncode, 0, run.stderr)

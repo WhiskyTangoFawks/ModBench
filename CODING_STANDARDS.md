@@ -6,6 +6,7 @@ A review checks these rules against every hunk of the diff. No gate holds them. 
 
 - A comment explains what the code does. → Rename or restructure until the code says it. A comment states a constraint from outside the code.
 - A comment contradicts the code beneath it. → Delete it.
+- A comment restates an ADR, a spec or another comment. → Cite it. Keep only what the source does not say.
 - A comment inside a test. → Move what it says into the test's name or an assertion.
 
 ## Failures
