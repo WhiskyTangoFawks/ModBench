@@ -150,6 +150,11 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         }
     }
 
+    // DuckDB compares a FilenameIdentity column through lower(), and reads only an index over that
+    // same expression for it: an index over the bare column serves no lookup.
+    private static void CreateFormKeyIndex(DuckDBConnection connection, string name, string table, string column) =>
+        Execute(connection, $"CREATE INDEX IF NOT EXISTS {name} ON {MirrorSchema}.{table}(lower({column}))");
+
     // `body` is VARCHAR, never DuckDB's JSON type, which normalizes what it stores: "the same bytes
     // as the source file" is what makes content_hash a real git object name. `ref` is quoted
     // everywhere: REF is a DuckDB keyword.
@@ -171,9 +176,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 
         // form_key drives every single-record read; (plugin, origin) drives the per-plugin delete
         // every re-index starts with, and the per-plugin listings/counts.
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_form_key ON {MirrorSchema}.records(form_key)
-            """);
+        CreateFormKeyIndex(connection, "idx_records_form_key", "records", "form_key");
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_records_plugin ON {MirrorSchema}.records(plugin, origin)
             """);
@@ -198,9 +201,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON {MirrorSchema}.records_committed(form_key)
-            """);
+        CreateFormKeyIndex(connection, "idx_records_committed_form_key", "records_committed", "form_key");
     }
 
     /// <summary>What Head holds, for every indexed plugin, with no winner column. Outside the SQL
@@ -324,10 +325,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id       VARCHAR
             )
             """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_form_references_target
-                ON {MirrorSchema}.form_references(target_form_key)
-            """);
+        CreateFormKeyIndex(connection, "idx_form_references_target", "form_references", "target_form_key");
     }
 
     // ADR-0005: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin),
@@ -344,10 +342,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 editor_id      VARCHAR
             )
             """);
-        Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
-                ON {MirrorSchema}.form_lookup(form_key)
-            """);
+        CreateFormKeyIndex(connection, "idx_form_lookup_form_key", "form_lookup", "form_key");
     }
 
     // ADR-0005: side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
