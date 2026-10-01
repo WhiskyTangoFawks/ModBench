@@ -6,7 +6,7 @@ import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../instanceLoader/instance';
 import {
-  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
 import { PluginNode, pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
@@ -371,14 +371,16 @@ export interface TrackedRepositories {
   readonly client: Pick<MEditClient, 'getPlugins'>;
   readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
   readonly setPluginRepositories: (repos: Map<string, MinimalRepository>) => void;
-  readonly trackedFolderOf: TrackedFolderOf;
+  /** The Instance value's own two facts this needs, read fresh at call time (ADR-0007). */
+  readonly trackedMods: () => ReadonlySet<string>;
+  readonly modDirs: () => ReadonlyMap<string, string>;
 }
 
 // ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native Source
 // Control group. A logged no-op when `vscode.git` is unavailable: this only narrows the native UI,
 // never blocks reading or editing.
 async function registerHeldTrackedRepositories({
-  client, outputChannel, setPluginRepositories, trackedFolderOf,
+  client, outputChannel, setPluginRepositories, trackedMods, modDirs,
 }: TrackedRepositories): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -390,7 +392,7 @@ async function registerHeldTrackedRepositories({
     const gitApi = exports.getAPI(1);
 
     const plugins = await client.getPlugins();
-    const folders = await trackedFoldersOf(plugins, trackedFolderOf);
+    const folders = trackedFoldersOf(plugins, trackedMods(), modDirs());
     const folderRepositories = await registerTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), [...folders.values()]);
     setPluginRepositories(pluginRepositoriesOf(folders, folderRepositories));

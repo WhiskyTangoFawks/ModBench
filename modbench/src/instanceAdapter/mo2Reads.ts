@@ -15,7 +15,7 @@ import {
 } from './instanceAdapter';
 import {
   DATA_FOLDER_PLUGINS_GLOB, DOWNLOADS_WATCH_GLOB, downloadFile, downloadNameAt, downloadSidecarFile, isTempWrite, modDir, modlistFile,
-  modMetaFile, pluginFolder, pluginsFile, profilesDir, settingsFile,
+  modMetaFile, pluginsFile, profilesDir, settingsFile,
 } from './layout';
 import { folderHolding, listedAs, listModFolders, modFoldersOf, readOrAbsent, type Mo2Context } from './mo2Context';
 import { originFilesIn } from './mo2Files';
@@ -134,11 +134,6 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     entryFolder: (entry) => folderHolding(context, entry),
 
     originFiles: (origin) => originFilesIn(instanceRoot, origin),
-
-    async trackedFolderOf(pluginFile) {
-      const folder = pluginFolder(pluginFile);
-      return (await isTracked(folder)) ? folder : undefined;
-    },
 
     modTracked: (mod) => isTracked(modDir(instanceRoot, mod)),
   };

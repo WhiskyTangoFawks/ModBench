@@ -3,7 +3,7 @@
 // `formatLiteralScan.test.ts` refuses a second speller.
 
 import { randomBytes } from 'node:crypto';
-import { dirname, join, posix, sep, win32 } from 'node:path';
+import { join, posix, sep, win32 } from 'node:path';
 import { DOWNLOAD_SIDECAR_SUFFIX } from './codecs/downloads';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
@@ -103,9 +103,6 @@ export function downloadNameAt(downloadsDir: string, path: string, platform: Nod
 
 export const downloadSidecarFile = (downloadsDir: string, name: string): string =>
   join(downloadsDir, name + DOWNLOAD_SIDECAR_SUFFIX);
-
-/** The folder a plugin sits in: its mod's folder, overwrite/, or Data/. */
-export const pluginFolder = (pluginFile: string): string => dirname(pluginFile);
 
 /** A file inside `folder`, by the relative path a source tree names it with. */
 export const fileInFolder = (folder: string, relativePath: string): string => join(folder, relativePath);

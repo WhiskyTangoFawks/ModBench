@@ -5,17 +5,19 @@ import { findPluginsOutsideLoadOrder } from '../pluginsOutsideLoadOrder';
 // The plugin files the effective load order does not point at (ADR-0013): an overridden plugin,
 // or a file plugins.txt never names.
 
-// Discovery reads filesByMod only; the load-order set is passed in already resolved.
-function indexOf(filesByMod: Record<string, string[]>): FileConflictIndex {
-  return {
-    files: new FileConflictLookup(),
-    filesByMod: new Map(
-      Object.entries(filesByMod).map(([mod, paths]) => [
-        mod,
-        paths.map((relativePath) => ({ relativePath, absolutePath: `/mods/${mod}/${relativePath}` })),
-      ]),
-    ),
-  };
+// Discovery reads filesByMod and disabledModFiles only; the load-order set is passed in already
+// resolved.
+function toFileMap(byMod: Record<string, string[]>): Map<string, { relativePath: string; absolutePath: string }[]> {
+  return new Map(
+    Object.entries(byMod).map(([mod, paths]) => [
+      mod,
+      paths.map((relativePath) => ({ relativePath, absolutePath: `/mods/${mod}/${relativePath}` })),
+    ]),
+  );
+}
+
+function indexOf(filesByMod: Record<string, string[]>, disabledModFiles: Record<string, string[]> = {}): FileConflictIndex {
+  return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod), disabledModFiles: toFileMap(disabledModFiles) };
 }
 
 describe('findPluginsOutsideLoadOrder', () => {
@@ -74,5 +76,14 @@ describe('findPluginsOutsideLoadOrder', () => {
     const index = indexOf({ ModA: ['.esp'] });
 
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([]);
+  });
+
+  // ADR-0013, invariant 2: a disabled mod's plugin is still indexed, outside the load order.
+  it('finds a plugin file in a disabled mod', () => {
+    const index = indexOf({}, { DisabledMod: ['Off.esp'] });
+
+    expect(findPluginsOutsideLoadOrder(index, [])).toEqual([
+      { name: 'Off.esp', path: '/mods/DisabledMod/Off.esp', origin: 'DisabledMod' },
+    ]);
   });
 });

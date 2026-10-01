@@ -1,6 +1,5 @@
-// The plugin files the effective load order does not point at (ADR-0013). Scope is the enabled
-// mods' own folders: a disabled mod is not deployed into the game's view, and
-// buildFileConflictIndex doesn't walk it either.
+// The plugin files the effective load order does not point at (ADR-0013): an overridden plugin in
+// an enabled mod, or any plugin in a disabled mod — neither is deployed into the game's view.
 
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';
 import { isPluginFile } from '../instanceAdapter/instanceAdapter';
@@ -34,11 +33,13 @@ export function findPluginsOutsideLoadOrder(
   const loaded = new Set(loadOrder.map((p) => addressOf(p.origin, p.name)));
 
   const outside: PluginOutsideLoadOrder[] = [];
-  for (const [mod, files] of index.filesByMod) {
-    for (const file of files) {
-      if (!isRootLevelPlugin(file.relativePath)) continue;
-      if (loaded.has(addressOf(mod, file.relativePath))) continue;
-      outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
+  for (const byMod of [index.filesByMod, index.disabledModFiles]) {
+    for (const [mod, files] of byMod) {
+      for (const file of files) {
+        if (!isRootLevelPlugin(file.relativePath)) continue;
+        if (loaded.has(addressOf(mod, file.relativePath))) continue;
+        outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
+      }
     }
   }
   return outside;

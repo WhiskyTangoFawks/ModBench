@@ -714,19 +714,6 @@ describe('the MO2 Instance adapter', () => {
     });
 
     // ADR-0007: tracked is the presence of `.git` in the mod's folder.
-    describe('a plugin file\'s tracked folder', () => {
-      it('answers the mod folder a plugin file sits in when it holds a repository', async () => {
-        const folder = join(root, 'mods', 'Harder VATS');
-        await mkdir(join(folder, '.git'));
-
-        expect(await adapter.trackedFolderOf(join(folder, 'Harder VATS.esp'))).toBe(folder);
-      });
-
-      it('answers none for a plugin file in a folder with no repository', async () => {
-        expect(await adapter.trackedFolderOf(join(root, 'mods', 'Harder VATS', 'Harder VATS.esp'))).toBeUndefined();
-      });
-    });
-
     describe('a mod\'s repository', () => {
       it('answers tracked for a mod whose folder holds one, and not for a mod whose folder holds none', async () => {
         await mkdir(join(root, 'mods', 'Harder VATS', '.git'));

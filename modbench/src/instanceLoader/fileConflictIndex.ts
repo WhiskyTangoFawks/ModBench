@@ -58,6 +58,9 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
+  /** Each disabled mod's own files, read in the same walk, outside conflict resolution
+   *  (ADR-0013, invariant 2). */
+  disabledModFiles: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
 
 // Plugins live at a mod's root, so a nested file sharing a plugin's basename must not match.
@@ -93,18 +96,23 @@ export async function buildFileConflictIndex(
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
+  const disabledModFiles = new Map<string, { relativePath: string; absolutePath: string }[]>();
 
-  const enabledMods = entries.filter((e) => e.kind === 'mod' && e.enabled);
+  const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
 
-  // Each mod's listing is independent, so run them concurrently; only the merge below needs the
-  // override order.
+  // Every mod's listing is independent, so run them concurrently; only the merge below needs the
+  // override order, and only among enabled mods.
   const listed = await Promise.all(
-    enabledMods.map(async (mod) => ({ mod, files: await modFiles(adapter, mod.name, log) })),
+    mods.map(async (mod) => ({ mod, files: await modFiles(adapter, mod.name, log) })),
   );
 
   // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
   for (const { mod, files: ownFiles } of listed) {
+    if (!mod.enabled) {
+      disabledModFiles.set(mod.name, ownFiles);
+      continue;
+    }
     filesByMod.set(mod.name, ownFiles);
 
     for (const file of ownFiles) {
@@ -122,5 +130,5 @@ export async function buildFileConflictIndex(
     }
   }
 
-  return { files, filesByMod };
+  return { files, filesByMod, disabledModFiles };
 }

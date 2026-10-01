@@ -1,5 +1,6 @@
-// Every plugin file the enabled mods and overwrite/ provide, plus the Data-folder plugin of any
-// plugins.txt line no mod provides, and which of them the game loads, in load order (ADR-0013).
+// Every plugin file in the instance — every mod's, enabled or not, overwrite/'s, and the
+// Data-folder plugin of any plugins.txt line no mod provides — and which of them the game loads,
+// in load order (ADR-0013).
 
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';

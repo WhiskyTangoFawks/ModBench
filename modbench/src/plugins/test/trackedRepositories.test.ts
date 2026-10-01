@@ -1,13 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as path from 'node:path';
 import {
-  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey, type TrackedFolderOf,
+  trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
 } from '../trackedRepositories';
 import type { PluginMetadata } from '../../client';
 
-// The Instance adapter's answer, doubled at the port this box declares for it.
-const trackedAmong = (tracked: readonly string[]): TrackedFolderOf => (pluginFile) =>
-  Promise.resolve(tracked.find((folder) => path.dirname(pluginFile) === folder));
+// The Instance value's own two facts, doubled.
+const modDirsOf = (byOrigin: Record<string, string>): ReadonlyMap<string, string> => new Map(Object.entries(byOrigin));
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
   return {
@@ -31,7 +30,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
 // ── trackedFoldersOf ────────────────────────────────────────────────────
 
 describe('trackedFoldersOf', () => {
-  it('answers the folder the Instance adapter answers tracked, and none for its untracked sibling', async () => {
+  it('answers the folder of a tracked origin, and none for its untracked sibling', () => {
     const plugins = [
       makePlugin({ path: '/mods/TrackedMod/Tracked.esp', origin: 'TrackedMod' }),
       // Positive control, checked through the identical function call: the untracked sibling
@@ -39,19 +38,21 @@ describe('trackedFoldersOf', () => {
       makePlugin({ path: '/mods/UntrackedMod/Untracked.esp', origin: 'UntrackedMod' }),
     ];
 
-    const folders = await trackedFoldersOf(plugins, trackedAmong(['/mods/TrackedMod']));
+    const folders = trackedFoldersOf(plugins, new Set(['TrackedMod']), modDirsOf({ TrackedMod: '/mods/TrackedMod' }));
 
     expect(folders).toEqual(new Map([[pluginAddressKey('Tracked.esp', 'TrackedMod'), '/mods/TrackedMod']]));
   });
 
   // ADR-0012 invariant 1: two plugins that share a filename each have their own folder.
-  it('keeps two same-name plugins from different mods apart', async () => {
+  it('keeps two same-name plugins from different mods apart', () => {
     const plugins = [
       makePlugin({ path: '/mods/ModA/Shared.esp', origin: 'ModA' }),
       makePlugin({ path: '/mods/ModB/Shared.esp', origin: 'ModB' }),
     ];
 
-    const folders = await trackedFoldersOf(plugins, trackedAmong(['/mods/ModA', '/mods/ModB']));
+    const folders = trackedFoldersOf(
+      plugins, new Set(['ModA', 'ModB']), modDirsOf({ ModA: '/mods/ModA', ModB: '/mods/ModB' }),
+    );
 
     expect(folders.get(pluginAddressKey('Shared.esp', 'ModA'))).toBe('/mods/ModA');
     expect(folders.get(pluginAddressKey('Shared.esp', 'ModB'))).toBe('/mods/ModB');

@@ -235,7 +235,8 @@ describe('modbench.mod.track', () => {
     const announce = vi.fn();
     const channel = { warn: vi.fn(), error: vi.fn() };
     const notice = conflictsComputedOver(announce, {
-      client, outputChannel: channel, setPluginRepositories: () => {}, trackedFolderOf: () => Promise.resolve('/mods/ModB'),
+      client, outputChannel: channel, setPluginRepositories: () => {},
+      trackedMods: () => new Set(['ModB']), modDirs: () => new Map([['ModB', '/mods/ModB']]),
     });
     const { handler } = invokeTrack(client, vi.fn(notice));
 
