@@ -255,10 +255,8 @@ public sealed partial class SourceRepository
         }
     }
 
-    // The leaf name carries the EditorID, so a put that changes it moves the unit first: a crash
-    // between leaves the record at its new name with old content, still found by FormKey. A header
-    // and an embedded record have no leaf of their own, and a leaf something else renamed keeps that
-    // name while the EditorID stays what it was.
+    // Move before write: a crash between leaves the record at its new name with old content, still
+    // found by FormKey. A leaf something else renamed keeps its name while the EditorID is unchanged.
     private void MoveToItsEditorId(SourceUnit unit, SourceDocument document)
     {
         if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
