@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// ADR-0007: the webview writes through exactly one message, EDIT_FIELD, from one module — an
-// edit travels through the extension host so a refusal can become a native notification, a
-// surface only the host has.
+// ADR-0007: the webview writes through exactly one message, EDIT_FIELD, from one module. The host
+// answers it by firing the edit field command, so the grid and the palette share one write path.
 describe('the record editor webview writes through exactly one path', () => {
   const dir = __dirname;
   const clientSrc = fs.readFileSync(path.join(dir, 'RecordPanelClient.ts'), 'utf8');

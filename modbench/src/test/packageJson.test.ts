@@ -927,6 +927,7 @@ describe('package.json field gestures\' palette entries', () => {
     ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],
     ['modbench.record.moveElementUp', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveUp`],
     ['modbench.record.moveElementDown', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/ && modbench.record.focusedCellCanMoveDown`],
+    ['modbench.record.editField', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
     ['modbench.record.openFieldValue', String.raw`modbench.record.focusedCellSection =~ /\bstringValue\b/`],
   ] as const;
 

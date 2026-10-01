@@ -152,6 +152,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.record.editField",
+        "title": "Edit Record Field",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.addElement",
         "title": "Add Record Element",
         "category": "Modbench"
@@ -449,6 +454,10 @@
         {
           "command": "modbench.openHeader",
           "when": "false"
+        },
+        {
+          "command": "modbench.record.editField",
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
         },
         {
           "command": "modbench.record.addElement",

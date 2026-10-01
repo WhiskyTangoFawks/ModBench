@@ -15,15 +15,12 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, normalizeFormKeyQuery, routerDepsForPanel,
+  routeRecordPanelMessage, normalizeFormKeyQuery,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
-import { EditsInFlight } from '../followRecord';
-import { FocusedCells } from '../focusedCells';
 import type { RecordSummary, CompareResult } from '../../client';
 import { InMemoryMEditClient } from '../../client';
-import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
@@ -33,26 +30,15 @@ function fakeChannel() {
 }
 const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
 
-// The router's one client covers both editField and the picker's search — rebuilt fresh here so
-// each test starts with `editRecord` answering `{ applied: true }`.
 let meditClient: InMemoryMEditClient;
-const refreshSourceControlFor = vi.fn();
 
-beforeEach(() => {
-  meditClient = new InMemoryMEditClient();
-  meditClient.setCommandResult('editRecord', { applied: true });
-});
-
-function editRecordCalls() {
-  return meditClient.calls.filter(c => c.method === 'editRecord');
-}
+beforeEach(() => { meditClient = new InMemoryMEditClient(); });
 
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
-    meditClient, refreshSourceControlFor,
-    // No panel holds this suite's reads: the gate sends each write where it was addressed.
-    editInFlight: async (address, write) => { await write(address.formKey); },
+    meditClient,
+    panelId: 'record-panel-1',
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     focusCell: vi.fn(),
@@ -111,7 +97,6 @@ describe('routeRecordPanelMessage', () => {
     writeText.mockReset();
     createQuickPick.mockReset();
     fakeReporter.report.mockReset();
-    refreshSourceControlFor.mockReset();
   });
 
   it('OPEN_RECORD opens the named record in the editor', async () => {
@@ -167,52 +152,12 @@ describe('routeRecordPanelMessage', () => {
       makeDeps(),
     )).resolves.toBeUndefined();
 
-    expect(editRecordCalls()).toEqual([]);
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });
 
-// The router carries no panel identity, so "two panels" is two independently-built deps bundles.
-// No PASTE message exists to route: Ctrl+V lands in a plain <input> (ADR-0018) and committing it
-// is the ordinary EDIT_FIELD write.
-describe('cross-panel copy/paste — two independently-opened panels share this router unmodified', () => {
-  beforeEach(() => {
-    writeText.mockReset();
-    refreshSourceControlFor.mockReset();
-  });
-
-  it('copies a value out of one panel and commits it, via ordinary EDIT_FIELD, into a different panel\'s own record', async () => {
-    const panelADeps = makeDeps(); // "panel A", open on Record1
-    const panelBDeps = makeDeps(); // "panel B", open on a different record — its own independent deps bundle
-
-    // Ctrl+C in panel A: the webview has already read the focused cell's model value (ADR-0018);
-    // this is that value on its way to the OS clipboard.
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'CopiedNPC [000001:Fallout4.esm]' }, panelADeps);
-    expect(writeText).toHaveBeenCalledWith('CopiedNPC [000001:Fallout4.esm]');
-
-    // Ctrl+V in panel B: nothing Modbench-side carries the paste, so all that is left to prove is
-    // that the commit is addressed to panel B's record, not panel A's.
-    await routeRecordPanelMessage({
-      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
-      formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
-      envelope: { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' },
-    }, panelBDeps);
-
-    expect(editRecordCalls()).toEqual([{
-      method: 'editRecord',
-      args: [
-        '000800:Mod.esp', 'Mod.esp', 'SomeMod',
-        { op: 'set', path: [{ kind: 'member', name: 'LinkedRef' }], value: 'CopiedNPC [000001:Fallout4.esm]' },
-      ],
-    }]);
-    expect(refreshSourceControlFor).toHaveBeenCalledWith('Mod.esp', 'SomeMod');
-    // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
-  });
-});
-
-// ADR-0007: the one write the panel can ask for. Routed through the host rather than posted
-// to the backend from the webview precisely so a refusal can become a native notification — which
-// is what these cases are really pinning.
+// commands.md, Entry points are not gestures: a grid edit is an entry point to the command the
+// palette fires too, so the router writes nothing itself.
 describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   const envelope = {
     op: 'set' as const,
@@ -227,138 +172,15 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     envelope,
   };
 
-  beforeEach(() => {
-    fakeReporter.report.mockReset();
-    refreshSourceControlFor.mockReset();
-  });
+  beforeEach(() => { executeCommand.mockReset(); });
 
-  it('sends the edit through the single write path with its compound plugin identity', async () => {
-    await routeRecordPanelMessage(editMessage, makeDeps());
+  it('fires modbench.record.editField with the column\'s (origin, filename), its panel and the envelope', async () => {
+    await routeRecordPanelMessage(editMessage, makeDeps({ panelId: 'record-panel-3' }));
 
-    expect(present(editRecordCalls()[0], 'the routed editRecord call').args)
-      .toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', envelope]);
-  });
-
-  // The webview spells the whole write; the host adds nothing and rebuilds nothing, so an op with
-  // no value and a path of several hops reaches the port exactly as posted.
-  it('passes an add envelope with a nested key path through verbatim, value and all', async () => {
-    const add = {
-      op: 'add' as const,
-      path: [
-        { kind: 'member' as const, name: 'VirtualMachineAdapter' },
-        { kind: 'member' as const, name: 'Scripts' },
-        { kind: 'key' as const, key: 'Guard' },
-        { kind: 'member' as const, name: 'Properties' },
-      ],
-    };
-    await routeRecordPanelMessage({ ...editMessage, envelope: add }, makeDeps());
-
-    const call = present(editRecordCalls()[0], 'the routed editRecord call');
-    expect(call.args).toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', add]);
-    expect(call.args[3]).not.toHaveProperty('value');
-  });
-
-  it('tells the panel to re-read once the edit has landed', async () => {
-    await routeRecordPanelMessage(editMessage, makeDeps());
-
-    expect(refreshSourceControlFor).toHaveBeenCalledWith('Mod.esp', 'SomeMod');
-    expect(fakeReporter.report).not.toHaveBeenCalled();
-  });
-
-  function tabsOn(formKey: string, ...titles: string[]) {
-    const formKeys = new Map<unknown, string>();
-    const tracker = {
-      setFormKey(panel: unknown, key: string) { formKeys.set(panel, key); },
-      formKeyOf(panel: unknown) { return formKeys.get(panel); },
-    };
-    const tabs = titles.map(title => ({ title, webview: { postMessage: vi.fn(() => Promise.resolve(true)) } }));
-    for (const tab of tabs) tracker.setFormKey(tab, formKey);
-    return { tracker, tabs, edits: new EditsInFlight(tracker) };
-  }
-
-  it('takes the tab to the new FormKey an edit of its FormID answers with', async () => {
-    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
-    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
-    const panel = present(tab, 'the tab');
-
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
-
-    expect(tracker.formKeyOf(panel)).toBe('000900:Mod.esp');
-  });
-
-  // ADR-0012 invariant 1: two plugins named Mod.esp, in two mods, each shown in a tab of its own
-  // under one FormKey. The edit lands on the plugin its own tab's column names, and only that tab
-  // follows.
-  it('follows only the tab the edit came from, not a tab showing the other plugin of that filename', async () => {
-    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
-    const { tracker, tabs: [edited, other], edits } = tabsOn('000800:Mod.esp', 'Mod.esp (SomeMod)', 'Mod.esp (OtherMod)');
-    const editedTab = present(edited, 'the edited tab');
-    const otherTab = present(other, 'the other tab');
-
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), editedTab, edits, new FocusedCells(() => {})));
-
-    expect(tracker.formKeyOf(editedTab)).toBe('000900:Mod.esp');
-    expect(tracker.formKeyOf(otherTab)).toBe('000800:Mod.esp');
-    expect(otherTab.webview.postMessage).not.toHaveBeenCalled();
-  });
-
-  // Between the FormID's answer and the report that reads the new key, the webview still names
-  // the old one; the host knows the move, so a second edit lands on the record where it now is.
-  it('sends a second edit, posted under the old FormKey before the tab reads the new one, to the new FormKey', async () => {
-    meditClient.setCommandResult('editRecord', { applied: true, newFormKey: '000900:Mod.esp' });
-    const { tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
-    const panel = present(tab, 'the tab');
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
-    meditClient.setCommandResult('editRecord', { applied: true });
-
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
-
-    expect(editRecordCalls().map(c => c.args[0])).toEqual(['000800:Mod.esp', '000900:Mod.esp']);
-  });
-
-  it('leaves the tab where it is after an edit that keeps the FormKey', async () => {
-    const { tracker, tabs: [tab], edits } = tabsOn('000800:Mod.esp', 'MovedNpc');
-    const panel = present(tab, 'the tab');
-
-    await routeRecordPanelMessage(editMessage, routerDepsForPanel(makeDeps(), panel, edits, new FocusedCells(() => {})));
-
-    expect(tracker.formKeyOf(panel)).toBe('000800:Mod.esp');
-  });
-
-  it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {
-    meditClient.setCommandResult('editRecord', {
-      applied: false,
-      refusal: 'PluginNotTracked',
-      message: 'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.',
-    });
-
-    await routeRecordPanelMessage(editMessage, makeDeps());
-
-    // Relayed verbatim: re-wording the backend's message here would put that text in two places
-    // with only one of them tested. Whole string, so a partial relay fails.
-    expect(fakeReporter.report).toHaveBeenCalledWith(
-      'warning',
-      'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.');
-    expect(refreshSourceControlFor).not.toHaveBeenCalled();
-  });
-
-  it('a refusal is a warning, not an error — the user got a clear answer with a next step', async () => {
-    meditClient.setCommandResult('editRecord', {
-      applied: false, refusal: 'PluginHasNoModFolder', message: 'Author a patch plugin and edit the override there.',
-    });
-
-    await routeRecordPanelMessage(editMessage, makeDeps());
-
-    expect(present(fakeReporter.report.mock.calls[0], 'the sole report call')[0]).toBe('warning');
-  });
-
-  it('a transport failure is an error — nothing answered at all', async () => {
-    meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
-
-    await routeRecordPanelMessage(editMessage, makeDeps());
-
-    expect(fakeReporter.report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
-    expect(refreshSourceControlFor).not.toHaveBeenCalled();
+    expect(executeCommand).toHaveBeenCalledWith('modbench.record.editField', {
+      formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod', panelId: 'record-panel-3',
+    }, envelope);
+    expect(meditClient.calls).toEqual([]);
   });
 });
 

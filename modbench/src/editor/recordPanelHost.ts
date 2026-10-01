@@ -129,7 +129,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     panel.webview.onDidReceiveMessage((msg: unknown) => {
       // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
       // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, editsInFlight, focusedCells));
+      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, panelId, focusedCells));
     });
 
     const scriptUri = panel.webview.asWebviewUri(
@@ -151,7 +151,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const writeDeps = recordPanelWriteDeps(deps);
   // Lives for the activation, like the decoration provider above — disposed alongside it.
   const conflictsComputedTracker = trackConflictsComputed(meditClient);
-  // The picker and the edit gate are each panel's own, added per panel below.
+  // The picker and the panel's name are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
     ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
   };
