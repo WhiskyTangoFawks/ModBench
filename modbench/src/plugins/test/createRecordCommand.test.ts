@@ -54,9 +54,12 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
   registerRecordCreateCommand({
     client, reporter,
     marks: {
-      creating: ({ plugin, recordType }) => {
-        marks.push(['mark', plugin.name, plugin.origin, ...(recordType === undefined ? [] : [recordType])].join(' '));
-        return (formKey) => { marks.push(`answered ${formKey}`); };
+      creating: (row) => {
+        marks.push(['mark', row.plugin.name, row.plugin.origin, ...('recordType' in row ? [row.recordType] : [])].join(' '));
+        return {
+          answered: (formKey) => { marks.push(`answered ${formKey}`); },
+          unanswered: () => { marks.push('unanswered'); },
+        };
       },
     },
     createdRecords: {
@@ -201,5 +204,17 @@ describe('modbench.record.create marks the row it creates in', () => {
     await create(NPC_GROUP);
 
     expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'answered undefined']);
+  });
+
+  // common.md, Unconfirmed writes, story 6: only the disk can say what a create with no answer did.
+  it('tells the mark a create mEdit never answered, and reports it as before', async () => {
+    const { client, marks, reporter, create } = harness();
+    const message = 'Could not create a new npc_ record in "MyPatch.esp" — socket hang up';
+    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, unanswered: true, message }));
+
+    await create(NPC_GROUP);
+
+    expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'unanswered']);
+    expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
   });
 });

@@ -69,8 +69,6 @@ const arrayPathOf = ({ op, path }: RecordEditEnvelope): readonly PathHop[] => (o
 
 const elements = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
-// The disk shows a shape write when the array grew, shrank, or holds the moved element where the
-// move put it.
 function showsShape(edit: RecordEditEnvelope, before: unknown[], after: unknown[]): boolean {
   if (edit.op === 'add') return after.length > before.length;
   if (edit.op === 'remove') return after.length < before.length;

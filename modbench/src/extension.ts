@@ -64,6 +64,9 @@ function wireAutoLaunch(
 
 export type ActivateExports = ReturnType<typeof activate>;
 
+// Before the Plugins tree exists, no row shows what a record write changes.
+const UNMARKED = { answered: () => undefined, unanswered: () => undefined };
+
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
   const attachPort = meditConfig().get<number>('attachToBackendPort');
@@ -193,8 +196,8 @@ export function activate(context: vscode.ExtensionContext) {
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordMarks: {
-        deleting: (records) => session.pluginsTree?.deleting(records) ?? (() => undefined),
-        copying: (items) => session.pluginsTree?.copying(items) ?? (() => undefined),
+        deleting: (records, editorIds) => session.pluginsTree?.recordMarks.deleting(records, editorIds) ?? UNMARKED,
+        copying: (items, replacing, editorIds) => session.pluginsTree?.recordMarks.copying(items, replacing, editorIds) ?? UNMARKED,
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
@@ -263,7 +266,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerCompileCommand(compileDeps(deps), () => session.pluginsTreeView?.selection ?? []),
     registerRecordCreateCommand({
       client, reporter: makeReporter(outputChannel, 'record.create'),
-      marks: { creating: (row) => session.pluginsTree?.creating(row) ?? (() => undefined) },
+      marks: { creating: (row) => session.pluginsTree?.recordMarks.creating(row) ?? UNMARKED },
       createdRecords: createdRecordSelection({
         client, reporter: makeReporter(outputChannel, 'record.create'),
         rowOf: (group, formKey) => session.pluginsTree?.recordRow(group, formKey) ?? Promise.resolve(undefined),

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
+import { isRefused, isUnanswered, type CopyItem, type CopyMode, type MEditClient, type PluginAddress, type RecordAddress } from '../client';
 import { COPY_MODE_ITEMS, copiesWritten, copyDestinationItems, heldCopies, type CopyDestinationItem } from './copyPicks';
 import type { Reporter } from '../ports/reporter';
 import type { ItemRefusal } from '../ports/selectionOutcome';
@@ -75,12 +75,25 @@ function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefi
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 
+/** What a write tells a view's marks once mEdit answers it, or that it never did. */
+export interface WriteAnswer<Answer> {
+  answered(answer: Answer): void;
+  unanswered(): void;
+}
+
 /** The rows a view shows for what a delete or copy writes, marked until the disk confirms it
- *  (common.md, Unconfirmed writes). Each is told before the write, and what it returns is told what
- *  landed. */
+ *  (common.md, Unconfirmed writes). Each is told before the write. */
 export interface RecordWriteMarks {
-  deleting(records: readonly RecordAddress[]): (landed: readonly RecordAddress[]) => void;
-  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void;
+  deleting(records: readonly RecordAddress[], editorIds: ReadonlyMap<string, string | undefined>): WriteAnswer<readonly RecordAddress[]>;
+  copying(
+    items: readonly CopyItem[], replacing: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>,
+  ): WriteAnswer<readonly CopyItem[]>;
+}
+
+// Only the disk can say what a write with no answer did.
+function tell<Answer>(marks: WriteAnswer<Answer>, answer: unknown, landed: Answer): void {
+  if (isUnanswered(answer)) marks.unanswered();
+  else marks.answered(landed);
 }
 
 /** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
@@ -98,9 +111,9 @@ export function registerRecordLifecycleCommands(
       const label = (record: RecordArgument) => addressLabel(record, editorIds);
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
-      const answered = marks.deleting(records);
+      const marked = marks.deleting(records, editorIds);
       const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
-      answered(isRefused(answer) ? [] : answer.landed);
+      tell(marked, answer, isRefused(answer) ? [] : answer.landed);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       const refused = [...originless, ...answer.refused];
       reporter.selectionOutcome(
@@ -178,12 +191,12 @@ function askToReplace(
   );
 }
 
-// The replace Option an override is sent with: false when no destination holds a copy, true once
-// the replacement is confirmed, and undefined when nothing is to be copied.
+// The copies an override replaces: none when no destination holds a copy, those held once the
+// replacement is confirmed, and undefined when nothing is to be copied.
 async function confirmReplacement(
   client: RecordCopyClient, records: readonly RecordAddress[], destinations: readonly PluginAddress[],
   editorIds: ReadonlyMap<string, string | undefined>, ask: AskQuestion, reporter: Reporter,
-): Promise<boolean | undefined> {
+): Promise<CopyItem[] | undefined> {
   let held: CopyItem[];
   try {
     held = await copiesAnOverrideReplaces(client, records, destinations);
@@ -191,8 +204,8 @@ async function confirmReplacement(
     reporter.report('error', 'Could not check which plugins already hold a copy.', errorMessage(error));
     return undefined;
   }
-  if (held.length === 0) return false;
-  return await askToReplace(held, editorIds, ask) === 'Replace' ? true : undefined;
+  if (held.length === 0) return held;
+  return await askToReplace(held, editorIds, ask) === 'Replace' ? held : undefined;
 }
 
 function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>): string {
@@ -226,16 +239,16 @@ export function registerRecordCopyCommands(
       const destinations = await pickCopyDestinations(client, mode, records, reporter);
       if (!destinations) return;
 
-      const replace = mode === 'Override'
+      const replacing = mode === 'Override'
         ? await confirmReplacement(client, records, destinations, editorIds, ask, reporter)
-        : false;
-      if (replace === undefined) return;
+        : [];
+      if (replacing === undefined) return;
 
       const copies = records.flatMap((record) => destinations.map((destination) => ({ record, destination })));
-      const answered = marks.copying(copiesWritten(copies, mode));
-      const answer = await client.copyRecords(records, mode, destinations, replace);
+      const marked = marks.copying(copiesWritten(copies, mode), replacing, editorIds);
+      const answer = await client.copyRecords(records, mode, destinations, replacing.length > 0);
       const written = isRefused(answer) ? [] : copiesWritten(answer.landed, mode);
-      answered(written);
+      tell(marked, answer, written);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
       const into = (item: CopyItem) =>

@@ -6,18 +6,24 @@ export const MARK_DELAY_MS = 300;
 export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
 
 /** A row of the Plugins tree: a plugin's, one of its record-type groups', or one of its records'. */
-export interface MarkedRow {
-  plugin: PluginAddress;
-  recordType?: string;
-  formKey?: string;
+export type MarkedRow =
+  | { plugin: PluginAddress }
+  | { plugin: PluginAddress; recordType: string }
+  | { plugin: PluginAddress; formKey: string };
+
+/** What a write tells its marks once it is answered, or that it never was. */
+export interface MarkAnswer<Answer> {
+  answered(answer: Answer): void;
+  unanswered(): void;
 }
 
-// A write is unconfirmed until mEdit's index shows `formKey` held by `plugin`, or not held by it.
+// `held` is what the record's holders show once the write lands. Where they cannot show it, it is
+// undefined, and mEdit's report of the record is the disk's next value.
 interface Pending {
   readonly row: MarkedRow;
-  readonly plugin: PluginAddress;
-  readonly held: boolean;
   formKey: string | undefined;
+  held: boolean | undefined;
+  awaitingAnswer: boolean;
   readonly unshown: (formKey: string) => string;
   marked: boolean;
   differedOnce: boolean;
@@ -30,16 +36,17 @@ type Read = 'answer' | 'report' | 'refresh';
 
 const addressOf = (plugin: PluginAddress): string => pluginAddressKey(plugin.name, plugin.origin);
 
-const rowKey = ({ plugin, recordType, formKey }: MarkedRow): string =>
-  [addressOf(plugin), recordType ?? '', formKey ?? ''].join('\n');
+const rowKey = (row: MarkedRow): string =>
+  [addressOf(row.plugin), 'recordType' in row ? row.recordType : '', 'formKey' in row ? row.formKey : ''].join('\n');
 
-const sameCopy = (a: CopyItem, b: CopyItem): boolean => a.record.formKey === b.record.formKey
-  && pluginAddressKey(a.record.plugin, a.record.origin) === pluginAddressKey(b.record.plugin, b.record.origin)
-  && addressOf(a.destination) === addressOf(b.destination);
+const sameRecord = (a: RecordAddress, b: RecordAddress): boolean =>
+  a.formKey === b.formKey && pluginAddressKey(a.plugin, a.origin) === pluginAddressKey(b.plugin, b.origin);
+
+const sameCopy = (a: CopyItem, b: CopyItem): boolean =>
+  sameRecord(a.record, b.record) && addressOf(a.destination) === addressOf(b.destination);
 
 /** The Plugins tree's rows a record create, copy or delete changed, each marked until mEdit's index
- *  shows the write (common.md, Unconfirmed writes). What a mark returns is told what landed, and
- *  forgets the rest. */
+ *  shows the write (common.md, Unconfirmed writes). */
 export class UnconfirmedRecordRows {
   private readonly pending = new Set<Pending>();
 
@@ -49,57 +56,83 @@ export class UnconfirmedRecordRows {
     render: () => void;
   }) {}
 
-  creating(row: MarkedRow): (formKey: string | undefined) => void {
-    const pending = this.mark(row, row.plugin, true, undefined,
+  /** A new record is blank, so its line names it by FormKey alone. */
+  creating(row: MarkedRow): MarkAnswer<string | undefined> {
+    const pending = this.mark(row, undefined, true,
       (formKey) => `${formKey} was created in "${row.plugin.name}", and the disk does not hold it.`);
-    return (formKey) => {
-      if (formKey === undefined) this.drop(pending);
-      else this.answered(pending, formKey);
+    return {
+      answered: (formKey) => {
+        if (formKey === undefined) this.drop(pending);
+        else this.answered(pending, formKey);
+      },
+      unanswered: () => { this.unanswered(pending); },
     };
   }
 
-  deleting(records: readonly RecordAddress[]): (landed: readonly RecordAddress[]) => void {
+  deleting(
+    records: readonly RecordAddress[], editorIds: ReadonlyMap<string, string | undefined>,
+  ): MarkAnswer<readonly RecordAddress[]> {
     const marks = records.map((record) => {
       const plugin = { name: record.plugin, origin: record.origin };
-      return this.mark({ plugin, formKey: record.formKey }, plugin, false, record.formKey,
-        (formKey) => `${formKey} was deleted from "${plugin.name}", and the disk still holds it.`);
+      return {
+        record,
+        pending: this.mark({ plugin, formKey: record.formKey }, record.formKey, false,
+          (formKey) => `${recordName(formKey, editorIds)} was deleted from "${plugin.name}", and the disk still holds it.`),
+      };
     });
-    return (landed) => {
-      const kept = new Set(landed.map((r) => rowKey({ plugin: { name: r.plugin, origin: r.origin }, formKey: r.formKey })));
-      for (const pending of marks) {
-        if (kept.has(rowKey(pending.row))) void this.settle(pending, 'answer');
-        else this.drop(pending);
-      }
+    return {
+      answered: (landed) => {
+        for (const { record, pending } of marks) {
+          if (landed.some((item) => sameRecord(item, record))) this.answered(pending, record.formKey);
+          else this.drop(pending);
+        }
+      },
+      unanswered: () => { for (const { pending } of marks) this.unanswered(pending); },
     };
   }
 
-  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void {
-    const marks = items.map((item) => ({
-      item,
-      pending: this.mark({ plugin: item.destination }, item.destination, true, undefined,
-        (formKey) => `${formKey} was copied into "${item.destination.name}", and the disk does not hold the copy.`),
-    }));
-    return (landed) => {
-      for (const { item, pending } of marks) {
-        const copy = landed.find((written) => sameCopy(written, item));
-        if (copy === undefined) this.drop(pending);
-        else this.answered(pending, copy.newFormKey ?? item.record.formKey);
-      }
+  /** A copy that replaces what its destination held leaves the destination holding the record, so
+   *  only mEdit's report of it there settles the mark. */
+  copying(
+    items: readonly CopyItem[], replacing: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>,
+  ): MarkAnswer<readonly CopyItem[]> {
+    const marks = items.map((item) => {
+      const replaces = replacing.some((replaced) => sameCopy(replaced, item));
+      return {
+        item,
+        pending: this.mark({ plugin: item.destination }, replaces ? item.record.formKey : undefined, replaces ? undefined : true,
+          () => `${recordName(item.record.formKey, editorIds)} was copied into "${item.destination.name}", and the disk does not hold the copy.`),
+      };
+    });
+    return {
+      answered: (landed) => {
+        for (const { item, pending } of marks) {
+          const copy = landed.find((written) => sameCopy(written, item));
+          if (copy === undefined) this.drop(pending);
+          else this.answered(pending, copy.newFormKey ?? item.record.formKey);
+        }
+      },
+      unanswered: () => { for (const { pending } of marks) this.unanswered(pending); },
     };
   }
 
   /** mEdit's report that rows of `plugin` changed. */
   rowsChanged(plugin: PluginAddress, keys: readonly string[]): void {
     for (const pending of this.pending) {
-      if (pending.formKey !== undefined && keys.includes(pending.formKey) && addressOf(pending.plugin) === addressOf(plugin)) {
-        void this.settle(pending, 'report');
-      }
+      if (addressOf(pending.row.plugin) !== addressOf(plugin)) continue;
+      const reported = pending.formKey === undefined ? !pending.awaitingAnswer : keys.includes(pending.formKey);
+      if (!reported) continue;
+      if (pending.held === undefined) this.drop(pending);
+      else void this.settle(pending, 'report');
     }
   }
 
   /** A reconcile read every plugin again, as a refresh does. */
   reconciled(): void {
-    for (const pending of this.pending) void this.settle(pending, 'refresh');
+    for (const pending of this.pending) {
+      if (pending.formKey === undefined || pending.held === undefined) this.drop(pending);
+      else void this.settle(pending, 'refresh');
+    }
   }
 
   isMarked(row: MarkedRow): boolean {
@@ -112,11 +145,9 @@ export class UnconfirmedRecordRows {
     this.pending.clear();
   }
 
-  private mark(
-    row: MarkedRow, plugin: PluginAddress, held: boolean, formKey: string | undefined, unshown: Pending['unshown'],
-  ): Pending {
+  private mark(row: MarkedRow, formKey: string | undefined, held: boolean | undefined, unshown: Pending['unshown']): Pending {
     const pending: Pending = {
-      row, plugin, held, formKey, unshown, marked: false, differedOnce: false,
+      row, formKey, held, unshown, awaitingAnswer: true, marked: false, differedOnce: false,
       timer: setTimeout(() => {
         pending.marked = true;
         this.deps.render();
@@ -127,8 +158,15 @@ export class UnconfirmedRecordRows {
   }
 
   private answered(pending: Pending, formKey: string): void {
+    pending.awaitingAnswer = false;
     pending.formKey = formKey;
-    void this.settle(pending, 'answer');
+    if (pending.held !== undefined) void this.settle(pending, 'answer');
+  }
+
+  // Only the disk can say what a write with no answer did (story 6).
+  private unanswered(pending: Pending): void {
+    pending.awaitingAnswer = false;
+    pending.held = undefined;
   }
 
   private drop(pending: Pending): void {
@@ -138,8 +176,8 @@ export class UnconfirmedRecordRows {
 
   // A read that fails keeps the mark, as a disk that cannot be read does (States, story 6).
   private async settle(pending: Pending, read: Read): Promise<void> {
-    const { formKey } = pending;
-    if (formKey === undefined || !this.deps.client) return;
+    const { formKey, held } = pending;
+    if (formKey === undefined || held === undefined || !this.deps.client) return;
     let holders: PluginAddress[];
     try {
       holders = await this.deps.client.getRecordHolders(formKey);
@@ -147,7 +185,7 @@ export class UnconfirmedRecordRows {
       return;
     }
     if (!this.pending.has(pending)) return;
-    if (holders.some((holder) => addressOf(holder) === addressOf(pending.plugin)) !== pending.held) {
+    if (holders.some((holder) => addressOf(holder) === addressOf(pending.row.plugin)) !== held) {
       if (read === 'answer') return;
       if (read === 'report' && !pending.differedOnce) {
         pending.differedOnce = true;
@@ -157,4 +195,10 @@ export class UnconfirmedRecordRows {
     }
     this.drop(pending);
   }
+}
+
+// As the record panel names a record: its EditorID with the FormKey, or the FormKey alone.
+function recordName(formKey: string, editorIds: ReadonlyMap<string, string | undefined>): string {
+  const editorId = editorIds.get(formKey);
+  return editorId ? `${editorId} [${formKey}]` : formKey;
 }

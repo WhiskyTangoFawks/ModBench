@@ -51,11 +51,20 @@ function recordingMarks(): { marks: RecordWriteMarks; told: string[] } {
   const named = (records: readonly RecordAddress[]) => records.map((r) => `${r.formKey} ${r.origin}`).join(', ');
   const copies = (items: readonly CopyItem[]) =>
     items.map((i) => `${i.record.formKey} into ${i.destination.name}${i.newFormKey ? ` as ${i.newFormKey}` : ''}`).join(', ');
+  const ids = (editorIds: ReadonlyMap<string, string | undefined>) =>
+    [...editorIds].filter(([, id]) => id).map(([formKey, id]) => ` (${id} is ${formKey})`).join('');
+  const unanswered = () => { told.push('unanswered'); };
   return {
     told,
     marks: {
-      deleting: (records) => { told.push(`deleting ${named(records)}`); return (landed) => { told.push(`deleted ${named(landed)}`); }; },
-      copying: (items) => { told.push(`copying ${copies(items)}`); return (landed) => { told.push(`copied ${copies(landed)}`); }; },
+      deleting: (records, editorIds) => {
+        told.push(`deleting ${named(records)}${ids(editorIds)}`);
+        return { answered: (landed) => { told.push(`deleted ${named(landed)}`); }, unanswered };
+      },
+      copying: (items, replacing, editorIds) => {
+        told.push(`copying ${copies(items)}${replacing.length > 0 ? `, replacing ${copies(replacing)}` : ''}${ids(editorIds)}`);
+        return { answered: (landed) => { told.push(`copied ${copies(landed)}`); }, unanswered };
+      },
     },
   };
 }
@@ -303,11 +312,13 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
 
       expect(told).toEqual([
-        'deleting 000801:MyPatch.esp ModA, 000802:MyPatch.esp ModA', 'write', 'deleted 000801:MyPatch.esp ModA',
+        'deleting 000801:MyPatch.esp ModA, 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)',
+        'write',
+        'deleted 000801:MyPatch.esp ModA',
       ]);
     });
 
-    it('tells the marks nothing landed when the call itself fails, and marks nothing when cancelled', async () => {
+    it('tells the marks nothing landed when mEdit refuses the call, and marks nothing when cancelled', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, message: 'boom' });
       const { told } = invoke(client, 'Delete', undefined);
@@ -315,7 +326,21 @@ describe('registerRecordLifecycleCommands', () => {
       await deleteRecords(SECOND_NODE);
       await deleteRecords(SECOND_NODE);
 
-      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA', 'deleted ']);
+      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)', 'deleted ']);
+    });
+
+    // common.md, Unconfirmed writes, story 6: only the disk can say what a call with no answer did.
+    it('tells the marks a call mEdit never answered, and reports it as before', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
+      const { told, reporter } = invoke(client, 'Delete');
+
+      await deleteRecords(SECOND_NODE);
+
+      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)', 'unanswered']);
+      expect(reporter.reports).toEqual([
+        { severity: 'error', message: 'Could not delete 1 record — socket hang up', detail: undefined },
+      ]);
     });
   });
 });
@@ -644,6 +669,33 @@ describe('modbench.record.copy', () => {
       'write',
       'copied 000801:MyPatch.esp into Patch.esp as 000900:Patch.esp',
     ]);
+  });
+
+  it('names the copies that replace what a destination held', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setQueryAnswer('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH]);
+    client.setCommandResult('copyRecords', { landed: [{ record: SOURCE, destination: PATCH }], refused: [] });
+    pick('Override', [PATCH, OTHER]);
+    const { told } = invoke(client, 'Replace');
+
+    await copy(RECORD_NODE);
+
+    expect(told[0]).toBe(
+      'copying 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp, replacing 000801:MyPatch.esp into Patch.esp');
+  });
+
+  it('tells the marks a call mEdit never answered, and reports it as before', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setCommandResult('copyRecords', { refused: true, unanswered: true, message: 'Could not copy 1 record — socket hang up' });
+    pick('New', [PATCH]);
+    const { told, reporter } = invoke(client);
+
+    await copy(RECORD_NODE);
+
+    expect(told).toEqual(['copying 000801:MyPatch.esp into Patch.esp', 'unanswered']);
+    expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — socket hang up', detail: undefined }]);
   });
 
   it('marks no override into a record\'s own plugin, which writes nothing, and nothing when a call fails', async () => {

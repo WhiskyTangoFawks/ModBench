@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type {
   PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
-  NotificationEvent, RecordAddress, CopyItem,
+  NotificationEvent,
 } from '../client';
 import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
@@ -332,7 +332,7 @@ export class PluginsTreeProvider
   private instanceValue: InstanceValue;
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
-  private readonly recordMarks: UnconfirmedRecordRows;
+  private readonly unconfirmedRecords: UnconfirmedRecordRows;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
   // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
@@ -371,27 +371,18 @@ export class PluginsTreeProvider
     }
     const unsubscribeChanges = options.client?.subscribe('external-change', (event) => this.applyExternalChange(event));
     if (unsubscribeChanges) this.subscriptions.push({ dispose: unsubscribeChanges });
-    this.recordMarks = new UnconfirmedRecordRows({
+    this.unconfirmedRecords = new UnconfirmedRecordRows({
       client: options.client, log: (line) => this.log('warn', `[PluginsTreeProvider] ${line}`), render: () => this.render(),
     });
     const unsubscribeRows = options.client?.subscribe('rows-changed',
-      (event) => this.recordMarks.rowsChanged({ name: event.plugin, origin: event.origin }, event.keys));
+      (event) => this.unconfirmedRecords.rowsChanged({ name: event.plugin, origin: event.origin }, event.keys));
     if (unsubscribeRows) this.subscriptions.push({ dispose: unsubscribeRows });
   }
 
-  /** A record create from `row`: the row carries the mark (common.md, Unconfirmed writes). */
-  creating(row: MarkedRow): (formKey: string | undefined) => void {
-    return this.recordMarks.creating(row);
-  }
-
-  /** Each record's own row carries the mark. */
-  deleting(records: readonly RecordAddress[]): (landed: readonly RecordAddress[]) => void {
-    return this.recordMarks.deleting(records);
-  }
-
-  /** Each destination's plugin row carries the mark. */
-  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void {
-    return this.recordMarks.copying(items);
+  /** The rows a record write changes, marked until mEdit's index shows it (common.md, Unconfirmed
+   *  writes). */
+  get recordMarks(): Pick<UnconfirmedRecordRows, 'creating' | 'deleting' | 'copying'> {
+    return this.unconfirmedRecords;
   }
 
   // plugins.md, A row: each settle of a tracked mod names every plugin of it that changed outside
@@ -407,7 +398,7 @@ export class PluginsTreeProvider
 
   dispose(): void {
     this.clearUnconfirmed();
-    this.recordMarks.dispose();
+    this.unconfirmedRecords.dispose();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
   }
@@ -475,7 +466,7 @@ export class PluginsTreeProvider
 
   private isMarked(address: PluginAddress): boolean {
     return this.unconfirmed.get(pluginAddressKey(address.name, address.origin))?.marked === true || this.shapeMarked(address)
-      || this.recordMarks.isMarked({ plugin: address });
+      || this.unconfirmedRecords.isMarked({ plugin: address });
   }
 
   private shapeMarked(address: PluginAddress): boolean {
@@ -729,13 +720,12 @@ export class PluginsTreeProvider
 
   private readonly unmarkedLook = new WeakMap<object, Pick<vscode.TreeItem, 'iconPath' | 'tooltip'>>();
 
-  // A record or group row a record write marks, restored once the mark goes.
   private markedBeneath(item: vscode.TreeItem, element: PluginsTreeNode): vscode.TreeItem {
     const plugin = this.pluginOf(element);
     const row = plugin && markedRowOf(element, plugin);
     const base = this.unmarkedLook.get(item) ?? { iconPath: item.iconPath, tooltip: item.tooltip };
     this.unmarkedLook.set(item, base);
-    const marked = row !== undefined && this.recordMarks.isMarked(row);
+    const marked = row !== undefined && this.unconfirmedRecords.isMarked(row);
     item.iconPath = marked ? new vscode.ThemeIcon('sync~spin') : base.iconPath;
     item.tooltip = marked ? UNCONFIRMED_TOOLTIP : base.tooltip;
     return item;
@@ -885,7 +875,7 @@ export class PluginsTreeProvider
    *  `undefined` when the read failed. */
   async applyReconciled(failures: PluginLoadFailure[]): Promise<PluginMatch[] | undefined> {
     const generation = ++this.generation;
-    this.recordMarks.reconciled();
+    this.unconfirmedRecords.reconciled();
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.expansionOverride = undefined;
