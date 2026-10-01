@@ -64,7 +64,7 @@ Every array takes the same gestures. Some arrays' elements have a key, which is 
 As a user, I want:
 
 1. Every array written back in the order I leave it: nothing re-sorts one. *xedit.md, divergence 14*
-2. An array whose elements have a key to align across the columns by that key. Any other array to align by its values in sequence, as a diff does. A plugin with fewer elements than its master then reads as an absence where they are missing. *xEdit; ADR-0018, invariant 3; xedit.md, divergence 14*
+2. An array whose elements have a key to align across the columns by that key. Any other array to align by its values in sequence, as a diff does. A plugin with fewer elements than its master then reads as an absence where they are missing. Two elements that share a key, as another tool can write them, each on a row of their own. *xEdit; ADR-0018, invariant 3; xedit.md, divergence 14*
 3. Add on an array's row, whether it is collapsed or expanded, to append a new element, empty but for its kind, which is the first the field lists. *xEdit*
 4. Two elements with the same key refused, naming the key: the key is the element's identity. A second new element in a keyed array meets this until I set the first one's key. *xEdit*
 5. Move up absent on the first element, and move down on the last. *No dead entries*
