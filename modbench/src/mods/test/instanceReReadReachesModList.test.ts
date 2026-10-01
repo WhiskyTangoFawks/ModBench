@@ -31,7 +31,7 @@ async function setup() {
     logReadFailure: () => {},
   });
   await instance.refresh();
-  const provider = new ModListProvider({ instance, access: accessTo(root) });
+  const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
   await provider.getChildren(); // populate the cache off the first value
   return { root, instance, provider };
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from '../../instanceLoader/instance';
 import type { InstanceValue } from '../../instanceLoader/instance';
 import type { ModStatusResult } from '../../instanceLoader/statusChecker';
@@ -111,10 +111,11 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 
 const makeProvider = (
   mods: ModlistEntry[],
-  extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
+  extra: Partial<{ instance: FakeInstance; instanceRoot: string; log: (line: string) => void }> = {},
 ) => new ModListProvider({
   instance: extra.instance ?? new FakeInstance(valueOf(mods)),
   access: accessTo(extra.instanceRoot ?? INSTANCE_ROOT),
+  log: extra.log ?? (() => undefined),
 });
 
 // modlist.txt runs winning-first and a separator heads the lines above it: Late Section holds
@@ -462,7 +463,7 @@ describe('ModListProvider', () => {
   // before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
-      const provider = new ModListProvider({ instance, access: accessTo(root) });
+      const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
 
       const pending = provider.getChildren();
       await instance.refresh();
@@ -939,5 +940,97 @@ describe('ModListProvider', () => {
 
       expect(dataTransfer.get('application/vnd.medit.modlist-node')).toBeUndefined();
     });
+  });
+});
+
+describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const rowNamed = async (provider: ModListProvider, name: string): Promise<ModNode> =>
+    present((await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode).find((n) => n.mod.name === name), name);
+  const iconId = (row: ModNode) => (row.iconPath as { id: string }).id;
+
+  it('shows the new state at once, and the mark only after a delay, on that row alone', async () => {
+    const provider = makeProvider([mod('A'), mod('B')]);
+
+    provider.markUnconfirmed('A', false);
+    expect((await rowNamed(provider, 'A')).checkboxState).toBe(TreeItemCheckboxState.Unchecked);
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
+
+    vi.advanceTimersByTime(1000);
+    const marked = await rowNamed(provider, 'A');
+    expect(iconId(marked)).toBe('sync~spin');
+    expect(marked.tooltip).toBe('Written; waiting for the disk to confirm');
+    expect(iconId(await rowNamed(provider, 'B'))).toBe('package');
+  });
+
+  it('goes when the disk\'s next value lands, and never flickers when that is at once', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('A', false);
+
+    instance.publish(valueOf([mod('A', false)]));
+    vi.advanceTimersByTime(1000);
+
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
+  });
+
+  it('shows the disk\'s value when it differs from the write, with one Output line and no notification', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([mod('A', true)]));
+
+    expect((await rowNamed(provider, 'A')).checkboxState).toBe(TreeItemCheckboxState.Checked);
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
+    expect(logged).toEqual(['"A" was written disabled, and the disk now shows it enabled.']);
+  });
+
+  it('says nothing when the disk shows what was written', () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('A', false);
+
+    instance.publish(valueOf([mod('A', false)]));
+
+    expect(logged).toEqual([]);
+  });
+
+  it('stays while the disk cannot be read', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('sync~spin');
+  });
+
+  it('goes with a refresh, which reloads from disk', async () => {
+    const provider = makeProvider([mod('A')]);
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    provider.forgetAllUnconfirmed();
+
+    const row = await rowNamed(provider, 'A');
+    expect(iconId(row)).toBe('package');
+    expect(row.checkboxState).toBe(TreeItemCheckboxState.Checked);
+  });
+
+  it('a write forgotten before its delay never shows the mark', async () => {
+    const provider = makeProvider([mod('A')]);
+    provider.markUnconfirmed('A', false);
+
+    provider.forgetUnconfirmed('A');
+    vi.advanceTimersByTime(1000);
+
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
   });
 });

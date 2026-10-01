@@ -464,7 +464,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   void instance.refresh();
   // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
   // this provider builds no index and reads no disk of its own.
-  const modListProvider = own(new ModListProvider({ instance, access }));
+  const modListProvider = own(new ModListProvider({ instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`) }));
   // Held on the session as well, because the teardown writers outside this file abandon the
   // send in flight through it (ADR-0013).
   const sender = own(createLoadOrderSender(client));
@@ -563,7 +563,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
   ], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
-    refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    refresh: () => { modListProvider.forgetAllUnconfirmed(); return refreshIndex(); }, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,

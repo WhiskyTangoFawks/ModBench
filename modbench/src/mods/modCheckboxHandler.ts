@@ -8,17 +8,19 @@ import { errorMessage } from '../ports/errorMessage';
  *  cannot load under a minimal `vi.mock('vscode')`. */
 export async function onModCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<ModlistNode>,
-  modListProvider: Pick<ModListProvider, 'setModEnabled' | 'invalidate'>,
+  modListProvider: Pick<ModListProvider, 'setModEnabled' | 'markUnconfirmed' | 'forgetUnconfirmed'>,
   reporter: Reporter,
 ): Promise<void> {
   for (const [node, state] of e.items) {
     if (node.kind !== 'mod') continue;
+    const enabled = state === vscode.TreeItemCheckboxState.Checked;
+    modListProvider.markUnconfirmed(node.mod.name, enabled);
     try {
-      await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
+      await modListProvider.setModEnabled(node.mod.name, enabled);
     } catch (err) {
       reporter.report(
         'error', `Failed to update "${node.mod.name}".`, errorMessage(err));
-      modListProvider.invalidate();
+      modListProvider.forgetUnconfirmed(node.mod.name);
     }
   }
 }

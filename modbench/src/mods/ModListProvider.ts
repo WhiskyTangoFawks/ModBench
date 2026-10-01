@@ -30,6 +30,19 @@ export interface ModListProviderOptions {
   instance: InstanceView;
   /** The instance the check box command writes to; never read by this provider. */
   access: ModlistAccess;
+  /** One line to the Output. */
+  log: (line: string) => void;
+}
+
+/** How long a write waits before it is marked, so one the disk confirms at once never flickers. */
+const MARK_DELAY_MS = 300;
+
+export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
+
+interface UnconfirmedWrite {
+  readonly enabled: boolean;
+  marked: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
 }
 
 function statusIconId(status?: ModStatusResult): string {
@@ -171,6 +184,8 @@ export class ModListProvider
   private groupingOn = true;
   private direction: SortDirection = 'losingAtTop';
   private readonly access: ModlistAccess;
+  private readonly log: (line: string) => void;
+  private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -178,16 +193,62 @@ export class ModListProvider
 
   constructor(options: ModListProviderOptions) {
     this.access = options.access;
+    this.log = options.log;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.instanceSubscription = options.instance.subscribe((value) => {
+      this.settleUnconfirmed(value);
       this.instanceValue = value;
       this.invalidate();
     });
   }
 
+  /** The disk's next value covers every write: its value shows, and one that is not what was
+   *  written is said in the Output. */
+  private settleUnconfirmed(value: InstanceValue): void {
+    for (const [name, write] of this.unconfirmed) {
+      const disk = value.mods.find((m) => m.kind === 'mod' && m.name === name);
+      if (disk?.kind === 'mod' && disk.enabled !== write.enabled) {
+        this.log(`"${name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and the disk now shows it ${disk.enabled ? 'enabled' : 'disabled'}.`);
+      }
+    }
+    this.clearUnconfirmed();
+  }
+
+  /** A check box's new state shows at once; the mark follows after a delay. */
+  markUnconfirmed(modName: string, enabled: boolean): void {
+    clearTimeout(this.unconfirmed.get(modName)?.timer);
+    const write: UnconfirmedWrite = {
+      enabled, marked: false,
+      timer: setTimeout(() => {
+        write.marked = true;
+        this.render();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmed.set(modName, write);
+  }
+
+  /** A refused or failed write shows the disk's value at once, with no mark. */
+  forgetUnconfirmed(modName: string): void {
+    clearTimeout(this.unconfirmed.get(modName)?.timer);
+    this.unconfirmed.delete(modName);
+    this.invalidate();
+  }
+
+  /** Refresh reloads from disk, so no write is waiting on it any more. */
+  forgetAllUnconfirmed(): void {
+    this.clearUnconfirmed();
+    this.invalidate();
+  }
+
+  private clearUnconfirmed(): void {
+    for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
+    this.unconfirmed.clear();
+  }
+
   dispose(): void {
+    this.clearUnconfirmed();
     this.instanceSubscription.dispose();
     this.firstRead.dispose();
   }
@@ -322,10 +383,17 @@ export class ModListProvider
     return new OverwriteNode(this.instanceValue.overwriteFileCount, this.instanceValue.managerNames.manager);
   }
 
-  private toModNode = (m: Mod): ModNode =>
-    new ModNode(m, this.instanceValue.modStatuses.get(m.name), {
+  private toModNode = (m: Mod): ModNode => {
+    const write = this.unconfirmed.get(m.name);
+    const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
     });
+    if (write?.marked) {
+      row.iconPath = new vscode.ThemeIcon('sync~spin');
+      row.tooltip = UNCONFIRMED_TOOLTIP;
+    }
+    return row;
+  };
 
   private separatorChildren(element: SeparatorNode): ModlistNode[] {
     return element.mods.map((m) => {
