@@ -308,7 +308,7 @@ export function DiffRow({
         const vscodeContext = offersMenu ? combineVscodeContexts(
           parentContext,
           elementContext,
-          meta.type === 'string' && hops
+          meta.type === 'string'
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
                 modelValue(diff.values[key], meta), !cellEditable, hops,
