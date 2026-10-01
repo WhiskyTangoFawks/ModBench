@@ -10,7 +10,7 @@ vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickReco
 vi.mock('vscode', () => ({
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { /* no listeners */ } dispose() { /* nothing held */ } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
-  ViewColumn: { One: 1, Beside: -2 },
+  ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
       commandHandlers.set(id, handler);
@@ -88,7 +88,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     const opened = executeCommand.mock.calls.filter(([id]) => id === 'vscode.openWith');
     expect(opened.map(([, , , options]) => options)).toEqual([
-      { viewColumn: 1, preview: false }, { viewColumn: 1, preview: false },
+      { viewColumn: -1, preview: false }, { viewColumn: -1, preview: false },
     ]);
   });
 
@@ -101,7 +101,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand).toHaveBeenCalledWith(
       'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
-      { viewColumn: 1, preview: true });
+      { viewColumn: -1, preview: true });
   });
 
   it('opens nothing when the picker is dismissed', async () => {
