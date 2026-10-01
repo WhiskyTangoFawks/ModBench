@@ -10,9 +10,8 @@ export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
   // Load order-static: the same field files and channel every panel's tabs would get.
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   log: (msg: string) => void;
-  // A right-click's edits are the panel's it came from, through its gate. The panel is named by its
-  // webview context's `panelId`, which the body carries.
-  editGateOf: (panelId: string | undefined) => EditGate;
+  // An edit's gate is that of the panels showing the record it is addressed to.
+  editGateOf: (formKey: string) => EditGate;
   // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.
   focusedCell: () => FocusedCellContext | undefined;
 }
@@ -31,11 +30,6 @@ function hasWebviewSection<Ctx extends { webviewSection: string }>(
   // One cell can carry several sections, space-separated, as its menu's `=~` reads them.
   const sections: unknown = Reflect.get(value, 'webviewSection');
   return typeof sections === 'string' && sections.split(' ').includes(webviewSection);
-}
-
-function panelIdOf(ctx: object): string | undefined {
-  const panelId: unknown = Reflect.get(ctx, 'panelId');
-  return typeof panelId === 'string' ? panelId : undefined;
 }
 
 function isArrayParentContext(value: unknown): value is ArrayParentContext {
@@ -61,7 +55,7 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw);
       if (!envelope) return;
-      await deps.editGateOf(panelIdOf(raw))(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
+      await deps.editGateOf(raw.formKey)(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
     },
   };
 }
@@ -79,7 +73,7 @@ async function editField(deps: RecordPanelContextCommandDeps, address: unknown, 
   if (!isPluginCopyAddress(address)) return;
   const envelope = isRecordEditEnvelope(option) ? option : await promptedSet(address);
   if (!envelope) return;
-  await deps.editGateOf(panelIdOf(address))(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
+  await deps.editGateOf(address.formKey)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
 }
 
 async function promptedSet(address: object): Promise<RecordEditEnvelope | undefined> {
@@ -91,7 +85,7 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 // ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
-  const gate = deps.editGateOf(panelIdOf(ctx));
+  const gate = deps.editGateOf(ctx.formKey);
   return openExtendedFieldEditor(
     {
       value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,

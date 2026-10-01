@@ -4,10 +4,8 @@ export function buildWebviewHtml(params: {
   formKey: string;
   scriptUri: string;
   cspSource: string;
-  // Named in the body's webview context, so every right-click menu names the panel it came from.
-  panelId: string;
 }): string {
-  const { formKey, scriptUri, cspSource, panelId } = params;
+  const { formKey, scriptUri, cspSource } = params;
   const nonce = crypto.randomBytes(16).toString('base64');
   return `<!DOCTYPE html>
 <html lang="en">
@@ -16,7 +14,7 @@ export function buildWebviewHtml(params: {
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
 </head>
-<body data-vscode-context='${JSON.stringify({ panelId })}'>
+<body>
   <div id="root"></div>
   <script nonce="${nonce}">window.mEditFormKey = ${JSON.stringify(formKey)};</script>
   <script type="module" src="${scriptUri}"></script>

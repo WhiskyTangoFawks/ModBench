@@ -37,6 +37,20 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return (address, write) => this.edit(panel, address, addressedAt, write);
   }
 
+  /** The gate of every panel showing `formKey`: one write, held and followed by each. */
+  gateShowing(panels: Iterable<Panel>, formKey: string): EditGate {
+    const gates = [...panels].filter(panel => this.tracker.formKeyOf(panel) === formKey).map(panel => this.gate(panel));
+    const through = async (
+      index: number, address: EditAddress, key: string, write: (formKey: string) => Promise<string | undefined>,
+    ): Promise<string | undefined> => {
+      if (index === gates.length) return write(key);
+      let answer: string | undefined;
+      await gates[index](address, async target => { answer = await through(index + 1, address, target, write); return answer; });
+      return answer;
+    };
+    return async (address, write) => { await through(0, address, address.formKey, write); };
+  }
+
   /** The notification wiring's gate: true holds the panel's read, keeping the keys reported. */
   holds(panel: Panel, keys: readonly string[]): boolean {
     const entry = this.inFlight.get(panel);

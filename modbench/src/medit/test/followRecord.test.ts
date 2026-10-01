@@ -80,6 +80,22 @@ describe('EditsInFlight', () => {
     expect(loadsOf(panel)).toEqual([{ type: 'loadRecord', formKey: '000800:Mod.esp' }]);
   });
 
+  it('gateShowing holds and follows every panel showing the record with one write', async () => {
+    const tracker = fakeActiveRecordTracker();
+    const [first, second, elsewhere] = [fakePanel('a'), fakePanel('b'), fakePanel('c')];
+    tracker.setFormKey(first, '000800:Mod.esp');
+    tracker.setFormKey(second, '000800:Mod.esp');
+    tracker.setFormKey(elsewhere, '000801:Mod.esp');
+    const edits = new EditsInFlight(tracker);
+    const write = vi.fn(() => Promise.resolve<string | undefined>('000900:Mod.esp'));
+
+    await edits.gateShowing([first, second, elsewhere], '000800:Mod.esp')(EDITED, write);
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect([first, second, elsewhere].map(panel => tracker.formKeyOf(panel)))
+      .toEqual(['000900:Mod.esp', '000900:Mod.esp', '000801:Mod.esp']);
+  });
+
   it('holds only the panel whose edit is in flight', async () => {
     const client = new InMemoryMEditClient();
     const editing = fakePanel('MovedNpc');
