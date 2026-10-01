@@ -41,7 +41,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
-    // The right-clicked panel's gate, sending each write where it was addressed.
+    // The gate of the panels showing the record, sending each write where it was addressed.
     editGateOf: () => async (address, write) => { await write(address.formKey); },
     focusedCell: () => undefined,
     ...overrides,
@@ -183,7 +183,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
 // A right-click edit is an edit the panel makes, so it goes through that panel's gate: the gate
 // holds its reads, and sends the write to the FormKey the record is at now.
-describe('right-click edits go through the right-clicked panel\'s gate', () => {
+describe('right-click edits go through the gate of the panels showing the record', () => {
   const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
     () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
 
@@ -200,15 +200,15 @@ describe('right-click edits go through the right-clicked panel\'s gate', () => {
   });
 
   // The menu names its panel (the body's webview context), whichever panel was focused last.
-  it('takes the gate of the panel the menu came from', async () => {
-    const asked: (string | undefined)[] = [];
-    const { deps } = makeDeps({ editGateOf: panelId => { asked.push(panelId); return async (address, write) => { await write(address.formKey); }; } });
+  it('takes the gate of the panels showing the record it is addressed to', async () => {
+    const asked: string[] = [];
+    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
-      { ...parentContext([{ kind: 'member', name: 'Entries' }]), panelId: 'panel-2' });
+      parentContext([{ kind: 'member', name: 'Entries' }]));
 
-    expect(asked).toEqual(['panel-2']);
+    expect(asked).toEqual([IDENTITY.formKey]);
   });
 
   it('a save of the extended editor writes through the gate of the panel it was opened from', async () => {
@@ -329,14 +329,14 @@ describe('modbench.record.editField', () => {
     expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
   });
 
-  it('goes through the gate of the panel its Argument names', async () => {
-    const asked: (string | undefined)[] = [];
-    const { deps } = makeDeps({ editGateOf: panelId => { asked.push(panelId); return async (address, write) => { await write(address.formKey); }; } });
+  it('goes through the gate of the panels showing the record its Argument names', async () => {
+    const asked: string[] = [];
+    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
     registerRecordPanelContextCommands(deps);
 
-    await editField()({ ...IDENTITY, panelId: 'record-panel-2' }, envelope);
+    await editField()(IDENTITY, envelope);
 
-    expect(asked).toEqual(['record-panel-2']);
+    expect(asked).toEqual([IDENTITY.formKey]);
   });
 
   it('surfaces a refusal as a warning, and re-reads nothing', async () => {

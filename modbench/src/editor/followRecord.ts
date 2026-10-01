@@ -37,6 +37,25 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return (address, write) => this.edit(panel, address, addressedAt, write);
   }
 
+  /** The gate of every panel showing the record `address` names, as of now: one write, held and
+   *  followed by each. A panel that moved the record shows it under the key it moved to. */
+  gateShowing(panels: Iterable<Panel>, address: EditAddress): EditGate {
+    const gates = [...panels].flatMap(panel => {
+      const gate = this.gate(panel);
+      return this.tracker.formKeyOf(panel) === this.targetOf(panel, address, this.clock) ? [gate] : [];
+    });
+    const through = async (
+      index: number, address: EditAddress, key: string, write: (formKey: string) => Promise<string | undefined>,
+    ): Promise<string | undefined> => {
+      const gate = gates[index];
+      if (!gate) return write(key);
+      let answer: string | undefined;
+      await gate(address, async target => { answer = await through(index + 1, address, target, write); return answer; });
+      return answer;
+    };
+    return async (address, write) => { await through(0, address, address.formKey, write); };
+  }
+
   /** The notification wiring's gate: true holds the panel's read, keeping the keys reported. */
   holds(panel: Panel, keys: readonly string[]): boolean {
     const entry = this.inFlight.get(panel);

@@ -19,8 +19,6 @@ export interface RouteRecordPanelMessageDeps {
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
-  // Names the panel to the commands the webview's gestures fire, which find its gate by it.
-  panelId: string;
   // The panel's own focused cell, which a field gesture from the palette acts on.
   focusCell: (context: FocusedCellContext | undefined, userFocus: boolean) => void;
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
@@ -33,20 +31,17 @@ export interface RouteRecordPanelMessageDeps {
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'panelId' | 'focusCell' | 'reply' | 'setTitle'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'focusCell' | 'reply' | 'setTitle'>;
 
-/** The router's bundle for one panel's messages: the picker and the record load both reply to it,
- *  and the commands it fires name it. */
+/** The router's bundle for one panel's messages: the picker and the record load both reply to it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
-  panelId: string,
   focusedCells: FocusedCells<Panel>,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
-    panelId,
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     setTitle: (title) => { panel.title = title; },
@@ -195,7 +190,7 @@ async function editField(
 ): Promise<void> {
   await vscode.commands.executeCommand(
     'modbench.record.editField',
-    { formKey: m.formKey, plugin: m.plugin, origin: m.origin, panelId: deps.panelId },
+    { formKey: m.formKey, plugin: m.plugin, origin: m.origin },
     m.envelope,
   );
 }
