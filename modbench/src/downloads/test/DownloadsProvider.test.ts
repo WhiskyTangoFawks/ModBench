@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -99,10 +99,10 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
 // would see an empty/ENOENT result instead of the fixture rows below.
 const makeProvider = (
   downloads: DownloadFile[],
-  extra: Partial<{ instance: FakeInstance }> = {},
+  extra: Partial<{ instance: FakeInstance; log: (line: string) => void }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instance };
+  const options: DownloadsProviderOptions = { instance, log: extra.log ?? (() => undefined) };
   return new DownloadsProvider(options);
 };
 
@@ -454,7 +454,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   // for before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     await withUnreadCorpusInstance(async (instance) => {
-      const provider = new DownloadsProvider({ instance });
+      const provider = new DownloadsProvider({ instance, log: () => undefined });
 
       const pending = provider.getChildren();
       await instance.refresh();
@@ -586,5 +586,131 @@ describe('DownloadsProvider — the configured downloads folder could not be res
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
     expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+  });
+});
+
+describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const rows = async (provider: DownloadsProvider) =>
+    (await provider.getChildren()).map((n) => expectInstanceOf(n, DownloadNode));
+  const spinning = (node: DownloadNode) => node.iconPath instanceof ThemeIcon && node.iconPath.id === 'sync~spin';
+
+  it('keeps an excluded row in a list that hides excluded rows, showing its new state at once, and marks it after a delay', async () => {
+    const provider = makeProvider([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
+
+    provider.markUnconfirmed('a.7z', true);
+
+    const [first, second] = await rows(provider);
+    expect([first?.row.name, first?.row.excluded]).toEqual(['a.7z', true]);
+    expect(first?.contextValue).toContain('excluded');
+    expect(provider.excludedNames()).toEqual(new Set(['a.7z']));
+    expect(second?.row.name).toBe('b.7z');
+    expect(spinning(present(first, 'a.7z'))).toBe(false);
+
+    vi.advanceTimersByTime(1000);
+    const [marked, other] = await rows(provider);
+    expect(spinning(present(marked, 'a.7z'))).toBe(true);
+    expect(marked?.tooltip).toBe('Written; waiting for the disk to confirm');
+    expect(spinning(present(other, 'b.7z'))).toBe(false);
+  });
+
+  it('the row leaves the list once the disk confirms the exclusion, silently', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'a.7z', excluded: true }), row({ name: 'b.7z' })]));
+
+    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+    expect(logged).toEqual([]);
+  });
+
+  it('keeps the row and the mark through a pre-write value, and the row leaves on the confirming one', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'a.7z' })]));
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(true);
+
+    instance.publish(valueOf([row({ name: 'a.7z', excluded: true })]));
+    expect(await provider.getChildren()).toEqual([]);
+  });
+
+  it('shows the disk\'s value and logs one line once a second landed value still differs', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'a.7z' })]));
+    instance.publish(valueOf([row({ name: 'a.7z' })]));
+
+    const [shown] = await rows(provider);
+    expect(shown?.row.excluded).toBe(false);
+    expect(spinning(present(shown, 'a.7z'))).toBe(false);
+    expect(logged).toEqual(['"a.7z" was written excluded, and the disk now shows it included.']);
+  });
+
+  it('stays while the disk cannot be read', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(true);
+  });
+
+  it('an include shows the row not excluded, marked, while show excluded is on', async () => {
+    const provider = makeProvider([row({ name: 'a.7z', excluded: true })]);
+    provider.setShowExcluded(true);
+
+    provider.markUnconfirmed('a.7z', false);
+    vi.advanceTimersByTime(1000);
+
+    const [shown] = await rows(provider);
+    expect(shown?.row.excluded).toBe(false);
+    expect(spinning(present(shown, 'a.7z'))).toBe(true);
+    expect(provider.excludedNames()).toEqual(new Set());
+  });
+
+  it('a write forgotten shows the disk\'s value at once, with no mark', async () => {
+    const provider = makeProvider([row({ name: 'a.7z' })]);
+    provider.markUnconfirmed('a.7z', true);
+
+    provider.forgetUnconfirmed('a.7z');
+    vi.advanceTimersByTime(1000);
+
+    const [shown] = await rows(provider);
+    expect(shown?.row.excluded).toBe(false);
+    expect(spinning(present(shown, 'a.7z'))).toBe(false);
+  });
+});
+
+describe('DownloadsProvider — a file that vanishes while its write is unconfirmed', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps the mark through one landed value without it, then logs one line', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'b.7z' })]));
+    expect(logged).toEqual([]);
+    instance.publish(valueOf([row({ name: 'b.7z' })]));
+
+    expect(logged).toEqual(['"a.7z" was written excluded, and it is gone from the disk.']);
+    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
   });
 });

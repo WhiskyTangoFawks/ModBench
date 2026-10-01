@@ -139,7 +139,7 @@ export interface DownloadsViewDeps {
 export function registerDownloadsView(
   { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
 ): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode> } {
-  const downloadsProvider = own(new DownloadsProvider({ instance })); // disposes its Instance subscriptions
+  const downloadsProvider = own(new DownloadsProvider({ instance, log: install.log })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
@@ -174,7 +174,7 @@ export function registerDownloadsView(
   for (const disposable of [
     ...registerDownloadsExcludedToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(access, instance, reporter, install, () => downloadsView.selection),
-    ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection),
+    ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection, downloadsProvider),
   ]) own(disposable);
   return { downloadsProvider, downloadsView };
 }

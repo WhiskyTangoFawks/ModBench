@@ -1,11 +1,24 @@
 import * as vscode from 'vscode';
 import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
 
+const MARK_DELAY_MS = 300;
+
+export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
+
+interface UnconfirmedProfile {
+  readonly name: string;
+  marked: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
 export interface ToolboxDeps {
   /** `undefined` with no instance open. The view still registers then — it is the container's
    *  first view and must never be a hole — but the commands its rows activate do not exist, so
    *  it renders no rows. */
   instance: InstanceView | undefined;
+  /** One line to the Output. */
+  log: (line: string) => void;
 }
 
 function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {
@@ -27,11 +40,11 @@ function gameRow({ gameName, gameFolder }: InstanceValue): vscode.TreeItem {
   return row;
 }
 
-function profileRow({ activeProfile }: InstanceValue): vscode.TreeItem {
+function profileRow({ activeProfile }: InstanceValue, unconfirmed: UnconfirmedProfile | undefined): vscode.TreeItem {
   const row = new vscode.TreeItem('Profile');
-  row.description = activeProfile;
-  row.iconPath = new vscode.ThemeIcon('account');
-  row.tooltip = 'Switch profile';
+  row.description = unconfirmed?.name ?? activeProfile;
+  row.iconPath = new vscode.ThemeIcon(unconfirmed?.marked ? 'sync~spin' : 'account');
+  row.tooltip = unconfirmed?.marked ? UNCONFIRMED_TOOLTIP : 'Switch profile';
   row.contextValue = 'profile';
   row.command = { command: 'modbench.profile.switch', title: 'Switch Profile' };
   return row;
@@ -53,15 +66,55 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly subscriptions: vscode.Disposable[];
+  private unconfirmed?: UnconfirmedProfile;
 
   constructor(private readonly deps: ToolboxDeps) {
     const changed = () => this._onDidChangeTreeData.fire(undefined);
     this.subscriptions = deps.instance
-      ? [deps.instance.subscribe(changed), deps.instance.onReadFailure(changed)]
+      ? [deps.instance.subscribe((value) => { this.settleUnconfirmed(value); changed(); }), deps.instance.onReadFailure(changed)]
       : [];
   }
 
+  private settleUnconfirmed({ activeProfile }: InstanceValue): void {
+    const write = this.unconfirmed;
+    if (write === undefined) return;
+    if (activeProfile !== write.name && !write.differedOnce) {
+      write.differedOnce = true;
+      return;
+    }
+    if (activeProfile !== write.name) {
+      this.deps.log(`Profile "${write.name}" was selected, and the disk now shows "${activeProfile}".`);
+    }
+    this.clearUnconfirmed();
+  }
+
+  /** The picked profile shows at once; the mark follows after a delay. */
+  markUnconfirmedProfile(name: string): void {
+    this.clearUnconfirmed();
+    const write: UnconfirmedProfile = {
+      name, marked: false, differedOnce: false,
+      timer: setTimeout(() => {
+        write.marked = true;
+        this._onDidChangeTreeData.fire(undefined);
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmed = write;
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** A refused or failed switch shows the disk's profile at once, with no mark. */
+  forgetUnconfirmedProfile(): void {
+    this.clearUnconfirmed();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  private clearUnconfirmed(): void {
+    clearTimeout(this.unconfirmed?.timer);
+    this.unconfirmed = undefined;
+  }
+
   dispose(): void {
+    this.clearUnconfirmed();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
   }
@@ -76,6 +129,6 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     if (instance.sequence === 0) {
       return instance.readFailure === undefined ? [] : [failedReadRow(instance.readFailure)];
     }
-    return [gameRow(instance.value), profileRow(instance.value)];
+    return [gameRow(instance.value), profileRow(instance.value, this.unconfirmed)];
   }
 }

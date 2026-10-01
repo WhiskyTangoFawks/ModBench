@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
-import type { PluginNode, PluginsTreeNode } from './PluginsTreeProvider';
+import type { PluginNode, PluginsTreeNode, PluginsTreeProvider } from './PluginsTreeProvider';
 import { pluralArgument, registerPluginsGesture, type GestureEntry } from './gestureEntry';
 import {
   setPluginsEnabled, type PluginParticipation, type PluginsAccess, type PluginsSelectionResult,
@@ -12,12 +12,17 @@ import type { Reporter } from '../ports/reporter';
 export function registerPluginEnableCommands(
   access: PluginsAccess, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly PluginsTreeNode[], reporter: Reporter,
+  marks: Pick<PluginsTreeProvider, 'isEnabled' | 'markUnconfirmed' | 'forgetUnconfirmed'>,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
-    const names = pluralArgument(entry, 'plugin').map((n: PluginNode) => n.plugin.name);
-    if (names.length === 0) return;
+    const rows = pluralArgument(entry, 'plugin');
+    if (rows.length === 0) return;
+    const names = rows.map((n: PluginNode) => n.plugin.name);
+    const changing = rows.filter((row) => marks.isEnabled(row) !== enabled);
+    for (const row of changing) marks.markUnconfirmed(row, enabled);
     const result = await setPluginsEnabled(access, instance.value.activeProfile, names, enabled);
     reportPluginsParticipation(result, names.map((name) => ({ name, enabled })), reporter);
+    forgetRefused(result, changing, marks);
   };
   return [
     registerPluginsGesture('modbench.plugin.enable', viewSelection, run(true)),
@@ -47,4 +52,14 @@ export function reportPluginsParticipation(
     `Could not ${verb} ${result.outcome.refused.length} of ${entries.length} plugins.`,
     result.outcome, (name) => name,
   );
+}
+
+/** A refused plugin, or a refused write, shows the disk's value at once, with no mark. */
+export function forgetRefused(
+  result: PluginsSelectionResult, rows: readonly PluginNode[], marks: Pick<PluginsTreeProvider, 'forgetUnconfirmed'>,
+): void {
+  const refusedNames = result.applied ? new Set(result.outcome.refused.map((r) => r.item)) : undefined;
+  for (const row of rows) {
+    if (refusedNames === undefined || refusedNames.has(row.plugin.name)) marks.forgetUnconfirmed(row);
+  }
 }

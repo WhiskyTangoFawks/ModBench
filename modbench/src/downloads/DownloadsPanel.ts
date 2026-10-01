@@ -169,23 +169,34 @@ async function deleteSelection(
 
 // No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
 // writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
+export type DownloadMarks = Pick<DownloadsProvider, 'markUnconfirmed' | 'forgetUnconfirmed'>;
+
 async function excludeSelection(
-  access: DownloadsAccess, names: readonly string[], reporter: Reporter,
+  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, marks: DownloadMarks,
 ): Promise<SelectionOutcome<string>> {
-  if (names.length === 0) return NOTHING_CHANGED;
-  const outcome = await excludeDownloads(access, names);
-  reporter.selectionOutcome(
-    `Could not exclude ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
-  return outcome;
+  return changeExcluded(access, rows, true, excludeDownloads, reporter, marks);
 }
 
 async function includeSelection(
-  access: DownloadsAccess, names: readonly string[], reporter: Reporter,
+  access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, marks: DownloadMarks,
 ): Promise<SelectionOutcome<string>> {
-  if (names.length === 0) return NOTHING_CHANGED;
-  const outcome = await includeDownloads(access, names);
+  return changeExcluded(access, rows, false, includeDownloads, reporter, marks);
+}
+
+// A row already in the state asked for writes nothing, so it is never marked.
+async function changeExcluded(
+  access: DownloadsAccess, rows: readonly DownloadFile[], excluded: boolean,
+  write: (access: DownloadsAccess, names: readonly string[]) => Promise<SelectionOutcome<string>>,
+  reporter: Reporter, marks: DownloadMarks,
+): Promise<SelectionOutcome<string>> {
+  if (rows.length === 0) return NOTHING_CHANGED;
+  const changing = rows.filter((row) => row.excluded !== excluded).map((row) => row.name);
+  for (const name of changing) marks.markUnconfirmed(name, excluded);
+  const outcome = await write(access, rows.map((row) => row.name));
   reporter.selectionOutcome(
-    `Could not include ${outcome.refused.length} of ${names.length} downloaded files.`, outcome, (name) => name);
+    `Could not ${excluded ? 'exclude' : 'include'} ${outcome.refused.length} of ${rows.length} downloaded files.`,
+    outcome, (name) => name);
+  for (const { item } of outcome.refused) marks.forgetUnconfirmed(item);
   return outcome;
 }
 
@@ -229,20 +240,19 @@ function selectionRows(clicked: DownloadNode | undefined, selected: DownloadNode
  *  argument. */
 export function registerDownloadsMultiRowCommands(
   access: DownloadsAccess, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[],
+  log: (line: string) => void, viewSelection: () => readonly DownloadsTreeNode[], marks: DownloadMarks,
 ): vscode.Disposable[] {
   const rows = (clicked?: DownloadNode, selected?: DownloadNode[]) => {
     const explicit = selectionRows(clicked, selected);
     return explicit.length > 0 ? explicit : selectedFiles(viewSelection()).map((n) => n.row);
   };
-  const names = (clicked?: DownloadNode, selected?: DownloadNode[]) => rows(clicked, selected).map((row) => row.name);
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
       deleteSelection(access, rows(clicked, selected), reporter, ask, trash, log)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      excludeSelection(access, names(clicked, selected), reporter)),
+      excludeSelection(access, rows(clicked, selected), reporter, marks)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      includeSelection(access, names(clicked, selected), reporter)),
+      includeSelection(access, rows(clicked, selected), reporter, marks)),
   ];
 }
 
