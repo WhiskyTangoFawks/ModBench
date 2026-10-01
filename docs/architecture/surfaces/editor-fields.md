@@ -59,7 +59,7 @@ As a user, I want:
 
 ## Arrays
 
-Every array takes the same gestures. Some arrays' elements have a key, which is the element's identity (ADR-0018, invariant 3). *catalog `add element`, `remove element`, `move element`*
+Every array takes add and remove, and an array without a key takes move. Some arrays' elements have a key, which is the element's identity (ADR-0018, invariant 3). *catalog `add element`, `remove element`, `move element`*
 
 As a user, I want:
 
