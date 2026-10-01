@@ -43,9 +43,10 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     const through = async (
       index: number, address: EditAddress, key: string, write: (formKey: string) => Promise<string | undefined>,
     ): Promise<string | undefined> => {
-      if (index === gates.length) return write(key);
+      const gate = gates[index];
+      if (!gate) return write(key);
       let answer: string | undefined;
-      await gates[index](address, async target => { answer = await through(index + 1, address, target, write); return answer; });
+      await gate(address, async target => { answer = await through(index + 1, address, target, write); return answer; });
       return answer;
     };
     return async (address, write) => { await through(0, address, address.formKey, write); };
