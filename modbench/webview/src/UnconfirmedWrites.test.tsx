@@ -447,12 +447,30 @@ describe('an element added, removed or moved, until mEdit confirms it (common.md
   it('shows no mark when mEdit refuses the write', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('[2]'));
+
+    vi.useFakeTimers();
+    try {
+      written({ op: 'remove', path: [VALUES, at(1)] });
+      written({ op: 'remove', path: [VALUES, at(1)] }, EXTENSION_TO_WEBVIEW.EDIT_REFUSED);
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(marked()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The host tells a panel nothing more of a gesture mEdit never answered.
+  it('keeps the mark of a gesture with no answer until a refresh reads the disk', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
     written({ op: 'remove', path: [VALUES, at(1)] });
+    await waitFor(() => expect(marked()).toEqual(['[1]']));
 
-    written({ op: 'remove', path: [VALUES, at(1)] }, EXTENSION_TO_WEBVIEW.EDIT_REFUSED);
+    disk = values([1, 3]);
+    send({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
 
-    await new Promise(resolve => setTimeout(resolve, 400));
-    expect(marked()).toEqual([]);
+    await waitFor(() => expect(marked()).toEqual([]));
+    expect(screen.queryByText('[2]')).not.toBeInTheDocument();
   });
 
   it('keeps the mark when the read fails', async () => {
