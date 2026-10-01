@@ -6,13 +6,14 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { copiedText, modelValue } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, getCellStyle, focusedRowStyle } from './gridStyles';
+import { baseCell, labelCell, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import { LABEL_COLUMN } from './columnKey';
 
 
 // NoConflict and OnlyOne are deliberately absent: they paint no background, so an expanded row
@@ -125,9 +126,9 @@ interface DiffRowProps {
   // up and can never render against a shape the panel did not choose.
   meta: FieldMetadata;
   columns: Column[];
-  // Each column's look, the label column's at null, as the panel gives its header too, so the
-  // header and every cell under it can never disagree.
-  columnStyle: (column: ColumnKey | null) => React.CSSProperties;
+  // Each column's look, as the panel gives its header too, so the header and every cell under it
+  // can never disagree.
+  columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
   // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
@@ -206,7 +207,7 @@ export function DiffRow({
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
       <DiskCell
-        style={{ ...baseCell, ...columnStyle(null), opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}
         onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}

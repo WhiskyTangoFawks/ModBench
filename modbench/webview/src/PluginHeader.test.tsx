@@ -43,6 +43,12 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(/winner/);
   });
 
+  // ADR-0012, invariant 3: the origin sits in the tooltip alone.
+  it('shows no origin on an expanded column', () => {
+    const { header } = renderHeader();
+    expect(header).not.toHaveTextContent('ModA');
+  });
+
   // The Status table, its "When" and "The tooltip says" columns; the Tooltip row.
   it.each<[string, Facts, string, string]>([
     ['a copy mEdit could not read', { override: { parseDiagnosis: DIAGNOSIS } }, '(parse failure)', DIAGNOSIS],
@@ -103,7 +109,6 @@ describe('PluginHeader', () => {
     fireEvent.mouseDown(edge, { clientX: 300 });
     fireEvent.mouseMove(window, { clientX: 360 });
     fireEvent.mouseUp(window, { clientX: 360 });
-    // The drag ended over the label, so the click lands on the header.
     fireEvent.click(header);
     fireEvent.mouseMove(window, { clientX: 400 });
 
@@ -113,6 +118,21 @@ describe('PluginHeader', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     fireEvent.click(header);
     expect(onToggleCollapse).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no drag from a button but the left one', () => {
+    const { header, onResize } = renderHeader();
+    const edge = required(header.querySelector('[data-column-edge]'), 'the header’s edge');
+
+    fireEvent.mouseDown(edge, { clientX: 300, button: 2 });
+    fireEvent.mouseMove(window, { clientX: 360 });
+
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it('offers no edge to drag while collapsed', () => {
+    const { header } = renderHeader({}, { collapsed: true });
+    expect(header.querySelector('[data-column-edge]')).toBeNull();
   });
 
   // The copy commands live on the header's native right-click menu, so the only thing to assert is

@@ -15,7 +15,7 @@ public static class PartialFormFlag
     /// <summary>The same bit as the annotation tables spell it.</summary>
     internal static readonly string BitHex = $"0x{Bit:X}";
 
-    /// <summary>The one eligibility gate, shared by the read and write sides.</summary>
+    /// <summary>The container-record gate both IsSet overloads read the bit through.</summary>
     public static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
 

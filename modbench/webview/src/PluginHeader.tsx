@@ -52,9 +52,11 @@ export function PluginHeader({
     >
       <div>[{o.loadIndex}] <span>{o.plugin}</span></div>
       {!collapsed && (
-        <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>{status.label}</div>
+        <>
+          <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>{status.label}</div>
+          <ColumnEdge onResize={onResize} />
+        </>
       )}
-      <ColumnEdge onResize={onResize} />
     </th>
   );
 }

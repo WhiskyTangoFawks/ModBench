@@ -14,7 +14,7 @@ import { idleMembers } from './siblingsInUse';
 import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
-import { columnKey } from './columnKey';
+import { columnKey, LABEL_COLUMN } from './columnKey';
 import { vscode } from './vscode';
 import { editField, focusCell, focusedCellContext } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
@@ -100,9 +100,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
-  // The label column's width is held at null, as the focus names that column.
-  const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | null, number>>(new Map());
-  const resizeColumn = (key: ColumnKey | null, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
+  const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
+  const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
   // ADR-0007: one definition of "this column can be written", computed for the whole grid at
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
@@ -113,7 +112,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
   const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
-  const columnStyle = useCallback((key: ColumnKey | null): React.CSSProperties => ({
+  const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key != null && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key != null && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
   }), [dimmedColumns, collapsedColumns, columnWidths]);
@@ -416,8 +415,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
             <tr ref={headerRow}>
-              <th style={{ ...headerCell, position: 'relative', textAlign: 'left', ...columnStyle(null) }}>
-                Field<ColumnEdge onResize={width => resizeColumn(null, width)} />
+              <th style={{ ...headerCell, position: 'relative', textAlign: 'left', ...columnStyle(LABEL_COLUMN) }}>
+                Field<ColumnEdge onResize={width => resizeColumn(LABEL_COLUMN, width)} />
               </th>
               {columns.map(col => {
                 // ADR-0012: keyed by col.key, never the bare file name, so two columns that share

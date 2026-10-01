@@ -559,7 +559,6 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
     vi.mocked(vscode.postMessage).mockClear();
 
-    // Uncheck A in the tracked column, the row's last cell.
     const modCell = required(screen.getByText('Flags').closest('tr')?.lastElementChild, 'the tracked column\u2019s cell');
     fireEvent.click(required(modCell.querySelector('input'), 'its first flag'));
 
@@ -1204,6 +1203,27 @@ describe('RecordPanel — column widths', () => {
 
     expect(new Set(widthsOfColumn(2))).toEqual(new Set(['240px']));
     expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
+  });
+
+  // The browser's box model: a width is the content box's unless box-sizing says it is the border
+  // box's, and a header's rect is its border box.
+  function renderedWidth(cell: HTMLElement): number {
+    const style = getComputedStyle(cell);
+    const outside = style.boxSizing === 'border-box' ? 0
+      : [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]
+        .reduce((sum, length) => sum + (parseFloat(length) || 0), 0);
+    return parseFloat(style.width) + outside;
+  }
+
+  it('keeps a column\u2019s width through a drag of its edge that does not move', async () => {
+    renderPanel(compareResult);
+    await screen.findByText('Override Name');
+    const header = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
+    dragEdge(header, 200, 40);
+
+    dragEdge(header, renderedWidth(header), 0);
+
+    expect(new Set(widthsOfColumn(2))).toEqual(new Set(['240px']));
   });
 
   it('gives the label column the width its edge is dragged to', async () => {

@@ -10,7 +10,7 @@ const edgeStyle: React.CSSProperties = {
 export function ColumnEdge({ onResize }: Readonly<{ onResize: (width: number) => void }>) {
   function startResize(e: React.MouseEvent<HTMLElement>) {
     const header = e.currentTarget.closest('th');
-    if (!header) return;
+    if (e.button !== 0 || !header) return;
     const startX = e.clientX;
     const startWidth = header.getBoundingClientRect().width;
     const move = (m: MouseEvent) => onResize(Math.max(COLLAPSED_COLUMN_WIDTH, startWidth + m.clientX - startX));

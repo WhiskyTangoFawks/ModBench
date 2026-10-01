@@ -66,11 +66,10 @@ describe('FlagCell — collapsed row', () => {
 describe('FlagCell — read-only column', () => {
   // editor.md, Columns, story 4: nothing marks its cells ahead of time.
   it('renders the same checkbox list, not disabled', () => {
-    render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes).toHaveLength(4);
-    for (const box of boxes) expect(box).toBeEnabled();
-    expect(boxes[0]).toBeChecked();
+    const { container } = render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+    expect(container.querySelectorAll('input:disabled')).toHaveLength(0);
+    expect(checkboxAt(0)).toBeChecked();
   });
 
   it('clicking a checkbox never commits, and leaves it as it was', () => {
