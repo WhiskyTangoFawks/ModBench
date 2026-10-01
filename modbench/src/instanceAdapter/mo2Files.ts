@@ -19,8 +19,6 @@ interface Walk {
   readonly notes: string[];
 }
 
-// Walked paths are the root, then separators and names, so the key is a slice: this runs once per
-// file, and `path.relative` there costs a share of a large instance's recompute.
 export const relativeUnder = (root: string, path: string, separator: string = sep): string => {
   const below = path.slice(root.length + 1);
   return separator === '/' ? below : below.split(separator).join('/');
