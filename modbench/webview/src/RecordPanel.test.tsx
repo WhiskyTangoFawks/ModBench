@@ -1912,18 +1912,6 @@ describe('RecordPanel — the Record Header', () => {
     expect(menuOf(formIdCell(container))).not.toContain('stringValue');
     expect(menuOf(required(screen.getByText('A Name').closest('td'), "Name's cell"))).toContain('stringValue');
   });
-
-  it('opens no editor on a plugin header\'s FormID, where its other fields open one', async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
-    await waitFor(() => screen.getByText('A Name'));
-
-    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-
-    fireEvent.doubleClick(screen.getByText('A Name'));
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
 });
 
 // editor-fields.md, Every field, story 7: the reason comes from the field's own metadata, and

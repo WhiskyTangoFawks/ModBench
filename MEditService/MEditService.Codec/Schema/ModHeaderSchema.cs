@@ -17,8 +17,7 @@ internal static class ModHeaderSchema
     }
 
     // The members of the header the editor presents, and why a write reaching one is refused, if it
-    // is. A mod header is not a major record, so the table names them; each is built by the same
-    // builder every record column is.
+    // is. A mod header is not a major record, so the table names them.
     private static readonly (string Member, string? ReadOnlyReason)[] PresentedMembers =
     [
         ("Author", null),

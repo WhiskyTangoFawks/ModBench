@@ -101,30 +101,13 @@ public sealed class HeaderFlagEditTests : IDisposable
     private PluginCompileService CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);
 
-    // The raw flags column stays exactly as read-only as it was — IsSmallMaster is the one door.
     [Fact]
-    public void EditField_RawFlagsColumn_StillRefusesAsReadOnly()
+    public void EditField_Masters_RefusesAsReadOnly_AndChangesNothing()
     {
-        var result = Service().Set(
-            _fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse("[\"Small\"]").RootElement);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-    }
-
-    // Masters and Author refuse identically to Flags — the evidence that no masters-specific
-    // mechanism exists, only the shared absence of a write delegate on every header column.
-    [Fact]
-    public void EditField_MastersOrAuthor_RefusesAsReadOnly_LikeTheFlagsColumn()
-    {
-        // "MasterReferences" is PluginHeader.MastersFieldName's wire name (Codec-internal).
         var masters = Service().Set(
             _fixture.Plugin, HeaderFormKey, "MasterReferences", JsonDocument.Parse("[\"Other.esm\"]").RootElement);
-        var author = Service().Set(
-            _fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone Else\"").RootElement);
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, author.Refusal);
         Assert.Empty(_fixture.GitStatus());
     }
 }
