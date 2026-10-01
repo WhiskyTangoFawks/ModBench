@@ -35,7 +35,7 @@ describe('RecordPanelClient.load', () => {
 
   it('reads a record held by no active plugin as a null result, not a failure', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
-    answer(lastRequestId(), { ok: true, compare: null, plugins: null, conflictsComputed: true });
+    answer(lastRequestId(), { ok: true, compare: null, plugins: null, conflictsComputed: true, loadFailures: [] });
 
     expect(await promise).toMatchObject({ ok: true, result: null });
   });
@@ -44,7 +44,7 @@ describe('RecordPanelClient.load', () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
       ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },
-      plugins: [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true,
+      plugins: [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }], conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;
@@ -67,7 +67,7 @@ describe('RecordPanelClient.load', () => {
         { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 0, origin: 'ModA' },
         { name: 'Shared.esp', isImmutable: false, loadOrderIndex: 1, origin: 'ModB' },
       ],
-      conflictsComputed: true,
+      conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;
@@ -87,7 +87,7 @@ describe('RecordPanelClient.load', () => {
   it('leaves plugins null when the host answers with a null plugin list', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: null, conflictsComputed: true,
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: null, conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;
@@ -96,10 +96,20 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet).toBeNull();
   });
 
+  it('returns the plugins mEdit cannot read', async () => {
+    const loadFailures = [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }];
+    const promise = createRecordPanelClient().load('000001:A.esp');
+    answer(lastRequestId(), {
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: true, loadFailures,
+    });
+
+    expect(await promise).toMatchObject({ ok: true, loadFailures });
+  });
+
   it('returns conflictsComputed false while the sweep is still outstanding', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: false,
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: false, loadFailures: [],
     });
 
     const r = await promise;
@@ -113,10 +123,10 @@ describe('RecordPanelClient.load', () => {
   it('ignores an answer whose requestId does not match this load\'s own request', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer('some-other-requestId', {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: true,
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' }, plugins: [], conflictsComputed: true, loadFailures: [],
     });
     answer(lastRequestId(), {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: [], conflictsComputed: true,
+      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'NoConflict' }, plugins: [], conflictsComputed: true, loadFailures: [],
     });
 
     const r = await promise;

@@ -147,6 +147,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   // The picker and the panel's name are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
     ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
+    loadFailures: () => conflictsComputedTracker.failures(),
   };
   const recordEditorProvider = new RecordEditorProvider({
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,

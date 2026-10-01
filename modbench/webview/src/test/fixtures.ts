@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from '../messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
-import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
+import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
@@ -50,6 +50,7 @@ export interface FixturePlugin {
 export interface PanelOpts {
   plugins?: FixturePlugin[];
   conflictsComputed?: boolean;
+  loadFailures?: PluginLoadFailure[];
   /** A whole `load` of the test's own — a rejection, or one that answers differently each call. */
   load?: RecordPanelClient['load'];
 }
@@ -71,6 +72,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,
+      loadFailures: opts.loadFailures ?? [],
     })),
   };
 }

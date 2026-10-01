@@ -11,7 +11,7 @@ import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyle
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
+  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey } from './columnKey';
 import { vscode } from './vscode';
@@ -19,6 +19,7 @@ import { editField, focusCell, focusedCellContext } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
+import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
 import { RecordHeaderRows, RECORD_HEADER_ROW, FORM_ID_ROW } from './RecordHeaderRows';
 import { navigate, type NavRow } from './gridNavigation';
 
@@ -64,6 +65,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
+  const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
   const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
@@ -148,6 +150,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // No `?? true` fallback: `undefined` is falsy, so a fixture that omits `conflictsComputed`
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
+      setLoadFailures(loaded.loadFailures);
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -237,6 +240,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [refresh]);
+
+  const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
 
   const columns = useMemo(
     () => result ? buildColumns(result.overrides) : [],
@@ -392,6 +397,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       {/* ADR-0017: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
           has checked yet. Clears itself with no user action once refresh() next lands a settled
           `conflictsComputed`. */}
+      {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {recordPanelIncompleteMessage(conflictsComputed) && (
         <div style={messageStyle}>{recordPanelIncompleteMessage(conflictsComputed)}</div>
       )}

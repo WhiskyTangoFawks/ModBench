@@ -1,9 +1,11 @@
-import type { MEditClient } from '../client';
+import type { MEditClient, PluginLoadFailure } from '../client';
 
-/** The load-order sweep's latest known answer, kept live off the notification stream rather than
- *  polled. Reads false until the first tick, never mistaking "not computed" for "settled". */
+/** The load-order status's latest known answer, kept live off the notification stream rather than
+ *  polled. `current` reads false until the first tick, never mistaking "not computed" for
+ *  "settled"; `failures` are the plugins mEdit could not read, none until the first tick. */
 export interface ConflictsComputedTracker {
   current(): boolean;
+  failures(): readonly PluginLoadFailure[];
   dispose(): void;
 }
 
@@ -11,15 +13,20 @@ export function trackConflictsComputed(
   client: Pick<MEditClient, 'subscribe' | 'onStatusChanged' | 'onReconnected'>,
 ): ConflictsComputedTracker {
   let value = false;
+  let failures: readonly PluginLoadFailure[] = [];
+  const forget = () => { value = false; failures = []; };
   const unsubscribeStatus = client.subscribe('load-order-status', (event) => {
-    if (event.loadOrderStatus) value = event.loadOrderStatus.conflictsComputed;
+    if (!event.loadOrderStatus) return;
+    value = event.loadOrderStatus.conflictsComputed;
+    failures = event.loadOrderStatus.failures;
   });
   // Mirrors reconcileNarrator's own detached() reset, on the same two signals (toolbox.ts): a
   // crash-and-restart or a reattached stream starts the next process's reconcile from unsettled.
-  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'running') value = false; });
-  const unsubscribeReconnected = client.onReconnected(() => { value = false; });
+  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'running') forget(); });
+  const unsubscribeReconnected = client.onReconnected(forget);
   return {
     current: () => value,
+    failures: () => failures,
     dispose: () => { unsubscribeStatus(); unsubscribeStatusChanged(); unsubscribeReconnected(); },
   };
 }

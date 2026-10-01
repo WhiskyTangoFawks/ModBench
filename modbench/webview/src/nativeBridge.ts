@@ -63,7 +63,7 @@ export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
     (msg): RecordLoadAnswer => {
       if (msg.type !== EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED) return { ok: false, error: 'Mismatched reply.' };
       return msg.ok
-        ? { ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed }
+        ? { ok: true, compare: msg.compare, plugins: msg.plugins, conflictsComputed: msg.conflictsComputed, loadFailures: msg.loadFailures }
         : { ok: false, error: msg.error };
     },
     requestId => ({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId, formKey }),

@@ -43,6 +43,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     reply: vi.fn(),
     setTitle: vi.fn(),
     conflictsComputed: () => true,
+    loadFailures: () => [],
     ...overrides,
   };
 }
@@ -439,8 +440,19 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => true }));
 
     expect(reply).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
     });
+  });
+
+  it('answers with the plugins mEdit cannot read', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const reply = vi.fn();
+    const failure = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply, loadFailures: () => [failure] }));
+
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ ok: true, loadFailures: [failure] }));
   });
 
   it('answers a record held by no active plugin as a null comparison, not a failure', async () => {
@@ -451,7 +463,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => true }));
 
     expect(reply).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true, loadFailures: [],
     });
   });
 
@@ -516,7 +528,7 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => false }));
 
     expect(reply).toHaveBeenCalledWith({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
     });
   });
 });

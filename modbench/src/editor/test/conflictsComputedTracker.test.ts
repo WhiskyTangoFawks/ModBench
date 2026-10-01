@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { NotificationEvent } from '../../client';
+import type { NotificationEvent, PluginLoadFailure } from '../../client';
 import { InMemoryMEditClient } from '../../client';
 import { trackConflictsComputed } from '../conflictsComputedTracker';
 
-function tick(conflictsComputed: boolean): NotificationEvent {
+function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = []): NotificationEvent {
   return {
     kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
     loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures: [], version: 1,
+      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures, version: 1,
     },
   };
 }
@@ -67,5 +67,31 @@ describe('trackConflictsComputed', () => {
     client.reconnected();
 
     expect(tracker.current()).toBe(false);
+  });
+
+  it('reads the latest tick\'s load failures, and none before the first tick', () => {
+    const client = new InMemoryMEditClient();
+    const tracker = trackConflictsComputed(client);
+    expect(tracker.failures()).toEqual([]);
+
+    const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+    client.emit(tick(false, [bad]));
+    expect(tracker.failures()).toEqual([bad]);
+
+    client.emit(tick(true));
+    expect(tracker.failures()).toEqual([]);
+  });
+
+  it('forgets the failures when the backend leaves running or reconnects', () => {
+    const client = new InMemoryMEditClient();
+    const tracker = trackConflictsComputed(client);
+    client.emit(tick(true, [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }]));
+
+    client.setStatus('disconnected');
+    expect(tracker.failures()).toEqual([]);
+
+    client.emit(tick(true, [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }]));
+    client.reconnected();
+    expect(tracker.failures()).toEqual([]);
   });
 });

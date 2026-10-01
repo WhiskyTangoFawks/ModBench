@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareResult } from './types';
+import type { ColumnKey, CompareResult, PluginLoadFailure } from './types';
 import { columnKey } from './columnKey';
 import { parseCompareResult } from './parseCompareResult';
 import { requestRecordLoad } from './nativeBridge';
@@ -18,6 +18,7 @@ export type LoadResult =
       // read as "not computed", never as "settled", or a status-fetch blip would render a
       // settled-looking grid over a comparison nothing checked.
       conflictsComputed: boolean;
+      loadFailures: PluginLoadFailure[];
     }
   | { ok: false; error: string };
 
@@ -44,6 +45,7 @@ export function createRecordPanelClient(): RecordPanelClient {
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
         conflictsComputed: answer.conflictsComputed,
+        loadFailures: answer.loadFailures,
       };
     },
   };
