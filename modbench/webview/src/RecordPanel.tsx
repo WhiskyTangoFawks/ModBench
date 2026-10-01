@@ -188,17 +188,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
       }
     }
-    // ADR-0008: the header record's masters field displays but is never directly editable —
-    // stamped readOnly here rather than gated a second way, so every consumer sees one answer.
-    const mastersMeta = map.MasterReferences;
-    if (isHeaderRecord && mastersMeta) {
-      map.MasterReferences = {
-        ...mastersMeta, readOnly: true,
-        elementType: mastersMeta.elementType ? { ...mastersMeta.elementType, readOnly: true } : mastersMeta.elementType,
-      };
-    }
     return map;
-  }, [result, isHeaderRecord]);
+  }, [result]);
 
   // `path` addresses the array itself for add and the element for the rest. A move off either end
   // is the backend's to refuse by name, so the direction the row asked for is posted as it is.

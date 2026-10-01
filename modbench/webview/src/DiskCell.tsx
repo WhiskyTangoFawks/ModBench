@@ -33,9 +33,10 @@ export interface ArrayOps {
 }
 
 export function DiskCell({
-  style, isFocused, onFocusCell, onDoubleClick, copyText, arrayOps, vscodeContext, children,
+  style, title, isFocused, onFocusCell, onDoubleClick, copyText, arrayOps, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
+  title?: string;
   isFocused: boolean;
   onFocusCell: () => void;
   onDoubleClick?: () => void;
@@ -62,6 +63,7 @@ export function DiskCell({
     <td
       ref={ref}
       tabIndex={0}
+      title={title}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       data-vscode-context={vscodeContext}
       data-focused-cell={isFocused || undefined}

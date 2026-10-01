@@ -18,10 +18,11 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
       case 'struct':
       case 'array':
         return JSON.stringify(value);
+      case 'bool':
+        return value === true ? 'True' : 'False';
       case 'string':
       case 'int':
       case 'float':
-      case 'bool':
       case 'enum':
       case 'hex':
       case 'color':
@@ -33,11 +34,23 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   return toStr(value);
 }
 
-// Differs from the edit value only for an enum whose values are wire tokens rather than words (an
-// abstract union's `MutagenObjectType` carries Mutagen class names); the member's label shows instead.
+const memberOf = (value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
+
+// Differs from the edit value only for an enum: a wire-token member shows its label, and a value
+// the enum does not name reads `<Unknown: n>`.
 export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
-  if (meta.type !== 'enum') return modelValue(value, meta, resolution);
-  return meta.enumMembers.find(m => m.value === String(value))?.label ?? modelValue(value, meta);
+  if (meta.type !== 'enum' || value == null || meta.enumMembers.length === 0) {
+    return modelValue(value, meta, resolution);
+  }
+  const member = memberOf(value, meta);
+  return member ? member.label ?? modelValue(value, meta) : `<Unknown: ${modelValue(value, meta)}>`;
+}
+
+// What Ctrl+C takes: the reading, except an unnamed enum value, which copies as the value the
+// editor can take back.
+export function copiedText(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
+  const unnamed = meta.type === 'enum' && value != null && meta.enumMembers.length > 0 && !memberOf(value, meta);
+  return unnamed ? modelValue(value, meta) : displayValue(value, meta, resolution);
 }
 
 // The codec spells a flags member as the array of the names that are set; absent means none.

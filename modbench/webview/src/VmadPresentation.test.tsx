@@ -254,7 +254,7 @@ describe('a collapsed script reads as xEdit prose', () => {
     await waitFor(() => fieldCell('Guard'));
     toggleRow('Guard');
 
-    expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = true, Radius: Int = 10)');
+    expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = True, Radius: Int = 10)');
   });
 
   it('a script with no properties reads as its own name and an empty list', async () => {

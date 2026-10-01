@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { displayValue, modelValue } from './modelValue';
+import { copiedText, modelValue } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
@@ -48,9 +48,7 @@ function renderCell(
       <FormKeyCell
         value={value} meta={meta}
         onOpen={onOpen} checkError={checkError} resolution={resolution}
-        // Same editability rule as the flags/scalar branches — presence of somewhere to
-        // write, ORed with the per-row readOnly veto.
-        editable={onCommit != null && !meta.readOnly}
+        editable={onCommit != null}
         onCommit={onCommit}
       />
     );
@@ -75,9 +73,7 @@ function renderCell(
       <FlagCell
         value={value}
         meta={meta}
-        // Same rule as ScalarCell's editable computation just below: presence of somewhere to
-        // write is the editability signal, ORed with the per-row readOnly veto.
-        editable={onCommit != null && !meta.readOnly}
+        editable={onCommit != null}
         onCommit={onCommit}
         collapsed={rowCollapsed}
       />
@@ -87,9 +83,7 @@ function renderCell(
     <ScalarCell
       value={value}
       meta={meta}
-      // `meta.readOnly` is a per-row veto a synthesized row can set regardless of what the
-      // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
-      editable={onCommit != null && !meta.readOnly}
+      editable={onCommit != null}
       onCommit={onCommit}
     />
   );
@@ -253,9 +247,10 @@ export function DiffRow({
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
         // ADR-0018: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
-        const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
-        // Array ops are offered only on a writable column.
-        const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
+        const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
+        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null;
+        // Array ops are offered only on a writable cell.
+        const arrayEditable = !!onArrayOp && writable && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
@@ -269,7 +264,7 @@ export function DiffRow({
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
-        const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
+        const cellEditable = !!onEditCell && writable;
         // The host that invokes these commands holds no document, so it is handed the envelope's
         // own path, resolved here against this column's own value of the root.
         const hops = offersMenu ? wirePath(rootField, context.path, rootValue?.value) : [];
@@ -300,6 +295,7 @@ export function DiffRow({
             <DiskCell
               key={key}
               style={cellStyle}
+              title={cellMeta.readOnlyReason ?? undefined}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               copyText={copyText}
@@ -320,6 +316,7 @@ export function DiffRow({
             vscodeContext={vscodeContext}
             key={key}
             style={cellStyle}
+            title={cellMeta.readOnlyReason ?? undefined}
             isFocused={isFocused}
             onFocusCell={() => onFocusCell(rowKey, key)}
             copyText={copyText}
