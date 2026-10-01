@@ -6,9 +6,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Only three of the five embedded slots can be exercised through a field edit:
-/// <c>SchemaReflector</c> publishes no schema for Landscape or NavigationMesh, so neither has a field to
-/// write.</summary>
 public sealed class EmbeddedChildEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -160,18 +157,17 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Empty(_fixture.GitStatus());
     }
 
-    // ---- The embedded slots that are editable at all ----
+    // ---- every embedded slot is editable ----
 
     [Fact]
-    public void EveryEditableEmbeddedSlot_ResolvesToItsOwningContainersFile()
+    public void EveryEmbeddedSlot_ResolvesToItsOwningContainersFile()
     {
-        // Three of the five embedded slots, which is all a field edit can reach: Cell.Landscape and
-        // Cell.NavigationMeshes hold record types SchemaReflector publishes no schema for, so there is no
-        // field on either to write.
         var service = EditService();
 
         Assert.True(service.Set(_fixture.Plugin, _fixture.PersistentRef.ToString(), "Scale", Json("2.0")).Applied);
         Assert.True(service.Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.0")).Applied);
+        Assert.True(service.Set(_fixture.Plugin, _fixture.Landscape.ToString(), "EditorID", Json("\"EditedLandscape\"")).Applied);
+        Assert.True(service.Set(_fixture.Plugin, _fixture.Navmesh.ToString(), "EditorID", Json("\"EditedNavmesh\"")).Applied);
         // TopCell is embedded in the *worldspace's* document, so its source unit is a different file
         // from the two above — the case that falls through a resolver built only for cells.
         Assert.True(service.Set(_fixture.Plugin, _fixture.TopCell.ToString(), "WaterHeight", Json("42.0")).Applied);
@@ -179,6 +175,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
         var cellFile = File.ReadAllText(_fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
         Assert.Contains("\"Scale\": 2.0", cellFile, StringComparison.Ordinal);
         Assert.Contains("\"Scale\": 3.0", cellFile, StringComparison.Ordinal);
+        Assert.Contains("\"EditedLandscape\"", cellFile, StringComparison.Ordinal);
+        Assert.Contains("\"EditedNavmesh\"", cellFile, StringComparison.Ordinal);
 
         // The top cell has no file of its own anywhere in the tree — that is what "embedded" means, and
         // it is why locating it by content finds the worldspace's own document.

@@ -140,17 +140,6 @@ internal sealed record SchemaAnnotations(
         ("ILocationGetter", "Color"),
     ];
 
-    // Every navmesh array wbDefinitionsFO4.pas declares wbArrayS over a wbStructSK (wbNVNM, NAVM,
-    // NAVI), with its key members as Mutagen member names.
-    private static readonly (string TypeName, string MemberName, string[] KeyMembers)[] Fallout4NavmeshKeyedArrays =
-    [
-        ("INavmeshGeometryGetter", "DoorTriangles", ["TriangleBeforeDoor", "Door"]),
-        ("INavigationMeshGetter", "PreCutMapEntries", ["Reference"]),
-        ("INavigationMeshInfoMapGetter", "MapInfos", ["NavigationMesh"]),
-        ("INavigationMapInfoGetter", "LinkedDoors", ["Door"]),
-        ("IPreferredPathingGetter", "NavmeshTree", ["NodeIndex"]),
-    ];
-
     // wbFileHeader in wbDefinitionsFO4.pas spells the master and light-master bits ESM and ESL.
     // Localized is already xEdit's own spelling, so it carries no label.
     private static readonly Dictionary<string, string> XEditModHeaderFlagNames = new(StringComparer.Ordinal)
@@ -201,7 +190,7 @@ internal sealed record SchemaAnnotations(
                 [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
                 [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
             },
-            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4NavmeshKeyedArrays).ToDictionary(
+            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4LandscapeAndNavmeshAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             AlphaBearingColorFields: [.. RgbaColorFields],

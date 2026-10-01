@@ -88,8 +88,36 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // Worldspace.TopCell is the only single-value embedded slot this gesture can reach: SchemaReflector
-    // publishes no schema for land or navm, so neither Cell slot has a document to read.
+    [Fact]
+    public void DeletingACellsLandscape_NullsTheSlot_LeavingItsNavmeshIntact()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Landscape.ToString())]);
+
+        Assert.Empty(result.Refused);
+        var after = File.ReadAllText(file);
+        Assert.DoesNotContain(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
+        Assert.Contains(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
+        Assert.Null(_fixture.Document(_fixture.Landscape.ToString()));
+        Assert.NotNull(_fixture.Document(_fixture.EmbedCell.ToString()));
+    }
+
+    [Fact]
+    public void DeletingACellsNavmesh_RemovesItFromTheCellsList_LeavingItsLandscapeIntact()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
+
+        var result = DeleteHandler().DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Navmesh.ToString())]);
+
+        Assert.Empty(result.Refused);
+        var after = File.ReadAllText(file);
+        Assert.DoesNotContain(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
+        Assert.Contains(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
+        Assert.Null(_fixture.Document(_fixture.Navmesh.ToString()));
+        Assert.NotNull(_fixture.Document(_fixture.EmbedCell.ToString()));
+    }
+
     [Fact]
     public void DeletingASingleValueEmbeddedSlot_NullsTheSlot_AndCascadesItsOwnDescendant()
     {

@@ -29,15 +29,6 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_IncludesLandscapeAndNavmeshRecordTypes()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("land"));
-        Assert.True(schemas.ContainsKey("navm"));
-        Assert.True(schemas.ContainsKey("navi"));
-    }
-
-    [Fact]
     public void GetSchemas_BuildsNoTableForAPlacementVariantCollapsedIntoRefr()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);

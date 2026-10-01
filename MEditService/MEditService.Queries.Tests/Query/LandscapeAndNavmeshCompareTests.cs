@@ -8,25 +8,27 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Queries.Tests.Query;
 
-public sealed class NavmeshCompareTests
+public sealed class LandscapeAndNavmeshCompareTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress TopPlugin = new("Top.esp", "Data");
-    private static readonly string[] Fields = ["NavmeshGeometry", "PreCutMapEntries", "MapInfos", "PreferredPathing"];
+    private static readonly string[] Fields = ["NavmeshGeometry", "PreCutMapEntries", "MapInfos", "PreferredPathing", "Layers"];
 
     private static readonly ModKey Base = ModKey.FromFileName(BasePlugin.Name);
     private static readonly FormKey NavmeshKey = new(Base, 0x800);
     private static readonly FormKey InfoMapKey = new(Base, 0x801);
-    private static readonly FormKey Cell = new(Base, 0x802);
-    private static readonly FormKey DoorA = new(Base, 0x803);
-    private static readonly FormKey DoorB = new(Base, 0x804);
-    private static readonly FormKey NavA = new(Base, 0x805);
-    private static readonly FormKey NavB = new(Base, 0x806);
+    private static readonly FormKey LandscapeKey = new(Base, 0x802);
+    private static readonly FormKey Cell = new(Base, 0x803);
+    private static readonly FormKey DoorA = new(Base, 0x804);
+    private static readonly FormKey DoorB = new(Base, 0x805);
+    private static readonly FormKey NavA = new(Base, 0x806);
+    private static readonly FormKey NavB = new(Base, 0x807);
+    private static readonly FormKey Dirt = new(Base, 0x808);
 
     private readonly RecordQueryService _service;
 
-    public NavmeshCompareTests()
+    public LandscapeAndNavmeshCompareTests()
     {
         var rows = new[]
         {
@@ -34,11 +36,13 @@ public sealed class NavmeshCompareTests
             Row(Navmesh(reversed: true), TopPlugin, 1, isWinner: true, "navm"),
             Row(InfoMap(reversed: false), BasePlugin, 0, isWinner: false, "navi"),
             Row(InfoMap(reversed: true), TopPlugin, 1, isWinner: true, "navi"),
+            Row(Landscape(reversed: false), BasePlugin, 0, isWinner: false, "land"),
+            Row(Landscape(reversed: true), TopPlugin, 1, isWinner: true, "land"),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 2),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: 2),
+            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 3),
+            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: 3),
         };
         var plugins = new[]
         {
@@ -89,15 +93,22 @@ public sealed class NavmeshCompareTests
         },
     };
 
+    private static Landscape Landscape(bool reversed) => new(LandscapeKey, Fallout4Release.Fallout4)
+    {
+        Layers = [.. InOrder<BaseLayer>(reversed,
+            new BaseLayer { Header = Layer(Quadrant.BottomLeft, 0) },
+            new AlphaLayer { Header = Layer(Quadrant.BottomLeft, 1) },
+            new AlphaLayer { Header = Layer(Quadrant.TopRight, 0) })],
+    };
+
+    private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
+        new() { Texture = new FormLink<ILandscapeTextureGetter>(Dirt), Quadrant = quadrant, LayerNumber = number };
+
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType) =>
         new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, Fields));
 
-    [Theory]
-    [InlineData("navm")]
-    [InlineData("navi")]
-    public void ACopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster(string recordType)
+    private void AssertTopCopyIsIdenticalToMaster(FormKey record)
     {
-        var record = recordType == "navm" ? NavmeshKey : InfoMapKey;
         var compare = _service.GetCompare(record.ToString())
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
 
@@ -105,4 +116,16 @@ public sealed class NavmeshCompareTests
         Assert.NotEmpty(topCells);
         Assert.All(topCells, cell => Assert.Equal(ConflictThis.IdenticalToMaster, cell.State));
     }
+
+    [Fact]
+    public void ANavmeshCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(NavmeshKey);
+
+    [Fact]
+    public void AnInfoMapCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(InfoMapKey);
+
+    [Fact]
+    public void ALandscapeCopyHoldingItsLayersInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(LandscapeKey);
 }
