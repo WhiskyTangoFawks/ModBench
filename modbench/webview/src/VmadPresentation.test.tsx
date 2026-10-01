@@ -216,23 +216,16 @@ function cellAt(row: Element, index: number): HTMLTableCellElement {
   return cell;
 }
 
-function firstChevron(): HTMLElement {
-  const chevron = screen.getAllByText('▶')[0];
-  if (!chevron) throw new Error('no ▶ chevron to expand');
-  return chevron;
-}
-
 const summaryOf = (field: string): string => cellAt(rowOf(fieldCell(field)), 1).textContent;
 
-const expandRow = (field: string) => {
+const toggleRow = (field: string) => {
   const button = rowOf(fieldCell(field)).querySelector('button');
-  if (!button) throw new Error(`no expand button in ${field}'s row`);
+  if (!button) throw new Error(`no toggle button in ${field}'s row`);
   fireEvent.click(button);
 };
 
-async function expandScripts() {
+async function openScripts() {
   await waitFor(() => screen.getByText('Scripts'));
-  fireEvent.click(firstChevron());
 }
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
@@ -257,8 +250,9 @@ describe('a collapsed script reads as xEdit prose', () => {
       property('Radius', 'ScriptIntProperty', { Data: 10 }),
     ])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard(Awake: Bool = true, Radius: Int = 10)');
   });
@@ -266,8 +260,9 @@ describe('a collapsed script reads as xEdit prose', () => {
   it('a script with no properties reads as its own name and an empty list', async () => {
     currentCompare = oneColumn([script('Bare')]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Bare'));
+    await openScripts();
+    await waitFor(() => fieldCell('Bare'));
+    toggleRow('Bare');
 
     expect(summaryOf('Bare')).toBe('Bare()');
   });
@@ -279,12 +274,11 @@ describe('a collapsed script reads as xEdit prose', () => {
       property('Tag', 'ScriptStringProperty', { Data: 'alpha' }),
     ])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Radius'));
+    await openScripts();
+    await waitFor(() => fieldCell('Radius'));
+    toggleRow('Radius');
+    toggleRow('Rate');
+    toggleRow('Tag');
 
     expect(summaryOf('Radius')).toBe('Radius: Int = 10');
     expect(summaryOf('Rate')).toBe('Rate: Float = 2.5');
@@ -299,16 +293,9 @@ describe('a collapsed script reads as xEdit prose', () => {
       { '00000014:Fallout4.esm': 'PlayerRef' },
     );
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Owner'));
-    expandRow('Owner');
-    await waitFor(() => screen.getByText('Objects'));
-    expandRow('Objects');
-    await waitFor(() => screen.getByText('[0]'));
+    await openScripts();
+    await waitFor(() => fieldCell('[0]'));
+    toggleRow('[0]');
 
     expect(summaryOf('[0]')).toBe('PlayerRef [00000014:Fallout4.esm], Alias[None]');
   });
@@ -321,8 +308,9 @@ describe('a collapsed script reads as xEdit prose', () => {
       { '00000014:Fallout4.esm': 'PlayerRef' },
     );
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard'))
       .toBe('Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[None])');
@@ -335,8 +323,9 @@ describe('a collapsed script reads as xEdit prose', () => {
       property('Names', 'ScriptStringListProperty', { Data: ['a', 'b'] }),
     ])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard(Names: String List)');
   });
@@ -346,8 +335,9 @@ describe('a collapsed script reads as xEdit prose', () => {
     // value member; it still reads as a property, because ScriptProperty is what it is.
     currentCompare = oneColumn([script('Guard', [property('V', 'ScriptVariableProperty')])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard(V: Variable)');
   });
@@ -374,8 +364,9 @@ describe('a collapsed script reads as xEdit prose', () => {
     delete unnamed.MutagenObjectType;
     currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
   });
@@ -383,8 +374,9 @@ describe('a collapsed script reads as xEdit prose', () => {
   it('the concrete base is a leaf like any other and reads with no value', async () => {
     currentCompare = oneColumn([script('Guard', [property('Nothing', 'ScriptProperty')])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard(Nothing: Script Property)');
   });
@@ -401,8 +393,9 @@ describe('the alias slot of an object binding', () => {
     'alias %i reads as %s', async (alias, expected) => {
       currentCompare = withAlias(alias);
       renderPanel();
-      await expandScripts();
-      await waitFor(() => screen.getByText('Guard'));
+      await openScripts();
+      await waitFor(() => fieldCell('Guard'));
+      toggleRow('Guard');
 
       expect(summaryOf('Guard'))
         .toBe(`Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[${expected}])`);
@@ -410,18 +403,16 @@ describe('the alias slot of an object binding', () => {
 });
 
 describe('a row of a keyed array is identified by its key', () => {
-  it('expanding one script and then losing an earlier sibling leaves that script expanded', async () => {
+  it('collapsing one script and then losing it leaves the later script expanded', async () => {
     currentCompare = oneColumn([
       script('Ambush', [property('Radius', 'ScriptIntProperty', { Data: 10 })]),
       script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 20 })]),
     ]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Radius'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Ambush');
+    toggleRow('Radius');
 
     // The compare the panel re-reads after a remove of the earlier sibling. Guard now sits where
     // Ambush did: identity by key survives that, identity by position does not.
@@ -438,12 +429,9 @@ describe('a row of a keyed array is identified by its key', () => {
     currentCompare = oneColumn([alias(0, 'First'), alias(1, 'Second')], {}, aliasesMeta);
     renderPanel();
     await waitFor(() => screen.getByText('Aliases'));
-    fireEvent.click(firstChevron());
-    await waitFor(() => screen.getByText('1'));
-    expandRow('1');
-    await waitFor(() => screen.getByText('Scripts'));
-    expandRow('Scripts');
-    await waitFor(() => screen.getByText('Second'));
+    await waitFor(() => fieldCell('Second'));
+    toggleRow('0');
+    toggleRow('Second');
 
     reloadWith(oneColumn([alias(1, 'Second')], {}, aliasesMeta));
     await waitFor(() => expect(screen.queryByText('0')).not.toBeInTheDocument());
@@ -457,14 +445,16 @@ describe('a row of a keyed array is identified by its key', () => {
       script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 20 })]),
     ]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Ambush'));
+    await openScripts();
+    await waitFor(() => fieldCell('Ambush'));
+    toggleRow('Ambush');
+    toggleRow('Guard');
 
     expect(summaryOf('Ambush')).toBe('Ambush(Radius: Int = 10)');
     expect(summaryOf('Guard')).toBe('Guard(Radius: Int = 20)');
 
-    // Expanding one leaves the other collapsed — a row is its own key's, not its position's.
-    expandRow('Ambush');
+    // Re-expanding one leaves the other collapsed — a row is its own key's, not its position's.
+    toggleRow('Ambush');
     await waitFor(() => screen.getAllByText('Properties'));
     expect(screen.getAllByText('Properties')).toHaveLength(1);
     expect(summaryOf('Guard')).toBe('Guard(Radius: Int = 20)');
@@ -480,13 +470,7 @@ describe('a member the column\'s own leaf does not declare', () => {
       'Other.esp': [script('Guard', [property('Owner', 'ScriptObjectProperty', { Object: '00000014:Fallout4.esm', Alias: -1 })])],
     });
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Owner'));
-    expandRow('Owner');
+    await openScripts();
     await waitFor(() => screen.getByText('Data'));
 
     const dataRow = rowOf(fieldCell('Data'));
@@ -503,10 +487,7 @@ describe('Add Script is the generic array gesture', () => {
     renderPanel();
     await waitFor(() => screen.getByText('Scripts'));
 
-    const marker = screen.getAllByText('[1]')[0];
-    if (!marker) throw new Error("no '[1]' key marker rendered");
-    const cell = marker.closest('td');
-    if (!cell) throw new Error("no <td> ancestor for the '[1]' key marker");
+    const cell = cellAt(rowOf(fieldCell('Scripts')), 1);
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -516,27 +497,25 @@ describe('Add Script is the generic array gesture', () => {
   it('the added script is a row of its own in that plugin’s column, and is nameable there', async () => {
     currentCompare = oneColumn([script('Guard')]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
 
     // The new script's key is empty until the user names it, so it sorts first.
     reloadWith(oneColumn([script(''), script('Guard')]));
     // The Record Header and its FormID, then Scripts and its two script rows.
-    await waitFor(() => expect(document.querySelectorAll('tbody tr')).toHaveLength(5));
+    await waitFor(() => expect(screen.getAllByText('Name')).toHaveLength(2));
 
     // First of the two script rows, since the empty key sorts before every named one.
     const added = document.querySelectorAll('tbody tr')[3];
     if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
-    expect(cellAt(added, 0).textContent).toBe('▶');
-    expect(cellAt(added, 1).textContent).toBe('()');
+    expect(cellAt(added, 0).textContent).toBe('▼');
+    const beneath = added.nextElementSibling;
+    if (!beneath) throw new Error('no row beneath the added script');
+    expect(cellAt(beneath, 0).textContent).toBe('Name');
 
     // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
     // the empty key — the only handle the element has until it is named.
-    const expandButton = added.querySelector('button');
-    if (!expandButton) throw new Error("no expand button on the added script's row");
-    fireEvent.click(expandButton);
-    await waitFor(() => screen.getAllByText('Name'));
     const nameLabel = screen.getAllByText('Name')[0];
     if (!nameLabel) throw new Error("no 'Name' row rendered");
     const nameCell = cellAt(rowOf(nameLabel), 1);
@@ -559,13 +538,7 @@ describe('Add Script is the generic array gesture', () => {
   it('an edit under a nested keyed array carries the key hop at each level', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Radius'));
-    expandRow('Radius');
+    await openScripts();
     await waitFor(() => screen.getByText('Data'));
 
     const dataCell = cellAt(rowOf(fieldCell('Data')), 1);
@@ -591,12 +564,8 @@ describe('Add Script is the generic array gesture', () => {
   it('Delete on a property under a keyed script posts remove through both key hops', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
-    await waitFor(() => screen.getByText('Properties'));
-    expandRow('Properties');
-    await waitFor(() => screen.getByText('Radius'));
+    await openScripts();
+    await waitFor(() => fieldCell('Radius'));
 
     const cell = cellAt(rowOf(fieldCell('Radius')), 1);
     fireEvent.click(cell);
@@ -614,9 +583,7 @@ describe('Add Script is the generic array gesture', () => {
   it('Insert on a property list nested under a keyed script posts add through the key hop', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
-    await expandScripts();
-    await waitFor(() => screen.getByText('Guard'));
-    expandRow('Guard');
+    await openScripts();
     await waitFor(() => screen.getByText('Properties'));
 
     const cell = cellAt(rowOf(fieldCell('Properties')), 1);

@@ -19,7 +19,8 @@ import { editField, focusCell, focusedCellContext } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
-import { RecordHeaderRows, RECORD_HEADER_ROW } from './RecordHeaderRows';
+import { RecordHeaderRows, RECORD_HEADER_ROW, FORM_ID_ROW } from './RecordHeaderRows';
+import { navigate, type NavRow } from './gridNavigation';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
@@ -64,12 +65,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set([RECORD_HEADER_ROW]));
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(new Set());
+  const toggleRow = (rowKey: string) => setCollapsedRows(prev => {
+    const next = new Set(prev);
+    if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
+    return next;
+  });
   // ADR-0018: one source of truth for "which value cell is focused," so at most one cell across
   // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   const enteredCell = useRef(false);
+  const scroller = useRef<HTMLDivElement>(null);
+  const headerRow = useRef<HTMLTableRowElement>(null);
   function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
     enteredCell.current = true;
     setFocusedCell({ rowKey, plugin });
@@ -288,19 +296,40 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const displayId = (winner ?? overrides.at(0))?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
+  const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
+  const navRows: NavRow[] = [
+    { key: RECORD_HEADER_ROW, parent: null, expandable: true, expanded: headerExpanded },
+    ...(headerExpanded ? [{ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false }] : []),
+  ];
+  const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
+
+  function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
+    if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !focusedCell) return;
+    if (e.target instanceof Element && e.target.closest('[data-editor]')) return;
+    const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
+    const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
+    const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
+    const move = navigate(e.key, navRows, navColumns, focusedCell, page);
+    if (!move) return;
+    e.preventDefault();
+    if ('toggle' in move) toggleRow(move.toggle);
+    else handleFocusCell(move.focus.rowKey, move.focus.plugin);
+  }
+
   // One recursive builder for every nesting depth — including the recursion a script property's
   // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
   // columns carry the object this row is a member of.
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rowKey: string, present: (column: ColumnKey) => boolean, depth = 0,
+    rootField: string, rowKey: string, parent: string | null, present: (column: ColumnKey) => boolean, depth = 0,
     collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
   ): React.ReactNode[] {
     // A diff node naming a member no override's schema declares has no shape to render against, so
     // it and its subtree are dropped rather than rendered against a guessed one.
     if (!meta) return [];
     const hasChildren = (diff.children?.length ?? 0) > 0;
-    const isExpanded = expandedStructs.has(rowKey);
+    const isExpanded = !collapsedRows.has(rowKey);
+    navRows.push({ key: rowKey, parent, expandable: hasChildren || meta.type === 'flags', expanded: isExpanded });
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -323,11 +352,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         collapsedSummary={collapsedSummary}
         ownerPresent={present}
         cellMetas={cellMetas}
-        onToggle={() => setExpandedStructs(prev => {
-          const next = new Set(prev);
-          if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
-          return next;
-        })}
+        onToggle={() => toggleRow(rowKey)}
       />,
     ];
 
@@ -350,7 +375,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // An element is spelled in full, so a column has it exactly where its value is.
         rows.push(...buildRows(
           child, meta.elementType, [...path, elementSegment(meta, child.fieldName, ordinal)],
-          rootField, childRowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
+          rootField, childRowKey, rowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first
         // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
@@ -362,7 +387,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           : undefined;
         rows.push(...buildRows(
           child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
-          rootField, childRowKey,
+          rootField, childRowKey, rowKey,
           column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
           depth + 1, undefined, cellMetas));
@@ -386,10 +411,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the
           flex-item default of min-height:auto would defeat that). overflow:auto then keeps the
           horizontal scrollbar reachable at any scroll position. */}
-      <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
+      <div ref={scroller} style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
-            <tr>
+            <tr ref={headerRow}>
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 {
@@ -436,7 +461,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               })}
             </tr>
           </thead>
-          <tbody>
+          <tbody onKeyDown={handleGridKey}>
             {/* A Partial Form column's own fields are nulled by the classifier: none is absent by
                 default, since the record's own fields are not there to be members of. */}
             <RecordHeaderRows
@@ -445,19 +470,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               dimmedColumns={dimmedColumns}
               editableColumns={editableColumns}
               isPluginHeader={isHeaderRecord}
-              expanded={expandedStructs.has(RECORD_HEADER_ROW)}
-              onToggle={() => setExpandedStructs(prev => {
-                const next = new Set(prev);
-                if (next.has(RECORD_HEADER_ROW)) next.delete(RECORD_HEADER_ROW); else next.add(RECORD_HEADER_ROW);
-                return next;
-              })}
+              expanded={headerExpanded}
+              onToggle={() => toggleRow(RECORD_HEADER_ROW)}
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
               onCommitFormId={(plugin, value) => post(plugin, { op: 'set', path: [{ kind: 'member', name: FORM_ID_MEMBER }], value })}
             />
             {diffs.flatMap(
               diff => buildRows(
-                diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName,
+                diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName, null,
                 column => !overrideFor(column)?.isPartialForm),
             )}
           </tbody>

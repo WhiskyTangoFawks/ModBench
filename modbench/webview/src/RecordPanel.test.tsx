@@ -532,28 +532,27 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  // A flags row starts collapsed to its compact summary; the chevron reveals the checkbox list,
-  // enabled only in the tracked, editable column.
-  it('a flags row starts collapsed; expanding reveals enabled checkboxes and it re-collapses', async () => {
+  // A flags row opens expanded, its checkbox list enabled only in the tracked, editable column;
+  // the arrow beside the label collapses it to the compact summary.
+  it('a flags row opens expanded with enabled checkboxes; collapsing shows the summary and expanding restores them', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    // compact summary, value 3, once per column
-    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
+    // The immutable master column's checkboxes are disabled.
+    const enabled = () => screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
+    expect(enabled()).toHaveLength(2);
+    const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
 
-    fireEvent.click(screen.getByRole('button', { name: '▶' }));
-    // The immutable master column's flags expand too, its checkboxes disabled.
-    const enabled = screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
-    expect(enabled).toHaveLength(2);
-
-    fireEvent.click(within(required(screen.getByText('Flags').closest('tr'), "the Flags row")).getByRole('button', { name: '▼' }));
+    fireEvent.click(within(flagsRow()).getByRole('button', { name: '▼' }));
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getAllByText('A, B')).toHaveLength(2);
+
+    fireEvent.click(within(flagsRow()).getByRole('button', { name: '▶' }));
+    expect(enabled()).toHaveLength(2);
   });
 
   it('toggling a flag posts set of the member with the names now set', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
-    fireEvent.click(screen.getByRole('button', { name: '▶' }));
+    await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
     vi.mocked(vscode.postMessage).mockClear();
 
     // uncheck A in the tracked column — the first *enabled* box, since the master column's
@@ -675,48 +674,178 @@ describe('RecordPanel — struct sub-rows', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  it('struct parent row renders ▶ toggle and {…} placeholder in value cells', async () => {
+  it('a struct row opens expanded, its children shown beneath a ▼ arrow', async () => {
     renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('Bounds'));
-    expect(screen.getByText('▶')).toBeInTheDocument();
-    expect(screen.getAllByText('{…}').length).toBeGreaterThan(0);
-  });
-
-  it('child rows appear after clicking ▶ toggle', async () => {
-    renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
     await waitFor(() => expect(screen.getByText('X')).toBeInTheDocument());
     expect(screen.getByText('Y')).toBeInTheDocument();
+    expect(within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼')).toBeInTheDocument();
+  });
+
+  it('double clicking the label collapses an expanded row and expands it again', async () => {
+    renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('X'));
+
+    fireEvent.doubleClick(screen.getByText('Bounds'));
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+    fireEvent.doubleClick(screen.getByText('Bounds'));
+    expect(screen.getByText('X')).toBeInTheDocument();
   });
 
   // The master's X: 10 beside the override's X: 15 — the delta struct expansion exists to show.
   it('child row for X shows each override\'s own sub-field value', async () => {
     renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('10')).toBeInTheDocument();
   });
 
-  it('toggle collapses child rows when clicked again', async () => {
+  it('the arrow beside the label collapses the child rows, and expands them again', async () => {
     renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
-    fireEvent.click(within(required(screen.getByText('Bounds').closest('tr'), "the Bounds row")).getByText('▼'));
-    await waitFor(() => expect(screen.queryByText('X')).not.toBeInTheDocument());
+    const boundsRow = () => required(screen.getByText('Bounds').closest('tr'), "the Bounds row");
+
+    fireEvent.click(within(boundsRow()).getByText('▼'));
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+    expect(screen.getAllByText('{…}').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(boundsRow()).getByText('▶'));
+    expect(screen.getByText('X')).toBeInTheDocument();
+  });
+
+  it('a double click on the arrow toggles the row once for each of its two clicks', async () => {
+    renderPanel(structCompareResult);
+    await waitFor(() => screen.getByText('X'));
+
+    const arrow = within(required(screen.getByText('Bounds').closest('tr'), 'the Bounds row')).getByText('▼');
+    fireEvent.click(arrow);
+    fireEvent.click(arrow);
+    fireEvent.doubleClick(arrow);
+
+    expect(screen.getByText('X')).toBeInTheDocument();
   });
 
   it('child row X has correct cell background from cellStates (Override = green)', async () => {
     renderPanel(structCompareResult);
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('15'));
     const cell = screen.getByText('15').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the child row\'s 15 cell');
     expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
+  });
+});
+
+describe('RecordPanel — keys through the rows (editor.md, The focused cell, story 4)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  const labelCell = (text: string) => required(screen.getByText(text).closest('td'), `the ${text} label cell`);
+  const focusedCells = (container: HTMLElement) => Array.from(container.querySelectorAll('[data-focused-cell]'));
+  const press = (cell: Element, key: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(cell, { key, ...init });
+
+  async function focusedOn(text: string, opts: PanelOpts = {}, result: CompareResult = structCompareResult) {
+    const rendered = renderPanel(result, opts);
+    await waitFor(() => screen.getByText(text));
+    const cell = labelCell(text);
+    fireEvent.click(cell);
+    return { ...rendered, cell };
+  }
+
+  it('Down and Up move the focus a row, through the expanded children', async () => {
+    const { container, cell } = await focusedOn('Bounds');
+
+    press(cell, 'ArrowDown');
+    expect(focusedCells(container)).toEqual([labelCell('X')]);
+
+    press(labelCell('X'), 'ArrowDown');
+    expect(focusedCells(container)).toEqual([labelCell('Y')]);
+
+    press(labelCell('Y'), 'ArrowUp');
+    expect(focusedCells(container)).toEqual([labelCell('X')]);
+  });
+
+  it('Home and End move the focus to the first and last row', async () => {
+    const { container, cell } = await focusedOn('Bounds');
+
+    press(cell, 'End');
+    expect(focusedCells(container)).toEqual([labelCell('Y')]);
+
+    press(labelCell('Y'), 'Home');
+    expect(focusedCells(container)).toEqual([labelCell('Record Header')]);
+  });
+
+  it('Left collapses an expanded row and Right expands it again', async () => {
+    const { container, cell } = await focusedOn('Bounds');
+
+    press(cell, 'ArrowLeft');
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
+    expect(focusedCells(container)).toEqual([labelCell('Bounds')]);
+
+    press(labelCell('Bounds'), 'ArrowRight');
+    expect(screen.getByText('X')).toBeInTheDocument();
+  });
+
+  it('Right on an expanded row steps into its first child, and Left steps back out to the parent', async () => {
+    const { container, cell } = await focusedOn('Bounds');
+
+    press(cell, 'ArrowRight');
+    expect(focusedCells(container)).toEqual([labelCell('X')]);
+
+    press(labelCell('X'), 'ArrowLeft');
+    expect(focusedCells(container)).toEqual([labelCell('Bounds')]);
+    expect(screen.getByText('X')).toBeInTheDocument();
+  });
+
+  it('on a value column, Left and Right move a column and Down keeps the column', async () => {
+    const { container } = await focusedOn('Bounds');
+    const valueCell = required(screen.getByText('15').closest('td'), 'the winner\'s X cell');
+    const masterCell = required(screen.getByText('10').closest('td'), 'the master\'s X cell');
+    fireEvent.click(masterCell);
+
+    press(masterCell, 'ArrowRight');
+    expect(focusedCells(container)).toEqual([valueCell]);
+    expect(screen.getByText('X')).toBeInTheDocument();
+
+    press(valueCell, 'ArrowDown');
+    const yRow = required(screen.getByText('Y').closest('tr'), 'the Y row');
+    expect(focusedCells(container)).toEqual([yRow.children[2]]);
+
+    press(required(yRow.children[2], 'the winner\'s Y cell'), 'ArrowLeft');
+    expect(focusedCells(container)).toEqual([yRow.children[1]]);
+  });
+
+  it('tells the host the user entered the grid when a key moves the focus', async () => {
+    const { cell } = await focusedOn('Bounds');
+    vi.mocked(vscode.postMessage).mockClear();
+
+    press(cell, 'ArrowDown');
+
+    await waitFor(() => expect(vi.mocked(vscode.postMessage)).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, entered: true })));
+  });
+
+  it('moves no focus on a key with a modifier, which is another gesture\'s', async () => {
+    const { container, cell } = await focusedOn('Bounds');
+
+    press(cell, 'ArrowDown', { ctrlKey: true });
+    press(cell, 'ArrowDown', { altKey: true });
+
+    expect(focusedCells(container)).toEqual([cell]);
+  });
+
+  it('acts on no key while an editor is open, where the keys edit its text', async () => {
+    const { container } = await focusedOn('Name', { plugins: flagsTrackedPluginsResponse }, flagsCompareResult);
+    const valueCell = required(screen.getByText('Override Name').closest('td'), 'the editable Name cell');
+    fireEvent.click(valueCell);
+    fireEvent.doubleClick(valueCell);
+    const editor = screen.getByRole('textbox');
+
+    press(editor, 'ArrowDown');
+    press(editor, 'ArrowLeft');
+    press(editor, 'Home');
+
+    expect(focusedCells(container)).toEqual([valueCell]);
   });
 });
 
@@ -851,22 +980,24 @@ describe('RecordPanel — states (editor.md, States)', () => {
     expect(container).toHaveTextContent('');
   });
 
-  it('keeps the grid, with the rows I expanded, while the record is read again', async () => {
+  it('keeps the grid, with the rows I collapsed, while the record is read again', async () => {
     const pending = deferred<ReturnType<typeof loaded>>();
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(structCompareResult))
       .mockReturnValueOnce(pending.promise);
     renderPanel(structCompareResult, { load });
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
-    const expandedRow = await waitFor(() => screen.getByText('X'));
+    await waitFor(() => screen.getByText('Bounds'));
+    const boundsRow = required(screen.getByText('Bounds').closest('tr'), 'the Bounds row');
+    fireEvent.click(within(boundsRow).getByText('▼'));
 
     loadRecord();
 
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
-    expect(screen.getByText('X')).toBe(expandedRow);
+    expect(screen.getByText('Bounds').closest('tr')).toBe(boundsRow);
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
     pending.resolve(loaded(structCompareResult));
-    await waitFor(() => screen.getByText('X'));
+    await waitFor(() => screen.getByText('▶', { selector: 'button' }));
+    expect(screen.queryByText('X')).not.toBeInTheDocument();
   });
 
   it('says the record is gone, naming it, in place of the grid', async () => {
@@ -1115,28 +1246,24 @@ describe('RecordPanel — union element rows', () => {
     return required(rows().getByText(label).closest('td'), `the '${label}' cell's td ancestor`);
   }
 
-  function expandRow(label: string) {
-    fireEvent.click(required(labelCell(label).querySelector('button'), `the '${label}' row's expand button`));
-  }
-
-  async function renderExpandedElement() {
+  async function renderElement() {
     renderPanel(mixedLeafAliasResult);
     await waitFor(() => rows().getByText('aliases'));
-    expandRow('aliases');
     await waitFor(() => rows().getByText('[0]'));
-    expandRow('[0]');
     await waitFor(() => rows().getByText('location'));
   }
 
   it('shows the union of both plugins\' leaf members', async () => {
-    await renderExpandedElement();
+    await renderElement();
     expect(rows().getByText('name')).toBeInTheDocument();
     expect(rows().getByText('location')).toBeInTheDocument();
     expect(rows().getByText('external')).toBeInTheDocument();
   });
 
   it('renders an empty cell for the column whose leaf lacks the member', async () => {
-    await renderExpandedElement();
+    await renderElement();
+    fireEvent.click(required(labelCell('location').querySelector('button'), "the 'location' row's arrow"));
+    fireEvent.click(required(labelCell('external').querySelector('button'), "the 'external' row's arrow"));
     const locationRow = required(labelCell('location').closest('tr'), "the 'location' row");
     const locationCells = locationRow.querySelectorAll('td');
     expect(required(locationCells[1], "the 'location' row's second cell").textContent).toBe('{…}');
@@ -1153,22 +1280,20 @@ describe('RecordPanel — union element rows', () => {
   it('shows no row for a member no plugin\'s leaf declares', async () => {
     renderPanel(singleLeafAliasResult);
     await waitFor(() => rows().getByText('aliases'));
-    expandRow('aliases');
     await waitFor(() => rows().getByText('[0]'));
-    expandRow('[0]');
     await waitFor(() => rows().getByText('location'));
     expect(rows().queryByText('external')).not.toBeInTheDocument();
   });
 
   it('indents each nesting level by its own depth', async () => {
-    await renderExpandedElement();
+    await renderElement();
     expect(labelCell('aliases')).not.toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('[0]')).toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('location')).toHaveStyle({ paddingLeft: '48px' });
 
-    expandRow('location');
-    await waitFor(() => rows().getByText('alias_id'));
-    expect(labelCell('alias_id')).toHaveStyle({ paddingLeft: '72px' });
+    for (const aliasId of rows().getAllByText('alias_id')) {
+      expect(aliasId.closest('td')).toHaveStyle({ paddingLeft: '72px' });
+    }
   });
 });
 
@@ -1227,15 +1352,14 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
 
   afterEach(() => vi.unstubAllGlobals());
 
-  async function expandLevel() {
+  async function renderLevel() {
     renderPanel(unionCompareResult, { plugins: unionTrackedPluginsResponse });
     await waitFor(() => expect(screen.getByText('Level')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: '▶' }));
     await waitFor(() => expect(screen.getByText('Kind')).toBeInTheDocument());
   }
 
   it('labels the row from the schema and never shows the class name it holds', async () => {
-    await expandLevel();
+    await renderLevel();
 
     expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
     expect(screen.getByText('Npc Level')).toBeInTheDocument();
@@ -1243,7 +1367,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
   });
 
   it('opens a dropdown of the union\'s leaves, listed by label', async () => {
-    await expandLevel();
+    await renderLevel();
 
     fireEvent.doubleClick(screen.getByText('Npc Level'));
 
@@ -1253,7 +1377,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
 
   // A discriminator switch is the Kind row's own set; the backend switches the leaf.
   it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label', async () => {
-    await expandLevel();
+    await renderLevel();
     fireEvent.doubleClick(screen.getByText('Npc Level'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -1320,7 +1444,6 @@ describe('RecordPanel — an absent member reads as its default', () => {
   async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Stats'));
-    fireEvent.click(required(required(rows().getByText('Stats').closest('td'), "the 'Stats' cell's td ancestor").querySelector('button'), "the 'Stats' row's expand button"));
     await waitFor(() => rows().getByText('Weight'));
   }
 
@@ -1408,7 +1531,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Bounds'));
     expect(cellAt('Bounds', 2).textContent).toBe('');
-    fireEvent.click(required(required(rows().getByText('Bounds').closest('td'), "the 'Bounds' cell's td ancestor").querySelector('button'), "the 'Bounds' row's expand button"));
     await waitFor(() => rows().getByText('X'));
 
     expect(cellAt('X', 1).textContent).toBe('10');
@@ -1418,7 +1540,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   it('an element past the column\'s own length reads as nothing, not zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Values'));
-    fireEvent.click(required(required(rows().getByText('Values').closest('td'), "the 'Values' cell's td ancestor").querySelector('button'), "the 'Values' row's expand button"));
     await waitFor(() => rows().getByText('[1]'));
 
     expect(cellAt('[1]', 1).textContent).toBe('2');
@@ -1452,6 +1573,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
       })],
     }), { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     expect(cellAt('Size', 1).textContent).toBe('{…}');
     expect(cellAt('Size', 2).textContent).toBe('');
 
@@ -1497,15 +1619,14 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  async function renderCollapsed() {
+  async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => rows().getByText('Size'));
+    await waitFor(() => rows().getByText('Width'));
   }
 
-  async function renderExpanded() {
-    await renderCollapsed();
+  async function renderCollapsed() {
+    await renderExpanded();
     fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
-    await waitFor(() => rows().getByText('Width'));
   }
 
   it('the struct the column omits reads as a struct, not as nothing', async () => {

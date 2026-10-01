@@ -5,7 +5,8 @@ import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, modelValue } from './modelValue';
-import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
+import { ExpandArrow } from './ExpandArrow';
+import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
@@ -217,7 +218,7 @@ export function DiffRow({
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (
-          <button style={toggleBtnStyle} onClick={onToggle}>{rowExpanded ? '▼' : '▶'}</button>
+          <ExpandArrow expanded={rowExpanded} onToggle={onToggle} />
         )}
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
@@ -274,12 +275,12 @@ export function DiffRow({
         const hops = offersMenu ? wirePath(rootField, context.path, rootValue?.value) : [];
         const vscodeContext = offersMenu ? combineVscodeContexts(
           // `hops` addresses the array itself here — this row *is* the array.
-          isArrayParentRow
+          arrayEditable && isArrayParentRow
             ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
           // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every
           // hop above it rather than just that one.
-          isArrayElementRow
+          arrayEditable && isArrayElementRow
             ? arrayElementContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
           meta.type === 'string'
