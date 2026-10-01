@@ -116,7 +116,7 @@ export class EditsInFlight<Panel extends FollowedPanel> {
   }
 
   // An edit of the FormID moves its own plugin's record, and the tab goes with it (editor.md,
-  // The FormID).
+  // The record header, story 2).
   private follow(panel: Panel, target: EditAddress, newFormKey: string): void {
     const moves = this.moves.get(panel) ?? [];
     moves.push({ plugin: target.plugin, origin: target.origin, from: target.formKey, to: newFormKey, readAt: undefined });
