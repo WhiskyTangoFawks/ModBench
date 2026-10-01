@@ -82,9 +82,9 @@ export function editField(formKey: string, plugin: string, origin: string, envel
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell, which only this
-// panel knows. `context` is the one its right-click would hand the command; `null` is no cell.
-// `entered` is a user's focus, as against a re-read refreshing the cell.
+// The palette's field gestures act on the focused cell, which only this panel knows: `context` is
+// the one its right-click would hand the command, `null` no cell. `entered` is a user's focus, not
+// a re-read.
 export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
 }
