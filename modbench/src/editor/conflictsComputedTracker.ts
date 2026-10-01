@@ -1,8 +1,7 @@
 import type { MEditClient, PluginLoadFailure } from '../client';
 
-/** The load-order status's latest known answer, kept live off the notification stream rather than
- *  polled. `current` reads false until the first tick, never mistaking "not computed" for
- *  "settled"; `failures` are the plugins mEdit could not read, none until the first tick. */
+/** The load-order status's latest answer, kept live off the notification stream. Before the first
+ *  tick, `current` reads false (never "settled") and `failures` is empty. */
 export interface ConflictsComputedTracker {
   current(): boolean;
   failures(): readonly PluginLoadFailure[];
