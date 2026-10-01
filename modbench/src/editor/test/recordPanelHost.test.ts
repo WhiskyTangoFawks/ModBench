@@ -98,7 +98,12 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
 describe('modbench.record.editField, fired with only the record, the plugin and the field path', () => {
   const MOVED = '000900:Mod.esp';
-  const fakePanel = () => ({ title: '000800:Mod.esp', webview: { postMessage: vi.fn(() => Promise.resolve(true)) } }) as unknown as vscode.WebviewPanel;
+  const isPanel = (value: object): value is vscode.WebviewPanel => 'webview' in value;
+  const fakePanel = (): vscode.WebviewPanel => {
+    const panel = { title: '000800:Mod.esp', webview: { postMessage: vi.fn(() => Promise.resolve(true)) } };
+    if (!isPanel(panel)) throw new Error('not a panel');
+    return panel;
+  };
 
   it('moves every tab showing the record to its new FormKey, as an agent fires it with no panel', async () => {
     const tracker = new ActiveRecordTracker<vscode.WebviewPanel>();
