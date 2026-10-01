@@ -41,6 +41,7 @@ export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
 interface UnconfirmedWrite {
   readonly enabled: boolean;
   marked: boolean;
+  differedOnce: boolean;
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
@@ -206,18 +207,23 @@ export class ModListProvider
   private settleUnconfirmed(value: InstanceValue): void {
     for (const [name, write] of this.unconfirmed) {
       const disk = value.mods.find((m) => m.kind === 'mod' && m.name === name);
+      if (disk?.kind === 'mod' && disk.enabled !== write.enabled && !write.differedOnce) {
+        write.differedOnce = true;
+        continue;
+      }
       if (disk?.kind === 'mod' && disk.enabled !== write.enabled) {
         this.log(`"${name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and the disk now shows it ${disk.enabled ? 'enabled' : 'disabled'}.`);
       }
+      clearTimeout(write.timer);
+      this.unconfirmed.delete(name);
     }
-    this.clearUnconfirmed();
   }
 
   /** A check box's new state shows at once; the mark follows after a delay. */
   markUnconfirmed(modName: string, enabled: boolean): void {
     clearTimeout(this.unconfirmed.get(modName)?.timer);
     const write: UnconfirmedWrite = {
-      enabled, marked: false,
+      enabled, marked: false, differedOnce: false,
       timer: setTimeout(() => {
         write.marked = true;
         this.render();
@@ -230,12 +236,6 @@ export class ModListProvider
   forgetUnconfirmed(modName: string): void {
     clearTimeout(this.unconfirmed.get(modName)?.timer);
     this.unconfirmed.delete(modName);
-    this.invalidate();
-  }
-
-  /** Refresh reloads from disk, so no write is waiting on it any more. */
-  forgetAllUnconfirmed(): void {
-    this.clearUnconfirmed();
     this.invalidate();
   }
 
@@ -282,7 +282,7 @@ export class ModListProvider
   /** A row the view still holds may predate the value, so its mod's state is read from the value. */
   isEnabled(row: ModNode): boolean {
     const entry = this.instanceValue.mods.find((m) => m.kind === 'mod' && m.name === row.mod.name);
-    return entry?.enabled ?? row.mod.enabled;
+    return this.unconfirmed.get(row.mod.name)?.enabled ?? entry?.enabled ?? row.mod.enabled;
   }
 
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty

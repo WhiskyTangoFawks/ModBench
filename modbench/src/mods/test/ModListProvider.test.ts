@@ -976,13 +976,33 @@ describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
     expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
   });
 
-  it('shows the disk\'s value when it differs from the write, with one Output line and no notification', async () => {
+  it('keeps the mark through a pre-write value, and clears silently when the confirming one lands', async () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const logged: string[] = [];
     const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmed('A', false);
     vi.advanceTimersByTime(1000);
 
+    instance.publish(valueOf([mod('A', true)]));
+    const held = await rowNamed(provider, 'A');
+    expect(held.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
+    expect(iconId(held)).toBe('sync~spin');
+
+    instance.publish(valueOf([mod('A', false)]));
+    const confirmed = await rowNamed(provider, 'A');
+    expect(confirmed.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
+    expect(iconId(confirmed)).toBe('package');
+    expect(logged).toEqual([]);
+  });
+
+  it('shows the disk\'s value and says so once a second landed value still differs, with no notification', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([mod('A', true)]));
     instance.publish(valueOf([mod('A', true)]));
 
     expect((await rowNamed(provider, 'A')).checkboxState).toBe(TreeItemCheckboxState.Checked);
@@ -1012,16 +1032,30 @@ describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
     expect(iconId(await rowNamed(provider, 'A'))).toBe('sync~spin');
   });
 
-  it('goes with a refresh, which reloads from disk', async () => {
+  it('stays when a refresh is refused, which lands no value', async () => {
     const provider = makeProvider([mod('A')]);
     provider.markUnconfirmed('A', false);
     vi.advanceTimersByTime(1000);
 
-    provider.forgetAllUnconfirmed();
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('sync~spin');
+  });
 
-    const row = await rowNamed(provider, 'A');
-    expect(iconId(row)).toBe('package');
-    expect(row.checkboxState).toBe(TreeItemCheckboxState.Checked);
+  it('goes with a refresh that lands, which reloads from disk', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([mod('A', false)]));
+
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
+  });
+
+  it('feeds the key context the written state while the write is unconfirmed', async () => {
+    const provider = makeProvider([mod('A')]);
+    provider.markUnconfirmed('A', false);
+
+    expect(provider.isEnabled(await rowNamed(provider, 'A'))).toBe(false);
   });
 
   it('a write forgotten before its delay never shows the mark', async () => {

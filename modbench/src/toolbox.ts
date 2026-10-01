@@ -563,7 +563,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
   ], 'modbench.mod.trackRowsIn');
   own(registerRefreshCommand({
-    refresh: () => { modListProvider.forgetAllUnconfirmed(); return refreshIndex(); }, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
+    refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
     instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
