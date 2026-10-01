@@ -548,15 +548,10 @@ describe('package.json command titles and categories', () => {
     expect(offenders.map((c) => c.command)).toEqual([]);
   });
 
-  const paletteGated = (): readonly string[] => LEGACY_GESTURES.flatMap((g) => g.outOfPalette);
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
-  it('gates exactly the listed commands out of the palette', () => {
-    const missingGate = paletteGated().filter((c) => !gatedFalse().has(c));
-    const unexpectedGate = [...gatedFalse()].filter(
-      (c) => !paletteGated().includes(c) && !(INTERNAL_COMMANDS as readonly string[]).includes(c),
-    );
-    expect(missingGate).toEqual([]);
+  it('gates only the system commands out of the palette', () => {
+    const unexpectedGate = [...gatedFalse()].filter((c) => !(INTERNAL_COMMANDS as readonly string[]).includes(c));
     expect(unexpectedGate).toEqual([]);
   });
 
@@ -810,7 +805,7 @@ describe('package.json Downloads row menu order', () => {
     expect(include).toBe(exclude); // one slot, two mutually-exclusive commands
 
     const slots = [
-      'modbench.downloads.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
+      'modbench.mod.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
       'modbench.downloadedFile.openMeta', 'modbench.downloadedFile.exclude', 'modbench.copyValue',
       'modbench.downloadedFile.delete',
     ].map(slotOf);
@@ -1316,15 +1311,8 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// The gate's only exception. Each line is a gesture whose merge into its catalog ID belongs to
-// another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
-const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
-  { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
-];
-
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
-  const legacy = new Set<string>(LEGACY_GESTURES.flatMap((g) => g.ids));
 
   it('reads the Command ID column of every catalog table', () => {
     expect(catalog).toContain('modbench.mod.enable');
@@ -1332,23 +1320,13 @@ describe('package.json registers every command under its catalog Command ID', ()
     expect(catalog).toContain('modbench.plugin.sync');
   });
 
-  it('registers no ID that is in neither the catalog nor the legacy list', () => {
-    const offenders = registered.filter((id) => !catalog.has(id) && !legacy.has(id));
+  it('registers no ID that is not in the catalog', () => {
+    const offenders = registered.filter((id) => !catalog.has(id));
     expect(
       offenders,
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
         + 'source: register the gesture under the ID its row gives it.').join('\n'),
     ).toEqual([]);
-  });
-
-  it('takes out of the palette only a legacy line\'s own IDs', () => {
-    const strays = LEGACY_GESTURES.flatMap((g) => g.outOfPalette.filter((id) => !g.ids.includes(id)));
-    expect(strays).toEqual([]);
-  });
-
-  it('lists only legacy IDs that are registered, so a landed merge deletes its line', () => {
-    const stale = [...legacy].filter((id) => !registered.includes(id));
-    expect(stale, `${stale.join(', ')} is not registered: delete it from LEGACY_GESTURES.`).toEqual([]);
   });
 });
 
