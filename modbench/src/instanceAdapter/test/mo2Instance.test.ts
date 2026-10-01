@@ -290,12 +290,12 @@ describe('the MO2 Instance adapter', () => {
 
     it('rejects when a mod folder cannot be read, rather than treating it as gone', async () => {
       const folder = join(root, 'mods', 'Harder VATS');
-      await chmod(folder, 0o000);
-      try {
-        await expect(adapter.modFolders()).rejects.toThrow(/EACCES/);
-      } finally {
-        await chmod(folder, 0o755);
-      }
+      vi.mocked(readdir).mockImplementation(async (path, options) => {
+        if (String(path) === folder) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        return actualReaddir(path, options);
+      });
+
+      await expect(adapter.modFolders()).rejects.toThrow(/permission denied/);
     });
 
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
