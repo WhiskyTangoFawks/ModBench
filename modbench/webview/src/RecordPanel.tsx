@@ -46,16 +46,22 @@ function columnKeysWhere(
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
+const messageStyle: React.CSSProperties = {
+  flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)',
+  padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-warningBorder, #cca700)', borderRadius: 2,
+};
+
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
+  const [gone, setGone] = useState(false);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   // ADR-0007: null until /plugins answers, and null again when it fails — fail-closed, so a panel
   // that has not heard from /plugins offers no editing, compile or track rather than gestures that
   // cannot land.
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
-  // lands (the `!result` early return renders "Loading…" until then), so it can never read as a
+  // lands (the `!result` early return renders nothing until then), so it can never read as a
   // false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,13 +118,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     wirePath(rootField, path, rootFieldOf(overrideFor(plugin), rootField)?.value),
     [overrideFor]);
 
+  // An answer lands only if no later read was asked for since: reads answer out of order.
+  const latestRead = useRef(0);
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
+    const read = ++latestRead.current;
     try {
-      setError(null);
       const loaded = await client.load(fk);
+      if (read !== latestRead.current) return;
       if (!loaded.ok) throw new Error(loaded.error);
+      setError(null);
       setResult(loaded.result);
+      setGone(loaded.result === null);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
       // unknown state reads as neither tracked nor untracked.
@@ -127,7 +138,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
   }, [client]);
 
@@ -209,10 +220,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           // formKey will change → [formKey] effect will fire; skip it.
           skipNextRefreshEffect.current = true;
         }
+        if (msg.formKey !== prevFormKeyRef.current) {
+          setResult(null);
+          setGone(false);
+          setError(null);
+          setFocusedCell(null);
+        }
         setFormKey(msg.formKey);
-        setResult(null);
-        setError(null);
-        setFocusedCell(null);
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
@@ -251,8 +265,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   };
 
   if (!formKey) return <div style={containerStyle}>No record selected.</div>;
-  if (error) return <div style={{ ...containerStyle, color: 'var(--vscode-errorForeground, #f44)' }}>Error: {error}</div>;
-  if (!result) return <div style={containerStyle}>Loading…</div>;
+  if (gone) return <div style={containerStyle}>{formKey} is gone.</div>;
+  if (!result) {
+    return (
+      <div style={{ ...containerStyle, color: error ? 'var(--vscode-errorForeground, #f44)' : fg }}>
+        {error && `Failed to load: ${error}`}
+      </div>
+    );
+  }
 
   // `result.conflictAll` is record-wide and deliberately not threaded into the row background —
   // that is each row's own `diff.conflictAll`, computed bottom-up per node.
@@ -350,13 +370,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
       </div>
+      {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
       {/* ADR-0017: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
           has checked yet. Clears itself with no user action once refresh() next lands a settled
           `conflictsComputed`. */}
       {recordPanelIncompleteMessage(conflictsComputed) && (
-        <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-warningBorder, #cca700)', borderRadius: 2 }}>
-          {recordPanelIncompleteMessage(conflictsComputed)}
-        </div>
+        <div style={messageStyle}>{recordPanelIncompleteMessage(conflictsComputed)}</div>
       )}
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the
           flex-item default of min-height:auto would defeat that). overflow:auto then keeps the
