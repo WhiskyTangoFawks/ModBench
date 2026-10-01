@@ -60,7 +60,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** The port is the lifecycle's to choose, so the generated client is built once it is known. */
+  // The port is the lifecycle's to choose, so the generated client is built once it is known.
   private get apiClient(): ApiClient {
     const port = this.lifecycle.port;
     if (port === undefined) throw new Error('mEdit has not started');
