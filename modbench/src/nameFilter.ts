@@ -127,10 +127,8 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   };
 }
 
-/** The catalog's filter pair for every view that has a name filter: each acts on the view it is
- *  given, else the focused view's. A view-title icon cannot say which view it sits in, so each
- *  view has an entry point, `<view id>.filterHere` and `<view id>.clearFilterHere`, that fires
- *  the gesture with its view. `nothingFocused` speaks when no view has a filter to act on. */
+/** The catalog's filter pair acts on the view it is given, else the focused one. A title icon
+ *  cannot name its view, so `<view id>.filterHere` and `.clearFilterHere` fire the pair with it. */
 export function registerFilterCommands(
   focusedViewId: () => string | undefined,
   filters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>,
