@@ -143,6 +143,12 @@ describe('RecordPanel — the keys on the focused cell, by its type', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Level')], value: 12 });
   });
 
+  it('Ctrl+V of a whole array copied from the field writes it', async () => {
+    paste(await focusCell('Values', 2), '[4,6]');
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('Values')], value: [4, 6] });
+  });
+
   it('Ctrl+V into a column that cannot be edited changes nothing', async () => {
     const notPrevented = paste(await focusCell('Level', 1), '12');
 

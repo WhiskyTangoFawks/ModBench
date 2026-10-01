@@ -104,6 +104,17 @@ describe('right-click array ops write one envelope from the host', () => {
     ]);
   });
 
+  it('Add lands the value a drop supplies in its add envelope', async () => {
+    const { deps, meditClient } = makeDeps();
+    registerRecordPanelContextCommands(deps);
+
+    await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
+      parentContext([{ kind: 'member', name: 'Values' }]), 6);
+
+    expect(present(editRecordCalls(meditClient)[0], 'the sole editRecord call').args[3])
+      .toEqual({ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 });
+  });
+
   it('Remove lands a remove envelope at a keyed element\'s own path', async () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);

@@ -94,9 +94,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, openTrigger, resoluti
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        // ADR-0018: no resting cursor override — the parent DiskCell's `grab` is this cell's
-        // resting affordance, since it is a drag source the whole time. `pointer` is asserted only
-        // while the reference is hot-tracked.
+        // `pointer` is asserted only while the reference is hot-tracked.
         cursor: hot ? 'pointer' : undefined,
         fontFamily: mono,
         fontSize: '12px',
