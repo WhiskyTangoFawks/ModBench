@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const registerCustomEditorProvider = vi.fn<(...args: unknown[]) => { dispose(): void }>(() => ({ dispose: () => undefined }));
 const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
 const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
-const setStatusBarMessage = vi.fn<(...args: unknown[]) => unknown>();
+const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
+
+vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 
 vi.mock('vscode', () => ({
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { /* no listeners */ } dispose() { /* nothing held */ } },
@@ -19,7 +21,6 @@ vi.mock('vscode', () => ({
   window: {
     registerFileDecorationProvider: () => ({ dispose: () => undefined }),
     registerCustomEditorProvider: (...args: unknown[]) => registerCustomEditorProvider(...args),
-    setStatusBarMessage: (...args: unknown[]) => setStatusBarMessage(...args),
   },
 }));
 
@@ -62,7 +63,7 @@ function register(
 beforeEach(() => {
   commandHandlers.clear();
   executeCommand.mockReset();
-  setStatusBarMessage.mockReset();
+  pickRecord.mockReset();
 });
 
 describe('registerEditorCommands', () => {
@@ -89,13 +90,44 @@ describe('modbench.record.open from the palette, with no Argument', () => {
     ]);
   });
 
-  it('says what to select when the focused view has no record selected, and opens nothing', async () => {
+  it('asks for a record when the focused view has none selected, and opens the one picked as a preview', async () => {
+    pickRecord.mockResolvedValue('000801:A.esp');
     register(() => [{ kind: 'recordType' }]);
 
     await open();
 
-    expect(setStatusBarMessage).toHaveBeenCalledWith('Select a record in Plugins or Referenced By to open it.', 5000);
+    expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
+    expect(executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
+      { viewColumn: 1, preview: true });
+  });
+
+  it('opens nothing when the picker is dismissed', async () => {
+    pickRecord.mockResolvedValue(null);
+    register();
+
+    await open();
+
     expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses, saying why, when it is given something that names no record', async () => {
+    reporter.report.mockClear();
+    register();
+
+    await commandHandlers.get('modbench.record.open')?.({ kind: 'recordType' });
+
+    expect(reporter.report).toHaveBeenCalledWith('error', 'Could not open a record.', 'What was given names no record.');
+    expect(pickRecord).not.toHaveBeenCalled();
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('does not ask when the selection holds a record', async () => {
+    register(() => [{ formKey: '000801:A.esp', kind: 'placed' }]);
+
+    await open();
+
+    expect(pickRecord).not.toHaveBeenCalled();
   });
 });
 
