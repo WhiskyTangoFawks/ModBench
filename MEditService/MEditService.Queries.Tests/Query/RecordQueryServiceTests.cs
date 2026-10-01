@@ -169,6 +169,35 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(3, query.Offset);
     }
 
+    // editor-fields.md, References, story 2: a FormID is the game-assigned index, then the ID. A
+    // light plugin counts among the light ones, after FE.
+    [Theory]
+    [InlineData("01000800", "Patch.esp")]
+    [InlineData("0x01000800", "Patch.esp")]
+    [InlineData("FE000800", "Light.esp")]
+    [InlineData("00000800", "Base.esm")]
+    public void GetRecords_AFormIdSearchesTheFormKeyItNames(string formId, string plugin)
+    {
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
+            .WithPlugin("Light.esp", mod => mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small)
+            .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchNpc"))
+            .Build();
+        var (manager, svc) = Build(fixture);
+
+        svc.GetRecords(type: null, plugin: null, search: formId, limit: 20, offset: 0);
+
+        Assert.Equal($"000800:{plugin}", ((FakeReads)manager.RequireReads()).LastSearch?.Search);
+    }
+
+    [Fact]
+    public void GetRecords_AFormIdNoActivePluginHoldsSearchesAsTyped()
+    {
+        _svc.GetRecords(type: null, plugin: null, search: "7F000800", limit: 20, offset: 0);
+
+        Assert.Equal("7F000800", _reads.LastSearch?.Search);
+    }
+
     [Fact]
     public void GetRecords_NoType_QueriesEveryNonHeaderSchemaType()
     {
