@@ -21,8 +21,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009: the MO2 instance root the index file is keyed on, because <c>origin</c> is
-    /// a mod folder name and so is unique only within one instance.</summary>
+    /// <summary>ADR-0009 invariant 3.</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }

@@ -339,10 +339,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0009 invariant 3: the index's home is the MO2 instance — one persistent file per
-    // instance, so a fresh open finds whatever the last run left there, and `origin` (a mod folder
-    // name) is unique only within one.
-
+    // ADR-0009 invariant 3.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
     {

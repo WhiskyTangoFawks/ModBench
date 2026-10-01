@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009: one persistent file per MO2 instance, validating itself against the disk by content,
-// and an open hashes every file. Each test is two launches over the same instance.
 public sealed class PersistentIndexTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"medit-index-{Guid.NewGuid():N}");

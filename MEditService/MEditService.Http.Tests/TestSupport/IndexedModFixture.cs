@@ -19,7 +19,6 @@ public sealed class IndexedModFixture : IDisposable
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
 
-    // The MO2 instance this mod folder lives in (ADR-0009), also the fixture's cleanup root.
     public string InstanceRoot { get; }
 
     public string ModFolder { get; }

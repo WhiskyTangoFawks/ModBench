@@ -22,7 +22,6 @@ public sealed class SourceEditFixture : IDisposable
     public const string KeywordEditorId = "FixtureKeyword";
     public const string OtherNpcEditorId = "UntouchedNpc";
 
-    // The MO2 instance this mod folder lives in (ADR-0009), also the fixture's cleanup root.
     public string InstanceRoot { get; }
 
     public string ModFolder { get; }

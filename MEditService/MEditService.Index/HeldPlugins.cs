@@ -34,9 +34,7 @@ internal sealed class HeldPlugins
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009: the MO2 instance root the index file is keyed on, because <c>origin</c>
-    /// is a mod folder name and so is unique only within one instance. Null asks for an in-memory
-    /// index.</summary>
+    /// <summary>ADR-0009 invariant 3. Null asks for an in-memory index.</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }
