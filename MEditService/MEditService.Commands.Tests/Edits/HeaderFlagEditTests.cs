@@ -1,15 +1,17 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The ESL flag's one sanctioned write door is the synthetic <c>IsSmallMaster</c> header field;
-/// the raw <c>flags</c> column stays read-only.</summary>
+/// a write to the raw <c>Flags</c> column changes every other bit and refuses this one.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
     private readonly SourceEditFixture _fixture = SourceEditFixture.Tracked();
@@ -109,5 +111,53 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
         Assert.Empty(_fixture.GitStatus());
+    }
+
+    private RecordEditResult SetFlags(string names) =>
+        Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
+
+    [Fact]
+    public void EditField_RawFlagsSettingSmall_IsRefusedNamingTheLightFlagsDoor()
+    {
+        var result = SetFlags("[\"Small\"]");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
+        Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
+        Assert.Empty(_fixture.GitStatus());
+    }
+
+    [Fact]
+    public void EditField_RawFlagsChangingAnotherBit_IsAccepted()
+    {
+        var result = SetFlags("[\"Master\"]");
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public void EditField_RawFlagsLeavingSmallAsItIs_WhileChangingAnotherBit_IsAccepted()
+    {
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
+
+        var result = SetFlags("[\"Small\", \"Master\"]");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.True(HeaderDocument.IsLight(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body)));
+    }
+
+    [Fact]
+    public async Task EditField_Author_CompilesIntoTheBinary()
+    {
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
+
+        var compile = await CompileService().CompileAsync(_fixture.Plugin);
+        Assert.True(compile.Succeeded, compile.RefusalReason);
+
+        using var written = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
+                Path.Combine(_fixture.ModFolder, SourceEditFixture.PluginName)),
+            GameRelease.Fallout4);
+        Assert.Equal("Someone", ((IFallout4ModGetter)written).ModHeader.Author);
     }
 }

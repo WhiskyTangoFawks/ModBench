@@ -63,8 +63,6 @@ public record RecordDetail(
     // The record editor renders the column read-only with this as the reason; every write is
     // refused.
     string? ParseDiagnosis = null,
-    // Non-null when the record's FormID cannot be edited: the reason the FormID row shows and the
-    // write refuses with.
     string? FormIdReadOnlyReason = null);
 
 public record CompareOverride(
