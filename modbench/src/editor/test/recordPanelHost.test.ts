@@ -123,3 +123,16 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
     expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
   });
 });
+
+describe('modbench.record.openToSide, the menus\' entry point', () => {
+  it('fires open with the menu selection, each record placed beside', async () => {
+    register();
+    const [a, b] = [{ formKey: '000801:A.esp' }, { formKey: '000802:A.esp' }];
+
+    await commandHandlers.get('modbench.record.openToSide')?.(a, [a, b]);
+
+    expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
+      { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
+    ]);
+  });
+});
