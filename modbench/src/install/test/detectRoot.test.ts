@@ -29,8 +29,8 @@ async function scaffold(...paths: string[]): Promise<void> {
   }
 }
 
-// The staged tree is read through the Instance adapter, as install reads it.
-const detectRoot = (staged: string) => detectRootWith(adapterOver(dir), staged);
+// The extracted tree is read through the Instance adapter, as install reads it.
+const detectRoot = (extracted: string) => detectRootWith(adapterOver(dir), extracted);
 
 describe('detectRoot', () => {
   it('points at the Data subfolder when the archive has a Data root', async () => {
@@ -38,7 +38,7 @@ describe('detectRoot', () => {
     expect(await detectRoot(dir)).toEqual({ sourceDir: join(dir, 'Data'), isFomod: false });
   });
 
-  it('treats the staging root as the source when files sit at root', async () => {
+  it('treats the extraction root as the source when files sit at root', async () => {
     await scaffold('foo.esp', 'meshes/x.nif');
     expect(await detectRoot(dir)).toEqual({ sourceDir: dir, isFomod: false });
   });

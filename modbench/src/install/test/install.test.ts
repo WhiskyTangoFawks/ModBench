@@ -1,5 +1,5 @@
-// An install is one rename, so the tests observe the effect on disk rather than the steps: what
-// mods/ shows while the install runs, and which other files moved.
+// The tests observe the effect on disk rather than the steps: what the instance shows while the
+// install runs, and which files moved.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -137,29 +137,32 @@ describe('install commands', () => {
     await rm(sourceFolder, { recursive: true, force: true });
   });
 
-  // Rival: populate mods/<name> in place with a recursive copy. The observer runs between that
-  // copy's own awaits, so it sees the folder half-built and this fails.
-  it('the mod folder is never observed partial — it appears whole or not at all', async () => {
-    const observed: (string[] | null)[] = [];
+  // Rival: extract into a staging folder beside mods/, as install once did. The observer sees
+  // that folder appear in the instance, and this fails.
+  it('writes nothing outside mods/<name> while it runs, from an archive or a folder', async () => {
+    const before = new Set((await snapshotTree(root)).keys());
+    const seen = new Set<string>();
     let observing = true;
-    const stillObserving = () => observing;
     const observer = (async () => {
-      while (stillObserving()) {
-        observed.push(await treeOf(join(root, 'mods', MOD)));
+      while (observing) {
+        for (const path of (await snapshotTree(root)).keys()) {
+          if (!before.has(path) && !path.startsWith(`mods/${MOD}/`)) seen.add(path);
+        }
         await new Promise((resolve) => setImmediate(resolve));
       }
     })();
+    const slowly: Runner = async (bin, args) => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await runnerFor()(bin, args);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    };
 
-    const outcome = await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: slowly });
+    await installFromFolder(access, { kind: 'new', name: 'Harder VATS' }, sourceFolder, { gameName: GAME_NAME });
     observing = false;
     await observer;
 
-    expect(outcome).toMatchObject({ applied: true });
-    expect(observed.length).toBeGreaterThan(1); // the observer really did interleave
-    expect(observed.filter((tree) => tree !== null)).not.toEqual([]); // and really did see it land
-    for (const tree of observed) {
-      if (tree !== null) expect(tree).toEqual(COMPLETE);
-    }
+    expect([...seen].filter((path) => !path.startsWith('mods/Harder VATS/'))).toEqual([]);
   });
 
   // Rival: append the modlist line from the installer. The touch-set below has no modlist.txt
@@ -240,22 +243,6 @@ describe('install commands', () => {
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=3.0.0');
-  });
-
-  // Rival: catch EXDEV and fall back to a recursive copy. The mod folder would then exist, and
-  // the applied assertion and the absence assertion both fail.
-  it('refuses a cross-volume staging area instead of copying', async () => {
-    const before = await snapshotTree(root);
-    const crossVolume = withAdapter(access, {
-      landNewMod: () => Promise.reject(errnoError('EXDEV', 'cross-device link not permitted')),
-    });
-
-    const outcome = await installFromFolder(crossVolume, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
-
-    expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
-    assertOnlyChanged(before, await snapshotTree(root), new Set());
-    expect(outcome).toMatchObject({ applied: false });
-    expect(!outcome.applied && outcome.refusal).toMatch(/different drives/);
   });
 
   // Rival: remove only the folder the mod root was detected in, which leaves the wrapper's parent.
@@ -421,7 +408,12 @@ describe('install commands', () => {
   it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back', async () => {
     const name = 'Untracked Target';
     await makeExistingMod(root, name, false);
-    const failing = withAdapter(access, { upgradeMod: () => Promise.reject(errnoError('EACCES', 'permission denied')) });
+    const failing = withAdapter(access, {
+      extractUpgrade: async (mod) => ({
+        ...(await access.adapter.extractUpgrade(mod)),
+        land: () => Promise.reject(errnoError('EACCES', 'permission denied')),
+      }),
+    });
 
     const outcome = await installFromArchive(failing, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
 
@@ -494,6 +486,39 @@ describe('install commands', () => {
     await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
 
     expect(await treeOf(sourceFolder)).toEqual(PAYLOAD.map((p) => p.split(sep).join('/')).sort());
+  });
+
+  // Rival: report the failure and leave the folder, so the half-extracted mod shows up in mods/.
+  it('removes the folder of a new install that fails partway, and writes nothing else', async () => {
+    const before = await snapshotTree(root);
+    const dies: Runner = async (bin, args) => {
+      await runnerFor()(bin, args);
+      throw new Error('archive is truncated');
+    };
+
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: dies });
+
+    expect(!outcome.applied && outcome.refusal).toMatch(/truncated/);
+    expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
+    assertOnlyChanged(before, await snapshotTree(root), new Set());
+  });
+
+  // Rival: clear the folder before extracting, so a failed extraction leaves it emptied.
+  it('an upgrade whose extraction fails leaves the folder as it was, with the error shown', async () => {
+    const name = 'Tracked Target';
+    const modDir = await makeExistingMod(root, name, true);
+    await mkdir(join(modDir, 'plugin-source'));
+    await writeFile(join(modDir, 'plugin-source', 'RecordData.json'), '{}');
+    const before = await snapshotTree(root);
+    const dies: Runner = async (bin, args) => {
+      await runnerFor()(bin, args);
+      throw new Error('archive is truncated');
+    };
+
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: dies });
+
+    expect(!outcome.applied && outcome.refusal).toMatch(/truncated/);
+    assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
 
   it('reports a failed extraction as a refusal, not a throw', async () => {

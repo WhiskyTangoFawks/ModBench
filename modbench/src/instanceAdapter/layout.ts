@@ -64,12 +64,10 @@ export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefi
   return folder === undefined ? undefined : modDir(instanceRoot, folder);
 };
 
-// Beside mods/ rather than inside it: the same volume, so the landing rename is one step, and
-// outside every watcher's glob.
-const STAGING_PREFIX = '.medit-install-';
+const EXTRACTION_PREFIX = '.medit-extract-';
 
-/** The prefix a fresh staging folder's name is made from. */
-export const stagingPrefix = (instanceRoot: string): string => join(instanceRoot, STAGING_PREFIX);
+/** The prefix a release's extraction folder, inside its mod's folder, is named from. */
+export const extractionPrefix = (modFolder: string): string => join(modFolder, EXTRACTION_PREFIX);
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
