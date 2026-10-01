@@ -157,9 +157,14 @@ const fakeSettleClock = (): void => {
 };
 
 // Yields until a settle wait is armed on the fake clock: the read has reached it, whatever the
-// machine's load.
+// machine's load. A read that never reaches one fails here, not in the runner's timeout.
+const SETTLE_WAIT_YIELDS = 10_000;
+
 async function settleWaitArmed(): Promise<void> {
-  while (vi.getTimerCount() === 0) await new Promise((resolve) => setImmediate(resolve));
+  for (let yields = 0; vi.getTimerCount() === 0; yields++) {
+    if (yields === SETTLE_WAIT_YIELDS) throw new Error('no settle wait was armed on the fake clock');
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 }
 
 const TIMED_OUT = Symbol('timed out waiting for a recompute');
