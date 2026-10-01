@@ -16,7 +16,7 @@ import {
   parseJsonRecord, required,
   type PanelOpts,
 } from './test/fixtures';
-import type { CompareResult } from './types';
+import type { CompareResult, PluginLoadFailure } from './types';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
@@ -423,7 +423,7 @@ describe('RecordPanel — column header native right-click menu', () => {
       })],
     });
     const load = vi.fn().mockResolvedValue({
-      ok: true, result: compare, immutableSet: null, trackedSet: null, conflictsComputed: true,
+      ok: true, result: compare, immutableSet: null, trackedSet: null, conflictsComputed: true, loadFailures: [],
     });
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -849,6 +849,43 @@ describe('RecordPanel — keys through the rows (editor.md, The focused cell, st
   });
 });
 
+describe('RecordPanel — a plugin mEdit cannot read (editor.md, States, story 6)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('says it shows the last good read, with the reason, when a plugin the panel shows cannot be read', async () => {
+    renderPanel(compareResult, { loadFailures: [{ name: 'MyMod.esp', origin: 'Data', reason: 'truncated' }] });
+    await waitFor(() => screen.getByText('Showing the last good read: MyMod.esp: truncated'));
+  });
+
+  it('says nothing of a plugin the panel does not show', async () => {
+    renderPanel(compareResult, { loadFailures: [{ name: 'Elsewhere.esp', origin: 'Data', reason: 'truncated' }] });
+    await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
+    expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument();
+  });
+
+  it('goes once a read lands with the plugin readable again', async () => {
+    const answered = (loadFailures: PluginLoadFailure[]) => ({
+      ok: true as const, result: compareResult, immutableSet: new Set<string>(), trackedSet: new Set<string>(),
+      conflictsComputed: true, loadFailures,
+    });
+    const load = vi.fn()
+      .mockResolvedValueOnce(answered([{ name: 'MyMod.esp', origin: 'Data', reason: 'truncated' }]))
+      .mockResolvedValue(answered([]));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText(/Showing the last good read/));
+
+    sendMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+
+    await waitFor(() => expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument());
+  });
+});
+
 describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
   // conflictsComputed: false always returns the banner text (recordPanelIncompleteMessage.ts) —
   // bounded so every test below can rely on it being present.
@@ -876,11 +913,11 @@ describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(), conflictsComputed: false,
+        immutableSet: new Set(), conflictsComputed: false, loadFailures: [],
       })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(), conflictsComputed: true,
+        immutableSet: new Set(), conflictsComputed: true, loadFailures: [],
       });
     renderPanel(compareResult, { load });
     await waitFor(() => screen.getByText(incompleteMessage));
@@ -933,7 +970,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
       .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
       .mockResolvedValue({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
-        immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true,
+        immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true, loadFailures: [],
       });
     renderPanel(compareResult, { load });
     await waitFor(() => expect(screen.getByText('Failed to load: HTTP 500')).toBeInTheDocument());
@@ -950,7 +987,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 });
 
 const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
-  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed,
+  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed, loadFailures: [],
 });
 
 function deferred<T>() {

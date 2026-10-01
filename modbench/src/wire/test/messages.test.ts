@@ -45,22 +45,31 @@ describe('the record load request and its answer', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     const plugins = [{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }];
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins, conflictsComputed: true, loadFailures: [],
     });
   });
 
   it('carries null plugins when that read failed, and a string error when the load itself did', () => {
     const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
     expect(parseExtensionToWebview({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
     })).toEqual({
-      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false,
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: false, loadFailures: [],
     });
 
     expect(parseExtensionToWebview({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' }))
       .toEqual({ type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: false, error: 'HTTP 404' });
+  });
+
+  it('carries the plugins mEdit cannot read, and rejects an answer without them', () => {
+    const compare = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
+    const loadFailures = [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }];
+    const answered = { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare, plugins: null, conflictsComputed: true };
+
+    expect(parseExtensionToWebview({ ...answered, loadFailures })).toEqual({ ...answered, loadFailures });
+    expect(() => parseExtensionToWebview(answered)).toThrow();
   });
 
   it('rejects an answer whose ok is missing entirely', () => {

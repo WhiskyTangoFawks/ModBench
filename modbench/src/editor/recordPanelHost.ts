@@ -10,7 +10,7 @@ import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
-import { trackConflictsComputed } from './conflictsComputedTracker';
+import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, type RecordAddress } from './recordUri';
@@ -36,6 +36,9 @@ export interface EditorCommandDeps {
     | 'deleteRecords' | 'copyRecords'
     | 'getPlugins' | 'getRecordHolders'
     | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
+  // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
+  // read changed).
+  refreshPanels: () => void;
   // The merged Plugins tree's selection, which the record gestures act on. Narrowed to the one
   // cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
@@ -143,10 +146,12 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const writeDeps = recordPanelWriteDeps(deps);
   // Lives for the activation, like the decoration provider above — disposed alongside it.
-  const conflictsComputedTracker = trackConflictsComputed(meditClient);
+  const loadOrderStatusTracker = trackLoadOrderStatus(
+    meditClient, deps.refreshPanels);
   // The picker and the panel's name are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
-    ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
+    ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => loadOrderStatusTracker.current(),
+    loadFailures: () => loadOrderStatusTracker.failures(),
   };
   const recordEditorProvider = new RecordEditorProvider({
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
@@ -154,7 +159,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
 
   return [
     recordDecorationProvider,
-    { dispose: () => { conflictsComputedTracker.dispose(); } },
+    { dispose: () => { loadOrderStatusTracker.dispose(); } },
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     vscode.window.registerCustomEditorProvider(
       RECORD_EDITOR_VIEW_TYPE, recordEditorProvider, { webviewOptions: { retainContextWhenHidden: true } }),

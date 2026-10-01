@@ -149,6 +149,8 @@ export type RecordLoadAnswer =
       compare: components['schemas']['CompareResult'] | null;
       plugins: components['schemas']['PluginResponse'][] | null;
       conflictsComputed: boolean;
+      // The plugins mEdit cannot read, as the Plugins tree is told them.
+      loadFailures: components['schemas']['PluginLoadFailure'][];
     }
   | { ok: false; error: string };
 
@@ -264,6 +266,10 @@ function isPluginResponseArray(value: unknown): value is components['schemas']['
   return Array.isArray(value);
 }
 
+function isPluginLoadFailureArray(value: unknown): value is components['schemas']['PluginLoadFailure'][] {
+  return Array.isArray(value);
+}
+
 function parseLoadRecord(w: { formKey?: unknown }): ExtensionToWebview {
   if (!isString(w.formKey)) throw new Error('Expected "loadRecord" to carry a string formKey.');
   return { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: w.formKey };
@@ -278,7 +284,7 @@ function parseFormKeyPicked(w: { requestId?: unknown; formKey?: unknown }): Exte
 }
 
 function parseRecordLoadAnswer(w: {
-  requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; error?: unknown;
+  requestId?: unknown; ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
 }): { requestId: string } & RecordLoadAnswer {
   if (!isString(w.requestId)) throw new Error('Expected "recordLoadAnswered" to carry a string requestId.');
   if (w.ok === false) {
@@ -295,7 +301,13 @@ function parseRecordLoadAnswer(w: {
   if (typeof w.conflictsComputed !== 'boolean') {
     throw new Error('Expected "recordLoadAnswered" to carry a boolean conflictsComputed.');
   }
-  return { requestId: w.requestId, ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed };
+  if (!isPluginLoadFailureArray(w.loadFailures)) {
+    throw new Error('Expected "recordLoadAnswered" to carry a loadFailures array.');
+  }
+  return {
+    requestId: w.requestId, ok: true, compare: w.compare, plugins: w.plugins, conflictsComputed: w.conflictsComputed,
+    loadFailures: w.loadFailures,
+  };
 }
 
 /** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
@@ -306,7 +318,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   }
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown;
-    ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; error?: unknown;
+    ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);

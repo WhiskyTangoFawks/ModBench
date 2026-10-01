@@ -3,7 +3,7 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
-import type { RecordSummary, MEditClient } from '../client';
+import type { RecordSummary, MEditClient, PluginLoadFailure } from '../client';
 import type { FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
@@ -28,6 +28,7 @@ export interface RouteRecordPanelMessageDeps {
   setTitle: (title: string) => void;
   // The load-order sweep's latest known answer, read rather than fetched (ADR-0013).
   conflictsComputed: () => boolean;
+  loadFailures: () => readonly PluginLoadFailure[];
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
@@ -217,6 +218,6 @@ async function answerRecordLoad(
   deps.reply({
     type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
     compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,
-    conflictsComputed: deps.conflictsComputed(),
+    conflictsComputed: deps.conflictsComputed(), loadFailures: [...deps.loadFailures()],
   });
 }

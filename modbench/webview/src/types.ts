@@ -45,6 +45,7 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 
 export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: FieldValue[] };
 
+export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
 // Lives in messages.ts so it can cross to the extension host.
