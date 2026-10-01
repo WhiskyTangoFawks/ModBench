@@ -249,6 +249,43 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
+    public void Put_WithANewEditorIdOnACell_MovesItsDirectoryAndKeepsItsBlockFolders()
+    {
+        const string cellKey = "000A00:Fixture.esp";
+        Track();
+        var repository = RequireOpened();
+        static string CellBody(string editorId) => $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "OldCell", CellBody("OldCell")));
+        var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
+        var oldLeaf = Directory.GetDirectories(cells, "OldCell*", SearchOption.AllDirectories).Single();
+        var blockFolder = Path.GetDirectoryName(oldLeaf) ?? throw new InvalidOperationException(oldLeaf);
+
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "NewCell", CellBody("NewCell")));
+
+        Assert.Equal(
+            [Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")],
+            Directory.GetDirectories(blockFolder));
+        Assert.Equal(
+            CellBody("NewCell"),
+            File.ReadAllText(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}", "RecordData.json")));
+    }
+
+    [Fact]
+    public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
+    {
+        var repository = Opened();
+        var file = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
+        File.WriteAllText(file, "this is not a document");
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc"))));
+
+        Assert.Contains("not a readable document", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal("this is not a document", File.ReadAllText(file));
+        Assert.Equal([Path.GetFileName(file)], NpcFileNames());
+    }
+
+    [Fact]
     public void Put_OfTheEditorIdTheDocumentAlreadyHas_LeavesAFileSomethingElseRenamedWhereItIs()
     {
         var repository = Opened();

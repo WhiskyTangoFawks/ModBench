@@ -259,9 +259,7 @@ public sealed partial class SourceRepository
     // found by FormKey. A leaf something else renamed keeps its name while the EditorID is unchanged.
     private void MoveToItsEditorId(SourceUnit unit, SourceDocument document)
     {
-        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
-            return;
-        if (string.Equals(EditorIdOf(unit.FullPath), document.EditorId, StringComparison.Ordinal)) return;
+        if (!ChangesEditorId(unit, document)) return;
 
         var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
         var to = Path.Combine(
@@ -274,9 +272,23 @@ public sealed partial class SourceRepository
         Forget();
     }
 
-    private static string? EditorIdOf(string documentPath)
+    /// <summary>Whether putting <paramref name="document"/> would rename the file it replaces. Refuses
+    /// a file whose text is not a document: its EditorID cannot be compared, and overwriting it would
+    /// drop what something else wrote.</summary>
+    internal static bool ChangesEditorId(SourceUnit unit, SourceDocument document)
     {
-        using var document = JsonDocument.Parse(File.ReadAllBytes(documentPath));
+        if (document.RecordType == PluginHeader.RecordType || unit.IsEmbedded || !File.Exists(unit.FullPath))
+            return false;
+
+        var text = File.ReadAllText(unit.FullPath);
+        if (NotADocument(text) is { } why)
+            throw new InvalidOperationException($"{unit.RelativePath} is not a readable document, so its EditorID cannot be compared: {why}");
+        return !string.Equals(EditorIdOf(text), document.EditorId, StringComparison.Ordinal);
+    }
+
+    private static string? EditorIdOf(string text)
+    {
+        using var document = JsonDocument.Parse(text);
         return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
             && editorId.ValueKind == JsonValueKind.String
             ? editorId.GetString()
