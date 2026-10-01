@@ -51,8 +51,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         // ADR-0012: keyed by the compound column identity, not the bare plugin — two overrides
         // sharing a filename but differing in origin must land as two independent entries here,
         // not collide (ToDictionary would throw on a literal duplicate key).
-        var pluginConflictThis = conflictingRecords.ToDictionary(
-            Column, o => ConflictRules.AggregateThis(Column(o), ctx.MasterColumn, diffs.Select(d => d.CellStates)));
+        var pluginConflictThis = new Dictionary<string, ConflictThis>();
+        foreach (var o in conflictingRecords)
+        {
+            if (ConflictRules.AggregateThis(Column(o), ctx.MasterColumn, diffs.Select(d => d.CellStates)) is { } state)
+                pluginConflictThis[Column(o)] = state;
+        }
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }

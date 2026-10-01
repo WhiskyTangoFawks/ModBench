@@ -188,6 +188,15 @@ public class ConflictClassifierTests
     }
 
     [Fact]
+    public void Classify_ColumnWithNoCellStates_HasNoPluginState()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
+        var empty = MakeOverride("B.esp", 1, true);
+        var result = Classify([master, empty]);
+        Assert.DoesNotContain("B.esp", result.PluginStates.Keys);
+    }
+
+    [Fact]
     public void Classify_FourPlugins_OneITM_TwoDisagree_ReturnsConflict()
     {
         // hasAnyChange: Any()=true (B,D change), All()=false (C is ITM) — an All()-based check

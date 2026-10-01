@@ -29,9 +29,7 @@
         "viewType": "modbench.record",
         "displayName": "Record",
         "selector": [
-          {
-            "filenamePattern": "**/*.modbench-record"
-          }
+          { "filenamePattern": "**/*.modbench-record" }
         ],
         "priority": "option"
       }

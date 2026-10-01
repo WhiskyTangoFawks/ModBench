@@ -698,6 +698,18 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     expect(empty?.title).toBe('');
   });
 
+  it('paints no colour on the header of a column with no cell state', async () => {
+    renderPanel(compareResultFixture({
+      overrides: [
+        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }], conflictThis: 'Master' }),
+        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Empty.esp', editorId: 'TestNPC', fields: [], conflictThis: null }),
+      ],
+      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'A' }, winnerColumn: 'Fallout4.esm' })],
+    }));
+    await cellOf('A');
+    expect(screen.getByText('Empty.esp').closest('th')?.style.backgroundColor).toBe('');
+  });
+
   it('gives the master column no tooltip on a row only a later plugin holds', async () => {
     renderPanel(compareResultFixture({
       overrides: columns.slice(0, 2).map(plugin => compareOverride({

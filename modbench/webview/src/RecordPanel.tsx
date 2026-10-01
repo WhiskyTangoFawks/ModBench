@@ -29,7 +29,7 @@ const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
 
-const headerBg = (c: ConflictThis): string | undefined => getCellStyle(c).backgroundColor;
+const headerBg = (c: ConflictThis | null | undefined): string | undefined => getCellStyle(c ?? undefined).backgroundColor;
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.

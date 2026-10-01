@@ -1,4 +1,3 @@
-
 namespace MEditService.Queries;
 
 // Single owner of the ADR-0018 two-axis model's decision rules, so a rule change cannot drift
@@ -59,9 +58,9 @@ internal static class ConflictRules
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
-    // One column's own state across every row: the most severe cell it holds, and Master for the
-    // master's own column.
-    public static ConflictThis AggregateThis(
+    // One column's own state across every row: the most severe cell it holds, Master for the
+    // master's own column, and none for a column with no cell.
+    public static ConflictThis? AggregateThis(
         string column, string masterColumn, IEnumerable<IReadOnlyDictionary<string, ConflictThis>> rows)
     {
         if (column == masterColumn) return ConflictThis.Master;
@@ -69,7 +68,7 @@ internal static class ConflictRules
         var states = rows.Where(r => r.ContainsKey(column)).Select(r => r[column]).ToList();
         return states switch
         {
-            { Count: 0 } => ConflictThis.IdenticalToMaster,
+            { Count: 0 } => null,
             _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
             _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
             _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,

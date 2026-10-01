@@ -534,7 +534,7 @@ export interface components {
             isPartialForm: boolean;
             parseDiagnosis?: string | null;
             formIdReadOnlyReason?: string | null;
-            conflictThis: components["schemas"]["ConflictThis"];
+            conflictThis?: components["schemas"]["ConflictThis"] | null;
             loadIndex: string;
             isInOverwrite: boolean;
         };

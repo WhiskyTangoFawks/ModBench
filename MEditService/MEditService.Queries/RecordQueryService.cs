@@ -92,12 +92,12 @@ public sealed class RecordQueryService(
 
         var (classification, conflictAll) = ClassifyStack(committedOverrides, resolveFormKey);
         // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
-        // any non-Data-origin column and silently default ConflictThis to OnlyOne.
+        // any non-Data-origin column and silently drop its ConflictThis.
         var snapshot = _loadOrder.Require();
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
-                classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
+                classification.PluginStates.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var state) ? state : null,
                 Origin: o.Origin,
                 LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
                 RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
