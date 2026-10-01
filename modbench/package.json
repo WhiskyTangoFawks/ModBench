@@ -24,6 +24,16 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "modbench.record",
+        "displayName": "Record",
+        "selector": [
+          { "filenamePattern": "**/*.modbench-record" }
+        ],
+        "priority": "option"
+      }
+    ],
     "configuration": {
       "title": "Modbench",
       "properties": {
