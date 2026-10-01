@@ -48,6 +48,7 @@ export function createModListView(
     toggle: { icon: 'list-tree', label: 'Group by separator' },
     termPlacement: 'afterBase',
     viewMessage: () => messageLine(modListProvider.viewMessage(), modSync.message()),
+    standingMessage: () => modListProvider.lastGoodReadMessage(),
     onRowsChanged: modListProvider.onDidChangeTreeData,
     onViewMessageChanged: (listener) => modSync.onMessageChanged(listener),
   }));
@@ -155,6 +156,7 @@ export function registerDownloadsView(
     setFilter: (text) => downloadsProvider.setFilter(text),
     hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
     viewMessage: () => downloadsProvider.viewMessage(),
+    standingMessage: () => downloadsProvider.viewMessage(),
     onRowsChanged: downloadsProvider.onDidChangeTreeData,
   }));
   // package.json's viewsWelcome gates the all-excluded message on this key (downloads.md,

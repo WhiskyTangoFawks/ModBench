@@ -980,6 +980,18 @@ describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
     expect(iconId(await rowNamed(provider, 'B'))).toBe('package');
   });
 
+  it('keeps the mark, and says it shows the last good read, when a read fails while the write is unconfirmed', async () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('EACCES modlist.txt');
+
+    expect(iconId(await rowNamed(provider, 'A'))).toBe('sync~spin');
+    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
+  });
+
   it('goes when the disk\'s next value lands, and never flickers when that is at once', async () => {
     const instance = new FakeInstance(valueOf([mod('A')]));
     const provider = makeProvider([], { instance });

@@ -503,11 +503,15 @@ export class PluginsTreeProvider
   }
 
   viewMessage(): string | undefined {
-    return [this.firstHeldMessage(), lastGoodReadMessage(this.instance)].filter((part) => part !== undefined).join(' ') || undefined;
+    return [this.firstHeldMessage(), this.lastGoodReadMessage()].filter((part) => part !== undefined).join(' ') || undefined;
   }
 
-    // The first that holds: the game folder not found (common.md, States 5), a failed index
-// (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5).
+  lastGoodReadMessage(): string | undefined {
+    return lastGoodReadMessage(this.instance);
+  }
+
+  // The first that holds: the game folder not found (common.md, States 5), a failed index
+  // (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5).
   private firstHeldMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {

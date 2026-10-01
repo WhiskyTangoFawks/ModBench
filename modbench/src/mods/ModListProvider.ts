@@ -499,7 +499,11 @@ export class ModListProvider
    *  list says so here, above it. */
   viewMessage(): string | undefined {
     const empty = this.instance.sequence !== 0 && this.instanceValue.mods.length === 0 ? NO_MODS_MESSAGE : undefined;
-    return [empty, lastGoodReadMessage(this.instance)].filter((part) => part !== undefined).join(' ') || undefined;
+    return [empty, this.lastGoodReadMessage()].filter((part) => part !== undefined).join(' ') || undefined;
+  }
+
+  lastGoodReadMessage(): string | undefined {
+    return lastGoodReadMessage(this.instance);
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection
