@@ -71,8 +71,6 @@ interface RecordHeaderRowsProps {
   collapsedColumns: Set<ColumnKey>;
   dimmedColumns: Set<ColumnKey>;
   editableColumns: Set<ColumnKey>;
-  // A plugin header's FormID names the plugin, and is read-only (editor.md, The FormID).
-  isPluginHeader: boolean;
   expanded: boolean;
   onToggle: () => void;
   focusedCell: FocusedCell | null;
@@ -83,7 +81,7 @@ interface RecordHeaderRowsProps {
 /** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
-  columns, collapsedColumns, dimmedColumns, editableColumns, isPluginHeader, expanded, onToggle,
+  columns, collapsedColumns, dimmedColumns, editableColumns, expanded, onToggle,
   focusedCell, onFocusCell, onCommitFormId,
 }: Readonly<RecordHeaderRowsProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
@@ -128,7 +126,7 @@ export function RecordHeaderRows({
               >
                 <FormIdCell
                   record={override}
-                  editable={!isPluginHeader && editableColumns.has(key)}
+                  editable={editableColumns.has(key)}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               </DiskCell>
