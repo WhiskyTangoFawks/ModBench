@@ -951,6 +951,8 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     const listening = provider().onDidChangeTreeData(() => { refreshes++; });
     const before = instance().sequence;
 
+    const warn = vscode.window.showWarningMessage;
+    (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
     try {
       await vscode.commands.executeCommand('modbench.separator.delete', doomed);
 
@@ -965,6 +967,7 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
       await pastSequence(instance(), before);
       assert.strictEqual(await separatorRow('Doomed'), undefined, 'the watch\'s value should have taken the row away');
     } finally {
+      (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
       listening.dispose();
     }
   });

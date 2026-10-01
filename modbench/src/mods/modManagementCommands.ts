@@ -190,8 +190,15 @@ function separatorNamePrompt(
   return async (value) => (value === '' ? undefined : separatorNameRefusal(access, instance.value.activeProfile, value, own));
 }
 
+async function confirmSeparatorDelete(names: readonly string[], ask: AskQuestion): Promise<boolean> {
+  const question = names.length === 1
+    ? `Delete separator "${names[0]}"? Its mods stay.`
+    : `Delete separators ${names.map((n) => `"${n}"`).join(', ')}? Their mods stay.`;
+  return (await ask(question, { modal: true }, 'Delete')) === 'Delete';
+}
+
 export function registerSeparatorCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, trash: MoveToTrash,
+  access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
   viewSelection: () => readonly ModlistNode[],
   marks: Pick<
     ModListProvider,
@@ -239,6 +246,7 @@ export function registerSeparatorCommands(
       registerModsGesture('modbench.separator.delete', viewSelection, async (entry) => {
         const names = pluralArgument(entry, 'separator').map((n) => n.separator.name);
         if (names.length === 0) return;
+        if (!(await confirmSeparatorDelete(names, ask))) return;
         marks.markRemoved(entryRefs('separator', names));
         const result = await deleteSeparators(access, instance.value.activeProfile, names, trash);
         if (!result.applied) {
