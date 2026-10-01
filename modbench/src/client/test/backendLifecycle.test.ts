@@ -142,7 +142,8 @@ describe('BackendLifecycle.start', () => {
   it('claims a fresh port for each restart', async () => {
     const state = { healthy: false };
     const children: ReturnType<typeof makeChild>[] = [];
-    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
+    const urls: string[] = [];
+    const spawn = vi.fn((_exe: string, args: string[]) => { urls.push(args[1] ?? ''); const c = makeChild(); children.push(c); state.healthy = true; return c; });
     let next = 6000;
 
     const lifecycle = new BackendLifecycle({
@@ -153,7 +154,7 @@ describe('BackendLifecycle.start', () => {
     present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
-    expect(spawn.mock.calls.map((c) => (c as unknown as string[][])[1]?.[1])).toEqual(['http://localhost:6000', 'http://localhost:6001']);
+    expect(urls).toEqual(['http://localhost:6000', 'http://localhost:6001']);
   });
 
   it('gives each lifecycle its own free port', async () => {
