@@ -20,6 +20,12 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ key: columnKey(o.plugin, o.origin), override: o }));
 }
 
+/** The record as the panel names it: the EditorID and the FormKey, or the FormKey alone. */
+export function recordLabel(overrides: readonly CompareOverride[], formKey: string): string {
+  const editorId = (overrides.find(o => o.isWinner) ?? overrides.at(0))?.editorId;
+  return editorId ? `${editorId} [${formKey}]` : formKey;
+}
+
 // ── Array child helpers ───────────────────────────────────────────────────────
 
 // A keyed array is stored in key order on every write, so no Move there could change the file; a
@@ -34,7 +40,7 @@ export function isMovableElementHop(seg: PathSegment | undefined): boolean {
 
 // An array sorted by its own element value (xEdit's wbArrayS): its elements are pure links, which
 // the element type alone says.
-function isPureLinkArray(meta: FieldMetadata): boolean {
+export function isPureLinkArray(meta: FieldMetadata): boolean {
   return meta.elementType?.type === 'formKey';
 }
 

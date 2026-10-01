@@ -4,6 +4,7 @@ import { buildWebviewHtml } from '../webviewHtml';
 const BASE_PARAMS = {
   formKey: 'Fallout4.esm:001234',
   scriptUri: 'vscode-webview://host/main.js',
+  styleUri: 'vscode-webview://host/main.css',
   cspSource: 'vscode-webview-resource:',
 };
 
@@ -23,6 +24,12 @@ describe('buildWebviewHtml', () => {
   it('sets mEditFormKey in the inline script', () => {
     const html = buildWebviewHtml(BASE_PARAMS);
     expect(html).toContain('window.mEditFormKey = "Fallout4.esm:001234"');
+  });
+
+  it('links the panel\'s stylesheet and loads its fonts from the panel\'s own resources alone', () => {
+    const html = buildWebviewHtml(BASE_PARAMS);
+    expect(html).toContain('<link rel="stylesheet" href="vscode-webview://host/main.css">');
+    expect(html).toMatch(/font-src vscode-webview-resource:;/);
   });
 
   it('uses unique nonces on each call', () => {

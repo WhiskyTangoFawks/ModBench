@@ -11,6 +11,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
   // winner sweep has run, posted untransformed (ADR-0002 invariant 2 — the webview names no port).
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
+  // Every record edit, broadcast as it is sent, and again if mEdit refuses it or it fails: the
+  // panel showing the record shows the value until the disk confirms it (common.md, Unconfirmed
+  // writes).
+  EDIT_WRITTEN: 'editWritten',
+  EDIT_REFUSED: 'editRefused',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -158,7 +163,16 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
-  | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer);
+  | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
+  | ({ type: typeof EXTENSION_TO_WEBVIEW.EDIT_WRITTEN | typeof EXTENSION_TO_WEBVIEW.EDIT_REFUSED } & RecordEdit);
+
+/** One edit, addressed to the plugin copy of the record it writes. */
+export interface RecordEdit {
+  formKey: string;
+  plugin: string;
+  origin: string;
+  envelope: RecordEditEnvelope;
+}
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -310,6 +324,14 @@ function parseRecordLoadAnswer(w: {
   };
 }
 
+function parseRecordEdit(w: { formKey?: unknown; plugin?: unknown; origin?: unknown; envelope?: unknown }): RecordEdit {
+  if (!isString(w.formKey) || !isString(w.plugin) || !isString(w.origin)) {
+    throw new Error('Expected a record edit to carry a string formKey, plugin and origin.');
+  }
+  if (!isRecordEditEnvelope(w.envelope)) throw new Error('Expected a record edit to carry an envelope with an op and a path.');
+  return { formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
+}
+
 /** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
  *  through this rather than asserting `event.data`'s shape itself. */
 export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
@@ -317,7 +339,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
     throw new Error(`Expected an extension-to-webview message object, got ${typeof value}.`);
   }
   const w = value as {
-    type?: unknown; formKey?: unknown; requestId?: unknown;
+    type?: unknown; formKey?: unknown; requestId?: unknown; plugin?: unknown; origin?: unknown; envelope?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
   };
   switch (w.type) {
@@ -325,6 +347,8 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
     case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED: return { type: w.type };
     case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED: return parseFormKeyPicked(w);
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
+    case EXTENSION_TO_WEBVIEW.EDIT_WRITTEN:
+    case EXTENSION_TO_WEBVIEW.EDIT_REFUSED: return { type: w.type, ...parseRecordEdit(w) };
     default:
       throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
   }

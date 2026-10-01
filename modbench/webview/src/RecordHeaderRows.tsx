@@ -3,28 +3,31 @@ import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
-import type { Column } from './recordUtils';
+import { toStr, type Column } from './recordUtils';
+import { WrittenValue } from './WrittenValue';
+import type { WriteAt } from './unconfirmedWrites';
 import type { FocusedCell } from './DiffRow';
-import type { ColumnKey, CompareOverride } from './types';
+import type { ColumnKey, PathHop } from './types';
 import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
 export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
+// An edit of the FormID names the document member a record's FormID is (editor.md, The FormID).
+export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
 const INDENT = 24;
 
 interface FormIdCellProps {
-  record: CompareOverride;
+  formKey: string;
+  label: string;
   editable: boolean;
   onCommit: (formKey: string) => void;
 }
 
 // xEdit's FormID reads as the record it names, and edits as the ID typed; mEdit spells both as
 // the FormKey (xedit.md, divergence 12).
-function FormIdCell({ record, editable, onCommit }: Readonly<FormIdCellProps>) {
-  const { formKey } = record;
+function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellProps>) {
   const [draft, setDraft] = useState<string | null>(null);
   const settled = useRef(true);
-  const label = formKeyLabel(formKey, record);
   if (!editable) return <span>{label}</span>;
   function settle(write: boolean) {
     if (settled.current) return;
@@ -77,13 +80,14 @@ interface RecordHeaderRowsProps {
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
+  writeAt: WriteAt;
 }
 
 /** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
   columns, collapsedColumns, columnStyle, editableColumns, expanded, onToggle,
-  focusedCell, onFocusCell, onCommitFormId,
+  focusedCell, onFocusCell, onCommitFormId, writeAt,
 }: Readonly<RecordHeaderRowsProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
     ({ ...baseCell, ...columnStyle(key) });
@@ -126,11 +130,17 @@ export function RecordHeaderRows({
                 title={override.formIdReadOnlyReason ?? undefined}
                 copyText={formKeyLabel(override.formKey, override)}
               >
-                <FormIdCell
-                  record={override}
-                  editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
-                  onCommit={formKey => onCommitFormId(key, formKey)}
-                />
+                <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
+                  {value => (
+                    <FormIdCell
+                      formKey={toStr(value)}
+                      // A FormKey the disk does not hold yet names no record.
+                      label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
+                      editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
+                      onCommit={formKey => onCommitFormId(key, formKey)}
+                    />
+                  )}
+                </WrittenValue>
               </DiskCell>
             ))}
         </tr>

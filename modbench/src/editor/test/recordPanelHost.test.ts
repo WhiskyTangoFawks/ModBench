@@ -122,8 +122,9 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 describe('modbench.record.editField, fired with only the record, the plugin and the field path', () => {
   const MOVED = '000900:Mod.esp';
   const isPanel = (value: object): value is vscode.WebviewPanel => 'webview' in value;
-  const fakePanel = (): vscode.WebviewPanel => {
-    const panel = { title: '000800:Mod.esp', webview: { postMessage: vi.fn(() => Promise.resolve(true)) } };
+  const posting = () => vi.fn(() => Promise.resolve(true));
+  const fakePanel = (postMessage = posting()): vscode.WebviewPanel => {
+    const panel = { title: '000800:Mod.esp', webview: { postMessage } };
     if (!isPanel(panel)) throw new Error('not a panel');
     return panel;
   };
@@ -144,6 +145,23 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
     expect(shown.map(panel => tracker.formKeyOf(panel))).toEqual([MOVED, MOVED]);
     expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
     expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
+  });
+
+  it('tells every open panel the edit as it is sent', async () => {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setCommandResult('editRecord', { applied: true });
+    const first = posting();
+    const second = posting();
+    register(() => [], {
+      recordPanels: new Set([fakePanel(first), fakePanel(second)]), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient,
+    });
+    const envelope = { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' };
+    const written = { type: 'editWritten', formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA', envelope };
+
+    await commandHandlers.get('modbench.record.editField')?.({ formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' }, envelope);
+
+    expect(first).toHaveBeenCalledWith(written);
+    expect(second).toHaveBeenCalledWith(written);
   });
 });
 

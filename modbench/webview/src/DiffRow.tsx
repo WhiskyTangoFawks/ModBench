@@ -5,6 +5,8 @@ import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { copiedText, modelValue } from './modelValue';
+import { WrittenValue } from './WrittenValue';
+import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, labelCell, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
@@ -147,6 +149,7 @@ interface DiffRowProps {
   editableColumns: Set<ColumnKey>;
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
+  writeAt: WriteAt;
   // Every array gesture, through one callback: the panel offers it to every row and this row
   // decides which ops it has, so availability is stated once rather than agreed on twice.
   onArrayOp?: (plugin: ColumnKey, op: ArrayOp) => void;
@@ -166,7 +169,7 @@ export function DiffRow({
   diff, meta, columns, columnStyle,
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
-  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
+  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
   onArrayOp, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -267,7 +270,7 @@ export function DiffRow({
         const cellEditable = !!onEditCell && writable;
         // The host that invokes these commands holds no document, so it is handed the envelope's
         // own path, resolved here against this column's own value of the root.
-        const hops = offersMenu ? wirePath(rootField, context.path, rootValue?.value) : [];
+        const hops = wirePath(rootField, context.path, rootValue?.value);
         const vscodeContext = offersMenu ? combineVscodeContexts(
           // `hops` addresses the array itself here — this row *is* the array.
           arrayEditable && isArrayParentRow
@@ -323,11 +326,16 @@ export function DiffRow({
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {hasElement && renderCell(shown, cellMeta, onOpen, {
-              checkError, resolution: diff.resolutions?.[key],
-              onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
-              rowCollapsed: isFlagsRow && !rowExpanded,
-            })}
+            {hasElement && (
+              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+                {value => renderCell(value, cellMeta, onOpen, {
+                  // A reference the disk does not hold yet has no resolution.
+                  checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,
+                  onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
+                  rowCollapsed: isFlagsRow && !rowExpanded,
+                })}
+              </WrittenValue>
+            )}
           </DiskCell>
         );
       })}
