@@ -140,14 +140,16 @@ describe('install commands', () => {
   // Rival: extract into a staging folder beside mods/, as install once did. The observer sees
   // that folder appear in the instance, and this fails.
   it('writes nothing outside mods/<name> while it runs, from an archive or a folder', async () => {
-    const before = new Set((await snapshotTree(root)).keys());
+    const entriesAt = async (): Promise<string[]> =>
+      [...await readdir(root), ...(await readdir(join(root, 'mods'))).map((name) => `mods/${name}`)];
+    const before = new Set(await entriesAt());
     const seen = new Set<string>();
     let observing = true;
     const stillObserving = () => observing;
     const observer = (async () => {
       while (stillObserving()) {
-        for (const path of (await snapshotTree(root)).keys()) {
-          if (!before.has(path) && !path.startsWith(`mods/${MOD}/`)) seen.add(path);
+        for (const path of await entriesAt()) {
+          if (!before.has(path)) seen.add(path);
         }
         await new Promise((resolve) => setImmediate(resolve));
       }
@@ -163,7 +165,7 @@ describe('install commands', () => {
     observing = false;
     await observer;
 
-    expect([...seen].filter((path) => !path.startsWith('mods/Harder VATS/'))).toEqual([]);
+    expect([...seen].sort()).toEqual(['mods/Harder VATS', `mods/${MOD}`]);
   });
 
   // Rival: append the modlist line from the installer. The touch-set below has no modlist.txt
