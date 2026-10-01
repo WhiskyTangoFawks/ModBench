@@ -12,9 +12,7 @@ git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo curre
 git diff --name-only HEAD && git diff --name-only --cached
 ```
 
-The first line must print `current`: HEAD on a branch that contains `main`. A detached HEAD
-or a branch behind `main` gates a tree that will not land — stop and say so (merge `main`
-into the branch first; a detached HEAD is the user's to resolve).
+The first line must print `current`: HEAD on a branch that contains `main`. A detached HEAD or a branch behind `main` gates a tree that will not land — stop and say so (merge `main` into the branch first; a detached HEAD is the user's to resolve).
 
 Classify changed files → run matching gate (never review non-compiling code):
 
@@ -25,31 +23,17 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend --api-drift` |
 | config/docs only | `… ` with no flag — Gate 1 alone |
 
-`bash .claude/skills/validate/run-gates.sh` with no flags runs Gate 1 alone in seconds and exits 1 on failure; an orchestrator runs it on a branch before merging, because the editor-time hook does not fire on script-patched files. Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s
-`EXCLUDE_RE`): Vale over comments in `.cs`/`.ts`/`.tsx`/`.py`/`.mjs` and over markdown text
-(`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which
-reaches string literals but carries only the History rule (`.vale-raw.ini`);
-`comment-shape.py` for the doc-comment shape checks on `.cs`/`.ts`/`.tsx`; and the discipline's own
-tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate
-runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
+`bash .claude/skills/validate/run-gates.sh` with no flags runs Gate 1 alone in seconds and exits 1 on failure; an orchestrator runs it on a branch before merging, because the editor-time hook does not fire on script-patched files. Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s `EXCLUDE_RE`): Vale over comments in `.cs`/`.ts`/`.tsx`/`.py`/`.mjs` and over markdown text (`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which reaches string literals but carries only the History rule (`.vale-raw.ini`); `comment-shape.py` for the doc-comment shape checks on `.cs`/`.ts`/`.tsx`; and the discipline's own tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
 
-`--api-drift` boots a fresh backend and fails if `modbench/src/wire/generated/api.ts`
-has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
-silently invalidate it, so it rides along with `--backend`, not `--frontend`.
+`--api-drift` boots a fresh backend and fails if `modbench/src/wire/generated/api.ts` has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 
-The backend gates queue on a machine-wide flock, so a run can outlast a foreground command's
-10-minute cap, and a subagent that ends its turn to wait has reported instead. Run
-`run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the
-verdict. Exit 3 means call it again.
+The backend gates queue on a machine-wide flock, so a run can outlast a foreground command's 10-minute cap, and a subagent that ends its turn to wait has reported instead. Run `run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the verdict. Exit 3 means call it again.
 
 Fix all failures, rerun.
 
 ## Finding dispositions
 
-Review itself belongs to the calling workflow (`/implement` closes with `/code-review`;
-`/orchestrate` § 3, step 4, runs its own). In-loop, the maintainer rules on findings live, by this
-table (first match). An orchestrated run sorts findings by `/orchestrate` § 3, step 11. Neither
-files an issue: the tracker holds no standing bug/tech-debt backlog (`docs/agents/issue-tracker.md`):
+Review itself belongs to the calling workflow (`/implement` closes with `/code-review`; `/orchestrate` § 3, step 4, runs its own). In-loop, the maintainer rules on findings live, by this table (first match). An orchestrated run sorts findings by `/orchestrate` § 3, step 11. Neither files an issue: the tracker holds no standing bug/tech-debt backlog (`docs/agents/issue-tracker.md`):
 
 | Outcome | When → Action |
 |---|---|
@@ -60,6 +44,4 @@ files an issue: the tracker holds no standing bug/tech-debt backlog (`docs/agent
 
 Rerun the gates if any fix changed logic.
 
-Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces
-them continuously during the work, scoped to changed files, and the work in progress triages them. Validate
-owns correctness and gates — nothing else.
+Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces them continuously during the work, scoped to changed files, and the work in progress triages them. Validate owns correctness and gates — nothing else.

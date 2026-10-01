@@ -2,42 +2,20 @@
 
 Read from `references/modorganizer` at `efe2a02d`.
 
-An audit of what Mod Organizer 2's UI surfaces offer and what each gesture does, read from source.
-It describes MO2 only and takes no position on any other tool.
+An audit of what Mod Organizer 2's UI surfaces offer and what each gesture does, read from source. It describes MO2 only and takes no position on any other tool.
 
 ## Sources and conventions
 
-All paths are relative to `references/modorganizer/src/` (grep-only clone, never modified).
-Citations are `file:line`. Abbreviations: `MLCM` = `modlistcontextmenu.cpp`, `MLVA` =
-`modlistviewactions.cpp`, `MLV` = `modlistview.cpp`, `ML` = `modlist.cpp`, `PLCM` =
-`pluginlistcontextmenu.cpp`, `PL` = `pluginlist.cpp`, `DLV` = `downloadlistview.cpp`, `DM` =
-`downloadmanager.cpp`, `UI` = `mainwindow.ui`, `MW` = `mainwindow.cpp`.
+All paths are relative to `references/modorganizer/src/` (grep-only clone, never modified). Citations are `file:line`. Abbreviations: `MLCM` = `modlistcontextmenu.cpp`, `MLVA` = `modlistviewactions.cpp`, `MLV` = `modlistview.cpp`, `ML` = `modlist.cpp`, `PLCM` = `pluginlistcontextmenu.cpp`, `PL` = `pluginlist.cpp`, `DLV` = `downloadlistview.cpp`, `DM` = `downloadmanager.cpp`, `UI` = `mainwindow.ui`, `MW` = `mainwindow.cpp`.
 
-**Verification status.** Everything is read from the source unless tagged **(inferred)**. Not in this
-tree, so behaviour there is inferred from call sites: the `uibase` library (`DelayedFileWriter`,
-`shellDelete`, `FilterWidget`, `setCustomizableColumns`), the game plugin that writes `plugins.txt`
-and `loadorder.txt`, installer plugins (Quick/Manual/FOMOD dialogs), and Qt's own item-view
-behaviour.
+**Verification status.** Everything is read from the source unless tagged **(inferred)**. Not in this tree, so behaviour there is inferred from call sites: the `uibase` library (`DelayedFileWriter`, `shellDelete`, `FilterWidget`, `setCustomizableColumns`), the game plugin that writes `plugins.txt` and `loadorder.txt`, installer plugins (Quick/Manual/FOMOD dialogs), and Qt's own item-view behaviour.
 
-**Effect / Trigger / Argument** in the gesture tables: `writes` = changes a file, folder or list.
-`reads` = changes only what is shown, or opens something (dialog, browser, Explorer). `runs` =
-starts another program. Persistence is stated in Notes.
+**Effect / Trigger / Argument** in the gesture tables: `writes` = changes a file, folder or list. `reads` = changes only what is shown, or opens something (dialog, browser, Explorer). `runs` = starts another program. Persistence is stated in Notes.
 
 **Persistence shorthand.**
-- `modlist.txt` writes are delayed: `Profile::writeModlist()` goes through `m_ModListWriter`
-  (`profile.cpp:228-231`, constructed at `:78`), a `DelayedFileWriter` (uibase, delay
-  **inferred**). It is flushed by `writeModlistNow` on refresh, run, install and profile switch
-  (`organizercore.cpp:796,1282,1600,2018`).
-- `modlist.txt` is written lowest-priority-last, so the top of the file is the highest priority.
-  Prefix is `+` enabled, `-` disabled, `*` for foreign mods. Backups and Overwrite are never written
-  (`profile.cpp:243-272`).
-- `meta.ini` setters (`setCategory`, `setColor`, `setComments`, `ignoreUpdate`, ...) only set
-  `m_MetaInfoChanged` (`modinforegular.cpp:446-680`). The file is written by `saveMeta()` at
-  `modinforegular.cpp:249`, called from the destructor (`:64-70`), on Mod-Info-dialog open and close
-  (`MLVA:592,611`), on Nexus responses (`:370-402`), and immediately by `markConverted` and
-  `markValidated` (`:644-657`). Timing of the flush for the other setters is **inferred** (next
-  `saveMeta` or when the `ModInfo` collection is rebuilt by `ModInfo::updateFromDisc`,
-  `modinfo.cpp:233-241`).
+- `modlist.txt` writes are delayed: `Profile::writeModlist()` goes through `m_ModListWriter` (`profile.cpp:228-231`, constructed at `:78`), a `DelayedFileWriter` (uibase, delay **inferred**). It is flushed by `writeModlistNow` on refresh, run, install and profile switch (`organizercore.cpp:796,1282,1600,2018`).
+- `modlist.txt` is written lowest-priority-last, so the top of the file is the highest priority. Prefix is `+` enabled, `-` disabled, `*` for foreign mods. Backups and Overwrite are never written (`profile.cpp:243-272`).
+- `meta.ini` setters (`setCategory`, `setColor`, `setComments`, `ignoreUpdate`, ...) only set `m_MetaInfoChanged` (`modinforegular.cpp:446-680`). The file is written by `saveMeta()` at `modinforegular.cpp:249`, called from the destructor (`:64-70`), on Mod-Info-dialog open and close (`MLVA:592,611`), on Nexus responses (`:370-402`), and immediately by `markConverted` and `markValidated` (`:644-657`). Timing of the flush for the other setters is **inferred** (next `saveMeta` or when the `ModInfo` collection is rebuilt by `ModInfo::updateFromDisc`, `modinfo.cpp:233-241`).
 
 ---
 
@@ -45,8 +23,7 @@ starts another program. Persistence is stated in Notes.
 
 ### 1.1 Structure
 
-Widget `ModListView` (`UI:385-447`), a `QTreeView` on `ModList`, via a sort proxy and an optional
-grouping proxy (`MLV:773-792`, `updateGroupByProxy` `:659-700`).
+Widget `ModListView` (`UI:385-447`), a `QTreeView` on `ModList`, via a sort proxy and an optional grouping proxy (`MLV:773-792`, `updateGroupByProxy` `:659-700`).
 
 | Aspect | Reading |
 | --- | --- |
@@ -93,13 +70,9 @@ grouping proxy (`MLV:773-792`, `updateGroupByProxy` `:659-700`).
 
 ### 1.4 Selection and mouse
 
-- Alt+click on a separator (collapsible mode) also selects or deselects all its children; editing is
-  suppressed while Alt is held (`MLV:1421-1492`).
-- Right click on the empty area shows the global menu; on a row shows the row menu
-  (`MLV:963-980`).
-- Right-click on an unselected row replaces the selection: Qt default, **inferred**. The menu then
-  reads `selectionModel()->selectedRows()` if any selection exists, else the clicked row
-  (`MLCM:227-231`).
+- Alt+click on a separator (collapsible mode) also selects or deselects all its children; editing is suppressed while Alt is held (`MLV:1421-1492`).
+- Right click on the empty area shows the global menu; on a row shows the row menu (`MLV:963-980`).
+- Right-click on an unselected row replaces the selection: Qt default, **inferred**. The menu then reads `selectionModel()->selectedRows()` if any selection exists, else the clicked row (`MLCM:227-231`).
 
 ### 1.5 Keyboard (`MLV:1494-1537`, only when a row is selected)
 
@@ -115,26 +88,15 @@ grouping proxy (`MLV:773-792`, `updateGroupByProxy` `:659-700`).
 
 ### 1.6 Double click (`MLV:982-1052`)
 
-Ignored when the double click follows a check-box click. Otherwise: **Ctrl** → Open in Explorer;
-**Shift** → visit Nexus, else custom URL (`MLVA:950-977`); **plain on a separator (collapsible
-mode)** → toggle expand; **plain otherwise** → Information dialog, opened on the tab matching the
-clicked column: Notes→Notes; Version, Nexus ID, Source Game→Nexus; Category→Categories;
-Conflicts→Conflicts; else default.
+Ignored when the double click follows a check-box click. Otherwise: **Ctrl** → Open in Explorer; **Shift** → visit Nexus, else custom URL (`MLVA:950-977`); **plain on a separator (collapsible mode)** → toggle expand; **plain otherwise** → Information dialog, opened on the tab matching the clicked column: Notes→Notes; Version, Nexus ID, Source Game→Nexus; Category→Categories; Conflicts→Conflicts; else default.
 
 ### 1.7 Context menus
 
-Legend for rows: R regular, S separator, O overwrite, B backup, F foreign. No item is disabled by
-`setEnabled`; conditions only hide items, except the two "state unknown" entries
-(`MLCM:563-566,591-594`). Multi-selection does **not** change which items are shown. The menu is
-built from the **clicked** row's type and the handler then acts on all selected rows, except where
-noted "index only" (the clicked row alone). Kind codes: `M` writes `meta.ini`, `L` writes
-`modlist.txt`, `F` changes mod folders on disk, `X` opens an external app or dialog.
+Legend for rows: R regular, S separator, O overwrite, B backup, F foreign. No item is disabled by `setEnabled`; conditions only hide items, except the two "state unknown" entries (`MLCM:563-566,591-594`). Multi-selection does **not** change which items are shown. The menu is built from the **clicked** row's type and the handler then acts on all selected rows, except where noted "index only" (the clicked row alone). Kind codes: `M` writes `meta.ini`, `L` writes `modlist.txt`, `F` changes mod folders on disk, `X` opens an external app or dialog.
 
 #### 1.7.1 Empty-area menu = "All Mods" submenu = list-options button menu
 
-Class `ModListGlobalContextMenu` (`MLCM:12-104`). The same class is (1) the empty-area menu
-(`MLV:970`), (2) the submenu "All Mods" at the top of every row menu (`MLCM:235-238`), (3) the
-menu of the list-options button (`MW:368-369,2944`).
+Class `ModListGlobalContextMenu` (`MLCM:12-104`). The same class is (1) the empty-area menu (`MLV:970`), (2) the submenu "All Mods" at the top of every row menu (`MLCM:235-238`), (3) the menu of the list-options button (`MW:368-369,2944`).
 
 | Caption | Visible when | Handler | Kind |
 | --- | --- | --- | --- |
@@ -151,11 +113,9 @@ menu of the list-options button (`MW:368-369,2944`).
 #### 1.7.2 Row menu order (`MLCM:221-274`)
 
 1. "All Mods" submenu (1.7.1).
-2. If the clicked row has children (collapsible separator): Collapse all, Collapse others, Expand
-   all (`:241-250`).
+2. If the clicked row has children (collapsible separator): Collapse all, Collapse others, Expand all (`:241-250`).
 3. Type block (below).
-4. **Information...** for every type except F; this is the menu's default (bold) action
-   (`:267-273`).
+4. **Information...** for every type except F; this is the menu's default (bold) action (`:267-273`).
 
 #### 1.7.3 Regular mod block (R) (`MLCM:464-637`)
 
@@ -187,13 +147,7 @@ menu of the list-options button (`MW:368-369,2944`).
 
 #### 1.7.4 Separator block (S) (`MLCM:381-409`)
 
-Change Categories, Primary Category (same handlers as R); **Rename Separator...** (in-place, index
-only); **Remove Separator...** (same `removeMods` handler as R); Send to... (only when sorted by
-Priority); **Select Color...** (always, not gated by column) and Reset Color (colour set);
-Information... Missing compared with R: Enable/Disable selected, Rename Mod, Reinstall, Create
-Backup, updates, endorse/track, visit, Open in Explorer. A separator's colour is stored as a
-`meta.ini` value like any mod's (`modinforegular.cpp:618-621`). Rename edits the display name; the
-`_separator` suffix is re-appended (`ML:116-122`).
+Change Categories, Primary Category (same handlers as R); **Rename Separator...** (in-place, index only); **Remove Separator...** (same `removeMods` handler as R); Send to... (only when sorted by Priority); **Select Color...** (always, not gated by column) and Reset Color (colour set); Information... Missing compared with R: Enable/Disable selected, Rename Mod, Reinstall, Create Backup, updates, endorse/track, visit, Open in Explorer. A separator's colour is stored as a `meta.ini` value like any mod's (`modinforegular.cpp:618-621`). Rename edits the display name; the `_separator` suffix is re-appended (`ML:116-122`).
 
 #### 1.7.5 Overwrite (O), Backup (B) and Foreign (F) blocks
 
@@ -212,9 +166,7 @@ Backup, updates, endorse/track, visit, Open in Explorer. A separator's colour is
 | B | Information... | always | as R | `X` |
 | F | Send to... | only when sorted by Priority (`MLCM:411-416`) | see 1.7.6 | `L` |
 
-Foreign rows have no Information item and nothing else. Delete key on Overwrite: `removeRows`
-emits `clearOverwrite()` when the folder has content, which runs Clear Overwrite (`ML:1210-1216`,
-`MLV:726-728`); with an empty overwrite it does nothing.
+Foreign rows have no Information item and nothing else. Delete key on Overwrite: `removeRows` emits `clearOverwrite()` when the folder has content, which runs Clear Overwrite (`ML:1210-1216`, `MLV:726-728`); with an empty overwrite it does nothing.
 
 #### 1.7.6 Send to... submenu (`MLCM:285-338`)
 
@@ -232,14 +184,8 @@ Visible for R, S, F when sorted by Priority. All write `modlist.txt` via `change
 #### 1.7.7 Remove flow (R, S, B)
 
 `removeMods(selected)` (`MLVA:787-840`):
-- **One row:** `ModList::removeRows` shows Yes/No "Are you sure you want to remove "%1"?"
-  (`ML:1230-1236`), then `removeRowForce`: disable, `ModInfo::removeMod` → `shellDelete(path, true)`
-  of `mods/<name>` (`modinfo.cpp:172-190`), immediate `writeModlist` (`ML:1173-1203`).
-- **Several rows:** one Yes/No box "Remove the following mods?" listing up to 20 names; on Yes,
-  `removeRowForce` for each with the downloads watcher suspended (`MLVA:791-829`). Rows that are
-  not `isRegular` are skipped. Overwrite and Foreign are excluded, but Separators and Backups
-  count as regular (`modinforegular.h:27`, inheritance `modinfoseparator.h:6`,
-  `modinfobackup.h:6`), so they are removed too **(inferred from class hierarchy)**.
+- **One row:** `ModList::removeRows` shows Yes/No "Are you sure you want to remove "%1"?" (`ML:1230-1236`), then `removeRowForce`: disable, `ModInfo::removeMod` → `shellDelete(path, true)` of `mods/<name>` (`modinfo.cpp:172-190`), immediate `writeModlist` (`ML:1173-1203`).
+- **Several rows:** one Yes/No box "Remove the following mods?" listing up to 20 names; on Yes, `removeRowForce` for each with the downloads watcher suspended (`MLVA:791-829`). Rows that are not `isRegular` are skipped. Overwrite and Foreign are excluded, but Separators and Backups count as regular (`modinforegular.h:27`, inheritance `modinfoseparator.h:6`, `modinfobackup.h:6`), so they are removed too **(inferred from class hierarchy)**.
 
 ### 1.8 Gestures: Mod list
 
@@ -276,9 +222,7 @@ Visible for R, S, F when sorted by Priority. All write `modlist.txt` via `change
 | Copy names | reads | key | mod, separator | Ctrl+C; separators bracketed |
 | Sort, filter, group, show/hide columns | reads | menu | none | header menu and filter widgets; display only |
 
-Same object on other surfaces: a **mod** also appears as the origin of a plugin (section 2), as a
-highlight when a plugin is selected, and in the Conflicts tab "Go to..." list (section 5). It is
-**not** offered the mod-list menu on those surfaces (section 7).
+Same object on other surfaces: a **mod** also appears as the origin of a plugin (section 2), as a highlight when a plugin is selected, and in the Conflicts tab "Go to..." list (section 5). It is **not** offered the mod-list menu on those surfaces (section 7).
 
 ---
 
@@ -286,8 +230,7 @@ highlight when a plugin is selected, and in the Conflicts tab "Go to..." list (s
 
 ### 2.1 Structure
 
-Widget `PluginListView` (`UI:911-985`), a `QTreeView` on `PluginList` through `PluginListSortProxy`
-(`pluginlistview.cpp:233-244`).
+Widget `PluginListView` (`UI:911-985`), a `QTreeView` on `PluginList` through `PluginListSortProxy` (`pluginlistview.cpp:233-244`).
 
 | Aspect | Reading |
 | --- | --- |
@@ -312,14 +255,11 @@ Widget `PluginListView` (`UI:911-985`), a `QTreeView` on `PluginList` through `P
 
 ### 2.3 Keyboard (`pluginlistview.cpp:382-413`)
 
-Space toggles all selected (`PL:627-643`); Ctrl+Up/Down shifts priority when sorted by Priority or
-Mod Index (`PL:604-625`); Ctrl+Enter opens the origin in Explorer (single row); Ctrl+C copies
-names (`pluginlistview.cpp:33`).
+Space toggles all selected (`PL:627-643`); Ctrl+Up/Down shifts priority when sorted by Priority or Mod Index (`PL:604-625`); Ctrl+Enter opens the origin in Explorer (single row); Ctrl+C copies names (`pluginlistview.cpp:33`).
 
 ### 2.4 Context menu (`PLCM:11-165`)
 
-Right click anywhere in the list; the selection is the current selection, or the clicked row if
-none (`PLCM:17-21`). No `setEnabled` use; only hiding.
+Right click anywhere in the list; the selection is the current selection, or the clicked row if none (`PLCM:17-21`). No `setEnabled` use; only hiding.
 
 | Caption | Visible when | Handler | Kind |
 | --- | --- | --- | --- |
@@ -350,9 +290,7 @@ none (`PLCM:17-21`). No `setEnabled` use; only hiding.
 | Filter, sort columns | reads | menu | none | filter box and header; display only |
 | Select plugin highlights mods | reads | automatic | plugin | display only |
 
-Same object on other surfaces: a **plugin** is listed in the Mod Info dialog's "Optional Plugins"
-tab (`modinfodialog.ui:318`); actions there were not read. A plugin's **origin mod** is the bridge
-to the mod list, but the plugin menu offers only Explorer and Information, not the mod menu.
+Same object on other surfaces: a **plugin** is listed in the Mod Info dialog's "Optional Plugins" tab (`modinfodialog.ui:318`); actions there were not read. A plugin's **origin mod** is the bridge to the mod list, but the plugin menu offers only Explorer and Information, not the mod menu.
 
 ---
 
@@ -376,8 +314,7 @@ to the mod list, but the plugin menu offers only Explorer and Information, not t
 | Drop in | archives (supported extensions only) or URLs onto the tab are copied or moved into the downloads folder; a name clash asks Overwrite / Rename new file / Ignore file (`MW:3930-4032`) |
 | Content | archives found in the downloads folder with a `.meta` sidecar; orphan `.meta` files are **deleted** on every refresh (`DM:377-486`, deletion `:405-419`) |
 
-Enum `DownloadState` order (`downloadmanager.h:138-154`): STARTED, DOWNLOADING, CANCELING, PAUSING,
-CANCELED, PAUSED, ERROR, FETCHING..., NOFETCH, READY, INSTALLED, UNINSTALLED. "Finished" means state
+Enum `DownloadState` order (`downloadmanager.h:138-154`): STARTED, DOWNLOADING, CANCELING, PAUSING, CANCELED, PAUSED, ERROR, FETCHING..., NOFETCH, READY, INSTALLED, UNINSTALLED. "Finished" means state
 >= READY.
 
 ### 3.2 Row context menu (`DLV:216-328`)
@@ -412,8 +349,7 @@ Built from the row under the cursor; the bulk items show on empty space too.
 | downloading | none | Cancel (no confirm) | Pause | none |
 | paused/error/pausing | none | Delete | Resume | Resume |
 
-Space on a downloading row calls `issuePause(event->key())`, passing the key code where a row index
-is expected (`DLV:347`) **(oddity)**. Keys act on the current item, not the whole selection.
+Space on a downloading row calls `issuePause(event->key())`, passing the key code where a row index is expected (`DLV:347`) **(oddity)**. Keys act on the current item, not the whole selection.
 
 ### 3.4 Gestures: Downloads
 
@@ -434,8 +370,7 @@ is expected (`DLV:347`) **(oddity)**. Keys act on the current item, not the whol
 | Filter, sort, choose columns | reads | menu, check box | none | header menu; display only |
 | Drop archive/URL on tab | writes | drag | none | copy or move into downloads; clash dialog |
 
-Same object elsewhere: a downloaded file's **installation file** name is recorded in a mod's
-`meta.ini` and used by Reinstall (section 1); the mod menu has no "reveal download" action.
+Same object elsewhere: a downloaded file's **installation file** name is recorded in a mod's `meta.ini` and used by Reinstall (section 1); the mod menu has no "reveal download" action.
 
 ---
 
@@ -443,10 +378,7 @@ Same object elsewhere: a downloaded file's **installation file** name is recorde
 
 ### 4.1 Toolbar (`UI:1477-1512`)
 
-Order: Manage Instances, Install Mod, Visit Nexus, Browse Mod Page (menu), Profiles, Refresh,
-Executables, Tools (menu), Settings | Endorse ModOrganizer, Notifications, Update, Help. Pinned
-executables are inserted before the trailing separator, object name prefix `custom__`
-(`MW:755-795`). The same actions also live in the menu bar (`UI:1528-1571`).
+Order: Manage Instances, Install Mod, Visit Nexus, Browse Mod Page (menu), Profiles, Refresh, Executables, Tools (menu), Settings | Endorse ModOrganizer, Notifications, Update, Help. Pinned executables are inserted before the trailing separator, object name prefix `custom__` (`MW:755-795`). The same actions also live in the menu bar (`UI:1528-1571`).
 
 | Action | Shortcut | Handler | Effect |
 | --- | --- | --- | --- |
@@ -464,25 +396,14 @@ executables are inserted before the trailing separator, object name prefix `cust
 
 ### 4.2 Run box (top of the right pane)
 
-- **Executable combo** (`UI:605`): item 0 opens the executables dialog and re-selects the previous
-  item (`MW:2325-2344`).
-- **Run** button (`UI:651`): `processRunner().setFromExecutable(exe).setWaitForCompletion(TriggerRefresh).run()`
-  (`MW:2285-2304`). Before launching, `beforeRun` saves the profile: `modlist.txt`, `initweaks.ini`
-  (merged ini tweaks of enabled mods), plugin lists, settings; waits for the directory structure;
-  flushes; sets up the virtual file system mapping (`organizercore.cpp:1984-2036`,
-  `createTweakedIniFile` `profile.cpp:300-310`). While the program runs the UI is locked with an
-  unlock button unless locking is disabled; when it ends (or is force-unlocked) MO refreshes
-  (`processrunner.cpp:806-835`). Effect: runs, then writes.
-- **Shortcut** button (`UI:707`): menu "Toolbar and Menu / Desktop / Start Menu" toggles the
-  shortcut of the selected executable; icons show add/remove state (`MW:358-364,2705-2739`).
+- **Executable combo** (`UI:605`): item 0 opens the executables dialog and re-selects the previous item (`MW:2325-2344`).
+- **Run** button (`UI:651`): `processRunner().setFromExecutable(exe).setWaitForCompletion(TriggerRefresh).run()` (`MW:2285-2304`). Before launching, `beforeRun` saves the profile: `modlist.txt`, `initweaks.ini` (merged ini tweaks of enabled mods), plugin lists, settings; waits for the directory structure; flushes; sets up the virtual file system mapping (`organizercore.cpp:1984-2036`, `createTweakedIniFile` `profile.cpp:300-310`). While the program runs the UI is locked with an unlock button unless locking is disabled; when it ends (or is force-unlocked) MO refreshes (`processrunner.cpp:806-835`). Effect: runs, then writes.
+- **Shortcut** button (`UI:707`): menu "Toolbar and Menu / Desktop / Start Menu" toggles the shortcut of the selected executable; icons show add/remove state (`MW:358-364,2705-2739`).
 - **Pinned executable** (toolbar or Run menu): `startExeAction` runs it the same way (`MW:1688-1720`).
 
 ### 4.3 Profile selector (`UI:253`, `MW:1733-1830`)
 
-Combo: item 0 `<Manage...>` opens `ProfilesDialog`; other items are profiles. Choosing a profile
-saves the current lists, then `setCurrentProfile` builds a new `Profile` (reads its `modlist.txt`),
-stores the choice in settings, then `refresh` (`MW:1722-1731`, `organizercore.cpp:553-620`). The
-combo ignores mouse-wheel changes (`MW:377-381`).
+Combo: item 0 `<Manage...>` opens `ProfilesDialog`; other items are profiles. Choosing a profile saves the current lists, then `setCurrentProfile` builds a new `Profile` (reads its `modlist.txt`), stores the choice in settings, then `refresh` (`MW:1722-1731`, `organizercore.cpp:553-620`). The combo ignores mouse-wheel changes (`MW:377-381`).
 
 ### 4.4 Pane buttons
 
@@ -511,9 +432,7 @@ combo ignores mouse-wheel changes (`MW:377-381`).
 | Open folders | reads | menu | none | external app |
 | Backup/restore mod list | writes | dialog answer | profile | button click; `modlist.txt.<ts>` |
 
-Same object elsewhere: a **profile** is selectable only here; the mod list never offers profile
-gestures. An **executable** is reachable from the toolbar, Run menu, run box, and the executables
-dialog; the mod and plugin surfaces never start programs (Explorer and browser only).
+Same object elsewhere: a **profile** is selectable only here; the mod list never offers profile gestures. An **executable** is reachable from the toolbar, Run menu, run box, and the executables dialog; the mod and plugin surfaces never start programs (Explorer and browser only).
 
 ---
 
@@ -542,13 +461,7 @@ dialog; the mod and plugin surfaces never start programs (Explorer and browser o
 | Assign categories warning | Auto assign categories (`MLVA:264-280`) | Yes/Cancel, "Don't show this again" | setting |
 | Restore backup choice | Restore Backup buttons | selection dialog (`MW:3862-3895`) | file copy |
 
-Profile dialog behaviour (`profilesdialog.cpp`): **Select** (or double click / Enter on a row)
-returns that profile and closes (`:129-141,389-392`); **Create** creates a profile folder
-(`:195-208`); **Copy** asks a name and clones files (`:210-229`, `Profile::createPtrFrom`);
-**Remove** refuses the active profile, Yes/No warning "...including profile-specific save games",
-`shellDelete` then plain delete fallback (`:231-280`); **Rename** refuses the active profile
-(`:282-313`); **Transfer Saves** opens a transfer dialog (`:407-413`); check boxes change
-per-profile settings immediately (`:315-425`).
+Profile dialog behaviour (`profilesdialog.cpp`): **Select** (or double click / Enter on a row) returns that profile and closes (`:129-141,389-392`); **Create** creates a profile folder (`:195-208`); **Copy** asks a name and clones files (`:210-229`, `Profile::createPtrFrom`); **Remove** refuses the active profile, Yes/No warning "...including profile-specific save games", `shellDelete` then plain delete fallback (`:231-280`); **Rename** refuses the active profile (`:282-313`); **Transfer Saves** opens a transfer dialog (`:407-413`); check boxes change per-profile settings immediately (`:315-425`).
 
 ### 5.1 Gestures: Dialogs
 
@@ -571,27 +484,16 @@ per-profile settings immediately (`:315-425`).
 
 ## 6. Refresh on disk change
 
-- **No file watcher on the mods folder, on `modlist.txt`, `plugins.txt` or `meta.ini` was found.**
-  The only `QFileSystemWatcher` uses are the downloads folder (`DM:166-208,283-285,363`, suspended
-  by a RAII guard during MO's own writes), the saves folder (`savestab.cpp:21-27`) and the style
-  sheet (`moapplication.cpp:153`).
+- **No file watcher on the mods folder, on `modlist.txt`, `plugins.txt` or `meta.ini` was found.** The only `QFileSystemWatcher` uses are the downloads folder (`DM:166-208,283-285,363`, suspended by a RAII guard during MO's own writes), the saves folder (`savestab.cpp:21-27`) and the style sheet (`moapplication.cpp:153`).
 - A change in the downloads folder triggers `refreshList` automatically (`DM:283-285`).
-- For mods and profile files MO2 re-reads only on an explicit or implicit `refresh()` (menu Refresh,
-  F5, profile switch, after install/create/remove/backup, after a launched program exits): flush
-  pending `modlist.txt`, `ModInfo::updateFromDisc` rebuilds every mod from folders and `meta.ini`,
-  then `Profile::refreshModStatus` re-reads `modlist.txt` (`organizercore.cpp:1278-1293`,
-  `profile.cpp:391-470`). The refresh button's whatsThis says it is "usually not necessary unless
-  you modified data outside the program" (`UI:283-295`).
-- Pending in-memory `modlist.txt` and `meta.ini` writes happen before or during that re-read, so an
-  outside edit made while a delayed write is pending can be overwritten **(inferred from
-  `writeModlistNow(true)` at `profile.cpp:425`, not exercised)**.
+- For mods and profile files MO2 re-reads only on an explicit or implicit `refresh()` (menu Refresh, F5, profile switch, after install/create/remove/backup, after a launched program exits): flush pending `modlist.txt`, `ModInfo::updateFromDisc` rebuilds every mod from folders and `meta.ini`, then `Profile::refreshModStatus` re-reads `modlist.txt` (`organizercore.cpp:1278-1293`, `profile.cpp:391-470`). The refresh button's whatsThis says it is "usually not necessary unless you modified data outside the program" (`UI:283-295`).
+- Pending in-memory `modlist.txt` and `meta.ini` writes happen before or during that re-read, so an outside edit made while a delayed write is pending can be overwritten **(inferred from `writeModlistNow(true)` at `profile.cpp:425`, not exercised)**.
 
 ---
 
 ## 7. Object x surface
 
-Cell = gestures offered there (`-` = none). "Row menu" = context menu on that object's row;
-"Keys/mouse" = keyboard, drag, double click.
+Cell = gestures offered there (`-` = none). "Row menu" = context menu on that object's row; "Keys/mouse" = keyboard, drag, double click.
 
 | Object | Mod list: row menu | Mod list: keys/mouse | Plugin list | Downloads tab | Toolbar / run box | Dialogs (Profiles, Executables, Mod Info, Overwrite) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -606,34 +508,21 @@ Cell = gestures offered there (`-` = none). "Row menu" = context menu on that ob
 | Executable | - | - | - | - | run box (combo, Run, Shortcut), Run menu, toolbar pins, Executables... | Executables dialog |
 
 **Same object on several surfaces, same gestures?**
-- Mod: the mod-list menu (35+ items) is offered only on the mod list. From the plugin list the
-  reduced set is Open Origin in Explorer and Open Origin Info.... From the Conflicts tab it is Go
-  to... (open that mod's Information). Selecting a plugin or a mod cross-highlights; no gesture.
-- Plugin: Enable/Disable, Send to and Lock exist only on the plugin list. Enable-all and
-  Disable-all carry a confirm dialog on both the plugin list and the mod list.
-- Downloaded file: Install by menu, key, double click or drag onto the mod list; Delete and Hide by
-  menu only (Delete also by key).
+- Mod: the mod-list menu (35+ items) is offered only on the mod list. From the plugin list the reduced set is Open Origin in Explorer and Open Origin Info.... From the Conflicts tab it is Go to... (open that mod's Information). Selecting a plugin or a mod cross-highlights; no gesture.
+- Plugin: Enable/Disable, Send to and Lock exist only on the plugin list. Enable-all and Disable-all carry a confirm dialog on both the plugin list and the mod list.
+- Downloaded file: Install by menu, key, double click or drag onto the mod list; Delete and Hide by menu only (Delete also by key).
 
 ---
 
 ## Surprises and oddities (read, not judged)
 
-- The mod-list row menu is chosen by the clicked row's type but acts on the whole selection; items
-  marked "index only" (Rename, Reinstall, Create Backup, versioning, Restore Backup, Information)
-  ignore the rest of the selection (`MLCM:269-273,508-519`).
-- Select Color appears for a regular mod only if the click landed in the Notes column
-  (`MLCM:530-540`), but always for a separator (`:398-406`).
-- A Backup row with a priority sort shows none of Install / Create empty / Create separator inside
-  "All Mods" (`MLCM:34-60`).
-- `removeMods` counts Separators and Backups as regular through inheritance; Overwrite and Foreign
-  are the only exclusions.
-- Multi-select remove asks once for the whole list; single remove asks per mod through
-  `ModList::removeRows`; Delete on an Overwrite row runs Clear Overwrite (`ML:1210-1216`).
+- The mod-list row menu is chosen by the clicked row's type but acts on the whole selection; items marked "index only" (Rename, Reinstall, Create Backup, versioning, Restore Backup, Information) ignore the rest of the selection (`MLCM:269-273,508-519`).
+- Select Color appears for a regular mod only if the click landed in the Notes column (`MLCM:530-540`), but always for a separator (`:398-406`).
+- A Backup row with a priority sort shows none of Install / Create empty / Create separator inside "All Mods" (`MLCM:34-60`).
+- `removeMods` counts Separators and Backups as regular through inheritance; Overwrite and Foreign are the only exclusions.
+- Multi-select remove asks once for the whole list; single remove asks per mod through `ModList::removeRows`; Delete on an Overwrite row runs Clear Overwrite (`ML:1210-1216`).
 - Downloads Space-to-pause passes `event->key()` where a row index is expected (`DLV:347`).
 - Refreshing the downloads list deletes orphaned `.meta` files without asking (`DM:405-419`).
-- Most `meta.ini` setters only mark the mod dirty; the file is written later by `saveMeta`
-  (destructor or dialog), not per gesture.
-- Downloads `queryInfo(int)` is wired (`downloadstab.cpp:34`) and the view has `issueQueryInfo`
-  (`DLV:367-370`), but the menu only calls the MD5 variant (`DLV:236`).
-- The list-options button's `whatsThis` says "Refresh list" but its menu is the full All Mods menu
-  (`UI:283-300`, `MW:368-369`).
+- Most `meta.ini` setters only mark the mod dirty; the file is written later by `saveMeta` (destructor or dialog), not per gesture.
+- Downloads `queryInfo(int)` is wired (`downloadstab.cpp:34`) and the view has `issueQueryInfo` (`DLV:367-370`), but the menu only calls the MD5 variant (`DLV:236`).
+- The list-options button's `whatsThis` says "Refresh list" but its menu is the full All Mods menu (`UI:283-300`, `MW:368-369`).

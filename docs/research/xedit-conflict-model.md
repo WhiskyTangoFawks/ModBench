@@ -6,12 +6,10 @@ Findings from `xeMainForm.pas`, `wbInterface.pas` and `wbImplementation.pas`.
 
 ## Two independent axes
 
-- **ConflictThis**: this plugin's version of the record relative to the rest of the stack.
-  Classifies each cell in the compare grid.
+- **ConflictThis**: this plugin's version of the record relative to the rest of the stack. Classifies each cell in the compare grid.
 - **ConflictAll**: the summary classification for the whole override stack. Classifies each row.
 
-A record may be `caConflict` overall while the master plugin's version is `ctMaster` and the
-winning plugin's version is `ctConflictWins`.
+A record may be `caConflict` overall while the master plugin's version is `ctMaster` and the winning plugin's version is `ctConflictWins`.
 
 `TConflictAll` (row level, background colour):
 
@@ -49,31 +47,20 @@ Every field definition carries a `ConflictPriority` the algorithm consults befor
 | `cpOverride` | Per-plugin result capped at `ctOverride` |
 | `cpCritical` | Bumps to `caConflictCritical` if non-empty values differ |
 
-Injected records, a FormKey from a master the plugin does not declare, are treated as
-`cpCritical`. The priority system exists because xEdit works at the raw binary level and must
-paper over redundant count fields, unused bytes and internal bookkeeping.
+Injected records, a FormKey from a master the plugin does not declare, are treated as `cpCritical`. The priority system exists because xEdit works at the raw binary level and must paper over redundant count fields, unused bytes and internal bookkeeping.
 
 ## Comparison uses resolved display values, not raw bytes
 
-xEdit compares `DisplaySortKey` values, the human-readable resolved form. Two records with
-different binary representations can be identical, for example a FormID that resolves to the same
-target across different load-order slots.
+xEdit compares `DisplaySortKey` values, the human-readable resolved form. Two records with different binary representations can be identical, for example a FormID that resolves to the same target across different load-order slots.
 
 ## Partial forms are sparse by design
 
-A record with the `IsPartialForm` header flag omits fields it does not override. Those absent
-fields are treated as `cpIgnore`, not as empty values that differ from the master.
+A record with the `IsPartialForm` header flag omits fields it does not override. Those absent fields are treated as `cpIgnore`, not as empty values that differ from the master.
 
 ## Sorted versus unsorted arrays
 
-`wbArrayS` arrays are matched by sort key before comparing elements, not by index. Where the key is
-a member read off the element rather than the element's own value, a script's name, a property's
-name, a fragment's index, that key aligns the columns, so a plugin carrying fewer elements reads as
-an absence at those keys instead of shifting every row after it. For unsorted arrays, quest script
-fragments for example, order is semantically significant and a positional mismatch is a real
-conflict.
+`wbArrayS` arrays are matched by sort key before comparing elements, not by index. Where the key is a member read off the element rather than the element's own value, a script's name, a property's name, a fragment's index, that key aligns the columns, so a plugin carrying fewer elements reads as an absence at those keys instead of shifting every row after it. For unsorted arrays, quest script fragments for example, order is semantically significant and a positional mismatch is a real conflict.
 
 ## Injected-record escalation
 
-`ConflictLevelForNodeDatas` in `xeMainForm.pas` escalates an injected record to critical only when a
-real value difference exists; a content-identical injected record stays non-conflicting.
+`ConflictLevelForNodeDatas` in `xeMainForm.pas` escalates an injected record to critical only when a real value difference exists; a content-identical injected record stays non-conflicting.
