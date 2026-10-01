@@ -237,7 +237,7 @@ function isElementCommand(value: unknown): value is ElementCommand {
 function parseElementCommand(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isElementCommand(w.command)) throw new Error('Expected "elementCommand" to name an element command.');
   if (!isContextObject(w.context)) throw new Error('Expected "elementCommand" to carry a context object.');
-  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context, value: w.value };
+  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context, value: w.command === 'addElement' ? w.value : undefined };
 }
 
 function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {

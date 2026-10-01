@@ -168,6 +168,10 @@ describe('RecordPanel — drag and drop', () => {
     expect(lastElementCommand(vscode.postMessage)).toBeUndefined();
   });
 
+  it('a cell the plugin does not hold is not draggable', async () => {
+    expect(await cellOf('Name', MOD)).toHaveAttribute('draggable', 'false');
+  });
+
   it('a cell is draggable', async () => {
     expect(await cellOf('Level', MASTER)).toHaveAttribute('draggable', 'true');
   });

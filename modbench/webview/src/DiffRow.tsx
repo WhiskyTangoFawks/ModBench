@@ -291,8 +291,8 @@ export function DiffRow({
         const parentContext = arrayEditable && isArrayParentRow
           ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
           : undefined;
-        const drag: CellDrag | undefined = hasElement
-          ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: shown }
+        const drag: CellDrag | undefined = diff.values[key] != null
+          ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: diff.values[key] }
           : undefined;
         const landing = (dragged: CellDrag): (() => void) | undefined => {
           if (dragged.row === rowKey) {
