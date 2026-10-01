@@ -39,6 +39,7 @@ vi.mock('../../install/install', async (importOriginal) => ({
 
 import { registerModInstallCommands, type ModInstallDeps } from '../installCommands';
 import { ARCHIVE_EXTENSIONS } from '../../install/install';
+import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 
@@ -59,6 +60,7 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
     instance: { value: instanceValueFixture({ gameName: GAME_NAME }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
+    installDownloaded: vi.fn(),
     warnIfFomod: vi.fn(),
     ...over,
   };
@@ -179,5 +181,33 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
       ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME },
     );
     expect(succeeded).toEqual({ installed: true });
+  });
+});
+
+describe('modbench.mod.install: a downloaded file is its source', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('hands the downloaded file to the Downloads flow and asks nothing itself', async () => {
+    const installDownloaded = vi.fn().mockResolvedValueOnce(true);
+    const row = downloadRowFixture('foo.7z');
+
+    registerModInstallCommands(deps({ installDownloaded }));
+    const outcome = await invoke('modbench.mod.install', { kind: 'download', row });
+
+    expect(installDownloaded).toHaveBeenCalledWith(row);
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(showOpenDialog).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ installed: true });
+  });
+
+  it('a mod row as Argument is no source, so it asks archive or folder', async () => {
+    const installDownloaded = vi.fn();
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerModInstallCommands(deps({ installDownloaded }));
+    await invoke('modbench.mod.install', { kind: 'mod', mod: { name: 'Some Mod' } });
+
+    expect(showQuickPick).toHaveBeenCalled();
+    expect(installDownloaded).not.toHaveBeenCalled();
   });
 });

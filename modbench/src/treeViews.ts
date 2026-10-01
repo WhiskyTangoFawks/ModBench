@@ -6,13 +6,13 @@ import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNod
 import type { NexusModRow } from './mods/modManagementCommands';
 import { errorMessage } from './ports/errorMessage';
 import {
-  registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
+  installDownloadedFile, registerDownloadsExcludedToggleCommands, registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps,
 } from './downloads/DownloadsPanel';
 import { DownloadNode, DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
 import { ExcludedDownloadDecorationProvider } from './downloads/ExcludedDownloadDecorationProvider';
 import { downloadsKeyContext } from './downloads/keyContext';
-import type { InstanceView } from './instanceLoader/instance';
+import type { DownloadFile, InstanceView } from './instanceLoader/instance';
 import type { DownloadsAccess } from './downloadsCommands/downloads';
 import type { InstallAccess } from './install/install';
 import type { Own } from './session';
@@ -158,7 +158,10 @@ export interface DownloadsViewDeps {
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
   { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
-): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode>; downloadsFilter: NameFilter } {
+): {
+  downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode>; downloadsFilter: NameFilter;
+  installDownloaded: (file: DownloadFile) => Promise<boolean>;
+} {
   const downloadsProvider = own(new DownloadsProvider({ instance, log: install.log })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -195,8 +198,9 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsExcludedToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(access, instance, reporter, install, () => downloadsView.selection),
+    ...registerDownloadsSingleRowCommands(reporter, () => downloadsView.selection),
     ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection, downloadsProvider),
   ]) own(disposable);
-  return { downloadsProvider, downloadsView, downloadsFilter };
+  const installDownloaded = (file: DownloadFile) => installDownloadedFile(file, access, instance, reporter, install);
+  return { downloadsProvider, downloadsView, downloadsFilter, installDownloaded };
 }
