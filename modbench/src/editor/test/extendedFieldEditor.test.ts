@@ -34,7 +34,7 @@ type FieldFile = ExtendedFieldEditorDeps['fieldFile'];
 // record and origin, a file per field and plugin, every segment escaped into one path segment.
 const fieldFileUnder = (tempRoot: string): FieldFile => (field) => {
   const folder = join(tempRoot, encodeURIComponent(field.recordLabel), encodeURIComponent(field.origin));
-  return { folder, file: join(folder, `${encodeURIComponent(field.fieldName)} [${encodeURIComponent(field.plugin)}].txt`) };
+  return { folder, file: join(folder, `${encodeURIComponent(field.fieldName)} [${encodeURIComponent(field.plugin)}]`) };
 };
 
 const extendedEditorPath = (tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string) =>
