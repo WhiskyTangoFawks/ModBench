@@ -167,7 +167,7 @@ function isLogLevel(value: unknown): value is LogLevel {
   return value === 'debug' || value === 'info' || value === 'warn';
 }
 
-function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
+export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
   if (typeof value !== 'object' || value === null) return false;
   const witness = value as { op?: unknown; path?: unknown };
   return (
