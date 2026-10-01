@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -51,6 +52,10 @@ public sealed class PluginHeaderRecordApiTests
 
         var masters = Field(detail, "MasterReferences");
         Assert.Contains("Fallout4.esm", masters.GetProperty("value").ToString());
+
+        Assert.Equal(
+            PluginHeader.FormIdReadOnlyReason("000000:HeaderQuery.esp", "HeaderQuery.esp"),
+            detail.GetProperty("formIdReadOnlyReason").GetString());
     }
 
     [Fact]

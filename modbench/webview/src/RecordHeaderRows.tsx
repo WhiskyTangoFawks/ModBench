@@ -122,11 +122,12 @@ export function RecordHeaderRows({
               <DiskCell
                 key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                 onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
+                title={override.formIdReadOnlyReason ?? undefined}
                 copyText={formKeyLabel(override.formKey, override)}
               >
                 <FormIdCell
                   record={override}
-                  editable={editableColumns.has(key)}
+                  editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               </DiskCell>

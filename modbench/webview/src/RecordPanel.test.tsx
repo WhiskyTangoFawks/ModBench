@@ -1855,10 +1855,10 @@ describe('RecordPanel — a column whose record failed to parse', () => {
 // and read-only on a plugin header. It reads as xEdit's does, as the record it names.
 describe('RecordPanel — the Record Header', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
-  const native = (formKey: string, editorId: string | null): CompareResult => compareResultFixture({
+  const native = (formKey: string, editorId: string | null, formIdReadOnlyReason?: string): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
-        formKey, plugin: 'MyMod.esp', isWinner: true, editorId,
+        formKey, plugin: 'MyMod.esp', isWinner: true, editorId, formIdReadOnlyReason,
         fields: [{ metadata: nameMeta, value: 'A Name' }],
       }),
     ],
@@ -1900,6 +1900,28 @@ describe('RecordPanel — the Record Header', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({
       op: 'set', path: [member('FormKey')], value: '000900:MyMod.esp',
     });
+  });
+
+  it('opens no editor on a FormID the record carries a read-only reason for, and shows the reason', async () => {
+    const reason = 'names the plugin itself';
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(native('000000:MyMod.esp', null, reason), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(formIdCell(container)).toHaveAttribute('title', reason);
+  });
+
+  it('opens the editor on a FormID with no reason, where the plugin header\'s opens none', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
   // editor.md, Menus and keys: open field value is a text field's; the FormID reads as a reference.

@@ -106,7 +106,8 @@ public sealed class RecordQueryService(
                 LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
                 RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
                 IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis,
-                IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin)));
+                IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin),
+                FormIdReadOnlyReason: o.FormIdReadOnlyReason));
 
         return new CompareResult(annotated, classification.Diffs, conflictAll);
     }
@@ -180,7 +181,10 @@ public sealed class RecordQueryService(
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
-            ParseDiagnosis: document.ParseDiagnosis);
+            ParseDiagnosis: document.ParseDiagnosis,
+            FormIdReadOnlyReason: document.RecordType == PluginHeader.RecordType
+                ? PluginHeader.FormIdReadOnlyReason(document.FormKey, document.Plugin.Name)
+                : null);
 
     private IRecordReads RequireReads() => _index.RequireReads();
 

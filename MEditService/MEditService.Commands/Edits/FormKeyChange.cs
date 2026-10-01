@@ -32,7 +32,7 @@ internal sealed class FormKeyChange(
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.FieldReadOnly, Member,
-                $"A plugin header's FormID is read-only: {formKey} names {plugin.Name} itself, not a record in it.");
+                PluginHeader.FormIdReadOnlyReason(formKey, plugin.Name));
         }
 
         if (value is not { ValueKind: JsonValueKind.String } text
