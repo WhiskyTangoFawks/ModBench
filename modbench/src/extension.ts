@@ -64,7 +64,7 @@ export type ActivateExports = ReturnType<typeof activate>;
 
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
-  const attachPort = meditConfig().get<number>('backendPort');
+  const attachPort = meditConfig().get<number>('attachToBackendPort');
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);

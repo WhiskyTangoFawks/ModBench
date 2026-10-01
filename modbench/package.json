@@ -37,9 +37,9 @@
     "configuration": {
       "title": "Modbench",
       "properties": {
-        "modbench.backendPort": {
+        "modbench.attachToBackendPort": {
           "type": "number",
-          "description": "Attach to an mEdit a developer launched from an IDE on this port, and spawn none. Leave unset: each window spawns its own mEdit."
+          "description": "Attach to an mEdit already running on this port instead of starting one. Never a fallback: if nothing answers, Modbench reports it. Leave unset: each window starts its own mEdit."
         },
         "modbench.scriptsPath": {
           "type": "string",
