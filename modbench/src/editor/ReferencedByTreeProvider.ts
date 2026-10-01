@@ -73,10 +73,8 @@ export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): st
 
 export const REFERENCED_BY_VIEW = 'modbench.referencedByTree';
 
-/** Referenced By's own text for the catalog's one copy value id, or `undefined` unless the
- *  invocation is its own: a referrer row, or its Ctrl+C, which names the view. A row's invocation
- *  is the selection VS Code hands a context menu, or the view's own current selection, or the
- *  right-clicked row, in that order. */
+/** Referenced By's own text for copy value, or `undefined` unless the invocation is a referrer row
+ *  or its Ctrl+C, which names the view. */
 export function referencedByCopyValueText(
   referencedByTreeView: Pick<vscode.TreeView<ReferencedByTreeNode>, 'selection'>,
   clicked: unknown, allSelected: readonly unknown[] | undefined,

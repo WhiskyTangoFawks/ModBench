@@ -161,9 +161,8 @@ export interface CopyValueAdapter {
   reporterTag: string;
 }
 
-// Every surface the catalog names contributes an adapter, tried in order, so no surface's module
-// needs to know another surface exists. A palette call hands over no argument, so the focused
-// view stands for the key that view's own Ctrl+C would have passed.
+// Adapters are tried in order, so no surface needs to know another exists. A palette call has no
+// argument, so the focused view stands for the key its own Ctrl+C passes.
 export function registerCopyValueCommand(
   adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter,
   focusedViewId: () => string | undefined, nothingToCopy: () => void,
