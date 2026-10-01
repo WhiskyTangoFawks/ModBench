@@ -109,7 +109,7 @@ export class HttpMEditClient implements MEditClient {
     op: string;
     failMsg: string;
     post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
-  }): Promise<T | WriteRefused | undefined> {
+  }): Promise<T | WriteRefused> {
     try {
       const { data, error, response } = await spec.post();
       if (!response.ok) {
@@ -117,11 +117,11 @@ export class HttpMEditClient implements MEditClient {
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
       }
-      return data;
+      return data ?? { refused: true, unanswered: true, message: `${spec.failMsg} — no answer` };
     } catch (e) {
       const message = errorMessage(e);
       this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
-      return { refused: true, message: `${spec.failMsg} — ${message}` };
+      return { refused: true, unanswered: true, message: `${spec.failMsg} — ${message}` };
     }
   }
 
@@ -132,7 +132,7 @@ export class HttpMEditClient implements MEditClient {
       failMsg,
       post: () => this.apiClient.POST('/plugins/create', { body: { origin: plugin.origin, name: plugin.name, folder } }),
     });
-    return answer ?? { refused: true, message: `${failMsg} — no answer` };
+    return answer;
   }
 
   /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.
@@ -296,7 +296,6 @@ export class HttpMEditClient implements MEditClient {
         failMsg: `Could not track ${counted}`,
         post: () => this.apiClient.POST('/plugins/track', { body: { plugins: [...plugins], preset, upstreamVersionByOrigin } }),
       });
-      if (answer === undefined) return { refused: true, message: `Could not track ${counted} — no answer` };
       if (isRefused(answer)) return answer;
       return {
         landed: answer.applied,
@@ -317,7 +316,7 @@ export class HttpMEditClient implements MEditClient {
         body: { origin, recordType, editorId: null, formKey: null },
       }),
     });
-    return answer ?? { refused: true, message: `${failMsg} — no answer` };
+    return answer;
   }
 
   async deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused> {
@@ -327,7 +326,6 @@ export class HttpMEditClient implements MEditClient {
       failMsg: `Could not delete ${counted}`,
       post: () => this.apiClient.POST('/records/delete', { body: { records: [...records] } }),
     });
-    if (answer === undefined) return { refused: true, message: `Could not delete ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,
@@ -346,7 +344,6 @@ export class HttpMEditClient implements MEditClient {
         body: { records: [...records], mode, destinations: [...destinations], replace },
       }),
     });
-    if (answer === undefined) return { refused: true, message: `Could not copy ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied.map(({ record, destination, newFormKey }) => ({ record, destination, newFormKey })),
@@ -361,7 +358,6 @@ export class HttpMEditClient implements MEditClient {
       failMsg: `Could not decompile ${counted}`,
       post: () => this.apiClient.POST('/plugins/decompile', { body: { plugins: [...plugins] } }),
     });
-    if (answer === undefined) return { refused: true, message: `Could not decompile ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,
@@ -381,7 +377,6 @@ export class HttpMEditClient implements MEditClient {
         body: { plugins: [...plugins] },
       }),
     });
-    if (answer === undefined) return { refused: true, message: `Could not compile ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
       landed: answer.applied,

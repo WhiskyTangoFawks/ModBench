@@ -10,7 +10,7 @@ export type {
   LoadOrderRefusal, PluginLoadFailure, CompareResult,
 } from './MEditClient';
 export type { RecordEditEnvelope } from './MEditClient';
-export { isRefused, UNLIMITED_RECORDS } from './MEditClient';
+export { isRefused, isUnanswered, UNLIMITED_RECORDS } from './MEditClient';
 export { toLoadOrderStatus } from './apiClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
 export type { BackendLifecycleOptions, BackendStream } from './backendLifecycle';

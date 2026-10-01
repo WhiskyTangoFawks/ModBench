@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient } from '../HttpMEditClient';
+import { isUnanswered } from '../MEditClient';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -216,13 +217,35 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
 
-  it('resolves a WriteRefused the same way for a thrown request', async () => {
+  // common.md, Unconfirmed writes, story 6: a request with no answer may have written.
+  it('resolves a thrown request the same way, told apart as unanswered', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
     const result = await client.deleteRecords([kept]);
 
-    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(result).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(isUnanswered(result)).toBe(true);
+  });
+
+  it('tells a success with no body apart as unanswered, for create and copy too', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+    const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
+
+    const answers = [
+      await client.deleteRecords([kept]),
+      await thrown.createRecord('MyPatch.esp', 'ModA', 'npc_'),
+      await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
+    ];
+
+    expect(answers.map(isUnanswered)).toEqual([true, true, true]);
+    expect(answers[0]).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — no answer' });
+  });
+
+  it('never tells a refusal mEdit answered apart as unanswered', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request'))));
+
+    expect(isUnanswered(await client.deleteRecords([kept]))).toBe(false);
   });
 });
 

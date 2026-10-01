@@ -20,9 +20,12 @@ export type { RecordEditEnvelope } from '../wire/messages';
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
- *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
+ *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm.
+ *  `unanswered` marks a request mEdit never answered, which may have written (common.md,
+ *  Unconfirmed writes, story 6). */
 export interface WriteRefused {
   readonly refused: true;
+  readonly unanswered?: true;
   readonly message: string;
 }
 
@@ -31,6 +34,10 @@ export interface WriteRefused {
  *  the HTTP adapter into a caller's test. */
 export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
+}
+
+export function isUnanswered(result: unknown): result is WriteRefused & { unanswered: true } {
+  return isRefused(result) && result.unanswered === true;
 }
 
 const NOTIFICATION_KINDS = [
