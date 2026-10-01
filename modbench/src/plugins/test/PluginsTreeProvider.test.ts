@@ -3791,7 +3791,24 @@ describe('PluginsTreeProvider — an unconfirmed shape change (common.md, Unconf
 
       instance.publish(valueOver(LINES));
       expect(await spinning(tree)).toEqual([]);
-      expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was moved, and the disk shows the same order.']);
+      expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was moved, and the disk does not show the move.']);
+    });
+
+    it('treats an unrelated reorder or an install as differing: the mark stays, and the next such value logs', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const logged: string[] = [];
+      const tree = treeOver(instance, { log: (line) => logged.push(line) });
+      await tree.getChildren();
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOver([LINES[0], LINES[2], LINES[1], LINES[3]]));
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp']);
+      expect(logged).toEqual([]);
+
+      instance.publish(valueOver([...LINES, ['New.esp', 'ModOne']]));
+      expect(await spinning(tree)).toEqual([]);
+      expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was moved, and the disk does not show the move.']);
     });
 
     it('stays while the disk cannot be read', async () => {

@@ -140,10 +140,19 @@ async function confirmUninstall(names: readonly string[], ask: AskQuestion): Pro
   return (await ask(question, { modal: true }, 'Uninstall')) === 'Uninstall';
 }
 
+export interface ModContextDeps {
+  access: ModlistAccess;
+  instance: Pick<Instance, 'value'>;
+  viewSelection: () => readonly ModlistNode[];
+  reporter: Reporter;
+  ask: AskQuestion;
+  trash: MoveToTrash;
+  log: (line: string) => void;
+  marks: Pick<ModListProvider, 'markRemoved' | 'forgetUnconfirmedShape'>;
+}
+
 export function registerModContextCommands(
-  access: ModlistAccess, instance: Pick<Instance, 'value'>, viewSelection: () => readonly ModlistNode[],
-  reporter: Reporter, ask: AskQuestion, trash: MoveToTrash, log: (line: string) => void,
-  marks: Pick<ModListProvider, 'markRemoved' | 'forgetUnconfirmedShape'>,
+  { access, instance, viewSelection, reporter, ask, trash, log, marks }: ModContextDeps,
 ): vscode.Disposable[] {
   return [
       registerModsGesture('modbench.mod.uninstall', viewSelection, async (entry) => {

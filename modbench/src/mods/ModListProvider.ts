@@ -73,7 +73,19 @@ const sameEntry = (a: EntryRef, b: EntryRef): boolean => a.kind === b.kind && a.
 
 const isListed = (value: InstanceValue, ref: EntryRef): boolean => value.mods.some((entry) => sameEntry(entry, ref));
 
-const orderOf = (value: InstanceValue): string => value.mods.map((entry) => `${entry.kind}:${entry.name}`).join('\n');
+const keyOf = (entry: EntryRef): string => `${entry.kind}:${entry.name}`;
+
+const sequence = (entries: readonly EntryRef[]): string => entries.map(keyOf).join('\n');
+
+// A separator carries the mods directly before it in mod order, the ones it holds.
+function travellingWith(entries: readonly ModlistEntry[], moved: readonly EntryRef[]): ReadonlySet<string> {
+  const travelling = new Set(moved.map(keyOf));
+  for (const ref of moved) {
+    let at = ref.kind === 'separator' ? entries.findIndex((entry) => sameEntry(entry, ref)) - 1 : -1;
+    for (; at >= 0 && entries[at]?.kind === 'mod'; at--) travelling.add(keyOf(entries[at] ?? ref));
+  }
+  return travelling;
+}
 
 const quoted = (ref: EntryRef): string => (ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`);
 
@@ -290,7 +302,7 @@ export class ModListProvider
 
   private markShape(
     subjects: readonly EntryRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
-    carriers?: readonly EntryRef[], partway?: UnconfirmedShape['partway'],
+    { carriers, partway }: { carriers?: readonly EntryRef[]; partway?: UnconfirmedShape['partway'] } = {},
   ): void {
     const own = [...subjects];
     const rows = carriers ?? own;
@@ -307,9 +319,13 @@ export class ModListProvider
 
   /** The rows stay where they are, marked, until the disk's order differs. */
   markMoved(refs: readonly EntryRef[]): void {
-    const before = orderOf(this.instanceValue);
-    this.markShape(refs, (value) => orderOf(value) !== before,
-      (moved) => `${moved.map(quoted).join(', ')} was moved, and the disk shows the same order.`);
+    const { mods: entries } = this.instanceValue;
+    const travelling = travellingWith(entries, refs);
+    const rest = (all: readonly ModlistEntry[]) => sequence(all.filter((entry) => !travelling.has(keyOf(entry))));
+    const before = sequence(entries);
+    const restBefore = rest(entries);
+    this.markShape(refs, (value) => sequence(value.mods) !== before && rest(value.mods) === restBefore,
+      (moved) => `${moved.map(quoted).join(', ')} was moved, and the disk does not show the move.`);
   }
 
   /** Each row stays, marked, until the disk omits it. */
@@ -330,8 +346,10 @@ export class ModListProvider
     const holder = this.separatorHolding(0);
     if (holder === undefined) return;
     this.markShape([created], (value) => isListed(value, created),
-      () => `${quoted(created)} was created, and the disk does not list it.`, [holder],
-      (value) => value.modFolders?.some((folder) => folder.kind === 'mod' && folder.name === name) === true);
+      () => `${quoted(created)} was created, and the disk does not list it.`, {
+        carriers: [holder],
+        partway: (value) => value.modFolders?.some((folder) => folder.kind === 'mod' && folder.name === name) === true,
+      });
   }
 
   /** The anchor separator, or the separator that holds the anchor mod, carries the mark. With none,
@@ -342,7 +360,7 @@ export class ModListProvider
     const holder = at === -1 ? undefined : this.separatorHolding(at);
     if (holder === undefined) return;
     this.markShape([added], (value) => isListed(value, added),
-      () => `${quoted(added)} was added, and the disk does not list it.`, [holder]);
+      () => `${quoted(added)} was added, and the disk does not list it.`, { carriers: [holder] });
   }
 
   /** A refused or failed write shows the disk's shape at once, with no mark. */

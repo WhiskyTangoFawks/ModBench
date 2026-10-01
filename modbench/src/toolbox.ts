@@ -537,9 +537,10 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const toolboxProvider = own(new ToolboxProvider({ instance, log: (line) => outputChannel.warn(`[toolbox] ${line}`) }));
   ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor, marks: toolboxProvider }));
   ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod }));
-  ownAll(own, registerModContextCommands(
-    access, instance, () => modListView.selection, reporterFor('mod.uninstall'), ask, trash,
-    (line) => outputChannel.warn(`[modList] ${line}`), modListProvider));
+  ownAll(own, registerModContextCommands({
+    access, instance, viewSelection: () => modListView.selection, reporter: reporterFor('mod.uninstall'), ask, trash,
+    log: (line) => outputChannel.warn(`[modList] ${line}`), marks: modListProvider,
+  }));
   ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable'), modListProvider));
   own(registerModMoveCommand(
     access, instance,

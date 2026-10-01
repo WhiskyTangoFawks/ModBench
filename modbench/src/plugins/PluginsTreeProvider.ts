@@ -55,8 +55,7 @@ function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] 
     .sort((a, b) => a.slot - b.slot);
 }
 
-const orderOf = (value: InstanceValue): string =>
-  listedPlugins(value).map((p) => pluginAddressKey(p.name, p.origin)).join('\n');
+const orderOf = (value: InstanceValue): string[] => listedPlugins(value).map((p) => pluginAddressKey(p.name, p.origin));
 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a
@@ -410,7 +409,7 @@ export class PluginsTreeProvider
           shape.differedOnce = true;
           continue;
         }
-        this.log('warn', `[PluginsTreeProvider] ${shape.moved.map(({ name }) => `"${name}"`).join(', ')} was moved, and the disk shows the same order.`);
+        this.log('warn', `[PluginsTreeProvider] ${shape.moved.map(({ name }) => `"${name}"`).join(', ')} was moved, and the disk does not show the move.`);
       }
       this.dropShape(shape);
     }
@@ -423,9 +422,12 @@ export class PluginsTreeProvider
 
   private markMoved(moved: readonly PluginAddress[]): void {
     if (moved.length === 0) return;
-    const before = orderOf(this.instanceValue);
+    const movedKeys = new Set(moved.map(({ name, origin }) => pluginAddressKey(name, origin)));
+    const rest = (value: InstanceValue) => orderOf(value).filter((key) => !movedKeys.has(key)).join('\n');
+    const before = orderOf(this.instanceValue).join('\n');
+    const restBefore = rest(this.instanceValue);
     const shape: UnconfirmedShape = {
-      moved: [...moved], covered: (value) => orderOf(value) !== before, marked: false, differedOnce: false,
+      moved: [...moved], covered: (value) => orderOf(value).join('\n') !== before && rest(value) === restBefore, marked: false, differedOnce: false,
       timer: setTimeout(() => {
         shape.marked = true;
         this.render();

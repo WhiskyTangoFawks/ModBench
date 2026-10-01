@@ -207,7 +207,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(ask.asked).toEqual([{
@@ -225,7 +225,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
     assertAskedOnce(ask, { messageContains: '"Mod A", "Mod B"', buttons: ['Uninstall'] });
@@ -240,7 +240,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   it('uninstalls nothing when the modal is dismissed', async () => {
     uninstallMods.mockResolvedValue({ applied: true, outcome: { landed: [], refused: [] } });
 
-    registerModContextCommands(access, instance, () => [], recordingReporter(), scriptedDialog(undefined), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(undefined), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(uninstallMods).not.toHaveBeenCalled();
@@ -249,7 +249,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   it('falls back to the view selection from a key, where no row is right-clicked', async () => {
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
 
-    registerModContextCommands(access, instance, () => [modA], recordingReporter(), scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [modA], reporter: recordingReporter(), ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall');
 
     expect(uninstallMods).toHaveBeenCalledWith(
@@ -259,7 +259,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   it('an empty selection asks nothing and uninstalls nothing', async () => {
     const ask = scriptedDialog('Uninstall');
 
-    registerModContextCommands(access, instance, () => [], recordingReporter(), ask, trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask, trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall');
 
     expect(ask.asked).toEqual([]);
@@ -273,7 +273,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA, [modA, modB]);
 
     expect(reporter.reports).toEqual([{
@@ -285,7 +285,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([
@@ -297,7 +297,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     uninstallMods.mockResolvedValueOnce({ applied: true, outcome: { landed: [{ name: 'Mod A' }], refused: [] } });
     const reporter = recordingReporter();
 
-    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -311,7 +311,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -326,7 +326,7 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
     });
     const reporter = recordingReporter();
 
-    registerModContextCommands(access, instance, () => [], reporter, scriptedDialog('Uninstall'), trash, log, shapeMarks);
+    registerModContextCommands({ access, instance, viewSelection: () => [], reporter, ask: scriptedDialog('Uninstall'), trash, log, marks: shapeMarks });
     await invoke('modbench.mod.uninstall', modA);
 
     expect(reporter.reports).toEqual([{
@@ -1317,7 +1317,7 @@ describe('shape gestures mark what they change before the write (common.md, Unco
     it('marks each mod once the question is answered, then writes', async () => {
       recordCalls({ markRemoved: shapeMarks.markRemoved }, { uninstallMods });
 
-      registerModContextCommands(access, instance, () => [], recordingReporter(), asked(), trash, vi.fn(), shapeMarks);
+      registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: asked(), trash, log: vi.fn(), marks: shapeMarks });
       await invoke('modbench.mod.uninstall', modA, [modA, modC]);
 
       expect(shapeMarks.markRemoved.mock.calls).toEqual([[[{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod C' }]]]);
@@ -1325,7 +1325,7 @@ describe('shape gestures mark what they change before the write (common.md, Unco
     });
 
     it('marks nothing when the question is dismissed', async () => {
-      registerModContextCommands(access, instance, () => [], recordingReporter(), scriptedDialog(undefined), trash, vi.fn(), shapeMarks);
+      registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: scriptedDialog(undefined), trash, log: vi.fn(), marks: shapeMarks });
       await invoke('modbench.mod.uninstall', modA);
 
       expect(shapeMarks.markRemoved).not.toHaveBeenCalled();
@@ -1340,7 +1340,7 @@ describe('shape gestures mark what they change before the write (common.md, Unco
         },
       });
 
-      registerModContextCommands(access, instance, () => [], recordingReporter(), asked(), trash, vi.fn(), shapeMarks);
+      registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: asked(), trash, log: vi.fn(), marks: shapeMarks });
       await invoke('modbench.mod.uninstall', modA, [modA, modC]);
 
       expect(shapeMarks.forgetUnconfirmedShape.mock.calls).toEqual([
@@ -1351,7 +1351,7 @@ describe('shape gestures mark what they change before the write (common.md, Unco
     it('forgets every mark when the whole selection is refused', async () => {
       uninstallMods.mockResolvedValue({ applied: false, refusal: 'locked' });
 
-      registerModContextCommands(access, instance, () => [], recordingReporter(), asked(), trash, vi.fn(), shapeMarks);
+      registerModContextCommands({ access, instance, viewSelection: () => [], reporter: recordingReporter(), ask: asked(), trash, log: vi.fn(), marks: shapeMarks });
       await invoke('modbench.mod.uninstall', modA, [modA, modC]);
 
       expect(shapeMarks.forgetUnconfirmedShape.mock.calls).toEqual([[[{ kind: 'mod', name: 'Mod A' }, { kind: 'mod', name: 'Mod C' }]]]);

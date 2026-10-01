@@ -1247,7 +1247,37 @@ describe('an unconfirmed shape change (common.md, Unconfirmed writes, story 2)',
 
       instance.publish(valueOf(ordered()));
       expect(await spinning(provider)).toEqual([]);
-      expect(logged).toEqual(['"Late Tweak", "Old Mod" was moved, and the disk shows the same order.']);
+      expect(logged).toEqual(['"Late Tweak", "Old Mod" was moved, and the disk does not show the move.']);
+    });
+
+    it('treats an unrelated reorder, an install or an uninstall as differing: the mark stays, and the next such value logs', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }]);
+      vi.advanceTimersByTime(1000);
+      const swapped = ordered().map((e) => (e.name === 'Old Mod' ? mod('Oldest Mod') : e.name === 'Oldest Mod' ? mod('Old Mod') : e));
+
+      instance.publish(valueOf(swapped));
+      expect(await spinning(provider)).toEqual(['Late Tweak']);
+      expect(logged).toEqual([]);
+
+      instance.publish(valueOf([mod('Installed'), ...swapped]));
+      expect(await spinning(provider)).toEqual([]);
+      expect(logged).toEqual(['"Late Tweak" was moved, and the disk does not show the move.']);
+    });
+
+    it('a separator moved with its mods confirms when only that block relocated', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markMoved([{ kind: 'separator', name: 'Late Section' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOf([mod('Base Patch'), sep('Early Section'), mod('Late Tweak'), mod('Early Fix', false), sep('Late Section'), mod('Old Mod'), mod('Oldest Mod')]));
+
+      expect(await spinning(provider)).toEqual([]);
+      expect(logged).toEqual([]);
     });
 
     it('stays while the disk cannot be read', async () => {
