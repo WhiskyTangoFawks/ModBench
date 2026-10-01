@@ -31,17 +31,22 @@ public sealed record SubFieldSpec(
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
     public bool IsArray => ApiType == "array";
 
-    public FieldMetadata ToFieldMetadata() =>
-        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers,
-            ElementSpec?.ToFieldMetadata(),
-            SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
+    /// <summary>A read-only member has no writable members of its own, so its reason reaches every
+    /// member below it.</summary>
+    public FieldMetadata ToFieldMetadata(string? inheritedReason = null)
+    {
+        var reason = ReadOnlyReason ?? inheritedReason;
+        return new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumMembers,
+            ElementSpec?.ToFieldMetadata(reason),
+            SubFields?.Select(s => s.ToFieldMetadata(reason)).ToList(),
             AllowsNull: AllowsNull,
             DisplayLabel: DisplayLabel,
             IsDiscriminator: IsDiscriminator,
             SiblingsInUse: SiblingsInUse,
             KeyMembers: KeyMembers,
             LeafTypeName: LeafTypeName,
-            Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(), StringComparer.Ordinal),
+            Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(reason), StringComparer.Ordinal),
             Default: Default,
-            ReadOnlyReason: ReadOnlyReason);
+            ReadOnlyReason: reason);
+    }
 }
