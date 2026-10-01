@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { NotificationEvent, PluginLoadFailure } from '../../client';
 import { InMemoryMEditClient } from '../../client';
-import { trackConflictsComputed } from '../conflictsComputedTracker';
+import { trackLoadOrderStatus } from '../loadOrderStatusTracker';
 
 function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = []): NotificationEvent {
   return {
@@ -12,17 +12,17 @@ function tick(conflictsComputed: boolean, failures: PluginLoadFailure[] = []): N
   };
 }
 
-describe('trackConflictsComputed', () => {
+describe('trackLoadOrderStatus', () => {
   it('reads false before the first tick — not computed is never settled', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
 
     expect(tracker.current()).toBe(false);
   });
 
   it('reads the latest tick\'s own value', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
 
     client.emit(tick(true));
     expect(tracker.current()).toBe(true);
@@ -35,7 +35,7 @@ describe('trackConflictsComputed', () => {
   // moves the tracker — exactly the leak that would keep a torn-down panel host live.
   it('stops updating once disposed', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true));
 
     tracker.dispose();
@@ -49,7 +49,7 @@ describe('trackConflictsComputed', () => {
   // signals (toolbox.ts).
   it('resets to false when the backend leaves running, so a re-indexing process answers unsettled', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true));
     expect(tracker.current()).toBe(true);
 
@@ -60,7 +60,7 @@ describe('trackConflictsComputed', () => {
 
   it('resets to false on reconnect, since the stream may have reattached to another process', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true));
     expect(tracker.current()).toBe(true);
 
@@ -71,7 +71,7 @@ describe('trackConflictsComputed', () => {
 
   it('reads the latest tick\'s load failures, and none before the first tick', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
     expect(tracker.failures()).toEqual([]);
 
     const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
@@ -84,7 +84,7 @@ describe('trackConflictsComputed', () => {
 
   it('forgets the failures when the backend leaves running or reconnects', () => {
     const client = new InMemoryMEditClient();
-    const tracker = trackConflictsComputed(client);
+    const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true, [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }]));
 
     client.setStatus('disconnected');
@@ -93,5 +93,32 @@ describe('trackConflictsComputed', () => {
     client.emit(tick(true, [{ name: 'Bad.esp', origin: 'Mod', reason: 'truncated' }]));
     client.reconnected();
     expect(tracker.failures()).toEqual([]);
+  });
+
+  describe('onFailuresChanged', () => {
+    const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+
+    it('fires, with the new failures already readable, when a tick brings or clears a failure', () => {
+      const client = new InMemoryMEditClient();
+      const seen: unknown[] = [];
+      const tracker = trackLoadOrderStatus(client, () => seen.push(tracker.failures()));
+
+      client.emit(tick(false, [bad]));
+      client.emit(tick(false));
+
+      expect(seen).toEqual([[bad], []]);
+    });
+
+    it('stays silent on a tick whose failures are the ones already held', () => {
+      const client = new InMemoryMEditClient();
+      const onChanged = vi.fn();
+      trackLoadOrderStatus(client, onChanged);
+
+      client.emit(tick(false));
+      client.emit(tick(false, [bad]));
+      client.emit(tick(true, [{ ...bad }]));
+
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -28,7 +28,7 @@ import { registerEditorCommands } from '../recordPanelHost';
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
-import { InMemoryMEditClient } from '../../client';
+import { InMemoryMEditClient, type NotificationEvent } from '../../client';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -36,8 +36,10 @@ function register(
   focusedViewSelection: () => readonly unknown[] = () => [],
   panels: { recordPanels: Set<vscode.WebviewPanel>; tracker: ActiveRecordTracker<vscode.WebviewPanel>; meditClient: InMemoryMEditClient }
     = { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient: new InMemoryMEditClient() },
+  override: { meditClient?: InMemoryMEditClient; refreshPanels?: () => void } = {},
 ): void {
-  const { recordPanels, tracker, meditClient } = panels;
+  const { recordPanels, tracker } = panels;
+  const meditClient = override.meditClient ?? panels.meditClient;
   registerEditorCommands({
     context: { extensionUri: vscode.Uri.from({ scheme: 'file' }) },
     recordPanels,
@@ -46,6 +48,7 @@ function register(
     focusedCells: new FocusedCells(() => undefined, () => undefined),
     recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient,
+    refreshPanels: override.refreshPanels ?? (() => undefined),
     mergedTreeSelection: () => [],
     focusedViewSelection,
     refreshSourceControlFor: () => undefined,
@@ -134,5 +137,27 @@ describe('modbench.record.openToSide, the menus\' entry point', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
     ]);
+  });
+});
+
+describe('a record panel open while mEdit reports a plugin it cannot read', () => {
+  const tick = (failures: { name: string; origin: string; reason: string }[]): NotificationEvent => ({
+    kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+    loadOrderStatus: {
+      state: 'Ready', totalPlugins: 1, activePlugins: 1, indexedPlugins: [], conflictsComputed: false, failures, version: 1,
+    },
+  });
+  const bad = { name: 'Bad.esp', origin: 'Mod', reason: 'truncated' };
+
+  it('has the panels refreshed on a failure arriving and on it clearing, and not on an identical tick', () => {
+    const meditClient = new InMemoryMEditClient();
+    const refreshPanels = vi.fn();
+    register(() => [], undefined, { meditClient, refreshPanels });
+
+    meditClient.emit(tick([bad]));
+    meditClient.emit(tick([bad]));
+    expect(refreshPanels).toHaveBeenCalledTimes(1);
+    meditClient.emit(tick([]));
+    expect(refreshPanels).toHaveBeenCalledTimes(2);
   });
 });
