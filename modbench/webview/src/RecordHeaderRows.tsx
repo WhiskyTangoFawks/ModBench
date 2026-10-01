@@ -121,7 +121,7 @@ export function RecordHeaderRows({
             ? <td key={key} style={cellStyle(key)} />
             : (
               <DiskCell
-                key={key} style={cellStyle(key)}
+                key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                 onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
                 copyText={formKeyLabel(override.formKey, override)}
               >

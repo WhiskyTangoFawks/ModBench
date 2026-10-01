@@ -10,9 +10,8 @@ const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
 const inside = (target: EventTarget, selector: string): boolean =>
   target instanceof Element && target.closest(selector) !== null;
 
-// Every gesture that opens the cell's editor, F2 and the clicks alike, lands on the cell's own
-// editable element: a cell with nothing editable renders no `data-open-trigger` and is inert.
-// One already open is left alone. The click it sends is an open, not a first click that only focuses.
+// Every gesture that opens the cell's editor lands on its `data-open-trigger`, so a cell with
+// nothing editable is inert. The click sent there is an open, not a first click that only focuses.
 let opening = false;
 function openEditor(e: React.SyntheticEvent<HTMLTableCellElement>): boolean {
   if (inside(e.target, '[data-editor]')) return false;
