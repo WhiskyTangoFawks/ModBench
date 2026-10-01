@@ -107,7 +107,7 @@ async function openFirst(
     await showBeside(path);
   } catch (err) {
     openTabs.delete(path);
-    listeners.forEach(listener => listener.dispose());
+    for (const listener of listeners) listener.dispose();
     reportOpenFailure(deps, err);
     return false;
   }
