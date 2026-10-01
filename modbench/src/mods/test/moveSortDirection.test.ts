@@ -77,7 +77,7 @@ async function shownAfter(
     provider.setViewDirection(direction);
     registerCommand.mockClear();
     const reporter = recordingReporter();
-    registerModMoveCommand(accessTo(root), instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter);
+    registerModMoveCommand(accessTo(root), instance, { selection: () => [], direction: () => provider.viewDirection() }, reporter, provider);
     await act(provider, (await shownRows(provider)).rows);
     expect(reporter.reports).toEqual([]);
     await instance.refresh();
