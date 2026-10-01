@@ -29,7 +29,9 @@
         "viewType": "modbench.record",
         "displayName": "Record",
         "selector": [
-          { "filenamePattern": "**/*.modbench-record" }
+          {
+            "filenamePattern": "**/*.modbench-record"
+          }
         ],
         "priority": "option"
       }
@@ -1119,6 +1121,78 @@
         "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance",
         "args": {
           "view": "modbench.pluginListTree"
+        }
+      }
+    ],
+    "colors": [
+      {
+        "id": "modbench.conflict.rowOverride",
+        "description": "A record field row where copies change the field and none disagrees with another.",
+        "defaults": {
+          "dark": "#4CAF5033",
+          "light": "#4CAF5033",
+          "highContrast": "#4CAF5066",
+          "highContrastLight": "#4CAF5066"
+        }
+      },
+      {
+        "id": "modbench.conflict.rowConflict",
+        "description": "A record field row where copies disagree on the field.",
+        "defaults": {
+          "dark": "#FF980033",
+          "light": "#FF980033",
+          "highContrast": "#FF980066",
+          "highContrastLight": "#FF980066"
+        }
+      },
+      {
+        "id": "modbench.conflict.identicalToMaster",
+        "description": "A record field cell whose copy is unchanged from the master.",
+        "defaults": {
+          "dark": "#9696962E",
+          "light": "#9696962E",
+          "highContrast": "#96969666",
+          "highContrastLight": "#96969666"
+        }
+      },
+      {
+        "id": "modbench.conflict.override",
+        "description": "A record field cell changed from the master, with no other copy disagreeing.",
+        "defaults": {
+          "dark": "#4CAF502E",
+          "light": "#4CAF502E",
+          "highContrast": "#4CAF5066",
+          "highContrastLight": "#4CAF5066"
+        }
+      },
+      {
+        "id": "modbench.conflict.conflictWins",
+        "description": "A record field cell that disagrees with another copy and wins.",
+        "defaults": {
+          "dark": "#FF98002E",
+          "light": "#FF98002E",
+          "highContrast": "#FF980066",
+          "highContrastLight": "#FF980066"
+        }
+      },
+      {
+        "id": "modbench.conflict.conflictLoses",
+        "description": "A record field cell that disagrees with another copy and loses.",
+        "defaults": {
+          "dark": "#F443362E",
+          "light": "#F443362E",
+          "highContrast": "#F4433666",
+          "highContrastLight": "#F4433666"
+        }
+      },
+      {
+        "id": "modbench.conflict.conflictLosesText",
+        "description": "The text of a record field cell that disagrees with another copy and loses.",
+        "defaults": {
+          "dark": "#F44336",
+          "light": "#C62828",
+          "highContrast": "#FF6B6B",
+          "highContrastLight": "#B71C1C"
         }
       }
     ]

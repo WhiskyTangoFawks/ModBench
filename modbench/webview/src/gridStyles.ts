@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { ConflictThis } from './types';
+import type { ConflictAll, ConflictThis } from './types';
 
 export const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
 export const fg = 'var(--vscode-editor-foreground, #ccc)';
@@ -49,24 +49,55 @@ export const toggleBtnStyle: React.CSSProperties = {
   lineHeight: 1,
 };
 
-const CONFLICT_RGB: Partial<Record<ConflictThis, string>> = {
-  IdenticalToMaster: '150,150,150',
-  Override:          '76,175,80',
-  ConflictWins:      '255,152,0',
-  ConflictLoses:     '244,67,54',
+// editor-conflicts.md, The colours: each is a theme colour the extension manifest contributes.
+export const CONFLICT_COLOURS = {
+  rowOverride: 'modbench.conflict.rowOverride',
+  rowConflict: 'modbench.conflict.rowConflict',
+  identicalToMaster: 'modbench.conflict.identicalToMaster',
+  override: 'modbench.conflict.override',
+  conflictWins: 'modbench.conflict.conflictWins',
+  conflictLoses: 'modbench.conflict.conflictLoses',
+  conflictLosesText: 'modbench.conflict.conflictLosesText',
+} as const;
+
+const themeColour = (id: string): string => `var(--vscode-${id.replaceAll('.', '-')})`;
+
+// NoConflict and OnlyOne are absent: they paint no background, so an expanded row deferring to its
+// children reads the same way they do.
+const ROW_BG: Partial<Record<ConflictAll, string>> = {
+  Override: themeColour(CONFLICT_COLOURS.rowOverride),
+  Conflict: themeColour(CONFLICT_COLOURS.rowConflict),
 };
 
-export const getConflictBg = (c: ConflictThis | undefined, alpha: number): string | undefined => {
-  const rgb = c !== undefined ? CONFLICT_RGB[c] : undefined;
-  return rgb ? `rgba(${rgb},${alpha})` : undefined;
+export const rowBackground = (conflictAll: ConflictAll): string | undefined => ROW_BG[conflictAll];
+
+const CELL_BG: Partial<Record<ConflictThis, string>> = {
+  IdenticalToMaster: themeColour(CONFLICT_COLOURS.identicalToMaster),
+  Override: themeColour(CONFLICT_COLOURS.override),
+  ConflictWins: themeColour(CONFLICT_COLOURS.conflictWins),
+  ConflictLoses: themeColour(CONFLICT_COLOURS.conflictLoses),
 };
 
 export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProperties {
-  const bg = getConflictBg(cellState, 0.18);
-  if (!bg) return {};
-  if (cellState === 'ConflictLoses') return { backgroundColor: bg, color: 'rgba(244,67,54,1)' };
-  return { backgroundColor: bg };
+  const backgroundColor = cellState && CELL_BG[cellState];
+  if (!backgroundColor) return {};
+  if (cellState === 'ConflictLoses') {
+    return { backgroundColor, color: themeColour(CONFLICT_COLOURS.conflictLosesText) };
+  }
+  return { backgroundColor };
 }
+
+// xEdit's own words for each state.
+const STATE_NAME: Record<ConflictThis, string> = {
+  Master: 'Master',
+  OnlyOne: 'Single Record',
+  IdenticalToMaster: 'Identical to Master',
+  Override: 'Override without conflict',
+  ConflictWins: 'Conflict winner',
+  ConflictLoses: 'Conflict loser',
+};
+
+export const conflictStateName = (cellState: ConflictThis): string => STATE_NAME[cellState];
 
 // ADR-0018's focus paints use inset box-shadow, not `outline`: in a collapsed-border table a
 // neighbour can overdraw an outline along the shared edge, and happy-dom drops

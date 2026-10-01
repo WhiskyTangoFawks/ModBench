@@ -8,7 +8,7 @@ import {
   headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
-import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
+import { mono, fg, headerCell, getCellStyle, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
@@ -29,7 +29,7 @@ const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
 
-const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
+const headerBg = (c: ConflictThis): string | undefined => getCellStyle(c).backgroundColor;
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
@@ -110,8 +110,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // definition of a column's look, so the header and the cells cannot disagree.
   const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
-    ...(key != null && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
-    ...columnWidthStyle(key != null && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
+    ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
+    ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
   }), [dimmedColumns, collapsedColumns, columnWidths]);
 
   // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
@@ -437,7 +437,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                     collapsed={collapsedColumns.has(col.key)}
                     onToggleCollapse={() => toggleColumnCollapse(col.key)}
                     onResize={width => resizeColumn(col.key, width)}
-                    style={{ backgroundColor: getHeaderBg(col.override.conflictThis), ...columnStyle(col.key) }}
+                    style={{ backgroundColor: headerBg(col.override.conflictThis), ...columnStyle(col.key) }}
                     // Copy… is offered on every column: copying from a read-only plugin is the
                     // ordinary case.
                     vscodeContext={combineVscodeContexts(
