@@ -31,6 +31,7 @@ export function referenceResultFixture(
     plugin: 'MyPatch.esp',
     fieldPath: 'FNAM',
     recordType: 'npc_',
+    recordTypeName: 'Non-Player Character',
     origin: 'SomeMod',
     ...overrides,
   };

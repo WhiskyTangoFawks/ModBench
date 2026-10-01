@@ -111,6 +111,10 @@ public record CompareResult(
     ConflictAll ConflictAll,
     string RecordTypeName);
 
+// ADR-0012 invariant 1: a plugin is (origin, filename) on every payload.
+public record ReferenceResult(
+    string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);
+
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure, bool IsCreatable);

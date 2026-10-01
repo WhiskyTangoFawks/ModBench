@@ -918,10 +918,11 @@ export interface components {
         ReferenceResult: {
             formKey: string;
             plugin: string;
+            origin: string;
             fieldPath: string;
             recordType: string;
+            recordTypeName: string;
             editorId?: string | null;
-            origin: string;
         };
         SequenceAwaitResponse: {
             reached: boolean;

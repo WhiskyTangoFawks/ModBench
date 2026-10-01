@@ -180,7 +180,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     private Dictionary<string, RecordDocument> DocumentsByFormKey(Indexer index) =>
         index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
 
-    private static List<ReferenceResult> Ordered(IEnumerable<ReferenceResult> references) =>
+    private static List<ReferenceRow> Ordered(IEnumerable<ReferenceRow> references) =>
         [.. references.OrderBy(r => r.FormKey, StringComparer.Ordinal).ThenBy(r => r.FieldPath, StringComparer.Ordinal)];
 
     private static string StripVersioningBlock(string body) =>
