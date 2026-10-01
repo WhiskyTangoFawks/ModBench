@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 
@@ -32,7 +33,7 @@ public record RecordEditRequest(
     string Origin,
     string Op,
     IReadOnlyList<PathHop> Path,
-    JsonElement? Value = null);
+    [property: JsonConverter(typeof(KeepsJsonNullConverter))] JsonElement? Value = null);
 
 /// <summary>An applied edit; <see cref="NewFormKey"/> is set by an edit of the FormID. A refusal is
 /// ProblemDetails with refusal and path extensions, so a plain success check is correct (ADR-0019).</summary>
