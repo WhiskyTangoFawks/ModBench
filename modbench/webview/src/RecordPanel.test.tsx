@@ -1855,10 +1855,10 @@ describe('RecordPanel — a column whose record failed to parse', () => {
 // and read-only on a plugin header. It reads as xEdit's does, as the record it names.
 describe('RecordPanel — the Record Header', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
-  const native = (formKey: string, editorId: string | null): CompareResult => compareResultFixture({
+  const native = (formKey: string, editorId: string | null, formIdReadOnlyReason?: string): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
-        formKey, plugin: 'MyMod.esp', isWinner: true, editorId,
+        formKey, plugin: 'MyMod.esp', isWinner: true, editorId, formIdReadOnlyReason,
         fields: [{ metadata: nameMeta, value: 'A Name' }],
       }),
     ],
@@ -1902,6 +1902,28 @@ describe('RecordPanel — the Record Header', () => {
     });
   });
 
+  it('opens no editor on a FormID the record carries a read-only reason for, and shows the reason', async () => {
+    const reason = 'names the plugin itself';
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(native('000000:MyMod.esp', null, reason), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(formIdCell(container)).toHaveAttribute('title', reason);
+  });
+
+  it('opens the editor on a FormID with no reason, where the plugin header\'s opens none', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
   // editor.md, Menus and keys: open field value is a text field's; the FormID reads as a reference.
   it('offers the FormID no open-field-value menu, where a text field offers one', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
@@ -1911,18 +1933,6 @@ describe('RecordPanel — the Record Header', () => {
     const menuOf = (cell: Element) => cell.closest('[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '';
     expect(menuOf(formIdCell(container))).not.toContain('stringValue');
     expect(menuOf(required(screen.getByText('A Name').closest('td'), "Name's cell"))).toContain('stringValue');
-  });
-
-  it('opens no editor on a plugin header\'s FormID, where its other fields open one', async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
-    await waitFor(() => screen.getByText('A Name'));
-
-    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-
-    fireEvent.doubleClick(screen.getByText('A Name'));
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 });
 

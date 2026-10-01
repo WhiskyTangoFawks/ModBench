@@ -177,10 +177,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     });
   }
 
-  // The header record's synthetic FormKey is "000000:<plugin>". Computed ahead of every hook that
-  // needs it, since hooks can't follow the early-return guards below.
-  const isHeaderRecord = formKey.startsWith('000000:');
-
   const fieldMetaMap = useMemo((): Partial<Record<string, FieldMetadata>> => {
     const map: Partial<Record<string, FieldMetadata>> = {};
     for (const o of result?.overrides ?? []) {
@@ -460,7 +456,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               collapsedColumns={collapsedColumns}
               dimmedColumns={dimmedColumns}
               editableColumns={editableColumns}
-              isPluginHeader={isHeaderRecord}
               expanded={headerExpanded}
               onToggle={() => toggleRow(RECORD_HEADER_ROW)}
               focusedCell={focusedCell}

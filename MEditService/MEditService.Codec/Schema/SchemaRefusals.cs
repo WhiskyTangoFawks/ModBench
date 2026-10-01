@@ -13,9 +13,6 @@ internal static class SchemaRefusals
     // loud in a real run.
     internal const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
-    /// <summary>The header's author/flags: a write reaching them is refused here, not at a gate.</summary>
-    internal const string HeaderNoWritePathReason = "the header has no write path for this column";
-
     private static string TypeLabel(Type type) =>
         type.IsGenericType
             ? $"{type.Name[..type.Name.IndexOf('`', StringComparison.Ordinal)]}" +

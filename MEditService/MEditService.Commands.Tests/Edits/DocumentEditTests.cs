@@ -402,17 +402,42 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void ReadOnlyColumn_IsRefusedWithItsReason()
+    public void Header_Author_IsWrittenAsAnyFieldIs()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, before);
+
+        var after = Applied(headerFormKey, SetAt(Json("\"me\""), Member("Author")));
+
+        Assert.Equal("me", Node(after, "ModHeader.Author").GetValue<string>());
+        AssertOnlyChanged(before, after, "ModHeader.Author");
+    }
+
+    [Fact]
+    public void Header_Flags_AreWrittenAsAnyFlagsFieldIs()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, before);
+
+        var after = Applied(headerFormKey, SetAt(Json("[\"Master\"]"), Member("Flags")));
+
+        Assert.Equal("Master", Node(after, "ModHeader.Flags")[0].Require().GetValue<string>());
+        AssertOnlyChanged(before, after, "ModHeader.Flags");
+    }
+
+    [Fact]
+    public void Header_Masters_AreRefusedWithTheirReason()
     {
         var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
         _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
 
-        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("\"me\""), Member("Author")));
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("[]"), Member("MasterReferences")));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        // SchemaRefusals.HeaderNoWritePathReason's wording (Codec-internal).
-        Assert.Contains("the header has no write path for this column", result.Message, StringComparison.Ordinal);
+        Assert.Contains("content-derived", result.Message, StringComparison.Ordinal);
     }
 
     [Theory]
