@@ -56,9 +56,11 @@ if not gate_lints(path):
     sys.exit(0)
 text = tool_input.get("new_string") if data.get("tool_name") == "Edit" else tool_input.get("content")
 text = text or ""
-hits =[h.replace(path + ":", "line ") for h in comment_shape.check(path, text)] + vale_hits(path, text)
+test_hits = comment_shape.comments_in_test(path, text)
+shape_hits = comment_shape.check(path, text) + test_hits
+hits = [h.replace(path + ":", "line ") for h in shape_hits] + vale_hits(path, text)
 if hits:
-    if not path.endswith(".md") and not all("Ticket number" in h for h in hits):
+    if not path.endswith(".md") and not test_hits and not all("Ticket number" in h for h in hits):
         print("A comment states a constraint from outside the code; a string states the current "
               "state.", file=sys.stderr)
         print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)
