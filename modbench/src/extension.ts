@@ -55,7 +55,7 @@ function wireAutoLaunch(
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'attached') void launch();
+      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'running') void launch();
     }),
   );
 }

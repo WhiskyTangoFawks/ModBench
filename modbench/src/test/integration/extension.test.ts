@@ -183,7 +183,7 @@ function pushLoadOrderStatus(): void {
 // that puts the load order again. A launch left attached by an earlier suite is stopped first.
 async function resetMockBackendDetached(): Promise<void> {
   const client = ext?.exports.client;
-  if (client?.status === 'attached') {
+  if (client?.status === 'running') {
     exitEditing();
     await awaitStatus(client, 'stopped', 'the earlier launch to stop');
   }
@@ -363,7 +363,7 @@ function createMockBackend(): http.Server {
 }
 
 // Start a mock backend that answers GET /health → 200 so the extension reaches
-// 'attached'. /plugins is load-order-gated (see above). Uses port 15172 (set via
+// 'running'. /plugins is load-order-gated (see above). Uses port 15172 (set via
 // workspace settings).
 before(async function () {
   this.timeout(15000);
@@ -386,7 +386,7 @@ before(async function () {
   // The client polls the mock backend's health on its own schedule; wait for the transition
   // itself rather than guessing how long a poll cycle takes.
   const client = ext?.exports.client;
-  if (client) await awaitStatus(client, 'attached', 'the client to reach attached');
+  if (client) await awaitStatus(client, 'running', 'the client to reach running');
 });
 
 after(async () => {

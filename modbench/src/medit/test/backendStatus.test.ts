@@ -11,7 +11,7 @@ function makeViews() {
 describe('backendStatusText', () => {
   it('names each backend state the way the status bar shows it', () => {
     expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Starting…');
-    expect(backendStatusText('attached')).toBe('$(plug) mEdit: Running');
+    expect(backendStatusText('running')).toBe('$(plug) mEdit: Running');
     expect(backendStatusText('disconnected')).toBe('$(error) mEdit: Disconnected');
     expect(backendStatusText('stopped')).toBe('$(circle-slash) mEdit: Stopped');
   });
@@ -23,7 +23,7 @@ describe('wireBackendStatus', () => {
     const views = makeViews();
     wireBackendStatus(client, views);
 
-    client.setStatus('attached');
+    client.setStatus('running');
 
     expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Running');
   });
@@ -80,7 +80,7 @@ describe('wireBackendStatus', () => {
     const views = makeViews();
     wireBackendStatus(client, views);
 
-    client.setStatus('attached');
+    client.setStatus('running');
 
     expect(views.abandonReconcile).not.toHaveBeenCalled();
     expect(views.refreshTree).not.toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe('wireBackendStatus', () => {
     const views = makeViews();
     wireBackendStatus(client, views);
 
-    client.setStatus('attached');
+    client.setStatus('running');
 
     expect(views.setUnreachable).not.toHaveBeenCalled();
   });
@@ -146,7 +146,7 @@ describe('wireBackendStatus', () => {
 describe('a backend that disconnects mid-send', () => {
   it('leaves the send reporting abandoned, not failed', async () => {
     const client = new InMemoryMEditClient();
-    client.setStatus('attached');
+    client.setStatus('running');
     let putStarted!: () => void;
     const started = new Promise<void>((resolve) => { putStarted = resolve; });
     // What the backend answers on each ending: a deliberate abort is 'abandoned', and a refused
@@ -180,7 +180,7 @@ describe('enterEditingAcrossRestarts', () => {
 
     client.setStatus('disconnected');
     client.setStatus('starting');
-    client.setStatus('attached');
+    client.setStatus('running');
     await Promise.resolve();
 
     expect(enterEditing).toHaveBeenCalledTimes(1);
@@ -194,7 +194,7 @@ describe('enterEditingAcrossRestarts', () => {
 
     await enter();
     client.setStatus('starting');
-    client.setStatus('attached');
+    client.setStatus('running');
     await Promise.resolve();
 
     expect(enterEditing).toHaveBeenCalledTimes(1);
@@ -209,7 +209,7 @@ describe('enterEditingAcrossRestarts', () => {
 
     client.setStatus('disconnected');
     await enter();
-    client.setStatus('attached');
+    client.setStatus('running');
     await Promise.resolve();
 
     expect(enterEditing).toHaveBeenCalledTimes(1);
@@ -222,7 +222,7 @@ describe('enterEditingAcrossRestarts', () => {
 
     dispose();
     client.setStatus('disconnected');
-    client.setStatus('attached');
+    client.setStatus('running');
     await Promise.resolve();
 
     expect(enterEditing).not.toHaveBeenCalled();
@@ -234,7 +234,7 @@ describe('enterEditingAcrossRestarts', () => {
     enterEditingAcrossRestarts(client, () => Promise.reject(new Error('boom')), log);
 
     client.setStatus('disconnected');
-    client.setStatus('attached');
+    client.setStatus('running');
     await Promise.resolve();
     await Promise.resolve();
 

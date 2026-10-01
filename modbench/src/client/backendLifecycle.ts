@@ -113,8 +113,8 @@ export class BackendLifecycle {
   private async doStart(): Promise<void> {
     const gen = this.generation;
 
-    if (this.attachPort === undefined) {
-      this.spawnPort ??= await this.freePort();
+    if (this.attachPort === undefined && !this.child) {
+      this.spawnPort = await this.freePort();
       if (gen !== this.generation) return;
     }
 
@@ -130,8 +130,8 @@ export class BackendLifecycle {
       this.forwardOutput(child);
     }
 
-    await this.connect(gen);
-    if (this._status === 'attached') this.restartAttempts = 0;
+    await this.connect(gen, this.attachPort === undefined ? this.child : undefined);
+    if (this._status === 'running') this.restartAttempts = 0;
   }
 
   // Subscribed unconditionally: a piped stream nobody reads fills its OS buffer and then blocks
@@ -151,7 +151,7 @@ export class BackendLifecycle {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
     this.restartAttempts = 0;
-    const wasRunning = this.child !== undefined || this._status === 'attached';
+    const wasRunning = this.child !== undefined || this._status === 'running';
     const child = this.child;
     this.child = undefined;
     if (child) {
@@ -192,19 +192,25 @@ export class BackendLifecycle {
     }
     this.restartAttempts++;
     this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
-    void this.start();
+    const gen = this.generation;
+    void (this.startPromise ?? Promise.resolve()).then(() => {
+      if (gen === this.generation && this.expectedAlive) void this.start();
+    });
   }
 
-  private connect(gen: number): Promise<void> {
+  // A spawned child that is gone before `/health` answers is a failed start, whoever else answers
+  // on its port.
+  private connect(gen: number, child: BackendProcess | undefined): Promise<void> {
     return new Promise((resolve) => {
       const deadline = Date.now() + this.pollTimeoutMs;
 
       const attempt = async () => {
-        if (gen !== this.generation) { resolve(); return; } // cancelled by stop()
+        const abandoned = () => gen !== this.generation || (child !== undefined && this.child !== child);
+        if (abandoned()) { resolve(); return; }
         const healthy = await this.checkHealthFn();
-        if (gen !== this.generation) { resolve(); return; }
+        if (abandoned()) { resolve(); return; }
         if (healthy) {
-          this.setStatus('attached');
+          this.setStatus('running');
           resolve();
           return;
         }

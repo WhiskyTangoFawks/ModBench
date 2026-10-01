@@ -68,7 +68,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
 
     await client.start();
 
-    expect(client.status).toBe('attached');
+    expect(client.status).toBe('running');
   });
 
   it('reports every status change to its listeners', async () => {
@@ -79,7 +79,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
     await client.start();
     await client.stop();
 
-    expect(seen).toEqual(['attached', 'stopped']);
+    expect(seen).toEqual(['running', 'stopped']);
   });
 
   it('an unsubscribed listener hears nothing more', async () => {
@@ -91,7 +91,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
     off();
     await client.stop();
 
-    expect(seen).toEqual(['attached']);
+    expect(seen).toEqual(['running']);
   });
 });
 

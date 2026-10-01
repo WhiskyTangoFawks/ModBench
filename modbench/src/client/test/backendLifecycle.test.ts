@@ -27,7 +27,7 @@ function record(lifecycle: BackendLifecycle): BackendStatus[] {
 // fresh process waits for that second attach.
 function nextAttach(lifecycle: BackendLifecycle): Promise<void> {
   return new Promise<void>((resolve) => {
-    const off = lifecycle.onStatusChanged((s) => { if (s === 'attached') { off(); resolve(); } });
+    const off = lifecycle.onStatusChanged((s) => { if (s === 'running') { off(); resolve(); } });
   });
 }
 
@@ -47,8 +47,8 @@ describe('BackendLifecycle', () => {
 
     await lifecycle.start();
 
-    expect(lifecycle.status).toBe('attached');
-    expect(statuses).toEqual(['attached']);
+    expect(lifecycle.status).toBe('running');
+    expect(statuses).toEqual(['running']);
   });
 
   it('polls until backend becomes healthy', async () => {
@@ -60,8 +60,8 @@ describe('BackendLifecycle', () => {
 
     await lifecycle.start();
 
-    expect(lifecycle.status).toBe('attached');
-    expect(statuses).toEqual(['attached']);
+    expect(lifecycle.status).toBe('running');
+    expect(statuses).toEqual(['running']);
     expect(checkHealth).toHaveBeenCalledTimes(3);
   });
 
@@ -102,7 +102,7 @@ describe('BackendLifecycle.start', () => {
     await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
-    expect(lifecycle.status).toBe('attached');
+    expect(lifecycle.status).toBe('running');
   });
 
   // Rival: the old attach-first start, which adopts whatever answers on a shared port, such as
@@ -116,6 +116,44 @@ describe('BackendLifecycle.start', () => {
     await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:41000']);
+  });
+
+  // Rival: polling /health on the claimed port without asking whether its own child is alive,
+  // which reports Running on whichever backend took the port in the gap.
+  it('is not running when its child exits at once while another backend answers its port', async () => {
+    const spawn = vi.fn(() => {
+      const child = makeChild();
+      queueMicrotask(() => child.emit('exit', 1));
+      return child;
+    });
+
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(5172), pollIntervalMs: 5, spawn, executablePath: '/x',
+      checkHealth: () => Promise.resolve(true),
+    });
+    const statuses = record(lifecycle);
+    await lifecycle.start();
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(statuses).not.toContain('running');
+  });
+
+  // Rival: keeping the first claimed port across restarts, widening the gap while the backend is down.
+  it('claims a fresh port for each restart', async () => {
+    const state = { healthy: false };
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
+    let next = 6000;
+
+    const lifecycle = new BackendLifecycle({
+      freePort: () => Promise.resolve(next++), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
+    await lifecycle.start();
+    const restarted = nextAttach(lifecycle);
+    present(children[0], 'the first spawned child').emit('exit', 1);
+    await restarted;
+
+    expect(spawn.mock.calls.map((c) => (c as unknown as string[][])[1]?.[1])).toEqual(['http://localhost:6000', 'http://localhost:6001']);
   });
 
   it('gives each lifecycle its own free port', async () => {
@@ -150,7 +188,7 @@ describe('BackendLifecycle.start', () => {
     const lifecycle = new BackendLifecycle({ attachPort: 5172, checkHealth: () => Promise.resolve(true) });
     await lifecycle.start();
 
-    expect(lifecycle.status).toBe('attached');
+    expect(lifecycle.status).toBe('running');
   });
 
   // The Output channel's level, translated by the caller into Serilog
@@ -269,7 +307,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await restarted;
 
     expect(spawn).toHaveBeenCalledTimes(2);
-    expect(lifecycle.status).toBe('attached');
+    expect(lifecycle.status).toBe('running');
   });
 
   // The crash is the news the views act on: the reconcile is abandoned and the status bar says
@@ -290,7 +328,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
-    expect(statuses).toEqual(['disconnected', 'starting', 'attached']);
+    expect(statuses).toEqual(['disconnected', 'starting', 'running']);
   });
 
   it('does not double-spawn when start() is called concurrently', async () => {
@@ -303,7 +341,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await Promise.all([lifecycle.start(), lifecycle.start()]);
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(lifecycle.status).toBe('attached');
+    expect(lifecycle.status).toBe('running');
   });
 
   it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order', async () => {
@@ -330,7 +368,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     expect(lifecycle.status).toBe('stopped');
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(statuses).not.toContain('attached');
+    expect(statuses).not.toContain('running');
   });
 
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
@@ -451,7 +489,7 @@ describe('BackendLifecycle (no checkHealth injected — the real GET /health ada
     const lifecycle = new BackendLifecycle({ attachPort: port });
     await lifecycle.start();
 
-    expect(lifecycle.status).toBe('attached');
+    expect(lifecycle.status).toBe('running');
   });
 
   // The rival: inverting the status check (`!== 200`) would report attached for a refused

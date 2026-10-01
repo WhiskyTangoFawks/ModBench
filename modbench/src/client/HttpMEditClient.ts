@@ -55,7 +55,7 @@ export class HttpMEditClient implements MEditClient {
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
     // module outside this one starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
-      if (status === 'attached') this.notifications.start();
+      if (status === 'running') this.notifications.start();
       else this.notifications.stop();
     });
   }
@@ -251,7 +251,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
-  // 'attached' abandons it too — once the stream is gone, nothing is left to hear its tick.
+  // 'running' abandons it too — once the stream is gone, nothing is left to hear its tick.
   private awaitTerminalOrAbort(
     terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
   ): Promise<LoadOrderProgress | undefined> {
@@ -267,7 +267,7 @@ export class HttpMEditClient implements MEditClient {
       const onAbort = (): void => settle(undefined);
       signal?.addEventListener('abort', onAbort, { once: true });
       const unlisten = this.lifecycle.onStatusChanged((status) => {
-        if (status !== 'attached') settle(undefined);
+        if (status !== 'running') settle(undefined);
       });
       void terminal.then(settle);
     });

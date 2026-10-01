@@ -7,7 +7,7 @@ type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 // fifth, Ready, is the reconcile's own (`loadOrderOutcome.ts`).
 const STATUS_TEXT: Record<BackendStatus, string> = {
   starting:     '$(loading~spin) mEdit: Starting…',
-  attached:     '$(plug) mEdit: Running',
+  running:     '$(plug) mEdit: Running',
   disconnected: '$(error) mEdit: Disconnected',
   stopped:      '$(circle-slash) mEdit: Stopped',
 };
@@ -43,7 +43,7 @@ export function wireBackendStatus(client: StatusSource, views: BackendStatusView
     views.setStatusText(backendStatusText(status));
     // A backend on its way up owns the views itself: the launch armed its reconcile before
     // asking the client to start, and the reconcile is what hands the tree its load order.
-    if (status === 'starting' || status === 'attached') return;
+    if (status === 'starting' || status === 'running') return;
     views.abandonReconcile();
     views.refreshTree();
     views.setUnreachable(UNREACHABLE_REASON[status]);
@@ -55,13 +55,13 @@ export function wireBackendStatus(client: StatusSource, views: BackendStatusView
 export function enterEditingAcrossRestarts(
   client: StatusSource, enterEditing: () => Promise<void>, log: (msg: string) => void,
 ): { enter: () => Promise<void>; dispose: () => void } {
-  // A `disconnected` nobody asked for is the crash; the `attached` after it is the fresh
+  // A `disconnected` nobody asked for is the crash; the `running` after it is the fresh
   // process. Cleared by every deliberate entry, so a relaunch is not also read as a restart.
   let crashed = false;
   const enter = () => { crashed = false; return enterEditing(); };
   const unsubscribe = client.onStatusChanged((status) => {
     if (status === 'disconnected') { crashed = true; return; }
-    if (status !== 'attached' || !crashed) return;
+    if (status !== 'running' || !crashed) return;
     void enter().catch((err: unknown) =>
       log(`reload after backend restart failed: ${errorMessage(err)}`),
     );
