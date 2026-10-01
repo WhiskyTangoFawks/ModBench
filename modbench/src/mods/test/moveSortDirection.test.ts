@@ -71,7 +71,7 @@ async function shownAfter(
     log: () => {}, logReadFailure: () => {},
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND, downloadedFiles: NO_DOWNLOADS }),
   });
-  const provider = new ModListProvider({ instance, access: accessTo(root) });
+  const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
   try {
     await instance.refresh();
     provider.setViewDirection(direction);

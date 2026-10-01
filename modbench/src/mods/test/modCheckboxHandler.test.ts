@@ -26,22 +26,24 @@ function modNode(name: string, enabled = true): ModNode {
 describe('onModCheckboxChanged', () => {
   it('enables/disables the mod and does nothing else on success', async () => {
     const setModEnabled = vi.fn().mockResolvedValue(undefined);
-    const invalidate = vi.fn();
-    const modListProvider = { setModEnabled, invalidate };
+    const markUnconfirmed = vi.fn();
+    const forgetUnconfirmed = vi.fn();
+    const modListProvider = { setModEnabled, markUnconfirmed, forgetUnconfirmed };
 
     const reporter = recordingReporter();
 
     await onModCheckboxChanged({ items: [[modNode('TestMod'), 1]] }, modListProvider, reporter);
 
     expect(setModEnabled).toHaveBeenCalledWith('TestMod', true);
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(markUnconfirmed).toHaveBeenCalledWith('TestMod', true);
+    expect(forgetUnconfirmed).not.toHaveBeenCalled();
     expect(reporter.reports).toEqual([]);
   });
 
-  it('reports and invalidates so the checkbox resyncs when the toggle fails', async () => {
+  it('reports and forgets the mark so the checkbox shows the disk when the toggle fails', async () => {
     const setModEnabled = vi.fn().mockRejectedValue(new Error('permission denied'));
-    const invalidate = vi.fn();
-    const modListProvider = { setModEnabled, invalidate };
+    const forgetUnconfirmed = vi.fn();
+    const modListProvider = { setModEnabled, markUnconfirmed: vi.fn(), forgetUnconfirmed };
 
     const reporter = recordingReporter();
 
@@ -50,16 +52,17 @@ describe('onModCheckboxChanged', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to update "TestMod".', detail: 'permission denied' },
     ]);
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(forgetUnconfirmed).toHaveBeenCalledWith('TestMod');
   });
 
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
     const setModEnabled = vi.fn();
-    const modListProvider = { setModEnabled, invalidate: vi.fn() };
+    const modListProvider = { setModEnabled, markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn() };
     const overwriteNode = new OverwriteNode(1, 'MO2');
 
     await onModCheckboxChanged({ items: [[overwriteNode, 1]] }, modListProvider, recordingReporter());
 
     expect(setModEnabled).not.toHaveBeenCalled();
+    expect(modListProvider.markUnconfirmed).not.toHaveBeenCalled();
   });
 });

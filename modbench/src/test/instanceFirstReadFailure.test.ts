@@ -62,7 +62,7 @@ async function fourViewsOverOneInstance() {
     log, logReadFailure: (line) => { channel.error(line); },
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
   });
-  const mods = new ModListProvider({ instance, access: accessTo(root) });
+  const mods = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
   const plugins = new PluginsTreeProvider({
     instance,
     source: { reorderPlugins: () => Promise.resolve() },

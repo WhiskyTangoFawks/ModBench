@@ -34,7 +34,7 @@ import { accessTo, readModlistEntries } from '../../test/mo2/adapterOver';
 // not a hand-built fixture. Nothing but the tree is under test here, so no Instance reads a clone.
 async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
-  const provider = new ModListProvider({ instance, access: accessTo(CORPUS_FIXTURE) });
+  const provider = new ModListProvider({ instance, access: accessTo(CORPUS_FIXTURE), log: () => undefined });
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
