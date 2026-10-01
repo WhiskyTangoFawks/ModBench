@@ -14,14 +14,18 @@ describe('EXTENSION_TO_WEBVIEW', () => {
 describe('the focused cell message', () => {
   it('carries the focused cell\'s context, or null when no cell is focused', () => {
     const context = { webviewSection: 'arrayElement', formKey: '000001:A.esp', path: [] };
-    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context }))
-      .toEqual({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context });
-    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null }))
-      .toEqual({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null });
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered: true }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered: true });
+    expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: false }))
+      .toEqual({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: false });
   });
 
   it('is refused when its context is neither an object nor null', () => {
-    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: 'arrayElement' })).toThrow();
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: 'arrayElement', entered: true })).toThrow();
+  });
+
+  it('is refused without saying whether the user entered the cell', () => {
+    expect(() => parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null })).toThrow();
   });
 });
 

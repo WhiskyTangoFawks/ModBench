@@ -39,7 +39,7 @@ function register(focusedViewSelection: () => readonly unknown[] = () => []): vo
     recordPanels: new Set(),
     activeRecordTracker: tracker,
     editsInFlight: new EditsInFlight(tracker),
-    focusedCells: new FocusedCells(() => undefined),
+    focusedCells: new FocusedCells(() => undefined, () => undefined),
     recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient: new InMemoryMEditClient(),
     mergedTreeSelection: () => [],

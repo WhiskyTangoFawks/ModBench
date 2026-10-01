@@ -28,7 +28,6 @@ beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
 }
-const fakeReporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
 
 let meditClient: InMemoryMEditClient;
 
@@ -36,7 +35,7 @@ beforeEach(() => { meditClient = new InMemoryMEditClient(); });
 
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
-    channel: fakeChannel(), reporter: fakeReporter,
+    channel: fakeChannel(),
     meditClient,
     panelId: 'record-panel-1',
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
@@ -97,7 +96,6 @@ describe('routeRecordPanelMessage', () => {
     executeCommand.mockReset();
     writeText.mockReset();
     createQuickPick.mockReset();
-    fakeReporter.report.mockReset();
   });
 
   it('OPEN_RECORD opens the named record in the editor', async () => {
@@ -117,23 +115,12 @@ describe('routeRecordPanelMessage', () => {
     expect(channel.debug).not.toHaveBeenCalled();
   });
 
-  it('COPY_TO_CLIPBOARD writes through the extension host', async () => {
+  it('COPY_VALUE fires copy value with the cell\'s text, and writes no clipboard itself', async () => {
     await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'copied' }, makeDeps());
+      { type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value: 'copied' }, makeDeps());
 
-    expect(writeText).toHaveBeenCalledWith('copied');
-  });
-
-  // modbench/CLAUDE.md: no silent catch. This message is dispatched fire-and-forget, so an
-  // unhandled rejection would surface as nothing at all.
-  it('surfaces a failed clipboard write rather than swallowing it', async () => {
-    writeText.mockRejectedValue(new Error('no clipboard'));
-
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'copied' }, makeDeps());
-
-    expect(fakeReporter.report).toHaveBeenCalledWith(
-      'error', expect.stringContaining('clipboard'), expect.stringContaining('no clipboard'));
+    expect(executeCommand).toHaveBeenCalledWith('modbench.copyValue', { copyText: 'copied' });
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it('an unrecognized or non-object message is a no-op', async () => {
@@ -431,10 +418,10 @@ describe('routeRecordPanelMessage — the focused cell', () => {
     const focusCell = vi.fn();
     const context = { webviewSection: 'stringValue', formKey: '000001:A.esp' };
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context }, makeDeps({ focusCell }));
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null }, makeDeps({ focusCell }));
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered: true }, makeDeps({ focusCell }));
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: false }, makeDeps({ focusCell }));
 
-    expect(focusCell.mock.calls).toEqual([[context], [undefined]]);
+    expect(focusCell.mock.calls).toEqual([[context, true], [undefined, false]]);
   });
 });
 

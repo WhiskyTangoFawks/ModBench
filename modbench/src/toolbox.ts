@@ -18,10 +18,11 @@ import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
 import { loadOrderSnapshotOf, originFiles, originFolder, type OriginFilesOf } from './instanceLoader/loadOrderSnapshot';
-import { DownloadsProvider } from './downloads/DownloadsProvider';
+import { DownloadsProvider, type DownloadsTreeNode } from './downloads/DownloadsProvider';
+import { downloadsCopyValueText } from './downloads/keyContext';
 import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { ToolboxProvider } from './toolbox/ToolboxProvider';
-import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
+import { messageLine, registerFilterCommands, registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { pluginSyncOver, reorderOver, type PluginsAccess } from './pluginsCommands/plugins';
@@ -33,7 +34,7 @@ import { pluginSyncArguments, registerPluginSync } from './pluginSyncTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands } from './mods/installCommands';
 import { registerModContextCommands, registerModEnableCommands, registerModMoveCommand, registerSeparatorCommands, registerCreateEmptyModCommand, registerModListCoreCommands, registerOpenFolderCommand, registerViewOnNexusCommand, modsCopyValueText, reportFailure } from './mods/modManagementCommands';
-import { createModListView, lastSelectedViewSelection, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
+import { createModListView, lastSelectedViewSelection, type FocusedView, nexusRowInLastSelectedView, registerDownloadsView } from './treeViews';
 import { onModCheckboxChanged } from './mods/modCheckboxHandler';
 import { modRepositoryContext } from './modRepositories';
 import { answerInstanceCheck, gameDirectoryOverrides, markFirstReadLanded, type FirstReadMark } from './workspaceConfig';
@@ -86,9 +87,13 @@ export interface ToolboxDeps {
   trash: MoveToTrash;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
-  /** Referenced By's own text for the catalog's one copy value id (Editor's own adapter,
-   *  `referencedByCopyValueText`): copy value's Mods and Plugins adapters are this file's own. */
-  referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string;
+  /** The view copy value and the name filter act on, which each list here makes itself by being
+   *  selected in. */
+  focusedView: FocusedView;
+  /** Referenced By's and the record grid's own text for the catalog's one copy value id (Editor's
+   *  own adapters): copy value's Mods, Plugins and Downloads adapters are this file's own. */
+  referencedByCopyValueText: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
+  gridCopyValueText: (invocation: unknown) => string | undefined;
 }
 
 /** The instance side's wiring, which the activation file calls: the Toolbox view and everything
@@ -149,22 +154,25 @@ export function registerLoadOrderPut(
   };
 }
 
-/** One surface's contribution to the catalog's one copy value id (commands.md, Record: copy
- *  value): its own text for this invocation, or `undefined` to defer to the next adapter. */
+/** One surface's contribution to the catalog's one copy value id (commands.md, Every view): its
+ *  own text for this invocation, or `undefined` to defer to the next adapter. */
 export interface CopyValueAdapter {
   text: (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined;
   reporterTag: string;
 }
 
-// Every surface the catalog names contributes an adapter, tried in order, so no surface's module
-// needs to know another surface exists.
+// Adapters are tried in order, so no surface needs to know another exists. A palette call has no
+// argument, so the focused view stands for the key its own Ctrl+C passes.
 export function registerCopyValueCommand(
   adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter,
+  focusedViewId: () => string | undefined, nothingToCopy: () => void,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.record.copyValue',
+  return vscode.commands.registerCommand('modbench.copyValue',
     async (clicked?: unknown, allSelected?: unknown[]) => {
+      const viewId = focusedViewId();
+      const invocation = clicked ?? (viewId === undefined ? undefined : { view: viewId });
       for (const adapter of adapters) {
-        const text = adapter.text(clicked, allSelected);
+        const text = adapter.text(invocation, allSelected);
         if (text === undefined) continue;
         if (!text) return;
         try {
@@ -174,6 +182,7 @@ export function registerCopyValueCommand(
         }
         return;
       }
+      nothingToCopy();
     });
 }
 
@@ -202,7 +211,7 @@ interface PluginListDeps {
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(
   deps: PluginListDeps,
-): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode> } {
+): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode>; pluginsFilter: NameFilter } {
   const { own, session, outputChannel, reporterFor, access, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
@@ -238,7 +247,8 @@ function registerPluginListView(
   showKeyContext();
   own(pluginListView.onDidChangeSelection(showKeyContext));
   own(pluginsTree.onDidChangeTreeData(showKeyContext));
-  session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
+  const pluginsFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree, deps.pluginSync));
+  session.pluginsNameFilter = pluginsFilter;
   // Grays an implicit master's row the way the reference tool grays COL_NAME for a forceLoaded
   // plugin — live against the tree's own locked row URIs so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
@@ -250,7 +260,7 @@ function registerPluginListView(
   ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(
     access, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable'), pluginsTree));
-  return { pluginsTree, pluginListView };
+  return { pluginsTree, pluginListView, pluginsFilter };
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
@@ -437,6 +447,7 @@ interface InstanceSide {
   // back to undefined selection outside one, the same posture as `modListProvider` and its siblings.
   modListSelection: () => readonly ModlistNode[];
   pluginsSelection: () => readonly PluginsTreeNode[];
+  downloadsSelection: () => readonly DownloadsTreeNode[];
   trackSelection: () => readonly unknown[];
 }
 
@@ -491,13 +502,13 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   const syncPluginsOver = pluginSyncOver(access);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
-  const { pluginsTree, pluginListView } = registerPluginListView({
+  const { pluginsTree, pluginListView, pluginsFilter } = registerPluginListView({
     own, session, outputChannel, reporterFor, access,
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });
   const runModSync = modSyncOver(access);
   const modSync = own(registerModSync(instance, runModSync, outputChannel));
-  const { modListView } = createModListView(
+  const { modListView, modListFilter } = createModListView(
     own, modListProvider, (line) => outputChannel.warn(`[modList] ${line}`), modSync);
   const showModRepositories = (value: InstanceValue) => {
     for (const [name, mods] of Object.entries(modRepositoryContext(value))) {
@@ -552,7 +563,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
   own(vscode.commands.registerCommand('modbench.plugin.sync', runPluginSync));
-  const { downloadsProvider, downloadsView } = registerDownloadsView({
+  const { downloadsProvider, downloadsView, downloadsFilter } = registerDownloadsView({
     own, access, instance, reporter: reporterFor('downloadList'), ask, trash,
     install: {
       nameNewMod: (defaultName) => promptModName(defaultName, (name) => installNameRefusal(access, name)),
@@ -563,6 +574,15 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
   ])));
+  own(deps.focusedView.follow('modbench.modList', modListView));
+  own(deps.focusedView.follow('modbench.pluginListTree', pluginListView));
+  own(deps.focusedView.follow('modbench.downloads', downloadsView));
+  ownAll(own, registerFilterCommands(
+    () => deps.focusedView.id(),
+    new Map([
+      ['modbench.modList', modListFilter], ['modbench.pluginListTree', pluginsFilter], ['modbench.downloads', downloadsFilter],
+    ]),
+    () => vscode.window.setStatusBarMessage('Focus a list to filter it.', 5000)));
   const trackSelection = lastSelectedViewSelection(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.pluginListTree', view: pluginListView },
   ], 'modbench.mod.trackRowsIn');
@@ -572,7 +592,8 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   return {
     instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing,
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
-    modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection, trackSelection,
+    modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection,
+    downloadsSelection: () => downloadsView.selection, trackSelection,
   };
 }
 
@@ -611,15 +632,19 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   showMessage();
   own(provider.onDidChangeTreeData(showMessage));
   own(registerCreatePluginCommand(client, side?.instance, reporterFor('newPlugin')));
-  // Registered here, not inside buildInstanceSide: Referenced By's own copy reaches this regardless
-  // of whether the folder is an instance.
+  // Registered here, not inside buildInstanceSide: the record grid's and Referenced By's own copy
+  // reach this regardless of whether the folder is an instance.
   own(registerCopyValueCommand(
     [
       { text: side ? modsCopyValueText(() => side.modListSelection()) : () => undefined, reporterTag: 'mod.copyValue' },
       { text: side ? pluginsCopyValueText(() => side.pluginsSelection()) : () => undefined, reporterTag: 'pluginListTree.copyValue' },
+      { text: side ? downloadsCopyValueText(() => side.downloadsSelection()) : () => undefined, reporterTag: 'downloadedFile.copyValue' },
+      { text: deps.gridCopyValueText, reporterTag: 'recordGrid.copy' },
       { text: deps.referencedByCopyValueText, reporterTag: 'referencedByTree.copy' },
     ],
     reporterFor,
+    () => deps.focusedView.id(),
+    () => vscode.window.setStatusBarMessage('Focus a list or a record cell to copy its value.', 5000),
   ));
 
   return {

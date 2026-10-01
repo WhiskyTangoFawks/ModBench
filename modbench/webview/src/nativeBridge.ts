@@ -70,11 +70,10 @@ export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
   );
 }
 
-// `vscode.env.clipboard.writeText` is extension-host-only (webview clipboard access isn't
-// guaranteed), so the caller posts the already-computed model value up here. Fire-and-forget:
-// there is no answer to wait for.
-export function copyToClipboard(value: string): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
+// Ctrl+C on a cell is an entry point to the host's copy value, which writes the clipboard (webview
+// clipboard access isn't guaranteed). Fire-and-forget: there is no answer to wait for.
+export function copyValue(value: string): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value });
 }
 
 // The grid's entry point to `modbench.record.editField`, which the host fires. Fire-and-forget: the
@@ -83,14 +82,16 @@ export function editField(formKey: string, plugin: string, origin: string, envel
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell, which only this
-// panel knows. `context` is the one its right-click would hand the command; `null` is no cell.
-export function focusCell(context: Record<string, unknown> | null): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context });
+// The palette's field gestures act on the focused cell, which only this panel knows: `context` is
+// the one its right-click would hand the command, `null` no cell. `entered` is a user's focus, not
+// a re-read.
+export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
 }
 
 /** The focused cell's `data-vscode-context`, merged over its ancestors' as VS Code merges them for
- *  a right-click, the nearest winning. `null` while no cell is focused. */
+ *  a right-click, the nearest winning, and the text its Ctrl+C copies. `null` while no cell is
+ *  focused. */
 export function focusedCellContext(root: ParentNode): Record<string, unknown> | null {
   const cell = root.querySelector('[data-focused-cell]');
   if (!cell) return null;
@@ -103,5 +104,7 @@ export function focusedCellContext(root: ParentNode): Record<string, unknown> | 
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed === 'object' && parsed !== null) Object.assign(merged, parsed);
   }
+  const copyText = cell.getAttribute('data-copy-text');
+  if (copyText !== null) merged.copyText = copyText;
   return merged;
 }

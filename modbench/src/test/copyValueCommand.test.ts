@@ -21,11 +21,12 @@ import { registerCopyValueCommand, type CopyValueAdapter } from '../toolbox';
 import { modsCopyValueText } from '../mods/modManagementCommands';
 import { MODS_KEY_ARGS } from '../mods/gestureEntry';
 import { ModNode, type ModlistNode } from '../mods/ModListProvider';
+import type { Reporter } from '../ports/reporter';
 import { recordingReporter, type RecordingReporter } from './surfacingDoubles';
 
 function invokeCommand(...args: unknown[]): Promise<unknown> {
-  const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.record.copyValue');
-  if (!call) throw new Error('modbench.record.copyValue was not registered');
+  const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.copyValue');
+  if (!call) throw new Error('modbench.copyValue was not registered');
   return Promise.resolve(call[1](...args));
 }
 
@@ -39,21 +40,32 @@ function reporterForRecording(): { reporterFor: (tag: string) => RecordingReport
   return { reporterFor, reportersByTag };
 }
 
+const isViewArgs = (value: unknown, view: string): boolean =>
+  typeof value === 'object' && value !== null && Reflect.get(value, 'view') === view;
+
+const nothingToCopy = vi.fn<() => void>();
+
+function register(
+  adapters: readonly CopyValueAdapter[], reporterFor: (tag: string) => Reporter, focusedViewId?: string,
+): void {
+  registerCopyValueCommand(adapters, reporterFor, () => focusedViewId, nothingToCopy);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched over an ordered adapter list', () => {
   it('registers exactly one command under the catalog id', () => {
-    registerCopyValueCommand([], recordingReporter);
+    registerCopyValueCommand([], recordingReporter, () => undefined, nothingToCopy);
     expect(registerCommand).toHaveBeenCalledTimes(1);
-    expect(registerCommand.mock.calls[0]?.[0]).toBe('modbench.record.copyValue');
+    expect(registerCommand.mock.calls[0]?.[0]).toBe('modbench.copyValue');
   });
 
   it('writes the first adapter\'s text when it applies', async () => {
     const first: CopyValueAdapter = { text: () => 'first', reporterTag: 'first.copy' };
     const second: CopyValueAdapter = { text: () => 'second', reporterTag: 'second.copy' };
-    registerCopyValueCommand([first, second], recordingReporter);
+    register([first, second], recordingReporter);
 
     await invokeCommand('clicked', ['clicked']);
 
@@ -63,7 +75,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
   it('falls through to the next adapter when one defers with undefined', async () => {
     const declines: CopyValueAdapter = { text: () => undefined, reporterTag: 'first.copy' };
     const applies: CopyValueAdapter = { text: () => 'second', reporterTag: 'second.copy' };
-    registerCopyValueCommand([declines, applies], recordingReporter);
+    register([declines, applies], recordingReporter);
 
     await invokeCommand();
 
@@ -73,7 +85,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
   it('writes nothing, and tries no further adapter, when the owning adapter has empty text', async () => {
     const owns: CopyValueAdapter = { text: () => '', reporterTag: 'first.copy' };
     const next = vi.fn(() => 'second');
-    registerCopyValueCommand([owns, { text: next, reporterTag: 'second.copy' }], recordingReporter);
+    register([owns, { text: next, reporterTag: 'second.copy' }], recordingReporter);
 
     await invokeCommand();
 
@@ -81,8 +93,8 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('writes nothing when every adapter defers', async () => {
-    registerCopyValueCommand(
+  it('writes nothing and says so when every adapter defers', async () => {
+    register(
       [{ text: () => undefined, reporterTag: 'first.copy' }, { text: () => undefined, reporterTag: 'second.copy' }],
       recordingReporter,
     );
@@ -90,6 +102,15 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     await invokeCommand();
 
     expect(writeText).not.toHaveBeenCalled();
+    expect(nothingToCopy).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing when an adapter owns the invocation with empty text', async () => {
+    register([{ text: () => '', reporterTag: 'first.copy' }], recordingReporter);
+
+    await invokeCommand();
+
+    expect(nothingToCopy).not.toHaveBeenCalled();
   });
 
   it('reports a failed clipboard write under the owning adapter\'s own tag', async () => {
@@ -97,7 +118,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     const { reporterFor, reportersByTag } = reporterForRecording();
     const first: CopyValueAdapter = { text: () => undefined, reporterTag: 'first.copy' };
     const second: CopyValueAdapter = { text: () => 'text', reporterTag: 'second.copy' };
-    registerCopyValueCommand([first, second], reporterFor);
+    register([first, second], reporterFor);
 
     await invokeCommand();
 
@@ -112,7 +133,7 @@ describe('registerCopyValueCommand: the catalog\'s one copy value id, dispatched
     const { reporterFor, reportersByTag } = reporterForRecording();
     const first: CopyValueAdapter = { text: () => 'text', reporterTag: 'first.copy' };
     const second: CopyValueAdapter = { text: () => 'unreachable', reporterTag: 'second.copy' };
-    registerCopyValueCommand([first, second], reporterFor);
+    register([first, second], reporterFor);
 
     await invokeCommand();
 
@@ -128,7 +149,7 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
     const viewSelection = (): ModlistNode[] => [];
     const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
     const referencedByStub: CopyValueAdapter = { text: () => undefined, reporterTag: 'referencedByTree.copy' };
-    registerCopyValueCommand([modsAdapter, referencedByStub], recordingReporter);
+    register([modsAdapter, referencedByStub], recordingReporter);
     const clicked = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
 
     await invokeCommand(clicked, [clicked]);
@@ -136,23 +157,34 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
     expect(writeText).toHaveBeenCalledWith('Alpha');
   });
 
-  // Referenced By's own Ctrl+C invokes with no arguments (package.json).
-  it('a no-argument invocation still copies Referenced By\'s selection, even with a Mods row selected', async () => {
+  // commands.md, The surface supplies the Argument: a palette call has none, so the focused view
+  // stands for the key its own Ctrl+C would have passed.
+  it('a palette call copies the focused view\'s selection, even with a Mods row selected', async () => {
     const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
     const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
-    const referencedByStub: CopyValueAdapter = { text: () => 'NPC_ / TestNPC', reporterTag: 'referencedByTree.copy' };
-    registerCopyValueCommand([modsAdapter, referencedByStub], recordingReporter);
+    const referencedBy = vi.fn((clicked: unknown) => (isViewArgs(clicked, 'modbench.referencedByTree') ? 'NPC_ / TestNPC' : undefined));
+    register([modsAdapter, { text: (clicked) => referencedBy(clicked), reporterTag: 'referencedByTree.copy' }], recordingReporter, 'modbench.referencedByTree');
 
     await invokeCommand();
 
     expect(writeText).toHaveBeenCalledWith('NPC_ / TestNPC');
   });
 
+  it('a palette call with no view focused copies nothing and says so', async () => {
+    const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
+    register([{ text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' }], recordingReporter);
+
+    await invokeCommand();
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(nothingToCopy).toHaveBeenCalledOnce();
+  });
+
   it('the Mods key\'s own args copy the Mods selection, not Referenced By\'s', async () => {
     const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
     const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };
     const referencedByStub: CopyValueAdapter = { text: () => 'NPC_ / TestNPC', reporterTag: 'referencedByTree.copy' };
-    registerCopyValueCommand([modsAdapter, referencedByStub], recordingReporter);
+    register([modsAdapter, referencedByStub], recordingReporter);
 
     await invokeCommand(MODS_KEY_ARGS);
 

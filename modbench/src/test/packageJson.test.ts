@@ -251,16 +251,6 @@ describe('package.json Referenced By panel migration', () => {
     const sidebarViews = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
     expect(sidebarViews.some((v) => v.id === 'modbench.referencedByTree')).toBe(false);
   });
-
-  it('is never a right-click entry point — modbench.record.showReferencedBy appears in no menu contribution', () => {
-    const menus: Record<string, { command: string }[]> = pkg.contributes.menus;
-    for (const [menuId, entries] of Object.entries(menus)) {
-      expect(
-        entries.some((e) => e.command === 'modbench.record.showReferencedBy'),
-        `expected no "${menuId}" entry invoking modbench.record.showReferencedBy`,
-      ).toBe(false);
-    }
-  });
 });
 
 describe('package.json Toolbox view', () => {
@@ -354,7 +344,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
 
   // commands.md, Chrome: the order.
   it('keeps modbench.plugin.filter at slot 1 (unchanged by this slice)', () => {
-    expect(entryFor('modbench.plugin.filter').group).toBe('navigation@1');
+    expect(entryFor('modbench.filter').group).toBe('navigation@1');
   });
 
   // plugins.md, Menus and keys: "3: filter records, or clear the record filter while active".
@@ -411,9 +401,9 @@ describe('package.json filtering is one UX', () => {
 
   // commands.md, Chrome: the icons.
   const FILTERED_VIEWS = [
-    ['modbench.modList', 'modbench.mod.filter'],
-    ['modbench.pluginListTree', 'modbench.plugin.filter'],
-    ['modbench.downloads', 'modbench.downloadedFile.filter'],
+    ['modbench.modList', 'modbench.filter'],
+    ['modbench.pluginListTree', 'modbench.filter'],
+    ['modbench.downloads', 'modbench.filter'],
   ] as const;
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
@@ -439,9 +429,9 @@ describe('package.json filtering is one UX', () => {
   // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
   // so slot 1 shows exactly one of the pair at a time. The key is per view.
   const DURABLE_FILTERS = [
-    ['modbench.modList', 'modbench.mod.filter', 'modbench.mod.clearFilter', 'modbench.mod.filterActive'],
-    ['modbench.pluginListTree', 'modbench.plugin.filter', 'modbench.plugin.clearFilter', 'modbench.plugin.filterActive'],
-    ['modbench.downloads', 'modbench.downloadedFile.filter', 'modbench.downloadedFile.clearFilter', 'modbench.downloadedFile.filterActive'],
+    ['modbench.modList', 'modbench.filter', 'modbench.clearFilter', 'modbench.mod.filterActive'],
+    ['modbench.pluginListTree', 'modbench.filter', 'modbench.clearFilter', 'modbench.plugin.filterActive'],
+    ['modbench.downloads', 'modbench.filter', 'modbench.clearFilter', 'modbench.downloadedFile.filterActive'],
   ] as const;
 
   it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
@@ -616,8 +606,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.sortLosingAtTop', 'navigation@2'],
     ]));
     expect(placed(inPluginsView('view/title'))).toEqual([
-      ['modbench.plugin.filter', 'navigation'],
-      ['modbench.plugin.clearFilter', 'navigation'],
+      ['modbench.filter', 'navigation'],
+      ['modbench.clearFilter', 'navigation'],
       ['modbench.plugin.sortWinningAtTop', 'navigation'],
       ['modbench.plugin.sortLosingAtTop', 'navigation'],
       ['modbench.record.filter', 'navigation'],
@@ -651,7 +641,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.enable', '2_change'],
       ['modbench.mod.track', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
     expect(menuOf('plugin enabled inTrackedMod tracked editable')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
@@ -659,7 +649,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.record.create', '3_create'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -671,7 +661,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.enable', '2_change'],
       ['modbench.plugin.decompile', '4_sourceControl'],
       ['modbench.plugin.compile', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -681,7 +671,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
       ['modbench.plugin.decompile', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -692,7 +682,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
       ['modbench.mod.track', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -711,14 +701,14 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf(contextValue)).toEqual([
       ['modbench.plugin.reveal', '1_open'],
       ['modbench.plugin.disable', '2_change'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
   it('the locked row: reveal and copy value', () => {
     expect(menuOf('pluginImplicit')).toEqual([
       ['modbench.plugin.reveal', '1_open'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -740,7 +730,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       expect(menuOf(`${kind} tracked editable`)).toEqual([
         ['modbench.record.open', '1_open'],
         ['modbench.record.copy', '5_copy'],
-        ['modbench.record.copyValue', '5_copy'],
+        ['modbench.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
       ]);
     });
@@ -749,7 +739,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(menuOf(`record ${conditions}`)).toEqual([
       ['modbench.record.open', '1_open'],
       ['modbench.record.copy', '5_copy'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
     ]);
   });
 
@@ -771,7 +761,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       { command: 'modbench.plugin.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == enable`, args: undefined },
       { command: 'modbench.plugin.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == disable`, args: undefined },
       { command: 'modbench.record.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
-      { command: 'modbench.record.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
+      { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
     ]);
   });
 
@@ -821,7 +811,8 @@ describe('package.json Downloads row menu order', () => {
 
     const slots = [
       'modbench.downloads.install', 'modbench.mod.viewOnNexus', 'modbench.downloadedFile.open',
-      'modbench.downloadedFile.openMeta', 'modbench.downloadedFile.exclude', 'modbench.downloadedFile.delete',
+      'modbench.downloadedFile.openMeta', 'modbench.downloadedFile.exclude', 'modbench.copyValue',
+      'modbench.downloadedFile.delete',
     ].map(slotOf);
     expect(slots).toEqual([...slots].sort((a, b) => a - b));
     expect(new Set(slots).size).toBe(slots.length); // strictly increasing, no ties outside exclude/include
@@ -897,6 +888,27 @@ describe('package.json Downloads delete key', () => {
     expect(entry.key).toBe('Delete');
     expect(entry.mac).toBe('cmd+backspace');
     expect(entry.when).toBe(`focusedView == modbench.downloads && listFocus && !inputFocus && ${IN_AN_INSTANCE}`);
+  });
+});
+
+// downloads.md, Menus and keys: "Ctrl+C: copy value." and referenced-by.md, Menus and keys; each key
+// hands the command its own view, which is how one command knows whose selection to copy.
+describe('package.json Ctrl+C keys', () => {
+  const COPY_KEYS = [
+    'modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree',
+  ] as const;
+  const copyKeys: { command: string; key: string; mac?: string; when: string; args?: unknown }[] =
+    pkg.contributes.keybindings.filter((k: { command: string }) => k.command === 'modbench.copyValue');
+
+  it.each(COPY_KEYS)('%s binds Ctrl+C to copy value, handing it its own view', (view) => {
+    const entry = present(copyKeys.find((k) => k.when.startsWith(`focusedView == ${view} `)), `a Ctrl+C key for ${view}`);
+    expect(entry.key).toBe('ctrl+c');
+    expect(entry.mac).toBe('cmd+c');
+    expect(entry.args).toEqual({ view });
+  });
+
+  it('binds no other Ctrl+C', () => {
+    expect(copyKeys).toHaveLength(COPY_KEYS.length);
   });
 });
 
@@ -1104,7 +1116,7 @@ describe('package.json Mods row menu — copy value', () => {
   const modsViewMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
       .filter((e) => e.when.includes('view == modbench.modList'));
-  const copyValueEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.record.copyValue');
+  const copyValueEntries = (): MenuEntry[] => modsViewMenu().filter((e) => e.command === 'modbench.copyValue');
   const rowMatches = (when: string, contextValue: string | undefined): boolean => {
     const tokens = present(contextValue, "the row's own contextValue").split(' ');
     const exact = /viewItem == (\w+)/.exec(when)?.[1];
@@ -1122,15 +1134,15 @@ describe('package.json Mods row menu — copy value', () => {
     expect(offeredOn(new OverwriteNode(0, 'MO2').contextValue)).toBe(false);
   });
 
-  it('registers modbench.record.copyValue exactly once', () => {
-    const registrations = pkg.contributes.commands.filter((c) => c.command === 'modbench.record.copyValue');
+  it('registers modbench.copyValue exactly once', () => {
+    const registrations = pkg.contributes.commands.filter((c) => c.command === 'modbench.copyValue');
     expect(registrations).toHaveLength(1);
   });
 
   it('leaves the Referenced By tree\'s own copy value entry untouched', () => {
     const entry = present(
       pkg.contributes.menus['view/item/context']?.find(
-        (e) => e.command === 'modbench.record.copyValue' && e.when.includes('referencedByTree')),
+        (e) => e.command === 'modbench.copyValue' && e.when.includes('referencedByTree')),
       'the Referenced By copy value entry',
     );
     expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
@@ -1149,8 +1161,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
   it('title bar: filter or clear, then sort direction, as icons; install then create empty mod in the overflow', () => {
     expect(placed(inModsView('view/title'))).toEqual([
-      ['modbench.mod.filter', 'navigation'],
-      ['modbench.mod.clearFilter', 'navigation'],
+      ['modbench.filter', 'navigation'],
+      ['modbench.clearFilter', 'navigation'],
       ['modbench.mod.sortWinningAtTop', 'navigation'],
       ['modbench.mod.sortLosingAtTop', 'navigation'],
       ['modbench.mod.install', '3_create'],
@@ -1169,7 +1181,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.createEmpty', '3_create'],
       ['modbench.mod.install', '3_create'],
       ['modbench.mod.track', '4_sourceControl'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
       ['modbench.mod.uninstall', '6_destroy'],
     ]);
   });
@@ -1191,7 +1203,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       ['modbench.mod.move', '2_change'],
       ['modbench.separator.add', '3_create'],
       ['modbench.separator.rename', '3_create'],
-      ['modbench.record.copyValue', '5_copy'],
+      ['modbench.copyValue', '5_copy'],
       ['modbench.separator.delete', '6_destroy'],
     ]);
   });
@@ -1214,7 +1226,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
       { command: 'modbench.mod.uninstall', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == mod`, args: undefined },
       { command: 'modbench.separator.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.mod.selectionKind == separator`, args: undefined },
       { command: 'modbench.separator.rename', key: 'f2', mac: 'enter', when: `${ON_THE_TREE} && ${ONE_SEPARATOR}`, args: undefined },
-      { command: 'modbench.record.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
+      { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: MODS_KEY_ARGS },
     ]);
   });
 
@@ -1308,15 +1320,6 @@ const catalog = catalogCommandIds(commandsMarkdown);
 // another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
-  { gesture: 'show referenced by', removedBy: '#1096', ids: ['modbench.record.showReferencedBy'], outOfPalette: [] },
-  {
-    gesture: 'copy value and the name filter', removedBy: '#1096',
-    ids: [
-      'modbench.record.copyValue', 'modbench.mod.filter', 'modbench.mod.clearFilter', 'modbench.plugin.filter',
-      'modbench.plugin.clearFilter', 'modbench.downloadedFile.filter', 'modbench.downloadedFile.clearFilter',
-    ],
-    outOfPalette: [],
-  },
 ];
 
 describe('package.json registers every command under its catalog Command ID', () => {
@@ -1352,6 +1355,11 @@ describe('package.json registers every command under its catalog Command ID', ()
 const wordsOf = (camel: string): string[] => camel.split(/(?=[A-Z])/).map((w) => w.toLowerCase());
 
 function expectTitleNamesVerbAndObject(id: string, title: string): void {
+  const everyView = /^modbench\.(\w+)$/.exec(id)?.[1];
+  if (everyView !== undefined) {
+    expect(title.replace('…', '').toLowerCase().split(/\s+/), `the title of ${id} is its verb alone`).toEqual(wordsOf(everyView));
+    return;
+  }
   const [, object = '', verb = ''] = present(
     /^modbench\.(\w+)\.(\w+)$/.exec(id) ?? undefined, `${id} as modbench.<object>.<verb>`);
   const titleWords = title.replace('…', '').toLowerCase().split(/\s+/);
