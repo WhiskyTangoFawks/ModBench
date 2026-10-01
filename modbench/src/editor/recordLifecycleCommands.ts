@@ -86,7 +86,7 @@ export interface WriteAnswer<Answer> {
 export interface RecordWriteMarks {
   deleting(records: readonly RecordAddress[], editorIds: ReadonlyMap<string, string | undefined>): WriteAnswer<readonly RecordAddress[]>;
   copying(
-    items: readonly CopyItem[], replacing: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>,
+    items: readonly CopyItem[], mode: CopyMode, replacing: readonly CopyItem[], editorIds: ReadonlyMap<string, string | undefined>,
   ): WriteAnswer<readonly CopyItem[]>;
 }
 
@@ -245,7 +245,7 @@ export function registerRecordCopyCommands(
       if (replacing === undefined) return;
 
       const copies = records.flatMap((record) => destinations.map((destination) => ({ record, destination })));
-      const marked = marks.copying(copiesWritten(copies, mode), replacing, editorIds);
+      const marked = marks.copying(copiesWritten(copies, mode), mode, replacing, editorIds);
       const answer = await client.copyRecords(records, mode, destinations, replacing.length > 0);
       const written = isRefused(answer) ? [] : copiesWritten(answer.landed, mode);
       tell(marked, answer, written);

@@ -61,8 +61,8 @@ function recordingMarks(): { marks: RecordWriteMarks; told: string[] } {
         told.push(`deleting ${named(records)}${ids(editorIds)}`);
         return { answered: (landed) => { told.push(`deleted ${named(landed)}`); }, unanswered };
       },
-      copying: (items, replacing, editorIds) => {
-        told.push(`copying ${copies(items)}${replacing.length > 0 ? `, replacing ${copies(replacing)}` : ''}${ids(editorIds)}`);
+      copying: (items, mode, replacing, editorIds) => {
+        told.push(`copying ${mode} ${copies(items)}${replacing.length > 0 ? `, replacing ${copies(replacing)}` : ''}${ids(editorIds)}`);
         return { answered: (landed) => { told.push(`copied ${copies(landed)}`); }, unanswered };
       },
     },
@@ -665,7 +665,7 @@ describe('modbench.record.copy', () => {
     await copy(RECORD_NODE);
 
     expect(told).toEqual([
-      'copying 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp',
+      'copying New 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp',
       'write',
       'copied 000801:MyPatch.esp into Patch.esp as 000900:Patch.esp',
     ]);
@@ -682,7 +682,7 @@ describe('modbench.record.copy', () => {
     await copy(RECORD_NODE);
 
     expect(told[0]).toBe(
-      'copying 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp, replacing 000801:MyPatch.esp into Patch.esp');
+      'copying Override 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp, replacing 000801:MyPatch.esp into Patch.esp');
   });
 
   it('tells the marks a call mEdit never answered, and reports it as before', async () => {
@@ -694,7 +694,7 @@ describe('modbench.record.copy', () => {
 
     await copy(RECORD_NODE);
 
-    expect(told).toEqual(['copying 000801:MyPatch.esp into Patch.esp', 'unanswered']);
+    expect(told).toEqual(['copying New 000801:MyPatch.esp into Patch.esp', 'unanswered']);
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Could not copy 1 record — socket hang up', detail: undefined }]);
   });
 
@@ -709,6 +709,6 @@ describe('modbench.record.copy', () => {
 
     await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
 
-    expect(told).toEqual(['copying 000801:MyPatch.esp into Patch.esp', 'copied ']);
+    expect(told).toEqual(['copying Override 000801:MyPatch.esp into Patch.esp', 'copied ']);
   });
 });

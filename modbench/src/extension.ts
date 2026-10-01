@@ -197,7 +197,8 @@ export function activate(context: vscode.ExtensionContext) {
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       recordMarks: {
         deleting: (records, editorIds) => session.pluginsTree?.recordMarks.deleting(records, editorIds) ?? UNMARKED,
-        copying: (items, replacing, editorIds) => session.pluginsTree?.recordMarks.copying(items, replacing, editorIds) ?? UNMARKED,
+        copying: (items, mode, replacing, editorIds) =>
+          session.pluginsTree?.recordMarks.copying(items, mode, replacing, editorIds) ?? UNMARKED,
       },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),

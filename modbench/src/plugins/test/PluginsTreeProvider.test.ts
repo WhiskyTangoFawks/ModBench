@@ -4017,7 +4017,7 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
     });
 
     // Story 6: only the disk can say what a gesture with no answer did.
-    it('with no answer, keeps the mark through a report of another record, and goes, saying nothing, on one of its own', async () => {
+    it('with no answer, keeps the mark through a report of another record, and goes, saying nothing, on one of its own that shows it gone', async () => {
       const h = await treeWithARecord();
       h.tree.recordMarks.deleting([RECORD], NAMED).unanswered();
       await shown();
@@ -4025,9 +4025,23 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
       await rowsChanged(h, A, '000002:A.esp');
       expect(await marked(h)).toEqual(['record']);
 
+      h.client.setQueryAnswer('getRecordHolders', [B]);
       await rowsChanged(h, A, RECORD.formKey);
       expect(await marked(h)).toEqual([]);
       expect(warnings(h)).toEqual([]);
+    });
+
+    // Story 4: the disk shows something other than what was written.
+    it('with no answer, says once that the disk still holds the record when mEdit\'s reports do', async () => {
+      const h = await treeWithARecord();
+      h.tree.recordMarks.deleting([RECORD], NAMED).unanswered();
+      await shown();
+
+      await rowsChanged(h, A, RECORD.formKey);
+      await rowsChanged(h, A, RECORD.formKey);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] TheWeapon [000001:A.esp] was deleted from "A.esp", and the disk still holds it.']);
     });
 
     it('with no answer, goes on a refresh, saying nothing', async () => {
@@ -4122,7 +4136,7 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
 
     it('marks each destination\'s row only after a delay, and goes once mEdit holds the copy there', async () => {
       const h = await treeWithARecord();
-      const marks = h.tree.recordMarks.copying([INTO_B], [], NAMED);
+      const marks = h.tree.recordMarks.copying([INTO_B], 'New', [], NAMED);
       expect(await marked(h)).toEqual([]);
       await shown();
       expect(await marked(h)).toEqual(['B.esp']);
@@ -4137,7 +4151,7 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
 
     it('logs, naming the record, when mEdit reports the copy and does not hold it', async () => {
       const h = await treeWithARecord();
-      h.tree.recordMarks.copying([INTO_B], [], NAMED).answered([INTO_B]);
+      h.tree.recordMarks.copying([INTO_B], 'New', [], NAMED).answered([INTO_B]);
       await shown();
 
       await rowsChanged(h, B, RECORD.formKey);
@@ -4150,7 +4164,7 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
     it('shows no mark for a copy the destination refused', async () => {
       const h = await treeWithARecord();
 
-      h.tree.recordMarks.copying([INTO_B], [], NAMED).answered([]);
+      h.tree.recordMarks.copying([INTO_B], 'New', [], NAMED).answered([]);
       await shown();
 
       expect(await marked(h)).toEqual([]);
@@ -4160,7 +4174,7 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
     it('keeps a replacing copy\'s mark while the destination holds the record, until mEdit reports it there', async () => {
       const h = await treeWithARecord();
       h.client.setQueryAnswer('getRecordHolders', [A, B]);
-      h.tree.recordMarks.copying([INTO_B], [INTO_B], NAMED).answered([INTO_B]);
+      h.tree.recordMarks.copying([INTO_B], 'Override', [INTO_B], NAMED).answered([INTO_B]);
       await shown();
       expect(await marked(h)).toEqual(['B.esp']);
 
@@ -4170,9 +4184,21 @@ describe('PluginsTreeProvider — an unconfirmed record create, copy or delete',
       expect(warnings(h)).toEqual([]);
     });
 
-    it('with no answer, keeps the mark until a refresh, saying nothing', async () => {
+    it('as an override with no answer, says once that the disk does not hold the copy when mEdit\'s reports do', async () => {
       const h = await treeWithARecord();
-      h.tree.recordMarks.copying([INTO_B], [], NAMED).unanswered();
+      h.tree.recordMarks.copying([INTO_B], 'Override', [], NAMED).unanswered();
+      await shown();
+
+      await rowsChanged(h, B, RECORD.formKey);
+      await rowsChanged(h, B, RECORD.formKey);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] TheWeapon [000001:A.esp] was copied into "B.esp", and the disk does not hold the copy.']);
+    });
+
+    it('as a new record with no answer, keeps the mark until a refresh, saying nothing', async () => {
+      const h = await treeWithARecord();
+      h.tree.recordMarks.copying([INTO_B], 'New', [], NAMED).unanswered();
       await shown();
       expect(await marked(h)).toEqual(['B.esp']);
 
