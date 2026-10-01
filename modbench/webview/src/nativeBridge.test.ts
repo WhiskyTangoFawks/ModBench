@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey } from './nativeBridge';
+import { pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // pickFormKey exercises the shared requestReply plumbing once, as the exemplar for the
@@ -89,5 +89,36 @@ describe('pickFormKey', () => {
     }));
 
     expect(await resultPromise).toBeNull();
+  });
+});
+
+// A second bridge, extending the shared mechanism (proven above) rather than re-proving it: only
+// its own request shape and reply unwrapping are this suite's to check.
+describe('requestRecordLoad', () => {
+  function postedFormKeyRequestId(): string {
+    const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
+    if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) {
+      throw new Error('Expected a REQUEST_RECORD_LOAD post');
+    }
+    return call.requestId;
+  }
+
+  it('posts REQUEST_RECORD_LOAD with the formKey', () => {
+    void requestRecordLoad('000001:A.esp');
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, formKey: '000001:A.esp',
+    }));
+  });
+
+  it('resolves the host\'s answer untransformed', async () => {
+    const resultPromise = requestRecordLoad('000001:A.esp');
+    const requestId = postedFormKeyRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId, ok: false, error: 'HTTP 404' },
+    }));
+
+    expect(await resultPromise).toEqual({ ok: false, error: 'HTTP 404' });
   });
 });

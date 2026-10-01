@@ -11,9 +11,9 @@ import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
-  // The write path's own port call, widened by the FormKey picker's search — one client
-  // serves both, and the per-panel picker bundle below reuses it.
-  meditClient: Pick<MEditClient, 'editRecord' | 'searchRecords'>;
+  // The write path's own port call, widened by the FormKey picker's search and the panel's own
+  // read — one client serves all three, and the per-panel picker bundle below reuses it.
+  meditClient: Pick<MEditClient, 'editRecord' | 'searchRecords' | 'getComparison' | 'getPlugins'>;
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -29,13 +29,18 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   editInFlight: EditGate;
   // The panel's own focused cell, which a field gesture from the palette acts on.
   focusCell: (context: FocusedCellContext | undefined) => void;
+  // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
+  // per panel like `formKeyPicker.reply`.
+  reply: (msg: ExtensionToWebview) => void;
+  // The load-order sweep's latest known answer, read rather than fetched (ADR-0013).
+  conflictsComputed: () => boolean;
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight' | 'focusCell'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight' | 'focusCell' | 'reply'>;
 
-/** The router's bundle for one panel's messages: the picker replies to it, and its edits are
- *  held in flight for it. */
+/** The router's bundle for one panel's messages: the picker and the record load both reply to it,
+ *  and its edits are held in flight for it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
@@ -47,6 +52,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
     editInFlight: edits.gate(panel),
     focusCell: (context) => { focusedCells.setCell(panel, context); },
+    reply: (m) => { void panel.webview.postMessage(m); },
   };
 }
 
@@ -82,6 +88,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined); },
+  [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
 };
 
 // Each case below narrows `m` to its own variant, so calling its HANDLERS entry needs no
@@ -94,6 +101,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return HANDLERS[m.type](deps, m);
     default: {
       const unreachable: never = m;
       return unreachable;
@@ -200,4 +208,28 @@ async function editField(
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
   await deps.editInFlight(m, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
+}
+
+// A failed comparison fails the whole load; a failed plugin list degrades to null (ADR-0002
+// invariant 2 — the webview asks the mEdit client through the host, never the port itself).
+async function answerRecordLoad(
+  deps: RouteRecordPanelMessageDeps,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,
+): Promise<void> {
+  const [compare, plugins] = await Promise.allSettled([
+    deps.meditClient.getComparison(m.formKey),
+    deps.meditClient.getPlugins(),
+  ]);
+  if (compare.status === 'rejected') {
+    deps.reply({
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId,
+      ok: false, error: errorMessage(compare.reason),
+    });
+    return;
+  }
+  deps.reply({
+    type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId, ok: true,
+    compare: compare.value, plugins: plugins.status === 'fulfilled' ? plugins.value : null,
+    conflictsComputed: deps.conflictsComputed(),
+  });
 }

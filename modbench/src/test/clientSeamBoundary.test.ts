@@ -6,8 +6,8 @@ import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
 // ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
-// stream's endpoint path live only under the client box. The webview calls the backend
-// directly (RecordPanelClient.ts, ADR-0007) but sits outside modbench/src.
+// stream's endpoint path live only under the client box. The webview sits outside modbench/src,
+// so this walk never reaches it.
 
 const SRC = join(__dirname, '..');
 const CLIENT_DIR = 'client';

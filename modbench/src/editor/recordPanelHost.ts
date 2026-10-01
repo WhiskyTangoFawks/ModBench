@@ -11,6 +11,7 @@ import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
+import { trackConflictsComputed } from './conflictsComputedTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 
@@ -27,12 +28,12 @@ export interface EditorCommandDeps {
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
   // Each panel's focused cell, which a field gesture from the palette acts on.
   focusedCells: FocusedCells<vscode.WebviewPanel>;
-  port: number;
   recordBadgeSource: RecordBadgeSource;
   meditClient: Pick<MEditClient,
     | 'editRecord' | 'searchRecords'
     | 'deleteRecords' | 'copyRecords'
-    | 'getPlugins' | 'getRecordHolders'>;
+    | 'getPlugins' | 'getRecordHolders'
+    | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
   // `modbench.openEditorBeside`'s selection fallback, against the merged Plugins tree. Narrowed
   // to the one cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
@@ -60,7 +61,7 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, port, recordBadgeSource, meditClient,
+    context, openPanels, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource, meditClient,
     outputChannel, mergedTreeSelection,
   } = deps;
   // One decoration provider per activation: it reads the tree's cache live, so it needs no copy
@@ -68,12 +69,15 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
   const panelsById = new Map<string, vscode.WebviewPanel>();
   const writeDeps = recordPanelWriteDeps(deps);
+  // Lives for the activation, like the decoration provider above — disposed alongside it.
+  const conflictsComputedTracker = trackConflictsComputed(meditClient);
   // The picker and the edit gate are each panel's own, added per panel below.
   const routerDeps: SharedRecordPanelDeps = {
-    ...writeDeps, meditClient, channel: outputChannel,
+    ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
   };
   return [
     recordDecorationProvider,
+    { dispose: () => { conflictsComputedTracker.dispose(); } },
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
@@ -95,7 +99,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
     vscode.commands.registerCommand('modbench.record.open', (args?: { formKey?: string; label?: string }) => {
-      openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
+      openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey,
         vscode.ViewColumn.One, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),
     // A named "Open to the Side" (ADR-0018), not a right-click side effect. `item`/`allSelected`
@@ -110,10 +114,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         const identities = nodes.map(recordOpenIdentity)
           .filter((i): i is { formKey: string; label: string } => i !== undefined);
         if (identities.length === 0) return;
-        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells });
+        openBesideRecordPanels(context, openPanels, identities, { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells });
       }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
-      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
+      openRecordPanel(context, openPanels, 'mEdit', undefined, vscode.ViewColumn.One,
         { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton: true });
     }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
@@ -148,7 +152,6 @@ export function openRecordPanel(
   openPanels: Map<string, vscode.WebviewPanel>,
   title: string,
   formKey: string | undefined,
-  port: number,
   viewColumn: vscode.ViewColumn,
   { routerDeps, recordPanels, panelsById, activeRecordTracker, editsInFlight, focusedCells, singleton }: OpenRecordPanelDeps,
 ): void {
@@ -214,7 +217,6 @@ export function openRecordPanel(
   panel.webview.html = buildWebviewHtml({
     panelId,
     formKey,
-    port,
     scriptUri: scriptUri.toString(),
     cspSource: panel.webview.cspSource,
   });
@@ -235,12 +237,11 @@ export function openBesideRecordPanels(
   context: vscode.ExtensionContext,
   openPanels: Map<string, vscode.WebviewPanel>,
   identities: { formKey: string; label: string }[],
-  port: number,
   deps: Omit<OpenRecordPanelDeps, 'singleton'>,
 ): void {
   let column: vscode.ViewColumn = vscode.ViewColumn.Beside;
   for (const { formKey, label } of identities) {
-    openRecordPanel(context, openPanels, label, formKey, port, column, { ...deps, singleton: false });
+    openRecordPanel(context, openPanels, label, formKey, column, { ...deps, singleton: false });
     column = vscode.window.tabGroups.activeTabGroup.viewColumn;
   }
 }

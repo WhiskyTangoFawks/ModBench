@@ -293,6 +293,30 @@ describe('HttpMEditClient — copying records answers per record and destination
   });
 });
 
+describe('HttpMEditClient — getComparison', () => {
+  it('asks the record\'s comparison by FormKey and returns it untransformed', async () => {
+    const comparison = {
+      overrides: [{ plugin: 'Patch.esp', origin: 'PatchMod', formKey: '000801:MyPatch.esp', editorId: 'MyRecord', fields: [] }],
+      diffs: [], conflictAll: 'NoConflict',
+    };
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, comparison)));
+    const client = makeClient(fetch);
+
+    expect(await client.getComparison('000801:MyPatch.esp')).toEqual(comparison);
+    const request = fetch.mock.calls[0]?.[0];
+    expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
+  });
+
+  // The rival: a client that degrades a 404 the way getRecordHolders does, so the record panel's
+  // host would answer a missing record with an empty comparison instead of a load failure.
+  it('rejects on a 404, unlike getRecordHolders\'s own degrade', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No such record.' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getComparison('000801:Gone.esp')).rejects.toThrow(/getComparison.*failed \(404\)/);
+  });
+});
+
 describe('HttpMEditClient — tracking plugins answers per plugin', () => {
   const first = { name: 'First.esp', origin: 'ModA' };
   const second = { name: 'Second.esp', origin: 'ModA' };
