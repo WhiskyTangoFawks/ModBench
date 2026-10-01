@@ -38,22 +38,18 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     }
 
     [Fact]
-    public void Index_ExcludesTheNonEditableRefTypesTheSchemaAlsoExcludes()
+    public void Index_WritesOneDocumentPerLandscapeAndNavmeshRecord()
     {
         using var overlay = OpenPlugin();
-        // By getter interface, not runtime type name: a binary overlay's concrete types are
-        // LandscapeBinaryOverlay / NavigationMeshBinaryOverlay, so a name comparison here silently
-        // counts zero and turns the control it is supposed to be into a no-op.
-        var presentInPlugin = overlay.EnumerateMajorRecords<ILandscapeGetter>(throwIfUnknown: false).Count()
-            + overlay.EnumerateMajorRecords<INavigationMeshGetter>(throwIfUnknown: false).Count();
-        Assert.True(presentInPlugin > 0,
-            "Positive control: the cut-down plugin must actually contain LAND/NAVM records for their absence to mean anything.");
+        var landscapes = overlay.EnumerateMajorRecords<ILandscapeGetter>(throwIfUnknown: false).Count();
+        var navmeshes = overlay.EnumerateMajorRecords<INavigationMeshGetter>(throwIfUnknown: false).Count();
+        Assert.True(landscapes > 0 && navmeshes > 0,
+            "Positive control: the cut-down plugin must hold LAND and NAVM records, counted by getter interface, "
+            + "since a binary overlay's concrete type name would count none.");
 
-        var reads = fixture.Reads;
-        foreach (var excluded in (string[])["land", "navm", "navi"])
-            Assert.Equal(0, reads.CountOf(CutDownPluginFixture.Plugin, excluded));
-        Assert.True(reads.CountOf(CutDownPluginFixture.Plugin, "npc_") > 0,
-            "Positive control: the same count must find documents of an indexed type.");
+        var documents = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin);
+        Assert.Equal(landscapes, documents.Count(d => d.RecordType == "land"));
+        Assert.Equal(navmeshes, documents.Count(d => d.RecordType == "navm"));
     }
 
     [Fact]

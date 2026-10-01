@@ -31,6 +31,8 @@ public class UnionArrayAddInventoryTests
     // Written out so a Mutagen change to any leaf set is a visible edit here.
     private static readonly string[] ExercisedShapes =
     [
+        // land.layers
+        "AlphaLayer|BaseLayer",
         // cobj.conditions and every other condition-bearing column
         "ConditionFloat|ConditionGlobal",
         // omod.properties
@@ -62,10 +64,24 @@ public class UnionArrayAddInventoryTests
     public void ArrayAdd_BuildsAnElementTheCodecAccepts(string table, string column)
     {
         using var fixture = new DocumentEditFixture();
-        var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
-        var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
-        var col = schema.RecordColumns.Single(c => c.Name == column);
-        var formKey = fixture.Seed(NewRecord(mod, table), table);
+        var formKey = fixture.Seed(NewRecord(new Fallout4Mod(Key, Fallout4Release.Fallout4), table), table);
+
+        AssertAddAppendsOneElementOfTheFirstKind(fixture, formKey, table, column);
+    }
+
+    [Fact]
+    public void ArrayAdd_OnTheLayersOfALandscapeInsideACell_BuildsAnElementTheCodecAccepts()
+    {
+        using var fixture = new DocumentEditFixture();
+        var formKey = fixture.SeedLandscape(new Fallout4Mod(Key, Fallout4Release.Fallout4));
+
+        AssertAddAppendsOneElementOfTheFirstKind(fixture, formKey, "land", "Layers");
+    }
+
+    private static void AssertAddAppendsOneElementOfTheFirstKind(
+        DocumentEditFixture fixture, string formKey, string table, string column)
+    {
+        var col = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
 
         var (result, after) = fixture.Apply(formKey, Envelopes.AddAt(Envelopes.Member(column)));
 
@@ -74,7 +90,6 @@ public class UnionArrayAddInventoryTests
         using var document = JsonDocument.Parse(after);
         var written = document.RootElement.GetProperty(col.PropertyName);
         Assert.Equal(1, written.GetArrayLength());
-        // The one member the default names, and the leaf it names.
         var discriminator = col.Field.ElementSpec.Require().SubFields.Require().Single(f => f.IsDiscriminator);
         Assert.Equal(
             discriminator.EnumMembers[0].Value,

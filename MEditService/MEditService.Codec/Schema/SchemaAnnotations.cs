@@ -18,8 +18,8 @@ public enum KnownDefectEffect
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
 internal sealed record SchemaAnnotations(
-    // GRUP signatures the schema builds no table for, and why: data the editor has no surface for,
-    // and xEdit's REFR-flavour placement variants this repo collapses into refr.
+    // GRUP signatures the schema builds no table for, and why: xEdit's REFR-flavour placement
+    // variants this repo collapses into refr.
     Dictionary<string, string> ExcludedSignatures,
     // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
     // them (ADR-0006); a reflected column and a source-document field are different promises.
@@ -72,16 +72,11 @@ internal sealed record SchemaAnnotations(
         ("IDialogTopicGetter", "Timestamp"),
     ];
 
-    // Placed refr/achr are indexed as normal records with cell parentage in the placement side table
-    // (ADR-0005); landscape and navmesh data get no such treatment.
-    private const string NoEditorSurface = "no editor surface: landscape and navmesh data are record fields in no game";
-
     // Rare REFR-flavour placement types: projectile, hazard and the rest of xEdit's variants.
     private const string CollapsedIntoRefr = "an xEdit REFR-flavour placement variant, collapsed into refr rather than given its own table";
 
     private static readonly KeyValuePair<string, string>[] ExcludedSignaturesInEveryGame =
     [
-        .. new[] { "land", "navm", "navi" }.Select(s => KeyValuePair.Create(s, NoEditorSurface)),
         .. new[] { "pgre", "pmis", "parw", "pbar", "pbea", "pcon", "pfla", "phzd" }
             .Select(s => KeyValuePair.Create(s, CollapsedIntoRefr)),
     ];
@@ -195,7 +190,7 @@ internal sealed record SchemaAnnotations(
                 [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
                 [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
             },
-            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.ToDictionary(
+            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4LandscapeAndNavmeshAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             AlphaBearingColorFields: [.. RgbaColorFields],

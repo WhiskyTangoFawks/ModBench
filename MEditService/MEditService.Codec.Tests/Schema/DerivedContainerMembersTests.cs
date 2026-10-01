@@ -39,9 +39,8 @@ public sealed class DerivedContainerMembersTests
         var swept = RecordTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
         var tabled = SchemaRecordTypeNames();
 
-        // The schema drops land, navm, navi and the placed variants collapsed into refr, so a sweep
-        // no broader than it would assert nothing about them.
-        Assert.True(swept.Count > tabled.Count, "the sweep is no broader than the schema's record types.");
+        Assert.True(swept.Count > tabled.Count,
+            "the sweep is no broader than the schema's record types, so it asserts nothing about the placed variants the schema collapses into refr.");
         Assert.Empty(tabled.Except(swept, StringComparer.Ordinal));
 
         // A derived member on a type outside the sweep is a member the tests above never reach.

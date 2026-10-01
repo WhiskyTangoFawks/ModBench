@@ -70,7 +70,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
         var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
-        // land/navm/navi publish no schema, so this walk excludes them the same way the Index does.
         using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
         var identities = documents.Records
             .Where((_, index) => index % stride == 0)
