@@ -63,6 +63,7 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
     refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
     // ADR-0019 surfacing for a refused edit.
     reporter: deps.reporterFor('recordPanel'),
+    tellPanels: (message) => { for (const panel of deps.recordPanels) void panel.webview.postMessage(message); },
   };
 }
 

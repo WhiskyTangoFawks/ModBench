@@ -125,6 +125,28 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
     expect(tracker.formKeyOf(elsewhere)).toBe('000801:Mod.esp');
     expect(meditClient.calls.filter(c => c.method === 'editRecord')).toHaveLength(1);
   });
+
+  // Each panel decides whether the record is its own, as it does for every broadcast.
+  it('tells every open panel the edit as it is sent', async () => {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setCommandResult('editRecord', { applied: true });
+    const posted = [vi.fn(() => Promise.resolve(true)), vi.fn(() => Promise.resolve(true))];
+    const panels = posted.map(postMessage => {
+      const panel = { title: '000800:Mod.esp', webview: { postMessage } };
+      if (!isPanel(panel)) throw new Error('not a panel');
+      return panel;
+    });
+    register(() => [], { recordPanels: new Set(panels), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient });
+    const envelope = { op: 'set', path: [{ kind: 'member', name: 'Name' }], value: 'x' };
+
+    await commandHandlers.get('modbench.record.editField')?.({ formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA' }, envelope);
+
+    for (const postMessage of posted) {
+      expect(postMessage).toHaveBeenCalledWith({
+        type: 'editWritten', formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'ModA', envelope,
+      });
+    }
+  });
 });
 
 describe('modbench.record.openToSide, the menus\' entry point', () => {

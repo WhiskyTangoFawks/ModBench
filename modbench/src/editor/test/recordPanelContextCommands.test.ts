@@ -24,7 +24,7 @@ vi.mock('../extendedFieldEditor', () => ({
 }));
 
 import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
-import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../wire/messages';
+import { EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext, type ExtensionToWebview, type StringValueContext } from '../../wire/messages';
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
@@ -35,9 +35,11 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   meditClient.setCommandResult('editRecord', { applied: true });
   const refreshSourceControlFor = vi.fn();
   const report = vi.fn();
+  const tellPanels = vi.fn<(message: ExtensionToWebview) => void>();
   const deps: RecordPanelContextCommandDeps = {
     meditClient,
     refreshSourceControlFor,
+    tellPanels,
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
@@ -46,7 +48,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     focusedCell: () => undefined,
     ...overrides,
   };
-  return { deps, meditClient, refreshSourceControlFor, report };
+  return { deps, meditClient, refreshSourceControlFor, report, tellPanels };
 }
 
 const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA' };
@@ -358,6 +360,52 @@ describe('modbench.record.editField', () => {
     await editField()(IDENTITY, envelope);
 
     expect(report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
+  });
+
+  // common.md, Unconfirmed writes: the panel showing the record shows the value until the disk
+  // confirms it, and the disk's value again at once when mEdit refuses it or the write fails.
+  describe('tells every panel', () => {
+    const written = { type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN, ...IDENTITY, envelope };
+    const refused = { type: EXTENSION_TO_WEBVIEW.EDIT_REFUSED, ...IDENTITY, envelope };
+
+    it('the edit as it is sent, and nothing more once mEdit applies it', async () => {
+      const { deps, meditClient, tellPanels } = makeDeps();
+      tellPanels.mockImplementation(() => { expect(editRecordCalls(meditClient)).toHaveLength(0); });
+      registerRecordPanelContextCommands(deps);
+
+      await editField()(IDENTITY, envelope);
+
+      expect(tellPanels.mock.calls).toEqual([[written]]);
+    });
+
+    it('a refused edit', async () => {
+      const { deps, meditClient, tellPanels } = makeDeps();
+      meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
+      registerRecordPanelContextCommands(deps);
+
+      await editField()(IDENTITY, envelope);
+
+      expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
+    });
+
+    it('a failed edit', async () => {
+      const { deps, meditClient, tellPanels } = makeDeps();
+      meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
+      registerRecordPanelContextCommands(deps);
+
+      await editField()(IDENTITY, envelope);
+
+      expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
+    });
+
+    it('the FormKey the gate writes to, where the tab followed the record', async () => {
+      const { deps, tellPanels } = makeDeps({ editGateOf: () => async (_address, write) => { await write('000900:MyMod.esp'); } });
+      registerRecordPanelContextCommands(deps);
+
+      await editField()(IDENTITY, envelope);
+
+      expect(tellPanels.mock.calls).toEqual([[{ ...written, formKey: '000900:MyMod.esp' }]]);
+    });
   });
 
   it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
