@@ -3872,3 +3872,241 @@ describe('PluginsTreeProvider — an unconfirmed shape change (common.md, Unconf
     });
   });
 });
+
+// common.md, Unconfirmed writes, stories 2-6: a record created, copied or deleted keeps the tree as
+// mEdit lists it, and marks the row it changed until mEdit's index shows the write.
+describe('PluginsTreeProvider — an unconfirmed record create, copy or delete', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  const A = { name: 'A.esp', origin: 'SomeMod' };
+  const B = { name: 'B.esp', origin: 'SomeMod' };
+  const RECORD = { formKey: '000001:A.esp', plugin: 'A.esp', origin: 'SomeMod' };
+
+  async function treeWithARecord(): Promise<Harness> {
+    const client = makeClient({
+      recordTypes: [{ type: 'weap', count: 1 }],
+      records: { items: [recordSummary()], total: 1 },
+    });
+    client.setQueryAnswer('getRecordHolders', [A]);
+    const h = makeTree([A_ROW(), B_ROW()], { client });
+    await reconcile(h, [held('A.esp'), held('B.esp')]);
+    vi.useFakeTimers();
+    return h;
+  }
+
+  const spins = (h: Harness, node: PluginsTreeNode): boolean => {
+    const icon = h.tree.getTreeItem(node).iconPath;
+    return icon instanceof ThemeIcon && icon.id === 'sync~spin';
+  };
+  const plugins = async (h: Harness) => (await h.tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
+  const pluginRow = async (h: Harness, name: string) => present((await plugins(h)).find((n) => n.plugin.name === name), name);
+  const groupRow = async (h: Harness) => expectInstanceOf((await h.tree.getChildren(await pluginRow(h, 'A.esp')))[0], RecordTypeNode);
+  const recordRow = async (h: Harness) => expectInstanceOf((await h.tree.getChildren(await groupRow(h)))[0], RecordNode);
+  const marked = async (h: Harness): Promise<string[]> => {
+    const rows: [string, PluginsTreeNode][] = [
+      ...(await plugins(h)).map((row): [string, PluginsTreeNode] => [row.plugin.name, row]),
+      ['group', await groupRow(h)], ['record', await recordRow(h)],
+    ];
+    return rows.filter(([, row]) => spins(h, row)).map(([name]) => name);
+  };
+  const rowsChanged = (h: Harness, plugin: { name: string; origin: string }, ...keys: string[]) => {
+    h.client.emit({ kind: 'rows-changed', plugin: plugin.name, origin: plugin.origin, keys, sequence: 1 });
+  };
+  const warnings = (h: Harness) => h.logged.filter((l) => l.level === 'warn').map((l) => l.msg);
+
+  describe('a delete', () => {
+    it('keeps the record\'s row, and marks it alone only after a delay', async () => {
+      const h = await treeWithARecord();
+
+      h.tree.deleting([RECORD]);
+
+      expect(await marked(h)).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await marked(h)).toEqual(['record']);
+      expect(h.tree.getTreeItem(await recordRow(h)).tooltip).toBe('Written; waiting for the disk to confirm');
+    });
+
+    it('keys the mark on (origin, filename): the record of a plugin of the same name elsewhere is untouched', async () => {
+      const h = await treeWithARecord();
+
+      h.tree.deleting([{ ...RECORD, origin: 'OtherMod' }]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await marked(h)).toEqual([]);
+    });
+
+    it('goes, with nothing said, once mEdit reports the record gone from the plugin', async () => {
+      const h = await treeWithARecord();
+      h.tree.deleting([RECORD])([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      h.client.setQueryAnswer('getRecordHolders', [B]);
+      rowsChanged(h, A, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual([]);
+    });
+
+    it('stays through a report that still holds it, then logs one line on the next and goes', async () => {
+      const h = await treeWithARecord();
+      h.tree.deleting([RECORD])([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      rowsChanged(h, A, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await marked(h)).toEqual(['record']);
+
+      rowsChanged(h, A, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] 000001:A.esp was deleted from "A.esp", and the disk still holds it.']);
+    });
+
+    it('ignores a report of another plugin or another record', async () => {
+      const h = await treeWithARecord();
+      h.tree.deleting([RECORD])([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+      h.client.setQueryAnswer('getRecordHolders', [B]);
+
+      rowsChanged(h, B, RECORD.formKey);
+      rowsChanged(h, A, '000002:A.esp');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual(['record']);
+    });
+
+    it('stays while mEdit cannot be read', async () => {
+      const h = await treeWithARecord();
+      h.tree.deleting([RECORD])([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      h.client.setQueryFailure('getRecordHolders', new Error('mEdit is not answering'));
+      rowsChanged(h, A, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual(['record']);
+      expect(warnings(h)).toEqual([]);
+    });
+
+    it('shows no mark for a record the delete refused, on the row it was shown on too', async () => {
+      const h = await treeWithARecord();
+      const answered = h.tree.deleting([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+      const shown = await recordRow(h);
+      expect(spins(h, shown)).toBe(true);
+
+      answered([]);
+
+      expect(spins(h, shown)).toBe(false);
+      expect(h.tree.getTreeItem(shown).tooltip).toBeUndefined();
+      expect(await marked(h)).toEqual([]);
+    });
+
+    it('goes on a refresh, which says once that the disk still holds it', async () => {
+      const h = await treeWithARecord();
+      h.tree.deleting([RECORD])([RECORD]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await h.tree.applyReconciled([]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] 000001:A.esp was deleted from "A.esp", and the disk still holds it.']);
+    });
+  });
+
+  describe('a create', () => {
+    it('marks the plugin row it was made from, or the group row, only after a delay', async () => {
+      const h = await treeWithARecord();
+
+      h.tree.creating({ plugin: A });
+      h.tree.creating({ plugin: B, recordType: 'weap' });
+      h.tree.creating({ plugin: A, recordType: 'weap' });
+      expect(await marked(h)).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await marked(h)).toEqual(['A.esp', 'group']);
+    });
+
+    it('goes when mEdit already holds the new record as the answer lands', async () => {
+      const h = await treeWithARecord();
+      const answered = h.tree.creating({ plugin: A });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      h.client.setQueryAnswer('getRecordHolders', [A]);
+      answered('000800:A.esp');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+    });
+
+    it('stays until mEdit reports the new record, and logs when the report does not hold it', async () => {
+      const h = await treeWithARecord();
+      const answered = h.tree.creating({ plugin: A });
+      h.client.setQueryAnswer('getRecordHolders', []);
+      answered('000800:A.esp');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await marked(h)).toEqual(['A.esp']);
+
+      rowsChanged(h, A, '000800:A.esp');
+      await vi.advanceTimersByTimeAsync(0);
+      rowsChanged(h, A, '000800:A.esp');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] 000800:A.esp was created in "A.esp", and the disk does not hold it.']);
+    });
+
+    it('shows no mark when the create is refused', async () => {
+      const h = await treeWithARecord();
+
+      h.tree.creating({ plugin: A })(undefined);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await marked(h)).toEqual([]);
+    });
+  });
+
+  describe('a copy', () => {
+    const INTO_B = { record: RECORD, destination: B };
+
+    it('marks each destination\'s row only after a delay, and goes once mEdit holds the copy there', async () => {
+      const h = await treeWithARecord();
+      const answered = h.tree.copying([INTO_B]);
+      expect(await marked(h)).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await marked(h)).toEqual(['B.esp']);
+
+      h.client.setQueryAnswer('getRecordHolders', [B]);
+      answered([{ ...INTO_B, newFormKey: '000900:B.esp' }]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+      expect(h.client.calls.filter((c) => c.method === 'getRecordHolders').map((c) => c.args)).toEqual([['000900:B.esp']]);
+    });
+
+    it('logs when mEdit reports the copy and does not hold it', async () => {
+      const h = await treeWithARecord();
+      h.tree.copying([INTO_B])([INTO_B]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      rowsChanged(h, B, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+      rowsChanged(h, B, RECORD.formKey);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(await marked(h)).toEqual([]);
+      expect(warnings(h)).toEqual(['[PluginsTreeProvider] 000001:A.esp was copied into "B.esp", and the disk does not hold the copy.']);
+    });
+
+    it('shows no mark for a copy the destination refused', async () => {
+      const h = await treeWithARecord();
+
+      h.tree.copying([INTO_B])([]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await marked(h)).toEqual([]);
+    });
+  });
+});
