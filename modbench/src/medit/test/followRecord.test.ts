@@ -89,11 +89,36 @@ describe('EditsInFlight', () => {
     const edits = new EditsInFlight(tracker);
     const write = vi.fn(() => Promise.resolve<string | undefined>('000900:Mod.esp'));
 
-    await edits.gateShowing([first, second, elsewhere], '000800:Mod.esp')(EDITED, write);
+    await edits.gateShowing([first, second, elsewhere], EDITED)(EDITED, write);
 
     expect(write).toHaveBeenCalledTimes(1);
     expect([first, second, elsewhere].map(panel => tracker.formKeyOf(panel)))
       .toEqual(['000900:Mod.esp', '000900:Mod.esp', '000801:Mod.esp']);
+  });
+
+  it('gateShowing sends an edit addressed with the pre-move key to the new key, holding and following the panel that moved', async () => {
+    const client = new InMemoryMEditClient();
+    const moved = fakePanel('a');
+    const elsewhere = fakePanel('c');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(moved, '000800:Mod.esp');
+    tracker.setFormKey(elsewhere, '000801:Mod.esp');
+    const edits = new EditsInFlight(tracker);
+    subscribeRecordPanelsToNotifications(client, new Set([moved, elsewhere]), tracker, edits);
+    const panels = [moved, elsewhere];
+    await edits.gateShowing(panels, EDITED)(EDITED, () => Promise.resolve('000900:Mod.esp'));
+    const { write, answer } = pendingAnswer();
+    const written: string[] = [];
+
+    const stale = edits.gateShowing(panels, EDITED)(EDITED, key => { written.push(key); return write(); });
+    client.emit(rowsChanged(['000800:Mod.esp', '000900:Mod.esp', '000900:Mod.esp']));
+    expect(loadsOf(moved)).toEqual([]);
+    answer('000a00:Mod.esp');
+    await stale;
+
+    expect(written).toEqual(['000900:Mod.esp']);
+    expect(tracker.formKeyOf(moved)).toBe('000a00:Mod.esp');
+    expect(loadsOf(elsewhere)).toEqual([]);
   });
 
   it('holds only the panel whose edit is in flight', async () => {

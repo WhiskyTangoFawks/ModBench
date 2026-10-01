@@ -3,7 +3,7 @@ import { isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type Arra
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
-import type { EditGate } from './followRecord';
+import type { EditAddress, EditGate } from './followRecord';
 import type { FocusedCellContext } from './focusedCells';
 
 export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
@@ -11,7 +11,7 @@ export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
   log: (msg: string) => void;
   // An edit's gate is that of the panels showing the record it is addressed to.
-  editGateOf: (formKey: string) => EditGate;
+  editGateOf: (address: EditAddress) => EditGate;
   // The palette hands a field gesture no cell: it acts on the record tab in focus's focused cell.
   focusedCell: () => FocusedCellContext | undefined;
 }
@@ -55,7 +55,7 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
       if (!isCtx(raw)) return;
       const envelope = envelopeOf(raw);
       if (!envelope) return;
-      await deps.editGateOf(raw.formKey)(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
+      await deps.editGateOf(raw)(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
     },
   };
 }
@@ -73,7 +73,7 @@ async function editField(deps: RecordPanelContextCommandDeps, address: unknown, 
   if (!isPluginCopyAddress(address)) return;
   const envelope = isRecordEditEnvelope(option) ? option : await promptedSet(address);
   if (!envelope) return;
-  await deps.editGateOf(address.formKey)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
+  await deps.editGateOf(address)(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
 }
 
 async function promptedSet(address: object): Promise<RecordEditEnvelope | undefined> {
@@ -85,7 +85,7 @@ async function promptedSet(address: object): Promise<RecordEditEnvelope | undefi
 // ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
-  const gate = deps.editGateOf(ctx.formKey);
+  const gate = deps.editGateOf(ctx);
   return openExtendedFieldEditor(
     {
       value: ctx.value, recordLabel: ctx.recordLabel, fieldName: ctx.fieldName,

@@ -37,9 +37,13 @@ export class EditsInFlight<Panel extends FollowedPanel> {
     return (address, write) => this.edit(panel, address, addressedAt, write);
   }
 
-  /** The gate of every panel showing `formKey`: one write, held and followed by each. */
-  gateShowing(panels: Iterable<Panel>, formKey: string): EditGate {
-    const gates = [...panels].filter(panel => this.tracker.formKeyOf(panel) === formKey).map(panel => this.gate(panel));
+  /** The gate of every panel showing the record `address` names, as of now: one write, held and
+   *  followed by each. A panel that moved the record shows it under the key it moved to. */
+  gateShowing(panels: Iterable<Panel>, address: EditAddress): EditGate {
+    const gates = [...panels].flatMap(panel => {
+      const gate = this.gate(panel);
+      return this.tracker.formKeyOf(panel) === this.targetOf(panel, address, this.clock) ? [gate] : [];
+    });
     const through = async (
       index: number, address: EditAddress, key: string, write: (formKey: string) => Promise<string | undefined>,
     ): Promise<string | undefined> => {

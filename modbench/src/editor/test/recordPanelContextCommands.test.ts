@@ -202,7 +202,7 @@ describe('right-click edits go through the gate of the panels showing the record
   // The menu names its panel (the body's webview context), whichever panel was focused last.
   it('takes the gate of the panels showing the record it is addressed to', async () => {
     const asked: string[] = [];
-    const { deps } = makeDeps({ editGateOf: formKey => { asked.push(formKey); return async (address, write) => { await write(address.formKey); }; } });
+    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.addElement'), 'the addElement handler')(
@@ -331,7 +331,7 @@ describe('modbench.record.editField', () => {
 
   it('goes through the gate of the panels showing the record its Argument names', async () => {
     const asked: string[] = [];
-    const { deps } = makeDeps({ editGateOf: formKey => { asked.push(formKey); return async (address, write) => { await write(address.formKey); }; } });
+    const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
     registerRecordPanelContextCommands(deps);
 
     await editField()(IDENTITY, envelope);

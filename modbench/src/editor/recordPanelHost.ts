@@ -162,7 +162,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
       ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
-      editGateOf: formKey => editsInFlight.gateShowing(recordPanels, formKey),
+      editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
       focusedCell: () => focusedCells.current(),
     }),
     // Editor owns the record gestures (delete/copy) — registered once, here,
