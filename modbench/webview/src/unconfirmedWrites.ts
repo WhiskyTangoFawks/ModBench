@@ -2,18 +2,19 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { columnKey } from './columnKey';
 import { displayValue } from './modelValue';
 import { defaultOf, recordLabel, variantFor } from './recordUtils';
-import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
+import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from './types';
 
 const MARK_DELAY_MS = 300;
 
-/** A value the panel shows in a cell between the write and the read that covers it
- *  (common.md, Unconfirmed writes). */
+/** A write the panel marks in a cell until a read covers it (common.md, Unconfirmed writes). A set
+ *  shows its value there; an element added, removed or moved leaves the rows as the disk has them. */
 export interface CellWrite {
   readonly id: number;
   readonly cell: string;
   readonly column: ColumnKey;
-  readonly path: readonly PathHop[];
-  readonly value: unknown;
+  readonly edit: RecordEditEnvelope;
+  /** The array an element is added to, removed from or moved in, as the panel last read it. */
+  readonly array: DiskCell | undefined;
   /** Reads asked for before the host held the panel's reads for it, none of which can cover it. */
   readonly readsAsked: number;
   readonly marked: boolean;
@@ -58,47 +59,71 @@ function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly Pat
   return { label: meta.displayLabel ?? diff.fieldName, meta, value: diff.values[column] ?? defaultOf(meta) };
 }
 
+const arrayPathOf = ({ op, path }: RecordEditEnvelope): readonly PathHop[] => (op === 'add' ? path : path.slice(0, -1));
+
+const elements = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+function showsShape(edit: RecordEditEnvelope, before: unknown[], after: unknown[]): boolean {
+  if (edit.op === 'add') return after.length > before.length;
+  if (edit.op === 'remove') return after.length < before.length;
+  const from = edit.path.at(-1);
+  return from?.kind === 'index' && typeof edit.value === 'number' && sameValue(after[edit.value], before[from.index]);
+}
+
+const SHAPE_UNSHOWN = {
+  add: (where: string) => `An element was added to ${where}, and the disk does not show it.`,
+  remove: (where: string) => `An element was removed from ${where}, and the disk does not show it.`,
+  move: (where: string) => `An element was moved in ${where}, and the disk does not show the move.`,
+};
+
 function differenceLine(result: CompareResult, formKey: string, write: CellWrite): string | undefined {
   const plugin = result.overrides.find(o => columnKey(o.plugin, o.origin) === write.column)?.plugin;
-  const disk = plugin === undefined ? undefined : diskCellAt(result, write.column, write.path);
+  if (plugin === undefined) return undefined;
+  const where = (label: string) => `${label} of ${recordLabel(result.overrides, formKey)} in "${plugin}"`;
+  const { edit, array } = write;
+  if (edit.op !== 'set') {
+    if (!array) return undefined;
+    const after = elements(diskCellAt(result, write.column, arrayPathOf(edit))?.value);
+    return showsShape(edit, elements(array.value), after) ? undefined : SHAPE_UNSHOWN[edit.op](where(array.label));
+  }
+  const disk = diskCellAt(result, write.column, edit.path);
   if (!disk) return undefined;
-  const written = displayValue(write.value, disk.meta);
+  const written = displayValue(edit.value, disk.meta);
   const shown = displayValue(disk.value, disk.meta);
-  return written === shown ? undefined
-    : `${disk.label} of ${recordLabel(result.overrides, formKey)} in "${plugin}" was written "${written}", and the disk now shows "${shown}".`;
+  return written === shown ? undefined : `${where(disk.label)} was written "${written}", and the disk now shows "${shown}".`;
 }
 
 export function useCellWrites(log: (line: string) => void) {
   const [held, setHeld] = useState<ReadonlyMap<string, CellWrite>>(new Map());
   // A callback reads the writes as last changed, which a render may not have caught up with.
   const latest = useRef(held);
+  const lastRead = useRef<CompareResult | null>(null);
   const nextId = useRef(0);
   const change = useCallback((next: (writes: ReadonlyMap<string, CellWrite>) => ReadonlyMap<string, CellWrite>) => {
     latest.current = next(latest.current);
     setHeld(latest.current);
   }, []);
 
-  const written = useCallback((
-    column: ColumnKey, path: readonly PathHop[], value: unknown, readsAsked: number,
-  ) => {
-    const cell = cellOf(column, path);
+  const written = useCallback((column: ColumnKey, edit: RecordEditEnvelope, readsAsked: number) => {
+    const cell = cellOf(column, edit.path);
     const now = latest.current.get(cell);
-    if (now && sameValue(now.value, value)) {
+    if (now && sameValue(now.edit, edit)) {
       change(writes => new Map(writes).set(cell, { ...now, readsAsked }));
       return;
     }
     const id = ++nextId.current;
-    change(writes => new Map(writes).set(cell, { id, cell, column, path, value, readsAsked, marked: false }));
+    const array = edit.op === 'set' || !lastRead.current ? undefined : diskCellAt(lastRead.current, column, arrayPathOf(edit));
+    change(writes => new Map(writes).set(cell, { id, cell, column, edit, array, readsAsked, marked: false }));
     setTimeout(() => {
       const write = latest.current.get(cell);
       if (write?.id === id) change(writes => new Map(writes).set(cell, { ...write, marked: true }));
     }, MARK_DELAY_MS);
   }, [change]);
 
-  const refused = useCallback((column: ColumnKey, path: readonly PathHop[], value: unknown) => {
-    const cell = cellOf(column, path);
+  const refused = useCallback((column: ColumnKey, edit: RecordEditEnvelope) => {
+    const cell = cellOf(column, edit.path);
     const now = latest.current.get(cell);
-    if (!now || !sameValue(now.value, value)) return;
+    if (!now || !sameValue(now.edit, edit)) return;
     change(writes => { const next = new Map(writes); next.delete(cell); return next; });
   }, [change]);
 
@@ -107,6 +132,7 @@ export function useCellWrites(log: (line: string) => void) {
   const landed = useCallback((
     read: number, result: CompareResult | null, formKey: string, readable: (column: ColumnKey) => boolean,
   ) => {
+    lastRead.current = result;
     const covered = [...latest.current.values()].filter(w => w.readsAsked < read && readable(w.column));
     if (covered.length === 0) return;
     for (const write of covered) {

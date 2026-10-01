@@ -190,7 +190,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, hops: PathHop[], value: unknown) => {
-    written(plugin, hops, value, Infinity);
+    written(plugin, { op: 'set', path: hops, value }, Infinity);
     post(plugin, { op: 'set', path: hops, value });
   }, [post, written]);
 
@@ -226,10 +226,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         void refresh(prevFormKeyRef.current);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN || msg.type === EXTENSION_TO_WEBVIEW.EDIT_REFUSED) {
         const { formKey: edited, plugin, origin, envelope } = msg;
-        if (edited !== prevFormKeyRef.current || envelope.op !== 'set') return;
+        if (edited !== prevFormKeyRef.current) return;
         const column = columnKey(plugin, origin);
-        if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN) written(column, envelope.path, envelope.value, latestRead.current);
-        else refused(column, envelope.path, envelope.value);
+        if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN) written(column, envelope, latestRead.current);
+        else refused(column, envelope);
       }
     };
     window.addEventListener('message', handler);

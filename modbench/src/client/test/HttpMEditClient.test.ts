@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { HttpMEditClient } from '../HttpMEditClient';
+import { isUnanswered } from '../MEditClient';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -216,13 +217,35 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
 
-  it('resolves a WriteRefused the same way for a thrown request', async () => {
+  // common.md, Unconfirmed writes, story 6: a request with no answer may have written.
+  it('resolves a thrown request the same way, told apart as unanswered', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
     const result = await client.deleteRecords([kept]);
 
-    expect(result).toEqual({ refused: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(result).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
+    expect(isUnanswered(result)).toBe(true);
+  });
+
+  it('tells a success with no body apart as unanswered, for create and copy too', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+    const thrown = makeClient(vi.fn(() => Promise.reject(new Error('socket hang up'))));
+
+    const answers = [
+      await client.deleteRecords([kept]),
+      await thrown.createRecord('MyPatch.esp', 'ModA', 'npc_'),
+      await thrown.copyRecords([kept], 'New', [{ name: 'Patch.esp', origin: 'PatchMod' }], false),
+    ];
+
+    expect(answers.map(isUnanswered)).toEqual([true, true, true]);
+    expect(answers[0]).toEqual({ refused: true, unanswered: true, message: 'Could not delete 1 record — no answer' });
+  });
+
+  it('never tells a refusal mEdit answered apart as unanswered', async () => {
+    const client = makeClient(vi.fn(() => Promise.resolve(jsonResponse(400, 'Bad Request'))));
+
+    expect(isUnanswered(await client.deleteRecords([kept]))).toBe(false);
   });
 });
 
@@ -272,12 +295,22 @@ describe('HttpMEditClient — copying records answers per record and destination
     const outcome = await client.copyRecords([npc], 'Override', [patch, other], true);
 
     expect(outcome).toEqual({
-      landed: [{ record: npc, destination: patch }],
+      landed: [{ record: npc, destination: patch, newFormKey: null }],
       refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
     });
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/records\/copy$/);
     expect(await request?.json()).toEqual({ records: [npc], mode: 'Override', destinations: [patch, other], replace: true });
+  });
+
+  it('names the FormKey mEdit minted for a new record\'s copy', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [],
+    })));
+
+    const outcome = await makeClient(fetch).copyRecords([npc], 'New', [patch], false);
+
+    expect(outcome).toEqual({ landed: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [] });
   });
 
   it('asks the record\'s holders by plugin and origin', async () => {

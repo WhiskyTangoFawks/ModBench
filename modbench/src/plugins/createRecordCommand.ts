@@ -1,15 +1,17 @@
 import * as vscode from 'vscode';
-import { isRefused, type MEditClient, type PluginAddress } from '../client';
+import { isRefused, isUnanswered, type MEditClient, type PluginAddress } from '../client';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
 import { registerPluginsGesture, singularArgument } from './gestureEntry';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { RecordGroup } from './createdRecordSelection';
+import type { UnconfirmedRecordRows } from './unconfirmedRecordRows';
 
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes'>;
   reporter: Reporter;
   createdRecords: { selectWhenListed(group: RecordGroup): Promise<() => void> };
+  marks: Pick<UnconfirmedRecordRows, 'creating'>;
 }
 
 async function pickRecordType(deps: RecordCreateDeps): Promise<string | undefined> {
@@ -35,7 +37,10 @@ export function registerRecordCreateCommand(
     if (recordType === undefined) return;
 
     const forget = await deps.createdRecords.selectWhenListed({ plugin, recordType });
+    const marked = deps.marks.creating(row.kind === 'plugin' ? { plugin } : { plugin, recordType });
     const result = await deps.client.createRecord(plugin.name, plugin.origin, recordType);
+    if (isUnanswered(result)) marked.unanswered();
+    else marked.answered(isRefused(result) ? undefined : result.formKey);
     if (isRefused(result)) {
       forget();
       deps.reporter.report('error', result.message);

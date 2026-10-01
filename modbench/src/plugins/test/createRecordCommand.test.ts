@@ -50,8 +50,18 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
     return Promise.resolve(NEW_NPC);
   });
   const reporter = recordingReporter();
+  const marks: string[] = [];
   registerRecordCreateCommand({
     client, reporter,
+    marks: {
+      creating: (row) => {
+        marks.push(['mark', row.plugin.name, row.plugin.origin, ...('recordType' in row ? [row.recordType] : [])].join(' '));
+        return {
+          answered: (formKey) => { marks.push(`answered ${formKey}`); },
+          unanswered: () => { marks.push('unanswered'); },
+        };
+      },
+    },
     createdRecords: {
       selectWhenListed: (group: RecordGroup) => {
         steps.push(`await ${group.plugin.name} ${group.plugin.origin} ${group.recordType}`);
@@ -60,7 +70,7 @@ function harness(viewSelection: readonly PluginsTreeNode[] = []) {
     },
   }, () => viewSelection);
   const create = present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'");
-  return { client, reporter, steps, create };
+  return { client, reporter, steps, marks, create };
 }
 
 beforeEach(() => { showQuickPick.mockReset(); });
@@ -161,5 +171,50 @@ describe('modbench.record.create', () => {
     expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
     expect(reporter.landings).toEqual([]);
     expect(steps).toEqual(['await MyPatch.esp ModA npc_', 'forget']);
+  });
+});
+
+// common.md, Unconfirmed writes, story 2: the row a record is created in carries the mark.
+describe('modbench.record.create marks the row it creates in', () => {
+  it('marks the group before the write, and tells it the new FormKey', async () => {
+    const { client, marks, create } = harness();
+    client.setCommandHandler('createRecord', () => {
+      marks.push('create');
+      return Promise.resolve(NEW_NPC);
+    });
+
+    await create(NPC_GROUP);
+
+    expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'create', 'answered 000900:MyPatch.esp']);
+  });
+
+  it('marks the plugin row a type was picked on', async () => {
+    const { marks, create } = harness();
+    showQuickPick.mockImplementation((items) => Promise.resolve(items[1]));
+
+    await create(PLUGIN_ROW);
+
+    expect(marks).toEqual(['mark MyPatch.esp ModA', 'answered 000900:MyPatch.esp']);
+  });
+
+  it('forgets the mark when mEdit refuses the create', async () => {
+    const { client, marks, create } = harness();
+    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, message: 'no' }));
+
+    await create(NPC_GROUP);
+
+    expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'answered undefined']);
+  });
+
+  // common.md, Unconfirmed writes, story 6: only the disk can say what a create with no answer did.
+  it('tells the mark a create mEdit never answered, and reports it as before', async () => {
+    const { client, marks, reporter, create } = harness();
+    const message = 'Could not create a new npc_ record in "MyPatch.esp" — socket hang up';
+    client.setCommandHandler('createRecord', () => Promise.resolve({ refused: true, unanswered: true, message }));
+
+    await create(NPC_GROUP);
+
+    expect(marks).toEqual(['mark MyPatch.esp ModA npc_', 'unanswered']);
+    expect(reporter.reports).toEqual([{ severity: 'error', message, detail: undefined }]);
   });
 });

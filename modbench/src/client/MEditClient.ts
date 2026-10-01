@@ -23,6 +23,8 @@ export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
  *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
 export interface WriteRefused {
   readonly refused: true;
+  /** mEdit never answered, so the write may have landed (common.md, Unconfirmed writes, story 6). */
+  readonly unanswered?: true;
   readonly message: string;
 }
 
@@ -31,6 +33,10 @@ export interface WriteRefused {
  *  the HTTP adapter into a caller's test. */
 export function isRefused(result: unknown): result is WriteRefused {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
+}
+
+export function isUnanswered(result: unknown): result is WriteRefused & { unanswered: true } {
+  return isRefused(result) && result.unanswered === true;
 }
 
 const NOTIFICATION_KINDS = [
@@ -118,8 +124,9 @@ export type RecordCreateResponse = components['schemas']['RecordCreateResponse']
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-/** One record into one destination: the unit a copy lands or is refused by. */
-export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination'>;
+/** One record into one destination: the unit a copy lands or is refused by. A new record's copy
+ *  that landed names the FormKey mEdit minted for it. */
+export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination' | 'newFormKey'>;
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */

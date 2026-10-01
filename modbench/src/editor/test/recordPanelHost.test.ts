@@ -30,6 +30,7 @@ import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { EditsInFlight } from '../followRecord';
 import { FocusedCells } from '../focusedCells';
 import { InMemoryMEditClient, type NotificationEvent } from '../../client';
+import { noRecordWriteMarks } from '../../test/recordWriteMarks';
 
 const reporter = { report: vi.fn(), landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() };
 
@@ -52,6 +53,7 @@ function register(
     refreshPanels: override.refreshPanels ?? (() => undefined),
     focusedViewSelection,
     viewSelections: new Map(),
+    recordMarks: noRecordWriteMarks,
     refreshSourceControlFor: () => undefined,
     outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     reporterFor: () => reporter,

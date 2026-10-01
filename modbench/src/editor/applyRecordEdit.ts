@@ -33,8 +33,10 @@ export async function applyRecordEdit(
     }
     deps.reporter.report('warning', outcome.message);
   } catch (err) {
+    // No answer: only the disk can say whether it wrote, so the panels keep the edit marked.
     deps.reporter.report(
       'error', 'Could not edit this record.', errorMessage(err));
+    return undefined;
   }
   deps.tellPanels({ type: EXTENSION_TO_WEBVIEW.EDIT_REFUSED, ...edit });
 }
