@@ -261,7 +261,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     color: fg,
   };
 
-  if (!formKey) return <div style={containerStyle}>No record selected.</div>;
   if (gone) {
     return (
       <div style={containerStyle}>

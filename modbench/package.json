@@ -137,21 +137,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.openEditorBeside",
-        "title": "Open Editor to the Side",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.openCompare",
-        "title": "Open Compare",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.openHeader",
-        "title": "Open Header",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.record.editField",
         "title": "Edit Record Field",
         "category": "Modbench"
@@ -451,10 +436,6 @@
     ],
     "menus": {
       "commandPalette": [
-        {
-          "command": "modbench.openHeader",
-          "when": "false"
-        },
         {
           "command": "modbench.record.editField",
           "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
@@ -783,11 +764,6 @@
         {
           "command": "modbench.record.open",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.openEditorBeside",
-          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@2"
         },
         {
@@ -971,7 +947,7 @@
           "group": "3_create@1"
         },
         {
-          "command": "modbench.openEditorBeside",
+          "command": "modbench.record.open",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "1_open@1"
         },

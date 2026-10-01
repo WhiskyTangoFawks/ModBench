@@ -118,7 +118,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     expect(present(group, 'the single referencer group').command).toEqual({
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey: '000002:Fallout4.esm', label: 'TestNPC' }],
+      arguments: [{ formKey: '000002:Fallout4.esm' }],
     });
   });
 });

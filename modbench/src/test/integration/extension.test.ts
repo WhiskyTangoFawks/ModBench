@@ -540,167 +540,93 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
 
+// A tab's title is the EditorID once the record has been read, and the FormKey until then
+// (editor.md, Opening, story 5); these tests run with no backend, so it stays the FormKey.
 describe('modbench.record.open', () => {
-  it('opens a new webview tab when no panel exists', async () => {
+  const titled = (title: string) => openTabs().some(t => t.label === title);
+
+  it('opens a tab titled by the FormKey', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000001' });
+
+    await waitFor('a tab titled by the FormKey', () => titled('Fallout4.esm:000001') || undefined);
+  });
+
+  it('a second click replaces the preview tab instead of adding one', async () => {
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.record.open', {
-      formKey: 'Fallout4.esm:000001',
-      label: 'Test Record',
-    });
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000002' });
+    await waitFor('the second record\'s tab', () => titled('Fallout4.esm:000002') || undefined);
 
-    const tabsAfter = await waitFor('a new tab after record open', () => {
-      const count = openTabs().length;
-      return count > tabsBefore ? count : undefined;
-    });
-    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.record.open');
+    assert.strictEqual(openTabs().length, tabsBefore, 'the next click replaces the preview editor');
+    assert.ok(!titled('Fallout4.esm:000001'), 'the first record\'s preview tab is gone');
   });
 
-  it('reuses the existing panel on a second call', async () => {
-    const tabsAfterFirst = openTabs().length;
-
-    await vscode.commands.executeCommand('modbench.record.open', {
-      formKey: 'Fallout4.esm:000002',
-      label: 'Another Record',
-    });
-
-    // The reused panel's own title update is what proves the call landed at all.
-    await waitFor('the reused panel to retitle', () => openTabs().some(t => t.label === 'Another Record') || undefined);
-
-    const tabsAfterSecond = openTabs().length;
-    assert.strictEqual(
-      tabsAfterSecond,
-      tabsAfterFirst,
-      'Second modbench.record.open call should reuse the existing panel, not open a new tab'
-    );
-  });
-
-  it('updates the panel title when opened for a different record', async () => {
-    await vscode.commands.executeCommand('modbench.record.open', {
-      formKey: 'Fallout4.esm:000010',
-      label: 'First Record',
-    });
-    await waitFor('the panel titled "First Record"', () => openTabs().some(t => t.label === 'First Record') || undefined);
-
-    await vscode.commands.executeCommand('modbench.record.open', {
-      formKey: 'Fallout4.esm:000011',
-      label: 'Second Record',
-    });
-    await waitFor('the panel to retitle to "Second Record"', () => openTabs().some(t => t.label === 'Second Record') || undefined);
-
-    const tabs = openTabs();
-    const editTab = tabs.find(t => t.label.startsWith('First Record') || t.label.startsWith('Second Record'));
-    assert.ok(editTab, 'Expected an mEdit tab to exist');
-    assert.strictEqual(editTab.label, 'Second Record', 'Panel title should update to the most recently opened record');
-  });
-});
-
-// ── modbench.openEditorBeside ───────────────────────────────────────────────────
-// Reachable from the Referenced By tree's group rows (plain {formKey,label} shape) and
-// from the Plugins tree's record/placed-reference rows (RecordNode/PlacedNode
-// shapes, single or multi-selected).
-
-describe('modbench.openEditorBeside', () => {
-  it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton', async () => {
-    // Seed the singleton with a known title first: an implementation that routed through the
-    // singleton/retarget path would retarget this panel instead of opening a new tab.
-    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', label: 'Seed Record' });
-    await waitFor('the seed panel', () => openTabs().some(t => t.label === 'Seed Record') || undefined);
-
+  it('shows a record already open in a tab of its own, and does not open it twice', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010', placement: 'beside' });
+    await waitFor('the pinned tab', () => titled('Fallout4.esm:000010') || undefined);
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000021', label: 'Beside Record' });
-    await waitFor('the Beside-opened tab', () => openTabs().some(t => t.label === 'Beside Record') || undefined);
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000010', placement: 'beside' });
 
-    const tabs = openTabs();
-    assert.strictEqual(tabs.length, tabsBefore + 1, 'expected a genuinely new tab, not a retarget of the existing singleton');
-    assert.ok(tabs.some(t => t.label === 'Seed Record'), 'the singleton panel must still show its own record, untouched');
-    assert.ok(tabs.some(t => t.label === 'Beside Record'), 'expected a new tab for the Beside-opened record');
+    assert.strictEqual(openTabs().length, tabsBefore);
   });
 
-  it('resolves a Plugins-tree RecordNode-shaped argument to its own record', async () => {
+  it('opens several records at once, each in a tab of its own', async () => {
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditorBeside', {
-      kind: 'record',
-      record: { formKey: 'Fallout4.esm:000030', plugin: 'Fallout4.esm', editorId: 'TestRecord' },
-      origin: 'Data',
-      label: 'TestRecord [Fallout4.esm:000030]',
-    });
-    await waitFor('the RecordNode-opened tab',
-      () => openTabs().some(t => t.label === 'TestRecord [Fallout4.esm:000030]') || undefined);
+    await vscode.commands.executeCommand('modbench.record.open', [
+      { formKey: 'Fallout4.esm:000011' }, { formKey: 'Fallout4.esm:000012' },
+    ]);
+    await waitFor('both tabs', () => (titled('Fallout4.esm:000011') && titled('Fallout4.esm:000012')) || undefined);
 
-    const tabs = openTabs();
-    assert.strictEqual(tabs.length, tabsBefore + 1, 'expected exactly one new tab');
-    assert.ok(
-      tabs.some(t => t.label === 'TestRecord [Fallout4.esm:000030]'),
-      "expected the tab to carry the RecordNode's own label, not a blank/mEdit placeholder"
-    );
+    assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
 
-  it('resolves a Plugins-tree PlacedNode-shaped argument (placed-reference row) to its own record', async () => {
+  it('opens beside as a genuinely new tab, leaving the tab it was fired from alone', async () => {
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000020', placement: 'beside' });
+    await waitFor('the seed tab', () => titled('Fallout4.esm:000020') || undefined);
     const tabsBefore = openTabs().length;
 
-    await vscode.commands.executeCommand('modbench.openEditorBeside', {
-      kind: 'placed',
-      formKey: 'Fallout4.esm:000040',
-      placed: { formKey: 'Fallout4.esm:000040', recordType: 'refr', editorId: 'TestRef' },
-      origin: 'Data',
-      label: 'TestRef [REFR:000040]',
-    });
-    await waitFor('the PlacedNode-opened tab', () => openTabs().some(t => t.label === 'TestRef [REFR:000040]') || undefined);
+    await vscode.commands.executeCommand('modbench.record.open', { formKey: 'Fallout4.esm:000021', placement: 'beside' });
+    await waitFor('the beside tab', () => titled('Fallout4.esm:000021') || undefined);
 
-    const tabs = openTabs();
-    assert.strictEqual(tabs.length, tabsBefore + 1, 'expected exactly one new tab');
-    assert.ok(
-      tabs.some(t => t.label === 'TestRef [REFR:000040]'),
-      "expected the tab to carry the PlacedNode's own label, not a blank/mEdit placeholder"
-    );
+    assert.strictEqual(openTabs().length, tabsBefore + 1);
+    assert.ok(titled('Fallout4.esm:000020'), 'the seed tab is untouched');
   });
 
-  it('two sequential single-target opens land as two separate tabs — neither retargets the other', async () => {
-    const tabsBefore = openTabs().length;
+  it('reads a Plugins-tree RecordNode-shaped row from a menu to its own record', async () => {
+    const row = { kind: 'record', record: { formKey: 'Fallout4.esm:000030' }, origin: 'Data' };
 
-    await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000050', label: 'First Beside' });
-    await waitFor('the first Beside tab', () => openTabs().some(t => t.label === 'First Beside') || undefined);
-    await vscode.commands.executeCommand('modbench.openEditorBeside', { formKey: 'Fallout4.esm:000051', label: 'Second Beside' });
-    await waitFor('the second Beside tab', () => openTabs().some(t => t.label === 'Second Beside') || undefined);
+    await vscode.commands.executeCommand('modbench.record.open', row, [row]);
 
-    const tabs = openTabs();
-    assert.strictEqual(tabs.length, tabsBefore + 2, 'expected two separate new tabs');
-    assert.ok(tabs.some(t => t.label === 'First Beside'), 'first Beside panel should still show its own record');
-    assert.ok(tabs.some(t => t.label === 'Second Beside'), 'second Beside panel should show its own record');
+    await waitFor('the RecordNode\'s tab', () => titled('Fallout4.esm:000030') || undefined);
   });
 
-  it('a multi-selection opens one panel per record, all landing in a single new editor group beside the active one', async () => {
+  it('reads a Plugins-tree PlacedNode-shaped row from a menu to its own record', async () => {
+    const row = { kind: 'placed', formKey: 'Fallout4.esm:000040', origin: 'Data' };
+
+    await vscode.commands.executeCommand('modbench.record.open', row, [row]);
+
+    await waitFor('the PlacedNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
+  });
+
+  it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
     const groupsBefore = vscode.window.tabGroups.all.length;
     const tabsBefore = openTabs().length;
-
     const selection = [
-      { formKey: 'Fallout4.esm:000060', label: 'Multi A' },
-      { formKey: 'Fallout4.esm:000061', label: 'Multi B' },
-      { formKey: 'Fallout4.esm:000062', label: 'Multi C' },
+      { formKey: 'Fallout4.esm:000060' }, { formKey: 'Fallout4.esm:000061' }, { formKey: 'Fallout4.esm:000062' },
     ];
-    await vscode.commands.executeCommand('modbench.openEditorBeside', selection[0], selection);
-    // Both conditions: a tab can carry its label before the group it landed in finishes
-    // settling, and settling into one group (not one per record) is the behavior under test.
-    await waitFor('every multi-selected tab in one new group', () =>
-      (selection.every((s) => openTabs().some((t) => t.label === s.label))
-        && vscode.window.tabGroups.all.length === groupsBefore + 1) || undefined);
 
-    const groupsAfter = vscode.window.tabGroups.all.length;
-    const tabs = openTabs();
-    assert.strictEqual(groupsAfter, groupsBefore + 1, 'expected exactly one new editor group, not one per record');
-    assert.strictEqual(tabs.length, tabsBefore + 3, 'expected three new tabs, one per selected record');
-    for (const s of selection) {
-      assert.ok(tabs.some(t => t.label === s.label), `expected a tab for ${s.label}`);
-    }
+    await vscode.commands.executeCommand('modbench.record.open', selection[0], selection);
+    // Both conditions: a tab can carry its title before the group it landed in finishes settling,
+    // and settling into one group (not one per record) is the behavior under test.
+    await waitFor('every selected tab in one new group', () =>
+      (selection.every((s) => titled(s.formKey)) && vscode.window.tabGroups.all.length === groupsBefore + 1) || undefined);
+
+    assert.strictEqual(openTabs().length, tabsBefore + 3);
   });
 });
 
-// ── modbench.openHeader reachable from every plugin-bearing row ─────────────────
-// The implicit-master row is a different class with a different contextValue and no `.plugin`
-// field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
 import { ImplicitMasterDecorationProvider } from '../../plugins/ImplicitMasterDecorationProvider';
 import { publishPluginWarnings } from '../../medit/loadDiagnostics';
@@ -712,17 +638,35 @@ function nodeKind(node: unknown): unknown {
   return fields.kind;
 }
 
-describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
-  it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
-    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
-    await vscode.commands.executeCommand('modbench.openHeader', node);
+// A plugin row's click fires the command its row carries (plugins.md, Menus and keys, story 2).
+async function clickRow(node: { command?: vscode.Command }): Promise<void> {
+  const { command, arguments: args } = present(node.command, 'the row\'s command');
+  const given: unknown[] = args ?? [];
+  await vscode.commands.executeCommand(command, ...given);
+}
+
+describe('a click on a plugin row opens its header', () => {
+  it('from an ordinary plugin row, titled by the plugin\'s file name', async () => {
+    await clickRow(new PluginListPluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod'));
+
     await waitFor('a header tab for TestMod.esp', () => openTabs().some(t => t.label === 'TestMod.esp') || undefined);
   });
 
-  it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
-    const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
-    await vscode.commands.executeCommand('modbench.openHeader', node);
+  it('from an implicit-master row', async () => {
+    await clickRow(new ImplicitMasterNode('Fallout4.esm', 'Data'));
+
     await waitFor('a header tab for Fallout4.esm', () => openTabs().some(t => t.label === 'Fallout4.esm') || undefined);
+  });
+
+  it('opens two plugins of one file name from different origins as two tabs', async () => {
+    const tabsBefore = openTabs().length;
+
+    await vscode.commands.executeCommand('modbench.record.open', [
+      { formKey: '000000:Twin.esp', origin: 'ModA' }, { formKey: '000000:Twin.esp', origin: 'ModB' },
+    ]);
+    await waitFor('both Twin.esp tabs', () => openTabs().filter(t => t.label === 'Twin.esp').length === 2 || undefined);
+
+    assert.strictEqual(openTabs().length, tabsBefore + 2);
   });
 });
 
@@ -2390,8 +2334,8 @@ describe('A field gesture from the palette acts on the focused cell of the recor
 
   it('removes the element the focused cell holds', async () => {
     const formKey = '000801:TestMod.esp';
-    await vscode.commands.executeCommand('modbench.record.open', { formKey, label: 'Focused Record' });
-    await waitFor('the record tab', () => openTabs().some((t) => t.label === 'Focused Record') || undefined);
+    await vscode.commands.executeCommand('modbench.record.open', { formKey });
+    await waitFor('the record tab', () => openTabs().some((t) => t.label === formKey) || undefined);
     const path = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }];
     present(ext?.exports.focusRecordCell, "the activated extension's focusRecordCell export")({
       webviewSection: 'arrayElement', formKey, plugin: 'TestMod.esp', origin: 'Data', path,
