@@ -37,13 +37,38 @@ interface UnconfirmedWrite {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+interface UnconfirmedShape {
+  readonly moved: PluginAddress[];
+  readonly covered: (value: InstanceValue) => boolean;
+  marked: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+const sameAddress = (a: PluginAddress, b: PluginAddress): boolean => a.name === b.name && a.origin === b.origin;
+
+// One entry per plugins.txt line: the winning plugin of every listed name, in file order
+// (ADR-0013) — an overridden plugin of the same name carries the same slot and is excluded.
+function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] & { slot: number })[] {
+  return value.plugins
+    .filter((p): p is InstanceValue['plugins'][number] & { slot: number } => p.slot !== null && p.winning)
+    .sort((a, b) => a.slot - b.slot);
+}
+
+const orderOf = (value: InstanceValue): string =>
+  listedPlugins(value).map((p) => pluginAddressKey(p.name, p.origin)).join('\n');
+
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a
 // second cast of its own.
-export function isDropPayload(value: unknown): value is { names: string[] } {
-  if (typeof value !== 'object' || value === null) return false;
-  const witness = value as { names?: unknown };
-  return Array.isArray(witness.names) && witness.names.every((n): n is string => typeof n === 'string');
+function isAddress(value: unknown): value is PluginAddress {
+  return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
+    && 'origin' in value && typeof value.origin === 'string';
+}
+
+export function isDropPayload(value: unknown): value is { plugins: PluginAddress[] } {
+  return typeof value === 'object' && value !== null && 'plugins' in value && Array.isArray(value.plugins)
+    && value.plugins.every(isAddress);
 }
 
 // toolbox.ts's composition root always wires a real RecordBrowser; reaching this means a test
@@ -304,6 +329,7 @@ export class PluginsTreeProvider
   private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
+  private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
   // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
@@ -374,6 +400,57 @@ export class PluginsTreeProvider
       clearTimeout(write.timer);
       this.unconfirmed.delete(address);
     }
+    this.settleUnconfirmedShapes(value);
+  }
+
+  private settleUnconfirmedShapes(value: InstanceValue): void {
+    for (const shape of this.unconfirmedShapes) {
+      if (!shape.covered(value)) {
+        if (!shape.differedOnce) {
+          shape.differedOnce = true;
+          continue;
+        }
+        this.log('warn', `[PluginsTreeProvider] ${shape.moved.map(({ name }) => `"${name}"`).join(', ')} was moved, and the disk shows the same order.`);
+      }
+      this.dropShape(shape);
+    }
+  }
+
+  private dropShape(shape: UnconfirmedShape): void {
+    clearTimeout(shape.timer);
+    this.unconfirmedShapes.delete(shape);
+  }
+
+  private markMoved(moved: readonly PluginAddress[]): void {
+    if (moved.length === 0) return;
+    const before = orderOf(this.instanceValue);
+    const shape: UnconfirmedShape = {
+      moved: [...moved], covered: (value) => orderOf(value) !== before, marked: false, differedOnce: false,
+      timer: setTimeout(() => {
+        shape.marked = true;
+        this.render();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmedShapes.add(shape);
+  }
+
+  private forgetMoved(moved: readonly PluginAddress[]): void {
+    let shown = false;
+    for (const shape of this.unconfirmedShapes) {
+      const left = shape.moved.filter((own) => !moved.some((forgotten) => sameAddress(forgotten, own)));
+      shown ||= shape.marked && left.length < shape.moved.length;
+      shape.moved.splice(0, shape.moved.length, ...left);
+      if (left.length === 0) this.dropShape(shape);
+    }
+    if (shown) this.render();
+  }
+
+  private isMarked(address: PluginAddress): boolean {
+    return this.unconfirmed.get(pluginAddressKey(address.name, address.origin))?.marked === true || this.shapeMarked(address);
+  }
+
+  private shapeMarked(address: PluginAddress): boolean {
+    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.moved.some((row) => sameAddress(row, address)));
   }
 
   /** A check box's new state shows at once; the mark follows after a delay. */
@@ -403,6 +480,8 @@ export class PluginsTreeProvider
   private clearUnconfirmed(): void {
     for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
     this.unconfirmed.clear();
+    for (const shape of this.unconfirmedShapes) clearTimeout(shape.timer);
+    this.unconfirmedShapes.clear();
   }
 
   // ── rows ──────────────────────────────────────────────────────────────────
@@ -566,11 +645,7 @@ export class PluginsTreeProvider
     const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
     const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
 
-    // One entry per plugins.txt line: the winning plugin of every listed name, in file order
-    // (ADR-0013) — an overridden plugin of the same name carries the same slot and is excluded.
-    const listed = this.instanceValue.plugins
-      .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
-      .sort((a, b) => a.slot - b.slot);
+    const listed = listedPlugins(this.instanceValue);
 
     // A name in both sets renders once, as the implicit row: the game loads it first, wherever its
     // line sits. A name on two lines renders once, at its first.
@@ -640,7 +715,7 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
-    if (this.unconfirmed.get(pluginAddressKey(file, row.origin))?.marked) {
+    if (this.isMarked({ name: file, origin: row.origin })) {
       row.iconPath = new vscode.ThemeIcon('sync~spin');
       row.tooltip = UNCONFIRMED_TOOLTIP;
     }
@@ -864,9 +939,10 @@ export class PluginsTreeProvider
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken,
   ): void {
-    const names = source.filter((n): n is PluginNode => n instanceof PluginNode).map((n) => n.plugin.name);
-    if (names.length === 0) return;
-    dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ names }));
+    const plugins = source.filter((n): n is PluginNode => n instanceof PluginNode)
+      .map((n) => ({ name: n.plugin.name, origin: n.origin }));
+    if (plugins.length === 0) return;
+    dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ plugins }));
   }
 
   /** The order check reads the same drop the write applies to plugins.txt's order, whichever end
@@ -878,7 +954,8 @@ export class PluginsTreeProvider
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
     if (!payload || !isDropPayload(payload.value)) return;
-    const { names } = payload.value;
+    const { plugins: moved } = payload.value;
+    const names = moved.map((p) => p.name);
     const drop = this.dropFor(target, names);
     if (drop === undefined) return;
     try {
@@ -887,8 +964,10 @@ export class PluginsTreeProvider
         this.reporter?.report('error', 'Could not move plugins.', refusal);
         return;
       }
+      this.markMoved(moved);
       await this.source.reorderPlugins(names, drop);
     } catch (e) {
+      this.forgetMoved(moved);
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${errorMessage(e)}`);
       this.reporter?.report('error', 'Failed to move plugins.', errorMessage(e));
     }

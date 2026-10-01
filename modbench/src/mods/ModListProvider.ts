@@ -319,7 +319,6 @@ export class ModListProvider
     }
   }
 
-  /** The separator that holds the entry at `index` of mod order, or the entry itself when it is one. */
   private separatorHolding(index: number): EntryRef | undefined {
     return this.instanceValue.mods.slice(index).find((entry) => entry.kind === 'separator');
   }
