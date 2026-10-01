@@ -33,7 +33,7 @@ public sealed class EnableAModApiTests : HostedTests
         enabled.EnsureSuccessStatusCode();
         var optional = await Client.Plugin(OptionalPlugin);
         Assert.Equal(OptionalMod, optional.GetProperty("origin").GetString());
-        Assert.True(optional.GetProperty("participates").GetBoolean());
+        Assert.True(optional.GetProperty("inLoadOrder").GetBoolean());
         Assert.Equal(
             "OptionalNpc",
             (await Client.Record(await Client.FirstFormKey(OptionalPlugin, OptionalMod))).GetProperty("editorId").GetString());

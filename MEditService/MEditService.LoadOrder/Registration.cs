@@ -1,23 +1,5 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>The three facts a <c>registrations</c> row carries (ADR-0013). Mod Management computes
-/// all three; nothing here is derived except the two predicates below, which are the only
-/// definition of participation and load-order membership.</summary>
-public readonly record struct Registration(int? LoadOrderIndex, bool Enabled, bool Winning)
-{
-    /// <summary>Participation is derived, never stored (ADR-0013): only a participating plugin
-    /// competes for winner or counts in a conflict. "Overridden" and "disabled" are the same
-    /// mechanism — a registered row that does not participate.</summary>
-    public bool Participates => Enabled && Winning && LoadOrderIndex is not null;
-
-    /// <summary>The winning plugin of a listed name, enabled or not: a disabled line is still a
-    /// legitimate write target; an overridden plugin is not (ADR-0012: editing a file the game does not
-    /// load changes nothing).</summary>
-    public bool InLoadOrder => Winning && LoadOrderIndex is not null;
-
-    /// <summary>The winning, enabled plugin of a listed name.</summary>
-    public static Registration Participating(int slot) => new(slot, Enabled: true, Winning: true);
-
-    /// <summary>The winning plugin of a listed name whose line has no <c>*</c>.</summary>
-    public static Registration Disabled(int slot) => new(slot, Enabled: false, Winning: true);
-}
+/// <summary>What a <c>registrations</c> row carries of the load order (ADR-0013 invariant 3): the
+/// plugin's load index, null when the snapshot does not list it as active.</summary>
+public readonly record struct Registration(int? LoadOrderIndex);

@@ -5,15 +5,14 @@ using MEditService.Ports;
 
 namespace MEditService.Queries;
 
-/// <summary>Kind B diagnoses as rows, in the load order that holds them. Immutable plugins are never
-/// reported: they are the proof set the tables were built from.
-/// </summary>
+/// <summary>Kind B diagnoses as rows, the active plugins in load order first. The plugins loaded with
+/// no line, the game's own, are never reported: they are the proof set the tables were built from.</summary>
 public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
 {
     public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
     {
         var reads = index.RequireReads();
-        var plugins = loadOrder.Require().Plugins;
+        var held = loadOrder.Require();
         // Derived from the whole plugin set, so a partial projection answers nothing: a plugin it has
         // not reached holds no rows yet and would read clean.
         if (index.Status.State != LoadOrderState.Ready) return [];
@@ -21,8 +20,9 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
         var byPlugin = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
         return
         [
-            .. plugins
-                .Where(plugin => !plugin.IsImmutable)
+            .. held.Plugins
+                .Where(plugin => !held.LoadedWithNoLine.Contains(plugin))
+                .OrderBy(plugin => held.LoadOrderIndex(plugin.Key) ?? int.MaxValue)
                 .SelectMany(plugin => byPlugin[plugin.Key].Select(row => Report(plugin, row.Diagnosis))),
         ];
     }

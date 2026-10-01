@@ -31,11 +31,11 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         WritePlugin(_trackedMod, "Second.esp", "SecondNpc");
         WritePlugin(_untrackedMod, "Other.esp", "OtherNpc");
         var game = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
-        _holder.Apply(new LoadOrderSnapshot(game, _root, GameRelease.Fallout4,
+        _holder.Apply(SnapshotPlugins.Snapshot(game, _root, GameRelease.Fallout4,
         [
-            new RegisteredPlugin("First.esp", TrackedModName, Path.Combine(_trackedMod, "First.esp"), 0, Enabled: true, Winning: true),
-            new RegisteredPlugin("Second.esp", TrackedModName, Path.Combine(_trackedMod, "Second.esp"), 1, Enabled: true, Winning: true),
-            new RegisteredPlugin("Other.esp", UntrackedModName, Path.Combine(_untrackedMod, "Other.esp"), 2, Enabled: true, Winning: true),
+            new LoadOrderEntry("First.esp", Path.Combine(_trackedMod, "First.esp"), TrackedModName, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Second.esp", Path.Combine(_trackedMod, "Second.esp"), TrackedModName, 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Other.esp", Path.Combine(_untrackedMod, "Other.esp"), UntrackedModName, 2, Enabled: true, Winning: true),
         ]));
         var tracked = TestEditService.TrackHandler(_holder)
             .TrackAsync([Tracked("First.esp")], SourcePreset.Edits, new Dictionary<string, string>())

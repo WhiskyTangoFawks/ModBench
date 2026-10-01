@@ -92,12 +92,7 @@ public sealed class PluginCompileService(
 
         var content = ContentFacts(tree, plugin, loadOrder);
 
-        var loadOrderNames = loadOrder.Plugins
-            .Where(c => c.Registration.InLoadOrder)
-            .OrderBy(c => c.Slot
-                ?? throw new InvalidOperationException($"Expected plugin '{c.Name}' from '{c.Origin}' in load order to carry a slot."))
-            .Select(c => c.Name)
-            .ToList();
+        var loadOrderNames = loadOrder.Active.Select(c => c.Name).ToList();
 
         PreparedPluginSave save;
         try
@@ -261,21 +256,18 @@ public sealed class PluginCompileService(
         return errors;
     }
 
-    // A master the load order holds sorts by its slot; one it does not falls after every held
-    // master, alphabetically among themselves, so the result is stable either way.
+    // An active master sorts by its load index; one that is not falls after every active master,
+    // alphabetically among themselves, so the result is stable either way.
     private static IReadOnlyList<string> InLoadOrderOrder(HashSet<string> masters, LoadOrderSnapshot loadOrder)
     {
         if (masters.Count == 0) return [];
 
-        var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var plugin in loadOrder.Plugins)
-        {
-            if (plugin.Slot is not { } slot) continue;
-            if (!slots.TryGetValue(plugin.Name, out var held) || slot < held) slots[plugin.Name] = slot;
-        }
+        var loadIndex = loadOrder.Active
+            .Select((plugin, index) => (plugin.Name, index))
+            .ToDictionary(p => p.Name, p => p.index, StringComparer.OrdinalIgnoreCase);
 
         return [.. masters
-            .OrderBy(m => slots.GetValueOrDefault(m, int.MaxValue))
+            .OrderBy(m => loadIndex.GetValueOrDefault(m, int.MaxValue))
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
     }
 

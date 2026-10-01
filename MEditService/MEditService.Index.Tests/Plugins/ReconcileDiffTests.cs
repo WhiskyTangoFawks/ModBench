@@ -113,12 +113,9 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        // Still registered and still in the load order — browsable at its slot — but a disabled
-        // plugin competes for nothing.
+        // Still registered and browsable, but a plugin that is not active competes for nothing.
         Assert.NotEmpty(ReadsOf(index).GetDocuments(bKey));
-        var b = OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey));
-        Assert.Equal(1, b.LoadOrderIndex);
-        Assert.False(b.IsWinner);
+        Assert.False(OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey)).IsWinner);
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -149,7 +146,6 @@ public sealed class ReconcileDiffTests
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
         Assert.False(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
-        Assert.Equal(stack.Single(e => e.Plugin.Equals(modA)).LoadOrderIndex, stack.Single(e => e.Plugin.Equals(modB)).LoadOrderIndex);
 
         // Both plugins are registered — the overridden one is browsable, not absent.
         Assert.NotEmpty(ReadsOf(index).GetDocuments(modB));

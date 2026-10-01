@@ -7,7 +7,7 @@ type QueryMethod =
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getReferences'
   | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
-  | 'getContainerChildren' | 'implicitMasters' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
+  | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
   | 'createPlugin' | 'rebuildIndex' | 'track' | 'createRecord' | 'deleteRecords'
@@ -271,9 +271,6 @@ export class InMemoryMEditClient implements MEditClient {
     ...args: Parameters<MEditClient['getContainerChildren']>
   ): ReturnType<MEditClient['getContainerChildren']> {
     return this.query('getContainerChildren', args);
-  }
-  implicitMasters(...args: Parameters<MEditClient['implicitMasters']>): ReturnType<MEditClient['implicitMasters']> {
-    return this.query('implicitMasters', args);
   }
   setFilter(...args: Parameters<MEditClient['setFilter']>): ReturnType<MEditClient['setFilter']> {
     return this.query('setFilter', args);

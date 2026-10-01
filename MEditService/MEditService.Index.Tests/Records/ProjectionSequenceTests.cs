@@ -65,7 +65,7 @@ public sealed class ProjectionSequenceTests : IDisposable
         Reconcile(_fixture.Plugins);
         var before = _index.Sequence;
 
-        Reconcile([.. _fixture.Plugins.Select(p => p with { Slot = 3 })]);
+        Reconcile([.. _fixture.Plugins.Select(p => p with { Enabled = false })]);
 
         Assert.True(_index.Sequence > before);
     }

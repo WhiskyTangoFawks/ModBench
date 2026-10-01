@@ -36,7 +36,7 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Body();
-        Assert.Equal("OverriddenPlugin", problem.GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotActive", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(PluginName, detail, StringComparison.Ordinal);
         Assert.Contains(OverriddenOrigin, detail, StringComparison.Ordinal);

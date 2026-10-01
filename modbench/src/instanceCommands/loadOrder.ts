@@ -7,7 +7,7 @@ import type {
 } from '../client';
 import type { GameFolder } from '../instanceAdapter/instanceAdapter';
 import {
-  loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine,
+  loadOrderSnapshotOf, type LoadOrderPlugin, type LoadOrderPluginLine, type PluginAddress,
 } from '../instanceLoader/loadOrderSnapshot';
 
 /** The game the instance is for. */
@@ -22,6 +22,7 @@ export interface InstanceGame {
 export interface LoadOrderSource extends InstanceGame {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;
+  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
 }
 
 /** Nothing is sent without a game folder found: there is no Data folder to key the load order on. */
@@ -37,7 +38,9 @@ function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnap
   const loaded = loadOrderSnapshotOf(value);
   if (!loaded) return undefined;
   return {
-    plugins: loaded.plugins, gameDirectory: loaded.dataFolder, instanceRoot, gameRelease: releaseOf(value),
+    plugins: loaded.plugins, active: loaded.active, loadedWithNoLine: loaded.loadedWithNoLine,
+    gameDirectory: loaded.dataFolder, instanceRoot,
+    gameRelease: releaseOf(value),
   };
 }
 

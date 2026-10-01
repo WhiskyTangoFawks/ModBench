@@ -938,7 +938,7 @@
         },
         {
           "command": "modbench.plugin.compile",
-          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/ && viewItem =~ /\\beditable\\b/",
+          "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/ && viewItem =~ /\\btracked\\b/",
           "group": "4_sourceControl@3"
         },
         {

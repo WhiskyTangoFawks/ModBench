@@ -28,25 +28,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance — winning and overridden, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Plugins new to the load order are opened and registered (indexed only if never seen), plugins absent from the snapshot are unregistered, moved plugins are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin and path, the active plugins in load order, and the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/implicit-masters": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The plugin filenames this install loads without a plugins.txt line of their own: the release's implicit masters present in the given Data folder, then that folder's Creation Club catalog. Load order. */
-        get: operations["GetImplicitMasters"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -711,13 +694,11 @@ export interface components {
             name: string;
             path: string;
             origin: string;
-            /** Format: int32 */
-            slot?: number | null;
-            enabled?: boolean | null;
-            winning?: boolean | null;
         };
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];
+            active: components["schemas"]["PluginAddress"][];
+            loadedWithNoLine: components["schemas"]["PluginAddress"][];
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
@@ -816,12 +797,9 @@ export interface components {
             /** Format: int32 */
             recordCount: number;
             isImmutable: boolean;
-            participates: boolean;
             origin: string;
             masterIssues?: string[] | null;
             inLoadOrder: boolean;
-            enabled: boolean;
-            winning: boolean;
             hasMatchingRecords: boolean;
             isTracked: boolean;
             hasParseFailure: boolean;
@@ -904,7 +882,7 @@ export interface components {
             parseDiagnosis?: string | null;
         };
         /** @enum {string} */
-        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "OverriddenPlugin" | "UnlistedPlugin" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "PluginNotActive" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";
         RecordEditRequest: {
             plugin: string;
             origin: string;
@@ -1063,38 +1041,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetImplicitMasters: {
-        parameters: {
-            query: {
-                gameDirectory: string;
-                gameRelease: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Bad Request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,13 +1,14 @@
 // MO2's parsed reads: each file read through its own codec, and each answer about where the
 // instance keeps what.
 
+import { basename, dirname } from 'node:path';
 import { parsePlugins } from '../loadOrderFileCodec/pluginsText';
 import { errorMessage } from '../ports/errorMessage';
 import { DOWNLOAD_SIDECAR_SUFFIX, parseDownloadMeta } from './codecs/downloads';
 import { parseMetaIni } from './codecs/metaIni';
 import { parseModlist } from './codecs/modlistText';
 import { readGameName, readSelectedProfile } from './codecs/modOrganizerIni';
-import { dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
+import { creationClubListFile, dataFolderOf, gameReleaseForGame } from '../tables/gamePaths';
 import { factsOf, get, isTracked, listDir } from './files';
 import {
   type DataFolderPlugins, type DownloadedFile, type DownloadedFiles, type GameFolder, type InstanceAdapter,
@@ -54,6 +55,14 @@ async function listGameFolderPlugins(gameFolder: GameFolder): Promise<DataFolder
   }
 }
 
+// The game writes its Creation Club list in plugins.txt's own line format.
+async function readCreationClubList(gameFolder: GameFolder, gameRelease: string | undefined): Promise<string[]> {
+  const file = gameFolder.kind === 'found' ? creationClubListFile(gameFolder.root, gameRelease) : undefined;
+  if (file === undefined) return [];
+  const text = await readOrAbsent<string | undefined>(() => get(file), undefined);
+  return text === undefined ? [] : parsePlugins(text).map((entry) => entry.name);
+}
+
 // The tables key each release on the game's name as `gameName=` spells it.
 const gameOf = (gameName: string) => ({ gameName, gameRelease: gameReleaseForGame(gameName) });
 
@@ -62,13 +71,19 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
   return {
     async settings() {
       const iniText = await get(settingsFile(instanceRoot));
+      const game = gameOf(readGameName(iniText));
       return {
         profile: readSelectedProfile(iniText),
-        ...gameOf(readGameName(iniText)),
+        ...game,
         // What the settings resolve is what the watch follows.
         gameFolder: async () => {
           const gameFolder = await resolveGameFolder(iniText);
           watch.follow('gameFolderPlugins', dataFolderOf(gameFolder), DATA_FOLDER_PLUGINS_GLOB);
+          const creationClubList = gameFolder.kind === 'found'
+            ? creationClubListFile(gameFolder.root, game.gameRelease)
+            : undefined;
+          if (creationClubList === undefined) watch.follow('creationClubList', undefined, '');
+          else watch.follow('creationClubList', dirname(creationClubList), basename(creationClubList));
           return gameFolder;
         },
         downloadedFiles: async (): Promise<DownloadedFiles> => {
@@ -108,6 +123,8 @@ export function mo2Reads(context: Mo2Context): Mo2Reads {
     },
 
     gameFolderPlugins: listGameFolderPlugins,
+
+    creationClubList: readCreationClubList,
 
     async downloadedFileAt(path) {
       const resolution = await resolveDownloadsFolder(instanceRoot, await get(settingsFile(instanceRoot)));

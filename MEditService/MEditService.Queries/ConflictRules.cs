@@ -7,13 +7,6 @@ namespace MEditService.Queries;
 // between the sites that fold per-plugin values through them.
 internal static class ConflictRules
 {
-    // plugins.md: a non-participating plugin never contributes to conflict classification — filtered
-    // out before any diff/winner/cell-state computation, not masked in the result. Null
-    // pluginParticipates means every plugin participates (absent key: fail-open).
-    public static IReadOnlyList<T> FilterParticipating<T>(
-        IReadOnlyList<T> items, Func<T, string> plugin, IReadOnlyDictionary<string, bool>? pluginParticipates) =>
-        pluginParticipates == null ? items : [.. items.Where(i => pluginParticipates.GetValueOrDefault(plugin(i), true))];
-
     // The field winner (highest load-order plugin with a value) is ConflictWins if contested by
     // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
     // Override. `valuesEqual` is supplied so callers can use sorted-array-aware comparison.

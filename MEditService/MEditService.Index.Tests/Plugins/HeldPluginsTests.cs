@@ -20,24 +20,17 @@ public sealed class HeldPluginsTests
 
     // ── Open ────────────────────────────────────────────────────────────────────
 
-    // The slots PutLoadOrderHandler would assign (ADR-0013 invariant 2): a forced plugin at slot 0,
-    // the sent entries offset behind it.
+    // ADR-0013 invariant 3: the game's master arrives in the snapshot, active and first, as Mod
+    // Management sends it.
     [Fact]
-    public void Open_ForcedMaster_LoadsBeforeTheSnapshotPlugin()
+    public void Open_TheGamesMasterSentFirst_LoadsBeforeTheUserPlugin()
     {
         using var data = new PluginFixtureBuilder("lo-open")
-            .WithPlugin("Fallout4.esm", listed: false)
+            .WithPlugin("Fallout4.esm")
             .WithPlugin(UserPlugin)
             .Build();
-        RegisteredPlugin[] forced = [RegisteredPlugin.Forced(data.DataFolder, "Fallout4.esm", slot: 0)];
-        var snapshot = new LoadOrderSnapshot(
-            data.DataFolder, instanceRoot: null, GameRelease.Fallout4,
-            [.. forced, .. data.Plugins.Select(e => RegisteredPlugin.Of(e, slotOffset: forced.Length))]);
-        var holder = new LoadOrderHolder();
-        var version = holder.Apply(snapshot);
-        using var held = Indexes.Open(holder);
 
-        held.Reconcile(snapshot, version);
+        using var held = Open(data);
 
         Assert.Equal(["Fallout4.esm", UserPlugin], held.Status.IndexedPlugins.Select(p => p.Name));
         Assert.Contains(Key("Fallout4.esm"), held.RequireReads().OpenedPlugins.Keys);

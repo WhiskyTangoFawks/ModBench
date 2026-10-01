@@ -1,7 +1,6 @@
 import type * as vscode from 'vscode';
 import type { Instance, InstanceValue } from './instanceLoader/instance';
 import { providedPluginsOf, type DataFolderPlugins } from './instanceLoader/loadOrderSnapshot';
-import { dataFolderOf } from './tables/gamePaths';
 import { reportSyncFailures, trackSyncRuns, type SyncMessage, type SyncRuns } from './syncFailureReport';
 
 // Stated structurally: the context-boundary scan reads the `plugins` in `pluginsCommands/plugins`
@@ -17,8 +16,7 @@ export interface PluginSyncArguments {
   profile: string;
   provided: ReadonlyMap<string, string>;
   inData: DataFolderPlugins;
-  dataFolder: string | undefined;
-  gameRelease: string | undefined;
+  loadedWithNoLine: readonly string[] | undefined;
 }
 
 export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
@@ -26,28 +24,21 @@ export function pluginSyncArguments(value: InstanceValue): PluginSyncArguments {
     profile: value.activeProfile,
     provided: providedPluginsOf(value.plugins),
     inData: value.dataFolderPlugins,
-    dataFolder: dataFolderOf(value.gameFolder),
-    gameRelease: value.gameRelease,
+    loadedWithNoLine: value.pluginsLoadedWithNoLine?.map((plugin) => plugin.name),
   };
 }
 
 /** Its message is the Plugins view's, for a failed run until a run lands. */
-export interface PluginSyncTrigger extends vscode.Disposable, SyncMessage, SyncRuns {
-  /** Runs on the current value: mEdit answers which plugins load with no line, and the first
-   *  value lands before it can. Until the first call, no landed value runs plugin sync. */
-  runOnConnect(): void;
-}
+export type PluginSyncTrigger = vscode.Disposable & SyncMessage & SyncRuns;
 
 // Termination: a write re-enters here through the Instance adapter's signal. The next run changes
 // nothing, writes nothing, and the loop stops; a sync that wrote unconditionally never would.
 export function registerPluginSync(
-  instance: Pick<Instance, 'subscribe' | 'value'>,
+  instance: Pick<Instance, 'subscribe'>,
   sync: (value: InstanceValue) => Promise<PluginSyncOutcome>,
   channel: { error(msg: string): void; info(msg: string): void },
 ): PluginSyncTrigger {
   const failures = reportSyncFailures('plugin sync', 'plugins.txt is not synced', (line) => channel.error(line));
-  // Before mEdit first attaches, plugin sync waits, so a launch reports nothing.
-  let attachedOnce = false;
   const runs = trackSyncRuns();
   const run = (value: InstanceValue): void => {
     runs.begin((async () => {
@@ -61,17 +52,11 @@ export function registerPluginSync(
       }
     })());
   };
-  const subscription = instance.subscribe((value) => {
-    if (attachedOnce) run(value);
-  });
+  const subscription = instance.subscribe(run);
   return {
     message: () => failures.message(),
     onMessageChanged: (listener) => failures.onMessageChanged(listener),
     settled: () => runs.settled(),
-    runOnConnect: () => {
-      attachedOnce = true;
-      run(instance.value);
-    },
     dispose: () => { subscription.dispose(); },
   };
 }

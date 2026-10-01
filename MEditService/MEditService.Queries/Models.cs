@@ -16,11 +16,14 @@ public record PluginDiagnosisReport(
     string Message,
     string Text);
 
-/// <summary>One plugin row as the read side answers it: the load order's registration, what reading
-/// the file told the Index, and what a filter, a parse failure and the rows' own derivation add.
-/// </summary>
+/// <summary>One plugin row as the read side answers it: the load order's facts, what reading the file
+/// told the Index, and what a filter, a parse failure and the rows' own derivation add.</summary>
 public sealed record PluginRow(
     RegisteredPlugin Plugin,
+    // LoadOrderIndex (ADR-0013 invariant 3): the plugin's place among the active plugins, null when
+    // it is not active.
+    int? LoadOrderIndex,
+    bool IsImmutable,
     PluginContent Content,
     // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.

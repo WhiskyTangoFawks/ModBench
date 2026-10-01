@@ -157,22 +157,15 @@ internal sealed class WriteTargets(
         return RefuseIfNotLoaded(plugin);
     }
 
-    // Tracking is per mod folder and implies neither winning nor a plugins.txt line (ADR-0012
-    // invariant 5). A disabled line is still a line, so its plugin stays writable.
+    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not
+    // (ADR-0012 invariant 5).
     private RecordEditResult? RefuseIfNotLoaded(PluginAddress plugin) =>
-        loadOrder.Current.Registration(plugin) switch
-        {
-            { Winning: false } => RecordEditResult.Refused(
-                RecordEditRefusal.OverriddenPlugin,
-                $"{plugin.Name} ({plugin.Origin}) is an overridden plugin — another mod's {plugin.Name} wins, " +
-                "so the game does not load this one and it is read-only. Raise its mod's priority to make " +
-                "it the one the game loads."),
-            { LoadOrderIndex: null } => RecordEditResult.Refused(
-                RecordEditRefusal.UnlistedPlugin,
-                $"{plugin.Name} ({plugin.Origin}) has no plugins.txt line, so the game does not load it and " +
-                "it is read-only. Plugin sync gives it a line."),
-            _ => null,
-        };
+        loadOrder.Current.IsActive(plugin)
+            ? null
+            : RecordEditResult.Refused(
+                RecordEditRefusal.PluginNotActive,
+                $"{plugin.Name} ({plugin.Origin}) is not active, so the game does not load it and it is " +
+                "read-only. Enabling its line, or moving its mod toward the winning end, makes it active.");
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.

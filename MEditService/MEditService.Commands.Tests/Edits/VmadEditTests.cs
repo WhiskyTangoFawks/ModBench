@@ -625,9 +625,9 @@ public sealed class VmadEditTests : IDisposable
 
             mod.WriteToBinary(pluginPath);
 
-            LoadOrder = new LoadOrderSnapshot(
+            LoadOrder = SnapshotPlugins.Snapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
             new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();

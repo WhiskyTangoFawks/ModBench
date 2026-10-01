@@ -2,9 +2,12 @@
 // adapter's parsed reads.
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
-import { buildLoadOrderRows, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
+import {
+  buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
+  type PluginAddress,
+} from './loadOrderSnapshot';
 import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './downloadRows';
-import { nexusSlugFor } from '../tables/gamePaths';
+import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
   type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
@@ -58,7 +61,7 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
-  /** Every plugin file, with origin, slot, enabled and winning (ADR-0013). A listed
+  /** Every plugin file, with origin, slot, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
@@ -82,6 +85,9 @@ export interface InstanceValue {
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
    *  it could not be read. */
   readonly dataFolderPlugins: DataFolderPlugins;
+  /** The plugins the game loads with no line, in the order it loads them; undefined while the
+   *  game folder's plugins cannot be listed. */
+  readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
   /** Each mod's conflict/override status, keyed by mod name — the Mods tree's badges (ADR-0015). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
@@ -146,6 +152,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   // Not read yet reads as not found, so a view that says not found waits for sequence 1.
   gameFolder: { kind: 'notFound', looked: [], setting: GAME_FOLDER_SETTING },
   dataFolderPlugins: { kind: 'unresolved' },
+  pluginsLoadedWithNoLine: undefined,
   modStatuses: new Map(),
   overwriteFileCount: 0,
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
@@ -356,12 +363,15 @@ export class Instance implements Subscription {
       this.readModFolders(),
       adapter.profiles(),
       settings.gameFolder().then(async (gameFolder) => ({
-        gameFolder, dataFolderPlugins: await this.readGameFolderPlugins(gameFolder),
+        gameFolder,
+        dataFolderPlugins: await this.readGameFolderPlugins(gameFolder),
+        creationClub: await adapter.creationClubList(gameFolder, gameRelease),
       })),
       Promise.all(entries.map(async (entry) => (entry.kind === 'mod' && await adapter.modTracked(entry.name) ? [entry.name] : []))),
     ]);
     for (const note of runtimeOutput.notes) log(`[instance] ${runtimeOutput.origin}: ${note}`);
-    const { gameFolder, dataFolderPlugins } = game;
+    const { gameFolder, dataFolderPlugins, creationClub } = game;
+    const plugins = buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder);
     const installedInto = downloadsOutcome.kind === 'listed' && downloadsOutcome.files
       ? await this.readInstalledInto(entries, modFolders?.all ?? [])
       : undefined;
@@ -372,7 +382,7 @@ export class Instance implements Subscription {
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
-      plugins: buildLoadOrderRows(pluginOrder, index, runtimeOutput.files, gameFolder),
+      plugins,
       downloads: downloadsOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
         : {
@@ -386,6 +396,7 @@ export class Instance implements Subscription {
       nexusSlug: nexusSlugFor(gameRelease, gameName),
       gameFolder,
       dataFolderPlugins,
+      pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
       modStatuses: computeModStatuses(entries, index),
       overwriteFileCount: runtimeOutput.files.length,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),

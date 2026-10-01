@@ -572,7 +572,8 @@ describe('modbench.plugin.compile', () => {
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
 
-  it('from the palette, picks among only the tracked, editable plugins, the selected one first, and compiles the pick', async () => {
+  // plugins.md, Menus and keys: compile (tracked), read-only or not.
+  it('from the palette, picks among only the tracked plugins, the selected one first, and compiles the pick', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: OTHER })], refused: [] });
     showQuickPick.mockResolvedValue({ label: 'Other.esp', description: 'ModB' });
@@ -581,7 +582,7 @@ describe('modbench.plugin.compile', () => {
     await handler();
 
     expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }],
+      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }, { label: 'ReadOnly.esp', description: 'ModD' }],
       { placeHolder: 'Compile which plugin?' });
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
@@ -594,7 +595,7 @@ describe('modbench.plugin.compile', () => {
     await handler();
 
     expect(showQuickPick).toHaveBeenCalledWith(
-      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }],
+      [{ label: 'Other.esp', description: 'ModB' }, { label: 'MyPatch.esp', description: 'ModA' }, { label: 'ReadOnly.esp', description: 'ModD' }],
       { placeHolder: 'Compile which plugin?' });
   });
 

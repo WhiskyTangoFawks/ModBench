@@ -319,6 +319,41 @@ describe('the MO2 Instance adapter', () => {
         expect(plugins.reason).toMatch(/ENOENT/);
       });
     });
+
+    // ADR-0013 invariant 3: Mod Management takes the Creation Club plugins from the game folder.
+    describe('the game folder\'s Creation Club list', () => {
+      let game: string;
+
+      beforeEach(async () => {
+        game = await mkdtemp(join(tmpdir(), 'mo2-instance-ccc-'));
+      });
+      afterEach(() => rm(game, { recursive: true, force: true }));
+
+      const found = (): GameFolder => ({ kind: 'found', root: game, dataFolder: join(game, 'Data') });
+
+      it('answers the plugins the release\'s list names, in its order', async () => {
+        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\r\nccBGSFO4001-PipBoy(Black).esl\r\n');
+
+        expect(await adapter.creationClubList(found(), 'Fallout4'))
+          .toEqual(['ccBGSFO4044-HellfirePowerArmor.esl', 'ccBGSFO4001-PipBoy(Black).esl']);
+      });
+
+      it('answers none when the game folder holds no list', async () => {
+        expect(await adapter.creationClubList(found(), 'Fallout4')).toEqual([]);
+      });
+
+      it('answers none for a release with no Creation Club', async () => {
+        await writeFile(join(game, 'Fallout4.ccc'), 'ccBGSFO4044-HellfirePowerArmor.esl\n');
+
+        expect(await adapter.creationClubList(found(), 'Oblivion')).toEqual([]);
+      });
+
+      it('answers none when the game folder was not found', async () => {
+        const notFound: GameFolder = { kind: 'notFound', looked: [], setting: 'setting' };
+
+        expect(await adapter.creationClubList(notFound, 'Fallout4')).toEqual([]);
+      });
+    });
   });
 
   describe('the watch', () => {
@@ -436,6 +471,23 @@ describe('the MO2 Instance adapter', () => {
 
         for (const name of ['Fallout4.esm', 'Patch.ESP', 'cc.Esl']) expect(fire(join(game, 'Data'), name), name).toBe(true);
         expect(fire(join(game, 'Data'), 'readme.txt')).toBe(false);
+      } finally {
+        await rm(game, { recursive: true, force: true });
+      }
+    });
+
+    // Rival: the Data folder followed alone, so a changed Creation Club list waits for the next focus.
+    it('follows the release\'s Creation Club list at the game folder\'s root', async () => {
+      const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
+      try {
+        await mkdir(join(game, 'Data'));
+        const watched = adapterAt(root, game);
+        watched.subscribe(() => undefined);
+
+        await (await watched.settings()).gameFolder();
+
+        expect(fire(game, 'Fallout4.ccc')).toBe(true);
+        expect(fire(game, 'Fallout4.ini')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
       }

@@ -1,9 +1,11 @@
-import type { LoadOrderOutcome, LoadOrderPluginInput, MEditClient } from './MEditClient';
+import type { LoadOrderOutcome, LoadOrderPluginInput, MEditClient, PluginAddress } from './MEditClient';
 
-/** One generation of ADR-0013's hand-off, whole: every plugin file plus the three facts
- *  the PUT is keyed on. Built from one Instance value, so a snapshot never mixes generations. */
+/** One generation of ADR-0013's hand-off, whole: every plugin, the active ones in load order, those
+ *  loaded with no line, and the PUT's keys. One Instance value, so never two generations. */
 export interface LoadOrderSnapshot {
   readonly plugins: LoadOrderPluginInput[];
+  readonly active: PluginAddress[];
+  readonly loadedWithNoLine: PluginAddress[];
   readonly gameDirectory: string;
   readonly instanceRoot: string;
   readonly gameRelease: string;
@@ -39,8 +41,8 @@ interface Waiting {
 function putSnapshot(
   client: LoadOrderSendClient, { snapshot }: Waiting, signal: AbortSignal,
 ): Promise<LoadOrderOutcome> {
-  const { plugins, gameDirectory, instanceRoot, gameRelease } = snapshot;
-  return client.putLoadOrder(plugins, gameDirectory, instanceRoot, gameRelease, { signal }).catch((e: unknown): LoadOrderOutcome => ({
+  const { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease } = snapshot;
+  return client.putLoadOrder(plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease, { signal }).catch((e: unknown): LoadOrderOutcome => ({
     outcome: 'failed',
     message: `Failed to send the load order — ${e instanceof Error ? e.message : String(e)}`,
   }));

@@ -12,7 +12,7 @@ public interface IRecordReads
     /// </summary>
     IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins { get; }
 
-    /// <summary>The winning override of <paramref name="formKey"/>, across every participating
+    /// <summary>The winning override of <paramref name="formKey"/>, across every active
     /// plugin. Null if the FormKey isn't indexed.</summary>
     RecordDocument? GetDocument(string formKey);
 

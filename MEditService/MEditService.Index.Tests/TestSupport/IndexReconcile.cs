@@ -4,8 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests;
 
-/// <summary>A snapshot built as Mod Management sends one — no forced plugin prepended. A test
-/// needing a forced master builds its own by hand (ADR-0013 invariant 2).</summary>
+/// <summary>A snapshot built as Mod Management sends one: every plugin, and the active plugins in
+/// load order (ADR-0013 invariant 3).</summary>
 internal static class IndexReconcile
 {
     internal static LoadOrderHolder Reconcile(
@@ -22,5 +22,5 @@ internal static class IndexReconcile
     /// own subject is what runs off <see cref="LoadOrderHolder.Apply"/>, not this helper.</summary>
     internal static LoadOrderSnapshot Snapshot(
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
-        new(gameDirectory, instanceRoot, gameRelease, SnapshotPlugins.Of(plugins));
+        SnapshotPlugins.Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
 }

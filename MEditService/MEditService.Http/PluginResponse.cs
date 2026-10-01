@@ -5,8 +5,8 @@ namespace MEditService.Http;
 public record PluginResponse(
     string Name,
     string Path,
-    // ADR-0013: the plugins.txt slot past the forced masters, or null when no line names this
-    // plugin; record-level LoadOrderIndex values are sort keys and put such a plugin last.
+    // ADR-0013 invariant 3: the plugin's place among the active plugins, or null when it is not
+    // active; record-level LoadOrderIndex values are sort keys and put such a plugin last.
     int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
@@ -16,20 +16,12 @@ public record PluginResponse(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
-    // Participates (ADR-0013): Registration.Participates, as the wire sees it — the only plugins
-    // that compete for winner or count in a conflict.
-    bool Participates,
     string Origin,
     // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
-    // InLoadOrder (ADR-0013 invariant 3): derived — the winning plugin of a listed name, enabled
-    // or not. False for an overridden plugin or an unlisted file. See PluginMetadata.InLoadOrder.
+    // InLoadOrder (ADR-0013 invariant 3): the snapshot lists this plugin as active.
     bool InLoadOrder,
-    // Enabled / Winning (ADR-0013): the two registration facts beside the slot, as Mod Management
-    // stated them — what lets a row say *why* it does not participate (disabled, or overridden).
-    bool Enabled,
-    bool Winning,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
     // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
     // to true: only the plugin listing answers inside a filter.
@@ -45,10 +37,9 @@ public record PluginResponse(
     public static PluginResponse Of(PluginRow row)
     {
         var plugin = row.Plugin;
-        var registration = plugin.Registration;
-        return new(plugin.Name, plugin.Path, plugin.Slot, row.Content.IsLight, row.Content.IsMaster,
-            row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, plugin.IsImmutable, registration.Participates,
-            plugin.Origin, row.MasterIssues, registration.InLoadOrder, plugin.Enabled, plugin.Winning,
+        return new(plugin.Name, plugin.Path, row.LoadOrderIndex, row.Content.IsLight, row.Content.IsMaster,
+            row.Content.IsBlueprint, row.Content.Masters, row.Content.RecordCount, row.IsImmutable,
+            plugin.Origin, row.MasterIssues, row.LoadOrderIndex is not null,
             row.HasMatchingRecords, row.IsTracked,
             row.HasParseFailure);
     }

@@ -679,6 +679,18 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     ]);
   });
 
+  // plugins.md, Menus and keys: compile (tracked). A disabled plugin is not active, so read-only
+  // (story 4), and still compiles.
+  it('plugin menu on a disabled tracked plugin: decompile and compile, and no record edit', () => {
+    expect(menuOf('plugin disabled inTrackedMod tracked')).toEqual([
+      ['modbench.plugin.reveal', '1_open'],
+      ['modbench.plugin.enable', '2_change'],
+      ['modbench.plugin.decompile', '4_sourceControl'],
+      ['modbench.plugin.compile', '4_sourceControl'],
+      ['modbench.record.copyValue', '5_copy'],
+    ]);
+  });
+
   // plugins.md, Reporting, story 5: an untracked plugin in a tracked mod is decompiled, not tracked.
   it('plugin menu on an untracked plugin in a tracked mod: decompile, and neither track nor compile', () => {
     expect(menuOf('plugin enabled inTrackedMod untracked editable')).toEqual([
@@ -707,7 +719,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   });
 
   // plugins.md, Menus and keys: track in a mod with no repository, decompile in a tracked mod,
-  // compile on a tracked, editable plugin.
+  // compile on a tracked plugin.
   it.each([
     ['in Overwrite', 'plugin enabled inOverwrite untracked editable'],
     ['in the game folder', 'plugin enabled untracked editable'],

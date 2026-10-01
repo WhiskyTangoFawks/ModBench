@@ -58,6 +58,6 @@ internal static class TestEditService
         Over(holder, adapter: adapter).GetRequiredService<CreatePluginHandler>();
 
     internal static PutLoadOrderHandler PutLoadOrderHandler(
-        LoadOrderHolder holder, IPluginAdapter? adapter = null, INotificationPublisher? notifications = null) =>
-        Over(holder, adapter: adapter, notifications: notifications).GetRequiredService<PutLoadOrderHandler>();
+        LoadOrderHolder holder, INotificationPublisher? notifications = null) =>
+        Over(holder, notifications: notifications).GetRequiredService<PutLoadOrderHandler>();
 }

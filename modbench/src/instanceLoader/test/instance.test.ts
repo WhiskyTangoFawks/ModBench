@@ -1198,6 +1198,43 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(instance.sequence).toBe(2);
     expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
+
+  // ADR-0013 invariant 3: the game's masters come from the per-release table and its Creation Club
+  // plugins from the game folder's list, each only where the game can load it from.
+  it('carries the plugins the game loads with no line: its masters, then its Creation Club plugins', async () => {
+    const { root, instance, setResolver } = await minimalInstance();
+    const gameRoot = join(root, 'Game');
+    const dataFolder = join(gameRoot, 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    for (const name of ['DLCRobot.esm', 'Fallout4.esm', 'ccListed.esl']) await writeFile(join(dataFolder, name), '');
+    await writeFile(join(gameRoot, 'Fallout4.ccc'), 'ccMissing.esl\r\nccListed.esl\r\n');
+    setResolver(() => Promise.resolve({ kind: 'found', root: gameRoot, dataFolder }));
+
+    await instance.refresh();
+
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual(
+      ['Fallout4.esm', 'DLCRobot.esm', 'ccListed.esl'].map((name) => ({ name, origin: 'Data' })));
+  });
+
+  it('carries a game master an enabled mod provides where the game folder holds none', async () => {
+    const { root, instance, setResolver } = await minimalInstance();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
+    setResolver(() => Promise.resolve({ kind: 'found', root: dirname(dataFolder), dataFolder }));
+
+    await instance.refresh();
+
+    expect(instance.value.pluginsLoadedWithNoLine).toEqual([{ name: 'DLCCoast.esm', origin: 'Consumer' }]);
+  });
+
+  it('carries no answer while the game folder is not found', async () => {
+    const { instance } = await minimalInstance();
+
+    await instance.refresh();
+
+    expect(instance.value.pluginsLoadedWithNoLine).toBeUndefined();
+  });
 });
 
 describe('Instance — the sidecar file id and meta.ini installedFiles', () => {

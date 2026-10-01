@@ -30,11 +30,6 @@ public interface IPluginAdapter
     /// tool holds it against a reader. Neither a read of its bytes nor a parse.</summary>
     bool CanRead(ModPath modPath);
 
-    /// <summary>The plugins the install at <paramref name="dataFolder"/> loads with no load-order
-    /// line naming them (ADR-0013 invariant 2): its implicit masters present there, then its
-    /// Creation Club catalog. Claimed by both, named once.</summary>
-    IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease);
-
     /// <summary>What a plugin's own binary says about itself, which is what the Index holds for it.
     /// <c>Unreachable</c> is the throw that stopped a full walk: the count is a readout, not a
     /// gate.</summary>

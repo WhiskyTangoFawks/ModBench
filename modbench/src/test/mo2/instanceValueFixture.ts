@@ -21,6 +21,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     nexusSlug: 'fallout4',
     gameFolder: GAME_FOLDER_NOT_FOUND,
     dataFolderPlugins: { kind: 'unresolved' },
+    pluginsLoadedWithNoLine: undefined,
     modStatuses: new Map(),
     overwriteFileCount: 0,
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },

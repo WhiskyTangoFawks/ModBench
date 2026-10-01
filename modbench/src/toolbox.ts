@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginLoadFailure } from './client';
 import { createLoadOrderSender, type LoadOrderSender } from './client';
-import { implicitMastersFrom } from './toolboxClientCalls';
 import {
   createReconcileNarrator, subscribeNarratorToLoadOrderStatus, type ReconcileNarrator,
 } from './medit/reconcileNarrator';
@@ -9,7 +8,7 @@ import { reportPutOutcome, settleReconciled, syncActiveFilter } from './medit/lo
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishPluginWarnings } from './medit/loadDiagnostics';
 import { Instance, type InstanceValue } from './instanceLoader/instance';
-import { dataFolderFile, dataFolderOf } from './tables/gamePaths';
+import { dataFolderFile } from './tables/gamePaths';
 import { isMo2Instance, mo2InstanceAdapter } from './instanceAdapter/mo2Instance';
 import { ModListProvider, type ModlistNode } from './mods/ModListProvider';
 import {
@@ -26,7 +25,7 @@ import { ToolboxProvider } from './toolbox/ToolboxProvider';
 import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { pluginSyncOver, reorderOver, type ImplicitMasterSource, type PluginsAccess } from './pluginsCommands/plugins';
+import { pluginSyncOver, reorderOver, type PluginsAccess } from './pluginsCommands/plugins';
 import type { SyncMessage } from './syncFailureReport';
 import { registerModSync } from './modSyncTrigger';
 import { modSyncOver } from './modlist/modlist';
@@ -58,7 +57,7 @@ import { errorMessage } from './ports/errorMessage';
 // The port members every gesture, plugin sync and the launch in this file call — narrowed off
 // `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
-  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
+  'putLoadOrder' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
 
 export interface ToolboxDeps {
@@ -122,15 +121,13 @@ export interface LoadOrderPuts {
   putOnMEditStarted(): Promise<void>;
 }
 
-// commands.md, put load order: put at every recompute and when mEdit started, running
-// `onMEditStarted` at each start. Nothing is put while detached; a stream reopen is a start, the
-// process behind it perhaps another.
+// commands.md, put load order: put at every recompute and when mEdit started. Nothing is put while
+// detached; a stream reopen is a start, the process behind it perhaps another.
 export function registerLoadOrderPut(
   own: Own,
   instance: Pick<Instance, 'subscribe'>,
   client: Pick<MEditClient, 'onStatusChanged' | 'onReconnected'>,
   put: () => Promise<void>,
-  onMEditStarted: () => void,
   channel: { error(msg: string): void },
 ): LoadOrderPuts {
   let startPutRan = false;
@@ -142,7 +139,6 @@ export function registerLoadOrderPut(
   }) });
   own({ dispose: client.onReconnected(() => {
     if (!startPutRan) return;
-    onMEditStarted();
     putLogged();
   }) });
   own(instance.subscribe(() => {
@@ -151,7 +147,6 @@ export function registerLoadOrderPut(
   return {
     putOnMEditStarted: () => {
       startPutRan = true;
-      onMEditStarted();
       return put();
     },
   };
@@ -193,8 +188,6 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporterFor: (tag: string) => Reporter;
   access: PluginsAccess;
-  /** The rows the game forces on, asked of the backend (ADR-0016). */
-  implicitMasters: ImplicitMasterSource;
   /** ADR-0015: the tree's only row input — name, origin, slot, enabled and winning for every
    *  plugin. */
   instance: Instance;
@@ -213,13 +206,13 @@ interface PluginListDeps {
 function registerPluginListView(
   deps: PluginListDeps,
 ): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode> } {
-  const { own, session, outputChannel, reporterFor, access, implicitMasters, instance } = deps;
+  const { own, session, outputChannel, reporterFor, access, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source: PluginListSource = { reorderPlugins: reorderOver(access, () => instance.value.activeProfile) };
   const changedOutsideDiagnostics = own(vscode.languages.createDiagnosticCollection('modbench-changed-outside'));
   const pluginsTree = own(new PluginsTreeProvider({
-    instance, source, log, reporter: reporterFor('pluginList'), implicitMasters,
+    instance, source, log, reporter: reporterFor('pluginList'),
     dataFolderFile: (name) => dataFolderFile(instance.value.gameFolder, name),
     records: deps.recordBrowser,
     client: deps.pluginFacts,
@@ -337,13 +330,12 @@ async function handleLoadOrder(
   command: () => Promise<PutLoadOrderResult>,
 ): Promise<void> {
   const put = await command();
-  // The game folder not found has its own one Output line; a line per value would repeat it.
+  // A game folder not found, or one whose plugins cannot be listed, is told by the views and the
+  // Output already; a line per value would repeat it.
   if (!put.sent) return;
-  const { plugins } = put.snapshot;
-  outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins)`);
-  reportPutOutcome(plugins, put.outcome, {
-    warn: (m) => reporter.report('warning', m), error: (m) => reporter.report('error', m),
-  });
+  const { plugins, active } = put.snapshot;
+  outputChannel.info(`[toolbox] handed mEdit the load order snapshot (${plugins.length} plugins, ${active.length} active)`);
+  reportPutOutcome(put.outcome, { error: (m) => reporter.report('error', m) });
   if (put.outcome.outcome !== 'applied') return;
   // The status the put waited for, heard here too: its ticks can be lost to a stream reopening.
   narrator.hear(put.outcome.status);
@@ -421,8 +413,8 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       return;
     }
     await instanceReady;
-    // No game folder means no snapshot to hand over. The Toolbox, the Plugins view and the Output
-    // already say so, without a notification (common.md, States, story 5).
+    // No game folder, or one whose plugins cannot be listed, means no snapshot to hand over. The
+    // views and the Output already say so, without a notification (common.md, States, story 5).
     if (!loadOrderSnapshotOf(instance.value)) {
       exitEditing(session, client);
       return;
@@ -470,10 +462,6 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // The Instance adapter watches files only, so an edited setting is the root's to hand to the same
   // recompute Refresh's re-read runs, once per burst under the Toolbox's own settle.
   own(refreshOnGameDirectoryChange(vscode.workspace.onDidChangeConfiguration, () => instance.refresh()));
-  // The value's own resolution, read fresh per call: a config change is a recompute trigger like
-  // any watched file, so the folder a view reads can never be a generation behind the rows.
-  const dataFolder = (): Promise<string | undefined> =>
-    Promise.resolve(dataFolderOf(instance.value.gameFolder));
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
@@ -492,27 +480,21 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   });
   // The value's slice the load order is built from, under the names instance commands give it.
   const loadOrderSource = (): LoadOrderSource => {
-    const { plugins, gameFolder, gameName, gameRelease } = instance.value;
-    return { plugins, gameFolder, gameName, gameRelease };
+    const { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine } = instance.value;
+    return { plugins, gameFolder, gameName, gameRelease, pluginsLoadedWithNoLine };
   };
   const putCurrentLoadOrder = (): Promise<void> => handleLoadOrder(
     outputChannel, loadOrderReporter, narrator, () => putLoadOrder(sender, instanceRoot, loadOrderSource()));
   // commands.md, `refresh`: instance commands rebuild the index and send nothing; the gesture
   // itself asks the Instance loader to read every file again.
   const refreshIndex = () => refresh(client, instanceRoot, instance.value);
-  // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
-  // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
-  // backend are one answer: unknown.
-  const implicitMastersIn = (folder: string | undefined, gameRelease: string | undefined): Promise<string[] | undefined> =>
-    implicitMastersFrom(client, folder, gameRelease);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the Instance adapter's watch.
-  const syncPluginsOver = pluginSyncOver(access, implicitMastersIn);
+  const syncPluginsOver = pluginSyncOver(access);
   const runPluginSync = (value: InstanceValue) => syncPluginsOver(pluginSyncArguments(value));
   const pluginSync = own(registerPluginSync(instance, runPluginSync, outputChannel));
   const { pluginsTree, pluginListView } = registerPluginListView({
     own, session, outputChannel, reporterFor, access,
-    implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics, pluginSync,
   });
   const runModSync = modSyncOver(access);
@@ -542,7 +524,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   };
   // ADR-0013: a landed Instance recompute and mEdit starting put the load order, never a gesture.
   const loadOrderPuts = registerLoadOrderPut(
-    own, instance, client, putCurrentLoadOrder, () => pluginSync.runOnConnect(), outputChannel);
+    own, instance, client, putCurrentLoadOrder, outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing({
