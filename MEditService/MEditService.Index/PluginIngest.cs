@@ -252,7 +252,9 @@ internal sealed class PluginIngest
 
         // References are read off the document, never a live object: the document is the model, and
         // what Referenced-By answers is what the source file holds.
-        var refs = Rows(FormReferences.Collect(root, schema), document.FormKey, editorId, document.RecordType);
+        var refs = Rows(
+            _containers.OwnReferences(document.RecordType, FormReferences.Collect(root, schema)),
+            document.FormKey, editorId, document.RecordType);
 
         var childRows = new List<ContainerChildRow>();
         var containerType = _containers.ContainerTypeOf(document.RecordType);

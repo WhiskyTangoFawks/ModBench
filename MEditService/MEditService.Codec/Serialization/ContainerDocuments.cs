@@ -64,6 +64,21 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         }
     }
 
+    /// <summary>The links a record holds in its own right: a child carried inline holds its own, so
+    /// the owner's document drops the paths that lie under a child slot.</summary>
+    public List<FormReference> OwnReferences(string ownerRecordType, IEnumerable<FormReference> references)
+    {
+        if (_dispatch.ConcreteFor(ownerRecordType) is not { } owner) return [.. references];
+        var slots = _slots.ChildSlotsOf(owner.Name);
+        return [.. references.Where(r => !slots.Contains(MemberOf(r.FieldPath)))];
+
+        static string MemberOf(string path)
+        {
+            var end = path.AsSpan().IndexOfAny('.', '[');
+            return end < 0 ? path : path[..end];
+        }
+    }
+
     /// <summary>The child's own standalone document: the bytes the codec produces for it as a record
     /// in its own right, so what a container yields and what ingest stores are one text.</summary>
     public string TextOf(RecordTextCodec codec, ChildDocument child) =>

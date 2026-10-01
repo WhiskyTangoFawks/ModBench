@@ -923,7 +923,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return ResolveFormKey(connection, formKey);
         }
 
-        public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey)
+        public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
         {
             using var connection = owner.OpenRead();
             return GetReferences(connection, targetFormKey);
@@ -1269,7 +1269,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return cmd.ExecuteScalar() as string;
         }
 
-        private static List<ReferenceResult> GetReferences(DuckDBConnection connection, string targetFormKey)
+        private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string targetFormKey)
         {
             // ADR-0007: WorkingTreeOverlay keeps form_references rewritten as the working tree
             // changes, so this already sees every edit without applying anything itself.
@@ -1283,11 +1283,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             cmd.CommandText = sql;
             AddParams(cmd, [targetFormKey]);
 
-            var results = new List<ReferenceResult>();
+            var results = new List<ReferenceRow>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                results.Add(new ReferenceResult(
+                results.Add(new ReferenceRow(
                     reader.GetString(0),
                     reader.GetString(1),
                     reader.GetString(2),

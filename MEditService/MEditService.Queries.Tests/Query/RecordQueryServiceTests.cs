@@ -407,6 +407,44 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("Non-Player Character", compare?.RecordTypeName);
     }
 
+    // editor-referenced-by.md, A row, Referrer: the record type as xEdit names it.
+    [Fact]
+    public void GetReferences_NameTheRecordTypeAsXEditDoes()
+    {
+        _reads.ReferencedBy = new Dictionary<string, IReadOnlyList<ReferenceRow>>
+        {
+            ["000001:Target.esp"] = [new("000002:TestPlugin.esp", PluginName, "Keywords[0]", "npc_", "Referrer", "Data")],
+        };
+
+        var reference = Assert.Single(_svc.GetReferences("000001:Target.esp"));
+
+        Assert.Equal("Non-Player Character", reference.RecordTypeName);
+        Assert.Equal("npc_", reference.RecordType);
+    }
+
+    // editor-referenced-by.md, The tree, story 2: one plugin's copy per row, in plugin order.
+    [Fact]
+    public void GetReferences_ListThePluginsInLoadOrder()
+    {
+        var fixture = new FakeFixtureBuilder(Release)
+            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("A"))
+            .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("B"))
+            .Build("Aggression");
+        var (manager, svc) = Build(fixture);
+        ((FakeReads)manager.RequireReads()).ReferencedBy = new Dictionary<string, IReadOnlyList<ReferenceRow>>
+        {
+            ["000001:Target.esp"] =
+            [
+                new("000002:Base.esp", "Patch.esp", "Keywords[0]", "npc_", null, "Data"),
+                new("000002:Base.esp", "Base.esp", "Keywords[0]", "npc_", null, "Data"),
+            ],
+        };
+
+        var plugins = svc.GetReferences("000001:Target.esp").Select(r => r.Plugin);
+
+        Assert.Equal(["Base.esp", "Patch.esp"], plugins);
+    }
+
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {

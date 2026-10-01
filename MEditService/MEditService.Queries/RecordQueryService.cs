@@ -155,8 +155,15 @@ public sealed class RecordQueryService(
 
     public bool GetLightPluginsSupported() => LightPluginSupport.Of(_loadOrder.Require().GameRelease);
 
-    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
-        RequireReads().GetReferencedBy(targetFormKey);
+    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
+    {
+        var schemas = RequireSchemas();
+        var snapshot = _loadOrder.Require();
+        return [.. RequireReads().GetReferencedBy(targetFormKey)
+            .OrderBy(r => snapshot.LoadOrderIndex(new PluginAddress(r.Plugin, r.Origin)) ?? int.MaxValue)
+            .Select(r => new ReferenceResult(
+                r.FormKey, r.Plugin, r.Origin, r.FieldPath, r.RecordType, schemas.DisplayNameFor(r.RecordType), r.EditorId))];
+    }
 
     public LoadOrderStatus GetStatus() => _index.Status;
 
