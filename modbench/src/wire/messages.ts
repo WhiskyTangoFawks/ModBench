@@ -104,13 +104,12 @@ export interface ColumnHeaderContext {
   preventDefaultContextMenuItems: true;
 }
 
-// A row's hops under its subtree root. An element of an array without a key has its own index in
-// each column that holds it, as its diff node states.
+// A row's hops under its subtree root. An array's element has its own index in each column that
+// holds it, as its diff node states, and an element of a keyed array takes no move.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }
-  | { kind: 'key'; key: string }
-  | { kind: 'element'; indexes: components['schemas']['FieldDiff']['indexes'] };
+  | { kind: 'element'; indexes: components['schemas']['FieldDiff']['indexes']; keyed: boolean };
 
 /** The wire's hop kinds (ADR-0005), narrowed to the closed set the backend resolves. */
 export type PathHop = Exclude<PathSegment, { kind: 'element' }>;
@@ -121,8 +120,8 @@ export type RecordEditEnvelope =
   Omit<components['schemas']['RecordEditRequest'], 'plugin' | 'origin' | 'op' | 'path'>
   & { op: 'set' | 'add' | 'remove' | 'move'; path: PathHop[] };
 
-/** A move's destination is the neighbour's position, so only an element addressed by index has
- *  one; the menu entry and the keyboard accelerator both build the move here. */
+/** A move's destination is the neighbour's position; the menu entry and the keyboard accelerator
+ *  both build the move here. */
 export function moveEnvelope(path: PathHop[], delta: -1 | 1): RecordEditEnvelope | undefined {
   const element = path.at(-1);
   return element?.kind === 'index' ? { op: 'move', path, value: element.index + delta } : undefined;

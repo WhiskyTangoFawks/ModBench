@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, columnHasNode, elementSegment,
+  buildColumns, columnHasNode,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
@@ -45,6 +45,16 @@ function columnKeysWhere(
 }
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
+
+// Two elements sharing a key share a label, and each is a row of its own.
+function withRowKeys(parent: string, children: readonly FieldDiff[]): [FieldDiff, string][] {
+  const turns = new Map<string, number>();
+  return children.map(child => {
+    const turn = (turns.get(child.fieldName) ?? 0) + 1;
+    turns.set(child.fieldName, turn);
+    return [child, turn === 1 ? `${parent}.${child.fieldName}` : `${parent}.${child.fieldName}#${turn}`];
+  });
+}
 
 const messageStyle: React.CSSProperties = {
   flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)',
@@ -354,9 +364,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
 
     const children = diff.children ?? [];
-    for (const child of children) {
+    for (const [child, childRowKey] of withRowKeys(rowKey, children)) {
       if (idle?.has(child.fieldName)) continue;
-      const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
         // The presentation table's unit is one element of a list, and "the last one in this
         // column" is the last child that column carries a value for.
@@ -364,7 +373,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           children.filter(c => c.values[column] != null).at(-1) === child);
         // An element is spelled in full, so a column has it exactly where its value is.
         rows.push(...buildRows(
-          child, meta.elementType, [...path, elementSegment(meta, child)],
+          child, meta.elementType, [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
           rootField, childRowKey, rowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first

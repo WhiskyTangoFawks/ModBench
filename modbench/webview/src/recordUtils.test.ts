@@ -2,9 +2,7 @@ import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
-  elementSegment,
   isArrayElementHop,
-  isMovableElementHop,
   getAtPath,
   wirePath,
   arrayElementContext,
@@ -16,8 +14,8 @@ import {
   type PathHop,
   type PathSegment,
 } from './recordUtils';
-import type { CompareOverride, FieldMetadata } from './types';
-import { diffNode, fieldMeta, parseJsonRecord } from './test/fixtures';
+import type { CompareOverride } from './types';
+import { fieldMeta, parseJsonRecord } from './test/fixtures';
 import { columnKey } from './columnKey';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
@@ -65,53 +63,15 @@ describe('buildColumns', () => {
   });
 });
 
-// How the backend labelled a child is what says how to address it — both answers come from the
-// same array metadata, and the key text travels exactly as the diff node states it.
-describe('elementSegment', () => {
-  const element = (extra: Partial<FieldMetadata> = {}): FieldMetadata =>
-    fieldMeta({ name: '', type: 'struct', ...extra });
-  const array = (extra: Partial<FieldMetadata>): FieldMetadata =>
-    fieldMeta({ name: 'A', type: 'array', isArray: true, ...extra });
-
-  it('addresses a keyed array\'s child by the key text it is labelled with, verbatim', () => {
-    expect(elementSegment(array({ keyMembers: ['stage', 'stage_index'], elementType: element() }), diffNode({ fieldName: '10 / 0' })))
-      .toEqual({ kind: 'key', key: '10 / 0' });
-  });
-
-  // The "[N]" label is the row's place in the alignment, never read back as a position.
-  it('addresses every other array\'s child by its own index in each column', () => {
-    const indexes = { 'A.esp': 0, 'B.esp': 2 };
-    const child = diffNode({ fieldName: '[3]', indexes });
-    expect(elementSegment(array({ elementType: element({ type: 'formKey' }) }), child)).toEqual({ kind: 'element', indexes });
-    expect(elementSegment(array({ elementType: element() }), child)).toEqual({ kind: 'element', indexes });
-  });
-});
-
 // One rule, since the panel's handler wiring, the cell menu and the native menu all ask it.
-describe('isArrayElementHop / isMovableElementHop', () => {
-  it('a positional element offers Remove and both Moves', () => {
-    const seg: PathSegment = { kind: 'index', index: 0 };
-    expect(isArrayElementHop(seg)).toBe(true);
-    expect(isMovableElementHop(seg)).toBe(true);
+describe('isArrayElementHop', () => {
+  it('an array\'s element is one, at a position or at its index in each column', () => {
+    expect(isArrayElementHop({ kind: 'index', index: 0 })).toBe(true);
+    expect(isArrayElementHop({ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false })).toBe(true);
   });
 
-  // A keyed array is stored in key order on every write (Edits/KeyedArrays.cs), so no Move there
-  // could change the file.
-  it('a keyed element offers Remove but no Move', () => {
-    const seg: PathSegment = { kind: 'key', key: 'Guard' };
-    expect(isArrayElementHop(seg)).toBe(true);
-    expect(isMovableElementHop(seg)).toBe(false);
-  });
-
-  // Its move is decided on the index hop one column's envelope carries.
-  it('an element of an array without a key offers Remove', () => {
-    expect(isArrayElementHop({ kind: 'element', indexes: { 'A.esp': 0 } })).toBe(true);
-  });
-
-  it('a struct member offers neither', () => {
-    const seg: PathSegment = { kind: 'member', name: 'X' };
-    expect(isArrayElementHop(seg)).toBe(false);
-    expect(isMovableElementHop(seg)).toBe(false);
+  it('a struct member is not', () => {
+    expect(isArrayElementHop({ kind: 'member', name: 'X' })).toBe(false);
     expect(isArrayElementHop(undefined)).toBe(false);
   });
 });
@@ -130,13 +90,6 @@ describe('getAtPath', () => {
   it('reads a positional array element', () => {
     const path: PathHop[] = [{ kind: 'index', index: 1 }];
     expect(getAtPath(['a', 'b', 'c'], path)).toBe('b');
-  });
-
-  // Which element a key names is the backend's to resolve (Queries/ElementKey.cs); the webview
-  // holds no mirror of that rule, so a key hop reads nothing here.
-  it('reads nothing through a key hop', () => {
-    const path: PathHop[] = [{ kind: 'key', key: 'Guard' }, { kind: 'member', name: 'flags' }];
-    expect(getAtPath([{ name: 'Guard', flags: 'g' }], path)).toBeUndefined();
   });
 
   // Struct-in-array-in-struct: a depth a fixed-level union could never express.
@@ -160,7 +113,7 @@ describe('getAtPath', () => {
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3)).toEqual({
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
@@ -174,30 +127,19 @@ describe('arrayElementContext', () => {
 
   it('canMoveDown is false for the last element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveDown).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false).canMoveDown).toBe(false);
   });
 
   it('canMoveUp is false for the first element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveUp).toBe(false);
-  });
-
-  // A keyed array is stored in key order on every write, so neither Move could change the file;
-  // Remove still applies, which is why the row carries this context at all.
-  it('offers neither Move on a keyed element, and still offers the element itself', () => {
-    const path: PathHop[] = [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }];
-    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3);
-    expect(context.canMoveUp).toBe(false);
-    expect(context.canMoveDown).toBe(false);
-    expect(context.webviewSection).toBe('arrayElement');
-    expect(context.path).toBe(path);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false).canMoveUp).toBe(false);
   });
 
   // canMoveUp/canMoveDown must key off the last hop, not path.length, and the full chain must
   // survive onto the payload rather than collapse to the trailing index.
   it('a nested element carries every hop of its own path, and the Moves read the last one', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
-    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2);
+    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2, false);
     expect(ctx.path).toEqual(path);
     expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
     expect(ctx.canMoveDown).toBe(true);
@@ -252,7 +194,7 @@ describe('combineVscodeContexts', () => {
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3, false),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');
@@ -261,7 +203,7 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3, false),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');
@@ -345,12 +287,10 @@ describe('stringValueContext', () => {
   });
 });
 
-// The envelope's path is the row's hops under the record's own member, with an element of an array
-// without a key at its position in the written column.
 describe('wirePath', () => {
-  it('leads with the root member and carries member, index and key hops as they are', () => {
+  it('leads with the root member and carries member and index hops as they are', () => {
     const path: PathSegment[] = [
-      { kind: 'member', name: 'Scripts' }, { kind: 'key', key: '10 / 0' },
+      { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 },
       { kind: 'member', name: 'Properties' }, { kind: 'index', index: 2 },
     ];
     expect(wirePath('VirtualMachineAdapter', path, columnKey('A.esp', 'Data'))).toEqual([
@@ -363,13 +303,13 @@ describe('wirePath', () => {
   });
 
   it('turns an element into its position in the given column', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'Packages' }, { kind: 'element', indexes: { 'A.esp': 0, 'B.esp': 2 } }];
+    const path: PathSegment[] = [{ kind: 'member', name: 'Packages' }, { kind: 'element', indexes: { 'A.esp': 0, 'B.esp': 2 }, keyed: false }];
     expect(wirePath('Data', path, columnKey('B.esp', 'Data')))
       .toEqual([{ kind: 'member', name: 'Data' }, { kind: 'member', name: 'Packages' }, { kind: 'index', index: 2 }]);
   });
 
   it('is no path for a column that does not hold the element', () => {
-    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 } }], columnKey('B.esp', 'Data'))).toBeUndefined();
+    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false }], columnKey('B.esp', 'Data'))).toBeUndefined();
   });
 });
 
@@ -392,10 +332,6 @@ describe('metaAtPath', () => {
 
   it('descends an array index via .elementType', () => {
     expect(metaAtPath(entriesMeta, [{ kind: 'index', index: 0 }])).toBe(entryMeta);
-  });
-
-  it('descends a key hop via .elementType, same as index', () => {
-    expect(metaAtPath(entriesMeta, [{ kind: 'key', key: 'anything' }])).toBe(entryMeta);
   });
 
   // A nested array's own element type, reached through a member chain from the subtree root.

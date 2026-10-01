@@ -69,7 +69,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         var result = _fixture.Service().Edit(
             _fixture.Plugin, _fixture.Npc.ToString(),
             SetAt(Json("\"ScriptProperty\""),
-                Member("VirtualMachineAdapter"), Member("Scripts"), Key("TestScript"), Member("Properties"), Key("Switched"), Member("MutagenObjectType")));
+                Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Properties"), At(0), Member("MutagenObjectType")));
 
         Assert.True(result.Applied, result.Message);
         var written = WrittenProperties(_fixture.NpcBody())["Switched"];

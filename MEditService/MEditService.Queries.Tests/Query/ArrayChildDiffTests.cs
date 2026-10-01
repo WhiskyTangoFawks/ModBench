@@ -171,6 +171,70 @@ public class ArrayChildDiffTests
             rows.Select(r => r.Indexes));
     }
 
+    private static FieldMetadata ScriptsAndTheirPropertiesKeyedByName()
+    {
+        var property = new FieldMetadata("", "struct", false, [], [],
+            Fields: [new FieldMetadata("Name", "string", false, [], []), new FieldMetadata("Data", "int", false, [], [])]);
+        var script = new FieldMetadata("", "struct", false, [], [],
+            Fields:
+            [
+                new FieldMetadata("Name", "string", false, [], []),
+                new FieldMetadata("Properties", "array", true, [], [], ElementType: property, KeyMembers: ["Name"]),
+            ]);
+        return new FieldMetadata("Adapter", "struct", false, [], [],
+            Fields: [new FieldMetadata("Scripts", "array", true, [], [], ElementType: script, KeyMembers: ["Name"])]);
+    }
+
+    [Fact]
+    public void KeyedArrays_DifferingOnlyInOrderAtAnyDepth_AreIdenticalToMasterAtEveryRow()
+    {
+        var master = Json("""{"Scripts":[{"Name":"A","Properties":[{"Name":"x","Data":1},{"Name":"y","Data":2}]},{"Name":"B"}]}""");
+        var reordered = Json("""{"Scripts":[{"Name":"B"},{"Name":"A","Properties":[{"Name":"y","Data":2},{"Name":"x","Data":1}]}]}""");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), reordered)]);
+
+        var adapter = result.Diffs.Single(d => d.FieldName == "Adapter");
+        var scripts = RequireChildren(adapter).Single();
+        Assert.Equal(ConflictThis.IdenticalToMaster, adapter.CellStates["B.esp"]);
+        Assert.Equal(ConflictThis.IdenticalToMaster, scripts.CellStates["B.esp"]);
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
+    public void KeyedArray_AChangedElement_IsAnOverrideAtTheArrayRow()
+    {
+        var master = Json("""{"Scripts":[{"Name":"A","Properties":[{"Name":"x","Data":1}]},{"Name":"B"}]}""");
+        var changed = Json("""{"Scripts":[{"Name":"B"},{"Name":"A","Properties":[{"Name":"x","Data":9}]}]}""");
+
+        var result = Classify([MakeRecord("A.esp", 0, false, ScriptsAndTheirPropertiesKeyedByName(), master), MakeRecord("B.esp", 1, true, ScriptsAndTheirPropertiesKeyedByName(), changed)]);
+
+        var scripts = RequireChildren(result.Diffs.Single(d => d.FieldName == "Adapter")).Single();
+        Assert.Equal(ConflictThis.Override, scripts.CellStates["B.esp"]);
+    }
+
+    [Fact]
+    public void KeyedArray_TwoElementsSharingAKey_EachTakeARow_AlignedByTheirTurnAtThatKey()
+    {
+        var meta = new FieldMetadata("Stages", "array", true, [], [],
+            ElementType: new FieldMetadata("", "struct", false, [], [],
+                Fields: [new FieldMetadata("Index", "int", false, [], []), new FieldMetadata("Note", "string", false, [], [])]),
+            KeyMembers: ["Index"]);
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("""[{"Index":10,"Note":"a"},{"Index":20,"Note":"b"}]""")),
+            MakeRecord("B.esp", 1, true, meta, Json("""[{"Index":20,"Note":"b"},{"Index":10,"Note":"a"},{"Index":10,"Note":"c"}]"""))]);
+
+        var rows = RequireChildren(result.Diffs.Single(d => d.FieldName == "Stages"));
+        Assert.Equal(["10", "10", "20"], rows.Select(r => r.FieldName));
+        Assert.Equal(
+            [
+                new Dictionary<string, int> { ["A.esp"] = 0, ["B.esp"] = 1 },
+                new Dictionary<string, int> { ["B.esp"] = 2 },
+                new Dictionary<string, int> { ["A.esp"] = 1, ["B.esp"] = 0 },
+            ],
+            rows.Select(r => r.Indexes));
+    }
+
     [Fact]
     public void Array_RowsAreLabelledByTheirPlaceInTheAlignment()
     {

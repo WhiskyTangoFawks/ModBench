@@ -92,7 +92,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         var cellStates = ConflictRules.ComputeCellStates(
             values, ctx.MasterColumn, ctx.ColumnOrder,
-            (a, b) => DocumentNodes.SameNode(a, b, absentMeansDefault ? shape : null));
+            (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
@@ -182,19 +182,23 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static List<ElementRow> KeyedRows(
         IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
     {
-        var rows = new Dictionary<string, (ElementKey Key, Dictionary<string, (JsonElement, int)> Held)>(StringComparer.Ordinal);
+        // The write path refuses two elements sharing a key, but another tool's plugin can hold
+        // them: each takes a row, the nth at a key aligning with the nth in every other column.
+        var rows = new Dictionary<(string Key, int Turn), (ElementKey Key, int Turn, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
+            var turns = new Dictionary<string, int>(StringComparer.Ordinal);
             for (var index = 0; index < elements.Count; index++)
             {
                 var key = ElementKey.Of(elements[index], keyMembers, element);
-                if (!rows.TryGetValue(key.Text, out var row)) rows[key.Text] = row = (key, []);
-                // A second element sharing a key: the first wins — the write path refuses such a
-                // pair, but another tool's plugin can hold one.
-                row.Held.TryAdd(column, (elements[index], index));
+                var turn = turns[key.Text] = turns.GetValueOrDefault(key.Text) + 1;
+                if (!rows.TryGetValue((key.Text, turn), out var row)) rows[(key.Text, turn)] = row = (key, turn, []);
+                row.Held[column] = (elements[index], index);
             }
         }
-        return [.. rows.Values.OrderBy(row => row.Key, Comparer<ElementKey>.Create((a, b) => a.CompareTo(b)))
+        return [.. rows.Values
+            .OrderBy(row => row.Key, ElementKey.Order)
+            .ThenBy(row => row.Turn)
             .Select(row => new ElementRow(row.Key.Text, row.Held))];
     }
 

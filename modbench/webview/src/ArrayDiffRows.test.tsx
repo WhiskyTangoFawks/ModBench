@@ -9,7 +9,7 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
 import {
-  at, compareOverride, compareResultFixture, diffNode, fieldMeta, keyed, lastElementCommand, lastPostedEnvelope, member,
+  at, compareOverride, compareResultFixture, diffNode, fieldMeta, lastElementCommand, lastPostedEnvelope, member,
   panelClient, required,
 } from './test/fixtures';
 import type { CompareResult } from './types';
@@ -562,9 +562,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
   });
 });
 
-// One row's path is shared by every column, so a keyed array's element is addressed by the key
-// text the diff node states, and the backend finds it in each column's own array.
-describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
+describe('RecordPanel — a keyed array\'s element is addressed at its position in this column', () => {
   const scriptMeta = fieldMeta({
     name: 'Scripts', type: 'array', isArray: true,
     keyMembers: ['name'],
@@ -574,57 +572,58 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     }),
   });
 
-  const master = [{ name: 'Guard', flags: 'm' }];
-  const override = [{ name: 'Ambush', flags: 'a' }, { name: 'Guard', flags: 'g' }];
-
-  const keyedResult: CompareResult = compareResultFixture({
-    conflictAll: 'Override',
-    overrides: [
-      compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data',
-        isWinner: false, editorId: 'TestNPC',
-        fields: [{ metadata: scriptMeta, value: master }], conflictThis: 'Master',
-      }),
-      compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: scriptMeta, value: override }], conflictThis: 'Override',
-      }),
-    ],
-    diffs: [diffNode({
-      fieldName: 'Scripts',
-      values: { 'Fallout4.esm': master, 'MyMod.esp': override },
-      winnerColumn: 'MyMod.esp',
-      cellStates: {},
+  const scriptRow = (fieldName: string, held: Record<string, { name: string; flags: string }>, indexes: Record<string, number>) =>
+    diffNode({
+      fieldName,
+      values: held,
+      winnerColumn: 'MyMod.esp', cellStates: {}, indexes,
       children: [
-        diffNode({
-          fieldName: 'Ambush',
-          values: { 'MyMod.esp': override[0] },
-          winnerColumn: 'MyMod.esp', cellStates: {},
-          children: [
-            diffNode({ fieldName: 'name', values: { 'MyMod.esp': 'Ambush' }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-            diffNode({ fieldName: 'flags', values: { 'MyMod.esp': 'a' }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-          ],
+        diffNode({ fieldName: 'name', values: Object.fromEntries(Object.entries(held).map(([c, s]) => [c, s.name])), winnerColumn: 'MyMod.esp', cellStates: {} }),
+        diffNode({ fieldName: 'flags', values: Object.fromEntries(Object.entries(held).map(([c, s]) => [c, s.flags])), winnerColumn: 'MyMod.esp', cellStates: {} }),
+      ],
+    });
+
+  function renderScripts(master: { name: string; flags: string }[], override: { name: string; flags: string }[], rows: ReturnType<typeof scriptRow>[]) {
+    const client = panelClient(() => compareResultFixture({
+      conflictAll: 'Override',
+      overrides: [
+        compareOverride({
+          formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data',
+          isWinner: false, editorId: 'TestNPC',
+          fields: [{ metadata: scriptMeta, value: master }], conflictThis: 'Master',
         }),
-        diffNode({
-          fieldName: 'Guard',
-          values: { 'Fallout4.esm': master[0], 'MyMod.esp': override[1] },
-          winnerColumn: 'MyMod.esp', cellStates: {},
-          children: [
-            diffNode({ fieldName: 'name', values: { 'Fallout4.esm': 'Guard', 'MyMod.esp': 'Guard' }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-            diffNode({ fieldName: 'flags', values: { 'Fallout4.esm': 'm', 'MyMod.esp': 'g' }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-          ],
+        compareOverride({
+          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+          isWinner: true, editorId: 'TestNPC',
+          fields: [{ metadata: scriptMeta, value: override }], conflictThis: 'Override',
         }),
       ],
-    })],
-  });
-
-  function renderKeyedPanel() {
-    const client = panelClient(() => keyedResult, {
-      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
-    });
+      diffs: [diffNode({
+        fieldName: 'Scripts',
+        values: { 'Fallout4.esm': master, 'MyMod.esp': override },
+        winnerColumn: 'MyMod.esp', cellStates: {}, children: rows,
+      })],
+    }), { plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }] });
     return render(<RecordPanel client={client} />);
   }
+
+  const guard = { name: 'Guard', flags: 'g' };
+  const ambush = { name: 'Ambush', flags: 'a' };
+  async function renderGuardAfterAmbush() {
+    renderScripts([{ name: 'Guard', flags: 'm' }], [guard, ambush], [
+      scriptRow('Ambush', { 'MyMod.esp': ambush }, { 'MyMod.esp': 1 }),
+      scriptRow('Guard', { 'Fallout4.esm': { name: 'Guard', flags: 'm' }, 'MyMod.esp': guard }, { 'Fallout4.esm': 0, 'MyMod.esp': 0 }),
+    ]);
+    await waitFor(() => screen.getAllByText('flags'));
+  }
+
+  const myCell = (row: Element) => {
+    const cells = row.querySelectorAll('td');
+    return required(cells[cells.length - 1], "the row's MyMod.esp cell");
+  };
+  const rowLabelled = (label: string, nth = 0) =>
+    required(Array.from(document.querySelectorAll('tbody tr')).filter(tr => tr.querySelector('td')?.textContent.endsWith(label))[nth],
+      `row '${label}' #${nth}`);
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -632,105 +631,82 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  async function renderOpen(label: string) {
-    renderKeyedPanel();
-    await waitFor(() => screen.getAllByText(label));
-    await waitFor(() => screen.getAllByText('flags'));
-  }
+  it('offers add at the keyed array', async () => {
+    await renderGuardAfterAmbush();
 
-  // `Guard` is element 1 in the column being written and element 0 in the master; the key names
-  // it in both, where a position could name only one.
-  it('a value edit on a keyed element posts set through the key hop', async () => {
-    await renderOpen('Guard');
-    const row = required(screen.getByText('g').closest('tr'), "the row for Guard's 'flags'");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
-    fireEvent.doubleClick(within(cell).getByText('g'));
+    const context: unknown = JSON.parse(myCell(rowLabelled('Scripts')).getAttribute('data-vscode-context') ?? '{}');
+    expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [member('Scripts')] });
+  });
+
+  it('a value edit on a keyed element posts set at its index in the written column', async () => {
+    await renderGuardAfterAmbush();
+    const cell = myCell(required(screen.getByText('a').closest('tr'), "the row for Ambush's 'flags'"));
+    fireEvent.doubleClick(within(cell).getByText('a'));
     const input = required(cell.querySelector('input'), "the cell's input");
     fireEvent.change(input, { target: { value: 'EDITED' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(lastEnvelope()).toEqual({
-      op: 'set', path: [member('Scripts'), keyed('Guard'), member('flags')], value: 'EDITED',
+      op: 'set', path: [member('Scripts'), at(1), member('flags')], value: 'EDITED',
     });
   });
 
-  it('Delete on a keyed element fires remove element naming the key', async () => {
-    await renderOpen('Guard');
-    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
-    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
+  it('Delete on a keyed element fires remove element at its index', async () => {
+    await renderGuardAfterAmbush();
+    const cell = myCell(rowLabelled('Ambush'));
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), keyed('Guard')] } });
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), at(1)] } });
   });
 
-  // The backend spells a key from the element's declared defaults, so an element omitting a key
-  // member is labelled "10 / 0"; the row posts that text as stated, never a respelling of its own.
-  it('posts the key text the diff node states, not one read off the element', async () => {
-    const fragmentsMeta = fieldMeta({
-      name: 'Fragments', type: 'array', isArray: true,
-      keyMembers: ['Stage', 'StageIndex'],
-      elementType: fieldMeta({
-        name: '', type: 'struct',
-        fields: [fieldMeta({ name: 'Stage', type: 'int' }), fieldMeta({ name: 'StageIndex', type: 'int' })],
-      }),
-    });
-    const element = { Stage: 10 };
-    const client = panelClient(() => compareResultFixture({
-          conflictAll: 'OnlyOne',
-          overrides: [compareOverride({
-            formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', isWinner: true,
-            editorId: 'TestNPC', fields: [{ metadata: fragmentsMeta, value: [element] }], conflictThis: 'OnlyOne',
-          })],
-          diffs: [diffNode({
-            fieldName: 'Fragments', values: { 'MyMod.esp': [element] }, winnerColumn: 'MyMod.esp',
-            cellStates: {},
-            children: [diffNode({
-              fieldName: '10 / 0', values: { 'MyMod.esp': element }, winnerColumn: 'MyMod.esp',
-              cellStates: {},
-              children: [diffNode({ fieldName: 'Stage', values: { 'MyMod.esp': 10 }, winnerColumn: 'MyMod.esp', cellStates: {} })],
-            })],
-          })],
-    }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] });
-    render(<RecordPanel client={client} />);
-    await waitFor(() => screen.getByText('Fragments'));
-    await waitFor(() => screen.getByText('10 / 0'));
-    const stageRow = required(screen.getByText('10 / 0').closest('tr'), "the '10 / 0' row");
-    const cell = required(stageRow.querySelectorAll('td')[1], "the '10 / 0' row's second cell");
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
-
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Fragments'), keyed('10 / 0')] } });
-  });
-
-  // A keyed array is stored in key order, so no Move could change the file: the accelerator is
-  // inert on its rows.
-  it('Alt+ArrowDown on a keyed element fires nothing', async () => {
-    await renderOpen('Guard');
-    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
-    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true });
+  it('Alt+ArrowUp and Alt+ArrowDown on a keyed element leave the key unhandled and fire nothing', async () => {
+    await renderGuardAfterAmbush();
+    for (const [label, key] of [['Ambush', 'ArrowUp'], ['Guard', 'ArrowDown']] as const) {
+      const cell = myCell(rowLabelled(label));
+      fireEvent.click(cell);
+      expect(fireEvent.keyDown(cell, { key, altKey: true })).toBe(true);
+    }
 
     expect(lastCommand()).toBeUndefined();
   });
 
-  // Inert means the row never offers the op, not that the envelope builder refuses it afterwards:
-  // a row that offered it would swallow the key and still post nothing, indistinguishable above.
-  it('Alt+ArrowDown on a keyed element leaves the key unhandled', async () => {
-    await renderOpen('Guard');
-    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
-    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
-    fireEvent.click(cell);
+  it('a keyed element\'s menu offers neither move', async () => {
+    await renderGuardAfterAmbush();
 
-    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
+    for (const label of ['Ambush', 'Guard']) {
+      expect(JSON.parse(myCell(rowLabelled(label)).getAttribute('data-vscode-context') ?? '{}'))
+        .toMatchObject({ webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: false });
+    }
+  });
+
+  it('Delete on the second of two elements sharing a key fires remove element at its index', async () => {
+    const second = { name: 'Guard', flags: 'h' };
+    renderScripts([], [guard, second], [
+      scriptRow('Guard', { 'MyMod.esp': guard }, { 'MyMod.esp': 0 }),
+      scriptRow('Guard', { 'MyMod.esp': second }, { 'MyMod.esp': 1 }),
+    ]);
+    await waitFor(() => expect(screen.getAllByText('flags')).toHaveLength(2));
+    const cell = myCell(rowLabelled('Guard', 1));
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), at(1)] } });
+  });
+
+  it('collapsing the second of two elements sharing a key leaves the first expanded', async () => {
+    const second = { name: 'Guard', flags: 'h' };
+    renderScripts([], [guard, second], [
+      scriptRow('Guard', { 'MyMod.esp': guard }, { 'MyMod.esp': 0 }),
+      scriptRow('Guard', { 'MyMod.esp': second }, { 'MyMod.esp': 1 }),
+    ]);
+    await waitFor(() => expect(screen.getAllByText('flags')).toHaveLength(2));
+
+    fireEvent.click(required(rowLabelled('Guard', 1).querySelector('button'), "the second Guard row's toggle"));
+
+    await waitFor(() => expect(screen.getAllByText('flags')).toHaveLength(1));
+    expect(rowLabelled('Guard', 0).querySelector('td')?.textContent).toBe('▼Guard');
+    expect(rowLabelled('Guard', 1).querySelector('td')?.textContent).toBe('▶Guard');
   });
 });
 

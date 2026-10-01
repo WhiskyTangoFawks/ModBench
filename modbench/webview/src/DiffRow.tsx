@@ -186,7 +186,7 @@ export function DiffRow({
   // What the label column shows for this row, reused as the extended-editor tab's own title.
   const label = meta.displayLabel ?? diff.fieldName;
   // Which array gestures this row offers — its own array's row (Add) or one of its element rows
-  // (Remove, and Move where the element's position is the user's to choose).
+  // (Remove and Move).
   const isArrayParentRow = offersArrayAdd(meta);
   const lastPathSegment = context.path[context.path.length - 1];
   const isArrayElementRow = isArrayElementHop(lastPathSegment);
@@ -272,12 +272,13 @@ export function DiffRow({
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
-        // `hops` ends in the element's own `index`/`key` hop, and carries every hop above it rather
-        // than just that one.
+        // `hops` ends in the element's own `index` hop, and carries every hop above it rather than
+        // just that one.
         const elementContext = hops && arrayEditable && isArrayElementRow
           ? arrayElementContext(
               col.override.formKey, col.override.plugin, col.override.origin, hops,
-              arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))))
+              arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))),
+              lastPathSegment?.kind === 'element' && lastPathSegment.keyed)
           : undefined;
         const fire = (command: ElementCommand, allowed = true) =>
           allowed && elementContext && onElementCommand ? () => onElementCommand(command, elementContext) : undefined;

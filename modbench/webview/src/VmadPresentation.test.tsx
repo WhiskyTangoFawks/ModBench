@@ -80,8 +80,6 @@ const scriptsMeta = fieldMeta({
   }),
 });
 
-// Fallout4VmadAnnotations keys alias bindings by the dotted `Property.Alias`, where a script is
-// keyed by the plain `Name`; the webview receives either as one opaque key string.
 const aliasesMeta = fieldMeta({
   name: 'Aliases', type: 'array', isArray: true,
   keyMembers: ['Property.Alias'],
@@ -131,18 +129,23 @@ const keyTextOf = (keyMembers: string[], element: unknown): string =>
     .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
     .join(' / ');
 
-function keysOf(meta: FieldMetadata, values: Record<string, unknown>): string[] {
-  const lists = Object.values(values).map(v => (isUnknownArray(v) ? v : []));
+function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { label: string; indexes: Record<string, number> }[] {
+  const rows = new Map<string, { label: string; turn: number; indexes: Record<string, number> }>();
   const { keyMembers } = meta;
-  if (keyMembers) return [...new Set(lists.flatMap(l => l.map(e => keyTextOf(keyMembers, e))))].sort();
-  return Array.from({ length: Math.max(0, ...lists.map(l => l.length)) }, (_, i) => `[${i}]`);
-}
-
-function elementAt(meta: FieldMetadata, list: unknown, key: string): unknown {
-  if (!Array.isArray(list)) return null;
-  const { keyMembers } = meta;
-  if (!keyMembers) return list[Number(key.slice(1, -1))] ?? null;
-  return list.find(e => keyTextOf(keyMembers, e) === key) ?? null;
+  for (const [column, list] of Object.entries(values)) {
+    const turns = new Map<string, number>();
+    (isUnknownArray(list) ? list : []).forEach((element, index) => {
+      const label = keyMembers ? keyTextOf(keyMembers, element) : `[${index}]`;
+      const turn = (turns.get(label) ?? 0) + 1;
+      turns.set(label, turn);
+      const row = rows.get(`${label}#${turn}`) ?? { label, turn, indexes: {} };
+      row.indexes[column] = index;
+      rows.set(`${label}#${turn}`, row);
+    });
+  }
+  const all = [...rows.values()];
+  if (keyMembers) all.sort((a, b) => a.label.localeCompare(b.label) || a.turn - b.turn);
+  return all;
 }
 
 function buildDiff(
@@ -154,6 +157,8 @@ function buildDiff(
   const each = (children: [string, FieldMetadata, (column: string) => unknown][]): FieldDiff[] =>
     children.map(([name, childMeta, pick]) => buildDiff(
       name, childMeta, Object.fromEntries(columns.map(c => [c, pick(c) ?? null])), editorIds));
+  const elementOf = (column: string, index: number | undefined): unknown =>
+    index === undefined ? null : propertyOf(values[column], String(index));
   const { elementType } = meta;
 
   return diffNode({
@@ -165,8 +170,11 @@ function buildDiff(
     }])),
     children:
       meta.type === 'array' && elementType
-        ? each(keysOf(meta, values).map(k =>
-          [k, elementType, (c: string) => elementAt(meta, values[c], k)]))
+        ? elementRows(meta, values).map(row => ({
+          ...buildDiff(row.label, elementType,
+            Object.fromEntries(columns.map(c => [c, elementOf(c, row.indexes[c]) ?? null])), editorIds),
+          indexes: row.indexes,
+        }))
         : meta.type === 'struct'
           ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => propertyOf(values[c], f.name)]))
           : undefined,
@@ -487,12 +495,10 @@ describe('Add Script is the generic array gesture', () => {
     await openScripts();
     await waitFor(() => fieldCell('Guard'));
 
-    // The new script's key is empty until the user names it, so it sorts first.
-    reloadWith(oneColumn([script(''), script('Guard')]));
+    reloadWith(oneColumn([script('Guard'), script('')]));
     // The Record Header and its FormID, then Scripts and its two script rows.
     await waitFor(() => expect(screen.getAllByText('Name')).toHaveLength(2));
 
-    // First of the two script rows, since the empty key sorts before every named one.
     const added = document.querySelectorAll('tbody tr')[3];
     if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
@@ -501,8 +507,6 @@ describe('Add Script is the generic array gesture', () => {
     if (!beneath) throw new Error('no row beneath the added script');
     expect(cellAt(beneath, 0).textContent).toBe('Name');
 
-    // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
-    // the empty key — the only handle the element has until it is named.
     const nameLabel = screen.getAllByText('Name')[0];
     if (!nameLabel) throw new Error("no 'Name' row rendered");
     const nameCell = cellAt(rowOf(nameLabel), 1);
@@ -516,13 +520,12 @@ describe('Add Script is the generic array gesture', () => {
 
     expect(lastEnvelope()).toEqual({
       op: 'set',
-      path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: '' }, { kind: 'member', name: 'Name' }],
+      path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }, { kind: 'member', name: 'Name' }],
       value: 'Ambush',
     });
   });
 
-  // A property lives two keyed hops down; every hop travels, each key as the diff node states it.
-  it('an edit under a nested keyed array carries the key hop at each level', async () => {
+  it('an edit under a nested keyed array carries the index hop at each level', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
@@ -540,15 +543,15 @@ describe('Add Script is the generic array gesture', () => {
     expect(lastEnvelope()).toEqual({
       op: 'set',
       path: [
-        { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
-        { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
+        { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
+        { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
         { kind: 'member', name: 'Data' },
       ],
       value: 25,
     });
   });
 
-  it('Delete on a property under a keyed script fires remove element through both key hops', async () => {
+  it('Delete on a property under a keyed script fires remove element through both index hops', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
@@ -562,8 +565,8 @@ describe('Add Script is the generic array gesture', () => {
       command: 'removeElement',
       context: {
         path: [
-          { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
-          { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
+          { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
+          { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
         ],
       },
     });
