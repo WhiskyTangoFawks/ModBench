@@ -43,6 +43,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     formKeyPicker: undefined,
     focusCell: vi.fn(),
     reply: vi.fn(),
+    setTitle: vi.fn(),
     conflictsComputed: () => true,
     ...overrides,
   };
@@ -104,7 +105,7 @@ describe('routeRecordPanelMessage', () => {
       { type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, makeDeps());
 
     expect(executeCommand).toHaveBeenCalledWith(
-      'modbench.record.open', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
+      'modbench.record.open', { formKey: '000001:Fallout4.esm' });
   });
 
   it('LOG forwards the message at its own level', async () => {
@@ -466,6 +467,26 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     expect(reply).toHaveBeenCalledWith({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true,
     });
+  });
+
+  it('titles the tab from the record it read, by recordTitle', async () => {
+    meditClient.setQueryAnswer('getComparison', compare);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const setTitle = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ setTitle }));
+
+    expect(setTitle).toHaveBeenCalledWith('000001:A.esp');
+  });
+
+  it('leaves the title alone when the read fails', async () => {
+    meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const setTitle = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ setTitle }));
+
+    expect(setTitle).not.toHaveBeenCalled();
   });
 
   it('asks the comparison by the message\'s own formKey', async () => {

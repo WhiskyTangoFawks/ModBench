@@ -2,14 +2,13 @@ import * as vscode from 'vscode';
 import {
   isRefused, type MEditClient, type CompileDiagnostic, type CompileOutcome, type PluginAddress, type UpstreamVersionByOrigin,
 } from '../client';
-import { headerFormKeyFor } from './PluginTreeProvider';
 import type { OriginFiles, OriginFilesOf } from '../instanceLoader/loadOrderSnapshot';
 import type { InstanceValue } from '../instanceLoader/instance';
 import {
   trackedFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, pluginAddressKey,
 } from './trackedRepositories';
 import { trackProgressMessage } from './trackProgress';
-import { PluginNode, pluginFileOf, type PluginListNode, type PluginsTreeNode } from './PluginsTreeProvider';
+import { PluginNode, type PluginsTreeNode } from './PluginsTreeProvider';
 import {
   compilableSelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
@@ -307,18 +306,6 @@ function reportCompiled(reporter: Reporter, outcome: CompileOutcome, total: numb
   if (only === undefined) return;
   const what = more.length === 0 ? `"${only.plugin.name}"` : `${outcome.landed.length} plugins`;
   reporter.landed(diagnostics > 0 ? `Compiled ${what} with ${diagnosticsWords(diagnostics)}` : `Compiled ${what}.`);
-}
-
-// A join, not an Editing-only gesture (its argument is Mod Management's own row type), so it
-// lives alongside the other plugin-row commands rather than with the record panel's own.
-export function registerOpenHeaderCommand(): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
-    const pluginName = node && pluginFileOf(node);
-    if (!pluginName) return;
-    void vscode.commands.executeCommand('modbench.record.open', {
-      formKey: headerFormKeyFor(pluginName), label: pluginName,
-    });
-  });
 }
 
 /** The compile diagnostics in the Problems panel. A plugin's compile replaces its own and no other

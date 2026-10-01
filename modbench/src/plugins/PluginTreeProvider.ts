@@ -10,7 +10,6 @@ import { failurePrefixIcon } from './failurePrefixIcon';
 import { pluginAddressKey } from './trackedRepositories';
 import { errorMessage } from '../ports/errorMessage';
 import { UNLIMITED_RECORDS } from '../client';
-export { headerFormKeyFor } from './formKeyIdentity';
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
 // catch spans the read, the reference walk and the codec write, and only the diagnosis knows which.
@@ -106,7 +105,7 @@ export class RecordNode extends vscode.TreeItem {
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey: record.formKey, label }],
+      arguments: [{ formKey: record.formKey }],
     };
     // RecordDecorationProvider's keying identity — record.plugin (this row's own copy's owning
     // plugin, which an override stack row can differ from the RecordTypeNode's) paired with origin.
@@ -145,7 +144,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     this.formKey = worldspace.formKey;
     this.editorId = worldspace.editorId ?? undefined;
     this.contextValue = conditionedContextValue('worldspace', conditions);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
+    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: worldspace.formKey }] };
     describeRecordRow(this, worldspace);
   }
 }
@@ -214,7 +213,7 @@ export class CellNode extends vscode.TreeItem {
     this.formKey = cell.formKey;
     this.editorId = cell.editorId ?? undefined;
     this.contextValue = conditionedContextValue('cell', conditions);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
+    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: cell.formKey }] };
     describeRecordRow(this, cell);
   }
 }
@@ -253,7 +252,7 @@ export class PlacedNode extends vscode.TreeItem {
     this.formKey = placed.formKey;
     this.editorId = placed.editorId ?? undefined;
     this.contextValue = conditionedContextValue('placed', conditions);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
+    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: placed.formKey }] };
     describeRecordRow(this, placed);
   }
 }

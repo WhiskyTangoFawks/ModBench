@@ -25,7 +25,7 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
-      arguments: [{ formKey, label: recordLabel }],
+      arguments: [{ formKey }],
     };
   }
 }

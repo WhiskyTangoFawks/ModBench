@@ -284,12 +284,6 @@ describe('RecordPanel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows "No record selected." when no formKey is set', () => {
-    vi.stubGlobal('mEditFormKey', '');
-    renderPanel(compareResult);
-    expect(screen.getByText('No record selected.')).toBeInTheDocument();
-  });
-
   it('shows the record title with editorId and formKey after loading', async () => {
     renderPanel(compareResult);
     await waitFor(() => expect(screen.getByText(/TestNPC \[000001:Fallout4\.esm\]/, { selector: 'div' })).toBeInTheDocument());

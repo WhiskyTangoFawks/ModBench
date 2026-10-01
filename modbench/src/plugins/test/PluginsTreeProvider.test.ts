@@ -242,14 +242,24 @@ describe('ImplicitMasterNode — leading slot', () => {
 
 // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
 describe('PluginNode / ImplicitMasterNode — row click opens the plugin header', () => {
-  it('PluginNode wires .command to modbench.openHeader, passing itself', () => {
+  it('PluginNode opens the header at the plugin and origin its row stands for', () => {
     const node = new PluginNode({ name: 'TestMod.esp', enabled: true }, 'SomeMod');
-    expect(node.command).toEqual({ command: 'modbench.openHeader', title: 'Open Header', arguments: [node] });
+    expect(node.command).toEqual({
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: '000000:TestMod.esp', origin: 'SomeMod' }],
+    });
   });
 
-  it('ImplicitMasterNode wires .command to modbench.openHeader, passing itself', () => {
+  it('ImplicitMasterNode opens the header at the plugin and origin its row stands for', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
-    expect(node.command).toEqual({ command: 'modbench.openHeader', title: 'Open Header', arguments: [node] });
+    expect(node.command).toEqual({
+      command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: '000000:Fallout4.esm', origin: 'Data' }],
+    });
+  });
+
+  it('two plugins of one file name from different origins open at different addresses', () => {
+    const a = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModA');
+    const b = new PluginNode({ name: 'Same.esp', enabled: true }, 'ModB');
+    expect(a.command?.arguments).not.toEqual(b.command?.arguments);
   });
 });
 
@@ -2734,7 +2744,7 @@ describe('PluginsTreeProvider — a plugin row\'s click', () => {
   it('opens the header of an enabled plugin', async () => {
     const h = makeTree([A_ROW()]);
 
-    expect((await rowItem(h)).command?.command).toBe('modbench.openHeader');
+    expect((await rowItem(h)).command?.command).toBe('modbench.record.open');
   });
 
   it('does nothing on a disabled plugin but select it', async () => {

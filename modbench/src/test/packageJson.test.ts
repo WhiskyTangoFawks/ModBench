@@ -403,22 +403,6 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   });
 });
 
-// There is no Open Header button: xEdit parity (xeMainForm.pas — selecting a plugin node shows
-// its File Header as a matter of course) means clicking a plugin row opens its header directly,
-// through the row's own `.command`.
-describe('package.json Open Header has no button of its own — row click replaces it', () => {
-  const contextMenus = (): MenuEntry[] =>
-    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
-
-  it('contributes no context-menu or inline entry for modbench.openHeader', () => {
-    expect(contextMenus().filter((e) => e.command === 'modbench.openHeader')).toEqual([]);
-  });
-
-  it('modbench.openHeader itself is still declared — the row-click bridge command, not a button', () => {
-    expect(pkg.contributes.commands.some((c) => c.command === 'modbench.openHeader')).toBe(true);
-  });
-});
-
 describe('package.json filtering is one UX', () => {
   const titleMenus = (): MenuEntry[] => present(pkg.contributes.menus['view/title'], "contributes.menus['view/title']");
   const commandOf = (): CommandEntry[] => pkg.contributes.commands;
@@ -754,7 +738,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it.each(['record', 'worldspace', 'cell', 'placed'])(
     'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
-        ['modbench.openEditorBeside', '1_open'],
+        ['modbench.record.open', '1_open'],
         ['modbench.record.copy', '5_copy'],
         ['modbench.record.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
@@ -763,7 +747,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
-      ['modbench.openEditorBeside', '1_open'],
+      ['modbench.record.open', '1_open'],
       ['modbench.record.copy', '5_copy'],
       ['modbench.record.copyValue', '5_copy'],
     ]);
@@ -1274,19 +1258,21 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   });
 });
 
-// "Open Editor to the Side" is reachable from the Referenced By tree's group rows too.
-describe('package.json "Open Editor to the Side" on Referenced By', () => {
+// editor.md, Opening, story 2: open to the side is on a referrer's menu as well.
+describe('package.json open on Referenced By', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
 
-  it('leaves the Referenced By group row\'s own existing entry untouched', () => {
+  it('puts open on the Referenced By group row\'s menu once', () => {
     const entry = present(
       contextMenus().find((e) =>
-        e.command === 'modbench.openEditorBeside' && e.when.includes('referencedByTree')),
-      'a modbench.openEditorBeside entry on the Referenced By tree',
+        e.command === 'modbench.record.open' && e.when.includes('referencedByTree')),
+      'a modbench.record.open entry on the Referenced By tree',
     );
     expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
     expect(entry.group).toBe('modbench@2');
+    expect(contextMenus().filter((e) => e.command === 'modbench.record.open' && e.when.includes('referencedByTree')))
+      .toHaveLength(1);
   });
 });
 
@@ -1322,11 +1308,6 @@ const catalog = catalogCommandIds(commandsMarkdown);
 // another ticket, and that ticket deletes the line. `outOfPalette` needs a row the palette lacks.
 const LEGACY_GESTURES: readonly { gesture: string; removedBy: string; ids: readonly string[]; outOfPalette: readonly string[] }[] = [
   { gesture: 'install', removedBy: '#959', ids: ['modbench.downloads.install'], outOfPalette: ['modbench.downloads.install'] },
-  {
-    gesture: 'record open', removedBy: '#963',
-    ids: ['modbench.openEditorBeside', 'modbench.openHeader', 'modbench.openCompare'],
-    outOfPalette: ['modbench.openHeader'],
-  },
   { gesture: 'show referenced by', removedBy: '#1096', ids: ['modbench.record.showReferencedBy'], outOfPalette: [] },
   {
     gesture: 'copy value and the name filter', removedBy: '#1096',
