@@ -11,8 +11,8 @@ export const EXTENSION_TO_WEBVIEW = {
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
   // winner sweep has run, posted untransformed (ADR-0002 invariant 2 — the webview names no port).
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
-  // Every record edit, broadcast as it is sent, and again if mEdit refuses it or it fails: the
-  // panel showing the record shows the value until the disk confirms it (common.md, Unconfirmed
+  // Every record edit, broadcast as it is sent, and again if mEdit answers with a refusal: the
+  // panel showing the record marks the edit until the disk confirms it (common.md, Unconfirmed
   // writes).
   EDIT_WRITTEN: 'editWritten',
   EDIT_REFUSED: 'editRefused',

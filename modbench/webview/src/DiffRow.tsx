@@ -333,11 +333,13 @@ export function DiffRow({
               landing={landing}
               vscodeContext={vscodeContext}
             >
-              {!isExpanded && hasElement && (
-                <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
-                  {collapsedLabel}<CheckErrorIcon checkError={checkError} />
-                </span>
-              )}
+              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+                {() => !isExpanded && hasElement && (
+                  <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                    {collapsedLabel}<CheckErrorIcon checkError={checkError} />
+                  </span>
+                )}
+              </WrittenValue>
             </DiskCell>
           );
         }

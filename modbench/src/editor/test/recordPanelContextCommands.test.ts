@@ -397,14 +397,26 @@ describe('modbench.record.editField', () => {
       expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
     });
 
-    it('a failed edit', async () => {
+    // common.md, Unconfirmed writes, story 6: only the disk can say what an edit with no answer did.
+    it('nothing more of an edit mEdit never answered', async () => {
       const { deps, meditClient, tellPanels } = makeDeps();
       meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
       registerRecordPanelContextCommands(deps);
 
       await editField()(IDENTITY, envelope);
 
-      expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
+      expect(tellPanels.mock.calls).toEqual([[written]]);
+    });
+
+    it('nothing more of an element removed with no answer', async () => {
+      const { deps, meditClient, tellPanels } = makeDeps();
+      meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
+      registerRecordPanelContextCommands(deps);
+      const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 1 }];
+
+      await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')(elementContext(path));
+
+      expect(tellPanels.mock.calls).toEqual([[{ ...written, envelope: { op: 'remove', path } }]]);
     });
 
     it('the FormKey the gate writes to, where the tab followed the record', async () => {

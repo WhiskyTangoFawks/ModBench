@@ -337,3 +337,152 @@ describe('a field in a row collapsed by the time the read lands', () => {
     }]));
   });
 });
+
+describe('an element added, removed or moved, until mEdit confirms it (common.md, Unconfirmed writes, story 2)', () => {
+  const valuesMeta = fieldMeta({ name: 'Values', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'int' }) });
+  const values = (held: number[]): CompareResult => compareResultFixture({
+    overrides: [compareOverride({
+      formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: valuesMeta, value: held }],
+    })],
+    diffs: [diffNode({
+      fieldName: 'Values', values: { 'MyMod.esp|ModA': held },
+      children: held.map((v, i) => diffNode({ fieldName: `[${i}]`, values: { 'MyMod.esp|ModA': v } })),
+    })],
+  });
+  const VALUES = { kind: 'member', name: 'Values' } as const;
+  const at = (index: number) => ({ kind: 'index', index }) as const;
+  const cellIn = (label: string) =>
+    required(required(screen.getByText(label).closest('tr'), `the ${label} row`).querySelectorAll('td')[1], `the ${label} cell`);
+  const rowLabels = () => screen.getAllByRole('row').slice(1).map(row => row.querySelector('td')?.textContent);
+  const written = (envelope: unknown, type: string = EXTENSION_TO_WEBVIEW.EDIT_WRITTEN) =>
+    send({ type, formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', envelope });
+  const marked = () => screen.queryAllByTitle(TOOLTIP).map(mark => mark.closest('tr')?.querySelector('td')?.textContent);
+  const messages = () => logged().map(m => ('message' in m ? m.message : ''));
+
+  beforeEach(() => { disk = values([1, 2, 3]); });
+
+  it('leaves every row where it is, and marks the removed row only after a delay', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    const before = rowLabels();
+
+    written({ op: 'remove', path: [VALUES, at(1)] });
+
+    expect(rowLabels()).toEqual(before);
+    expect(marked()).toEqual([]);
+    await waitFor(() => expect(marked()).toEqual(['[1]']));
+    expect(cellIn('[1]')).toHaveTextContent('2');
+    expect(within(cellIn('[1]')).getByTitle(TOOLTIP).querySelector('.codicon.codicon-sync.codicon-modifier-spin')).not.toBeNull();
+    expect(rowLabels()).toEqual(before);
+  });
+
+  it('marks the array an element is added to, though its row is open', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+
+    written({ op: 'add', path: [VALUES] });
+
+    await waitFor(() => expect(marked()).toEqual([expect.stringMatching(/Values$/)]));
+    expect(screen.queryByText('[3]')).not.toBeInTheDocument();
+  });
+
+  it('marks the moved row', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+
+    written({ op: 'move', path: [VALUES, at(0)], value: 1 });
+
+    await waitFor(() => expect(marked()).toEqual(['[0]']));
+    expect(cellIn('[0]')).toHaveTextContent('1');
+  });
+
+  it('shows the disk\'s shape, unmarked and with nothing said, once a read shows the write', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    written({ op: 'remove', path: [VALUES, at(1)] });
+    written({ op: 'move', path: [VALUES, at(0)], value: 1 });
+    await waitFor(() => expect(marked()).toEqual(['[0]', '[1]']));
+
+    disk = values([3, 1]);
+    reported();
+
+    await waitFor(() => expect(screen.queryByText('[2]')).not.toBeInTheDocument());
+    expect(marked()).toEqual([]);
+    expect(logged()).toEqual([]);
+  });
+
+  it('says once in the Output that the disk does not show a remove, an add or a move, and shows the disk', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    written({ op: 'remove', path: [VALUES, at(1)] });
+    written({ op: 'add', path: [VALUES] });
+    written({ op: 'move', path: [VALUES, at(0)], value: 1 });
+
+    reported();
+
+    const record = 'Values of TestNPC [000001:Fallout4.esm] in "MyMod.esp"';
+    await waitFor(() => expect(messages()).toEqual([
+      `[recordPanel] An element was removed from ${record}, and the disk does not show it.`,
+      `[recordPanel] An element was added to ${record}, and the disk does not show it.`,
+      `[recordPanel] An element was moved in ${record}, and the disk does not show the move.`,
+    ]));
+    expect(marked()).toEqual([]);
+    expect(screen.getByText('[2]')).toBeInTheDocument();
+  });
+
+  it('says nothing of a move between two equal elements, which leaves the disk as it was', async () => {
+    disk = values([1, 1, 3]);
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    written({ op: 'move', path: [VALUES, at(0)], value: 1 });
+    await waitFor(() => expect(marked()).toEqual(['[0]']));
+
+    reported();
+
+    await waitFor(() => expect(marked()).toEqual([]));
+    expect(logged()).toEqual([]);
+  });
+
+  it('shows no mark when mEdit refuses the write', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+
+    vi.useFakeTimers();
+    try {
+      written({ op: 'remove', path: [VALUES, at(1)] });
+      written({ op: 'remove', path: [VALUES, at(1)] }, EXTENSION_TO_WEBVIEW.EDIT_REFUSED);
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(marked()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The host tells a panel nothing more of a gesture mEdit never answered.
+  it('keeps the mark of a gesture with no answer until a refresh reads the disk', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    written({ op: 'remove', path: [VALUES, at(1)] });
+    await waitFor(() => expect(marked()).toEqual(['[1]']));
+
+    disk = values([1, 3]);
+    send({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+
+    await waitFor(() => expect(marked()).toEqual([]));
+    expect(screen.queryByText('[2]')).not.toBeInTheDocument();
+  });
+
+  it('keeps the mark when the read fails', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    written({ op: 'remove', path: [VALUES, at(1)] });
+    await waitFor(() => expect(marked()).toEqual(['[1]']));
+    vi.mocked(client.load).mockResolvedValueOnce({ ok: false, error: 'mEdit is not answering' });
+
+    reported();
+
+    await waitFor(() => screen.getByText(/Showing the last good read/));
+    expect(marked()).toEqual(['[1]']);
+  });
+});
