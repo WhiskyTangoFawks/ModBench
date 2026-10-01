@@ -103,7 +103,7 @@ describe('registerRecordLifecycleCommands', () => {
       client.setCommandResult('deleteRecords', { landed: [], refused: [] });
       viewSelection = [HOLDER_ROW];
       invoke(client, 'Delete');
-      registerDeleteHereCommands(new Map([
+      registerDeleteHereCommands(new Map<string, () => readonly unknown[]>([
         ['modbench.pluginListTree', () => [PLUGINS_ROW]],
         ['modbench.referencedByTree', () => [HOLDER_ROW]],
       ]));
