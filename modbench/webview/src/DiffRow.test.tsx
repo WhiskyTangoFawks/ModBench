@@ -4,10 +4,8 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // FormKeyCell's pickFormKey import touches vscode.ts's acquireVsCodeApi() at module load.
-const copyValue = vi.fn<(value: string) => void>();
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
-  copyValue: (value: string) => copyValue(value),
   pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
 }));
 
@@ -482,7 +480,8 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
       onEditCell: vi.fn(),
     });
     expect(stringContext('disk-value', 1)).toEqual({
-      webviewSection: 'cell stringValue',
+      webviewSection: 'cell editableCell stringValue',
+      holdsValue: true,
       copyText: 'disk-value',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
@@ -558,7 +557,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
     });
@@ -577,7 +576,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
       isExpanded: false,
     });
@@ -591,7 +590,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
@@ -607,7 +606,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);
@@ -748,16 +747,7 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
     expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
   });
 
-  it('copies what the cell reads, not the class name behind it', () => {
-    renderKindRow();
-    copyValue.mockClear();
-
-    fireEvent.keyDown(required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), "its td ancestor"), { key: 'c', ctrlKey: true });
-
-    expect(copyValue).toHaveBeenCalledWith('Reference');
-  });
-
-  it('carries the text it copies on the cell, for the palette\'s copy value', () => {
+  it('carries the text it copies, what the cell reads and not the class name behind it, for copy value', () => {
     renderKindRow();
 
     const cell = required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), 'its td ancestor');

@@ -16,21 +16,21 @@ export const EXTENSION_TO_WEBVIEW = {
   // writes).
   EDIT_WRITTEN: 'editWritten',
   EDIT_REFUSED: 'editRefused',
+  // The grid's keys are VS Code keybindings; these reach the focused cell of the panel in focus,
+  // which alone holds its editor and its field's schema to parse pasted text with.
+  OPEN_CELL_EDITOR: 'openCellEditor',
+  PASTE_INTO_CELL: 'pasteIntoCell',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
   // The webview has no route to the 'Modbench' channel of its own — this is
   // the bridge. The webview composes the full message text; the host does a level→method forward.
   LOG: 'log',
-  // Ctrl+C on a cell, an entry point to copy value, which writes the clipboard from the host
-  // (webview clipboard access isn't guaranteed). Fire-and-forget: nothing comes back.
-  COPY_VALUE: 'copyValue',
   // ADR-0007: routed through the extension host because an edit can be refused and a refusal has
   // to become a native notification (ADR-0019).
   EDIT_FIELD: 'editField',
-  // A key on a focused element, an entry point to the command its right-click menu fires: the host
-  // holds no key handler of its own, so the webview names the command and the element's context.
-  ELEMENT_COMMAND: 'elementCommand',
+  // A drop on an array, an entry point to the add its right-click menu fires, with the dropped value.
+  ADD_ELEMENT: 'addElement',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
@@ -44,12 +44,9 @@ export const WEBVIEW_TO_EXTENSION = {
 
 export type LogLevel = 'debug' | 'info' | 'warn';
 
-export const ELEMENT_COMMANDS = ['addElement', 'removeElement', 'moveElementUp', 'moveElementDown'] as const;
-export type ElementCommand = typeof ELEMENT_COMMANDS[number];
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_VALUE; value: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
@@ -59,7 +56,7 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND; command: ElementCommand; context: Record<string, unknown>; value?: unknown }
+  | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
@@ -125,6 +122,25 @@ export function moveEnvelope(path: PathHop[], delta: -1 | 1): RecordEditEnvelope
   return element?.kind === 'index' ? { op: 'move', path, value: element.index + delta } : undefined;
 }
 
+// A cell in a column that can be edited, which Delete clears and Ctrl+V pastes over. `holdsValue`
+// is whether the column's plugin holds the field, since clearing what it does not hold changes nothing.
+export interface EditableCellContext {
+  webviewSection: 'editableCell';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  path: PathHop[];
+  holdsValue: boolean;
+}
+
+/** Whether a `data-vscode-context` names `section` among its space-separated sections, as a menu's
+ *  `=~` reads them. */
+export function hasSection(context: unknown, section: string): boolean {
+  if (typeof context !== 'object' || context === null) return false;
+  const sections: unknown = Reflect.get(context, 'webviewSection');
+  return typeof sections === 'string' && sections.split(' ').includes(section);
+}
+
 // A reference that resolves, or resolves to the wrong type, which go to record follows. The target
 // is its own key because `formKey` already names the record the panel shows.
 export interface ReferenceContext {
@@ -174,7 +190,9 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | ({ type: typeof EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED; requestId: string } & RecordLoadAnswer)
-  | ({ type: typeof EXTENSION_TO_WEBVIEW.EDIT_WRITTEN | typeof EXTENSION_TO_WEBVIEW.EDIT_REFUSED } & RecordEdit);
+  | ({ type: typeof EXTENSION_TO_WEBVIEW.EDIT_WRITTEN | typeof EXTENSION_TO_WEBVIEW.EDIT_REFUSED } & RecordEdit)
+  | { type: typeof EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR }
+  | { type: typeof EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL; text: string };
 
 /** One edit, addressed to the plugin copy of the record it writes. */
 export interface RecordEdit {
@@ -203,7 +221,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
 
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
-  plugin?: unknown; origin?: unknown; envelope?: unknown; command?: unknown;
+  plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
 
@@ -211,11 +229,6 @@ function parseLog(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isLogLevel(w.level)) throw new Error('Expected "log" to carry a level of debug, info or warn.');
   if (!isString(w.message)) throw new Error('Expected "log" to carry a string message.');
   return { type: WEBVIEW_TO_EXTENSION.LOG, level: w.level, message: w.message };
-}
-
-function parseCopyValue(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.value)) throw new Error('Expected "copyValue" to carry a string value.');
-  return { type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value: w.value };
 }
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -228,14 +241,9 @@ function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
   return { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
 }
 
-function isElementCommand(value: unknown): value is ElementCommand {
-  return ELEMENT_COMMANDS.some(command => command === value);
-}
-
-function parseElementCommand(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isElementCommand(w.command)) throw new Error('Expected "elementCommand" to name an element command.');
-  if (!isContextObject(w.context)) throw new Error('Expected "elementCommand" to carry a context object.');
-  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context, value: w.command === 'addElement' ? w.value : undefined };
+function parseAddElement(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isContextObject(w.context)) throw new Error('Expected "addElement" to carry a context object.');
+  return { type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context: w.context, value: w.value };
 }
 
 function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -274,9 +282,8 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
   const w = value as WebviewToExtensionWitness;
   switch (w.type) {
     case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
-    case WEBVIEW_TO_EXTENSION.COPY_VALUE: return parseCopyValue(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
-    case WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND: return parseElementCommand(w);
+    case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return parseAddElement(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);
@@ -356,6 +363,7 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
   const w = value as {
     type?: unknown; formKey?: unknown; requestId?: unknown; plugin?: unknown; origin?: unknown; envelope?: unknown;
     ok?: unknown; compare?: unknown; plugins?: unknown; conflictsComputed?: unknown; loadFailures?: unknown; error?: unknown;
+    text?: unknown;
   };
   switch (w.type) {
     case EXTENSION_TO_WEBVIEW.LOAD_RECORD: return parseLoadRecord(w);
@@ -364,7 +372,15 @@ export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
     case EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED: return { type: w.type, ...parseRecordLoadAnswer(w) };
     case EXTENSION_TO_WEBVIEW.EDIT_WRITTEN:
     case EXTENSION_TO_WEBVIEW.EDIT_REFUSED: return { type: w.type, ...parseRecordEdit(w) };
-    default:
-      throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
+    default: return parseFocusedCellMessage(w);
   }
+}
+
+function parseFocusedCellMessage(w: { type?: unknown; text?: unknown }): ExtensionToWebview {
+  if (w.type === EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR) return { type: w.type };
+  if (w.type !== EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL) {
+    throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
+  }
+  if (!isString(w.text)) throw new Error('Expected "pasteIntoCell" to carry a string text.');
+  return { type: w.type, text: w.text };
 }

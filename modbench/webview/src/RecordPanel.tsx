@@ -15,7 +15,7 @@ import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
-import { editField, elementCommand, focusCell, focusedCellContext, logWarning } from './nativeBridge';
+import { addElement, editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
@@ -94,15 +94,38 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Read off the rendered grid after every render, since a re-read or a move changes what the
   // focused cell's menu would offer without a new focus. Only a user's focus enters the grid.
   const toldFocusedCell = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    const context = focusedCellContext(document);
+  const editorOpen = useRef(false);
+  const tellFocusedCell = useCallback((entered: boolean) => {
+    const cell = focusedCellContext(document);
+    const context = cell && editorOpen.current ? { ...cell, editorOpen: true } : cell;
     const told = JSON.stringify(context);
-    const entered = enteredCell.current;
-    enteredCell.current = false;
     if (told === toldFocusedCell.current && !entered) return;
     toldFocusedCell.current = told;
     focusCell(context, entered);
+  }, []);
+  useEffect(() => {
+    const entered = enteredCell.current;
+    enteredCell.current = false;
+    tellFocusedCell(entered);
   });
+  // editor.md, The focused cell, story 7: the grid's keys wait while an editor is open. An editor
+  // holds the focus from opening to closing, and leaving the panel closes it.
+  useEffect(() => {
+    const follow = (gaining: EventTarget | null) => {
+      const open = gaining instanceof Element && gaining.closest('[data-editor]') !== null;
+      if (open === editorOpen.current) return;
+      editorOpen.current = open;
+      tellFocusedCell(false);
+    };
+    const focusIn = (e: FocusEvent) => follow(e.target);
+    const focusOut = (e: FocusEvent) => follow(e.relatedTarget);
+    document.addEventListener('focusin', focusIn);
+    document.addEventListener('focusout', focusOut);
+    return () => {
+      document.removeEventListener('focusin', focusIn);
+      document.removeEventListener('focusout', focusOut);
+    };
+  }, [tellFocusedCell]);
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
@@ -334,7 +357,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           if (hops) handleCellCommit(plugin, hops, value);
         }}
         writeAt={writeAt}
-        onElementCommand={elementCommand}
+        onAddElement={addElement}
         collapsedColumns={collapsedColumns}
         recordLabel={title}
         context={{ path, rootField, depth }}

@@ -10,6 +10,7 @@ import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
+import { registerGridKeyCommands } from './gridKeyCommands';
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, type RecordWriteMarks,
 } from './recordLifecycleCommands';
@@ -176,6 +177,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
       editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
       focusedCell: () => focusedCells.current(),
+    }),
+    ...registerGridKeyCommands({
+      focusedCell: () => focusedCells.current(),
+      tellFocusedPanel: (message) => { void focusedCells.activePanel()?.webview.postMessage(message); },
     }),
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.

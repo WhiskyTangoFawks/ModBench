@@ -38,7 +38,9 @@ function register(
   focusedViewSelection: () => readonly unknown[] = () => [],
   panels: { recordPanels: Set<vscode.WebviewPanel>; tracker: ActiveRecordTracker<vscode.WebviewPanel>; meditClient: InMemoryMEditClient }
     = { recordPanels: new Set(), tracker: new ActiveRecordTracker<vscode.WebviewPanel>(), meditClient: new InMemoryMEditClient() },
-  override: { meditClient?: InMemoryMEditClient; refreshPanels?: () => void } = {},
+  override: {
+    meditClient?: InMemoryMEditClient; refreshPanels?: () => void; focusedCells?: FocusedCells<vscode.WebviewPanel>;
+  } = {},
 ): void {
   const { recordPanels, tracker } = panels;
   const meditClient = override.meditClient ?? panels.meditClient;
@@ -47,7 +49,7 @@ function register(
     recordPanels,
     activeRecordTracker: tracker,
     editsInFlight: new EditsInFlight(tracker),
-    focusedCells: new FocusedCells(() => undefined, () => undefined),
+    focusedCells: override.focusedCells ?? new FocusedCells(() => undefined, () => undefined),
     recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient,
     refreshPanels: override.refreshPanels ?? (() => undefined),
@@ -176,6 +178,27 @@ describe('modbench.record.editField, fired with only the record, the plugin and 
 
     expect(first).toHaveBeenCalledWith(written);
     expect(second).toHaveBeenCalledWith(written);
+  });
+});
+
+describe('the record grid\'s F2', () => {
+  it('opens the editor of the focused cell of the record tab in focus, and of no other tab', async () => {
+    const [behind, inFocus] = [vi.fn(() => Promise.resolve(true)), vi.fn(() => Promise.resolve(true))];
+    const isPanel = (value: object): value is vscode.WebviewPanel => 'webview' in value;
+    const panel = (postMessage: () => Promise<boolean>): vscode.WebviewPanel => {
+      const fake = { webview: { postMessage } };
+      if (!isPanel(fake)) throw new Error('not a panel');
+      return fake;
+    };
+    const focusedCells = new FocusedCells<vscode.WebviewPanel>(() => undefined, () => undefined);
+    focusedCells.setActivePanel(panel(behind));
+    focusedCells.setActivePanel(panel(inFocus));
+    register(() => [], undefined, { focusedCells });
+
+    await commandHandlers.get('modbench.recordGrid.editHere')?.();
+
+    expect(inFocus).toHaveBeenCalledWith({ type: 'openCellEditor' });
+    expect(behind).not.toHaveBeenCalled();
   });
 });
 

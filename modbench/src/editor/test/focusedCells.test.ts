@@ -57,9 +57,20 @@ describe('the focused cell of the record tab in focus', () => {
   it('sets the keys the field gestures\' palette entries read', () => {
     expect(focusedCellKeys(element)).toEqual({
       focusedCellSection: 'arrayElement', focusedCellCanMoveUp: false, focusedCellCanMoveDown: true,
+      focusedCellCopies: false, focusedCellEditorOpen: false,
     });
     expect(focusedCellKeys(undefined)).toEqual({
       focusedCellSection: undefined, focusedCellCanMoveUp: false, focusedCellCanMoveDown: false,
+      focusedCellCopies: false, focusedCellEditorOpen: false,
+    });
+  });
+
+  it('sets the keys the grid\'s keys read: whether the cell has text to copy, and whether its editor is open', () => {
+    expect(focusedCellKeys({ webviewSection: 'cell', copyText: '7', editorOpen: true })).toMatchObject({
+      focusedCellCopies: true, focusedCellEditorOpen: true,
+    });
+    expect(focusedCellKeys({ webviewSection: 'cell', copyText: '' })).toMatchObject({
+      focusedCellCopies: false, focusedCellEditorOpen: false,
     });
   });
 });

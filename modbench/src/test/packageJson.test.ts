@@ -891,8 +891,9 @@ describe('package.json view keys', () => {
     ).toEqual([]);
   });
 
-  it('binds no key outside a focused view', () => {
-    const unscoped = pkg.contributes.keybindings.filter((k) => !k.when.startsWith('focusedView == '));
+  it('binds no key outside a focused view or the record tab', () => {
+    const unscoped = pkg.contributes.keybindings.filter((k) =>
+      !k.when.startsWith('focusedView == ') && !k.when.startsWith("activeCustomEditorId == 'modbench.record' && "));
     expect(unscoped.map((k) => `${k.key} → ${k.command}`)).toEqual([]);
   });
 });
@@ -927,8 +928,8 @@ describe('package.json Ctrl+C keys', () => {
     expect(entry.args).toEqual({ view });
   });
 
-  it('binds no other Ctrl+C', () => {
-    expect(copyKeys).toHaveLength(COPY_KEYS.length);
+  it('binds no other Ctrl+C but the record grid\'s', () => {
+    expect(copyKeys).toHaveLength(COPY_KEYS.length + 1);
   });
 });
 
@@ -951,6 +952,63 @@ describe('package.json field gestures\' palette entries', () => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === command);
     expect(entries.map((e) => e.when)).toEqual([`${ON_A_RECORD_TAB} && ${holds}`]);
+  });
+});
+
+describe('package.json record grid keys, as editor.md\'s Menus and keys and its focused cell\'s story 7 place them', () => {
+  const ON_THE_GRID = "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus"
+    + ' && !inputFocus && !modbench.record.focusedCellEditorOpen';
+  const section = (name: string) => String.raw`modbench.record.focusedCellSection =~ /\b${name}\b/`;
+
+  it('binds F2 to edit, Ctrl+C to copy value, Ctrl+X to cut, Ctrl+V to paste, Delete to remove or clear, Alt+Up and Alt+Down to move', () => {
+    const gridKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID));
+    expect(gridKeys).toEqual([
+      { key: 'f2', command: 'modbench.recordGrid.editHere', when: `${ON_THE_GRID} && ${section('cell')}` },
+      {
+        key: 'ctrl+c', mac: 'cmd+c', command: 'modbench.copyValue', args: { view: 'modbench.recordGrid' },
+        when: `${ON_THE_GRID} && modbench.record.focusedCellCopies`,
+      },
+      { key: 'ctrl+x', mac: 'cmd+x', command: 'modbench.recordGrid.cutHere', when: `${ON_THE_GRID} && ${section('editableCell')}` },
+      { key: 'ctrl+v', mac: 'cmd+v', command: 'modbench.recordGrid.pasteHere', when: `${ON_THE_GRID} && ${section('editableCell')}` },
+      {
+        key: 'Delete', mac: 'cmd+backspace', command: 'modbench.record.removeElement',
+        when: `${ON_THE_GRID} && ${section('arrayElement')}`,
+      },
+      {
+        key: 'Delete', mac: 'cmd+backspace', command: 'modbench.recordGrid.clearHere',
+        when: `${ON_THE_GRID} && ${section('editableCell')} && !(${section('arrayElement')})`,
+      },
+      {
+        key: 'alt+up', command: 'modbench.record.moveElementUp',
+        when: `${ON_THE_GRID} && ${section('arrayElement')} && modbench.record.focusedCellCanMoveUp`,
+      },
+      {
+        key: 'alt+down', command: 'modbench.record.moveElementDown',
+        when: `${ON_THE_GRID} && ${section('arrayElement')} && modbench.record.focusedCellCanMoveDown`,
+      },
+    ]);
+  });
+
+  it('acts on no key while the focused cell\'s editor is open', () => {
+    const cell = {
+      activeCustomEditorId: 'modbench.record', 'modbench.record.focusedCellSection': 'cell editableCell arrayElement',
+      'modbench.record.focusedCellCopies': true, 'modbench.record.focusedCellCanMoveUp': true,
+      'modbench.record.focusedCellCanMoveDown': true,
+    };
+    const gridKeys = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID));
+    expect(gridKeys.filter((k) => holds(k.when, cell)).map((k) => k.key)).toEqual(
+      ['f2', 'ctrl+c', 'ctrl+x', 'ctrl+v', 'Delete', 'alt+up', 'alt+down']);
+    expect(gridKeys.filter((k) => holds(k.when, { ...cell, 'modbench.record.focusedCellEditorOpen': true }))).toEqual([]);
+  });
+
+  it('removes an element with Delete, and clears only what is not an element', () => {
+    const deletes = pkg.contributes.keybindings.filter((k) => k.when.startsWith(ON_THE_GRID) && k.key === 'Delete');
+    const firing = (sections: string) => deletes
+      .filter((k) => holds(k.when, { activeCustomEditorId: 'modbench.record', 'modbench.record.focusedCellSection': sections }))
+      .map((k) => k.command);
+    expect(firing('cell editableCell arrayElement')).toEqual(['modbench.record.removeElement']);
+    expect(firing('cell editableCell')).toEqual(['modbench.recordGrid.clearHere']);
+    expect(firing('cell')).toEqual([]);
   });
 });
 
@@ -1385,7 +1443,8 @@ const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const DELETE_ENTRY_POINTS = ['modbench.pluginListTree', 'modbench.referencedByTree'].map((view) => `${view}.deleteHere`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
+const GRID_KEY_ENTRY_POINTS = ['editHere', 'cutHere', 'pasteHere', 'clearHere'].map((verb) => `modbench.recordGrid.${verb}`);
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, ...GRID_KEY_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

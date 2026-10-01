@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
-import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from '../messages';
+import { act } from '@testing-library/react';
+import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';
@@ -87,13 +88,32 @@ export function postedEnvelopes(postMessage: (msg: WebviewToExtension) => void):
     .map((m) => m.envelope);
 }
 
-/** A key on a focused element posts the catalog command it fires and the element it names. */
-export function lastElementCommand(postMessage: (msg: WebviewToExtension) => void) {
+/** What the focused cell last told the host: the Arguments its keys' commands act on. */
+export function lastToldCell(postMessage: (msg: WebviewToExtension) => void): Record<string, unknown> | undefined {
+  return vi.mocked(postMessage).mock.calls
+    .flatMap(([m]) => (m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL && m.context ? [m.context] : []))
+    .at(-1);
+}
+
+/** The focused cell last told the host when it is an element: what Delete and Alt+Up and Alt+Down
+ *  act on. */
+export function lastToldElement(postMessage: (msg: WebviewToExtension) => void): Record<string, unknown> | undefined {
+  const cell = lastToldCell(postMessage);
+  return hasSection(cell, 'arrayElement') ? cell : undefined;
+}
+
+/** A drop on an array posts the add element it fires and the array it names. */
+export function lastAddElement(postMessage: (msg: WebviewToExtension) => void) {
   return vi.mocked(postMessage).mock.calls
     .map(([m]) => m)
-    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND }> =>
-      m.type === WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND)
+    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT }> =>
+      m.type === WEBVIEW_TO_EXTENSION.ADD_ELEMENT)
     .at(-1);
+}
+
+/** The host posting `message` to the panel. */
+export function tellPanel(message: ExtensionToWebview): void {
+  act(() => { window.dispatchEvent(new MessageEvent('message', { data: message })); });
 }
 
 export const lastPostedEnvelope = (

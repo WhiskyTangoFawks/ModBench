@@ -65,10 +65,9 @@ const HANDLERS: {
   ) => Promise<void> | void;
 } = {
   [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
-  [WEBVIEW_TO_EXTENSION.COPY_VALUE]: async (_deps, m) => { await vscode.commands.executeCommand('modbench.copyValue', { copyText: m.value }); },
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
-  [WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND]: async (_deps, m) => {
-    await vscode.commands.executeCommand(`modbench.record.${m.command}`, m.context, m.value);
+  [WEBVIEW_TO_EXTENSION.ADD_ELEMENT]: async (_deps, m) => {
+    await vscode.commands.executeCommand('modbench.record.addElement', m.context, m.value);
   },
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
   [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
@@ -80,9 +79,8 @@ const HANDLERS: {
 function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> | void {
   switch (m.type) {
     case WEBVIEW_TO_EXTENSION.LOG: return HANDLERS[m.type](deps, m);
-    case WEBVIEW_TO_EXTENSION.COPY_VALUE: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
-    case WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return HANDLERS[m.type](deps, m);

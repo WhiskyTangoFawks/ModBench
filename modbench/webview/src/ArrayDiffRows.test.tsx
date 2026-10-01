@@ -9,13 +9,12 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
 import {
-  at, compareOverride, compareResultFixture, diffNode, fieldMeta, lastElementCommand, lastPostedEnvelope, member,
+  at, compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldElement, member,
   panelClient, required,
 } from './test/fixtures';
 import type { CompareResult } from './types';
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
-const lastCommand = () => lastElementCommand(vscode.postMessage);
 
 
 const linkArrayMeta = fieldMeta({
@@ -345,61 +344,56 @@ describe('RecordPanel — array editing', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Delete on a focused array-element cell fires remove element at its own index', async () => {
+  it('a focused array-element cell tells the host its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[1]'));
     const cell = required(screen.getByText('2').closest('td'), "the '2' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Values'), at(1)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(1)] }));
     expect(lastEnvelope()).toBeUndefined();
   });
 
-  it('Alt+ArrowDown on a focused element fires move element down', async () => {
+  it('a focused element tells the host it can move down', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
     const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true });
 
-    expect(lastCommand()).toMatchObject({ command: 'moveElementDown', context: { path: [member('Values'), at(0)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(0)], canMoveDown: true }));
   });
 
-  it('Alt+ArrowUp on a focused element fires move element up', async () => {
+  it('a focused element tells the host it can move up', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[2]'));
     const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true });
 
-    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Values'), at(2)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(2)], canMoveUp: true }));
   });
 
   // As VS Code moves a line: at the end of the array nothing happens.
-  it('Alt+ArrowUp on the first element fires nothing and leaves the key unhandled', async () => {
+  it('the first element tells the host it cannot move up', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
     const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
 
-    expect(fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true })).toBe(true);
-    expect(lastCommand()).toBeUndefined();
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveUp: false }));
   });
 
-  it('Alt+ArrowDown on the last element fires nothing and leaves the key unhandled', async () => {
+  it('the last element tells the host it cannot move down', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[2]'));
     const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
     fireEvent.click(cell);
 
-    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
-    expect(lastCommand()).toBeUndefined();
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveDown: false }));
   });
 });
 
@@ -515,7 +509,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     });
   });
 
-  it('Delete on an element nested inside a struct fires remove element with every hop', async () => {
+  it('an element nested inside a struct tells the host every hop', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -527,11 +521,8 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     const cells = row.querySelectorAll('td');
     const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({
-      command: 'removeElement', context: { path: [member('Container'), member('Entries'), at(0)] },
-    });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Container'), member('Entries'), at(0)] }));
   });
 
   it('a top-level scalar: the one member hop', async () => {
@@ -635,7 +626,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await renderGuardAfterAmbush();
 
     const context: unknown = JSON.parse(myCell(rowLabelled('Scripts')).getAttribute('data-vscode-context') ?? '{}');
-    expect(context).toMatchObject({ webviewSection: 'cell arrayParent', path: [member('Scripts')] });
+    expect(context).toMatchObject({ webviewSection: 'cell arrayParent editableCell', path: [member('Scripts')] });
   });
 
   it('a value edit on a keyed element posts set at its index in the written column', async () => {
@@ -651,36 +642,24 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     });
   });
 
-  it('Delete on a keyed element fires remove element at its index', async () => {
+  it('a keyed element tells the host its index', async () => {
     await renderGuardAfterAmbush();
     const cell = myCell(rowLabelled('Ambush'));
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), at(1)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
-  it('Alt+ArrowUp and Alt+ArrowDown on a keyed element leave the key unhandled and fire nothing', async () => {
-    await renderGuardAfterAmbush();
-    for (const [label, key] of [['Ambush', 'ArrowUp'], ['Guard', 'ArrowDown']] as const) {
-      const cell = myCell(rowLabelled(label));
-      fireEvent.click(cell);
-      expect(fireEvent.keyDown(cell, { key, altKey: true })).toBe(true);
-    }
-
-    expect(lastCommand()).toBeUndefined();
-  });
-
-  it('a keyed element\'s menu offers neither move', async () => {
+  it('a keyed element\'s context offers neither move', async () => {
     await renderGuardAfterAmbush();
 
     for (const label of ['Ambush', 'Guard']) {
       expect(JSON.parse(myCell(rowLabelled(label)).getAttribute('data-vscode-context') ?? '{}'))
-        .toMatchObject({ webviewSection: 'cell arrayElement', canMoveUp: false, canMoveDown: false });
+        .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
     }
   });
 
-  it('Delete on the second of two elements sharing a key fires remove element at its index', async () => {
+  it('the second of two elements sharing a key tells the host its own index', async () => {
     const second = { name: 'Guard', flags: 'h' };
     renderScripts([], [guard, second], [
       scriptRow('Guard', { 'MyMod.esp': guard }, { 'MyMod.esp': 0 }),
@@ -689,9 +668,8 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await waitFor(() => expect(screen.getAllByText('flags')).toHaveLength(2));
     const cell = myCell(rowLabelled('Guard', 1));
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), at(1)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
   it('collapsing the second of two elements sharing a key leaves the first expanded', async () => {
@@ -756,41 +734,38 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     }));
   });
 
-  it('Delete fires remove element at the element\'s own index', async () => {
+  it('an element tells the host its own index in this column', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Packages'), at(1)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)] }));
   });
 
-  it('Alt+ArrowUp fires move element up from the element\'s own index', async () => {
+  it('an element tells the host it moves up from its own index', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true });
 
-    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Packages'), at(1)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)], canMoveUp: true }));
   });
 
-  it('Alt+ArrowDown on the column\'s own last element fires nothing', async () => {
+  it('the column\'s own last element tells the host it cannot move down', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
     fireEvent.click(cell);
 
-    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
-    expect(lastCommand()).toBeUndefined();
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveDown: false }));
   });
 
   it('offers add at the array', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('Packages'));
     const context: unknown = JSON.parse(myCell('Packages').getAttribute('data-vscode-context') ?? '{}');
-    expect(context).toMatchObject({ webviewSection: 'cell arrayParent', path: [member('Packages')] });
+    expect(context).toMatchObject({ webviewSection: 'cell arrayParent editableCell', path: [member('Packages')] });
   });
 });
 
@@ -834,20 +809,18 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Delete removes the element at its own index', async () => {
+  it('an element after a null slot tells the host its own index', async () => {
     await waitFor(() => screen.getByText('[2]'));
     fireEvent.click(myCell());
-    fireEvent.keyDown(myCell(), { key: 'Delete' });
 
-    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Items'), at(2)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Items'), at(2)] }));
   });
 
-  it('Alt+ArrowUp moves the element from its own index', async () => {
+  it('an element after a null slot tells the host it moves up from its own index', async () => {
     await waitFor(() => screen.getByText('[2]'));
     fireEvent.click(myCell());
-    fireEvent.keyDown(myCell(), { key: 'ArrowUp', altKey: true });
 
-    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Items'), at(2)] } });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Items'), at(2)], canMoveUp: true }));
   });
 
   it('an edit sets the element at its own index', async () => {
