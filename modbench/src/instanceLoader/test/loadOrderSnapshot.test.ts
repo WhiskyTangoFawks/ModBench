@@ -20,12 +20,13 @@ type Provider = { winner: string; winnerMod: string; providers?: string[] };
 function index(
   files: Record<string, Provider>,
   filesByMod: Record<string, { relativePath: string; absolutePath: string }[]> = {},
+  disabledModFiles: Record<string, { relativePath: string; absolutePath: string }[]> = {},
 ): FileConflictIndex {
   const lookup = new FileConflictLookup();
   for (const [relativePath, { winner, winnerMod, providers }] of Object.entries(files)) {
     lookup.set({ relativePath, winner, winnerMod, providers: providers ?? [winnerMod] });
   }
-  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)) };
+  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)), disabledModFiles: new Map(Object.entries(disabledModFiles)) };
 }
 
 const DATA_FOLDER = join('/game', 'Data');
@@ -143,6 +144,18 @@ describe('buildLoadOrderRows', () => {
       { name: 'Bar.esp', path: '/mods/B/bar.esp', origin: 'B', slot: 1, enabled: true, winning: true },
       { name: 'Fallout4.esm', path: join(DATA_FOLDER, 'Fallout4.esm'), origin: 'Data', slot: 2, enabled: true, winning: true },
     ]);
+  });
+
+  // ADR-0013, invariant 2: a disabled mod's own plugin is still in the snapshot, with no slot and
+  // never winning — plugins.txt and mod order decide nothing about whether it is indexed.
+  it('a disabled mod\'s own plugin is sent with no slot, not enabled, not winning', () => {
+    const fakeIndex = index({}, {}, { Disabled: [{ relativePath: 'Off.esp', absolutePath: '/mods/Disabled/Off.esp' }] });
+
+    const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
+
+    expect(result).toContainEqual(
+      { name: 'Off.esp', path: '/mods/Disabled/Off.esp', origin: 'Disabled', slot: null, enabled: false, winning: false },
+    );
   });
 });
 
@@ -290,6 +303,18 @@ describe('loadOrderSnapshotOf', () => {
     const unlisted = row('unlisted.esp', 'ModU', null, { enabled: false });
 
     expect(snapshotOf([second, disabled, overridden, unlisted, first])?.active).toEqual([address(first), address(second)]);
+  });
+
+  // ADR-0013, invariant 2 vs invariant 3: a disabled mod's plugin is named in `plugins` — the
+  // snapshot's every-plugin half — but never in `active`, since it never wins.
+  it('sends a disabled mod\'s plugin in plugins, never in active', () => {
+    const a = row('a.esp', 'ModA', 0);
+    const disabledModPlugin = row('off.esp', 'ModOff', null, { enabled: false, winning: false });
+
+    const snapshot = snapshotOf([a, disabledModPlugin]);
+
+    expect(snapshot?.plugins).toContainEqual(sent(disabledModPlugin));
+    expect(snapshot?.active).toEqual([address(a)]);
   });
 
   it('loads the plugins the game loads with no line first, from the game folder, in the order given', () => {

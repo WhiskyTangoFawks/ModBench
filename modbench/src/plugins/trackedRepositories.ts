@@ -1,16 +1,17 @@
 import type { PluginMetadata } from '../client';
 
-/** The tracked folder a plugin file sits in, undefined when it sits in none. Injected: the Instance
- *  adapter answers it, and this box holds no door onto the instance of its own (ADR-0007). */
-export type TrackedFolderOf = (pluginFile: string) => Promise<string | undefined>;
-
-/** Each plugin's tracked folder, by `pluginAddressKey`; a plugin in none has no entry. */
-export async function trackedFoldersOf(
-  plugins: readonly Pick<PluginMetadata, 'name' | 'origin' | 'path'>[], trackedFolderOf: TrackedFolderOf,
-): Promise<Map<string, string>> {
+/** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
+ *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check
+ *  (ADR-0007). */
+export function trackedFoldersOf(
+  plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
+  trackedMods: ReadonlySet<string>,
+  modDirs: ReadonlyMap<string, string>,
+): Map<string, string> {
   const folders = new Map<string, string>();
   for (const plugin of plugins) {
-    const folder = await trackedFolderOf(plugin.path);
+    if (!trackedMods.has(plugin.origin)) continue;
+    const folder = modDirs.get(plugin.origin);
     if (folder !== undefined) folders.set(pluginAddressKey(plugin.name, plugin.origin), folder);
   }
   return folders;

@@ -23,7 +23,6 @@ import {
   overwriteDir,
   fileInFolder,
   isInFolder,
-  pluginFolder,
   pluginsFile,
   profileDir,
   profilesDir,
@@ -46,10 +45,6 @@ describe('MO2 layout', () => {
     expect(modsDir(ROOT)).toBe(join(ROOT, 'mods'));
     expect(overwriteDir(ROOT)).toBe(join(ROOT, 'overwrite'));
     expect(defaultDownloadsDir(ROOT)).toBe(join(ROOT, 'downloads'));
-  });
-
-  it('names the folder a plugin sits in', () => {
-    expect(pluginFolder(join(ROOT, 'mods', 'SomeMod', 'Some.esp'))).toBe(join(ROOT, 'mods', 'SomeMod'));
   });
 
   it('names a file inside a folder by its relative path', () => {

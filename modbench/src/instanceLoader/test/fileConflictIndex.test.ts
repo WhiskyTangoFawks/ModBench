@@ -37,11 +37,21 @@ describe('buildFileConflictIndex', () => {
     expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModB');
   });
 
-  it('excludes disabled mods entirely', async () => {
+  it('excludes disabled mods from conflict resolution', async () => {
     const index = await buildFileConflictIndex([mod('ModA', false), mod('ModB')], fixture, () => {});
     const entry = index.files.get('textures/shared/foo.dds');
     expect(entry?.providers).toEqual(['ModB']);
     expect(entry?.winnerMod).toBe('ModB');
+    expect(index.filesByMod.has('ModA')).toBe(false);
+  });
+
+  // ADR-0013, invariant 2: the snapshot names every plugin, disabled mods' included, so their
+  // files are still read — into their own map, apart from conflict resolution.
+  it('lists a disabled mod\'s own files under disabledModFiles', async () => {
+    const index = await buildFileConflictIndex([mod('ModA', false), mod('ModB')], fixture, () => {});
+    const modAFiles = index.disabledModFiles.get('ModA')?.map((f) => f.relativePath).sort();
+    expect(modAFiles).toEqual(['textures/shared/foo.dds']);
+    expect(index.disabledModFiles.has('ModB')).toBe(false);
   });
 
   it('records a single-provider file with providers.length === 1', async () => {

@@ -352,6 +352,20 @@ describe('Instance — the value', () => {
     ]);
   });
 
+  // ADR-0013, invariant 2: the snapshot names every plugin in the instance, disabled mods'
+  // included. Rival: scoping the walk to enabled mods, which leaves a disabled mod's own plugin
+  // out of `plugins` entirely.
+  it('carries a disabled mod\'s own plugin, with no slot, not enabled, not winning', async () => {
+    const { root, instance } = await realInstance();
+    const path = await writeModFile(root, 'Harder VATS', 'Harder VATS.esp', 'disabled mod plugin');
+
+    await instance.refresh();
+
+    expect(instance.value.plugins).toContainEqual(
+      { name: 'Harder VATS.esp', path, origin: 'Harder VATS', slot: null, enabled: false, winning: false },
+    );
+  });
+
   it('sends the overridden plugin of a filename two enabled mods provide, at the same slot', async () => {
     const { root, instance } = await realInstance();
     const overridden = await writeModFile(root, 'Unofficial Fallout 4 Patch', 'NonAsciiRetexture.esp', 'overridden plugin');

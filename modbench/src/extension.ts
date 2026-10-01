@@ -115,7 +115,8 @@ export function activate(context: vscode.ExtensionContext) {
     client: meditClient,
     outputChannel,
     setPluginRepositories: (repos) => { session.pluginRepositories = repos; },
-    trackedFolderOf: (file) => toolbox.trackedFolderOf(file),
+    trackedMods: () => toolbox.instance?.value.trackedMods ?? new Set(),
+    modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
   });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
