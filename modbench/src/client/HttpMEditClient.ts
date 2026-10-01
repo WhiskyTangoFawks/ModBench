@@ -37,7 +37,8 @@ export interface HttpMEditClientDeps {
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
  *  and the notification stream live only here, composed behind {@link MEditClient}. */
 export class HttpMEditClient implements MEditClient {
-  private readonly apiClient: ApiClient;
+  private api?: { port: number; client: ApiClient };
+  private readonly fetchImpl: (input: Request) => Promise<Response>;
   private readonly log: (msg: string) => void;
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
@@ -45,7 +46,7 @@ export class HttpMEditClient implements MEditClient {
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
-    this.apiClient = createApiClient(deps.backend.port, deps.fetch ?? createUnlimitedFetch());
+    this.fetchImpl = deps.fetch ?? createUnlimitedFetch();
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
@@ -57,6 +58,14 @@ export class HttpMEditClient implements MEditClient {
       if (status === 'attached') this.notifications.start();
       else this.notifications.stop();
     });
+  }
+
+  /** The port is the lifecycle's to choose, so the generated client is built once it is known. */
+  private get apiClient(): ApiClient {
+    const port = this.lifecycle.port;
+    if (port === undefined) throw new Error('mEdit has not started');
+    if (this.api?.port !== port) this.api = { port, client: createApiClient(port, this.fetchImpl) };
+    return this.api.client;
   }
 
   // ── lifecycle ────────────────────────────────────────────────────────────

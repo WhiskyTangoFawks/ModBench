@@ -1917,10 +1917,10 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     const h = makeTree([A_ROW()]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
+    h.tree.applyBackendUnreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(row);
 
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected — start MEditService and reload.');
+    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
   });
 
   // The rival this guards: a disconnect mid-reconcile leaving an unheld row "Still indexing…"
@@ -1930,10 +1930,10 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []); // B.esp is mid-reconcile, not yet reached
     const rows = await h.tree.getChildren();
 
-    h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
+    h.tree.applyBackendUnreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(rows[1]);
 
-    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected — start MEditService and reload.');
+    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('mEdit is disconnected.');
   });
 
   it('leaves an already-held row browsable — the disconnect is not this row\'s to report', async () => {
@@ -1942,7 +1942,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     h.tree.applyIndexed([{ name: 'A.esp', origin: 'SomeMod' }], []);
     const [row] = await h.tree.getChildren();
 
-    h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
+    h.tree.applyBackendUnreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(row);
 
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
@@ -1950,7 +1950,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
 
   it('clears once a later tick lands, resuming "Still indexing…"', async () => {
     const h = makeTree([A_ROW()]);
-    h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
+    h.tree.applyBackendUnreachable('mEdit is disconnected.');
 
     h.tree.applyIndexed([], []);
     const [row] = await h.tree.getChildren();
@@ -1966,7 +1966,7 @@ describe('PluginsTreeProvider — applyBackendUnreachable', () => {
     const [row] = await h.tree.getChildren();
     h.tree.applyRefused({ kind: 'heldElsewhere', message: 'another Modbench window holds this instance' });
 
-    h.tree.applyBackendUnreachable('mEdit is disconnected — start MEditService and reload.');
+    h.tree.applyBackendUnreachable('mEdit is disconnected.');
     const children = await h.tree.getChildren(row);
 
     expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('another Modbench window holds this instance');

@@ -6,9 +6,9 @@ type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 // The four backend states the status bar item shows (common.md, The status bar); the
 // fifth, Ready, is the reconcile's own (`loadOrderOutcome.ts`).
 const STATUS_TEXT: Record<BackendStatus, string> = {
-  starting:     '$(loading~spin) mEdit: Connecting…',
-  attached:     '$(plug) mEdit: Attached',
-  disconnected: '$(error) mEdit: Disconnected — start MEditService and reload',
+  starting:     '$(loading~spin) mEdit: Starting…',
+  attached:     '$(plug) mEdit: Running',
+  disconnected: '$(error) mEdit: Disconnected',
   stopped:      '$(circle-slash) mEdit: Stopped',
 };
 
@@ -19,7 +19,7 @@ export function backendStatusText(status: BackendStatus): string {
 // plugins.md, States 3: the Plugins tree's own wording for the two states that make a row not
 // yet held unreachable — plain, no icon, no colon-prefixed "mEdit:".
 const UNREACHABLE_REASON: Record<'disconnected' | 'stopped', string> = {
-  disconnected: 'mEdit is disconnected — start MEditService and reload.',
+  disconnected: 'mEdit is disconnected.',
   stopped: 'mEdit is stopped.',
 };
 

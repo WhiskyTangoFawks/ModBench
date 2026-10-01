@@ -15,7 +15,7 @@ function neverFetch(): (input: Request) => Promise<Response> {
 function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up', timeoutMs?: number) {
   return new HttpMEditClient({
     backend: {
-      port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
+      attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
     },
     fetch, timeoutMs,

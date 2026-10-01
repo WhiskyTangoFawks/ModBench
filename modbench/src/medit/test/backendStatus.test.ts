@@ -10,9 +10,9 @@ function makeViews() {
 // common.md, The status bar, names these four verbatim; Ready is the reconcile's own.
 describe('backendStatusText', () => {
   it('names each backend state the way the status bar shows it', () => {
-    expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Connecting…');
-    expect(backendStatusText('attached')).toBe('$(plug) mEdit: Attached');
-    expect(backendStatusText('disconnected')).toBe('$(error) mEdit: Disconnected — start MEditService and reload');
+    expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Starting…');
+    expect(backendStatusText('attached')).toBe('$(plug) mEdit: Running');
+    expect(backendStatusText('disconnected')).toBe('$(error) mEdit: Disconnected');
     expect(backendStatusText('stopped')).toBe('$(circle-slash) mEdit: Stopped');
   });
 });
@@ -25,7 +25,7 @@ describe('wireBackendStatus', () => {
 
     client.setStatus('attached');
 
-    expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Attached');
+    expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Running');
   });
 
   // The badges the tree holds describe a backend that is gone, so it re-reads; the read fails,
@@ -107,7 +107,7 @@ describe('wireBackendStatus', () => {
 
     client.setStatus('disconnected');
 
-    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is disconnected — start MEditService and reload.');
+    expect(views.setUnreachable).toHaveBeenCalledWith('mEdit is disconnected.');
   });
 
   it('names the tree unreachable when the backend stops', () => {

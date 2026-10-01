@@ -1,4 +1,5 @@
 import * as http from 'node:http';
+import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
 
@@ -22,7 +23,12 @@ export interface BackendProcess {
 export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess;
 
 export interface BackendLifecycleOptions {
-  port: number;
+  /** A backend a developer launched from an IDE: this port is attached to and nothing is spawned,
+   *  and there is no fallback to a spawn. Omitted, the lifecycle spawns its own on a free port
+   *  that only this module knows (ADR-0009 invariant 5: one service per window). */
+  attachPort?: number;
+  /** Claims the port the spawned backend listens on; defaults to an OS-assigned free one. */
+  freePort?: () => Promise<number>;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
   log?: (msg: string) => void;
@@ -47,7 +53,9 @@ export interface BackendLifecycleOptions {
 /** The backend process, as the HTTP adapter's own internals (ADR-0002). The only module that
  *  names a process, a port, a health poll or a spawn. */
 export class BackendLifecycle {
-  private readonly port: number;
+  private readonly attachPort?: number;
+  private readonly freePort: () => Promise<number>;
+  private spawnPort?: number;
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
   private readonly stopGracePeriodMs: number;
@@ -72,7 +80,8 @@ export class BackendLifecycle {
   private static readonly MAX_RESTARTS = 3;
 
   constructor(opts: BackendLifecycleOptions) {
-    this.port = opts.port;
+    this.attachPort = opts.attachPort;
+    this.freePort = opts.freePort ?? claimFreePort;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;
     this.stopGracePeriodMs = opts.stopGracePeriodMs ?? 5_000;
@@ -86,13 +95,16 @@ export class BackendLifecycle {
 
   get status(): BackendStatus { return this._status; }
 
+  /** The port the API answers on: the attached one, else the spawned backend's once start() has
+   *  claimed it. */
+  get port(): number | undefined { return this.attachPort ?? this.spawnPort; }
+
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   }
 
-  /** Attaches to an already-healthy backend (a dev-launched one) rather than spawning.
-   *  Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
+  /** Spawns this window's own backend, or waits for the one on `attachPort`. Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
   start(): Promise<void> {
     this.expectedAlive = true;
     this.startPromise ??= this.doStart().finally(() => { this.startPromise = undefined; });
@@ -102,18 +114,15 @@ export class BackendLifecycle {
   private async doStart(): Promise<void> {
     const gen = this.generation;
 
-    if (await this.checkHealthFn()) {
-      if (gen !== this.generation) return; // stopped mid-check — don't attach
-      this.restartAttempts = 0;
-      this.setStatus('attached');
-      return;
+    if (this.attachPort === undefined) {
+      this.spawnPort ??= await this.freePort();
+      if (gen !== this.generation) return;
     }
-    if (gen !== this.generation) return;
 
-    if (this.spawnFn && this.executablePath && !this.child) {
+    if (this.attachPort === undefined && this.spawnFn && this.executablePath && !this.child) {
       this.setStatus('starting');
       const child = this.spawnFn(this.executablePath, [
-        '--urls', `http://localhost:${this.port}`,
+        '--urls', `http://localhost:${this.spawnPort}`,
         ...(this.serilogLevelArgs?.() ?? []),
       ]);
       this.child = child;
@@ -228,4 +237,16 @@ export class BackendLifecycle {
     this._status = status;
     for (const listener of this.listeners) listener(status);
   }
+}
+
+function claimFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.on('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      if (address === null || typeof address === 'string') { reject(new Error('no port was assigned')); return; }
+      probe.close(() => resolve(address.port));
+    });
+  });
 }
