@@ -33,6 +33,7 @@ One or two sentences: what the user can do once this epic ships, from the user's
 The spec lines this epic makes true, as pointers. One bullet per file.
 
 <scope-example>
+
 - `surfaces/plugins.md` § The tree, stories 1–9; § A row, stories 10–17
 - `surfaces/common.md` § States, story 5
 - `commands.md`: the `plugin create` and `plugin compile` rows

@@ -1,147 +1,65 @@
 # Commands
 
-This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain
-vocabulary. A gesture or command the code has and this file lacks is a defect in the code.
-A gesture this file has and the model cannot hold is a ticket.
+This file owns the UX vocabulary and the catalog of gestures. `CONTEXT.md` owns the domain vocabulary. A gesture or command the code has and this file lacks is a defect in the code. A gesture this file has and the model cannot hold is a ticket.
 
-- **Object**: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record,
-  Referrer, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own
-  configuration, which VS Code stores at user and workspace scope. It is the object of
-  `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
-- **Surface**: what a driving box presents to the user. One surface per driving box on the
-  Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor
-  realizes it.
-- **Gesture**: one thing the user does to an object. One row in the tables below, under the
-  object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
-- **Exclude and hide**: to exclude is to mark an object durably on disk. The mark leaves the
-  object out of something until include clears it, as the Downloads list leaves out an excluded
-  downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the
-  window, like hide excluded or a name filter.
-- **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it
-  has no gesture. Its first column is the trigger that fires it. It has its own section, after the
-  objects.
-- **Where**: each surface's Menus and keys lists the gestures it offers, where each sits and on
-  what condition.
-- **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository
-  or a folder. `reads` when it only changes what the surface shows, or opens something. `runs`
-  when it starts another program and writes nothing itself.
-- **Command ID**: the registered interface and the source of truth, which the code reflects. It is
-  `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`,
-  `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does
-  to whatever it shows is `modbench.<verb>`, in Every view.
-- **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a
-  position. A picker asks for each Option the caller did not supply. An Option may be computed
-  and multi-valued, such as a checked list with defaults.
-- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin
-  as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the
-  entry point is on the container's row. A create from a title icon has none, and its container is
-  an Option. It is the same on every surface that offers the gesture. Singular means the clicked
-  row, and plural means the whole selection.
-- **Template**: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md))
-  or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row
-  follows, read from [the xEdit audit](../research/xedit-surface-audit.md),
-  [the xEdit grid audit](../research/xedit-ux-audit.md) and
-  [the MO2 audit](../research/mo2-surface-audit.md). `none` means the template has no such
-  gesture: the row is an addition or a divergence, and needs a ruling.
-- **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and
-  drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes:
-  its specification is this row and its surface.
-- **Ruled out**: a gesture the maintainer has cut is not in any table. See
-  [Ruling a gesture out](#ruling-a-gesture-out).
+- **Object**: a domain noun the user acts on: Instance, Profile, Mod, Separator, Plugin, Record, Referrer, Downloaded file. `CONTEXT.md` defines each one. Settings is Modbench's own configuration, which VS Code stores at user and workspace scope. It is the object of `open settings` only, and `CONTEXT.md` does not define it, because it is not a domain noun.
+- **Surface**: what a driving box presents to the user. One surface per driving box on the Modbench side. A surface shows objects and offers their gestures. A VS Code view or an editor realizes it.
+- **Gesture**: one thing the user does to an object. One row in the tables below, under the object it changes. The Gesture column holds the verb the user sees, in a menu or a label.
+- **Exclude and hide**: to exclude is to mark an object durably on disk. The mark leaves the object out of something until include clears it, as the Downloads list leaves out an excluded downloaded file. To hide acts on the view alone. It changes nothing on disk and ends with the window, like hide excluded or a name filter.
+- **System command**: a command Modbench runs itself. No user starts it and no surface owns it, so it has no gesture. Its first column is the trigger that fires it. It has its own section, after the objects.
+- **Where**: each surface's Menus and keys lists the gestures it offers, where each sits and on what condition.
+- **Effect**: `writes` when the gesture ends in a Core command that writes a file, a repository or a folder. `reads` when it only changes what the surface shows, or opens something. `runs` when it starts another program and writes nothing itself.
+- **Command ID**: the registered interface and the source of truth, which the code reflects. It is `modbench.<object>.<verb>`, in camelCase, and the object owns it (`modbench.mod.enable`, `modbench.downloadedFile.delete`). `-` means the gesture has none. A gesture every list view does to whatever it shows is `modbench.<verb>`, in Every view.
+- **Options**: the inputs a gesture needs besides its Argument, such as a mode, a destination or a position. A picker asks for each Option the caller did not supply. An Option may be computed and multi-valued, such as a checked list with defaults.
+- **Argument**: the value that identifies the object or objects to the gesture, such as a plugin as `(origin, filename)`, or a FormKey. For a gesture that creates an object, it identifies the container, when the entry point is on the container's row. A create from a title icon has none, and its container is an Option. It is the same on every surface that offers the gesture. Singular means the clicked row, and plural means the whole selection.
+- **Template**: the source, xEdit ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) or MO2 ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)) gesture this row follows, read from [the xEdit audit](../research/xedit-surface-audit.md), [the xEdit grid audit](../research/xedit-ux-audit.md) and [the MO2 audit](../research/mo2-surface-audit.md). `none` means the template has no such gesture: the row is an addition or a divergence, and needs a ruling.
+- **Trace**: the sequence diagram of the gesture's flow. `-` means the trace is still to draw, and drawing it is part of designing the gesture. `none` means the gesture has no flow between boxes: its specification is this row and its surface.
+- **Ruled out**: a gesture the maintainer has cut is not in any table. See [Ruling a gesture out](#ruling-a-gesture-out).
 
-A toggle or an opposite pair (enable and disable, move up and move down) is one row with both
-directions, and both Command IDs. Any other gesture has one Command ID. A gesture that appears on
-several surfaces has one row, and each surface adapts its own item to the Argument.
+A toggle or an opposite pair (enable and disable, move up and move down) is one row with both directions, and both Command IDs. Any other gesture has one Command ID. A gesture that appears on several surfaces has one row, and each surface adapts its own item to the Argument.
 
 ## Principles
 
-- **Progressive disclosure.** A surface shows the common gesture first and asks for the rest when
-  it is needed. A gesture with variants is one gesture with Options. It is not a flat list of
-  near-duplicate menu items.
-- **The surface supplies the Argument. A picker supplies the Options.** A menu on an object passes
-  the object. A palette entry or a keybinding has no clicked row, so the gesture takes the focused
-  view's selection. The
-  gesture asks only for the Options the caller left out. A keybinding, a webview message or an agent
-  call may supply all of them.
+- **Progressive disclosure.** A surface shows the common gesture first and asks for the rest when it is needed. A gesture with variants is one gesture with Options. It is not a flat list of near-duplicate menu items.
+- **The surface supplies the Argument. A picker supplies the Options.** A menu on an object passes the object. A palette entry or a keybinding has no clicked row, so the gesture takes the focused view's selection. The gesture asks only for the Options the caller left out. A keybinding, a webview message or an agent call may supply all of them.
 - **When to group.** Variants are one gesture when all four of these hold:
   1. The user names them with the same verb and a qualifier: "copy as", "move to", "open beside".
   2. The Argument has the same shape.
   3. The variants differ along one dimension the user chooses: a mode, a target or a placement.
   4. The result is the same kind of thing.
 
-  A category word such as "edit" fails the first test, so its variants are separate gestures. An
-  opposite pair needs no picker. Gestures that share a flow share a diagram; that does not merge
-  them.
-- **A gesture is atomic.** It does one thing the user intends, however many steps it takes inside. A
-  chain of gestures the user already has, such as installing and then moving, is a script the user
-  writes.
-- **An *all* variant is select all, then the gesture.** A gesture over a selection needs no
-  second gesture for everything.
-- **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user
-  can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same
-  command, not a second gesture.
-- **An entry point fires a gesture. A gesture does not fire another.** An entry point may fire any
-  gesture through the command registry. It passes the Argument and uses no result, as a click on a
-  plugin row opens its header. A gesture that acts on another box's outcome calls that box through
-  a reference the reference view draws.
-- **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb
-  the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod"),
-  or the verb alone for a gesture in Every view ("Modbench: Copy Value").
-  Keep the ID's verb and the user's verb the same words. Prefer existing software-development
-  language, and keep both short. A verb that needs more than three words means the concept lacks a
-  term, so define the term first.
-- **No dead entries.** A gesture that is not available, or not applicable, is not shown. It is never
-  shown and then refused for that reason. A gesture that is offered and then cannot proceed still
-  refuses, and says why (see the next principle).
-- **Refuse, do not repair.** When a gesture cannot proceed, it says why and stops. The user fixes
-  the cause and tries again.
-- **A gone object is refused.** A gesture whose object has gone from disk is refused, and the refusal
-  names it.
-- **A failed gesture writes nothing.** When a command cannot finish, it leaves the files as they
-  were and reports the failure
-  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)). A
-  surface story names any gesture that cannot promise this.
-- **A selection is one gesture, and each item lands on its own.** A gesture over several objects is
-  one command with the whole selection as its Argument, asked once. An item that cannot proceed
-  writes nothing and is refused, naming why; the others land. The result names both
-  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md),
-  invariant 4). A cause that no item can escape, such as git missing from the PATH, refuses the
-  whole selection once, before any item is written.
-- **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no
-  message.
-- **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks
-  first. It asks once for the whole selection. An edit to a value inside a record changes the record
-  and deletes nothing, so it does not ask. No other gesture asks. A surface can name
-  an exception, with its reason.
-- **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch
-  reads the file back, and every view updates from the disk's next value. common.md, Unconfirmed
-  writes, says what a view shows until then. The disk's value always wins.
-- **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing
-  and says nothing.
-- **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts,
-  stops or reloads it.
+  A category word such as "edit" fails the first test, so its variants are separate gestures. An opposite pair needs no picker. Gestures that share a flow share a diagram; that does not merge them.
+- **A gesture is atomic.** It does one thing the user intends, however many steps it takes inside. A chain of gestures the user already has, such as installing and then moving, is a script the user writes.
+- **An *all* variant is select all, then the gesture.** A gesture over a selection needs no second gesture for everything.
+- **Entry points are not gestures.** Every gesture is a command. The palette lists it, and the user can bind a key to it. A menu item, a default key or a mouse click is an entry point to the same command, not a second gesture.
+- **An entry point fires a gesture. A gesture does not fire another.** An entry point may fire any gesture through the command registry. It passes the Argument and uses no result, as a click on a plugin row opens its header. A gesture that acts on another box's outcome calls that box through a reference the reference view draws.
+- **One identity.** The Command ID is the identity of a gesture. The Gesture column is the verb the user sees for it, and the palette title is that verb plus the object ("Modbench: Rename Mod"), or the verb alone for a gesture in Every view ("Modbench: Copy Value"). Keep the ID's verb and the user's verb the same words. Prefer existing software-development language, and keep both short. A verb that needs more than three words means the concept lacks a term, so define the term first.
+- **No dead entries.** A gesture that is not available, or not applicable, is not shown. It is never shown and then refused for that reason. A gesture that is offered and then cannot proceed still refuses, and says why (see the next principle).
+- **Refuse, do not repair.** When a gesture cannot proceed, it says why and stops. The user fixes the cause and tries again.
+- **A gone object is refused.** A gesture whose object has gone from disk is refused, and the refusal names it.
+- **A failed gesture writes nothing.** When a command cannot finish, it leaves the files as they were and reports the failure ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)). A surface story names any gesture that cannot promise this.
+- **A selection is one gesture, and each item lands on its own.** A gesture over several objects is one command with the whole selection as its Argument, asked once. An item that cannot proceed writes nothing and is refused, naming why; the others land. The result names both ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md), invariant 4). A cause that no item can escape, such as git missing from the PATH, refuses the whole selection once, before any item is written.
+- **Esc changes nothing.** Cancelling a pick or a prompt ends the gesture with no write and no message.
+- **Confirm what destroys.** A gesture that deletes an object, or replaces a whole object, asks first. It asks once for the whole selection. An edit to a value inside a record changes the record and deletes nothing, so it does not ask. No other gesture asks. A surface can name an exception, with its reason.
+- **A write is forgotten.** A gesture writes its file and keeps no copy of the new state. The watch reads the file back, and every view updates from the disk's next value. common.md, Unconfirmed writes, says what a view shows until then. The disk's value always wins.
+- **Doing nothing is not an error.** A gesture whose result equals the current state writes nothing and says nothing.
+- **No lifecycle gestures for mEdit.** The backend starts with the extension. No gesture starts, stops or reloads it.
 - **One filter.** Every list has the same name filter (common.md, The name filter).
-- **Stay in the panel.** No click on the record panel moves the user out of it. A gesture that
-  opens another tab is on the right-click menu.
+- **Stay in the panel.** No click on the record panel moves the user out of it. A gesture that opens another tab is on the right-click menu.
 
 ## Chrome
 
 Rules for the title bar of a view.
 
 - A view shows at most four icons, and a filter and its clear count as one.
-- An icon is earned. A state readout or a common toggle keeps one. A configure-once gesture goes in
-  the overflow.
+- An icon is earned. A state readout or a common toggle keeps one. A configure-once gesture goes in the overflow.
 - A destructive gesture never gets an icon. It sits in the overflow, behind a confirmation.
-- The order is the name filter, the view's state toggle, domain gestures, the overflow, and Collapse
-  All last. Collapse All is on trees only.
-- An action that is not about a tree's own object goes on the Toolbox, the status bar or the
-  palette.
+- The order is the name filter, the view's state toggle, domain gestures, the overflow, and Collapse All last. Collapse All is on trees only.
+- An action that is not about a tree's own object goes on the Toolbox, the status bar or the palette.
 
 ## Ruling a gesture out
 
-A template is a standalone program. Modbench is not. A gesture leaves this file for one of these
-reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md) or
-[mo2.md](../out-of-scope/mo2.md):
+A template is a standalone program. Modbench is not. A gesture leaves this file for one of these reasons, and each reason is a row in the summary table of [xedit.md](../out-of-scope/xedit.md) or [mo2.md](../out-of-scope/mo2.md):
 
 - **VS Code provides it.** Settings, editor history, the file tab, tasks, Problems and Output.
 - **Standalone application.** The template manages its own startup, save or options.
@@ -155,8 +73,7 @@ reasons, and each reason is a row in the summary table of [xedit.md](../out-of-s
 - **Maintainer ruling.** The gesture is unnecessary, and its register row says why.
 - **Dead in the template.** It has no working handler there.
 
-A gesture that fits none of these stays in the tables. A new reason is added to the summary table
-first. The file for that template lists the gesture with its reason.
+A gesture that fits none of these stays in the tables. A new reason is added to the summary table first. The file for that template lists the gesture with its reason.
 
 ## Surfaces and their templates
 
@@ -168,8 +85,7 @@ first. The file for that template lists the gesture with its reason.
 | Downloads | - | Downloads tab | [downloads.md](surfaces/downloads.md) |
 | Editor | View grid, Referenced By | - | [editor.md](surfaces/editor.md) |
 
-The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity
-calls for (ADR-0019); diagnostics go to the Problems panel.
+The xEdit Messages tab is not a surface. Failures go to the Output and the surface their severity calls for (ADR-0019); diagnostics go to the Problems panel.
 
 ## Where surfaces live
 
@@ -182,15 +98,11 @@ calls for (ADR-0019); diagnostics go to the Problems panel.
 | Editor, the record panel | an editor tab | - | opened by the user |
 | Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
 
-Every view is always present. A view with nothing to show renders its own empty state, and no
-view hides itself. Referenced By is a Panel view because it follows the active record, and a
-sidebar view cannot sit beside an editor tab.
+Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself. Referenced By is a Panel view because it follows the active record, and a sidebar view cannot sit beside an editor tab.
 
 ## Every view
 
-What every list view does to whatever it shows, whatever the object. common.md says how each
-behaves, and each surface says what its rows copy. The Toolbox is a readout, not a list, and offers
-neither.
+What every list view does to whatever it shows, whatever the object. common.md says how each behaves, and each surface says what its rows copy. The Toolbox is a readout, not a list, and offers neither.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
@@ -250,8 +162,7 @@ A separator is a row in mod order.
 
 ## Record
 
-A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the
-palette only while one has focus.
+A field gesture from the palette acts on the focused cell of the record tab in focus, and is in the palette only while one has focus.
 
 | Gesture | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|
@@ -285,12 +196,7 @@ palette only while one has focus.
 
 ## System commands
 
-Commands Modbench runs itself. No user starts them and no surface owns them, so they have no gesture
-and sit outside the object tables. The first column is the trigger that fires each one. Each is a
-command for the same reason a gesture is: one handler, and one identity. Each is internal:
-registered under its Command ID, with no entry point and no palette entry. A system command keeps
-the disk and mEdit in line with the instance value. It takes the value, or the slice it needs, as
-its Argument.
+Commands Modbench runs itself. No user starts them and no surface owns them, so they have no gesture and sit outside the object tables. The first column is the trigger that fires each one. Each is a command for the same reason a gesture is: one handler, and one identity. Each is internal: registered under its Command ID, with no entry point and no palette entry. A system command keeps the disk and mEdit in line with the instance value. It takes the value, or the slice it needs, as its Argument.
 
 | Trigger | Effect | Command ID | Argument | Options | Template | Meaning | Trace |
 |---|---|---|---|---|---|---|---|

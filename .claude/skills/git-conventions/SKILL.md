@@ -5,57 +5,28 @@ description: This repo's git workflow — every stream of work gets its own work
 
 # Git conventions
 
-**The main checkout is merge-only, unconditionally — not just when other work happens to be
-live.** Solo or concurrent, the rule doesn't change: the first stream to start doesn't get to
-claim the main checkout as its workspace just because nothing else is running yet. If it does,
-the next stream to start has nowhere safe to land. Always work in a worktree.
+**The main checkout is merge-only, unconditionally — not just when other work happens to be live.** Solo or concurrent, the rule doesn't change: the first stream to start doesn't get to claim the main checkout as its workspace just because nothing else is running yet. If it does, the next stream to start has nowhere safe to land. Always work in a worktree.
 
 ## Starting work
 
 1. `git worktree list` and `ListAgents` — see what's already live before adding to it.
-2. For every live worktree, `git -C <worktree> diff --name-only main` and compare against the
-   files your own work expects to touch. Overlap on a shared file: wait, negotiate order, or pick
-   a different slice. No overlap: proceed.
-3. `git worktree add ../<repo>-fix-<n>-<slug> fix-<n>-<slug>` — a sibling directory, never the
-   main checkout. `.claude/worktrees/` belongs to the `Agent` tool's own auto-managed isolation;
-   don't hand-create worktrees there. An orchestrated executor works in one of those, cut from
-   local `HEAD` (`worktree.baseRef` is `head` in the local settings), creates its `fix-<n>-<slug>`
-   branch inside it, and the orchestrator removes it at land.
-4. Claim tracked-ticket work immediately: `gh issue edit <n> --add-assignee @me` or a claiming
-   comment.
+2. For every live worktree, `git -C <worktree> diff --name-only main` and compare against the files your own work expects to touch. Overlap on a shared file: wait, negotiate order, or pick a different slice. No overlap: proceed.
+3. `git worktree add ../<repo>-fix-<n>-<slug> fix-<n>-<slug>` — a sibling directory, never the main checkout. `.claude/worktrees/` belongs to the `Agent` tool's own auto-managed isolation; don't hand-create worktrees there. An orchestrated executor works in one of those, cut from local `HEAD` (`worktree.baseRef` is `head` in the local settings), creates its `fix-<n>-<slug>` branch inside it, and the orchestrator removes it at land.
+4. Claim tracked-ticket work immediately: `gh issue edit <n> --add-assignee @me` or a claiming comment.
 
 ## While working
 
-A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2
-instance path from two places at once. A long-running process on a fixed port takes a flock'd
-lockfile.
-Backend gate runs are the heaviest thing a stream does. `run-gates.sh` holds two machine-wide gate
-slots, so a third run waits rather than sharing: at three the machine has no memory headroom left.
-A queued run can outlast a 10-minute foreground command, so `/validate` runs the gates detached
-and polls them.
-Inner-loop `dotnet test --filter` runs take no slot.
+A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2 instance path from two places at once. A long-running process on a fixed port takes a flock'd lockfile. Backend gate runs are the heaviest thing a stream does. `run-gates.sh` holds two machine-wide gate slots, so a third run waits rather than sharing: at three the machine has no memory headroom left. A queued run can outlast a 10-minute foreground command, so `/validate` runs the gates detached and polls them. Inner-loop `dotnet test --filter` runs take no slot.
 
 ## Merging
 
-1. `/validate` and `/code-review main` are a STRICT gate for every merge to main. Sort each finding
-   by `/validate`'s Finding dispositions.
-2. A branch that changes a maintainer's document merges only once the maintainer approves it. The
-   maintainer's documents are `docs/principles.md`, `docs/adr/`, `docs/architecture/`,
-   `docs/out-of-scope/`, `CONTEXT.md` and every `CLAUDE.md`. After the review, open the diff in the
-   maintainer's VS Code window, one `code --reuse-window --diff <main-checkout file> <worktree file>`
-   per changed file, and ask for feedback. Apply the feedback, and ask again; the review does not run
-   again. In an orchestrated run, the reviewer holds such a branch instead
-   (`.claude/skills/orchestrate/REVIEW.md`).
-3. Merge only from the main checkout, one merge at a time: `git -C <main-checkout-path> merge
-   --no-ff <branch>`. Confirm `git status` is clean and no `.git/MERGE_HEAD` exists first.
+1. `/validate` and `/code-review main` are a STRICT gate for every merge to main. Sort each finding by `/validate`'s Finding dispositions.
+2. A branch that changes a maintainer's document merges only once the maintainer approves it. The maintainer's documents are `docs/principles.md`, `docs/adr/`, `docs/architecture/`, `docs/out-of-scope/`, `CONTEXT.md` and every `CLAUDE.md`. After the review, open the diff in the maintainer's VS Code window, one `code --reuse-window --diff <main-checkout file> <worktree file>` per changed file, and ask for feedback. Apply the feedback, and ask again; the review does not run again. In an orchestrated run, the reviewer holds such a branch instead (`.claude/skills/orchestrate/REVIEW.md`).
+3. Merge only from the main checkout, one merge at a time: `git -C <main-checkout-path> merge --no-ff <branch>`. Confirm `git status` is clean and no `.git/MERGE_HEAD` exists first.
 4. `git fetch && git merge --ff-only origin/main` before pushing.
 
 ## Cleanup
 
 1. On merge: `git worktree remove <path>`, `git branch -d <branch>`, immediately.
-2. Before removing anything, verify it's actually done — a branch tip matching `main` is not
-   enough by itself. Check both: `git log --oneline -1 <branch>` against `main`, and `git -C
-   <path> status --short`. Tip matches and the tree is clean: safe to remove. Tip matches but the
-   tree is dirty: uncommitted live work, leave it.
-3. Separately sweep `.claude/worktrees/` for directories `git worktree list` doesn't recognize —
-   confirm with `git worktree prune -n -v`, inspect contents, then remove.
+2. Before removing anything, verify it's actually done — a branch tip matching `main` is not enough by itself. Check both: `git log --oneline -1 <branch>` against `main`, and `git -C <path> status --short`. Tip matches and the tree is clean: safe to remove. Tip matches but the tree is dirty: uncommitted live work, leave it.
+3. Separately sweep `.claude/worktrees/` for directories `git worktree list` doesn't recognize — confirm with `git worktree prune -n -v`, inspect contents, then remove.

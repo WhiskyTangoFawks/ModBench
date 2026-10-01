@@ -5,12 +5,9 @@ description: Build the extension and launch a VS Code Extension Development Host
 
 # Manual Test
 
-Build the extension if needed, then launch a VS Code Extension Development Host pointed at
-a real MO2 instance directory. Do all steps proactively without waiting to be asked.
+Build the extension if needed, then launch a VS Code Extension Development Host pointed at a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
-The extension spawns the backend itself at activation
-([ADR-0002](../../../docs/adr/0002-mod-management-and-editing-are-one-tool.md); there is no Launch/Close
-mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
+The extension spawns the backend itself at activation ([ADR-0002](../../../docs/adr/0002-mod-management-and-editing-are-one-tool.md); there is no Launch/Close mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current
 
@@ -18,9 +15,7 @@ mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README
 git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
 ```
 
-Both must hold — HEAD on a branch (a detached HEAD silently strands every commit made on
-it) and that branch containing `main`. Anything else: stop and say so — a manual test on a
-stale tree verifies behavior absent from `main`.
+Both must hold — HEAD on a branch (a detached HEAD silently strands every commit made on it) and that branch containing `main`. Anything else: stop and say so — a manual test on a stale tree verifies behavior absent from `main`.
 
 ## 1 — Build the extension (if needed)
 
@@ -28,9 +23,7 @@ stale tree verifies behavior absent from `main`.
 cd modbench && npm run build
 ```
 
-The published self-contained backend binary lives at `modbench/backend/` (produced by
-`npm run build:backend`, part of `vscode:prepublish`) — rebuild it only if `MEditService/`
-changed.
+The published self-contained backend binary lives at `modbench/backend/` (produced by `npm run build:backend`, part of `vscode:prepublish`) — rebuild it only if `MEditService/` changed.
 
 ## 2 — Launch the VS Code Extension Development Host
 
@@ -41,14 +34,8 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "$(git rev-parse --show-toplevel)/DevList" &
 ```
 
-**The workspace root must be a real MO2 instance directory** (README, *Launch the extension*: the
-workspace folder is the instance, with no separate setting). Default to `DevList/` (the local test
-instance checked into this repo) unless the user names another instance. Do not open the
-Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
+**The workspace root must be a real MO2 instance directory** (README, *Launch the extension*: the workspace folder is the instance, with no separate setting). Default to `DevList/` (the local test instance checked into this repo) unless the user names another instance. Do not open the Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
 ## 3 — Activate the extension
 
-The extension activates on `onStartupFinished`, so the views populate once the window is ready.
-The activity bar icon appears (Toolbox), and the backend launches automatically — the Plugins tree's rows
-gain chevrons once the load order is ready. Nothing switches views; every MO2-side view stays
-exactly where it was.
+The extension activates on `onStartupFinished`, so the views populate once the window is ready. The activity bar icon appears (Toolbox), and the backend launches automatically — the Plugins tree's rows gain chevrons once the load order is ready. Nothing switches views; every MO2-side view stays exactly where it was.

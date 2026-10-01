@@ -1,8 +1,6 @@
 # Modbench and mEdit
 
-Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# service
-(`MEditService/`). Architecture and surface map: [README.md](README.md). Per-module invariants:
-[modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
+Modding IDE for Bethesda plugins: VS Code extension (`modbench/`) + local C# service (`MEditService/`). Architecture and surface map: [README.md](README.md). Per-module invariants: [modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
 
 ## Status: pre-alpha, unreleased, zero users
 
@@ -28,34 +26,21 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ## Resources
 - `docs/architecture/` is the spec. `target-architecture.md` says how to read the diagrams. A view's spec is its surface in `surfaces/`. A trace in `traces/` is a diagram of how data flows, and holds no contract.
 - `docs/adr/` holds the decisions the code only cites. `ls docs/adr` is the index and the file names are the titles; `grep -rn ADR-00nn` finds everything one governs. Read one when a comment, spec or CLAUDE.md line names it, and when a design looks wrong and you are about to route around it.
-- `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen
-  (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
+- `references/` = grep-only local clones, never modified. Load-bearing two: Mutagen (`docs/Big-Cheat-Sheet.md`) and TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` = sorted,  `wbArray` = unsorted); also `modorganizer/` (MO2 C++), `SFRecordCompareEngine/`, `vscode-docs`. Gitignored, so **absent from every `git worktree`** — read it at the main checkout's absolute path; a relative grep from a worktree silently matches nothing.
 
 ## The chain of authority
 
-principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An epic or ticket sets
-scope, never behaviour. The divergence registers in `docs/out-of-scope/` rank with the ADR each
-serves. Check them before you propose a feature.
+principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An epic or ticket sets scope, never behaviour. The divergence registers in `docs/out-of-scope/` rank with the ADR each serves. Check them before you propose a feature.
 
 @docs/principles.md
 
-- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect:
-  fix it. Everything the list below does not name is tactical: decide it, and give the reason in
-  the commit message.
+- Strategy is the maintainer's; tactics are yours. Code that disagrees with a document is a defect: fix it. Everything the list below does not name is tactical: decide it, and give the reason in the commit message.
 - Stop and ask when the work does one of these:
-  - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and
-    no spec draws.
-  - It needs a module, arrow or port that `docs/architecture/` does not draw, or an interface item
-    that a box's caption does not list.
+  - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
+  - It needs a module, arrow or port that `docs/architecture/` does not draw, or an interface item that a box's caption does not list.
   - It meets two documents at one level that disagree.
-- Report every break: two documents in the chain that disagree about the work. Build to the higher
-  one. A break report and a stop quote the texts at stake, name their levels and say what you
-  built; the maintainer decides every change to their documents.
-- CONTEXT.md is the maintainer's modding vocabulary, outside the chain. Spec prose, code and
-  identifiers use its words. A label the user sees uses the reference tool's word. A divergence can
-  make that word mislead, such as "top" in a view whose sort the user can reverse. The label then
-  uses another word, and the register records that divergence. A concept with no word in either is described, never
-  named. When it needs a name, ask the maintainer.
+- Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
+- CONTEXT.md is the maintainer's modding vocabulary, outside the chain. Spec prose, code and identifiers use its words. A label the user sees uses the reference tool's word. A divergence can make that word mislead, such as "top" in a view whose sort the user can reverse. The label then uses another word, and the register records that divergence. A concept with no word in either is described, never named. When it needs a name, ask the maintainer.
 
 ## Rules that matter
 - Generalize across Bethesda games. Modbench's scan holds the game-name literals, and mEdit's holds game namespaces and game-concrete type names; what no scan can hold is a design that assumes one game's shape, so an FO4-concrete path or fixture is a fixture choice and never a platform lock.
