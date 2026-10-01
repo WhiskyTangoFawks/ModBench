@@ -170,7 +170,7 @@ describe('getAtPath', () => {
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path)).toEqual({
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
@@ -182,16 +182,21 @@ describe('arrayElementContext', () => {
     });
   });
 
+  it('canMoveDown is false for the last element', () => {
+    const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveDown).toBe(false);
+  });
+
   it('canMoveUp is false for the first element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 0 }];
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3).canMoveUp).toBe(false);
   });
 
   // A keyed array is stored in key order on every write, so neither Move could change the file;
   // Remove still applies, which is why the row carries this context at all.
   it('offers neither Move on a keyed element, and still offers the element itself', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }];
-    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
+    const context = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3);
     expect(context.canMoveUp).toBe(false);
     expect(context.canMoveDown).toBe(false);
     expect(context.webviewSection).toBe('arrayElement');
@@ -202,7 +207,7 @@ describe('arrayElementContext', () => {
   // survive onto the payload rather than collapse to the trailing index.
   it('a nested element carries every hop of its own path, and the Moves read the last one', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
-    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
+    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 2);
     expect(ctx.path).toEqual(path);
     expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
     expect(ctx.canMoveDown).toBe(true);
@@ -257,7 +262,7 @@ describe('combineVscodeContexts', () => {
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');
@@ -266,7 +271,7 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH, 3),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');

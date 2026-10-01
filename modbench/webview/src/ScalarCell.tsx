@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { displayValue, modelValue } from './modelValue';
+import { displayValue, modelValue, pastedValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata } from './types';
 
@@ -88,17 +88,9 @@ export function ScalarCell({
     if (modelValue(next, meta) !== modelValue(value, meta)) commit(next);
   }
 
-  function coerce(): unknown {
-    if (meta.type === 'int') { const n = parseInt(draft, 10); return isNaN(n) ? value : n; }
-    if (meta.type === 'float') { const n = parseFloat(draft); return isNaN(n) ? value : n; }
-    // The codec's own spelling of a translated string, with only its text changed.
-    if (meta.type === 'translatedString') return { ...(typeof value === 'object' ? value : null), Value: draft };
-    return draft;
-  }
-
   const isEnum = meta.type === 'enum' && meta.enumMembers.length > 0;
   // A checkbox writes as it toggles, so closing it has nothing left to write.
-  const pending = meta.type === 'bool' ? value : isEnum ? draft : coerce();
+  const pending = meta.type === 'bool' ? value : isEnum ? draft : pastedValue(draft, meta, value);
 
   // Enter, Esc and a blur each end the editor, and the focus Enter and Esc hand back blurs it again.
   function settle(write: boolean) {

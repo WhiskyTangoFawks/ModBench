@@ -39,9 +39,16 @@ describe('DiskCell — the grid keys act only while no editor is open', () => {
 
   it('Delete in an open editor does not remove the element', () => {
     const remove = vi.fn();
-    renderCell({ arrayOps: { remove } }, <input data-editor aria-label="editor" />);
+    renderCell({ keys: { remove } }, <input data-editor aria-label="editor" />);
     fireEvent.keyDown(screen.getByLabelText('editor'), { key: 'Delete' });
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+V in an open editor is left to the editor', () => {
+    const paste = vi.fn();
+    renderCell({ keys: { paste } }, <input data-editor aria-label="editor" />);
+    fireEvent.paste(screen.getByLabelText('editor'), { clipboardData: { getData: () => 'text' } });
+    expect(paste).not.toHaveBeenCalled();
   });
 
   it('F2 in an open editor does not open another', () => {
@@ -49,6 +56,76 @@ describe('DiskCell — the grid keys act only while no editor is open', () => {
     renderCell({}, <><button data-open-trigger onClick={open}>open</button><input data-editor aria-label="editor" /></>);
     fireEvent.keyDown(screen.getByLabelText('editor'), { key: 'F2' });
     expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('DiskCell — the keys on the focused cell', () => {
+  beforeEach(() => { copyValue.mockClear(); });
+  const cell = () => screen.getByText('cell');
+
+  it('Ctrl+V hands the clipboard text to paste', () => {
+    const paste = vi.fn();
+    renderCell({ keys: { paste } });
+    fireEvent.paste(cell(), { clipboardData: { getData: () => 'from the clipboard' } });
+    expect(paste).toHaveBeenCalledWith('from the clipboard');
+  });
+
+  it('Ctrl+V on a cell that takes no paste is left alone', () => {
+    renderCell();
+    expect(fireEvent.paste(cell(), { clipboardData: { getData: () => 'text' } })).toBe(true);
+  });
+
+  it('Delete on an element removes it, not clears it', () => {
+    const remove = vi.fn();
+    const clear = vi.fn();
+    renderCell({ keys: { remove, clear } });
+    fireEvent.keyDown(cell(), { key: 'Delete' });
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('Delete on any other field clears it', () => {
+    const clear = vi.fn();
+    renderCell({ keys: { clear } });
+    fireEvent.keyDown(cell(), { key: 'Delete' });
+    expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+X copies the value, then clears it', () => {
+    const order: string[] = [];
+    copyValue.mockImplementation(() => order.push('copy'));
+    renderCell({ keys: { clear: () => order.push('clear') } });
+    fireEvent.keyDown(cell(), { key: 'x', ctrlKey: true });
+    expect(order).toEqual(['copy', 'clear']);
+  });
+
+  it('Ctrl+X on a cell that cannot clear copies nothing', () => {
+    renderCell();
+    fireEvent.keyDown(cell(), { key: 'x', ctrlKey: true });
+    expect(copyValue).not.toHaveBeenCalled();
+  });
+
+  it('Alt+Up and Alt+Down move the element', () => {
+    const moveUp = vi.fn();
+    const moveDown = vi.fn();
+    renderCell({ keys: { moveUp, moveDown } });
+    fireEvent.keyDown(cell(), { key: 'ArrowUp', altKey: true });
+    fireEvent.keyDown(cell(), { key: 'ArrowDown', altKey: true });
+    expect(moveUp).toHaveBeenCalledTimes(1);
+    expect(moveDown).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['Insert', {}],
+    ['ArrowUp', { ctrlKey: true }],
+    ['ArrowDown', { ctrlKey: true }],
+  ])('%s with %j is bound to nothing', (key, modifiers) => {
+    const keys = { remove: vi.fn(), moveUp: vi.fn(), moveDown: vi.fn() };
+    renderCell({ keys });
+    expect(fireEvent.keyDown(cell(), { key, ...modifiers })).toBe(true);
+    expect(keys.remove).not.toHaveBeenCalled();
+    expect(keys.moveUp).not.toHaveBeenCalled();
+    expect(keys.moveDown).not.toHaveBeenCalled();
   });
 });
 

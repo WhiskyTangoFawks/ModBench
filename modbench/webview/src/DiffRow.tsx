@@ -3,8 +3,8 @@ import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
-import { DiskCell } from './DiskCell';
-import { copiedText, modelValue } from './modelValue';
+import { DiskCell, type CellKeys } from './DiskCell';
+import { copiedText, modelValue, pastedValue } from './modelValue';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
@@ -12,12 +12,13 @@ import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import {
-  arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
-  columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
+  arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, getAtPath, isArrayElementHop,
+  columnHasNode, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { LABEL_COLUMN } from './columnKey';
+import type { ArrayElementContext, ElementCommand } from './messages';
 
 interface RenderCellExtras {
   checkError?: string | null;
@@ -118,9 +119,7 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
 // One step of label indentation per ancestor hop, so a row's indent reads as its real depth.
 const INDENT_PER_LEVEL = 24;
 
-/** Every array gesture a row can offer. Which of them *this* row offers is the row's own
- *  question, answered once from its metadata and its last path hop. */
-export type ArrayOp = 'add' | 'remove' | 'moveUp' | 'moveDown';
+const arrayLength = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
 interface DiffRowProps {
   diff: FieldDiff;
@@ -150,9 +149,7 @@ interface DiffRowProps {
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   writeAt: WriteAt;
-  // Every array gesture, through one callback: the panel offers it to every row and this row
-  // decides which ops it has, so availability is stated once rather than agreed on twice.
-  onArrayOp?: (plugin: ColumnKey, op: ArrayOp) => void;
+  onElementCommand?: (command: ElementCommand, context: ArrayElementContext) => void;
   // What each column's cell reads while this row is collapsed, when the presentation table has an
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
@@ -170,7 +167,7 @@ export function DiffRow({
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
-  onArrayOp, collapsedSummary, ownerPresent, cellMetas,
+  onElementCommand, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
@@ -188,7 +185,6 @@ export function DiffRow({
   const isArrayParentRow = offersArrayAdd(meta);
   const lastPathSegment = context.path[context.path.length - 1];
   const isArrayElementRow = isArrayElementHop(lastPathSegment);
-  const isMovableElementRow = isMovableElementHop(lastPathSegment);
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // This row paints its own node's conflict state, not a record-wide value. An expanded row with
   // children defers to its children's tints — painting both would duplicate the signal — and
@@ -214,6 +210,7 @@ export function DiffRow({
         isFocused={isCellFocused(focusedCell, rowKey, null)}
         onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
+        copyText={label}
       >
         {(hasChildren || isFlagsRow) && (
           <ExpandArrow expanded={rowExpanded} onToggle={onToggle} />
@@ -257,17 +254,11 @@ export function DiffRow({
           .filter(Boolean).join('\n') || undefined;
         const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null;
         // Array ops are offered only on a writable cell.
-        const arrayEditable = !!onArrayOp && writable && (isArrayParentRow || isArrayElementRow);
+        const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
         const offersMenu = arrayEditable || meta.type === 'string';
-        const arrayOps = arrayEditable ? {
-          add: isArrayParentRow ? () => onArrayOp(key, 'add') : undefined,
-          remove: isArrayElementRow ? () => onArrayOp(key, 'remove') : undefined,
-          moveUp: isMovableElementRow ? () => onArrayOp(key, 'moveUp') : undefined,
-          moveDown: isMovableElementRow ? () => onArrayOp(key, 'moveDown') : undefined,
-        } : undefined;
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
@@ -275,16 +266,28 @@ export function DiffRow({
         // The host that invokes these commands holds no document, so it is handed the envelope's
         // own path, resolved here against this column's own value of the root.
         const hops = wirePath(rootField, context.path, rootValue?.value);
+        // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every hop
+        // above it rather than just that one.
+        const elementContext = arrayEditable && isArrayElementRow
+          ? arrayElementContext(
+              col.override.formKey, col.override.plugin, col.override.origin, hops,
+              arrayLength(getAtPath(rootValue?.value, context.path.slice(0, -1))))
+          : undefined;
+        const fire = (command: ElementCommand, allowed = true) =>
+          allowed && elementContext && onElementCommand ? () => onElementCommand(command, elementContext) : undefined;
+        const keys: CellKeys = {
+          remove: fire('removeElement'),
+          moveUp: fire('moveElementUp', elementContext?.canMoveUp),
+          moveDown: fire('moveElementDown', elementContext?.canMoveDown),
+          clear: cellEditable && diff.values[key] != null ? () => onEditCell(key, null) : undefined,
+          paste: cellEditable ? text => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined,
+        };
         const vscodeContext = offersMenu ? combineVscodeContexts(
           // `hops` addresses the array itself here — this row *is* the array.
           arrayEditable && isArrayParentRow
             ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
             : undefined,
-          // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every
-          // hop above it rather than just that one.
-          arrayEditable && isArrayElementRow
-            ? arrayElementContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
-            : undefined,
+          elementContext,
           meta.type === 'string'
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
@@ -306,7 +309,7 @@ export function DiffRow({
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               copyText={copyText}
-              arrayOps={arrayOps}
+              keys={keys}
               vscodeContext={vscodeContext}
             >
               {!isExpanded && hasElement && (
@@ -319,7 +322,7 @@ export function DiffRow({
         }
         return (
           <DiskCell
-            arrayOps={arrayOps}
+            keys={keys}
             vscodeContext={vscodeContext}
             key={key}
             style={cellStyle}
@@ -332,7 +335,7 @@ export function DiffRow({
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
               <WrittenValue write={writeAt(key, hops)} disk={shown}>
-                {value => renderCell(value, cellMeta, onOpen, {
+                {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, onOpen, {
                   // A reference the disk does not hold yet has no resolution.
                   checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,
                   onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,

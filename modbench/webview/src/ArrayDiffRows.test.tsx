@@ -9,12 +9,13 @@ import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
 import {
-  at, compareOverride, compareResultFixture, diffNode, fieldMeta, keyed, lastPostedEnvelope, member,
+  at, compareOverride, compareResultFixture, diffNode, fieldMeta, keyed, lastElementCommand, lastPostedEnvelope, member,
   panelClient, required,
 } from './test/fixtures';
 import type { CompareResult } from './types';
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
+const lastCommand = () => lastElementCommand(vscode.postMessage);
 
 
 const sortedArrayMeta = fieldMeta({
@@ -352,20 +353,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Insert on the focused array-parent cell posts add at the array, carrying no value', async () => {
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(within(required(screen.getByText('Values').closest('tr'), "Values's row")).getByText('▼'));
-    const label = required(screen.getAllByText('[3]')[0], 'the [3] index label');
-    const cell = required(label.closest('td'), "the [3] index label's cell");
-    fireEvent.click(cell); // focus
-    fireEvent.keyDown(cell, { key: 'Insert' });
-
-    expect(lastEnvelope()).toEqual({ op: 'add', path: [member('Values')] });
-    expect(lastEnvelope()).not.toHaveProperty('value');
-  });
-
-  it('Delete on a focused array-element cell posts remove at its own index', async () => {
+  it('Delete on a focused array-element cell fires remove element at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[1]'));
@@ -373,44 +361,54 @@ describe('RecordPanel — array editing (unsorted)', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Values'), at(1)] });
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Values'), at(1)] } });
+    expect(lastEnvelope()).toBeUndefined();
   });
 
-  it('Ctrl+ArrowDown on a focused element posts move with the next position as its value', async () => {
+  it('Alt+ArrowDown on a focused element fires move element down', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
     const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+    fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true });
 
-    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: 1 });
+    expect(lastCommand()).toMatchObject({ command: 'moveElementDown', context: { path: [member('Values'), at(0)] } });
   });
 
-  it('Ctrl+ArrowUp on a focused element posts move with the previous position as its value', async () => {
+  it('Alt+ArrowUp on a focused element fires move element up', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[2]'));
     const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
+    fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true });
 
-    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(2)], value: 1 });
+    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Values'), at(2)] } });
   });
 
-  // The webview posts what the user asked for; a move off either end is the backend's to refuse
-  // by name (ADR-0005), not a boundary this side answers.
-  it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
+  // As VS Code moves a line: at the end of the array nothing happens.
+  it('Alt+ArrowUp on the first element fires nothing and leaves the key unhandled', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
     const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
 
-    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Values'), at(0)], value: -1 });
+    expect(fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true })).toBe(true);
+    expect(lastCommand()).toBeUndefined();
   });
 
+  it('Alt+ArrowDown on the last element fires nothing and leaves the key unhandled', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
+    fireEvent.click(cell);
+
+    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
+    expect(lastCommand()).toBeUndefined();
+  });
 });
 
 // Module scope: the inline-edit blocks below share these fixtures.
@@ -525,7 +523,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     });
   });
 
-  it('Delete on an element nested inside a struct posts remove with every hop', async () => {
+  it('Delete on an element nested inside a struct fires remove element with every hop', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -539,24 +537,9 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Container'), member('Entries'), at(0)] });
-  });
-
-  it('Ctrl+ArrowDown on an element nested inside a struct posts move with every hop', async () => {
-    currentCompare = nestedStructArrayResult;
-    renderEditablePanel();
-    await waitFor(() => screen.getByText('Container'));
-    await waitFor(() => screen.getByText('Entries'));
-    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
-
-    const indexCell = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
-    const row = required(indexCell.closest('tr'), "the row containing the '[0]' index cell");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
-
-    expect(lastEnvelope()).toEqual({ op: 'move', path: [member('Container'), member('Entries'), at(0)], value: 1 });
+    expect(lastCommand()).toMatchObject({
+      command: 'removeElement', context: { path: [member('Container'), member('Entries'), at(0)] },
+    });
   });
 
   it('a top-level scalar: the one member hop', async () => {
@@ -680,7 +663,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     });
   });
 
-  it('Delete on a keyed element posts remove naming the key', async () => {
+  it('Delete on a keyed element fires remove element naming the key', async () => {
     await renderOpen('Guard');
     const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
     const row = required(guardCell.closest('tr'), "the row for 'Guard'");
@@ -689,7 +672,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Scripts'), keyed('Guard')] });
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Scripts'), keyed('Guard')] } });
   });
 
   // The backend spells a key from the element's declared defaults, so an element omitting a key
@@ -728,26 +711,26 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEnvelope()).toEqual({ op: 'remove', path: [member('Fragments'), keyed('10 / 0')] });
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Fragments'), keyed('10 / 0')] } });
   });
 
   // A keyed array is stored in key order, so no Move could change the file: the accelerator is
   // inert on its rows.
-  it('Ctrl+ArrowDown on a keyed element posts nothing', async () => {
+  it('Alt+ArrowDown on a keyed element fires nothing', async () => {
     await renderOpen('Guard');
     const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
     const row = required(guardCell.closest('tr'), "the row for 'Guard'");
     const cells = row.querySelectorAll('td');
     const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+    fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true });
 
-    expect(lastEnvelope()).toBeUndefined();
+    expect(lastCommand()).toBeUndefined();
   });
 
   // Inert means the row never offers the op, not that the envelope builder refuses it afterwards:
   // a row that offered it would swallow the key and still post nothing, indistinguishable above.
-  it('Ctrl+ArrowDown on a keyed element leaves the key unhandled', async () => {
+  it('Alt+ArrowDown on a keyed element leaves the key unhandled', async () => {
     await renderOpen('Guard');
     const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
     const row = required(guardCell.closest('tr'), "the row for 'Guard'");
@@ -755,7 +738,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
 
-    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true })).toBe(true);
+    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
   });
 });
 

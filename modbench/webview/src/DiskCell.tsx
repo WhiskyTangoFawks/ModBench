@@ -22,18 +22,16 @@ function openEditor(e: React.SyntheticEvent<HTMLTableCellElement>): boolean {
   return trigger !== null;
 }
 
-// An op that does not apply to this exact (row, column) cell is left undefined, so an inapplicable
-// key is inert by construction — the same "no distinct affordance, just does nothing" rule every
-// other immutable gesture follows.
-export interface ArrayOps {
-  add?: () => void;
+export interface CellKeys {
   remove?: () => void;
+  clear?: () => void;
   moveUp?: () => void;
   moveDown?: () => void;
+  paste?: (text: string) => void;
 }
 
 export function DiskCell({
-  style, title, isFocused, onFocusCell, onDoubleClick, copyText, arrayOps, vscodeContext, children,
+  style, title, isFocused, onFocusCell, onDoubleClick, copyText, keys, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
@@ -43,10 +41,7 @@ export function DiskCell({
   // ADR-0018: what Ctrl+C on the focused cell copies; absent when the cell copies nothing. The
   // palette's copy value reads it off the cell too.
   copyText?: string;
-  // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu offers,
-  // each posting the same envelope the menu entry does, with no extension-host round trip for
-  // the keys themselves.
-  arrayOps?: ArrayOps;
+  keys?: CellKeys;
   // The already-combined `data-vscode-context` JSON string VS Code's own
   // `contributes.menus["webview/context"]` gates on — undefined when this cell carries no
   // structural-op menu at all.
@@ -80,11 +75,24 @@ export function DiskCell({
       }}
       onDoubleClick={e => { onDoubleClick?.(); openEditor(e); }}
       onFocus={e => { if (e.target === e.currentTarget && !isFocused) onFocusCell(); }}
+      onPaste={e => {
+        if (inside(e.target, '[data-editor]') || !keys?.paste) return;
+        e.preventDefault();
+        keys.paste(e.clipboardData.getData('text/plain'));
+      }}
       onKeyDown={e => {
         if (e.target instanceof Element && e.target.closest('[data-editor]')) return;
+        const dropped = keys?.remove ?? keys?.clear;
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
           e.preventDefault();
           if (copyText !== undefined) copyValue(copyText);
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+          e.preventDefault();
+          if (!dropped) return;
+          if (copyText !== undefined) copyValue(copyText);
+          dropped();
           return;
         }
         // ADR-0018: F2 is xEdit's only keyboard "open the editor" trigger. Dispatched at the
@@ -94,10 +102,9 @@ export function DiskCell({
           if (openEditor(e)) e.preventDefault();
           return;
         }
-        if (e.key === 'Insert' && arrayOps?.add) { e.preventDefault(); arrayOps.add(); return; }
-        if (e.key === 'Delete' && arrayOps?.remove) { e.preventDefault(); arrayOps.remove(); return; }
-        if (e.ctrlKey && e.key === 'ArrowUp' && arrayOps?.moveUp) { e.preventDefault(); arrayOps.moveUp(); return; }
-        if (e.ctrlKey && e.key === 'ArrowDown' && arrayOps?.moveDown) { e.preventDefault(); arrayOps.moveDown(); }
+        if (e.key === 'Delete' && dropped) { e.preventDefault(); dropped(); return; }
+        if (e.altKey && e.key === 'ArrowUp' && keys?.moveUp) { e.preventDefault(); keys.moveUp(); return; }
+        if (e.altKey && e.key === 'ArrowDown' && keys?.moveDown) { e.preventDefault(); keys.moveDown(); }
       }}
     >
       {children}

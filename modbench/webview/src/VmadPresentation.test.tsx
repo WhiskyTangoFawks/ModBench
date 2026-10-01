@@ -11,6 +11,7 @@ import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from './messages';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
+  lastElementCommand,
 } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
@@ -480,20 +481,6 @@ describe('a member the column\'s own leaf does not declare', () => {
 });
 
 describe('Add Script is the generic array gesture', () => {
-  // The webview contributes no element: a new script's key is empty until the user names it,
-  // so it appears first and is then nameable.
-  it('posts the array op and no element of its own', async () => {
-    currentCompare = oneColumn([script('Guard')]);
-    renderPanel();
-    await waitFor(() => screen.getByText('Scripts'));
-
-    const cell = cellAt(rowOf(fieldCell('Scripts')), 1);
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Insert' });
-
-    expect(lastEnvelope()).toEqual({ op: 'add', path: [{ kind: 'member', name: 'Scripts' }] });
-  });
-
   it('the added script is a row of its own in that plugin’s column, and is nameable there', async () => {
     currentCompare = oneColumn([script('Guard')]);
     renderPanel();
@@ -561,7 +548,7 @@ describe('Add Script is the generic array gesture', () => {
     });
   });
 
-  it('Delete on a property under a keyed script posts remove through both key hops', async () => {
+  it('Delete on a property under a keyed script fires remove element through both key hops', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
@@ -571,28 +558,14 @@ describe('Add Script is the generic array gesture', () => {
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
-    expect(lastEnvelope()).toEqual({
-      op: 'remove',
-      path: [
-        { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
-        { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
-      ],
-    });
-  });
-
-  it('Insert on a property list nested under a keyed script posts add through the key hop', async () => {
-    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
-    renderPanel();
-    await openScripts();
-    await waitFor(() => screen.getByText('Properties'));
-
-    const cell = cellAt(rowOf(fieldCell('Properties')), 1);
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Insert' });
-
-    expect(lastEnvelope()).toEqual({
-      op: 'add',
-      path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }, { kind: 'member', name: 'Properties' }],
+    expect(lastElementCommand(vscode.postMessage)).toMatchObject({
+      command: 'removeElement',
+      context: {
+        path: [
+          { kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' },
+          { kind: 'member', name: 'Properties' }, { kind: 'key', key: 'Radius' },
+        ],
+      },
     });
   });
 });
