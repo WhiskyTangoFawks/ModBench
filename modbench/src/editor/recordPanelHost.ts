@@ -55,14 +55,15 @@ export interface EditorCommandDeps {
   // Where an extended-editor tab is written, answered at the composition root.
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
-// ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
-// notification stream (ADR-0015 invariant 3), not a broadcast from here.
+// ADR-0007: the single write path. A panel showing this record re-reads only on rows-changed from
+// the notification stream (ADR-0015 invariant 3).
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
     refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
     // ADR-0019 surfacing for a refused edit.
     reporter: deps.reporterFor('recordPanel'),
+    tellPanels: (message) => { for (const panel of deps.recordPanels) void panel.webview.postMessage(message); },
   };
 }
 
@@ -129,10 +130,12 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
       void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
     });
 
-    const scriptUri = panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', 'main.js'),
-    );
-    panel.webview.html = buildWebviewHtml({ formKey, scriptUri: scriptUri.toString(), cspSource: panel.webview.cspSource });
+    const asset = (file: string) => panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', file),
+    ).toString();
+    panel.webview.html = buildWebviewHtml({
+      formKey, scriptUri: asset('main.js'), styleUri: asset('main.css'), cspSource: panel.webview.cspSource,
+    });
   }
 }
 

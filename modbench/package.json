@@ -1163,6 +1163,7 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.46-24",
     "openapi-fetch": "^0.17.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",

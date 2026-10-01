@@ -5,34 +5,31 @@ import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
   buildColumns, columnHasNode, elementSegment, rootFieldOf,
   wirePath, variantFor, declaresMember,
-  headerCellContext, combineVscodeContexts,
+  headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
-  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PluginLoadFailure, RecordEditEnvelope,
+  ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
 import { vscode } from './vscode';
-import { editField, focusCell, focusedCellContext } from './nativeBridge';
+import { editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
-import { RecordHeaderRows, RECORD_HEADER_ROW, FORM_ID_ROW } from './RecordHeaderRows';
+import { RecordHeaderRows, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH } from './RecordHeaderRows';
 import { navigate, type NavRow } from './gridNavigation';
+import { useCellWrites } from './unconfirmedWrites';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
-
-// The document member a record's FormID is, which an edit of the FormID names (editor.md, The
-// FormID).
-const FORM_ID_MEMBER = 'FormKey';
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
@@ -123,9 +120,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
     [result]);
 
-  // Nothing is applied optimistically — the panel re-reads once the host reports the edit landed.
-  // An optimistic patch would show a value the write path had not accepted, which for a refused
-  // edit is a lie never corrected.
   const post = useCallback((plugin: ColumnKey, envelope: RecordEditEnvelope) => {
     const override = overrideFor(plugin);
     if (!override) return;
@@ -140,6 +134,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // An answer lands only if no later read was asked for since: reads answer out of order.
   const latestRead = useRef(0);
+  const { writeAt, written, refused, landed, clear: forgetWrites } = useCellWrites(logWarning);
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
     const read = ++latestRead.current;
@@ -158,10 +153,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       // still shows the banner rather than reading as settled.
       setConflictsComputed(loaded.conflictsComputed);
       setLoadFailures(loaded.loadFailures);
+      const unreadable = new Set(loaded.loadFailures.map(f => columnKey(f.name, f.origin)));
+      landed(read, loaded.result, fk, column => !unreadable.has(column));
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
-  }, [client]);
+  }, [client, landed]);
 
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
@@ -209,9 +206,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }, [post, hopsTo]);
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
-  const handleCellCommit = useCallback((plugin: ColumnKey, path: PathSegment[], rootField: string, value: unknown) => {
-    post(plugin, { op: 'set', path: hopsTo(plugin, rootField, path), value });
-  }, [post, hopsTo]);
+  const handleCellCommit = useCallback((plugin: ColumnKey, row: string, hops: PathHop[], value: unknown) => {
+    written(plugin, hops, value, Infinity, row);
+    post(plugin, { op: 'set', path: hops, value });
+  }, [post, written]);
 
   // Every message here is a broadcast: the extension host has no live reference into this panel's
   // React state, so it says what happened and each open panel decides whether it applies.
@@ -231,6 +229,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           setGone(false);
           setError(null);
           setFocusedCell(null);
+          forgetWrites();
         }
         setFormKey(msg.formKey);
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
@@ -242,11 +241,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // just clear its banner over stale content. Load-order-wide, not record-specific, so no
         // self-filter — every open panel reacts.
         void refresh(prevFormKeyRef.current);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN || msg.type === EXTENSION_TO_WEBVIEW.EDIT_REFUSED) {
+        const { formKey: edited, plugin, origin, envelope } = msg;
+        if (edited !== prevFormKeyRef.current || envelope.op !== 'set') return;
+        const column = columnKey(plugin, origin);
+        if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN) written(column, envelope.path, envelope.value, latestRead.current);
+        else refused(column, envelope.path, envelope.value);
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [refresh]);
+  }, [refresh, written, refused, forgetWrites]);
 
   const loadFailureMessage = recordPanelLoadFailureMessage(loadFailures, result?.overrides ?? []);
 
@@ -291,9 +296,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // that is each row's own `diff.conflictAll`, computed bottom-up per node.
   const { overrides, diffs } = result;
 
-  const winner = overrides.find(o => o.isWinner);
-  const displayId = (winner ?? overrides.at(0))?.editorId;
-  const title = displayId ? `${displayId} [${formKey}]` : formKey;
+  const title = recordLabel(overrides, formKey);
 
   const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
   const navRows: NavRow[] = [
@@ -338,7 +341,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         columns={columns}
         columnStyle={columnStyle}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
+        onEditCell={(plugin: ColumnKey, value: unknown) =>
+          handleCellCommit(plugin, rowKey, hopsTo(plugin, rootField, path), value)}
+        writeAt={writeAt}
         onArrayOp={(plugin: ColumnKey, op: ArrayOp) => handleArrayOp(plugin, path, rootField, op)}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
@@ -457,7 +462,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               onToggle={() => toggleRow(RECORD_HEADER_ROW)}
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
-              onCommitFormId={(plugin, value) => post(plugin, { op: 'set', path: [{ kind: 'member', name: FORM_ID_MEMBER }], value })}
+              onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_ROW, FORM_ID_PATH, value)}
+              writeAt={writeAt}
             />
             {diffs.flatMap(
               diff => buildRows(

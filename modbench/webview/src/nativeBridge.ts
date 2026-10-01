@@ -82,6 +82,11 @@ export function editField(formKey: string, plugin: string, origin: string, envel
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
 }
 
+// A line in the Output, which only the host can write.
+export function logWarning(message: string): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: `[recordPanel] ${message}` });
+}
+
 // The palette's field gestures act on the focused cell, which only this panel knows: `context` is
 // the one its right-click would hand the command, `null` no cell. `entered` is a user's focus, not
 // a re-read.
