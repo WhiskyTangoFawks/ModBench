@@ -14,7 +14,7 @@ import { trackConflictsComputed } from './conflictsComputedTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE, type RecordAddress } from './recordUri';
-import { recordOpenPlan, type RecordOpenPlan } from './recordOpenPlan';
+import { besideArgument, recordOpenPlan, type RecordOpenPlan } from './recordOpenPlan';
 import { recordTitle } from './recordTitle';
 
 export interface EditorCommandDeps {
@@ -171,8 +171,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
-    vscode.commands.registerCommand('modbench.record.open', (argument?: unknown, selection?: unknown) =>
-      openRecordTabs(recordOpenPlan(argument, selection, deps.focusedViewSelection()))),
+    vscode.commands.registerCommand('modbench.record.open', (argument?: unknown) =>
+      openRecordTabs(recordOpenPlan(argument, deps.focusedViewSelection()))),
+    vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
+      vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
   ];
 }
 

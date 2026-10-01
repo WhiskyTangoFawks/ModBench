@@ -20,14 +20,18 @@ function asksBeside(argument: unknown): boolean {
   return typeof argument === 'object' && argument !== null && 'placement' in argument && argument.placement === 'beside';
 }
 
-/** A menu hands over the clicked row and the selection, which opens beside. A palette entry or key
- *  hands over no Argument, so it takes the focused view's selection (commands.md, Principles). */
-export function recordOpenPlan(argument: unknown, selection: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
-  const fromMenu = Array.isArray(selection);
-  const subjects: readonly unknown[] = fromMenu ? (selection.length > 0 ? selection : [argument])
-    : argument === undefined ? focusedSelection
+/** A palette entry or key hands over no Argument, so it takes the focused view's selection
+ *  (commands.md, Principles). */
+export function recordOpenPlan(argument: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
+  const subjects: readonly unknown[] = argument === undefined ? focusedSelection
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
-  const beside = fromMenu || asksBeside(argument);
+  const beside = subjects.some(asksBeside);
   return { addresses, beside, preview: !beside && addresses.length === 1 };
+}
+
+/** What a menu's open to the side hands to open: the menu's selection, else its clicked row. */
+export function besideArgument(row: unknown, selection: unknown) {
+  const subjects = Array.isArray(selection) && selection.length > 0 ? selection : [row];
+  return subjects.flatMap((s) => addressOf(s) ?? []).map((address) => ({ ...address, placement: 'beside' as const }));
 }

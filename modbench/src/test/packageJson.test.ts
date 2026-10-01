@@ -551,7 +551,7 @@ describe('package.json command titles and categories', () => {
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
   it('gates only the system commands and the entry points out of the palette', () => {
-    const unexpectedGate = [...gatedFalse()].filter((c) => !(INTERNAL_COMMANDS as readonly string[]).includes(c) && !FILTER_ENTRY_POINTS.includes(c));
+    const unexpectedGate = [...gatedFalse()].filter((c) => !(INTERNAL_COMMANDS as readonly string[]).includes(c) && !ENTRY_POINTS.includes(c));
     expect(unexpectedGate).toEqual([]);
   });
 
@@ -572,8 +572,8 @@ describe('package.json command titles and categories', () => {
     'modbench.plugin.sync',
   ] as const;
 
-  it('gates every filter entry point out of the palette too', () => {
-    expect(FILTER_ENTRY_POINTS.filter((c) => !gatedFalse().has(c))).toEqual([]);
+  it('gates every entry point out of the palette too', () => {
+    expect(ENTRY_POINTS.filter((c) => !gatedFalse().has(c))).toEqual([]);
   });
 
   it('gates every internal system command out of the palette too', () => {
@@ -727,7 +727,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
   it.each(['record', 'worldspace', 'cell', 'placed'])(
     'record menu on a %s row: open to the side, copy, copy value, then delete last', (kind) => {
       expect(menuOf(`${kind} tracked editable`)).toEqual([
-        ['modbench.record.open', '1_open'],
+        [OPEN_TO_THE_SIDE, '1_open'],
         ['modbench.record.copy', '5_copy'],
         ['modbench.copyValue', '5_copy'],
         ['modbench.record.delete', '6_destroy'],
@@ -736,7 +736,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
 
   it.each([['untracked', 'untracked editable'], ['read-only', 'tracked']])('record menu on a record whose plugin is %s: no delete', (_what, conditions) => {
     expect(menuOf(`record ${conditions}`)).toEqual([
-      ['modbench.record.open', '1_open'],
+      [OPEN_TO_THE_SIDE, '1_open'],
       ['modbench.record.copy', '5_copy'],
       ['modbench.copyValue', '5_copy'],
     ]);
@@ -1270,6 +1270,12 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
 });
 
 // editor.md, Opening, story 2: open to the side is on a referrer's menu as well.
+describe('package.json open to the side', () => {
+  it('reads Open to the Side', () => {
+    expect(pkg.contributes.commands.find((c) => c.command === OPEN_TO_THE_SIDE)?.title).toBe('Open to the Side');
+  });
+});
+
 describe('package.json open on Referenced By', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
@@ -1277,12 +1283,12 @@ describe('package.json open on Referenced By', () => {
   it('puts open on the Referenced By group row\'s menu once', () => {
     const entry = present(
       contextMenus().find((e) =>
-        e.command === 'modbench.record.open' && e.when.includes('referencedByTree')),
-      'a modbench.record.open entry on the Referenced By tree',
+        e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')),
+      `a ${OPEN_TO_THE_SIDE} entry on the Referenced By tree`,
     );
     expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
     expect(entry.group).toBe('modbench@2');
-    expect(contextMenus().filter((e) => e.command === 'modbench.record.open' && e.when.includes('referencedByTree')))
+    expect(contextMenus().filter((e) => e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')))
       .toHaveLength(1);
   });
 });
@@ -1315,10 +1321,12 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// commands.md, Entry points are not gestures: a title icon cannot name its view, so each view's
-// icons are internal commands that fire the filter gesture with that view.
+// commands.md, Entry points are not gestures: a title icon or a menu cannot name its view or pass
+// an Option, so an internal command fires the gesture with them.
+const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, OPEN_TO_THE_SIDE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1330,7 +1338,7 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 
   it('registers no ID that is not in the catalog', () => {
-    const offenders = registered.filter((id) => !catalog.has(id) && !FILTER_ENTRY_POINTS.includes(id));
+    const offenders = registered.filter((id) => !catalog.has(id) && !ENTRY_POINTS.includes(id));
     expect(
       offenders,
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
