@@ -888,6 +888,21 @@ describe('RecordPanel — states (editor.md, States)', () => {
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 
+  it('says the last read failed, beside the gone record, until a good read replaces it', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(null))
+      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValue(loaded(compareResult));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
+
+    loadRecord();
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone. The last read failed: HTTP 500'));
+
+    loadRecord();
+    await waitFor(() => screen.getByText('Override Name'));
+  });
+
   it('shows the record again when a later read finds it', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(null))

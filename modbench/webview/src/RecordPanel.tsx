@@ -61,8 +61,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // cannot land.
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
   // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
-  // lands (the `!result` early return renders nothing until then), so it can never read as a
-  // false "settled".
+  // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set([RECORD_HEADER_ROW]));
@@ -219,8 +218,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         if (msg.formKey !== prevFormKeyRef.current) {
           // formKey will change → [formKey] effect will fire; skip it.
           skipNextRefreshEffect.current = true;
-        }
-        if (msg.formKey !== prevFormKeyRef.current) {
           setResult(null);
           setGone(false);
           setError(null);
@@ -265,7 +262,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   };
 
   if (!formKey) return <div style={containerStyle}>No record selected.</div>;
-  if (gone) return <div style={containerStyle}>{formKey} is gone.</div>;
+  if (gone) {
+    return (
+      <div style={containerStyle}>
+        {formKey} is gone.{error && ` The last read failed: ${error}`}
+      </div>
+    );
+  }
   if (!result) {
     return (
       <div style={{ ...containerStyle, color: error ? 'var(--vscode-errorForeground, #f44)' : fg }}>
