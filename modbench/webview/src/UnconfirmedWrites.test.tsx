@@ -45,12 +45,19 @@ const nameCell = () => {
   return required(row.querySelectorAll('td')[2], "MyMod.esp's Name cell");
 };
 
-async function editName(value: string) {
+function hostHearsTheEdit() {
+  const edit = required(vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
+    .findLast(m => m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD), 'the posted edit');
+  send({ ...edit, type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN });
+}
+
+async function editName(value: string, { heard = true } = {}) {
   await waitFor(() => screen.getByText('Before'));
   fireEvent.doubleClick(within(nameCell()).getByText('Before'));
   const input = required(nameCell().querySelector('input'), "the cell's input");
   fireEvent.change(input, { target: { value } });
   fireEvent.keyDown(input, { key: 'Enter' });
+  if (heard) hostHearsTheEdit();
 }
 
 const logged = () => vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
@@ -72,6 +79,7 @@ describe('a record field edit, until mEdit confirms it (common.md, Unconfirmed w
     expect(nameCell()).toHaveTextContent('After');
     expect(within(nameCell()).queryByTitle(TOOLTIP)).not.toBeInTheDocument();
     await waitFor(() => expect(within(nameCell()).getByTitle(TOOLTIP)).toBeInTheDocument());
+    expect(within(nameCell()).getByTitle(TOOLTIP).querySelector('.codicon.codicon-sync.codicon-modifier-spin')).not.toBeNull();
   });
 
   it('shows the disk value, unmarked, once a read asked after the write lands, and says nothing when it is what was written', async () => {
@@ -97,12 +105,11 @@ describe('a record field edit, until mEdit confirms it (common.md, Unconfirmed w
     await waitFor(() => expect(nameCell()).toHaveTextContent('Elsewhere'));
     await waitFor(() => expect(logged()).toEqual([{
       type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn',
-      message: '[recordPanel] TestNPC [000001:Fallout4.esm]: Name [MyMod.esp] was written "After", and the disk now shows "Elsewhere".',
+      message: '[recordPanel] Name of TestNPC [000001:Fallout4.esm] in "MyMod.esp" was written "After", and the disk now shows "Elsewhere".',
     }]));
     expect(within(nameCell()).queryByTitle(TOOLTIP)).not.toBeInTheDocument();
   });
 
-  // A refresh rebuilds mEdit's index, and every panel reads again once the rebuild lands.
   it('goes on the read every panel makes once a refresh lands', async () => {
     renderPanel();
     await editName('After');
@@ -126,6 +133,21 @@ describe('a record field edit, until mEdit confirms it (common.md, Unconfirmed w
 
     await waitFor(() => expect(within(nameCell()).getByTitle(TOOLTIP)).toBeInTheDocument());
     expect(nameCell()).toHaveTextContent('After');
+  });
+
+  it('is not covered by a read the host posted before it heard the write', async () => {
+    renderPanel();
+    await editName('After', { heard: false });
+    reported();
+    await waitFor(() => within(nameCell()).getByTitle(TOOLTIP));
+    expect(nameCell()).toHaveTextContent('After');
+
+    hostHearsTheEdit();
+    disk = recordNamed('After');
+    reported();
+
+    await waitFor(() => expect(within(nameCell()).queryByTitle(TOOLTIP)).not.toBeInTheDocument());
+    expect(logged()).toEqual([]);
   });
 
   it('shows the disk value at once, unmarked, when mEdit refuses the write', async () => {
@@ -230,13 +252,13 @@ describe('an edit of the FormID', () => {
     const input = required(cell.querySelector('input'), "the FormID cell's input");
     fireEvent.change(input, { target: { value: '000900:MyMod.esp' } });
     fireEvent.keyDown(input, { key: 'Enter' });
+    hostHearsTheEdit();
 
     expect(cell).toHaveTextContent(/^000900:MyMod\.esp$/);
     await waitFor(() => expect(within(cell).getByTitle(TOOLTIP)).toBeInTheDocument());
   });
 });
 
-// A sorted array's element is addressed at its place in the column, which the write itself moves.
 describe('a replaced element of a sorted array', () => {
   const keywordsMeta = fieldMeta({ name: 'Keywords', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'formKey' }) });
   const keywords = (held: string[]): CompareResult => compareResultFixture({
@@ -266,7 +288,8 @@ describe('a replaced element of a sorted array', () => {
     const request = required(vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
       .find(m => m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER), 'the picker request');
     send({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'requestId' in request ? request.requestId : '', formKey: 'KwdZ' });
-    // A reference the disk does not hold yet resolves to nothing.
+    await waitFor(() => vi.mocked(vscode.postMessage).mock.calls.some(([m]) => m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD));
+    hostHearsTheEdit();
     await waitFor(() => expect(cellOf('KwdA')).toHaveTextContent(/^KwdZ$/));
 
     disk = keywords(['KwdC', 'KwdZ']);
@@ -276,5 +299,41 @@ describe('a replaced element of a sorted array', () => {
     expect(cellOf('KwdC')).toHaveTextContent('NamedKwdC [KwdC]');
     expect(cellOf('KwdZ')).toHaveTextContent('NamedKwdZ [KwdZ]');
     expect(logged()).toEqual([]);
+  });
+});
+
+describe('a field in a row collapsed by the time the read lands', () => {
+  const boundsMeta = fieldMeta({ name: 'Bounds', type: 'struct', fields: [fieldMeta({ name: 'X', type: 'int' })] });
+  const bounds = (x: number): CompareResult => compareResultFixture({
+    overrides: [compareOverride({
+      formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: boundsMeta, value: { X: x } }],
+    })],
+    diffs: [diffNode({
+      fieldName: 'Bounds', values: { 'MyMod.esp|ModA': { X: x } },
+      children: [diffNode({ fieldName: 'X', values: { 'MyMod.esp|ModA': x } })],
+    })],
+  });
+
+  it('still says once that the disk shows something else', async () => {
+    disk = bounds(1);
+    renderPanel();
+    await waitFor(() => screen.getByText('X'));
+    const xCell = required(required(screen.getByText('X').closest('tr'), 'the X row').querySelectorAll('td')[1], 'the X cell');
+    fireEvent.doubleClick(within(xCell).getByText('1'));
+    const input = required(xCell.querySelector('input'), "the cell's input");
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    hostHearsTheEdit();
+    fireEvent.doubleClick(required(screen.getByText('Bounds').closest('td'), 'the Bounds label'));
+    await waitFor(() => expect(screen.queryByText('X')).not.toBeInTheDocument());
+
+    disk = bounds(7);
+    reported();
+
+    await waitFor(() => expect(logged()).toEqual([{
+      type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn',
+      message: '[recordPanel] X of TestNPC [000001:Fallout4.esm] in "MyMod.esp" was written "5", and the disk now shows "7".',
+    }]));
   });
 });

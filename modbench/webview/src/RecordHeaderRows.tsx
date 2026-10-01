@@ -5,7 +5,7 @@ import { ExpandArrow } from './ExpandArrow';
 import { baseCell, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
 import { toStr, type Column } from './recordUtils';
 import { WrittenValue } from './WrittenValue';
-import type { CellWrites } from './unconfirmedWrites';
+import type { WriteAt } from './unconfirmedWrites';
 import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, PathHop } from './types';
 
@@ -79,15 +79,14 @@ interface RecordHeaderRowsProps {
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
-  writes: CellWrites;
-  recordLabel: string;
+  writeAt: WriteAt;
 }
 
 /** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
   columns, collapsedColumns, dimmedColumns, editableColumns, expanded, onToggle,
-  focusedCell, onFocusCell, onCommitFormId, writes, recordLabel,
+  focusedCell, onFocusCell, onCommitFormId, writeAt,
 }: Readonly<RecordHeaderRowsProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
     ({ ...baseCell, opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined });
@@ -130,10 +129,7 @@ export function RecordHeaderRows({
                 title={override.formIdReadOnlyReason ?? undefined}
                 copyText={formKeyLabel(override.formKey, override)}
               >
-                <WrittenValue
-                  write={writes.at(key, FORM_ID_PATH, FORM_ID_ROW)} disk={override.formKey} settle={writes.settle}
-                  name={`${recordLabel}: FormID [${override.plugin}]`} text={toStr}
-                >
+                <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
                   {value => (
                     <FormIdCell
                       formKey={toStr(value)}

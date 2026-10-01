@@ -4,7 +4,7 @@ import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
   buildColumns, columnHasNode, elementSegment, rootFieldOf,
   wirePath, variantFor, declaresMember,
-  headerCellContext, combineVscodeContexts,
+  headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
@@ -127,7 +127,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // An answer lands only if no later read was asked for since: reads answer out of order.
   const latestRead = useRef(0);
-  const { writes, written, refused, landed, clear: forgetWrites } = useCellWrites(logWarning);
+  const { writeAt, written, refused, landed, clear: forgetWrites } = useCellWrites(logWarning);
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
     const read = ++latestRead.current;
@@ -147,7 +147,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setConflictsComputed(loaded.conflictsComputed);
       setLoadFailures(loaded.loadFailures);
       const unreadable = new Set(loaded.loadFailures.map(f => columnKey(f.name, f.origin)));
-      landed(read, column => !unreadable.has(column));
+      landed(read, loaded.result, fk, column => !unreadable.has(column));
     } catch (e) {
       if (read === latestRead.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -200,7 +200,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, row: string, hops: PathHop[], value: unknown) => {
-    written(plugin, hops, value, latestRead.current, row);
+    written(plugin, hops, value, Infinity, row);
     post(plugin, { op: 'set', path: hops, value });
   }, [post, written]);
 
@@ -289,9 +289,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // that is each row's own `diff.conflictAll`, computed bottom-up per node.
   const { overrides, diffs } = result;
 
-  const winner = overrides.find(o => o.isWinner);
-  const displayId = (winner ?? overrides.at(0))?.editorId;
-  const title = displayId ? `${displayId} [${formKey}]` : formKey;
+  const title = recordLabel(overrides, formKey);
 
   const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
   const navRows: NavRow[] = [
@@ -338,7 +336,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) =>
           handleCellCommit(plugin, rowKey, hopsTo(plugin, rootField, path), value)}
-        writes={writes}
+        writeAt={writeAt}
         onArrayOp={(plugin: ColumnKey, op: ArrayOp) => handleArrayOp(plugin, path, rootField, op)}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
@@ -474,8 +472,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
               onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_ROW, FORM_ID_PATH, value)}
-              writes={writes}
-              recordLabel={title}
+              writeAt={writeAt}
             />
             {diffs.flatMap(
               diff => buildRows(

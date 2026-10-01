@@ -362,8 +362,6 @@ describe('modbench.record.editField', () => {
     expect(report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
   });
 
-  // common.md, Unconfirmed writes: the panel showing the record shows the value until the disk
-  // confirms it, and the disk's value again at once when mEdit refuses it or the write fails.
   describe('tells every panel', () => {
     const written = { type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN, ...IDENTITY, envelope };
     const refused = { type: EXTENSION_TO_WEBVIEW.EDIT_REFUSED, ...IDENTITY, envelope };

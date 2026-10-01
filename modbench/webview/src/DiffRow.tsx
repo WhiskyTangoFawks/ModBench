@@ -4,9 +4,9 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { copiedText, displayValue, modelValue } from './modelValue';
+import { copiedText, modelValue } from './modelValue';
 import { WrittenValue } from './WrittenValue';
-import type { CellWrites } from './unconfirmedWrites';
+import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
@@ -148,7 +148,7 @@ interface DiffRowProps {
   editableColumns: Set<ColumnKey>;
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
-  writes: CellWrites;
+  writeAt: WriteAt;
   // Every array gesture, through one callback: the panel offers it to every row and this row
   // decides which ops it has, so availability is stated once rather than agreed on twice.
   onArrayOp?: (plugin: ColumnKey, op: ArrayOp) => void;
@@ -168,7 +168,7 @@ export function DiffRow({
   diff, meta, columns, dimmedColumns,
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
-  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writes,
+  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
   onArrayOp, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -327,10 +327,7 @@ export function DiffRow({
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
-              <WrittenValue
-                write={writes.at(key, hops, rowKey)} disk={shown} settle={writes.settle}
-                name={`${recordLabel}: ${label} [${override.plugin}]`} text={v => displayValue(v, cellMeta)}
-              >
+              <WrittenValue write={writeAt(key, hops)} disk={shown}>
                 {value => renderCell(value, cellMeta, onOpen, {
                   // A reference the disk does not hold yet has no resolution.
                   checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,

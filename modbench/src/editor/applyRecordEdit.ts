@@ -14,7 +14,6 @@ export interface RecordWriteDeps {
   // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
   reporter: Reporter;
-  // Every open panel hears each edit; the one showing the record decides what it shows.
   tellPanels: (message: ExtensionToWebview) => void;
 }
 
