@@ -164,7 +164,8 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     recordDecorationProvider,
     { dispose: () => { conflictsComputedTracker.dispose(); } },
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
-    vscode.window.registerCustomEditorProvider(RECORD_EDITOR_VIEW_TYPE, recordEditorProvider),
+    vscode.window.registerCustomEditorProvider(
+      RECORD_EDITOR_VIEW_TYPE, recordEditorProvider, { webviewOptions: { retainContextWhenHidden: true } }),
     // The native right-click menus write from here directly, with no panel in the path — the same
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
