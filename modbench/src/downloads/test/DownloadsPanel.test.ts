@@ -99,7 +99,9 @@ let instanceRoots: string[] = [];
 
 // Stands in for the composition root's `(line) => outputChannel.warn(...)`: the one Output line a
 // failed installed mark writes, with no notification of its own.
-const marks = { markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn() };
+const marks = {
+  markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn(), markUnconfirmedDelete: vi.fn(), forgetUnconfirmedDelete: vi.fn(),
+};
 
 let downloadsLogLines: string[] = [];
 const downloadsLog = (line: string): void => { downloadsLogLines.push(line); };
@@ -615,6 +617,10 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
 
 describe('registerDownloadsMultiRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    trash.mockReset();
+    marks.markUnconfirmedDelete.mockReset();
+  });
 
   it('registers delete, exclude and include', () => {
     registerDownloadsMultiRowCommands(accessTo('/instance'), recordingReporter(), scriptedDialog(), trash, downloadsLog, () => [], marks);
@@ -789,6 +795,34 @@ describe('registerDownloadsMultiRowCommands', () => {
 
     await vi.waitFor(() => expect(trash).toHaveBeenCalledTimes(2));
     expect(trashedPaths()).toEqual(expect.arrayContaining([archive, meta]));
+  });
+
+  it('delete marks each row by file name before the trash, and forgets the row whose trash is refused', async () => {
+    const root = await makeInstanceRoot();
+    const locked = await writeArchive(root, 'locked.7z');
+    await writeArchive(root, 'gone.7z');
+    const order: string[] = [];
+    marks.markUnconfirmedDelete.mockImplementation((name: string) => order.push(`mark ${name}`));
+    trash.mockImplementation((path: string) => {
+      order.push(`trash ${path}`);
+      return path === locked ? Promise.reject(new Error('locked')) : Promise.resolve();
+    });
+
+    registerDownloadsMultiRowCommands(accessTo(root), recordingReporter(), scriptedDialog('Delete'), trash, downloadsLog, () => [], marks);
+    await invoke('modbench.downloadedFile.delete', node(root, 'locked.7z'), [node(root, 'locked.7z'), node(root, 'gone.7z')]);
+
+    expect(order.slice(0, 2)).toEqual(['mark locked.7z', 'mark gone.7z']);
+    expect(marks.forgetUnconfirmedDelete.mock.calls).toEqual([['locked.7z']]);
+  });
+
+  it('delete declined marks nothing', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+
+    registerDownloadsMultiRowCommands(accessTo(root), recordingReporter(), scriptedDialog(undefined), trash, downloadsLog, () => [], marks);
+    await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
+
+    expect(marks.markUnconfirmedDelete).not.toHaveBeenCalled();
   });
 });
 

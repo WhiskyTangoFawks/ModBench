@@ -714,3 +714,77 @@ describe('DownloadsProvider — a file that vanishes while its write is unconfir
     expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
   });
 });
+
+describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const rows = async (provider: DownloadsProvider) =>
+    (await provider.getChildren()).map((n) => expectInstanceOf(n, DownloadNode));
+  const spinning = (node: DownloadNode) => node.iconPath instanceof ThemeIcon && node.iconPath.id === 'sync~spin';
+
+  it('keeps the row where it is, and marks it only after a delay', async () => {
+    const provider = makeProvider([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
+
+    provider.markUnconfirmedDelete('a.7z');
+    const [first, second] = await rows(provider);
+    expect([first?.row.name, second?.row.name]).toEqual(['a.7z', 'b.7z']);
+    expect(spinning(present(first, 'a.7z'))).toBe(false);
+
+    vi.advanceTimersByTime(1000);
+    const [marked, other] = await rows(provider);
+    expect(spinning(present(marked, 'a.7z'))).toBe(true);
+    expect(marked?.tooltip).toBe('Written; waiting for the disk to confirm');
+    expect(spinning(present(other, 'b.7z'))).toBe(false);
+  });
+
+  it('the row leaves once the disk omits it, silently, and keeps the mark through a value that lists it', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmedDelete('a.7z');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(true);
+
+    instance.publish(valueOf([row({ name: 'b.7z' })]));
+    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+    expect(logged).toEqual([]);
+  });
+
+  it('shows the disk\'s row unmarked and logs one line once a second landed value still lists it', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmedDelete('a.7z');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'a.7z' })]));
+    instance.publish(valueOf([row({ name: 'a.7z' })]));
+
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(false);
+    expect(logged).toEqual(['"a.7z" was deleted, and the disk still lists it.']);
+  });
+
+  it('stays while the disk cannot be read', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmedDelete('a.7z');
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(true);
+  });
+
+  it('a delete forgotten never shows the mark', async () => {
+    const provider = makeProvider([row({ name: 'a.7z' })]);
+    provider.markUnconfirmedDelete('a.7z');
+
+    provider.forgetUnconfirmedDelete('a.7z');
+    vi.advanceTimersByTime(1000);
+
+    expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(false);
+  });
+});

@@ -632,10 +632,10 @@ describe('PluginsTreeProvider — name filter', () => {
 const NONE = new FakeCancellationToken(); // the drag/drop methods ignore the token
 
 // handleDrag's own payload shape, read back the same way handleDrop reads it (isDropPayload).
-function namesFrom(item: unknown): string[] {
+function pluginsFrom(item: unknown): { name: string; origin: string }[] {
   const { value } = expectInstanceOf(item, DataTransferItem);
-  if (!isDropPayload(value)) throw new Error('Expected a names payload');
-  return value.names;
+  if (!isDropPayload(value)) throw new Error('Expected a plugins payload');
+  return value.plugins;
 }
 
 describe('PluginsTreeProvider — drag-and-drop reorder', () => {
@@ -665,7 +665,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new DataTransfer();
     tree.handleDrag([node('A.esp'), node('C.esp')], dt, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect(namesFrom(item)).toEqual(['A.esp', 'C.esp']);
+    expect(pluginsFrom(item)).toEqual([{ name: 'A.esp', origin: 'SomeMod' }, { name: 'C.esp', origin: 'SomeMod' }]);
   });
 
   it('a drop onto a row asks for the block to land before that row', async () => {
@@ -1203,7 +1203,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     const dt = new DataTransfer();
     tree.handleDrag(rows, dt, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect(namesFrom(item)).toEqual(['Mod.esp']);
+    expect(pluginsFrom(item).map((p) => p.name)).toEqual(['Mod.esp']);
   });
 });
 
@@ -3660,5 +3660,190 @@ describe('PluginsTreeProvider — a plugin that vanishes while its write is unco
     instance.publish(valueOf([plugin({ name: 'B.esp', slot: 0 })]));
 
     expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was written disabled, and it is gone from the disk.']);
+  });
+});
+
+describe('PluginsTreeProvider — an unconfirmed shape change (common.md, Unconfirmed writes, story 2)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const LINES = [
+    ['A.esp', 'ModOne'], ['B.esp', 'ModTwo'], ['C.esp', 'ModOne'], ['D.esp', 'ModTwo'],
+  ] as const;
+  const valueOver = (lines: readonly (readonly [string, string])[]): InstanceValue =>
+    valueOf(lines.map(([name, origin], slot) => plugin({ name, origin, slot })));
+  const node = (name: string, origin: string) => new PluginNode({ name, enabled: true }, origin);
+
+  function treeOver(instance: FakeInstance, extra: { source?: FakeSource; log?: (line: string) => void } = {}) {
+    return new PluginsTreeProvider({
+      instance, source: extra.source ?? new FakeSource(), log: (_level, line) => extra.log?.(line),
+      reporter: recordingReporter(),
+    });
+  }
+  const rows = async (tree: PluginsTreeProvider): Promise<PluginNode[]> =>
+    (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
+  const spinning = async (tree: PluginsTreeProvider): Promise<string[]> =>
+    (await rows(tree)).filter((row) => {
+      const icon = tree.getTreeItem(row).iconPath;
+      return icon instanceof ThemeIcon && icon.id === 'sync~spin';
+    }).map((row) => `${row.origin}/${row.plugin.name}`);
+  const order = async (tree: PluginsTreeProvider): Promise<string[]> => (await rows(tree)).map((row) => row.plugin.name);
+
+  async function drop(tree: PluginsTreeProvider, moved: readonly PluginNode[], target: PluginNode | undefined): Promise<void> {
+    const dt = new DataTransfer();
+    tree.handleDrag([...moved], dt, NONE);
+    await tree.handleDrop(target, dt, NONE);
+  }
+
+  describe('a move by drop', () => {
+    it('leaves every row where it is, and marks the dropped rows only after a delay', async () => {
+      const tree = treeOver(new FakeInstance(valueOver(LINES)));
+      const before = await order(tree);
+
+      await drop(tree, [node('A.esp', 'ModOne'), node('C.esp', 'ModOne')], node('D.esp', 'ModTwo'));
+      expect(await order(tree)).toEqual(before);
+      expect(await spinning(tree)).toEqual([]);
+
+      vi.advanceTimersByTime(1000);
+      expect(await order(tree)).toEqual(before);
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp', 'ModOne/C.esp']);
+      const [marked] = (await rows(tree)).filter((row) => row.plugin.name === 'A.esp');
+      expect(tree.getTreeItem(present(marked, 'A.esp')).tooltip).toBe('Written; waiting for the disk to confirm');
+    });
+
+    it('marks the rows while the write is still pending', async () => {
+      const source = new FakeSource();
+      source.reorderPlugins = () => new Promise<void>(() => undefined);
+      const tree = treeOver(new FakeInstance(valueOver(LINES)), { source });
+      await tree.getChildren();
+
+      void drop(tree, [node('A.esp', 'ModOne')], undefined);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp']);
+    });
+
+    it('carries the origin of each dragged row, so two plugins of one filename stay apart', () => {
+      const tree = treeOver(new FakeInstance(valueOver(LINES)));
+      const dt = new DataTransfer();
+
+      tree.handleDrag([node('Same.esp', 'ModOne'), node('Same.esp', 'ModTwo')], dt, NONE);
+
+      expect(pluginsFrom(dt.get('application/vnd.medit.pluginlist-node')))
+        .toEqual([{ name: 'Same.esp', origin: 'ModOne' }, { name: 'Same.esp', origin: 'ModTwo' }]);
+    });
+
+    it('marks the dragged plugin\'s own origin, not the listed plugin of the same filename', async () => {
+      const tree = treeOver(new FakeInstance(valueOf([
+        plugin({ name: 'Same.esp', origin: 'ModOne', slot: 0 }),
+        plugin({ name: 'Same.esp', origin: 'ModTwo', slot: 0, winning: false }),
+        plugin({ name: 'B.esp', origin: 'ModOne', slot: 1 }),
+      ])));
+      await tree.getChildren();
+
+      await drop(tree, [node('Same.esp', 'ModTwo')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(tree)).toEqual([]);
+    });
+
+    it('marks the plugin of the origin the row stands for, not another of the name', async () => {
+      const instance = new FakeInstance(valueOf([
+        plugin({ name: 'Same.esp', origin: 'ModOne', slot: 0 }),
+        plugin({ name: 'Same.esp', origin: 'ModTwo', slot: 1, winning: false }),
+        plugin({ name: 'B.esp', origin: 'ModOne', slot: 2 }),
+      ]));
+      const tree = treeOver(instance);
+      await tree.getChildren();
+
+      await drop(tree, [node('Same.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(tree)).toEqual(['ModOne/Same.esp']);
+    });
+
+    it('goes silently when the disk\'s order differs', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const logged: string[] = [];
+      const tree = treeOver(instance, { log: (line) => logged.push(line) });
+      await tree.getChildren();
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOver([LINES[1], LINES[2], LINES[3], LINES[0]]));
+
+      expect(await spinning(tree)).toEqual([]);
+      expect(await order(tree)).toEqual(['B.esp', 'C.esp', 'D.esp', 'A.esp']);
+      expect(logged).toEqual([]);
+    });
+
+    it('keeps the mark through a value that shows the old order, then logs one line and shows the disk', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const logged: string[] = [];
+      const tree = treeOver(instance, { log: (line) => logged.push(line) });
+      await tree.getChildren();
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOver(LINES));
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp']);
+      expect(logged).toEqual([]);
+
+      instance.publish(valueOver(LINES));
+      expect(await spinning(tree)).toEqual([]);
+      expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was moved, and the disk does not show the move.']);
+    });
+
+    it('treats an unrelated reorder or an install as differing: the mark stays, and the next such value logs', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const logged: string[] = [];
+      const tree = treeOver(instance, { log: (line) => logged.push(line) });
+      await tree.getChildren();
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOver([LINES[0], LINES[2], LINES[1], LINES[3]]));
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp']);
+      expect(logged).toEqual([]);
+
+      instance.publish(valueOver([...LINES, ['New.esp', 'ModOne']]));
+      expect(await spinning(tree)).toEqual([]);
+      expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was moved, and the disk does not show the move.']);
+    });
+
+    it('stays while the disk cannot be read', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const tree = treeOver(instance);
+      await tree.getChildren();
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      instance.fail('locked');
+
+      expect(await spinning(tree)).toEqual(['ModOne/A.esp']);
+    });
+
+    it('forgets the mark when the write is refused, and shows no mark', async () => {
+      const source = new FakeSource();
+      source.reorderPluginsError = new Error('locked');
+      const tree = treeOver(new FakeInstance(valueOver(LINES)), { source });
+      await tree.getChildren();
+
+      await drop(tree, [node('A.esp', 'ModOne')], undefined);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(tree)).toEqual([]);
+    });
+
+    it('marks nothing for a drop the order check refuses, or one that goes nowhere', async () => {
+      const instance = new FakeInstance(valueOver(LINES));
+      const tree = treeOver(instance);
+      await tree.getChildren();
+
+      await drop(tree, [node('A.esp', 'ModOne')], node('A.esp', 'ModOne'));
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(tree)).toEqual([]);
+    });
   });
 });

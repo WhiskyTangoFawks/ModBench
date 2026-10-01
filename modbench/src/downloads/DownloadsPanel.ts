@@ -153,12 +153,14 @@ const NOTHING_CHANGED: SelectionOutcome<string> = { landed: [], refused: [] };
 // applied, so this is an Output-only line, never a notification.
 async function deleteSelection(
   access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, ask: AskQuestion, trash: MoveToTrash,
-  log: (line: string) => void,
+  log: (line: string) => void, marks: DownloadMarks,
 ): Promise<SelectionOutcome<DeletedDownload>> {
   if (rows.length === 0 || !(await confirmDelete(rows.map((row) => row.name), ask))) return { landed: [], refused: [] };
+  for (const row of rows) marks.markUnconfirmedDelete(row.name);
   const outcome = await deleteDownloads(access, rows, trash);
   reporter.selectionOutcome(
     `Could not delete ${outcome.refused.length} of ${rows.length} downloaded files.`, outcome, (item) => item.name);
+  for (const { item } of outcome.refused) marks.forgetUnconfirmedDelete(item.name);
   for (const item of outcome.landed) {
     if (item.metaLeftBehind !== undefined) {
       log(`"${item.name}" was deleted, but its ".meta" could not be moved to the trash and was left behind: ${item.metaLeftBehind}`);
@@ -169,7 +171,9 @@ async function deleteSelection(
 
 // No confirmation, unlike delete: exclude and include are reversible, and a file already at rest
 // writes nothing (downloadsCommands/downloads.ts), so there is nothing destructive to confirm.
-export type DownloadMarks = Pick<DownloadsProvider, 'markUnconfirmed' | 'forgetUnconfirmed'>;
+export type DownloadMarks = Pick<
+  DownloadsProvider, 'markUnconfirmed' | 'forgetUnconfirmed' | 'markUnconfirmedDelete' | 'forgetUnconfirmedDelete'
+>;
 
 async function excludeSelection(
   access: DownloadsAccess, rows: readonly DownloadFile[], reporter: Reporter, marks: DownloadMarks,
@@ -248,7 +252,7 @@ export function registerDownloadsMultiRowCommands(
   };
   return [
     vscode.commands.registerCommand('modbench.downloadedFile.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
-      deleteSelection(access, rows(clicked, selected), reporter, ask, trash, log)),
+      deleteSelection(access, rows(clicked, selected), reporter, ask, trash, log, marks)),
     vscode.commands.registerCommand('modbench.downloadedFile.exclude', (clicked?: DownloadNode, selected?: DownloadNode[]) =>
       excludeSelection(access, rows(clicked, selected), reporter, marks)),
     vscode.commands.registerCommand('modbench.downloadedFile.include', (clicked?: DownloadNode, selected?: DownloadNode[]) =>

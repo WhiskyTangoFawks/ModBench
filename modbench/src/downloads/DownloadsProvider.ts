@@ -27,6 +27,12 @@ interface UnconfirmedWrite {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+interface UnconfirmedDelete {
+  marked: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
 // Mirrors the reference tool's own colour-coded Status cell. The icon is always set explicitly so
 // the file-icon theme never takes over; a colour is affordable because every row is an archive.
 function downloadStatusIcon(status: DownloadStatus): vscode.ThemeIcon {
@@ -102,6 +108,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private readonly instance: InstanceView;
   private readonly log: (line: string) => void;
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
+  private readonly unconfirmedDeletes = new Map<string, UnconfirmedDelete>();
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
@@ -143,6 +150,41 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
       clearTimeout(write.timer);
       this.unconfirmed.delete(name);
     }
+    this.settleUnconfirmedDeletes(rows);
+  }
+
+  private settleUnconfirmedDeletes(rows: readonly DownloadFile[]): void {
+    for (const [name, write] of this.unconfirmedDeletes) {
+      if (rows.some((row) => row.name === name)) {
+        if (!write.differedOnce) {
+          write.differedOnce = true;
+          continue;
+        }
+        this.log(`"${name}" was deleted, and the disk still lists it.`);
+      }
+      clearTimeout(write.timer);
+      this.unconfirmedDeletes.delete(name);
+    }
+  }
+
+  /** The row stays as it is; the mark follows after a delay. */
+  markUnconfirmedDelete(name: string): void {
+    clearTimeout(this.unconfirmedDeletes.get(name)?.timer);
+    const write: UnconfirmedDelete = {
+      marked: false, differedOnce: false,
+      timer: setTimeout(() => {
+        write.marked = true;
+        this.rerender();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmedDeletes.set(name, write);
+  }
+
+  /** A refused or failed delete shows the disk's row at once, with no mark. */
+  forgetUnconfirmedDelete(name: string): void {
+    clearTimeout(this.unconfirmedDeletes.get(name)?.timer);
+    this.unconfirmedDeletes.delete(name);
+    this.invalidate();
   }
 
   /** The row shows its new state at once, even where show excluded is off; the mark follows after
@@ -173,8 +215,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   }
 
   dispose(): void {
-    for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
+    for (const write of [...this.unconfirmed.values(), ...this.unconfirmedDeletes.values()]) clearTimeout(write.timer);
     this.unconfirmed.clear();
+    this.unconfirmedDeletes.clear();
     this.instanceSubscription.dispose();
     this.firstRead.dispose();
   }
@@ -262,7 +305,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
 
   private toNode(row: DownloadFile): DownloadNode {
     const node = new DownloadNode(row);
-    if (this.unconfirmed.get(row.name)?.marked) {
+    if (this.unconfirmed.get(row.name)?.marked || this.unconfirmedDeletes.get(row.name)?.marked) {
       node.iconPath = new vscode.ThemeIcon('sync~spin');
       node.tooltip = UNCONFIRMED_TOOLTIP;
     }

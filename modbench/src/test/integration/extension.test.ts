@@ -1480,7 +1480,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     // Same mime type PluginsTreeProvider.ts's private DND_MIME constant uses — pinned here since
     // it isn't exported; handleDrag/handleDrop only round-trip through it, never inspect it.
     const dataTransfer = new vscode.DataTransfer();
-    dataTransfer.set('application/vnd.medit.pluginlist-node', new vscode.DataTransferItem({ names: ['TestMod.esp'] }));
+    dataTransfer.set('application/vnd.medit.pluginlist-node', new vscode.DataTransferItem({ plugins: [{ name: 'TestMod.esp', origin: 'Data' }] }));
     // undefined target = drop past the last row: append.
     await provider.handleDrop(undefined, dataTransfer, new vscode.CancellationTokenSource().token);
 
