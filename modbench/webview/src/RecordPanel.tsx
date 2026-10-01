@@ -76,6 +76,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   const enteredCell = useRef(false);
+  const scroller = useRef<HTMLDivElement>(null);
+  const headerRow = useRef<HTMLTableRowElement>(null);
   function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
     enteredCell.current = true;
     setFocusedCell({ rowKey, plugin });
@@ -304,10 +306,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
     if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || !focusedCell) return;
     if (e.target instanceof Element && e.target.closest('[data-editor]')) return;
-    const row = e.target instanceof Element ? e.target.closest('tr') : null;
-    const page = row && row.offsetHeight > 0 && e.currentTarget.parentElement?.parentElement
-      ? Math.max(1, Math.floor(e.currentTarget.parentElement.parentElement.clientHeight / row.offsetHeight) - 1)
-      : 1;
+    const rowHeight = e.currentTarget.querySelector('tr')?.offsetHeight ?? 0;
+    const viewport = (scroller.current?.clientHeight ?? 0) - (headerRow.current?.offsetHeight ?? 0);
+    const page = rowHeight > 0 ? Math.max(1, Math.floor(viewport / rowHeight) - 1) : 1;
     const move = navigate(e.key, navRows, navColumns, focusedCell, page);
     if (!move) return;
     e.preventDefault();
@@ -410,10 +411,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport space (the
           flex-item default of min-height:auto would defeat that). overflow:auto then keeps the
           horizontal scrollbar reachable at any scroll position. */}
-      <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
+      <div ref={scroller} style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
-            <tr>
+            <tr ref={headerRow}>
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 {

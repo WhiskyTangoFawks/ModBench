@@ -75,6 +75,14 @@ describe('navigate', () => {
     expect(press('ArrowRight', 'Bounds', B)).toBeNull();
   });
 
+  it('acts from the nearest visible ancestor when the focused row has left the grid', () => {
+    const collapsed = rows.filter(r => r.key !== 'Bounds.X');
+    expect(navigate('ArrowDown', collapsed, [A, B], { rowKey: 'Bounds.X', plugin: A }, 3))
+      .toEqual({ focus: { rowKey: 'Shut', plugin: A } });
+    expect(navigate('ArrowLeft', collapsed, [A, B], { rowKey: 'Bounds.X', plugin: null }, 3))
+      .toEqual({ toggle: 'Bounds' });
+  });
+
   it('ignores other keys', () => {
     expect(press('a', 'Bounds', A)).toBeNull();
   });

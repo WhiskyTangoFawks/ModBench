@@ -10,10 +10,16 @@ export interface NavRow {
 
 export type Navigation = { focus: FocusedCell } | { toggle: string } | null;
 
+export function visibleRowKey(rows: readonly NavRow[], rowKey: string): string | undefined {
+  return rows
+    .filter(r => rowKey === r.key || rowKey.startsWith(`${r.key}.`))
+    .reduce<string | undefined>((nearest, r) => (nearest === undefined || r.key.length > nearest.length ? r.key : nearest), undefined);
+}
+
 export function navigate(
   key: string, rows: readonly NavRow[], columns: readonly ColumnKey[], focused: FocusedCell, page: number,
 ): Navigation {
-  const at = rows.findIndex(r => r.key === focused.rowKey);
+  const at = rows.findIndex(r => r.key === visibleRowKey(rows, focused.rowKey));
   const row = rows[at];
   if (!row) return null;
   const toRow = (index: number): Navigation => {

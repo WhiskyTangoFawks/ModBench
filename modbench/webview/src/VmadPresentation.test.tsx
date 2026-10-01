@@ -510,6 +510,9 @@ describe('Add Script is the generic array gesture', () => {
     if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
     expect(cellAt(added, 0).textContent).toBe('▼');
+    const beneath = added.nextElementSibling;
+    if (!beneath) throw new Error('no row beneath the added script');
+    expect(cellAt(beneath, 0).textContent).toBe('Name');
 
     // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
     // the empty key — the only handle the element has until it is named.
