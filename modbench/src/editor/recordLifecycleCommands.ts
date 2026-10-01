@@ -107,7 +107,7 @@ export function registerDeleteHereCommands(
   return [...selections].map(([viewId, selection]) =>
     vscode.commands.registerCommand(`${viewId}.deleteHere`, () => {
       const rows = selection();
-      return rows.length > 0 ? vscode.commands.executeCommand('modbench.record.delete', rows[0], rows) : undefined;
+      if (rows.length > 0) void vscode.commands.executeCommand('modbench.record.delete', rows[0], rows);
     }));
 }
 
