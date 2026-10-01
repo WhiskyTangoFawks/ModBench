@@ -496,10 +496,10 @@ describe('Add Script is the generic array gesture', () => {
     await waitFor(() => fieldCell('Guard'));
 
     reloadWith(oneColumn([script('Guard'), script('')]));
-    // The Record Header and its FormID, then Scripts and its two script rows.
+    // The Record Header, then Scripts and its two script rows.
     await waitFor(() => expect(screen.getAllByText('Name')).toHaveLength(2));
 
-    const added = document.querySelectorAll('tbody tr')[3];
+    const added = document.querySelectorAll('tbody tr')[2];
     if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
     expect(cellAt(added, 0).textContent).toBe('▼');

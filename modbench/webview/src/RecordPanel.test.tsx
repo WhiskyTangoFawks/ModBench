@@ -2063,10 +2063,10 @@ describe('RecordPanel — the Record Header', () => {
   });
   const formKeyMeta = header({ name: 'FormKey', type: 'string', displayLabel: 'FormID' });
   const vciMeta = header({ name: 'VersionControl', type: 'int', displayLabel: 'Version Control Info 1' });
-  const native = (formKey: string, editorId: string | null, formIdReadOnlyReason?: string): CompareResult => compareResultFixture({
+  const native = (formKey: string, editorId: string | null): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
-        formKey, plugin: 'MyMod.esp', isWinner: true, editorId, formIdReadOnlyReason,
+        formKey, plugin: 'MyMod.esp', isWinner: true, editorId,
         fields: [
           { metadata: flagsMeta, value: 1024 }, { metadata: formKeyMeta, value: formKey },
           { metadata: vciMeta, value: 5 }, { metadata: nameMeta, value: 'A Name' },
@@ -2080,14 +2080,18 @@ describe('RecordPanel — the Record Header', () => {
       diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
     ],
   });
-  const pluginHeader = (reason: string): CompareResult => compareResultFixture({
+  const pluginHeaderFormId = header({ name: 'FormID', type: 'int', displayLabel: 'FormID', readOnlyReason: 'names the plugin itself' });
+  const pluginHeader = (): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
-        formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: null, formIdReadOnlyReason: reason,
-        fields: [{ metadata: nameMeta, value: 'A Name' }],
+        formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: null,
+        fields: [{ metadata: pluginHeaderFormId, value: null }, { metadata: nameMeta, value: 'A Name' }],
       }),
     ],
-    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' })],
+    diffs: [
+      diffNode({ fieldName: 'FormID', values: { 'MyMod.esp': null } }),
+      diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
+    ],
   });
   const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
 
@@ -2166,27 +2170,19 @@ describe('RecordPanel — the Record Header', () => {
     });
   });
 
-  it('keeps a plugin header\'s FormID, which mEdit names no header member for, as its first row', async () => {
+  it('reads a plugin header\'s FormID as its own header member, opening no editor and giving the reason', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(pluginHeader('names the plugin itself'), { plugins: tracked });
+    const { container } = renderPanel(pluginHeader(), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
-  });
-
-  it('opens no editor on a FormID the record carries a read-only reason for, and shows the reason', async () => {
-    const reason = 'names the plugin itself';
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(pluginHeader(reason), { plugins: tracked });
-    await waitFor(() => screen.getByText('A Name'));
-
-    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('0'));
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(formIdCell(container)).toHaveAttribute('title', expect.stringContaining(reason));
+    expect(formIdCell(container)).toHaveAttribute('title', expect.stringContaining('names the plugin itself'));
   });
 
-  it('opens the editor on a FormID with no reason, where the plugin header\'s opens none', async () => {
+  it('opens the editor on a record\'s FormID', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
     const { container } = renderPanel(native('000000:MyMod.esp', null), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));

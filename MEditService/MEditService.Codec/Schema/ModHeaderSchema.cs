@@ -16,15 +16,16 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The members of the header the editor presents, and why a write reaching one is refused, if it
-    // is. A mod header is not a major record, so the table names them.
+    // The members of the header the editor presents beside its record header, and why a write
+    // reaching one is refused, if it is. A mod header is not a major record, so the table names them.
     private static readonly (string Member, string? ReadOnlyReason)[] PresentedMembers =
     [
         ("Author", null),
-        ("Flags", null),
         // Content-derived at compile time (ADR-0008).
         (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
     ];
+
+    private const string FormIdMember = "FormID";
 
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
     // root RecordData.json.
@@ -41,7 +42,9 @@ internal static class ModHeaderSchema
         }
 
         var headerGetterType = modHeaderProp.PropertyType;
-        var columns = new List<ColumnSpec>();
+        var declarations = ReflectedTypes.GetAllInterfaceProperties(headerGetterType).ToLookup(p => p.Name, StringComparer.Ordinal);
+        var columns = RecordHeaderColumns.For(headerGetterType, declarations, $"{modHeaderProp.Name}.", game, logger)
+            .ConvertAll(c => c.Name == FormIdMember ? c with { Field = c.Field with { ReadOnlyReason = PluginHeader.FormIdReadOnly } } : c);
 
         foreach (var (member, readOnlyReason) in PresentedMembers)
         {

@@ -422,6 +422,32 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Contains("content-derived", result.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Header_FormID_IsRefusedWithItsReason()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
+
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("2048"), Member("FormID")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Contains("names the plugin itself", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Header_VersionControlInfo1_IsWrittenAsAnyFieldIs()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, before);
+
+        var after = Applied(headerFormKey, SetAt(Json("7"), Member("Version")));
+
+        Assert.Equal(7, Node(after, "ModHeader.Version").GetValue<int>());
+        AssertOnlyChanged(before, after, "ModHeader.Version");
+    }
+
     [Theory]
     [InlineData("""{"CompareOperator": "EqualTo"}""")]
     [InlineData("""{"CompareOperator": "EqualTo", "MutagenObjectType": "ConditionFloat"}""")]

@@ -63,8 +63,8 @@ internal sealed record SchemaAnnotations(
     // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
     Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
     // The record header's members in xEdit's order, each under xEdit's label (wbRecordHeader in
-    // wbDefinitionsCommon.pas), keyed by the interface that declares it. A game's base declares
-    // which of them its records carry.
+    // wbDefinitionsCommon.pas), keyed by the interface that declares it. A type carries the rows
+    // whose interface it has: a game's major-record base, or its mod header.
     IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
@@ -93,6 +93,15 @@ internal sealed record SchemaAnnotations(
         ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
         ("IFormKeyGetter", "FormKey"),                       // record identity, the header's own column
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
+    ];
+
+    // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
+    // xEdit's order; each game's base adds the rest.
+    private static readonly (string, string, string)[] RecordHeaderMembersInEveryGame =
+    [
+        ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
+        ("IFormKeyGetter", "FormKey", "FormID"),
+        ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
     ];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
@@ -208,11 +217,15 @@ internal sealed record SchemaAnnotations(
             },
             RecordHeaderMembers:
             [
-                ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
-                ("IFormKeyGetter", "FormKey", "FormID"),
-                ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
+                .. RecordHeaderMembersInEveryGame,
                 ("IFallout4MajorRecordGetter", "FormVersion", "Form Version"),
                 ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
+                // The TES4 record's own header (wbRecord(TES4) in wbDefinitionsFO4.pas), in the same order.
+                ("IFallout4ModHeaderGetter", "Flags", "Record Flags"),
+                ("IFallout4ModHeaderGetter", "FormID", "FormID"),
+                ("IFallout4ModHeaderGetter", "Version", "Version Control Info 1"),
+                ("IFallout4ModHeaderGetter", "FormVersion", "Form Version"),
+                ("IFallout4ModHeaderGetter", "Version2", "Version Control Info 2"),
             ]),
 
         [GameCategory.Skyrim] = new(
@@ -234,7 +247,7 @@ internal sealed record SchemaAnnotations(
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
-            RecordHeaderMembers: []),
+            RecordHeaderMembers: [.. RecordHeaderMembersInEveryGame]),
 
         [GameCategory.Starfield] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -261,7 +274,7 @@ internal sealed record SchemaAnnotations(
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
-            RecordHeaderMembers: []),
+            RecordHeaderMembers: [.. RecordHeaderMembersInEveryGame]),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>

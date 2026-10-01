@@ -605,7 +605,6 @@ internal static class DocumentEdit
             var raw = owner[member] is JsonValue held && held.TryGetValue<long>(out var flags) ? flags : 0;
             var next = set ? raw | bit.Bit : raw & ~bit.Bit;
             if (next == 0) owner.Remove(member); else owner[member] = next;
-            foreach (var alias in bit.Aliases) owner.Remove(alias);
         }
         else
         {

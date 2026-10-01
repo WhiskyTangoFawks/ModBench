@@ -74,13 +74,10 @@ public sealed class RecordHeaderSchemaTests
     [Fact]
     public void TheDocumentsOtherSpellingsOfTheFlags_AreNoColumns_AndAreTheFlagsAliases()
     {
-        var names = Schema("cell").RecordColumns.Select(c => c.Name).ToHashSet(StringComparer.Ordinal);
+        var aliases = RecordFlags("cell").Aliases;
 
-        Assert.DoesNotContain("Fallout4MajorRecordFlags", names);
-        Assert.DoesNotContain("MajorFlags", names);
-        Assert.DoesNotContain("IsDeleted", names);
-        Assert.DoesNotContain("IsCompressed", names);
-        Assert.Equal(["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"], RecordFlags("cell").Aliases.Order(StringComparer.Ordinal));
+        Assert.Equal(["Fallout4MajorRecordFlags", "IsCompressed", "IsDeleted", "MajorFlags"], aliases.Order(StringComparer.Ordinal));
+        Assert.Empty(Schema("cell").RecordColumns.Select(c => c.Name).Intersect(aliases));
     }
 
     [Fact]
@@ -99,9 +96,17 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
-    public void AnOrdinaryField_IsNoHeaderMember()
+    public void APluginHeadersHeaderMembers_AreItsModHeaders_UnderTheSameLabels_WithItsFormIdReadOnly()
     {
-        Assert.Equal(5, HeaderOf("npc_").Length);
-        Assert.False(Schema("npc_").RecordColumns.Single(c => c.Name == "Name").Field.IsRecordHeaderMember);
+        var header = HeaderOf("header");
+
+        Assert.Equal(
+            ["ModHeader.Flags", "ModHeader.FormID", "ModHeader.Version", "ModHeader.FormVersion", "ModHeader.Version2"],
+            header.Select(c => c.PropertyName));
+        Assert.Equal(
+            ["Record Flags", "FormID", "Version Control Info 1", "Form Version", "Version Control Info 2"],
+            header.Select(c => c.Field.DisplayLabel));
+        Assert.NotNull(header.Single(c => c.Name == "FormID").ReadOnlyReason);
+        Assert.Contains(new EnumMember("Master", "1", "ESM"), header.Single(c => c.Name == "Flags").Field.EnumMembers);
     }
 }

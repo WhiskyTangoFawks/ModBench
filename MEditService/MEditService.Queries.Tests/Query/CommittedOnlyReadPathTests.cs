@@ -41,7 +41,7 @@ public sealed class CommittedOnlyReadPathTests
     }
 
     [Fact]
-    public void GetCompare_OverrideCarriesTheCommittedFieldValue()
+    public void GetCompare_OverrideCarriesTheCommittedFieldValue_AnOmittedOneReadingAsAbsent()
     {
         var (npc01Key, svc) = TwoNpcs();
 
@@ -51,8 +51,6 @@ public sealed class CommittedOnlyReadPathTests
         var only = Assert.Single(compare.Overrides);
         Assert.Equal(PluginName, only.Plugin);
         Assert.Equal("TestNPC01", only.EditorId);
-        // A scalar field read straight off the real codec's own text — the slot a staged value could
-        // otherwise stand in for. The document omits flags none of which is set, which read as their default.
         var flags = Assert.Single(only.Fields, f => f.Metadata.Name == "MajorRecordFlagsRaw");
         Assert.Null(flags.Value);
     }

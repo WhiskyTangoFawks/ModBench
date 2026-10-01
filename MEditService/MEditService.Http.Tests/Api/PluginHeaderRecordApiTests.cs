@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
@@ -18,11 +17,9 @@ public sealed class PluginHeaderRecordApiTests
     [Fact]
     public async Task GetRecord_PluginHeaderFormKey_ReturnsAuthorFlagsMasters()
     {
-        var npcFormKey = "";
         using var fixture = new PluginFixtureBuilder("rqs-header-record")
             .WithPlugin("HeaderQuery.esp", mod =>
             {
-                npcFormKey = mod.Npcs.AddNew("PlainNpc").FormKey.ToString();
                 mod.ModHeader.Author = "Test Author";
                 mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
@@ -55,10 +52,8 @@ public sealed class PluginHeaderRecordApiTests
         var masters = Field(detail, "MasterReferences");
         Assert.Contains("Fallout4.esm", masters.GetProperty("value").ToString());
 
-        Assert.Equal(
-            PluginHeader.FormIdReadOnlyReason("000000:HeaderQuery.esp", "HeaderQuery.esp"),
-            detail.GetProperty("formIdReadOnlyReason").GetString());
-        Assert.Equal(JsonValueKind.Null, (await client.Record(npcFormKey)).GetProperty("formIdReadOnlyReason").ValueKind);
+        var formId = Field(detail, "FormID");
+        Assert.Equal(JsonValueKind.String, formId.GetProperty("metadata").GetProperty("readOnlyReason").ValueKind);
     }
 
     [Fact]

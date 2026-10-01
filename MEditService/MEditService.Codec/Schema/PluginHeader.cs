@@ -13,6 +13,9 @@ public static class PluginHeader
     /// delegate is the enforcement.</summary>
     internal const string MastersFieldName = "MasterReferences";
 
+    /// <summary>Why the header's FormID member refuses every write.</summary>
+    internal const string FormIdReadOnly = "a plugin header's FormID names the plugin itself, not a record in it";
+
     public static string FormIdReadOnlyReason(string formKey, string pluginName) =>
         $"A plugin header's FormID is read-only: {formKey} names {pluginName} itself, not a record in it.";
 

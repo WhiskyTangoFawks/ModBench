@@ -65,6 +65,7 @@ public sealed class RecordHeaderCompareTests
 
         var version2 = Diffs(service, cell)["Version2"];
 
+        Assert.Equal(2, version2.Values.Count);
         Assert.All(version2.Values.Values, Assert.Null);
     }
 }

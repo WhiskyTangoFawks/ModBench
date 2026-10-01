@@ -5,8 +5,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>One record type's header members as columns, in the annotation table's order, and the
-/// document's other spellings of its flags, which are no column of their own.</summary>
+/// <summary>One type's record header members as columns, in the annotation table's order: each row
+/// whose interface the type carries and declares the member on.</summary>
 internal static class RecordHeaderColumns
 {
     private const string FlagsMember = nameof(IMajorRecordGetter.MajorRecordFlagsRaw);
@@ -14,47 +14,52 @@ internal static class RecordHeaderColumns
     // Every bit, so each flag view Mutagen spells over the raw integer shows up.
     private const long AllBits = -1;
 
-    internal static (List<ColumnSpec> Columns, IReadOnlyList<string> Aliases) For(
-        Type getterType, GameReflection game, ILogger logger)
+    internal static List<ColumnSpec> For(
+        Type getterType, ILookup<string, PropertyInfo> declarations, string pathPrefix, GameReflection game, ILogger logger)
     {
-        var properties = ReflectedTypes.GetAllInterfaceProperties(getterType)
-            .GroupBy(p => p.Name, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, ReflectedTypes.MostDerived, StringComparer.Ordinal);
-        var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, AllBits);
-
         var columns = new List<ColumnSpec>();
-        foreach (var (_, member, label) in game.Annotations.RecordHeaderMembers)
+        foreach (var (typeName, member, label) in game.Annotations.RecordHeaderMembers)
         {
-            if (!properties.TryGetValue(member, out var prop)) continue;
-            if (ColumnReflection.BuildColumn(prop, prop.Name, game, logger) is not { } column) continue;
+            var declared = declarations[member].ToList();
+            if (!declared.Exists(p => ReflectedTypes.DeclaringTypeOf(p).Name == typeName)) continue;
+            var prop = ReflectedTypes.MostDerived(declared);
+            if (ColumnReflection.BuildColumn(prop, pathPrefix + prop.Name, game, logger) is not { } column) continue;
 
-            var field = column.Field with { DisplayLabel = label, IsRecordHeaderMember = true };
-            columns.Add(member == FlagsMember
-                ? column with { Field = field with { EnumMembers = FlagNames(aliases, properties) }, Aliases = aliases }
-                : column with { Field = field });
+            var header = column with { Field = column.Field with { DisplayLabel = label, IsRecordHeaderMember = true } };
+            columns.Add(member == FlagsMember ? WithFlagViews(header, getterType, declarations, game) : header);
         }
-        return (columns, aliases);
+        return columns;
     }
 
-    // The bits every flags view over the raw integer names, in bit order. Where the game's view and
-    // the record type's own name one bit, the type's narrower word stands.
-    private static List<EnumMember> FlagNames(IReadOnlyList<string> aliases, Dictionary<string, PropertyInfo> properties)
+    // Record Flags names the bits of every flag view Mutagen spells over the raw integer, and those
+    // views are its aliases.
+    private static ColumnSpec WithFlagViews(
+        ColumnSpec flags, Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game)
     {
-        var views = aliases
-            .Select(properties.GetValueOrDefault)
-            .OfType<PropertyInfo>()
-            .Select(p => (Declaring: ReflectedTypes.DeclaringTypeOf(p), Core: ReflectedTypes.CoreOf(p).Core))
-            .Where(v => v.Core.IsEnum && v.Core.GetCustomAttribute<FlagsAttribute>() != null)
-            .OrderBy(v => v.Declaring.GetInterfaces().Length);
+        var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, AllBits);
+        return flags with { Field = flags.Field with { EnumMembers = BitNames(aliases, declarations) }, Aliases = aliases };
+    }
 
-        var byBit = new SortedDictionary<long, EnumMember>();
-        foreach (var view in views)
+    private static List<EnumMember> BitNames(IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations)
+    {
+        var byBit = new SortedDictionary<long, (EnumMember Member, Type Declaring)>();
+        foreach (var view in aliases.Where(declarations.Contains).Select(a => ReflectedTypes.MostDerived(declarations[a])))
         {
-            foreach (var member in LeafClassification.GetEnumMembers(view.Core))
+            var core = ReflectedTypes.CoreOf(view).Core;
+            if (!core.IsEnum || core.GetCustomAttribute<FlagsAttribute>() == null) continue;
+            var declaring = ReflectedTypes.DeclaringTypeOf(view);
+            foreach (var member in LeafClassification.GetEnumMembers(core))
             {
-                if (member.BitValue is { } bit) byBit[long.Parse(bit, CultureInfo.InvariantCulture)] = member;
+                if (member.BitValue is not { } bitValue) continue;
+                var bit = long.Parse(bitValue, CultureInfo.InvariantCulture);
+                if (!byBit.TryGetValue(bit, out var held) || IsNarrower(declaring, held.Declaring))
+                    byBit[bit] = (member, declaring);
             }
         }
-        return [.. byBit.Values];
+        return [.. byBit.Values.Select(v => v.Member)];
     }
+
+    // The game's flags and the record type's own both name some bits; the type's word is the
+    // narrower one.
+    private static bool IsNarrower(Type candidate, Type held) => held.IsAssignableFrom(candidate);
 }

@@ -42,8 +42,8 @@ internal static class RecordViewBuilder
         if (col.ApiType == "flags")
         {
             // A [Flags] enum is written as an array of member names. Joining them keeps the column
-            // text and keeps `LIKE '%SomeFlag%'` working, which is how record flags are actually
-            // filtered on.
+            // text and keeps `LIKE '%SomeFlag%'` working. A major record's Record Flags is its raw
+            // integer, which an INTEGER column filters by its bits.
             raw = $"array_to_string(CAST(json_extract(body, {path}) AS VARCHAR[]), ', ')";
         }
         else if (col.DuckDbType == "VARCHAR")

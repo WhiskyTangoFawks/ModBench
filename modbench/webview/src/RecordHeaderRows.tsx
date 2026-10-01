@@ -144,7 +144,6 @@ export function FormIdRow({
           <DiskCell
             key={key} style={cellStyle(key)} isFocused={isFocused(focusedCell, FORM_ID_ROW, key)}
             onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
-            title={override.formIdReadOnlyReason ?? undefined}
             copyText={formKeyLabel(override.formKey, override)}
           >
             <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
@@ -153,7 +152,7 @@ export function FormIdRow({
                   formKey={toStr(value)}
                   // A FormKey the disk does not hold yet names no record.
                   label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
-                  editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
+                  editable={editableColumns.has(key)}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               )}

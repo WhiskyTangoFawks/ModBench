@@ -59,8 +59,7 @@ public record RecordDetail(
     // Non-null when ingest could not produce this record's document, so Fields are the stub's.
     // The record editor renders the column read-only with this as the reason; every write is
     // refused.
-    string? ParseDiagnosis = null,
-    string? FormIdReadOnlyReason = null);
+    string? ParseDiagnosis = null);
 
 public record CompareOverride(
     string FormKey,
@@ -78,11 +77,10 @@ public record CompareOverride(
     string? ParseDiagnosis = null,
     // ADR-0012 invariant 2: Overwrite is an origin, not a mod. Computed here (PluginOrigin.
     // IsOverwrite) so the webview never interprets Origin itself.
-    bool IsInOverwrite = false,
-    string? FormIdReadOnlyReason = null)
+    bool IsInOverwrite = false)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
-        ParseDiagnosis, FormIdReadOnlyReason);
+        ParseDiagnosis);
 
 public record FieldDiff(
     string FieldName,

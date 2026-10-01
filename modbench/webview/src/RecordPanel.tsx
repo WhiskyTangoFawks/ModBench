@@ -410,8 +410,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return rows;
   }
 
-  // The FormID reads each copy's own FormKey; it stands where mEdit names that member, and first in
-  // a record whose header members mEdit does not name, as a plugin header's.
+  // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
   function formIdRow(label: string) {
     navRows.push({ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false });
     return (
@@ -432,16 +431,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   const isHeaderMember = (diff: FieldDiff) => fieldMetaMap[diff.fieldName]?.isRecordHeaderMember === true;
   const headerDiffs = diffs.filter(isHeaderMember);
-  const headerMemberRows = (diff: FieldDiff) => {
+  const headerMemberRows = (diff: FieldDiff): React.ReactNode[] => {
     const meta = fieldMetaMap[diff.fieldName];
     return diff.fieldName === FORM_KEY_MEMBER
       ? [formIdRow(meta?.displayLabel ?? diff.fieldName)]
       : buildRows(diff, meta, [], diff.fieldName, `${RECORD_HEADER_ROW}.${diff.fieldName}`, RECORD_HEADER_ROW, () => true, 1);
   };
-  const headerRows = !headerExpanded ? [] : [
-    ...(headerDiffs.some(d => d.fieldName === FORM_KEY_MEMBER) ? [] : [formIdRow('FormID')]),
-    ...headerDiffs.flatMap(headerMemberRows),
-  ];
+  const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];
   // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
   // since the record's own fields are not there to be members of.
   const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(

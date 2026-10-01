@@ -23,7 +23,10 @@ internal static class SyntheticColumns
                 new SubFieldSpec(name, "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),
                 name, "BOOLEAN",
                 ViewDefaultLiteral: "false",
-                Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names.Count == 0 ? null : flag, aliases));
+                Synthetic: new SyntheticBit(backingPathPrefix + backingMember, bit, names.Count == 0 ? null : flag))
+            {
+                Aliases = aliases,
+            };
         }
     }
 }

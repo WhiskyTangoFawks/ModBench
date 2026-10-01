@@ -16,19 +16,20 @@ internal static class ColumnReflection
     internal static List<ColumnSpec> ReflectColumns(
         Type getterType, GameReflection game, ILogger logger)
     {
-        var (columns, aliases) = RecordHeaderColumns.For(getterType, game, logger);
-        var notMembers = columns.Select(c => c.Name).Concat(aliases).Append(EditorIdMember)
+        var declarations = ReflectedTypes.GetAllInterfaceProperties(getterType).ToLookup(p => p.Name, StringComparer.Ordinal);
+        var columns = RecordHeaderColumns.For(getterType, declarations, pathPrefix: "", game, logger);
+        var headerOrAlias = columns.Select(c => c.Name).Concat(columns.SelectMany(c => c.Aliases)).Append(EditorIdMember)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var grouped = ReflectedTypes.GetAllInterfaceProperties(getterType)
-            .Where(p => !notMembers.Contains(p.Name))
-            .Where(p => !game.Annotations.IsExcludedColumn(p))
-            .Where(p => !game.Annotations.IsExcludedMember(p))
-            .Where(p => !SchemaRefusals.IsExcludedUnionColumn(p, game))
-            .GroupBy(p => p.Name, StringComparer.Ordinal);
 
-        foreach (var group in grouped)
+        foreach (var group in declarations.Where(g => !headerOrAlias.Contains(g.Key)))
         {
-            var prop = ReflectedTypes.MostDerived(group);
+            var kept = group
+                .Where(p => !game.Annotations.IsExcludedColumn(p))
+                .Where(p => !game.Annotations.IsExcludedMember(p))
+                .Where(p => !SchemaRefusals.IsExcludedUnionColumn(p, game))
+                .ToList();
+            if (kept.Count == 0) continue;
+            var prop = ReflectedTypes.MostDerived(kept);
             if (BuildColumn(prop, prop.Name, game, logger) is { } column) columns.Add(column);
         }
 
