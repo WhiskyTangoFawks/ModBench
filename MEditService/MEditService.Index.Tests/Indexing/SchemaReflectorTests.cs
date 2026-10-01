@@ -29,14 +29,18 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_BuildsNoTableForAnExcludedSignature()
+    public void GetSchemas_IncludesLandscapeAndNavmeshRecordTypes()
     {
-        // Landscape and navmesh live in cell children too but aren't standard refs; the REFR-flavour
-        // placement variants collapse into refr. Both groups are SchemaAnnotations.ExcludedSignatures.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.False(schemas.ContainsKey("land"));
-        Assert.False(schemas.ContainsKey("navm"));
-        Assert.False(schemas.ContainsKey("navi"));
+        Assert.True(schemas.ContainsKey("land"));
+        Assert.True(schemas.ContainsKey("navm"));
+        Assert.True(schemas.ContainsKey("navi"));
+    }
+
+    [Fact]
+    public void GetSchemas_BuildsNoTableForAPlacementVariantCollapsedIntoRefr()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.False(schemas.ContainsKey("pgre"));
         Assert.False(schemas.ContainsKey("phzd"));
     }
