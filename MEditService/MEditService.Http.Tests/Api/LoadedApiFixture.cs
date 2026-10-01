@@ -27,7 +27,9 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         Client = _app.CreateClient();
         var resp = await Client.PutLoadOrderAndAwaitReady(new
         {
-            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(Plugin.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Plugin.Plugins),
             gameDirectory = Plugin.DataFolder,
             instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",

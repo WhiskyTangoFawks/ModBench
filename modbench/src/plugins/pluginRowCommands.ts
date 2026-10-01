@@ -259,7 +259,7 @@ async function pickCompilable(deps: CompileDeps, entry: GestureEntry): Promise<P
   });
   if (plugins === undefined) return undefined;
   const compilable = plugins
-    .filter((p) => p.isTracked && !p.isImmutable)
+    .filter((p) => p.isTracked)
     .map((p) => ({ name: p.name, origin: p.origin }))
     .sort((a, b) => Number(isSelected(b)) - Number(isSelected(a)));
   const choice = await vscode.window.showQuickPick(

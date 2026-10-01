@@ -24,8 +24,8 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        var loadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotPlugins.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+        var loadOrder = SnapshotPlugins.Snapshot(GameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
         Holder.Apply(loadOrder);
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())

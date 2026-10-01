@@ -164,15 +164,9 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     return { kind: 'listed', names: new Set(names) };
   };
 
-  // `undefined` selects what the folder on disk holds. A backend that could not answer is
-  // `implicit` null.
-  const run = async (
-    inData?: DataFolderPlugins,
-    implicit: readonly string[] | null = [],
-  ) => syncPlugins(
-    accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE),
-    inData ?? await inDataOnDisk(),
-    () => Promise.resolve(implicit ?? undefined));
+  // `undefined` selects what the folder on disk holds.
+  const run = async (inData?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => syncPlugins(
+    accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE), inData ?? await inDataOnDisk(), loadedWithNoLine);
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
@@ -235,7 +229,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('*Base.esp\r\n');
   });
 
-  it('an implicit master the backend reports, which an enabled mod also ships, is never appended: the tree has no line-backed row for it', async () => {
+  it('a plugin the game loads with no line, which an enabled mod also ships, is never appended: the tree has no line-backed row for it', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
@@ -243,9 +237,9 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
   });
 
-  // The rival this forbids: ignoring the backend's answer. Then the mod's plugin is an ordinary
-  // unlisted plugin and earns a line.
-  it('appends a mod-shipped vanilla plugin the backend does not call implicit', async () => {
+  // The rival this forbids: ignoring the plugins the game loads with no line. Then the mod's plugin
+  // is an ordinary unlisted plugin and earns a line.
+  it('appends a mod-shipped vanilla plugin the game does not load with no line', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
@@ -254,7 +248,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     });
   });
 
-  it('an implicit master matches its plugins.txt line case-insensitively', async () => {
+  it('a plugin the game loads with no line matches its plugins.txt line case-insensitively', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
     expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
@@ -272,37 +266,17 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
 
   // Rivals: appending against an unknown game folder, which lists a plugin the game already loads
   // from Data; and a refusal of its own, a second telling beside the instance's state.
-  it('writes nothing when the game folder is not found, never asks mEdit, and leaves the telling to the instance\'s state', async () => {
+  it('writes nothing when the game folder is not found, and leaves the telling to the instance\'s state', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
     const old = new Date('2020-01-01T00:00:00Z');
     await utimes(pluginsPath(), old, old);
-    let asked = false;
 
     const result = await syncPlugins(
-      accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' },
-      () => { asked = true; return Promise.resolve([]); });
+      accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE), { kind: 'unresolved' }, undefined);
 
     expect(result).toEqual({ applied: false, toldAsInstanceState: true });
     expect(await mtime()).toEqual(old);
-    expect(asked).toBe(false);
-  });
-
-  // Rival: count an unknown answer as an applied run that adds and drops nothing, which says
-  // nothing to the user.
-  it('refuses when mEdit cannot say which plugins load with no line, writing nothing', async () => {
-    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
-    await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
-    const old = new Date('2020-01-01T00:00:00Z');
-    await utimes(pluginsPath(), old, old);
-
-    assertRefusal(await run(undefined, null), 'mEdit cannot say');
-    expect(await mtime()).toEqual(old);
-  });
-
-  // The folder is read before mEdit is asked, so the refusal names the listing that failed.
-  it('names the unreadable Data folder even when mEdit cannot answer either', async () => {
-    assertRefusal(await run(UNREADABLE, null), 'ENOENT');
   });
 
   it('an empty delta writes nothing at all: the file on disk is not touched', async () => {
@@ -353,7 +327,7 @@ describe('plugins commands hand the Instance adapter the change, decided on the 
     const { access, handed } = adapterRecordingChanges();
     await syncPlugins(
       access, PROFILE, new Map([['base.esp', 'Base.esp'], ['new.esp', 'New.esp']]),
-      { kind: 'listed', names: new Set() }, () => Promise.resolve([]));
+      { kind: 'listed', names: new Set() }, []);
     expect(handed).toEqual([[{ kind: 'drop', plugin: 'Gone.esp' }, { kind: 'add', plugin: 'New.esp' }]]);
   });
 });

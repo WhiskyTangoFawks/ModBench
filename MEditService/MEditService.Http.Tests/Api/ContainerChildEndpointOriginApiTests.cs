@@ -46,14 +46,16 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     private async Task PutBothPlugins(ScatteredFixtureData fx)
     {
         // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
-        // same slot; only the winning, enabled, listed one participates.
+        // same slot; only the winning, enabled, listed one is active.
         var plugins = fx.Plugins;
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
             gameRelease = "Fallout4",
         });
         put.EnsureSuccessStatusCode();

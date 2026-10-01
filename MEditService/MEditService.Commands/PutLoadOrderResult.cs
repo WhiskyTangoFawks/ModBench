@@ -7,6 +7,9 @@ public enum PutLoadOrderRefusal
 
     /// <summary>A release this build has no Mutagen assembly for.</summary>
     UnsupportedGameRelease,
+
+    /// <summary>Plugins and active plugins that make no load order (LoadOrderSnapshot.RefusalOf).</summary>
+    InvalidSnapshot,
 }
 
 /// <summary>Put load order's outcome — applied-or-refusal, never an exception (ADR-0014 invariant

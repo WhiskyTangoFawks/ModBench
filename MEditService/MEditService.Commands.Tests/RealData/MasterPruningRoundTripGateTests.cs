@@ -187,7 +187,7 @@ public sealed class MasterPruningRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotPlugins.Of(inputs));
+            _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
         }
 
         public async Task<TrackResult> TrackAsync() =>

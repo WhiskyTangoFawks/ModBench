@@ -112,17 +112,11 @@ function pluginLinesDelta(
   return { added, dropped };
 }
 
-/** Answers the plugins this install loads with no plugins.txt line, or `undefined` when the
- *  backend that knows them cannot be reached. Only the backend can answer it: deriving the set
- *  here would mean parsing plugin headers (ADR-0016). */
-export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
-
 /** `modbench.plugin.sync`: plugins.txt is the inventory the Plugins tree reads, so when disk
- *  disagrees the file is updated. `provided` is the value's winners and `inData` its Data-folder
- *  presence, both handed in — this walks nothing. */
+ *  disagrees the file is updated. Every input is the value's, handed in; this walks nothing. */
 export async function syncPlugins(
   access: PluginsAccess, profile: string, provided: ReadonlyMap<string, string>,
-  inData: DataFolderPlugins, implicitMasters: ImplicitMasterSource,
+  inData: DataFolderPlugins, loadedWithNoLine: readonly string[] | undefined,
 ): Promise<PluginSyncResult> {
   // Without the Data folder's listing, a line for a Data plugin would be dropped. A game folder
   // not found is told once, as the instance's state (common.md, States, story 5).
@@ -130,21 +124,10 @@ export async function syncPlugins(
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
-  // Without the implicit masters, a mod's plugin named like a vanilla master would earn a line
-  // (ADR-0013, invariant 3).
-  let addable: ReadonlyMap<string, string>;
-  try {
-    const implicit = await implicitMasters();
-    if (implicit === undefined) {
-      return { applied: false, refusal: 'mEdit cannot say which plugins the game loads with no line' };
-    }
-    // An implicit master is left out: the tree gives it a row of its own, never from a line, so
-    // a mod's plugin of that name must not earn a line.
-    const implicitFolded = new Set(implicit.map(foldPath));
-    addable = new Map([...provided].filter(([folded]) => !implicitFolded.has(folded)));
-  } catch (err) {
-    return refuse(err);
-  }
+  // The tree gives a plugin the game loads with no line a row of its own, so a mod's plugin of
+  // that name must not earn a line (ADR-0013, invariant 3).
+  const noLine = new Set((loadedWithNoLine ?? []).map(foldPath));
+  const addable = new Map([...provided].filter(([folded]) => !noLine.has(folded)));
   const inDataNames = inData.names;
 
   let delta: PluginLinesDelta = { added: [], dropped: [] };
@@ -165,24 +148,15 @@ export interface PluginSyncInputs {
   profile: string;
   provided: ReadonlyMap<string, string>;
   inData: DataFolderPlugins;
-  dataFolder: string | undefined;
-  gameRelease: string | undefined;
+  loadedWithNoLine: readonly string[] | undefined;
 }
-
-/** The plugins the game loads with no line, for a Data folder and a game; undefined when mEdit
- *  cannot say. */
-export type ImplicitMastersIn = (
-  dataFolder: string | undefined, gameRelease: string | undefined,
-) => Promise<readonly string[] | undefined>;
 
 /** Plugin sync on one run's inputs. */
 export type PluginSyncRun = (inputs: PluginSyncInputs) => Promise<PluginSyncResult>;
 
-/** `syncPlugins` bound to one instance, its implicit masters asked for each run's Data folder and
- *  game. */
-export function pluginSyncOver(access: PluginsAccess, implicitMastersIn: ImplicitMastersIn): PluginSyncRun {
-  return ({ profile, provided, inData, dataFolder, gameRelease }) =>
-    syncPlugins(access, profile, provided, inData, () => implicitMastersIn(dataFolder, gameRelease));
+/** `syncPlugins` bound to one instance. */
+export function pluginSyncOver(access: PluginsAccess): PluginSyncRun {
+  return ({ profile, provided, inData, loadedWithNoLine }) => syncPlugins(access, profile, provided, inData, loadedWithNoLine);
 }
 
 /** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the

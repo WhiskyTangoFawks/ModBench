@@ -5,9 +5,8 @@ namespace MEditService.LoadOrder;
 // folder and renders it.
 public static class PluginOrigin
 {
-    /// <summary>The one origin Editing assigns on its own, for a plugin resolved from the game's
-    /// Data directory (ADR-0012). It cannot collide with an MO2 mod folder name: those live under
-    /// `mods/`, never `Data`.</summary>
+    /// <summary>The origin of a plugin in the game's Data directory (ADR-0012). It cannot collide
+    /// with an MO2 mod folder name: those live under `mods/`, never `Data`.</summary>
     public const string DataDirectory = "Data";
 
     /// <summary>The other reserved origin (ADR-0012 invariant 1): the files outside every mod,
@@ -18,4 +17,7 @@ public static class PluginOrigin
     /// every origin.</summary>
     public static bool IsOverwrite(string origin) =>
         string.Equals(origin, Overwrite, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsDataDirectory(string origin) =>
+        string.Equals(origin, DataDirectory, StringComparison.OrdinalIgnoreCase);
 }

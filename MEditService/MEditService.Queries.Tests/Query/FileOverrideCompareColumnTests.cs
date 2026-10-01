@@ -14,7 +14,7 @@ public sealed class FileOverrideCompareColumnTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private static RecordQueryService Service(IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<FakeRow> rows)
+    private static RecordQueryService Service(IReadOnlyList<LoadOrderEntry> plugins, IReadOnlyList<FakeRow> rows)
     {
         var opened = plugins.ToDictionary(
             c => new PluginAddress(c.Name, c.Origin), _ => new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 1));
@@ -30,6 +30,14 @@ public sealed class FileOverrideCompareColumnTests
         return new(key, loadOrderIndex, isWinner, RealDocuments.Of(npc, key, loadOrderIndex, isWinner, Release, "npc_", []));
     }
 
+    // A record of another plugin's, overridden in this one.
+    private static FakeRow OverrideRow(string plugin, string origin, FormKey of, int loadOrderIndex, bool isWinner, string editorId)
+    {
+        var npc = new Npc(of, Fallout4Release.Fallout4) { EditorID = editorId };
+        var key = new PluginAddress(plugin, origin);
+        return new(key, loadOrderIndex, isWinner, RealDocuments.Of(npc, key, loadOrderIndex, isWinner, Release, "npc_", []));
+    }
+
     [Fact]
     public void GetCompare_TwoOriginsProvideSameFilename_ExcludesTheOverriddenPluginsColumn()
     {
@@ -37,8 +45,8 @@ public sealed class FileOverrideCompareColumnTests
         // its own NextFormID sequence from the same ModKey, so this is a same-identity comparison.
         var plugins = new[]
         {
-            new RegisteredPlugin("Shared.esp", "ModA", "Shared.esp", 0, Enabled: true, Winning: true),
-            new RegisteredPlugin("Shared.esp", "ModB", "Shared.esp", 0, Enabled: true, Winning: false),
+            new LoadOrderEntry("Shared.esp", "Shared.esp", "ModA", 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Shared.esp", "Shared.esp", "ModB", 0, Enabled: true, Winning: false),
         };
         var rows = new[]
         {
@@ -59,20 +67,27 @@ public sealed class FileOverrideCompareColumnTests
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
     }
 
+    // ADR-0012 invariant 5: a plugin that is not active is not a compare-grid column, whatever the
+    // reason the game does not load it.
     [Fact]
-    public void GetCompare_DisabledButWinningPlugin_StillColumns()
+    public void GetCompare_APluginWhoseLineIsDisabled_IsNoColumn()
     {
-        // The deliberately-untouched axis: a disabled line is not an overridden plugin, since its
-        // file is the one the name resolves to and the user merely switched it off. Only Winning
-        // filters, so the exclusion never widens to Participates.
-        var plugins = new[] { new RegisteredPlugin("Solo.esp", "ModA", "Solo.esp", 0, Enabled: false, Winning: true) };
-        var rows = new[] { Row("Solo.esp", "ModA", 0, isWinner: true, "FromSolo") };
+        var plugins = new[]
+        {
+            new LoadOrderEntry("Base.esm", "Base.esm", "ModA", 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Solo.esp", "Solo.esp", "ModB", 1, Enabled: false, Winning: true),
+        };
+        var baseRow = Row("Base.esm", "ModA", 0, isWinner: true, "FromBase");
+        var rows = new[] { baseRow, OverrideRow("Solo.esp", "ModB", FormKey.Factory(baseRow.Document.FormKey), 1, isWinner: false, "FromSolo") };
         var svc = Service(plugins, rows);
 
-        var compare = svc.GetCompare("000800:Solo.esp");
+        var compare = svc.GetCompare(baseRow.Document.FormKey);
 
         Assert.NotNull(compare);
         var column = Assert.Single(compare.Overrides);
-        Assert.Equal("FromSolo", column.EditorId);
+        Assert.Equal("FromBase", column.EditorId);
+        // The disabled plugin's differing copy is no conflict: nothing the game loads contests it.
+        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
+        Assert.Equal(ConflictThis.OnlyOne, column.ConflictThis);
     }
 }

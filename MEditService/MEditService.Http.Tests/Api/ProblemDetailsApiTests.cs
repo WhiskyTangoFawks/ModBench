@@ -36,7 +36,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     {
         var resp = await _client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = badGameDir ?? _fixture.DataFolder,
             instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
@@ -56,7 +58,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var resp = await client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "SkyrimSE",

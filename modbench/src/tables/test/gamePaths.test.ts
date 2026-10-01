@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { dataFolderFile, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease } from '../gamePaths';
+import { join } from 'node:path';
+import {
+  creationClubListFile, dataFolderFile, gameMastersOf, gameReleaseForGame, nexusSlugFor, gamePathInfoForRelease,
+} from '../gamePaths';
 
 describe('gameReleaseForGame', () => {
   it('maps a game\'s name, as an instance\'s settings spell it, to Mutagen\'s release name', () => {
@@ -65,7 +68,7 @@ describe('nexusSlugFor', () => {
 
 describe('gamePathInfoForRelease', () => {
   it('answers Fallout 4\'s Steam install facts', () => {
-    expect(gamePathInfoForRelease('Fallout4')).toEqual({
+    expect(gamePathInfoForRelease('Fallout4')).toMatchObject({
       gameName: 'Fallout 4',
       nexusSlug: 'fallout4',
       steamAppId: '377160',
@@ -76,7 +79,10 @@ describe('gamePathInfoForRelease', () => {
   // A release the table only knows the Nexus slug for carries no Steam facts — the
   // autodetector's signal to give up rather than guess a folder.
   it('answers no Steam facts for a release the table cannot autodetect', () => {
-    expect(gamePathInfoForRelease('SkyrimSE')).toEqual({ gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
+    const info = gamePathInfoForRelease('SkyrimSE');
+    expect(info).toMatchObject({ gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' });
+    expect(info?.steamAppId).toBeUndefined();
+    expect(info?.steamFolderName).toBeUndefined();
   });
 
   it('answers undefined for a release the table holds no row for', () => {
@@ -98,5 +104,35 @@ describe('dataFolderFile', () => {
   it('names nothing while the game folder is not found', () => {
     const notFound = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
     expect(dataFolderFile(notFound, 'Fallout4.esm')).toBeUndefined();
+  });
+});
+
+// ADR-0013 invariant 3: Mod Management takes the game's masters from this table. Each release's
+// list is Mutagen's Implicits.Listings, in the order the game loads them.
+describe('gameMastersOf', () => {
+  it('answers the game\'s masters, in the order the game loads them', () => {
+    expect(gameMastersOf('Fallout4')).toEqual([
+      'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
+      'DLCNukaWorld.esm',
+    ]);
+    expect(gameMastersOf('SkyrimSE')).toEqual(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
+    expect(gameMastersOf('Oblivion')).toEqual(['Oblivion.esm']);
+  });
+
+  it('answers none for a release the table holds no row for', () => {
+    expect(gameMastersOf(undefined)).toEqual([]);
+    expect(gameMastersOf('SomeRelease')).toEqual([]);
+  });
+});
+
+describe('creationClubListFile', () => {
+  it('names the release\'s Creation Club list in the game folder', () => {
+    expect(creationClubListFile('/game', 'Fallout4')).toBe(join('/game', 'Fallout4.ccc'));
+    expect(creationClubListFile('/game', 'SkyrimSE')).toBe(join('/game', 'Skyrim.ccc'));
+  });
+
+  it('names none for a release with no Creation Club, or no release', () => {
+    expect(creationClubListFile('/game', 'Oblivion')).toBeUndefined();
+    expect(creationClubListFile('/game', undefined)).toBeUndefined();
   });
 });

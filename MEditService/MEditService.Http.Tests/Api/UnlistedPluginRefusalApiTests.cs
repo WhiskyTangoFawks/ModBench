@@ -6,9 +6,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>A plugin with no plugins.txt line is read-only (ADR-0012 invariant 5); Overwrite is
-/// refused earlier still, for having no mod folder (invariant 2). A disabled line stays
-/// writable.</summary>
+/// <summary>A plugin with no plugins.txt line, or on a disabled one, is not active and so read-only
+/// (ADR-0012 invariant 5); Overwrite is refused earlier still, for having no mod folder
+/// (invariant 2).</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class UnlistedPluginRefusalApiTests : HostedTests
 {
@@ -74,7 +74,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     }
 
     [Fact]
-    public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndPluginSync()
+    public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndTheWayOut()
     {
         using var fx = await Loaded();
         var formKey = await Client.FirstFormKey(UnlistedPlugin, UnlistedOrigin);
@@ -83,12 +83,12 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Body();
-        Assert.Equal("UnlistedPlugin", problem.GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotActive", problem.GetProperty("refusal").GetString());
         var detail = problem.GetProperty("detail").GetString().Require();
         Assert.Contains(UnlistedPlugin, detail, StringComparison.Ordinal);
         Assert.Contains(UnlistedOrigin, detail, StringComparison.Ordinal);
         Assert.Contains("does not load", detail, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("plugin sync", detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Enabling its line", detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,19 +104,21 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     }
 
     [Fact]
-    public async Task EditingAPluginOnADisabledLine_Lands()
+    public async Task EditingAPluginOnADisabledLine_IsAConflict_WritingNothing()
     {
         using var fx = await Loaded();
         var formKey = await Client.FirstFormKey(DisabledPlugin, DisabledOrigin);
+        var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, DisabledOrigin));
 
         var response = await Client.Edit(formKey, DisabledPlugin, DisabledOrigin, "HeightMax", 0.75);
 
-        response.EnsureSuccessStatusCode();
-        Assert.True((await response.Body()).GetProperty("applied").GetBoolean());
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("PluginNotActive", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, DisabledOrigin)));
     }
 
     [Fact]
-    public async Task EditingAModFolderStray_IsAConflictAsUnlisted_WritingNothing()
+    public async Task EditingAModFolderStray_IsAConflictAsNotActive_WritingNothing()
     {
         using var fx = await LoadedWithAModFolderStray();
         var formKey = await Client.FirstFormKey(StrayPlugin, StrayOrigin);
@@ -125,7 +127,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
         var response = await Client.Edit(formKey, StrayPlugin, StrayOrigin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("UnlistedPlugin", (await response.Body()).GetProperty("refusal").GetString());
+        Assert.Equal("PluginNotActive", (await response.Body()).GetProperty("refusal").GetString());
         Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, StrayOrigin)));
     }
 

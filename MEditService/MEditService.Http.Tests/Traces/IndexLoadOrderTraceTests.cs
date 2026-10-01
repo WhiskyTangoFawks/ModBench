@@ -50,7 +50,7 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         using var stream = await Client.NotificationStream();
 
         var again = await VersionOf(await Client.PutLoadOrder(fx));
-        var moved = await VersionOf(await Client.PutLoadOrder(fx, fx.Plugins.Select(p => p with { Slot = p.Slot + 1 })));
+        var moved = await VersionOf(await Client.PutLoadOrder(fx, fx.Plugins.Select(p => p with { Enabled = false })));
 
         var statuses = (await stream.FramesThrough("load-order-status", d => StatusOf(d).GetProperty("version").GetInt64() == moved))
             .Where(f => f.Kind == "load-order-status")

@@ -135,7 +135,6 @@
       "masters": [],
       "name": "Base.esm",
       "origin": "Data",
-      "participates": true,
       "recordCount": 4
     },
     {
@@ -151,7 +150,6 @@
       ],
       "name": "Mid.esp",
       "origin": "Data",
-      "participates": true,
       "recordCount": 3
     },
     {
@@ -167,7 +165,6 @@
       ],
       "name": "Top.esp",
       "origin": "Data",
-      "participates": true,
       "recordCount": 2
     }
   ],

@@ -251,8 +251,8 @@ describe('the Plugins view, given no lines and no locked plugins', () => {
 function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
   return {
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
-    isImmutable: false, participates: true, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, enabled: true,
-    winning: true, hasMatchingRecords, isTracked: false, hasParseFailure: false,
+    isImmutable: false, origin: 'SomeMod', masterIssues: [], inLoadOrder: true, hasMatchingRecords, isTracked: false,
+    hasParseFailure: false,
   };
 }
 
@@ -314,7 +314,7 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
 });
 
 describe('the Plugins view, given a plugin sync that refused', () => {
-  const SYNC_MESSAGE = 'plugins.txt is not synced: mEdit cannot say which plugins the game loads with no line.';
+  const SYNC_MESSAGE = "plugins.txt is not synced: the game's Data folder cannot be listed: EACCES.";
   const NO_RECORD_MATCH = 'No records match armor.sql.';
 
   async function refusedView(recordFilter?: string) {

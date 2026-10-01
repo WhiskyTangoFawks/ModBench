@@ -132,9 +132,9 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
 
-        _loadOrder = new LoadOrderSnapshot(
+        _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            SnapshotPlugins.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
 
         new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)

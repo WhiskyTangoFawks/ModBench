@@ -56,12 +56,12 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
         });
 
-        _loadOrder = new LoadOrderSnapshot(
+        _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            SnapshotPlugins.Of([
+            [
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
-            ]));
+            ]);
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen());
         trackService.TrackModAsync(_loadOrder, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();

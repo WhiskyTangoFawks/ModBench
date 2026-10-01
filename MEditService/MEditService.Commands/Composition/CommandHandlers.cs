@@ -85,7 +85,6 @@ public static class CommandHandlers
         services.AddSingleton(sp => new PutLoadOrderHandler(
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<IPluginAdapter>(),
             new ExternalChangeCheck(
                 sp.GetRequiredService<INotificationPublisher>(),
                 new PluginFileHashes(sp.GetRequiredService<TimeProvider>()))));

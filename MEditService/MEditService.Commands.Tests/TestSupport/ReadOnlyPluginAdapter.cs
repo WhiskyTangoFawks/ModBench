@@ -33,9 +33,6 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 
     public virtual bool CanRead(ModPath modPath) => Real.CanRead(modPath);
 
-    public virtual IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
-        Real.ImplicitPluginsIn(dataFolder, gameRelease);
-
     public virtual LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,

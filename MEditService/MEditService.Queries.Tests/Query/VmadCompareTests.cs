@@ -59,8 +59,8 @@ public sealed class VmadCompareTests
         };
         var plugins = new[]
         {
-            new RegisteredPlugin("Base.esm", "Data", "Base.esm", 0, Enabled: true, Winning: true),
-            new RegisteredPlugin("Top.esp", "Data", "Top.esp", 1, Enabled: true, Winning: true),
+            new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
+            new LoadOrderEntry("Top.esp", "Top.esp", "Data", 1, Enabled: true, Winning: true),
         };
         var holder = FakeLoadOrder.Of(Release, plugins);
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());

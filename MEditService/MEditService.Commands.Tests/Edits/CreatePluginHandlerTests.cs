@@ -17,7 +17,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
 
     public CreatePluginHandlerTests() =>
-        _holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotPlugins.Of(_data.Plugins)));
+        _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
 
     public void Dispose() => _data.Dispose();
 
@@ -64,10 +64,10 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var folder = ModFolder("TrackedMod");
         await Create("First.esp", folder, "TrackedMod");
-        _holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4,
+        _holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4,
         [
-            .. SnapshotPlugins.Of(_data.Plugins),
-            new RegisteredPlugin("First.esp", "TrackedMod", Path.Combine(folder, "First.esp"), Slot: 1, Enabled: true, Winning: true),
+            .. _data.Plugins,
+            new LoadOrderEntry("First.esp", Path.Combine(folder, "First.esp"), "TrackedMod", Slot: 1, Enabled: true, Winning: true),
         ]));
         var tracked = await TestEditService.TrackHandler(_holder)
             .TrackAsync([new PluginAddress("First.esp", "TrackedMod")], SourcePreset.Edits, new Dictionary<string, string>());
@@ -161,7 +161,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private CreatePluginHandler HandlerIn(GameRelease release, RecordingAdapter adapter)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, release, SnapshotPlugins.Of(_data.Plugins)));
+        holder.Apply(SnapshotPlugins.Snapshot(_data.DataFolder, _data.InstanceRoot, release, _data.Plugins));
         return TestEditService.PluginCreateHandler(holder, adapter);
     }
 

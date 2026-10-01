@@ -22,7 +22,12 @@ const VALUE: LoadOrderSource = {
   gameRelease: 'Fallout4',
   gameFolder: { kind: 'found', root: '/game', dataFolder: '/game/Data' },
   plugins: [PLUGIN, LINE_WITHOUT_A_FILE],
+  pluginsLoadedWithNoLine: [{ name: 'Master.esm', origin: 'Data' }],
 };
+const MASTER = { name: 'Master.esm', path: '/game/Data/Master.esm', origin: 'Data' };
+const SENT_PLUGINS = [MASTER, { name: PLUGIN.name, path: PLUGIN.path, origin: PLUGIN.origin }];
+const SENT_ACTIVE = [{ name: 'Master.esm', origin: 'Data' }, { name: PLUGIN.name, origin: PLUGIN.origin }];
+const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Data' }];
 
 function attachedClient(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -38,10 +43,14 @@ describe('put load order', () => {
     const result = await putLoadOrder(createLoadOrderSender(client), '/instance', VALUE);
 
     const puts = client.calls.filter((c) => c.method === 'putLoadOrder');
-    expect(puts.map((c) => c.args.slice(0, 4))).toEqual([[[PLUGIN], '/game/Data', '/instance', 'Fallout4']]);
+    expect(puts.map((c) => c.args.slice(0, 6)))
+      .toEqual([[SENT_PLUGINS, SENT_ACTIVE, SENT_LOADED_WITH_NO_LINE, '/game/Data', '/instance', 'Fallout4']]);
     expect(result).toEqual({
       sent: true,
-      snapshot: { plugins: [PLUGIN], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
+      snapshot: {
+        plugins: SENT_PLUGINS, active: SENT_ACTIVE, loadedWithNoLine: SENT_LOADED_WITH_NO_LINE, gameDirectory: '/game/Data',
+        instanceRoot: '/instance', gameRelease: 'Fallout4',
+      },
       outcome: APPLIED,
     });
   });
@@ -52,7 +61,7 @@ describe('put load order', () => {
 
     await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameRelease: 'Fallout4VR' });
 
-    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[3])).toEqual(['Fallout4VR']);
+    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[5])).toEqual(['Fallout4VR']);
   });
 
   // A guessed release would answer about another game; the name is refused visibly instead.
@@ -61,7 +70,18 @@ describe('put load order', () => {
 
     await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined });
 
-    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[3])).toEqual(['Morrowind']);
+    expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[5])).toEqual(['Morrowind']);
+  });
+
+  // common.md, States, story 5: without the game's masters the snapshot would be wrong, so mEdit
+  // keeps what it holds.
+  it('sends nothing while the game folder\'s plugins cannot be listed', async () => {
+    const client = attachedClient();
+
+    const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, pluginsLoadedWithNoLine: undefined });
+
+    expect(client.calls).toEqual([]);
+    expect(result).toEqual({ sent: false });
   });
 
   it('sends nothing while the game directory is unresolved', async () => {

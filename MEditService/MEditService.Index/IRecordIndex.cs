@@ -67,10 +67,9 @@ internal interface IRecordIndex : IDisposable
     /// the next sweep.</summary>
     void Unregister(PluginAddress key);
 
-    /// <summary>Rebuilds every ref's winners among <paramref name="participating"/>. ADR-0013: who
-    /// competes is the load order value's answer, handed in here and remembered for the re-sweeps a
-    /// working-tree write triggers.</summary>
-    void UpdateWinners(IReadOnlyList<RegisteredPlugin> participating);
+    /// <summary>Rebuilds every ref's winners among <paramref name="active"/>, in load order
+    /// (ADR-0013), remembered for the re-sweeps a working-tree write triggers.</summary>
+    void UpdateWinners(IReadOnlyList<RegisteredPlugin> active);
 
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
     /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0007). Records the

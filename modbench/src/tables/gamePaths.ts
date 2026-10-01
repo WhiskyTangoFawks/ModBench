@@ -1,5 +1,5 @@
-// Every per-game fact needed to find an install and speak to Nexus, keyed by Mutagen's
-// GameRelease, and where a plugin sits in an install.
+// Every per-game fact needed to find an install, speak to Nexus and name the plugins the game loads
+// with no line, keyed by Mutagen's GameRelease, and where a plugin sits in an install.
 
 import { join } from 'node:path';
 
@@ -14,19 +14,42 @@ export interface GamePathInfo {
   readonly steamAppId?: string;
   /** The `steamapps/common/<name>` folder holding the install. Absent alongside `steamAppId`. */
   readonly steamFolderName?: string;
+  /** The game's masters: the plugins it loads with no plugins.txt line, in the order it loads
+   *  them. Mutagen's `Implicits.Listings` for the release. */
+  readonly masters: readonly string[];
+  /** The Creation Club list's file name in the game folder, for a release that has one. */
+  readonly creationClubList?: string;
 }
+
+const FALLOUT4_MASTERS = [
+  'Fallout4.esm', 'DLCRobot.esm', 'DLCworkshop01.esm', 'DLCCoast.esm', 'DLCworkshop02.esm', 'DLCworkshop03.esm',
+  'DLCNukaWorld.esm',
+];
+const SKYRIM_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
 
 // Only Fallout 4 carries Steam autodetection facts today — a fixture choice, not a platform lock.
 const GAME_PATHS: Record<string, GamePathInfo> = {
-  Fallout4: { gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4' },
-  Fallout4VR: { gameName: 'Fallout 4 VR', nexusSlug: 'fallout4' },
-  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3' },
-  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas' },
-  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim' },
-  SkyrimSE: { gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition' },
-  SkyrimVR: { gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition' },
-  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal' },
-  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion' },
+  Fallout4: {
+    gameName: 'Fallout 4', nexusSlug: 'fallout4', steamAppId: '377160', steamFolderName: 'Fallout 4',
+    masters: FALLOUT4_MASTERS, creationClubList: 'Fallout4.ccc',
+  },
+  Fallout4VR: {
+    gameName: 'Fallout 4 VR', nexusSlug: 'fallout4', masters: [...FALLOUT4_MASTERS, 'Fallout4_VR.esm'],
+    creationClubList: 'Fallout4.ccc',
+  },
+  Fallout3: { gameName: 'Fallout 3', nexusSlug: 'fallout3', masters: ['Fallout3.esm'] },
+  FalloutNV: { gameName: 'Fallout New Vegas', nexusSlug: 'newvegas', masters: ['FalloutNV.esm'] },
+  SkyrimLE: { gameName: 'Skyrim', nexusSlug: 'skyrim', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc' },
+  SkyrimSE: {
+    gameName: 'Skyrim Special Edition', nexusSlug: 'skyrimspecialedition', masters: SKYRIM_MASTERS,
+    creationClubList: 'Skyrim.ccc',
+  },
+  SkyrimVR: {
+    gameName: 'Skyrim VR', nexusSlug: 'skyrimspecialedition', masters: [...SKYRIM_MASTERS, 'SkyrimVR.esm'],
+    creationClubList: 'Skyrim.ccc',
+  },
+  EnderalLE: { gameName: 'Enderal', nexusSlug: 'enderal', masters: SKYRIM_MASTERS, creationClubList: 'Skyrim.ccc' },
+  Oblivion: { gameName: 'Oblivion', nexusSlug: 'oblivion', masters: ['Oblivion.esm'] },
 };
 
 // Rebuilt from the table above so the two directions can never disagree. Morrowind resolves to no
@@ -52,6 +75,19 @@ export function nexusSlugFor(gameRelease: string | undefined, gameName: string):
  *  the autodetector's signal to give up rather than guess a folder. */
 export function gamePathInfoForRelease(release: string): GamePathInfo | undefined {
   return GAME_PATHS[release];
+}
+
+/** The game's masters for a release, in the order the game loads them; none for a release the
+ *  table holds no row for. */
+export function gameMastersOf(release: string | undefined): readonly string[] {
+  return (release === undefined ? undefined : GAME_PATHS[release])?.masters ?? [];
+}
+
+/** The release's Creation Club list in the game folder at `root`; undefined for a release with no
+ *  Creation Club. */
+export function creationClubListFile(root: string, release: string | undefined): string | undefined {
+  const file = release === undefined ? undefined : GAME_PATHS[release]?.creationClubList;
+  return file === undefined ? undefined : join(root, file);
 }
 
 /** A game folder as plain data: found, with its Data folder, or not found. */

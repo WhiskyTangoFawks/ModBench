@@ -74,7 +74,7 @@ describe('plugins.txt corpus', () => {
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await syncPlugins(
-      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA, () => Promise.resolve([]));
+      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

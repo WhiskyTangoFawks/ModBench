@@ -40,6 +40,8 @@ function knownGameNameLiterals(): string[] {
       literals.add(info.nexusSlug);
       if (info.steamAppId) literals.add(info.steamAppId);
       if (info.steamFolderName) literals.add(info.steamFolderName);
+      for (const master of info.masters) literals.add(master);
+      if (info.creationClubList) literals.add(info.creationClubList);
     }
   }
   return [...literals];

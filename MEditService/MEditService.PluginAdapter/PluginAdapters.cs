@@ -18,15 +18,15 @@ public static class PluginAdapters
     public static bool CanRead(this IPluginAdapter adapter, RegisteredPlugin plugin) =>
         adapter.CanRead(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path));
 
-    /// <summary>The files the game loads, one winning plugin per filename in slot order, with
-    /// <paramref name="compiled"/> among them however it is registered (ADR-0013).</summary>
+    /// <summary>The files the game loads, the active plugins in load order, with
+    /// <paramref name="compiled"/> among them whether it is active or not (ADR-0013).</summary>
     public static LinkAnswers LinkTargets(
         this IPluginAdapter adapter, LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys)
     {
         // One mod per filename, because that is what a link cache can hold: the plugin being compiled
         // stands in for its own filename, at whatever slot the load order gives that name.
-        var files = loadOrder.Participating
+        var files = loadOrder.Active
             .Select(plugin => SameFile(plugin, compiled) ? compiled : plugin)
             .Append(compiled)
             .DistinctBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)

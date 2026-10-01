@@ -178,14 +178,14 @@ public sealed class SwaggerSchemaTests
     // property lands in `required` and the whole wire types optional-and-nullable.
     [Theory]
     // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0013's
-    // honest null for a plugin no plugins.txt line names) and MasterIssues (null: not yet checked),
-    // which must stay optional.
+    // honest null for a plugin that is not active) and MasterIssues (null: not yet checked), which
+    // must stay optional.
     [InlineData(
         "PluginResponse",
         new[]
         {
             "name", "path", "isLight", "isMaster", "isBlueprint", "masters", "recordCount", "isImmutable",
-            "participates", "origin", "inLoadOrder", "enabled", "winning",
+            "origin", "inLoadOrder",
             "hasMatchingRecords", "isTracked", "hasParseFailure",
         })]
     // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must

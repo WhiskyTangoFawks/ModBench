@@ -1,13 +1,15 @@
 using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
+using MEditService.LoadOrder;
+using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A plugin the game does not load, overridden or with no plugins.txt line, is read-only
-/// (ADR-0012 invariant 5), refused before any source write. The same write against the winning
-/// plugin of the same name lands.</summary>
+/// <summary>A plugin that is not active is read-only (ADR-0012 invariant 5), refused before any
+/// source write. The same write against the active plugin of the same name lands.</summary>
 public sealed class OverriddenAndUnlistedRefusalTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -20,7 +22,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.EditHandler.Set(mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
         Assert.Contains(OverriddenAndUnlistedFixture.PluginName, result.Message, StringComparison.Ordinal);
         Assert.Contains(OverriddenAndUnlistedFixture.OverriddenOrigin, result.Message, StringComparison.Ordinal);
         Assert.Contains("does not load", result.Message, StringComparison.OrdinalIgnoreCase);
@@ -59,20 +61,35 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var remove = mod.EditHandler.Edit(mod.OverriddenPlugin, npc, RemoveAt(Member("Keywords"), At(0)));
         var move = mod.EditHandler.Edit(mod.OverriddenPlugin, npc, MoveTo(0, Member("Keywords"), At(1)));
 
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, add.Refusal);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, remove.Refusal);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, move.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, add.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, remove.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, move.Refusal);
     }
 
     [Fact]
-    public void EditingAWinningPluginWithNoLine_IsRefusedAsUnlisted_NotAsOverridden_WritingNothing()
+    public void EditingAPluginWithNoLine_IsRefusedAsNotActive_WritingNothing()
     {
         using var mod = OverriddenAndUnlistedFixture.Create();
 
         var result = mod.EditHandler.Set(mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
         Assert.Empty(mod.GitStatus(mod.UnlistedPlugin));
+    }
+
+    [Fact]
+    public void EditingATrackedPluginWhoseLineIsDisabled_IsRefusedAsNotActive_WritingNothing()
+    {
+        using var mod = OverriddenAndUnlistedFixture.Create();
+        var holder = new LoadOrderHolder();
+        holder.Apply(SnapshotPlugins.Snapshot(mod.GameDirectory, mod.GameDirectory, GameRelease.Fallout4,
+            mod.Entries.Select(e => e.Key == mod.WinningPlugin ? e with { Enabled = false } : e)));
+
+        var result = TestEditService.EditHandler(holder)
+            .Set(mod.WinningPlugin, mod.WinningNpc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
+        Assert.Empty(mod.GitStatus(mod.WinningPlugin));
     }
 
     [Fact]
@@ -83,7 +100,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.CreateHandler.CreateRecord(mod.OverriddenPlugin, "npc_", "NewNpc");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -96,7 +113,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
 
         Assert.Empty(result.Applied);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, refusal.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refusal.Refusal);
         Assert.NotNull(mod.Document(mod.OverriddenPlugin, mod.OverriddenNpc.ToString()));
     }
 
@@ -109,7 +126,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.OverriddenPlugin, mod.OverriddenNpc.ToString(), $"000F00:{mod.OverriddenPlugin.Name}");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -121,7 +138,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -133,7 +150,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.OverriddenPlugin);
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.OverriddenPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -170,9 +187,9 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var remove = mod.EditHandler.Edit(mod.UnlistedPlugin, npc, RemoveAt(Member("Keywords"), At(0)));
         var move = mod.EditHandler.Edit(mod.UnlistedPlugin, npc, MoveTo(0, Member("Keywords"), At(1)));
 
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, add.Refusal);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, remove.Refusal);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, move.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, add.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, remove.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, move.Refusal);
     }
 
     [Fact]
@@ -183,7 +200,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
         var result = mod.CreateHandler.CreateRecord(mod.UnlistedPlugin, "npc_", "NewNpc");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -196,7 +213,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
 
         Assert.Empty(result.Applied);
         var refusal = Assert.Single(result.Refused);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, refusal.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, refusal.Refusal);
         Assert.NotNull(mod.Document(mod.UnlistedPlugin, mod.UnlistedNpc.ToString()));
     }
 
@@ -209,7 +226,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.UnlistedPlugin, mod.UnlistedNpc.ToString(), $"000F00:{mod.UnlistedPlugin.Name}");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -221,7 +238,7 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 
     [Fact]
@@ -233,6 +250,6 @@ public sealed class OverriddenAndUnlistedRefusalTests
             mod.CopySourcePlugin, mod.CopySourceNpc.ToString(), mod.UnlistedPlugin);
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.UnlistedPlugin, result.Refusal);
+        Assert.Equal(RecordEditRefusal.PluginNotActive, result.Refusal);
     }
 }

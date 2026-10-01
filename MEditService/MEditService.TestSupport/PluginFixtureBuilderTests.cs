@@ -17,9 +17,9 @@ public class PluginFixtureBuilderTests
 
     // The ordered explicit list is the load order — there is no plugins.txt path left for a
     // fixture to write one for. `listed` is what puts a plugin in that list; `enabled` is the `*`
-    // prefix, i.e. Participates.
+    // prefix.
     [Fact]
-    public void Build_PutsAListedPluginInTheLoadOrder_Participating()
+    public void Build_PutsAListedPluginInTheLoadOrder_Active()
     {
         using var data = new PluginFixtureBuilder()
             .WithPlugin("TestPlugin.esp")
@@ -27,7 +27,23 @@ public class PluginFixtureBuilderTests
 
         var plugin = Assert.Single(data.Plugins);
         Assert.Equal("TestPlugin.esp", plugin.Name);
-        Assert.True(plugin.Enabled);
+        Assert.Equal([plugin.Key], SnapshotPlugins.Active(data.Plugins));
+    }
+
+    [Fact]
+    public void BuildScattered_TheGamesMastersAndCreationClubPlugins_LoadFirst_FromTheGameDirectory()
+    {
+        using var data = new PluginFixtureBuilder()
+            .WithPlugin("UserMod.esp", origin: "UserMod")
+            .WithPlugin("ccTest.esl")
+            .WithPlugin("Fallout4.esm")
+            .WithCreationClubCatalog("ccTest.esl")
+            .BuildScattered();
+
+        Assert.Equal(
+            ["Fallout4.esm", "ccTest.esl", "UserMod.esp"],
+            SnapshotPlugins.Active(data.Plugins).Select(p => p.Name));
+        Assert.Equal(Path.Combine(data.GameDirectory, "Fallout4.esm"), data.Plugins.Single(p => p.Name == "Fallout4.esm").Path);
     }
 
     [Fact]
@@ -78,22 +94,6 @@ public class PluginFixtureBuilderTests
             .Build();
 
         Assert.NotEqual(FormKey.Null, captured);
-    }
-
-    [Fact]
-    public void Build_WithCreationClubCatalog_WritesCccFile()
-    {
-        // Written one directory above DataFolder — where Mutagen's own
-        // CreationClubListings.GetListingsPath expects it relative to the Data path a load order is
-        // given, not inside DataFolder itself.
-        using var data = new PluginFixtureBuilder()
-            .WithPlugin("ccTest.esl", listed: false)
-            .WithCreationClubCatalog("ccTest.esl")
-            .Build();
-
-        var cccPath = Path.Combine(data.CleanupRoot, "Fallout4.ccc");
-        Assert.True(File.Exists(cccPath));
-        Assert.Equal("ccTest.esl", File.ReadAllText(cccPath).Trim());
     }
 
     [Fact]

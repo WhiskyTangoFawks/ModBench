@@ -13,7 +13,7 @@ namespace MEditService.Queries.Tests.TestSupport;
 /// would have opened, and the documents each plugin holds.</summary>
 internal sealed record FakeFixtureData(
     GameRelease Release,
-    IReadOnlyList<RegisteredPlugin> Plugins, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins, IReadOnlyList<FakeRow> Rows);
+    IReadOnlyList<LoadOrderEntry> Plugins, IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins, IReadOnlyList<FakeRow> Rows);
 
 // Build takes the column names a test reads, never every column a schema has: a scratch round
 // trip runs Mutagen's own master computation, then the real codec serializes each record once.
@@ -43,7 +43,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
         try
         {
             var builtMods = new List<Fallout4Mod>();
-            var registered = new List<RegisteredPlugin>();
+            var registered = new List<LoadOrderEntry>();
             var opened = new Dictionary<PluginAddress, PluginContent>();
             var perPlugin = new List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)>();
 
@@ -71,7 +71,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 
                 opened[key] = new PluginContent(
                     written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, IsBlueprint: false, masters, records.Count);
-                if (listed) registered.Add(new RegisteredPlugin(name, origin, name, slot, enabled, Winning: true));
+                if (listed) registered.Add(new LoadOrderEntry(name, name, origin, slot, enabled, Winning: true));
                 perPlugin.Add((key, slot, records));
             }
 
@@ -99,15 +99,15 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     }
 
     // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
-    // FormKey is the highest-slot plugin that participates.
+    // FormKey is the highest-slot active plugin.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
-        List<RegisteredPlugin> registered, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
+        List<LoadOrderEntry> registered, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
     {
-        var participates = registered.Where(c => c.Registration.Participates).Select(c => new PluginAddress(c.Name, c.Origin)).ToHashSet();
+        var active = SnapshotPlugins.Active(registered).ToHashSet();
         var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);
         foreach (var (key, slot, records) in perPlugin)
         {
-            if (!participates.Contains(key)) continue;
+            if (!active.Contains(key)) continue;
             foreach (var (record, recordType) in records)
             {
                 var formKey = record.FormKey.ToString();

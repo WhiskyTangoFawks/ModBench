@@ -1,5 +1,4 @@
 using MEditService.Index.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;

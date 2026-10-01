@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using MEditService.Codec.Schema;
 using MEditService.Http.Tests.TestSupport;
+using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.RealData;
 
@@ -40,9 +42,13 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // LoadOrderSnapshot loads the implicit base masters present in the game directory, so an empty explicit
-            // list exercises a real vanilla load without guessing order. The instance is a temp one: a real
+            // The test stands in for Mod Management, which sends the game's masters present in the game
+            // directory as the active plugins (ADR-0013 invariant 3). The instance is a temp one: a real
             // install is not an MO2 instance.
+            var masters = Implicits.Get(release).Listings
+                .Select(master => master.FileName.String)
+                .Where(name => File.Exists(Path.Combine(dataDir.Path, name)))
+                .ToList();
             var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");
             Directory.CreateDirectory(instanceRoot);
             try
@@ -53,7 +59,9 @@ public sealed class RealInstallSmokeTests
 
                 var load = await client.PutAsJsonAsync("/load-order", new
                 {
-                    plugins = Array.Empty<object>(),
+                    plugins = masters.Select(name => new { name, path = Path.Combine(dataDir.Path, name), origin = PluginOrigin.DataDirectory }),
+                    active = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
+                    loadedWithNoLine = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
                     gameDirectory = dataDir.Path,
                     instanceRoot,
                     gameRelease = release.ToString(),

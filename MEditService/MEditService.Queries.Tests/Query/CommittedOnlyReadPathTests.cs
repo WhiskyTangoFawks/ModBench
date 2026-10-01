@@ -27,7 +27,7 @@ public sealed class CommittedOnlyReadPathTests
         {
             [Plugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: rows.Length),
         };
-        var holder = FakeLoadOrder.Of(Release, new RegisteredPlugin(PluginName, Origin, PluginName, 0, Enabled: true, Winning: true));
+        var holder = FakeLoadOrder.Of(Release, new LoadOrderEntry(PluginName, PluginName, Origin, 0, Enabled: true, Winning: true));
         return new(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 

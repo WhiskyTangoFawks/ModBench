@@ -29,7 +29,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
     // The snapshot arriving, as the put-load-order door takes it.
     private void Put(LoadOrderSnapshot snapshot) =>
         Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
-            [.. snapshot.Plugins.Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning))]).Applied);
+            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
@@ -43,9 +43,9 @@ public sealed class ExternalChangeCheckTests : IDisposable
     private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
     {
         foreach (var (name, bytes) in plugins) File.WriteAllBytes(Path.Combine(ModFolder, name), bytes);
-        return new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [.. plugins.Select((plugin, slot) => new RegisteredPlugin(
-                plugin.Name, Origin, Path.Combine(ModFolder, plugin.Name), slot, Enabled: true, Winning: true))]);
+        return SnapshotPlugins.Snapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
+            [.. plugins.Select((plugin, slot) => new LoadOrderEntry(
+                plugin.Name, Path.Combine(ModFolder, plugin.Name), Origin, slot, Enabled: true, Winning: true))]);
     }
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
@@ -225,8 +225,8 @@ public sealed class ExternalChangeCheckTests : IDisposable
         GitProbe.Run(Path.Combine(_instanceRoot, ".git"), _instanceRoot, "init", "-q", "-b", "main");
         GitProbe.Run(Path.Combine(_instanceRoot, ".git"), _instanceRoot, "commit", "-q", "--allow-empty", "-m", "a repository");
 
-        Put(new LoadOrderSnapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
-            [new RegisteredPlugin(PluginName, PluginOrigin.DataDirectory, Path.Combine(_instanceRoot, PluginName), 0, Enabled: true, Winning: true)]));
+        Put(SnapshotPlugins.Snapshot(_instanceRoot, _instanceRoot, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, Path.Combine(_instanceRoot, PluginName), PluginOrigin.DataDirectory, 0, Enabled: true, Winning: true)]));
 
         Assert.Empty(_notifications.Notifications);
     }

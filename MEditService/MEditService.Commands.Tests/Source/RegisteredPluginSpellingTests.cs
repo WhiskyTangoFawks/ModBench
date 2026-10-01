@@ -66,9 +66,9 @@ public sealed class RegisteredPluginSpellingTests
             mod.Npcs.AddNew("SpellingNpc");
             mod.WriteToBinary(PluginPath);
 
-            LoadOrder = new LoadOrderSnapshot(
+            LoadOrder = SnapshotPlugins.Snapshot(
                 _gameDirectory, _instanceRoot, Release,
-                SnapshotPlugins.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
+                [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
         }
 
         internal string GitDirectory => Path.Combine(ModFolder, ".git");

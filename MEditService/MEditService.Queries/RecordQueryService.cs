@@ -23,14 +23,16 @@ public sealed class RecordQueryService(
         var opened = reads.OpenedPlugins;
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A plugin the Index has not opened has none of the latter and is not a row.
-        var rows = _loadOrder.Require().Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
+        var snapshot = _loadOrder.Require();
+        var rows = snapshot.Plugins.Where(c => opened.ContainsKey(c.Key)).ToList();
         var masterIssues = _index.Status.State == LoadOrderState.Ready
-            ? MasterResolution.Classify(_loadOrder.Require(), opened)
+            ? MasterResolution.Classify(snapshot, opened)
             : null;
         var parseFailures = reads.GetPluginsWithParseFailures();
         var tracked = reads.GetTrackedPlugins();
         PluginRow ToRow(RegisteredPlugin plugin, bool hasMatchingRecords) =>
-            new(plugin, opened[plugin.Key], masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
+            new(plugin, snapshot.LoadOrderIndex(plugin.Key), snapshot.IsImmutable(plugin.Key), opened[plugin.Key],
+                masterIssues?.GetValueOrDefault(plugin.Key, []), hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(plugin.Name, plugin.Origin)), tracked.Contains(plugin.Key));
 
         if (_index.ActiveFilter is null)
@@ -86,13 +88,11 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var plugins = _loadOrder.Require().Plugins;
-        // ADR-0012: the grid is the record's in-game resolution stack, so an overridden plugin is
-        // not a column. Winning alone, never Participates — a disabled plugin still columns.
-        // Fail-open on a plugin the load order lacks.
-        var pluginWinning = plugins.ToDictionary(c => ColumnKey.Of(c.Name, c.Origin), c => c.Winning);
+        var snapshot = _loadOrder.Require();
+        // ADR-0012 invariant 5: the grid is the record's in-game resolution stack, so a plugin that
+        // is not active is not a column.
         var committedOverrides = stack.Entries
-            .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin), true))
+            .Where(e => snapshot.IsActive(e.Plugin))
             .Select(e => ToRecordDetail(e.Effective))
             .ToList();
 
@@ -100,12 +100,7 @@ public sealed class RecordQueryService(
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = reads.OpenedPlugins.ToDictionary(
             kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin), kv => kv.Value.Masters);
-        // ADR-0013: a non-participating plugin's override is indexed and browsable but
-        // never contributes to conflict classification.
-        var pluginParticipates = plugins.ToDictionary(
-            c => ColumnKey.Of(c.Name, c.Origin), c => c.Registration.Participates);
-        var (classification, conflictAll) =
-            ClassifyStack(committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
+        var (classification, conflictAll) = ClassifyStack(committedOverrides, pluginMasters, resolveFormKey);
         // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
         // any non-Data-origin column and silently default ConflictThis to OnlyOne.
         var annotated = committedOverrides
@@ -122,11 +117,10 @@ public sealed class RecordQueryService(
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
-        IReadOnlyDictionary<string, bool> pluginParticipates,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var classification = _conflictClassifier.Classify(
-            committedOverrides, pluginMasters, _loadOrder.Require().GameRelease, resolveFormKey, pluginParticipates);
+            committedOverrides, pluginMasters, _loadOrder.Require().GameRelease, resolveFormKey);
         return (classification, classification.ConflictAll);
     }
 
