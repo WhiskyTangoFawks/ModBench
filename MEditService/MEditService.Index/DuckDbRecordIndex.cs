@@ -695,10 +695,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             }
             reader.Close();
 
-            // One resolution cache for the whole batch: the same referenced FormKey recurs across a
-            // plugin's records, and every miss is a form_lookup query. Resolution is a pure lookup, so
-            // sharing changes nothing.
-            var resolve = FormKeyResolutionCache.Memoize(formKey => ResolveFormKey(connection, formKey));
+            var resolve = LinkResolution.ForLinksOf(connection, plugin);
 
             var documents = new List<RecordDocument>(rows.Count);
             foreach (var row in rows)
@@ -720,6 +717,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             var tableName = FindRecordType(connection, records, formKey);
             if (tableName == null) return null;
             var schema = owner.RequireSchemas()[tableName];
+            var resolve = LinkResolution.ForLinksOf(connection, formKey);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
                 SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis, "ref"
@@ -730,8 +728,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
             using var reader = cmd.ExecuteReader();
-
-            var resolve = FormKeyResolutionCache.Memoize(formKey => ResolveFormKey(connection, formKey));
 
             // Read the whole stack out before resolving any Head counterpart — ReadDocument opens
             // its own command on this same connection, and doing that while this reader is still open
@@ -920,7 +916,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public RecordLookupEntry? Resolve(string formKey)
         {
             using var connection = owner.OpenRead();
-            return ResolveFormKey(connection, formKey);
+            return LinkResolution.Resolve(connection, formKey);
         }
 
         public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
@@ -1403,6 +1399,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         conditions.Add($"record_type = ${values.Count + 1}");
         values.Add(NormalizeRecordType(tableName));
 
+        var resolve = LinkResolution.ForLinksOf(connection, formKey);
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, parse_diagnosis
@@ -1413,7 +1410,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
 
-        return ReadDocumentFromBody(reader, schema, FormKeyResolutionCache.Memoize(formKey => ResolveFormKey(connection, formKey)));
+        return ReadDocumentFromBody(reader, schema, resolve);
     }
 
     private RecordDocument ReadDocumentFromBody(
@@ -1462,22 +1459,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release)));
         }
         return fields;
-    }
-
-    private static RecordLookupEntry? ResolveFormKey(DuckDBConnection connection, string formKey)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        using var reader = cmd.ExecuteReader();
-
-        // Local function so the merged conditional expression below doesn't nest a ternary per
-        // coordinate (SonarS3358), matching GetPlacement's NullableFloat pattern.
-        string? NullableEditorId() => reader.IsDBNull(1) ? null : reader.GetString(1);
-
-        return !reader.Read()
-            ? null
-            : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
     }
 
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>
