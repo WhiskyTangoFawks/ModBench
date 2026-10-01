@@ -10,7 +10,7 @@ public sealed class GitProcessScanTests
 {
     private const string GitRunner = "MEditService.SourceAdapter/GitCli.cs";
 
-    private static readonly string[] ProcessStarts = [@"\bProcessStartInfo\b", @"\bProcess\.Start\b"];
+    private static readonly string[] ProcessStarts = [@"\bProcessStartInfo\b", @"\bProcess\.Start\b", @"\bnew\s+Process\b"];
 
     [Fact]
     public void NothingButGitCli_StartsAProcess()
@@ -38,7 +38,12 @@ public sealed class GitProcessScanTests
             Directory.CreateDirectory(Path.GetDirectoryName(rival).Require());
             File.WriteAllText(rival, "using var git = Process.Start(new ProcessStartInfo(\"git\", \"status\"));\n");
 
-            Assert.Equal(["MEditService.Commands/StatusProbe.cs"], StartsOutsideTheRunner(root, [runner, rival]));
+            var initializerRival = Path.Combine(root, "MEditService.Commands", "InitializerProbe.cs");
+            File.WriteAllText(initializerRival, "using var git = new Process { StartInfo = info }.Start();\n");
+
+            Assert.Equal(
+                ["MEditService.Commands/InitializerProbe.cs", "MEditService.Commands/StatusProbe.cs"],
+                StartsOutsideTheRunner(root, [runner, rival, initializerRival]));
             var failure = Assert.Throws<Xunit.Sdk.TrueException>(() => AssertOnlyTheRunnerStarts(root, [runner, rival]));
             Assert.Contains("MEditService.Commands/StatusProbe.cs", failure.Message, StringComparison.Ordinal);
         }

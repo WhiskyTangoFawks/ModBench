@@ -82,13 +82,13 @@ function ownerOf(src: string, path: string, boxes: readonly Box[]): string | und
   return boxes.some((box) => box.name === top) ? top : ROOT_BOX;
 }
 
-const isTestFile = (path: string): boolean =>
-  path.endsWith('.test.ts') || path.split(sep).includes('test');
+const isTestFile = (src: string, path: string): boolean =>
+  path.endsWith('.test.ts') || relative(src, path).split(sep).includes('test');
 
 // Each box's own tests, with the box that owns them; the shared support is no box's.
 function boxTests(src: string, boxes: readonly Box[]): { file: string; box: Box }[] {
   const testedBoxes: Box[] = [...boxes, { name: ROOT_BOX, references: new Set(boxes.map((box) => box.name)) }];
-  return tsFiles(src).filter(isTestFile).flatMap((file) => {
+  return tsFiles(src).filter((file) => isTestFile(src, file)).flatMap((file) => {
     const box = testedBoxes.find((b) => b.name === ownerOf(src, file, boxes));
     return box ? [{ file, box }] : [];
   });
@@ -138,6 +138,22 @@ describe('a test reaches only its own box and the boxes that box references', ()
 
   it('every test file imports only its own box, the boxes its tsconfig references and src/test', () => {
     assertEveryTestStaysInItsBox(unreferencedImports(SRC));
+  });
+
+  it('takes a test directory above src for no part of a file\'s path', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'medit-above-test-'));
+    const src = join(parent, 'test', 'src');
+    mkdirSync(join(src, 'view'), { recursive: true });
+    mkdirSync(join(src, 'kernel'));
+    writeFileSync(join(src, 'view', 'tsconfig.json'), '{}');
+    writeFileSync(join(src, 'kernel', 'tsconfig.json'), '{}');
+    writeFileSync(join(src, 'kernel', 'codec.ts'), 'export const x = 1;\n');
+    writeFileSync(join(src, 'view', 'production.ts'), "import { x } from '../kernel/codec';\n");
+    try {
+      expect(unreferencedImports(src)).toEqual([]);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
   });
 
   it('names a planted import of an unreferenced box, in every form a test names a module', () => {
