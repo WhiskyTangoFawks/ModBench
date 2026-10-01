@@ -36,9 +36,8 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
 
 const memberOf = (value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
 
-// Differs from the edit value only for an enum: a member whose values are wire tokens rather than
-// words (an abstract union's `MutagenObjectType` carries Mutagen class names) shows its label, and
-// a value the enum does not name reads `<Unknown: n>`.
+// Differs from the edit value only for an enum: a wire-token member shows its label, and a value
+// the enum does not name reads `<Unknown: n>`.
 export function displayValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
   if (meta.type !== 'enum' || value == null || meta.enumMembers.length === 0) {
     return modelValue(value, meta, resolution);
