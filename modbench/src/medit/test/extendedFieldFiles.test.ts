@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { extendedFieldFile } from '../extendedFieldFiles';
 
 const DEACON = { recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data' };
@@ -9,8 +9,12 @@ describe('extendedFieldFile', () => {
     // Brackets are valid on every filesystem; only the FormKey's colon is Windows-reserved.
     expect(extendedFieldFile('/tmp/root', DEACON)).toEqual({
       folder: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data'),
-      file: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm].txt'),
+      file: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm]'),
     });
+  });
+
+  it('names the file exactly as the tab is titled, <field> [<file name>]', () => {
+    expect(basename(extendedFieldFile('/tmp/root', DEACON).file)).toBe('Description [Fallout4.esm]');
   });
 
   it('is deterministic — the same identity always produces the same file', () => {
@@ -19,7 +23,7 @@ describe('extendedFieldFile', () => {
 
   it('folds a non-Data origin into its own directory segment, between the record and the field', () => {
     const { file } = extendedFieldFile('/tmp/root', { recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModA' });
-    expect(file).toBe(join('/tmp/root', 'Deacon', 'ModA', 'Description [Shared.esp].txt'));
+    expect(file).toBe(join('/tmp/root', 'Deacon', 'ModA', 'Description [Shared.esp]'));
   });
 
   it('two columns sharing a filename but differing in origin never collide', () => {
@@ -31,6 +35,6 @@ describe('extendedFieldFile', () => {
   // Origin is read off disk, so it is user-controlled input, not a trusted literal.
   it('strips path separators from a hostile origin, so it cannot escape the temp root', () => {
     const { file } = extendedFieldFile('/tmp/root', { ...DEACON, recordLabel: 'Deacon', origin: '../../../etc/passwd' });
-    expect(file).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm].txt'));
+    expect(file).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm]'));
   });
 });

@@ -22,5 +22,5 @@ export function extendedFieldFile(
   tempRoot: string, field: { recordLabel: string; fieldName: string; plugin: string; origin: string },
 ): { folder: string; file: string } {
   const folder = join(tempRoot, sanitizeForPath(field.recordLabel), sanitizeForPath(field.origin));
-  return { folder, file: join(folder, `${sanitizeForPath(field.fieldName)} [${sanitizeForPath(field.plugin)}].txt`) };
+  return { folder, file: join(folder, `${sanitizeForPath(field.fieldName)} [${sanitizeForPath(field.plugin)}]`) };
 }
