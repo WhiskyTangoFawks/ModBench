@@ -262,8 +262,8 @@ describe('ScalarCell — a translated string', () => {
 describe('ScalarCell — Enter writes and Esc cancels', () => {
   const enumMeta = () => meta({
     type: 'enum',
-    enumMembers: [{ value: 'A', displayName: 'A' }, { value: 'B', displayName: 'B' }],
-  } as Partial<FieldMetadata>);
+    enumMembers: [{ value: 'A' }, { value: 'B' }],
+  });
 
   it('Esc closes the text editor and writes nothing', () => {
     const onCommit = vi.fn();
