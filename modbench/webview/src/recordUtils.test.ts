@@ -2,7 +2,6 @@ import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
-  columnStatus,
   elementSegment,
   isArrayElementHop,
   isMovableElementHop,
@@ -32,7 +31,6 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
     origin: 'Data',
     recordType: 'npc_',
     isPartialForm: false,
-    isPartialFormable: false,
     isInOverwrite: false,
     ...extra,
   };
@@ -63,51 +61,6 @@ describe('buildColumns', () => {
 
   it('returns no columns for an empty override list', () => {
     expect(buildColumns([])).toEqual([]);
-  });
-});
-
-describe('columnStatus', () => {
-  it('is "tracked" for a mutable, tracked column', () => {
-    expect(columnStatus(false)).toBe('tracked');
-  });
-
-  it('is "vanillaMaster" for an immutable column', () => {
-    expect(columnStatus(true)).toBe('vanillaMaster');
-  });
-
-  // ADR-0007: editing requires tracking, viewing never does. This status earns its own value
-  // because each names a different way out, and offering the wrong one is worse than none.
-  it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
-    expect(columnStatus(false, false)).toBe('untracked');
-  });
-
-  it('is "tracked" once that same column is tracked', () => {
-    expect(columnStatus(false, true)).toBe('tracked');
-  });
-
-  // editor.md, Columns, A column's header: Overwrite is not a mod (ADR-0012 invariant 2), so it
-  // can never be tracked — "untracked" would send the user to a Track item this column's header
-  // does not offer.
-  it('is "inOverwrite" for a column whose isInOverwrite is true, regardless of tracked state', () => {
-    expect(columnStatus(false, false, null, true)).toBe('inOverwrite');
-    expect(columnStatus(false, true, null, true)).toBe('inOverwrite');
-  });
-
-  it('is not "inOverwrite" when isInOverwrite is false', () => {
-    expect(columnStatus(false, false, null, false)).toBe('untracked');
-  });
-
-  // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
-  // "run Track on it" would send the user somewhere that leads nowhere.
-  it('prefers the reason the user cannot fix over the one they can', () => {
-    expect(columnStatus(true, false)).toBe('vanillaMaster');
-  });
-
-  // editor.md's table takes the first row that applies: parse failure, then read-only, outrank
-  // "in Overwrite" — an unreadable or forced-immutable column names its own reason first.
-  it('prefers a parse failure or an immutable reason over "inOverwrite"', () => {
-    expect(columnStatus(false, false, 'diagnosis', true)).toBe('parseFailure');
-    expect(columnStatus(true, false, null, true)).toBe('vanillaMaster');
   });
 });
 

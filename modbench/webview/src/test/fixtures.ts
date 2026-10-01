@@ -30,13 +30,13 @@ export const compareOverride = (
   o: Partial<CompareOverride> & Pick<CompareOverride, 'formKey' | 'plugin' | 'fields'>,
 ): CompareOverride => ({
   loadIndex: '00', isWinner: false, origin: 'Data', recordType: '',
-  isPartialForm: false, isPartialFormable: false, conflictThis: 'OnlyOne', isInOverwrite: false, ...o,
+  isPartialForm: false, conflictThis: 'OnlyOne', isInOverwrite: false, ...o,
 });
 
 /** A compare result with every required wire member at its neutral value, so a fixture answers
  *  no wire question by omission — the same posture as fieldMeta/diffNode/compareOverride. */
 export const compareResultFixture = (over: Partial<CompareResult> = {}): CompareResult => ({
-  overrides: [], diffs: [], conflictAll: 'NoConflict', ...over,
+  overrides: [], diffs: [], conflictAll: 'NoConflict', recordTypeName: 'Non-Player Character', ...over,
 });
 
 /** What `GET /plugins` says about one column, as far as the panel reads it. */

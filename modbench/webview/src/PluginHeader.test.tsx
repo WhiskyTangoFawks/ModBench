@@ -6,311 +6,120 @@ import { describe, it, expect, vi } from 'vitest';
 import { PluginHeader } from './PluginHeader';
 import { headerCellContext, combineVscodeContexts } from './recordUtils';
 import type { CompareOverride } from './types';
+import { compareOverride, required } from './test/fixtures';
 
-function override(partial: Partial<CompareOverride> = {}): CompareOverride {
-  return {
-    formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadIndex: '01',
-    isWinner: true, editorId: 'TestNPC', fields: [], origin: 'Data',
-    recordType: 'npc_', isPartialForm: false, isPartialFormable: false,
-    conflictThis: 'OnlyOne', isInOverwrite: false,
-    ...partial,
-  };
+const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
+
+type Facts = { override?: Partial<CompareOverride>; isImmutable?: boolean; isTracked?: boolean };
+
+function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typeof PluginHeader>> = {}) {
+  const onToggleCollapse = vi.fn();
+  const onResize = vi.fn();
+  render(
+    <table><thead><tr>
+      <PluginHeader
+        override={compareOverride({
+          formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'ModA', loadIndex: '01', fields: [], ...facts.override,
+        })}
+        isImmutable={facts.isImmutable ?? false}
+        isTracked={facts.isTracked ?? true}
+        collapsed={false}
+        onToggleCollapse={onToggleCollapse}
+        onResize={onResize}
+        style={{}}
+        {...props}
+      />
+    </tr></thead></table>,
+  );
+  const header = required(screen.getByText('MyMod.esp').closest('th'), 'the header cell');
+  return { header, onToggleCollapse, onResize };
 }
 
-function baseProps() {
-  return {
-    override: override(),
-    isImmutable: false,
-    // Tracked by default; the untracked cases opt in explicitly.
-    isTracked: true,
-    collapsed: false,
-    onToggleCollapse: vi.fn(),
-    onTogglePartialForm: vi.fn(),
-  };
-}
-
+// editor.md, A column's header.
 describe('PluginHeader', () => {
-  // editor.md, A column's header, the Label row: `[XX] File name`.
-  it('labels the column with its load index, then its file name', () => {
-    render(<PluginHeader {...baseProps()} />);
+  it('labels the column `[XX] File name`, and says nothing of the winner', () => {
+    const { header } = renderHeader();
     expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
-    expect(screen.getByText('✓ winner')).toBeInTheDocument();
+    expect(header).not.toHaveTextContent(/winner/);
   });
 
-  it('clicking the plugin name toggles collapse', () => {
-    const onToggleCollapse = vi.fn();
-    render(<PluginHeader {...baseProps()} onToggleCollapse={onToggleCollapse} />);
-    fireEvent.click(screen.getByText('MyMod.esp'));
-    expect(onToggleCollapse).toHaveBeenCalled();
+  // The Status table, its "When" and "The tooltip says" columns; the Tooltip row.
+  it.each<[string, Facts, string, string]>([
+    ['a copy mEdit could not read', { override: { parseDiagnosis: DIAGNOSIS } }, '(parse failure)', DIAGNOSIS],
+    ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
+    ['a plugin in Overwrite', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)',
+      'Overwrite is not a mod, and a plugin moved into a mod can be tracked.'],
+    ['a plugin that is not tracked', { isTracked: false }, '(untracked)',
+      '“Track Mod…”, or “Decompile Plugin” in a tracked mod, in this header’s menu, makes it editable.'],
+    ['a Partial Form copy', { override: { isPartialForm: true } }, '(Partial Form)',
+      'The game ignores this copy’s own fields.'],
+    ['a tracked plugin', {}, '(tracked)',
+      'An edit lands in the mod’s working tree, for review in Source Control.'],
+  ])('for %s, shows its status, and a tooltip of the file name, the origin and the reason', (_case, facts, status, reason) => {
+    const { header } = renderHeader(facts);
+    expect(header).toHaveTextContent(status);
+    expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${reason}`);
   });
 
-  it('collapsed: hides the winner line', () => {
-    render(<PluginHeader {...baseProps()} collapsed={true} />);
-    expect(screen.queryByText('✓ winner')).not.toBeInTheDocument();
+  // "A column shows one status, the first in this table that applies."
+  it.each<[string, Facts, string, string]>([
+    ['parse failure over read-only', { override: { parseDiagnosis: DIAGNOSIS }, isImmutable: true }, '(parse failure)', '(read-only)'],
+    ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
+    ['in Overwrite over untracked', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)', '(untracked)'],
+    ['untracked over Partial Form', { override: { isPartialForm: true }, isTracked: false }, '(untracked)', '(Partial Form)'],
+    ['Partial Form over tracked', { override: { isPartialForm: true } }, '(Partial Form)', '(tracked)'],
+  ])('shows %s', (_case, facts, shown, displaced) => {
+    const { header } = renderHeader(facts);
+    expect(header).toHaveTextContent(shown);
+    expect(header).not.toHaveTextContent(displaced);
   });
 
-  // A vanilla/DLC/CC master keeps the plain, familiar "(read-only)" label; its tooltip names the
-  // reason.
-  it('shows "(read-only)" for an immutable column (a vanilla master)', () => {
-    render(<PluginHeader {...baseProps()} isImmutable={true} />);
-    expect(screen.getByText('(read-only)')).toBeInTheDocument();
-    expect(screen.getByText('(read-only)')).toHaveAttribute(
-      'title', expect.stringMatching(/vanilla/i),
-    );
+  // editor.md, The header... "It holds no controls"; a column's header holds none either, so
+  // nothing writes the Partial Form flag from here.
+  it('holds no control, not even on a Partial Form column', () => {
+    const { header } = renderHeader({ override: { isPartialForm: true } });
+    expect(header.querySelector('input, button, select')).toBeNull();
   });
 
-  // CSS opacity multiplies on nesting (0.55 twice renders at ~0.30), so PluginHeader must not
-  // dim its own root as well as the <th> that wraps it.
-  it('does not dim its own root when nested in a dimmed header cell — dimming is the header cell\'s job alone', () => {
-    const { container } = render(
-      <table><thead><tr>
-        <th style={{ opacity: 0.55 }}>
-          <PluginHeader {...baseProps()} isImmutable={true} />
-        </th>
-      </tr></thead></table>,
-    );
-    const pluginHeaderRoot = container.querySelector<HTMLElement>('th > div');
-    if (!pluginHeaderRoot) throw new Error('expected the PluginHeader to render a root div inside the <th>');
-    expect(pluginHeaderRoot.style.opacity).toBe('');
+  // Columns, story 3.
+  it('toggles its column’s collapse on a click anywhere on it', () => {
+    const { header, onToggleCollapse } = renderHeader();
+    fireEvent.click(header);
+    fireEvent.click(screen.getByText('(tracked)'));
+    expect(onToggleCollapse).toHaveBeenCalledTimes(2);
   });
 
-  // ADR-0012: origin is never what the user reads by default — only the filename.
-  it('does not render origin inline', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} />);
-    expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
-    expect(screen.queryByText(/ModA/)).not.toBeInTheDocument();
+  it('shows only its label while collapsed', () => {
+    const { header } = renderHeader({}, { collapsed: true });
+    expect(header).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 
-  // ADR-0012: "filename in the header, origin in its tooltip".
-  it('sets the origin in a tooltip on the name chip', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} />);
-    expect(screen.getByText('MyMod.esp').parentElement).toHaveAttribute('title', expect.stringContaining('ModA'));
+  // Columns, story 5.
+  it('resizes its column by the drag of its edge, and does not collapse it', async () => {
+    const { header, onToggleCollapse, onResize } = renderHeader();
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 20));
+    const edge = required(header.querySelector('[data-column-edge]'), 'the header’s edge');
+
+    fireEvent.mouseDown(edge, { clientX: 300 });
+    fireEvent.mouseMove(window, { clientX: 360 });
+    fireEvent.mouseUp(window, { clientX: 360 });
+    // The drag ended over the label, so the click lands on the header.
+    fireEvent.click(header);
+    fireEvent.mouseMove(window, { clientX: 400 });
+
+    expect(onResize.mock.calls).toEqual([[260]]);
+    expect(onToggleCollapse).not.toHaveBeenCalled();
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    fireEvent.click(header);
+    expect(onToggleCollapse).toHaveBeenCalledTimes(1);
   });
 
-  // The copy commands live on the header's native right-click menu (ADR-0017), so there is
-  // no rendered button to assert on — only the `data-vscode-context` payload they are gated on.
-  it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
-    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data', false));
-    const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
-    const root = container.firstElementChild;
-    if (!root) throw new Error('expected PluginHeader to render a root element');
-    const contextAttr = root.getAttribute('data-vscode-context');
-    if (contextAttr === null) throw new Error('expected the root element to carry a data-vscode-context attribute');
-    expect(JSON.parse(contextAttr)).toEqual({
-      webviewSection: 'recordHeader', formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data',
-      compilable: false, preventDefaultContextMenuItems: true,
-    });
-  });
-
-  it('renders no data-vscode-context attribute at all when the caller supplies none', () => {
-    const { container } = render(<PluginHeader {...baseProps()} />);
-    expect(container.firstElementChild).not.toHaveAttribute('data-vscode-context');
-  });
-
-  // ADR-0018: no standalone control once an action is right-click-reachable — PluginHeader
-  // renders no Add Master… button or candidate dropdown.
-  it('does not render an Add Master… button', () => {
-    render(<PluginHeader {...baseProps()} />);
-    expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
-  });
-});
-
-// ADR-0007: an untracked plugin is visibly read-only with the way out named — visibly, before
-// the user attempts an edit, so it lives on the header, not only in the backend's refusal.
-describe('PluginHeader — untracked signposting', () => {
-  it('marks an untracked column read-only on screen, not only in a tooltip', () => {
-    render(<PluginHeader {...baseProps()} isTracked={false} />);
-
-    expect(screen.getByText('(untracked)')).toBeTruthy();
-  });
-
-  // editor.md, A column's header: the tooltip names track and decompile as this header's menu
-  // shows them. A signpost naming an item that does not exist verbatim is a dead end.
-  it('names track and decompile exactly as the header\'s menu shows them', () => {
-    render(<PluginHeader {...baseProps()} isTracked={false} />);
-
-    const title = screen.getByText('(untracked)').closest('[title]')?.getAttribute('title') ?? '';
-    expect(title).toContain('\u201cTrack Mod\u2026\u201d');
-    expect(title).toContain('\u201cDecompile Plugin\u201d');
-    expect(title).toContain('this header\u2019s menu');
-  });
-
-  it('signposts the patch-plugin path instead for a master that cannot be tracked at all', () => {
-    // Track does not apply to a vanilla or DLC master, so its signposting
-    // must not name it. Offering a command that cannot work here is a dead end.
-    render(<PluginHeader {...baseProps()} isImmutable isTracked={false} />);
-
-    const title = screen.getByTitle(/patch/i);
-    expect(title).toBeTruthy();
-    expect(title.getAttribute('title')).not.toMatch(/Track/);
-    expect(title.getAttribute('title')).not.toMatch(/Modbench: Track\u2026/);
-  });
-
-  it('shows "(tracked)" once the mod is tracked, not silence', () => {
-    render(<PluginHeader {...baseProps()} isTracked />);
-
-    expect(screen.queryByText('(untracked)')).toBeNull();
-    expect(screen.queryByText('(read-only)')).toBeNull();
-    expect(screen.getByText('(tracked)')).toBeInTheDocument();
-  });
-});
-
-// editor.md, Columns, A column's header, Status table: Overwrite is not a mod (ADR-0012
-// invariant 2), so its column names its own reason rather than "(untracked)", which this header's
-// menu offers no Track or Decompile item for.
-describe('PluginHeader — Overwrite', () => {
-  it('shows "(in Overwrite)", not "(untracked)", for a column whose isInOverwrite is true', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isInOverwrite: true })} isTracked={false} />);
-
-    expect(screen.queryByText('(untracked)')).toBeNull();
-    expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
-  });
-
-  // The webview must not interpret Origin (mEdit already has, via isInOverwrite): an ordinary
-  // mod origin still reads as Overwrite once mEdit says so.
-  it('reads isInOverwrite alone, regardless of the origin string', () => {
-    render(
-      <PluginHeader {...baseProps()} override={override({ origin: 'ModA', isInOverwrite: true })} isTracked={false} />,
-    );
-
-    expect(screen.getByText('(in Overwrite)')).toBeInTheDocument();
-  });
-
-  it('is exactly the table\'s tooltip, and never names Track Mod… or Decompile Plugin', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isInOverwrite: true })} isTracked={false} />);
-
-    const title = screen.getByText('(in Overwrite)').getAttribute('title');
-    expect(title).toBe('Overwrite is not a mod, and a plugin moved into a mod can be tracked.');
-    expect(title).not.toMatch(/Track Mod/);
-    expect(title).not.toMatch(/Decompile/);
-  });
-
-  it('disables the Partial Form toggle for an Overwrite column — no write can land', () => {
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isInOverwrite: true, isPartialFormable: true, isPartialForm: true })}
-        isTracked={false}
-      />,
-    );
-
-    expect(screen.getByRole('checkbox')).toBeDisabled();
-  });
-});
-
-describe('PluginHeader — Partial Form toggle', () => {
-  it('does not render the toggle for a column whose record type can never carry the flag', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: false })} />);
-
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-  });
-
-
-  it('renders the toggle, checked, for a currently-flagged partial-formable column', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: true, isPartialForm: true })} />);
-
-    expect(screen.getByRole('checkbox')).toBeChecked();
-  });
-
-  it('renders the toggle, unchecked, for an eligible but currently-unflagged column', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: true, isPartialForm: false })} />);
-
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
-  });
-
-  it('dispatches onTogglePartialForm(false) when unchecking a flagged column', () => {
-    const onTogglePartialForm = vi.fn();
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, isPartialForm: true })}
-        onTogglePartialForm={onTogglePartialForm}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('checkbox'));
-
-    expect(onTogglePartialForm).toHaveBeenCalledWith(false);
-  });
-
-  it('dispatches onTogglePartialForm(true) when checking an unflagged eligible column', () => {
-    const onTogglePartialForm = vi.fn();
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, isPartialForm: false })}
-        onTogglePartialForm={onTogglePartialForm}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('checkbox'));
-
-    expect(onTogglePartialForm).toHaveBeenCalledWith(true);
-  });
-
-  it('disables the toggle on an untracked column — no dead control for a write that cannot land', () => {
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, isPartialForm: true })}
-        isTracked={false}
-      />,
-    );
-
-    expect(screen.getByRole('checkbox')).toBeDisabled();
-  });
-
-  it('does not render the toggle at all when the column is collapsed', () => {
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, isPartialForm: true })}
-        collapsed
-      />,
-    );
-
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-  });
-});
-
-// Parse failure is the fifth column state and wins over the four tracking states: nothing the
-// user does about tracking makes an unreadable record editable, so a way out named here would be
-// the wrong one.
-describe('PluginHeader — parse failure', () => {
-  const DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
-  const broken = () => override({ parseDiagnosis: DIAGNOSIS });
-
-  it('shows "(parse failure)" for a column whose record could not be read', () => {
-    render(<PluginHeader {...baseProps()} override={broken()} />);
-
-    expect(screen.getByText('(parse failure)')).toBeInTheDocument();
-  });
-
-  it('names the diagnosis as the reason, so the label says why and not only that', () => {
-    render(<PluginHeader {...baseProps()} override={broken()} />);
-
-    expect(screen.getByText('(parse failure)')).toHaveAttribute('title', expect.stringContaining(DIAGNOSIS));
-  });
-
-  it.each([
-    ['a vanilla master', { isImmutable: true }, '(read-only)'],
-    ['an untracked column', { isTracked: false }, '(untracked)'],
-    ['a tracked column', { isTracked: true }, '(tracked)'],
-  ])('takes precedence over %s', (_case, props, displaced) => {
-    render(<PluginHeader {...baseProps()} {...props} override={broken()} />);
-
-    expect(screen.queryByText(displaced)).toBeNull();
-    expect(screen.getByText('(parse failure)')).toBeInTheDocument();
-  });
-
-  it('disables the Partial Form toggle — no write to this column can land', () => {
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, parseDiagnosis: DIAGNOSIS })}
-      />,
-    );
-
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+  // The copy commands live on the header's native right-click menu, so the only thing to assert is
+  // the `data-vscode-context` payload they are gated on, anywhere a right click lands.
+  it('carries the context its menu reads on the whole header cell', () => {
+    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false));
+    const { header } = renderHeader({}, { vscodeContext });
+    expect(header).toHaveAttribute('data-vscode-context', vscodeContext);
   });
 });

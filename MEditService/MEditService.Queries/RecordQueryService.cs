@@ -104,12 +104,12 @@ public sealed class RecordQueryService(
                 classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
                 Origin: o.Origin,
                 LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
-                RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
-                IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis,
+                RecordType: o.RecordType, IsPartialForm: o.IsPartialForm, ParseDiagnosis: o.ParseDiagnosis,
                 IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin),
                 FormIdReadOnlyReason: o.FormIdReadOnlyReason));
 
-        return new CompareResult(annotated, classification.Diffs, conflictAll);
+        return new CompareResult(
+            annotated, classification.Diffs, conflictAll, RequireSchemas().DisplayNameFor(stack.RecordType));
     }
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
@@ -180,7 +180,7 @@ public sealed class RecordQueryService(
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
             document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
-            IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
+            IsPartialForm: document.IsPartialForm,
             ParseDiagnosis: document.ParseDiagnosis,
             FormIdReadOnlyReason: document.RecordType == PluginHeader.RecordType
                 ? PluginHeader.FormIdReadOnlyReason(document.FormKey, document.Plugin.Name)

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
+import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
   buildColumns, columnHasNode, elementSegment, rootFieldOf,
@@ -7,7 +8,7 @@ import {
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
-import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
+import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import { collapsedSummaries } from './presentation';
 import { idleMembers } from './siblingsInUse';
 import type {
@@ -99,6 +100,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
+  // The label column's width is held at null, as the focus names that column.
+  const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | null, number>>(new Map());
+  const resizeColumn = (key: ColumnKey | null, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
   // ADR-0007: one definition of "this column can be written", computed for the whole grid at
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
@@ -106,9 +110,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     !immutableSet.has(key) && trackedSet?.has(key) === true && !o.isPartialForm && o.parseDiagnosis == null),
     [result, immutableSet, trackedSet]);
 
-  // editor.md, A column's header: one definition of "this column renders at reduced weight", a
-  // Partial Form copy, so the header and the cells cannot disagree.
+  // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
+  // definition of a column's look, so the header and the cells cannot disagree.
   const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
+  const columnStyle = useCallback((key: ColumnKey | null): React.CSSProperties => ({
+    ...(key != null && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
+    ...columnWidthStyle(key != null && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
+  }), [dimmedColumns, collapsedColumns, columnWidths]);
 
   // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
@@ -329,7 +337,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         diff={diff}
         meta={meta}
         columns={columns}
-        dimmedColumns={dimmedColumns}
+        columnStyle={columnStyle}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, value)}
         onArrayOp={(plugin: ColumnKey, op: ArrayOp) => handleArrayOp(plugin, path, rootField, op)}
@@ -390,8 +398,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
 
   return (
     <div style={containerStyle}>
-      <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-        {title}
+      <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600 }}>
+        {`${result.recordTypeName} ${title}`}
       </div>
       {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
       {/* ADR-0017: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
@@ -408,49 +416,33 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
             <tr ref={headerRow}>
-              <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
+              <th style={{ ...headerCell, position: 'relative', textAlign: 'left', ...columnStyle(null) }}>
+                Field<ColumnEdge onResize={width => resizeColumn(null, width)} />
+              </th>
               {columns.map(col => {
-                {
-                  // ADR-0012: keyed by col.key (ColumnKey), not the bare plugin filename — two
-                  // same-filename columns must collapse and read-only independently. The header
-                  // context still gets the real plugin+origin pair, never the compound key.
-                  const isCollapsed = collapsedColumns.has(col.key);
-                  const isImmutable = immutableSet.has(col.key);
-                  const tracked = trackedSet?.has(col.key);
-                  return (
-                    <th
-                      key={col.key}
-                      style={{
-                        ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px',
-                        backgroundColor: getHeaderBg(col.override.conflictThis),
-                        opacity: dimmedColumns.has(col.key) ? DIMMED_OPACITY : undefined,
-                      }}
-                    >
-                      <PluginHeader
-                        override={col.override}
-                        isImmutable={isImmutable}
-                        isTracked={tracked === true}
-                        collapsed={isCollapsed}
-                        onToggleCollapse={() => toggleColumnCollapse(col.key)}
-                        // Copy…, on this column's native right-click menu — unconditional on isImmutable/
-                        // isTracked, since copying *from* any of those is the ordinary
-                        // case, not one to gate out.
-                        vscodeContext={combineVscodeContexts(
-                          headerCellContext(
-                            col.override.formKey, col.override.plugin, col.override.origin,
-                            tracked === true && !isImmutable,
-                          ),
-                        )}
-                        // The annotated synthetic member is the one sanctioned header-flag write —
-                        // exempt from the backend's Partial Form read-only guard, so it lands
-                        // regardless of the column's current state.
-                        onTogglePartialForm={next => post(col.key, {
-                          op: 'set', path: [{ kind: 'member', name: 'IsPartialForm' }], value: next,
-                        })}
-                      />
-                    </th>
-                  );
-                }
+                // ADR-0012: keyed by col.key, never the bare file name, so two columns that share
+                // one collapse, resize and read-only apart.
+                const isImmutable = immutableSet.has(col.key);
+                const tracked = trackedSet?.has(col.key) === true;
+                return (
+                  <PluginHeader
+                    key={col.key}
+                    override={col.override}
+                    isImmutable={isImmutable}
+                    isTracked={tracked}
+                    collapsed={collapsedColumns.has(col.key)}
+                    onToggleCollapse={() => toggleColumnCollapse(col.key)}
+                    onResize={width => resizeColumn(col.key, width)}
+                    style={{ backgroundColor: getHeaderBg(col.override.conflictThis), ...columnStyle(col.key) }}
+                    // Copy… is offered on every column: copying from a read-only plugin is the
+                    // ordinary case.
+                    vscodeContext={combineVscodeContexts(
+                      headerCellContext(
+                        col.override.formKey, col.override.plugin, col.override.origin, tracked && !isImmutable,
+                      ),
+                    )}
+                  />
+                );
               })}
             </tr>
           </thead>
@@ -460,7 +452,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             <RecordHeaderRows
               columns={columns}
               collapsedColumns={collapsedColumns}
-              dimmedColumns={dimmedColumns}
+              columnStyle={columnStyle}
               editableColumns={editableColumns}
               expanded={headerExpanded}
               onToggle={() => toggleRow(RECORD_HEADER_ROW)}

@@ -53,7 +53,6 @@ internal static class RealDocuments
 
         return new RecordDocument(
             record.FormKey.ToString(), plugin, loadOrderIndex, isWinner, record.EditorID, recordType, body, fields,
-            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, record.GetType()),
-            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(record.GetType()));
+            IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, record.GetType()));
     }
 }

@@ -136,8 +136,7 @@ const twoSiblingFieldsResult: CompareResult = compareResultFixture({
   ],
 });
 
-// The Partial Form toggle is disabled on an untracked column, so the dispatch needs a tracked
-// one.
+// Partial Form shows only on a column no earlier status claims, a tracked one.
 const partialFormTrackedPluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
@@ -153,7 +152,7 @@ const partialFormCompareResult: CompareResult = compareResultFixture({
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'IdenticalToMaster',
-      isPartialForm: true, isPartialFormable: true,
+      isPartialForm: true,
     }),
   ],
   diffs: [
@@ -284,9 +283,19 @@ describe('RecordPanel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the record title with editorId and formKey after loading', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => expect(screen.getByText(/TestNPC \[000001:Fallout4\.esm\]/, { selector: 'div' })).toBeInTheDocument());
+  // editor.md, The header.
+  it('reads the record type as xEdit names it, then EditorID [FormKey], in one line with no controls', async () => {
+    renderPanel({ ...compareResult, recordTypeName: 'Weapon' });
+    const header = await screen.findByText('Weapon TestNPC [000001:Fallout4.esm]');
+    expect(header.querySelector('input, button, select')).toBeNull();
+  });
+
+  it('reads the FormKey alone after the record type when there is no EditorID', async () => {
+    renderPanel({
+      ...compareResult, recordTypeName: 'Weapon',
+      overrides: compareResult.overrides.map(o => ({ ...o, editorId: null })),
+    });
+    expect(await screen.findByText('Weapon 000001:Fallout4.esm')).toBeInTheDocument();
   });
 
   it('shows field names from the diff table', async () => {
@@ -366,11 +375,9 @@ describe('RecordPanel — column header native right-click menu', () => {
     const { container } = renderPanel(compare);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
-    // The context lives on PluginHeader's own root div, nested inside RecordPanel's <th>.
-    const headerRoot = container.querySelector('th > div');
-    if (!headerRoot) throw new Error('expected a PluginHeader root under the recordHeader th');
-    const headerContext = headerRoot.getAttribute('data-vscode-context');
-    if (!headerContext) throw new Error('expected the PluginHeader root to carry a data-vscode-context attribute');
+    const headerContext = required(
+      container.querySelector('th[data-vscode-context]'), 'the header cell carrying the context',
+    ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       compilable: false, preventDefaultContextMenuItems: true,
@@ -402,7 +409,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     await waitFor(() => {
-      const headerContext = container.querySelector('th > div')?.getAttribute('data-vscode-context') ?? '{}';
+      const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
       expect(parseJsonRecord(headerContext).compilable).toBe(compilable);
     });
   });
@@ -428,7 +435,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     const { container } = renderPanel(compare, { load });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
-    const headerContext = container.querySelector('th > div')?.getAttribute('data-vscode-context') ?? '{}';
+    const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
     expect(parseJsonRecord(headerContext).compilable).toBe(false);
   });
 });
@@ -450,13 +457,22 @@ describe('RecordPanel — a vanilla master column', () => {
 describe('RecordPanel — a Partial Form column', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('renders the column header dimmed, matching xEdit-style marking rather than a full competing override', async () => {
+  it('reads (Partial Form) in its dimmed header, with no control on it', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getByText('(Partial Form)')).toBeInTheDocument());
+
+    const th = required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header');
+    expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    expect(th.querySelector('input')).toBeNull();
+  });
+
+  it('is dimmed under an earlier status too', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('(untracked)')).toBeInTheDocument());
 
-    const th = screen.getByText('MyMod.esp').closest('th');
-    expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    expect(screen.getByText('MyMod.esp').closest('th')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
   // One dimmed set reaches the header and every cell under it: a header-only rule would leave the
@@ -489,31 +505,6 @@ cellStates: {}, conflictAll: 'NoConflict',
   });
 });
 
-describe('RecordPanel — Partial Form header toggle', () => {
-  beforeEach(() => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-  });
-
-  afterEach(() => vi.unstubAllGlobals());
-
-  // The flag is the annotated synthetic member `IsPartialForm`, written through the one envelope.
-  it('unchecking the checkbox posts set of IsPartialForm to false', async () => {
-    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
-    vi.mocked(vscode.postMessage).mockClear();
-
-    fireEvent.click(screen.getByRole('checkbox'));
-
-    // origin deliberately unasserted: this fixture's MyMod.esp override omits it.
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
-      formKey: '000001:Fallout4.esm',
-      plugin: 'MyMod.esp',
-      envelope: { op: 'set', path: [{ kind: 'member', name: 'IsPartialForm' }], value: false },
-    }));
-  });
-});
-
 // Drives the gesture through the real editableColumns computation rather than a hand-fed set,
 // with a scalar cell and a flags cell on the identical column so only the field type differs.
 describe('RecordPanel — flags cell editing through real message plumbing', () => {
@@ -532,14 +523,10 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  // A flags row opens expanded, its checkbox list enabled only in the tracked, editable column;
-  // the arrow beside the label collapses it to the compact summary.
-  it('a flags row opens expanded with enabled checkboxes; collapsing shows the summary and expanding restores them', async () => {
+  // The arrow beside the label collapses a flags row to the compact summary.
+  it('a flags row opens expanded with its checkboxes; collapsing shows the summary and expanding restores them', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
-    // The immutable master column's checkboxes are disabled.
-    const enabled = () => screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
-    expect(enabled()).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const flagsRow = () => required(screen.getByText('Flags').closest('tr'), "the Flags row");
 
     fireEvent.click(within(flagsRow()).getByRole('button', { name: '▼' }));
@@ -547,7 +534,24 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getAllByText('A, B')).toHaveLength(2);
 
     fireEvent.click(within(flagsRow()).getByRole('button', { name: '▶' }));
-    expect(enabled()).toHaveLength(2);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+  });
+
+  // editor.md, Columns, story 4: a column that cannot be edited opens no editor, and nothing marks
+  // its cells ahead of time.
+  it('reads a read-only column\u2019s flags as the editable column\u2019s do, and writes nothing on a click', async () => {
+    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
+    const [, masterCell, modCell] = Array.from(required(screen.getByText('Flags').closest('tr'), 'the Flags row').querySelectorAll('td'));
+    const boxesOf = (cell: Element | undefined) =>
+      Array.from(required(cell, 'a value cell').querySelectorAll('input')).map(box => ({ checked: box.checked, disabled: box.disabled }));
+    expect(boxesOf(masterCell)).toEqual(boxesOf(modCell));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(required(masterCell?.querySelector('input'), 'the master’s first flag'));
+
+    expect(lastPostedEnvelope(vi.mocked(vscode.postMessage))).toBeUndefined();
+    expect(boxesOf(masterCell)).toEqual(boxesOf(modCell));
   });
 
   it('toggling a flag posts set of the member with the names now set', async () => {
@@ -555,11 +559,9 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     await waitFor(() => expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0));
     vi.mocked(vscode.postMessage).mockClear();
 
-    // uncheck A in the tracked column — the first *enabled* box, since the master column's
-    // disabled checkboxes render first in column order.
-    const [firstEnabledCheckbox] = screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
-    if (!firstEnabledCheckbox) throw new Error('expected an enabled checkbox in the tracked column');
-    fireEvent.click(firstEnabledCheckbox);
+    // Uncheck A in the tracked column, the row's last cell.
+    const modCell = required(screen.getByText('Flags').closest('tr')?.lastElementChild, 'the tracked column\u2019s cell');
+    fireEvent.click(required(modCell.querySelector('input'), 'its first flag'));
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
@@ -657,7 +659,7 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('re-loads with the new formKey when a loadRecord message arrives from the extension', async () => {
     const { client } = renderPanel(fkCompareResult, { plugins: fkPlugins });
-    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]', { selector: 'div' }));
+    await screen.findByText('Non-Player Character TestNPC [000001:Fallout4.esm]');
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -1164,6 +1166,53 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     await waitFor(() => screen.getByText('MyMod.esp'));
     // Still collapsed after navigating to a new record in the same panel load order.
     expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+  });
+});
+
+// editor.md, Columns, stories 3 and 5: a column's header and every cell under it share one width.
+describe('RecordPanel — column widths', () => {
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  const widthsOfColumn = (index: number) => Array.from(document.querySelectorAll('tr'))
+    .map(row => row.children[index])
+    .filter((cell): cell is HTMLElement => cell instanceof HTMLElement)
+    .map(cell => cell.style.width);
+
+  function dragEdge(header: HTMLElement, from: number, by: number) {
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, from, 20));
+    fireEvent.mouseDown(required(header.querySelector('[data-column-edge]'), 'the header\u2019s edge'), { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: by });
+    fireEvent.mouseUp(window, { clientX: by });
+  }
+
+  it('collapses a column to a narrow strip, header and cells alike', async () => {
+    renderPanel(compareResult);
+    await screen.findByText('Override Name');
+
+    fireEvent.click(screen.getByText('MyMod.esp'));
+
+    expect(new Set(widthsOfColumn(2))).toEqual(new Set(['48px']));
+    expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
+  });
+
+  it('gives a plugin column the width its edge is dragged to, header and cells alike', async () => {
+    renderPanel(compareResult);
+    await screen.findByText('Override Name');
+
+    dragEdge(required(screen.getByText('MyMod.esp').closest('th'), 'the column\u2019s header'), 200, 40);
+
+    expect(new Set(widthsOfColumn(2))).toEqual(new Set(['240px']));
+    expect(new Set(widthsOfColumn(1))).toEqual(new Set(['']));
+  });
+
+  it('gives the label column the width its edge is dragged to', async () => {
+    renderPanel(compareResult);
+    await screen.findByText('Override Name');
+
+    dragEdge(required(screen.getByText('Field').closest('th'), 'the label column\u2019s header'), 160, -40);
+
+    expect(new Set(widthsOfColumn(0))).toEqual(new Set(['120px']));
   });
 });
 

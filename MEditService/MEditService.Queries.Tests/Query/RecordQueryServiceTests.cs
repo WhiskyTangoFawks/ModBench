@@ -326,6 +326,15 @@ public sealed class RecordQueryServiceTests
         Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
     }
 
+    // editor.md, The header: the record type as xEdit names it.
+    [Fact]
+    public void GetCompare_NamesTheRecordTypeAsXEditDoes()
+    {
+        var compare = _svc.GetCompare(_npc01Key.ToString());
+
+        Assert.Equal("Non-Player Character", compare?.RecordTypeName);
+    }
+
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {

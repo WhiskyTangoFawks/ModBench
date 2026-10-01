@@ -1432,7 +1432,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             body, BuildFields(schema, root, resolveFormKey, _release),
             // A ModHeader can neither carry the Partial Form flag nor be a type that could.
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
-            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(schema.RecordType),
             ParseDiagnosis: parseDiagnosis);
     }
 

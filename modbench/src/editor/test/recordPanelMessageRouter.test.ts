@@ -428,7 +428,7 @@ describe('routeRecordPanelMessage — the focused cell', () => {
 // ADR-0002 invariant 2: RecordPanelClient's own read, asked of the mEdit client through the host
 // rather than fetched by the webview itself.
 describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
-  const compare: CompareResult = { overrides: [], diffs: [], conflictAll: 'OnlyOne' };
+  const compare: CompareResult = { overrides: [], diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Activator' };
   const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
   const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' };
 

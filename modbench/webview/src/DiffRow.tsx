@@ -6,7 +6,7 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { copiedText, modelValue } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
+import { baseCell, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
@@ -125,9 +125,9 @@ interface DiffRowProps {
   // up and can never render against a shape the panel did not choose.
   meta: FieldMetadata;
   columns: Column[];
-  // ADR-0013/ADR-0012: the columns that render at reduced weight, as one set the panel computes,
-  // so the header and every cell under it can never disagree.
-  dimmedColumns: Set<ColumnKey>;
+  // Each column's look, the label column's at null, as the panel gives its header too, so the
+  // header and every cell under it can never disagree.
+  columnStyle: (column: ColumnKey | null) => React.CSSProperties;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
   // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
@@ -162,7 +162,7 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, meta, columns, dimmedColumns,
+  diff, meta, columns, columnStyle,
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
@@ -206,7 +206,7 @@ export function DiffRow({
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
       <DiskCell
-        style={{ ...baseCell, opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        style={{ ...baseCell, ...columnStyle(null), opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}
         onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
@@ -229,8 +229,7 @@ export function DiffRow({
         // moment a non-Data-origin column exists.
 
         const cellStyle = {
-          ...baseCell, ...getCellStyle(diff.cellStates[key]),
-          opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined,
+          ...baseCell, ...getCellStyle(diff.cellStates[key]), ...columnStyle(key),
         };
         if (collapsedColumns.has(key)) {
           return <td key={key} style={cellStyle} />;
