@@ -19,7 +19,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 const ROOT = '/instance';
 const APPLIED: LoadOrderOutcome = {
   outcome: 'applied',
-  status: { totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [] },
+  status: { totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [] },
 };
 
 function valueWith(name: string, overrides: Partial<InstanceValue> = {}): InstanceValue {

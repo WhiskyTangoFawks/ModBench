@@ -44,15 +44,10 @@ public class PluginParticipationTests
         using var fixture = SharedNpcFixture("participation-winner", out var npcKey, pluginBEnabled: false);
         using var index = Indexes.Reconciled(fixture);
 
-        var overrideStack = index.RequireReads().GetOverrideStack(npcKey.ToString())
-            ?? throw new InvalidOperationException($"Expected an override stack for indexed record '{npcKey}'.");
-        var overrides = overrideStack.Entries;
+        var only = Assert.Single(index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries ?? []);
 
-        Assert.Equal(2, overrides.Count);
-        var pluginA = overrides.Single(o => o.Plugin.Name == "PluginA.esm");
-        var pluginB = overrides.Single(o => o.Plugin.Name == "PluginB.esp");
-        Assert.True(pluginA.IsWinner);
-        Assert.False(pluginB.IsWinner);
+        Assert.Equal("PluginA.esm", only.Plugin.Name);
+        Assert.True(only.IsWinner);
     }
 
     [Fact]
@@ -72,8 +67,7 @@ public class PluginParticipationTests
         var fromStartWinners = WinnersByPlugin(fromStart, npcKeyY);
 
         Assert.Equal(fromStartWinners, flippedWinners);
-        Assert.False(flippedWinners["PluginB.esp"]);
-        Assert.True(flippedWinners["PluginA.esm"]);
+        Assert.Equal(new Dictionary<string, bool> { ["PluginA.esm"] = true }, flippedWinners);
     }
 
     [Fact]
@@ -94,7 +88,7 @@ public class PluginParticipationTests
     }
 
     [Fact]
-    public void DisabledOnlyFormKey_HasNoWinner()
+    public void DisabledOnlyFormKey_IsReadNowhere()
     {
         FormKey npcKey = default;
         using var fixture = new PluginFixtureBuilder("participation-lone")
@@ -102,10 +96,8 @@ public class PluginParticipationTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var record = index.RequireReads().GetDocument(npcKey.ToString(), new PluginAddress("Disabled.esp", "Data"));
-
-        Assert.NotNull(record);
-        Assert.False(record.IsWinner);
+        Assert.Null(index.RequireReads().GetOverrideStack(npcKey.ToString()));
+        Assert.Null(index.RequireReads().GetDocument(npcKey.ToString()));
     }
 
     [Fact]

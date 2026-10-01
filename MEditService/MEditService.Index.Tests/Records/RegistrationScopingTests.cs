@@ -71,6 +71,9 @@ public class RegistrationScopingTests
 
         public IReadOnlyList<LoadOrderEntry> WithoutBeta => [.. Plugins.Plugins.Where(p => p.Name != BetaKey.Name)];
 
+        public IReadOnlyList<LoadOrderEntry> WithBetaDisabled =>
+            [.. Plugins.Plugins.Select(p => p.Name == BetaKey.Name ? p with { Enabled = false } : p)];
+
         public void Dispose()
         {
             Index.Dispose();
@@ -178,6 +181,61 @@ public class RegistrationScopingTests
         // Alpha, still registered, is untouched by its neighbour's unregistration.
         Assert.NotEmpty(reads.GetDocuments(AlphaKey));
         Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
+    }
+
+    // ADR-0009 invariant 1: a plugin in the snapshot that the game does not load is still indexed,
+    // and no read of a record sees it.
+    [Fact]
+    public void APluginThatIsNotActive_AnswersNoReadOfARecord()
+    {
+        using var fx = Build("registration-inactive-reads");
+        var reads = fx.Reads;
+        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.Null(reads.GetDocument(fx.BetaNpcFk));
+        Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
+        Assert.Empty(reads.GetDocuments(BetaKey));
+        Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
+        var shared = Assert.Single(reads.GetOverrideStack(fx.SharedNpcFk)?.Entries ?? []);
+        Assert.Equal(AlphaKey, shared.Plugin);
+        Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
+        Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
+        Assert.Null(reads.Resolve(fx.BetaNpcFk));
+        Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
+        Assert.Empty(reads.GetInteriorCells(BetaKey));
+        Assert.Null(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+    }
+
+    // The SQL door reads the same relations: a filter naming any of them meets none of Beta's rows.
+    // Each relation is proved to hold a Beta row before Beta stops being active.
+    [Fact]
+    public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
+    {
+        using var fx = Build("registration-inactive-door");
+        string[] relations =
+        [
+            "records", "records_head", "form_lookup", "form_references", "placement", "cell_location",
+            "container_child", "npc_",
+        ];
+        bool HoldsBeta(string relation)
+        {
+            var pluginColumn = relation == "form_references" ? "source_plugin" : "plugin";
+            return fx.Index.Matching(
+                $"SELECT form_key FROM records WHERE EXISTS (SELECT 1 FROM \"{relation}\" WHERE {pluginColumn} = '{BetaKey.Name}')") > 0;
+        }
+        Assert.All(relations, relation => Assert.True(HoldsBeta(relation), relation));
+
+        fx.Reconcile(fx.WithBetaDisabled);
+
+        Assert.All(relations, relation => Assert.False(HoldsBeta(relation), relation));
+        // Beta is untracked, so it has no committed copy to lose; the mirror holds every plugin's
+        // rows, and the door refuses it.
+        Assert.False(HoldsBeta("records_committed"));
+        Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records WHERE plugin = '{BetaKey.Name}'"));
+        Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records_committed WHERE plugin = '{BetaKey.Name}'"));
     }
 
     [Fact]

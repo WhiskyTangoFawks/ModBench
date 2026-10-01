@@ -180,7 +180,7 @@ function compareResult(
     conflictAll: 'NoConflict',
     overrides: columns.map((plugin, i) => compareOverride({
       formKey: '000001:MyMod.esp', plugin,
-      loadOrderIndex: i + 1, isWinner: i === 0, editorId: 'TestNpc',
+      isWinner: i === 0, editorId: 'TestNpc',
       fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
     diffs: [buildDiff(meta.name, meta, byColumn, editorIds)],

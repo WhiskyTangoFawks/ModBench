@@ -274,45 +274,26 @@ public sealed class RecordQueryServiceTests
         Assert.NotEmpty(compare.Diffs);
     }
 
-    // ADR-0013: a FormKey present in one enabled and one disabled plugin is not a conflict —
-    // the disabled override is indexed and browsable, but excluded from conflict classification.
+    // editor.md, A column's header, the Label row: xEdit's load index, in hex. A light plugin counts
+    // among the light plugins, after FE; a full plugin among the full ones.
     [Fact]
-    public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
+    public void GetCompare_EachColumnCarriesItsLoadIndex()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
-            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
-            .WithPlugin("Disabled.esp", (mod, prev) =>
-                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).CalcMinLevel = 5, enabled: false)
+            .WithPlugin("Base.esm", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
+            .WithPlugin("Light.esp", (mod, prev) =>
+            {
+                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+            })
+            .WithPlugin("Patch.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()))
             .Build();
         var (_, svc) = Build(fixture);
 
         var compare = svc.GetCompare(npcKey.ToString());
 
-        Assert.NotNull(compare);
-        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
-    }
-
-    // ADR-0013. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
-    // only the disabled last plugin differs, which an unfiltered winner pass would escalate.
-    [Fact]
-    public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
-    {
-        FormKey npcKey = default;
-        var fixture = new FakeFixtureBuilder(Release)
-            .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
-            .WithPlugin("Mid.esp", (mod, prev) =>
-                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(10))
-            .WithPlugin("Disabled.esp", (mod, prev) =>
-                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20),
-                enabled: false)
-            .Build(VmadField);
-        var (_, svc) = Build(fixture);
-
-        var compare = svc.GetCompare(npcKey.ToString());
-
-        Assert.NotNull(compare);
-        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.Equal(["00", "FE:000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
     }
 
     // The record editor renders the column read-only from this member alone, so the compare wire
@@ -980,7 +961,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetStatus_IsTheIndexsStatus()
     {
-        var reconciling = new LoadOrderStatus(LoadOrderState.Reconciling, 3, [], false, []);
+        var reconciling = new LoadOrderStatus(LoadOrderState.Reconciling, 3, 3, [], false, []);
         _manager.Status = reconciling;
 
         Assert.Equal(reconciling, _svc.GetStatus());

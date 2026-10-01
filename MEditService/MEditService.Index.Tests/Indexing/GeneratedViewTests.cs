@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -17,14 +18,13 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
 
     // One filter per table rather than per column: SetFilter re-materializes the whole match set,
     // and there are thousands of columns.
+    // COLUMNS() with no match is a binder error, so the door refuses a filter naming none of them.
     private bool AnyColumnOf(string table, IEnumerable<string> columns)
     {
-        var names = columns.Select(c => $"'{c}'").ToList();
-        return names.Count != 0 && Matching($"""
-            SELECT form_key FROM records WHERE EXISTS (
-                SELECT 1 FROM duckdb_columns()
-                WHERE table_name = '{table}' AND column_name IN ({string.Join(", ", names)}))
-            """) > 0;
+        var names = columns.Select(Regex.Escape).ToList();
+        return names.Count != 0 && fixture.Index.Accepts($"""
+            SELECT form_key FROM "{table}" WHERE EXISTS (SELECT COLUMNS('^({string.Join("|", names)})$') FROM "{table}")
+            """);
     }
 
     [Fact]

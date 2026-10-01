@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
@@ -41,7 +42,8 @@ public sealed record PluginRow(
 public record RecordDetail(
     string FormKey,
     string Plugin,
-    int LoadOrderIndex,
+    // The column order conflict classification reads; the front end reads LoadIndex instead.
+    [property: JsonIgnore] int LoadOrderIndex,
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
@@ -71,6 +73,8 @@ public record CompareOverride(
     IReadOnlyList<FieldValue> Fields,
     ConflictThis ConflictThis,
     string Origin,
+    // xEdit's load index, as the column header's label shows it: `0A`, or `FE:001` for a light plugin.
+    string LoadIndex,
     string RecordType = "",
     bool IsPartialForm = false,
     bool IsPartialFormable = false,

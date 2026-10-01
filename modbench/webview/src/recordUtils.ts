@@ -20,32 +20,20 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ key: columnKey(o.plugin, o.origin), override: o }));
 }
 
-// `immutableSet` says only that a column is immutable, which is ambiguous: a vanilla master is
-// immutable and named by the load order, while a plugin the load order doesn't name (ADR-0012) is
-// immutable *because* it isn't.
-export type ColumnStatus =
-  'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'inOverwrite' | 'untracked' | 'tracked';
+// Every column is an active plugin (editor.md, Columns, story 2), so an immutable one is the game's
+// own.
+export type ColumnStatus = 'parseFailure' | 'vanillaMaster' | 'inOverwrite' | 'untracked' | 'tracked';
 
 /** Ordered by what the user can do about it: a parse failure and an immutable column come first,
  *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
 // isInOverwrite is mEdit's own fact (PluginOrigin.IsOverwrite) — never re-derived from Origin here.
 export function columnStatus(
-  isImmutable: boolean, inLoadOrder: boolean, isTracked = true, parseDiagnosis?: string | null,
-  isInOverwrite = false,
+  isImmutable: boolean, isTracked = true, parseDiagnosis?: string | null, isInOverwrite = false,
 ): ColumnStatus {
   if (parseDiagnosis != null) return 'parseFailure';
-  if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+  if (isImmutable) return 'vanillaMaster';
   if (isInOverwrite) return 'inOverwrite';
   return isTracked ? 'tracked' : 'untracked';
-}
-
-// ADR-0012: origin appears inline in the header only when two plugins share a filename — computed
-// from the overrides this compare response carries, never the load order's plugin list. Two rows
-// can never share both plugin and origin.
-export function collidingFilenames(overrides: CompareOverride[]): Set<string> {
-  const counts = new Map<string, number>();
-  for (const o of overrides) counts.set(o.plugin, (counts.get(o.plugin) ?? 0) + 1);
-  return new Set([...counts].filter(([, n]) => n > 1).map(([plugin]) => plugin));
 }
 
 // ── Array child helpers ───────────────────────────────────────────────────────

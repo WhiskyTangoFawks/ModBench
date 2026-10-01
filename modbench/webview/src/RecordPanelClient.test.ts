@@ -70,28 +70,6 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
-  // ADR-0012: a plugin the load order does not name is both immutable and absent from it, and
-  // PluginHeader needs the second fact independently — a vanilla master is only the first.
-  it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {
-    const promise = createRecordPanelClient().load('000001:A.esm');
-    answer(lastRequestId(), {
-      ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },
-      plugins: [
-        { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0, inLoadOrder: true },
-        { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 1, origin: 'ModA', inLoadOrder: true },
-        { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 1, origin: 'ModB', inLoadOrder: false },
-      ],
-      conflictsComputed: true,
-    });
-
-    const r = await promise;
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.notInLoadOrderSet).toEqual(new Set([columnKey('Shared.esp', 'ModB')]));
-    expect(r.notInLoadOrderSet?.has(columnKey('Fallout4.esm', null))).toBe(false);
-    expect(r.notInLoadOrderSet?.has(columnKey('Shared.esp', 'ModA'))).toBe(false);
-  });
-
   it('fails the whole load when the host answers refused', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), { ok: false, error: 'HTTP 404' });
@@ -109,7 +87,6 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.immutableSet).toBeNull();
-    expect(r.notInLoadOrderSet).toBeNull();
   });
 
   it('returns conflictsComputed false while the sweep is still outstanding', async () => {

@@ -94,7 +94,7 @@ internal sealed class FakeReads(
 /// double states what it needs rather than computing it.</summary>
 internal sealed class FakeIndex(FakeReads reads, LoadOrderStatus? status = null) : IQueryIndex
 {
-    public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, [], true, []);
+    public LoadOrderStatus Status { get; set; } = status ?? new LoadOrderStatus(LoadOrderState.Ready, reads.OpenedPlugins.Count, reads.OpenedPlugins.Count, [], true, []);
     public (string Sql, string Source)? ActiveFilter { get; private set; }
     public long Sequence { get; set; }
     public GameRelease? LastRebuildRelease { get; private set; }

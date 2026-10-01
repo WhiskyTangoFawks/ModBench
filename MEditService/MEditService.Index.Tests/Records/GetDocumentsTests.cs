@@ -74,14 +74,18 @@ public class GetDocumentsTests
                 mod.Npcs.AddNew("SecondFromModB");
             }, origin: "ModB")
             .BuildScattered();
-        using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        IReadOnlyList<RecordDocument> DocumentsWhileWinning(string origin) =>
+            index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
+                .GetDocuments(new PluginAddress("Shared.esp", origin));
 
         // Records only: each plugin also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
-        var fromA = reads.GetDocuments(new PluginAddress("Shared.esp", "ModA"));
-        var fromB = reads.GetDocuments(new PluginAddress("Shared.esp", "ModB"));
+        var fromA = DocumentsWhileWinning("ModA");
+        Assert.Empty(index.RequireReads().GetDocuments(new PluginAddress("Shared.esp", "ModB")));
+        var fromB = DocumentsWhileWinning("ModB");
         var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
 

@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
   columnStatus,
-  collidingFilenames,
   elementSegment,
   isArrayElementHop,
   isMovableElementHop,
@@ -25,7 +24,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   return {
     formKey: '000001:Test.esp',
     plugin,
-    loadOrderIndex: 0,
+    loadIndex: '00',
     isWinner: false,
     editorId: null,
     fields: [],
@@ -44,9 +43,9 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
 describe('buildColumns', () => {
   it('returns one column per override, in response order', () => {
     const cols = buildColumns([
-      makeOverride('Fallout4.esm', { loadOrderIndex: 0 }),
-      makeOverride('Patch.esp', { loadOrderIndex: 3 }),
-      makeOverride('MyMod.esp', { loadOrderIndex: 7, isWinner: true }),
+      makeOverride('Fallout4.esm'),
+      makeOverride('Patch.esp'),
+      makeOverride('MyMod.esp', { isWinner: true }),
     ]);
     expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
@@ -55,8 +54,8 @@ describe('buildColumns', () => {
   // compound (plugin, origin) identity is minted here, once, for every consumer.
   it('keys same-filename columns by compound identity', () => {
     const cols = buildColumns([
-      makeOverride('Shared.esp', { origin: 'ModA', loadOrderIndex: 1 }),
-      makeOverride('Shared.esp', { origin: 'ModB', loadOrderIndex: 1 }),
+      makeOverride('Shared.esp', { origin: 'ModA' }),
+      makeOverride('Shared.esp', { origin: 'ModB' }),
     ]);
     expect(cols).toHaveLength(2);
     expect(new Set(cols.map(c => c.key)).size).toBe(2);
@@ -67,91 +66,48 @@ describe('buildColumns', () => {
   });
 });
 
-// ADR-0013: `immutableSet` alone can't tell a vanilla master from a plugin the load order does
-// not name, and the header needs both facts to word the tooltip and decide whether to dim.
 describe('columnStatus', () => {
-  it('is "tracked" for a mutable, tracked column, regardless of inLoadOrder', () => {
-    expect(columnStatus(false, true)).toBe('tracked');
-    expect(columnStatus(false, false)).toBe('tracked');
+  it('is "tracked" for a mutable, tracked column', () => {
+    expect(columnStatus(false)).toBe('tracked');
   });
 
-  it('is "vanillaMaster" for an immutable column still named by the load order', () => {
-    expect(columnStatus(true, true)).toBe('vanillaMaster');
-  });
-
-  it('is "notInLoadOrder" for an immutable column the load order does not name', () => {
-    expect(columnStatus(true, false)).toBe('notInLoadOrder');
+  it('is "vanillaMaster" for an immutable column', () => {
+    expect(columnStatus(true)).toBe('vanillaMaster');
   });
 
   // ADR-0007: editing requires tracking, viewing never does. This status earns its own value
   // because each names a different way out, and offering the wrong one is worse than none.
   it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
-    expect(columnStatus(false, true, false)).toBe('untracked');
+    expect(columnStatus(false, false)).toBe('untracked');
   });
 
   it('is "tracked" once that same column is tracked', () => {
-    expect(columnStatus(false, true, true)).toBe('tracked');
+    expect(columnStatus(false, true)).toBe('tracked');
   });
 
   // editor.md, Columns, A column's header: Overwrite is not a mod (ADR-0012 invariant 2), so it
   // can never be tracked — "untracked" would send the user to a Track item this column's header
   // does not offer.
   it('is "inOverwrite" for a column whose isInOverwrite is true, regardless of tracked state', () => {
-    expect(columnStatus(false, true, false, null, true)).toBe('inOverwrite');
-    expect(columnStatus(false, true, true, null, true)).toBe('inOverwrite');
-  });
-
-  // A 3- or 4-arg caller keeps its old tracked/untracked behaviour.
-  it('defaults isInOverwrite to false when the caller omits it', () => {
-    expect(columnStatus(false, true, false)).toBe('untracked');
+    expect(columnStatus(false, false, null, true)).toBe('inOverwrite');
+    expect(columnStatus(false, true, null, true)).toBe('inOverwrite');
   });
 
   it('is not "inOverwrite" when isInOverwrite is false', () => {
-    expect(columnStatus(false, true, false, null, false)).toBe('untracked');
+    expect(columnStatus(false, false, null, false)).toBe('untracked');
   });
 
   // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
   // "run Track on it" would send the user somewhere that leads nowhere.
   it('prefers the reason the user cannot fix over the one they can', () => {
-    expect(columnStatus(true, true, false)).toBe('vanillaMaster');
-    expect(columnStatus(true, false, false)).toBe('notInLoadOrder');
+    expect(columnStatus(true, false)).toBe('vanillaMaster');
   });
 
   // editor.md's table takes the first row that applies: parse failure, then read-only, outrank
   // "in Overwrite" — an unreadable or forced-immutable column names its own reason first.
   it('prefers a parse failure or an immutable reason over "inOverwrite"', () => {
-    expect(columnStatus(false, true, false, 'diagnosis', true)).toBe('parseFailure');
-    expect(columnStatus(true, true, false, null, true)).toBe('vanillaMaster');
-  });
-});
-
-// ADR-0012: origin inline only on collision, computed from the overrides one compare response
-// already carries, never from the load order's whole plugin list.
-describe('collidingFilenames', () => {
-  it('is empty when every override has a distinct filename', () => {
-    const overrides = [makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')];
-    expect(collidingFilenames(overrides)).toEqual(new Set());
-  });
-
-  it('is empty for a single override', () => {
-    expect(collidingFilenames([makeOverride('Fallout4.esm')])).toEqual(new Set());
-  });
-
-  it('names a filename two overrides share, regardless of their differing origins', () => {
-    const overrides = [
-      makeOverride('Shared.esp', { origin: 'ModA' }),
-      makeOverride('Shared.esp', { origin: 'ModB' }),
-    ];
-    expect(collidingFilenames(overrides)).toEqual(new Set(['Shared.esp']));
-  });
-
-  it('does not flag an unrelated filename that only appears once alongside a real collision', () => {
-    const overrides = [
-      makeOverride('Shared.esp', { origin: 'ModA' }),
-      makeOverride('Shared.esp', { origin: 'ModB' }),
-      makeOverride('Solo.esp'),
-    ];
-    expect(collidingFilenames(overrides)).toEqual(new Set(['Shared.esp']));
+    expect(columnStatus(false, false, 'diagnosis', true)).toBe('parseFailure');
+    expect(columnStatus(true, false, null, true)).toBe('vanillaMaster');
   });
 });
 

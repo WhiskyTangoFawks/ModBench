@@ -5,16 +5,9 @@ import { columnStatus, type ColumnStatus } from './recordUtils';
 interface PluginHeaderProps {
   override: CompareOverride;
   isImmutable: boolean;
-  // ADR-0013: whether the effective load order names this plugin — distinct from isImmutable (a
-  // plugin outside the load order is immutable *because* this is false). Dimming is applied once
-  // at the header cell; CSS opacity multiplies on nesting.
-  inLoadOrder: boolean;
-  // ADR-0007: checked after the two flags above — an immutable plugin's read-only-ness is not
-  // something tracking can lift, so its own reason wins.
+  // ADR-0007: checked after isImmutable — an immutable plugin's read-only-ness is not something
+  // tracking can lift, so its own reason wins.
   isTracked: boolean;
-  // ADR-0012: origin appears inline in the header only when two plugins share a filename — decided
-  // by the caller over the compare response's own overrides, never recomputed here.
-  showOriginInline: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
   // The already-combined `data-vscode-context` JSON string VS Code's own
@@ -27,11 +20,6 @@ interface PluginHeaderProps {
   onTogglePartialForm: (next: boolean) => void;
 }
 
-// The tooltip must not advise moving this plugin in the load order — wrong axis: an overridden
-// plugin is a file conflict, decided by the Mod override order and not by `plugins.txt`.
-
-// A column marked `!inLoadOrder` may be an overridden plugin *or* a plugin file `plugins.txt` never
-// lists; the wire carries no signal telling them apart, so the wording must be true for both.
 const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   // The record's own diagnosis is appended as the rest of this reason, so the sentence has to end
   // where the diagnosis begins. No way out is named: repairing the record is not offered anywhere.
@@ -46,13 +34,6 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
     title:
       'This is a vanilla, DLC, or Creation Club master and can never be edited. '
       + 'To change what it defines, author a patch plugin holding the override and edit that.',
-  },
-  notInLoadOrder: {
-    label: '(not loaded)',
-    title:
-      'This plugin plays no part in what the game actually loads, so editing it here changes '
-      + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
-      + 'decided in the Mods and Plugins views.',
   },
   // editor.md, Columns, A column's header, Status table: Overwrite's own row, worded as the
   // table's tooltip column states it, naming no gesture this header's menu lacks.
@@ -85,33 +66,31 @@ const PARTIAL_FORM_TITLE =
   + 'record’s own fields editable again.';
 
 export function PluginHeader({
-  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
+  override: o, isImmutable, isTracked, collapsed, onToggleCollapse,
   vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
-  const status = columnStatus(isImmutable, inLoadOrder, isTracked, o.parseDiagnosis, o.isInOverwrite);
+  const status = columnStatus(isImmutable, isTracked, o.parseDiagnosis, o.isInOverwrite);
   // Parse failure's reason ends with this column's own diagnosis, so it is composed rather than
   // tabled. Every other state's reason is the table's alone.
   const title = STATUS_TEXT[status].title + (o.parseDiagnosis == null ? '' : ` ${o.parseDiagnosis}`);
-  // A column that is not plainly tracked and in the load order offers no write that could land,
-  // so the checkbox is disabled (never hidden — the current state must stay visible) rather than
-  // a silent dead control.
-  const canWrite = status === 'tracked' && inLoadOrder;
+  // A column that is not plainly tracked offers no write that could land, so the checkbox is
+  // disabled (never hidden — the current state must stay visible) rather than a silent dead control.
+  const canWrite = status === 'tracked';
   return (
     <div data-vscode-context={vscodeContext}>
-      {/* Left-click the plugin-name chip collapses/expands this column. ADR-0012:
-          origin is never what the user reads by default — always in the tooltip, inline in the
-          label only when a second loaded plugin shares this filename (showOriginInline). */}
+      {/* Left-click the plugin-name chip collapses/expands this column. ADR-0012 invariant 3:
+          origin is never what the user reads; it sits in the tooltip. */}
       <div
         onClick={onToggleCollapse}
         style={{ cursor: 'pointer' }}
         title={`Origin: ${o.origin}`}
       >
-        {showOriginInline ? `${o.plugin} (${o.origin})` : o.plugin}
+        [{o.loadIndex}] <span>{o.plugin}</span>
       </div>
       {!collapsed && (
         <>
           <div style={{ fontWeight: 400, opacity: 0.6, fontSize: '11px' }}>
-            [{o.loadOrderIndex}]{o.isWinner ? ' ✓ winner' : ''}
+            {o.isWinner ? '✓ winner' : ''}
           </div>
           <div
             style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}

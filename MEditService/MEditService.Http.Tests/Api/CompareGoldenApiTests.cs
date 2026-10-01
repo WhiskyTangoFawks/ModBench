@@ -21,7 +21,7 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
             formKey = o.GetProperty("formKey"),
             plugin = o.GetProperty("plugin"),
             origin = o.GetProperty("origin"),
-            loadOrderIndex = o.GetProperty("loadOrderIndex"),
+            loadIndex = o.GetProperty("loadIndex"),
             isWinner = o.GetProperty("isWinner"),
             editorId = o.GetProperty("editorId"),
             recordType = o.GetProperty("recordType"),
@@ -84,7 +84,6 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
                 isWinner = d.GetProperty("isWinner"),
                 editorId = d.GetProperty("editorId"),
                 recordType = d.GetProperty("recordType"),
-                loadOrderIndex = d.GetProperty("loadOrderIndex"),
             };
         }
 

@@ -45,14 +45,14 @@ describe('toLoadOrderStatus', () => {
   it('keeps each indexed plugin as (origin, filename), so two of one filename stay two', () => {
     const status = toLoadOrderStatus({
       state: 'Reconciling',
-      totalPlugins: 3, version: 1,
+      totalPlugins: 3, activePlugins: 2, version: 1,
       indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
 
     expect(status).toEqual({
-      totalPlugins: 3, version: 1,
+      totalPlugins: 3, activePlugins: 2, version: 1,
       indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
@@ -65,7 +65,7 @@ describe('toLoadOrderStatus', () => {
   // no other field can tell apart from a reconcile that has indexed nothing yet.
   it('says the index holds none for the None state, and only for it', () => {
     const tick = (state: 'None' | 'Reconciling') => toLoadOrderStatus({
-      state, totalPlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [],
+      state, totalPlugins: 0, activePlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [],
     });
 
     expect(tick('None').holdsNone).toBe(true);
@@ -78,7 +78,7 @@ describe('toLoadOrderStatus', () => {
   it('carries a heldElsewhere refusal for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
-      totalPlugins: 0, version: 1,
+      totalPlugins: 0, activePlugins: 0, version: 1,
       indexedPlugins: [],
       conflictsComputed: false,
       failures: [],
@@ -93,7 +93,7 @@ describe('toLoadOrderStatus', () => {
   it('carries a failed refusal for the Failed state', () => {
     const status = toLoadOrderStatus({
       state: 'Failed',
-      totalPlugins: 0, version: 1,
+      totalPlugins: 0, activePlugins: 0, version: 1,
       indexedPlugins: [],
       conflictsComputed: false,
       failures: [],
@@ -106,7 +106,7 @@ describe('toLoadOrderStatus', () => {
   it('carries no refusal when a refusal state has no message', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
-      totalPlugins: 0, version: 1,
+      totalPlugins: 0, activePlugins: 0, version: 1,
       indexedPlugins: [],
       conflictsComputed: false,
       failures: [],

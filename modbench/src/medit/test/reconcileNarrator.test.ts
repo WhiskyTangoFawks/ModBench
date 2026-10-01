@@ -3,7 +3,7 @@ import type { LoadOrderProgress } from '../../client';
 import { createReconcileNarrator } from '../reconcileNarrator';
 
 const tick = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress => ({
-  totalPlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, ...over,
+  totalPlugins: 2, activePlugins: 2, version: 3, indexedPlugins: [], conflictsComputed: false, failures: [], holdsNone: false, ...over,
 });
 const dropped = (version = 3) => tick({ holdsNone: true, totalPlugins: 0, version });
 const ready = (version = 3) => tick({ conflictsComputed: true, indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }, { name: 'B.esp', origin: 'SomeMod' }], version });

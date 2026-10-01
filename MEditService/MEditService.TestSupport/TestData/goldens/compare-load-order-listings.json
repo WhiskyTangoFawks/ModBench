@@ -190,7 +190,6 @@
     "000800:Base.esm": {
       "editorId": "ConflictedNPC",
       "isWinner": true,
-      "loadOrderIndex": 2,
       "origin": "Data",
       "plugin": "Top.esp",
       "recordType": "npc_"
@@ -198,7 +197,6 @@
     "000800:Mid.esp": {
       "editorId": "InjectedNPC",
       "isWinner": true,
-      "loadOrderIndex": 1,
       "origin": "Data",
       "plugin": "Mid.esp",
       "recordType": "npc_"
@@ -206,7 +204,6 @@
     "000801:Base.esm": {
       "editorId": "UnchangedWeapon",
       "isWinner": true,
-      "loadOrderIndex": 1,
       "origin": "Data",
       "plugin": "Mid.esp",
       "recordType": "weap"
@@ -214,7 +211,6 @@
     "000802:Base.esm": {
       "editorId": "SoleNPC",
       "isWinner": true,
-      "loadOrderIndex": 0,
       "origin": "Data",
       "plugin": "Base.esm",
       "recordType": "npc_"
@@ -222,7 +218,6 @@
     "000803:Base.esm": {
       "editorId": "ConflictedRecipe",
       "isWinner": true,
-      "loadOrderIndex": 2,
       "origin": "Data",
       "plugin": "Top.esp",
       "recordType": "cobj"

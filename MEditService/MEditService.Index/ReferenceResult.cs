@@ -1,5 +1,4 @@
 namespace MEditService.Index;
 
-// Origin (ADR-0012): additive alongside Plugin; without it two same-filename sources referencing
-// the same target are indistinguishable.
+// ADR-0012 invariant 1: a plugin is (origin, filename) on every payload.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);

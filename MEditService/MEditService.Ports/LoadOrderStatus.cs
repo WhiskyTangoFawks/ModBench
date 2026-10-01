@@ -38,7 +38,10 @@ public sealed record IndexedPlugin(string Name, string Origin);
 /// question from the state being Ready (ADR-0013).</summary>
 public sealed record LoadOrderStatus(
     LoadOrderState State,
+    // Every plugin the snapshot holds, which the reconcile indexes.
     int TotalPlugins,
+    // The plugins the game loads, which every read of a record sees (ADR-0009 invariant 1).
+    int ActivePlugins,
     IReadOnlyList<IndexedPlugin> IndexedPlugins,
     bool ConflictsComputed,
     IReadOnlyList<PluginLoadFailure> Failures,
@@ -50,5 +53,5 @@ public sealed record LoadOrderStatus(
     long Version = 0)
 {
     public static readonly LoadOrderStatus None =
-        new(LoadOrderState.None, 0, [], ConflictsComputed: false, []);
+        new(LoadOrderState.None, 0, 0, [], ConflictsComputed: false, []);
 }

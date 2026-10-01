@@ -265,7 +265,7 @@
         "formKey": "000803:Base.esm",
         "isPartialForm": false,
         "isWinner": false,
-        "loadOrderIndex": 0,
+        "loadIndex": "00",
         "origin": "Data",
         "plugin": "Base.esm",
         "recordType": "cobj"
@@ -308,7 +308,7 @@
         "formKey": "000803:Base.esm",
         "isPartialForm": false,
         "isWinner": true,
-        "loadOrderIndex": 2,
+        "loadIndex": "02",
         "origin": "Data",
         "plugin": "Top.esp",
         "recordType": "cobj"
@@ -506,7 +506,7 @@
         "formKey": "000800:Base.esm",
         "isPartialForm": false,
         "isWinner": false,
-        "loadOrderIndex": 0,
+        "loadIndex": "00",
         "origin": "Data",
         "plugin": "Base.esm",
         "recordType": "npc_"
@@ -616,7 +616,7 @@
         "formKey": "000800:Base.esm",
         "isPartialForm": false,
         "isWinner": false,
-        "loadOrderIndex": 1,
+        "loadIndex": "01",
         "origin": "Data",
         "plugin": "Mid.esp",
         "recordType": "npc_"
@@ -726,7 +726,7 @@
         "formKey": "000800:Base.esm",
         "isPartialForm": false,
         "isWinner": true,
-        "loadOrderIndex": 2,
+        "loadIndex": "02",
         "origin": "Data",
         "plugin": "Top.esp",
         "recordType": "npc_"
@@ -843,7 +843,7 @@
         "formKey": "000800:Mid.esp",
         "isPartialForm": false,
         "isWinner": true,
-        "loadOrderIndex": 1,
+        "loadIndex": "01",
         "origin": "Data",
         "plugin": "Mid.esp",
         "recordType": "npc_"
@@ -957,7 +957,7 @@
         "formKey": "000802:Base.esm",
         "isPartialForm": false,
         "isWinner": true,
-        "loadOrderIndex": 0,
+        "loadIndex": "00",
         "origin": "Data",
         "plugin": "Base.esm",
         "recordType": "npc_"
@@ -1052,7 +1052,7 @@
         "formKey": "000801:Base.esm",
         "isPartialForm": false,
         "isWinner": false,
-        "loadOrderIndex": 0,
+        "loadIndex": "00",
         "origin": "Data",
         "plugin": "Base.esm",
         "recordType": "weap"
@@ -1140,7 +1140,7 @@
         "formKey": "000801:Base.esm",
         "isPartialForm": false,
         "isWinner": true,
-        "loadOrderIndex": 1,
+        "loadIndex": "01",
         "origin": "Data",
         "plugin": "Mid.esp",
         "recordType": "weap"

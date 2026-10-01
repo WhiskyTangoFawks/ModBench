@@ -182,19 +182,17 @@ public class HeaderIndexingTests
             .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author A", origin: "ModA")
             .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author B", origin: "ModB")
             .BuildScattered();
-        using var index = Indexes.Reconciled(fixture);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
 
-        var overrideStack = index.RequireReads().GetOverrideStack("000000:Shared.esp")
-            ?? throw new InvalidOperationException("Expected an override stack for Shared.esp's header.");
-        var overrides = overrideStack.Entries;
-
-        Assert.Equal(2, overrides.Count);
-        Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");
-        Assert.Contains(overrides, o => o.Plugin.Origin == "ModB");
-
-        // ...and each carries its own author through, which is the fact a filename-scoped delete
-        // would destroy.
-        Assert.Equal("Author A", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModA").Effective, "Author")).GetString());
-        Assert.Equal("Author B", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModB").Effective, "Author")).GetString());
+        // Each origin's header answers, with its own author, once it is the copy the game loads: the
+        // fact a filename-scoped delete would destroy.
+        foreach (var (origin, author) in new[] { ("ModA", "Author A"), ("ModB", "Author B") })
+        {
+            var header = Assert.Single(index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)
+                .GetOverrideStack("000000:Shared.esp")?.Entries ?? []);
+            Assert.Equal(origin, header.Plugin.Origin);
+            Assert.Equal(author, Assert.IsType<JsonElement>(FieldValueOf(header.Effective, "Author")).GetString());
+        }
     }
 }

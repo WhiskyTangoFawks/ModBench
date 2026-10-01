@@ -138,6 +138,7 @@ let getPluginsShouldFail = false;
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
   totalPlugins: number;
+  activePlugins: number;
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
   failures: { name: string; origin: string; reason: string }[];
@@ -145,7 +146,7 @@ type MockLoadOrderStatus = {
   message?: string;
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
-  { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
+  { state: 'None', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // The real Holder's counter: one higher per PUT, on the response and every tick answering it.
 // Never reset, since a real mEdit numbers its versions from 1 only when it restarts.
@@ -213,6 +214,7 @@ function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): 
   loadOrderStatus = {
     state: 'Reconciling',
     totalPlugins: Math.max(names.length, loadOrderStatus.totalPlugins),
+    activePlugins: Math.max(names.length, loadOrderStatus.activePlugins),
     indexedPlugins: names.map((name) => ({ name, origin: 'Data' })),
     conflictsComputed: false,
     failures: [],

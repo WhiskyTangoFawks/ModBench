@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, columnHasNode, elementSegment, collidingFilenames, rootFieldOf,
+  buildColumns, columnHasNode, elementSegment, rootFieldOf,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
@@ -50,9 +50,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0013: a plugin the load order doesn't name drives the header's dimming and tooltip wording
-  // independently of the plain immutable fact.
-  const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
   // ADR-0007: null until /plugins answers, and null again when it fails — fail-closed, so a panel
   // that has not heard from /plugins offers no editing, compile or track rather than gestures that
   // cannot land.
@@ -87,16 +84,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    !immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet?.has(key) === true
-    && !o.isPartialForm && o.parseDiagnosis == null),
-    [result, immutableSet, notInLoadOrderSet, trackedSet]);
+    !immutableSet.has(key) && trackedSet?.has(key) === true && !o.isPartialForm && o.parseDiagnosis == null),
+    [result, immutableSet, trackedSet]);
 
-  // ADR-0013/ADR-0012: one definition of "this column renders at reduced weight" — a plugin the
-  // load order does not name, or a Partial Form record — so the header and the cells cannot
-  // disagree.
-  const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    notInLoadOrderSet.has(key) || o.isPartialForm),
-    [result, notInLoadOrderSet]);
+  // editor.md, A column's header: one definition of "this column renders at reduced weight", a
+  // Partial Form copy, so the header and the cells cannot disagree.
+  const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
 
   // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
@@ -127,7 +120,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       if (!loaded.ok) throw new Error(loaded.error);
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
-      if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
       // Unguarded, unlike the two above: a null must replace a previous record's answer, so an
       // unknown state reads as neither tracked nor untracked.
       setTrackedSet(loaded.trackedSet);
@@ -241,12 +233,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
 
-  // ADR-0012: origin appears inline in the header only when two plugins share a filename —
-  // computed from this response's own overrides, never the load order's plugin list.
-  const collidingPluginNames = useMemo(
-    () => collidingFilenames(result?.overrides ?? []),
-    [result],
-  );
 
   const containerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -388,10 +374,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                   const isCollapsed = collapsedColumns.has(col.key);
                   const isImmutable = immutableSet.has(col.key);
                   const tracked = trackedSet?.has(col.key);
-                  // ADR-0013: the column's own load-order membership drives both the header's
-                  // reason wording and the dimming that carries down through every cell in this
-                  // column — "non-participating plugins render dimmed".
-                  const inLoadOrder = !notInLoadOrderSet.has(col.key);
                   return (
                     <th
                       key={col.key}
@@ -404,13 +386,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                       <PluginHeader
                         override={col.override}
                         isImmutable={isImmutable}
-                        inLoadOrder={inLoadOrder}
                         isTracked={tracked === true}
-                        showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
                         // Copy…, on this column's native right-click menu — unconditional on isImmutable/
-                        // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
+                        // isTracked, since copying *from* any of those is the ordinary
                         // case, not one to gate out.
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(

@@ -9,10 +9,6 @@ import { requestRecordLoad } from './nativeBridge';
 export type LoadResult =
   | {
       ok: true; result: CompareResult; immutableSet: Set<ColumnKey> | null;
-      // ADR-0013: mirrors immutableSet's own construction (same plugin list, same
-      // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
-      // failed), never independently.
-      notInLoadOrderSet: Set<ColumnKey> | null;
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
       // editable", because wrongly offering an edit that cannot land is worse than wrongly
       // withholding one (ADR-0019). Read fail-closed.
@@ -45,7 +41,6 @@ export function createRecordPanelClient(): RecordPanelClient {
         ok: true,
         result: parseCompareResult(answer.compare),
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
-        notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => !p.inLoadOrder).map(p => columnKey(p.name, p.origin))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
         conflictsComputed: answer.conflictsComputed,
       };

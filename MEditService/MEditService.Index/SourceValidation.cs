@@ -208,7 +208,7 @@ internal sealed class SourceValidation(
 
     private string? HeadBody(PluginAddress key, string formKey) =>
         DuckDbSql.ScalarString(connection,
-            "SELECT body FROM records_head WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            $"SELECT body FROM {TableDdlBuilder.HeadRowsRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
     // One row per source document: every Effective record no other record's document embeds. The
@@ -218,7 +218,7 @@ internal sealed class SourceValidation(
     // its block coordinates null — what tells it from an exterior cell, which has a directory.
     private const string DocumentRows = """
         SELECT r.form_key, r.body
-        FROM records r
+        FROM mirror.records r
         WHERE r.plugin = $1 AND r.origin = $2
           AND NOT EXISTS (
             SELECT 1 FROM mirror.container_child c
@@ -244,10 +244,10 @@ internal sealed class SourceValidation(
     private Dictionary<string, string> DeletedInWorkingTree(PluginAddress key) =>
         Rows("""
             SELECT c.form_key, c.body
-            FROM records_committed c
+            FROM mirror.records_committed c
             WHERE c.plugin = $1 AND c.origin = $2
               AND NOT EXISTS (
-                SELECT 1 FROM records r
+                SELECT 1 FROM mirror.records r
                 WHERE r.form_key = c.form_key AND r.plugin = c.plugin AND r.origin = c.origin)
             """, key.Name, key.Origin);
 

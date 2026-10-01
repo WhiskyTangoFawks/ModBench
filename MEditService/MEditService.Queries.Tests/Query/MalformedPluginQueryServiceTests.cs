@@ -66,6 +66,17 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Empty(Diagnose([Row(master, Short)], master));
     }
 
+    // ADR-0012 invariant 1: a filename compares ignoring case, so a second file whose name differs
+    // only in case, as a case-sensitive filesystem holds one, is the same plugin loaded with no line.
+    [Fact]
+    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase()
+    {
+        var upper = Plugin("FALLOUT4.ESM", origin: "CleanedMasters", enabled: false);
+        var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
+
+        Assert.Empty(Diagnose([Row(upper, Short), Row(master, Trailing)], upper, master));
+    }
+
     // Where the file sits decides nothing: a user's plugin placed in the game folder is the user's.
     [Fact]
     public void GetLoadOrderDiagnoses_RowsOfAUserPluginInTheGameFolder_AreReported()
@@ -143,7 +154,7 @@ public sealed class MalformedPluginQueryServiceTests
         var plugin = Plugin(Malformed);
         var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = [Row(plugin, Short)] };
         var reconciling = new LoadOrderStatus(
-            LoadOrderState.Reconciling, TotalPlugins: 1, [], ConflictsComputed: false, []);
+            LoadOrderState.Reconciling, TotalPlugins: 1, ActivePlugins: 1, [], ConflictsComputed: false, []);
 
         var reports = new MalformedPluginQueryService(
             new FakeIndex(reads, reconciling), FakeLoadOrder.Of(GameRelease.Fallout4, plugin))

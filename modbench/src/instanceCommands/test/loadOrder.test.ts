@@ -5,7 +5,7 @@ import {
 import { putLoadOrder, refresh, type LoadOrderSource } from '../loadOrder';
 
 const READY_STATUS: LoadOrderProgress = {
-  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 

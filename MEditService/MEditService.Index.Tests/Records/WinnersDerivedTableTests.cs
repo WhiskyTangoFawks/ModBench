@@ -80,11 +80,10 @@ public sealed class WinnersDerivedTableTests : IDisposable
     {
         Reconcile([.. _fixture.Plugins.Select(p => p.Name == OverKey.Name ? p with { Enabled = false } : p)]);
 
-        // Disabled in plugins.txt: Over.esp is registered (so its rows are still visible) but out of
-        // the stack, so the plugin below it holds the field.
+        // Disabled in plugins.txt: Over.esp is registered but not active, so no read sees it and the
+        // plugin below it holds the field.
         Assert.Equal(BaseKey, WinnerOf(_npc));
-        Assert.NotNull(Reads.GetDocument(_npc, OverKey));
-        Assert.DoesNotContain(Reads.GetDocuments(OverKey), d => d.IsWinner);
+        Assert.Null(Reads.GetDocument(_npc, OverKey));
 
         Reconcile(_fixture.Plugins);
 

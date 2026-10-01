@@ -7,7 +7,7 @@ function tick(conflictsComputed: boolean): NotificationEvent {
   return {
     kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
     loadOrderStatus: {
-      state: 'Ready', totalPlugins: 0, indexedPlugins: [], conflictsComputed, failures: [], version: 1,
+      state: 'Ready', totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed, failures: [], version: 1,
     },
   };
 }

@@ -9,7 +9,7 @@ import type { CompareOverride } from './types';
 
 function override(partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
-    formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadOrderIndex: 1,
+    formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadIndex: '01',
     isWinner: true, editorId: 'TestNPC', fields: [], origin: 'Data',
     recordType: 'npc_', isPartialForm: false, isPartialFormable: false,
     conflictThis: 'OnlyOne', isInOverwrite: false,
@@ -21,10 +21,8 @@ function baseProps() {
   return {
     override: override(),
     isImmutable: false,
-    inLoadOrder: true,
     // Tracked by default; the untracked cases opt in explicitly.
     isTracked: true,
-    showOriginInline: false,
     collapsed: false,
     onToggleCollapse: vi.fn(),
     onTogglePartialForm: vi.fn(),
@@ -32,10 +30,11 @@ function baseProps() {
 }
 
 describe('PluginHeader', () => {
-  it('shows the plugin name, load order index and winner marker', () => {
+  // editor.md, A column's header, the Label row: `[XX] File name`.
+  it('labels the column with its load index, then its file name', () => {
     render(<PluginHeader {...baseProps()} />);
-    expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
-    expect(screen.getByText('[1] ✓ winner')).toBeInTheDocument();
+    expect(screen.getByText('MyMod.esp').parentElement).toHaveTextContent(/^\[01\] MyMod\.esp$/);
+    expect(screen.getByText('✓ winner')).toBeInTheDocument();
   });
 
   it('clicking the plugin name toggles collapse', () => {
@@ -45,49 +44,19 @@ describe('PluginHeader', () => {
     expect(onToggleCollapse).toHaveBeenCalled();
   });
 
-  it('collapsed: hides load-order/winner line', () => {
+  it('collapsed: hides the winner line', () => {
     render(<PluginHeader {...baseProps()} collapsed={true} />);
-    expect(screen.queryByText('[1] ✓ winner')).not.toBeInTheDocument();
+    expect(screen.queryByText('✓ winner')).not.toBeInTheDocument();
   });
 
-  // A vanilla/DLC/CC master — immutable, still named by the load order — keeps the plain,
-  // familiar "(read-only)" label; its tooltip names the reason, distinct from the one a plugin
-  // outside the load order gets.
-  it('shows "(read-only)" for an immutable, in-load-order column (a vanilla master)', () => {
-    render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={true} />);
+  // A vanilla/DLC/CC master keeps the plain, familiar "(read-only)" label; its tooltip names the
+  // reason.
+  it('shows "(read-only)" for an immutable column (a vanilla master)', () => {
+    render(<PluginHeader {...baseProps()} isImmutable={true} />);
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
     expect(screen.getByText('(read-only)')).toHaveAttribute(
       'title', expect.stringMatching(/vanilla/i),
     );
-  });
-
-  // ADR-0012: "(not loaded)", not "(not in load order)" — an overridden plugin is a file conflict
-  // decided by the Mod override order, not the Plugin load order the longer label would imply.
-  it('shows a distinct label for an immutable column the load order does not name', () => {
-    render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
-    expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
-    expect(screen.getByText('(not loaded)')).toBeInTheDocument();
-  });
-
-  // Pins the meaning, not just the vocabulary: a wording can dodge the banned words and still
-  // assert the wrong mechanism. An exact match makes any rewording a reviewed choice.
-  it('the not-loaded tooltip is exactly the reviewed, true-for-both-causes wording', () => {
-    render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
-    expect(screen.getByText('(not loaded)')).toHaveAttribute(
-      'title',
-      'This plugin plays no part in what the game actually loads, so editing it here changes '
-      + 'nothing anywhere. Whether this file loads, and which file of this name the game uses, is '
-      + 'decided in the Mods and Plugins views.',
-    );
-  });
-
-  // A floor whatever the wording: never Mod Management's vocabulary as a common noun or
-  // mechanism, as distinct from naming the "Mods"/"Plugins" view titles, which names a surface.
-  it('the not-loaded tooltip never uses "mod" as a common noun or "priority" as a mechanism', () => {
-    render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
-    const title = screen.getByText('(not loaded)').getAttribute('title') ?? '';
-    expect(title).not.toMatch(/\bmod\b/i);
-    expect(title).not.toMatch(/priority/i);
   });
 
   // CSS opacity multiplies on nesting (0.55 twice renders at ~0.30), so PluginHeader must not
@@ -96,7 +65,7 @@ describe('PluginHeader', () => {
     const { container } = render(
       <table><thead><tr>
         <th style={{ opacity: 0.55 }}>
-          <PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />
+          <PluginHeader {...baseProps()} isImmutable={true} />
         </th>
       </tr></thead></table>,
     );
@@ -106,23 +75,16 @@ describe('PluginHeader', () => {
   });
 
   // ADR-0012: origin is never what the user reads by default — only the filename.
-  it('does not render origin inline when there is no collision', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={false} />);
+  it('does not render origin inline', () => {
+    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} />);
     expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
     expect(screen.queryByText(/ModA/)).not.toBeInTheDocument();
   });
 
-  // ADR-0012: "origin appears inline only when two loaded plugins share a filename."
-  it('renders origin inline when showOriginInline is true', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={true} />);
-    expect(screen.getByText('MyMod.esp (ModA)')).toBeInTheDocument();
-  });
-
-  // ADR-0012: "filename in the header, origin in its tooltip" — unconditionally, so a
-  // non-colliding column still tells a curious user which origin it's from on hover.
-  it('always sets the origin in a tooltip on the name chip, regardless of collision', () => {
-    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={false} />);
-    expect(screen.getByText('MyMod.esp')).toHaveAttribute('title', expect.stringContaining('ModA'));
+  // ADR-0012: "filename in the header, origin in its tooltip".
+  it('sets the origin in a tooltip on the name chip', () => {
+    render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} />);
+    expect(screen.getByText('MyMod.esp').parentElement).toHaveAttribute('title', expect.stringContaining('ModA'));
   });
 
   // The copy commands live on the header's native right-click menu (ADR-0017), so there is
@@ -298,18 +260,6 @@ describe('PluginHeader — Partial Form toggle', () => {
     expect(screen.getByRole('checkbox')).toBeDisabled();
   });
 
-  it('disables the toggle on a not-in-load-order column', () => {
-    render(
-      <PluginHeader
-        {...baseProps()}
-        override={override({ isPartialFormable: true, isPartialForm: true })}
-        inLoadOrder={false}
-      />,
-    );
-
-    expect(screen.getByRole('checkbox')).toBeDisabled();
-  });
-
   it('does not render the toggle at all when the column is collapsed', () => {
     render(
       <PluginHeader
@@ -344,7 +294,6 @@ describe('PluginHeader — parse failure', () => {
 
   it.each([
     ['a vanilla master', { isImmutable: true }, '(read-only)'],
-    ['a plugin the load order does not name', { isImmutable: true, inLoadOrder: false }, '(not loaded)'],
     ['an untracked column', { isTracked: false }, '(untracked)'],
     ['a tracked column', { isTracked: true }, '(tracked)'],
   ])('takes precedence over %s', (_case, props, displaced) => {
