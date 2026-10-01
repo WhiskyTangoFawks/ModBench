@@ -7,7 +7,7 @@ import type { DownloadsDirectoryResolver } from './downloadsDirectory';
 import { exists, get, listDir, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
-import { entryDir, isExtractionEntry, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
+import { entryDir, isNewModExtraction, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
 import type { Mo2Watch } from './mo2Watch';
 
 export interface Mo2Context {
@@ -36,11 +36,11 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-// A new mod's folder holds nothing but its extraction until the install settles. An installed
-// mod being upgraded holds its files beside the extraction and stays a mod.
+// A new mod's folder holds its extraction until the install settles; a folder removed since the
+// listing is gone, and any other failure to read it surfaces.
 async function isBeingInstalled(folder: string): Promise<boolean> {
   const entries = await readOrAbsent(() => listDir(folder), undefined);
-  return entries === undefined || (entries.length > 0 && entries.every((entry) => isExtractionEntry(entry.name)));
+  return entries === undefined || entries.some((entry) => isNewModExtraction(entry.name));
 }
 
 /** The mod folders as entries; the reserved overwrite name holds none, nor does a folder a new

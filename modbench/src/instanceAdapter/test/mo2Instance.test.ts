@@ -264,11 +264,38 @@ describe('the MO2 Instance adapter', () => {
         expect(await listed()).toContain('New Mod');
       });
 
+      it('is not listed mid-settle, with some of its entries moved up and its extraction still there', async () => {
+        await adapter.extractNewMod('New Mod');
+        await writeFile(join(root, 'mods', 'New Mod', 'readme.txt'), '');
+
+        expect(await listed()).not.toContain('New Mod');
+      });
+
       it('is listed when it is an installed mod being upgraded', async () => {
         await adapter.extractUpgrade('Harder VATS');
 
         expect(await listed()).toContain('Harder VATS');
       });
+
+      it('is listed when an upgrade has cleared the mod\'s old contents and holds only its extraction', async () => {
+        const extraction = await adapter.extractUpgrade('Harder VATS');
+        const folder = join(root, 'mods', 'Harder VATS');
+        for (const entry of await readdir(folder)) {
+          if (join(folder, entry) !== extraction.path) await rm(join(folder, entry), { recursive: true });
+        }
+
+        expect(await listed()).toContain('Harder VATS');
+      });
+    });
+
+    it('rejects when a mod folder cannot be read, rather than treating it as gone', async () => {
+      const folder = join(root, 'mods', 'Harder VATS');
+      await chmod(folder, 0o000);
+      try {
+        await expect(adapter.modFolders()).rejects.toThrow(/EACCES/);
+      } finally {
+        await chmod(folder, 0o755);
+      }
     });
 
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {

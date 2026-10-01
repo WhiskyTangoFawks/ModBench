@@ -64,12 +64,16 @@ export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefi
   return folder === undefined ? undefined : modDir(instanceRoot, folder);
 };
 
-const EXTRACTION_PREFIX = '.medit-extract-';
+const NEW_MOD_EXTRACTION_PREFIX = '.medit-extract-new-';
+const UPGRADE_EXTRACTION_PREFIX = '.medit-extract-upgrade-';
 
-/** The prefix a release's extraction folder, inside its mod's folder, is named from. */
-export const extractionPrefix = (modFolder: string): string => join(modFolder, EXTRACTION_PREFIX);
+/** The prefix a new mod's extraction folder, inside the mod's folder, is named from. */
+export const newModExtractionPrefix = (modFolder: string): string => join(modFolder, NEW_MOD_EXTRACTION_PREFIX);
 
-export const isExtractionEntry = (name: string): boolean => name.startsWith(EXTRACTION_PREFIX);
+/** The prefix an upgrade's extraction folder, inside the mod's folder, is named from. */
+export const upgradeExtractionPrefix = (modFolder: string): string => join(modFolder, UPGRADE_EXTRACTION_PREFIX);
+
+export const isNewModExtraction = (name: string): boolean => name.startsWith(NEW_MOD_EXTRACTION_PREFIX);
 
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
