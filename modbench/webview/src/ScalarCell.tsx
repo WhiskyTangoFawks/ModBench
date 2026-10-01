@@ -9,10 +9,6 @@ interface ScalarCellProps {
   // There is no edit mode — editability is a property of the column (is the plugin mutable, is it
   // tracked), never of a state the user toggles into.
   editable?: boolean;
-  // ADR-0018: gates the plain click, so a *second* click on an already-focused cell opens while a
-  // first click only focuses — this handler runs before DiskCell's ancestor onFocusCell, so
-  // `isFocused` is still the pre-click value here.
-  isFocused?: boolean;
   // Where an edited value goes. Absent is the ordinary state for every caller outside the
   // field grid — there is nowhere to write, so the cell
   // renders as text, which is what those callers already had.
@@ -38,7 +34,7 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
  *  ADR-0018: a VS Code tab relocates the user, so no left-click gesture may reach the extended
  *  editor. */
 export function ScalarCell({
-  value, meta, editable = false, isFocused = true, onCommit, ariaLabel, displayOverride,
+  value, meta, editable = false, onCommit, ariaLabel, displayOverride,
 }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
@@ -50,7 +46,7 @@ export function ScalarCell({
     setDraft(modelValue(value, meta));
   }
 
-  // Checked ahead of `active`/`isFocused` because there is no state to gate: every open trigger
+  // Checked ahead of `active` because there is no state to gate: every open trigger
   // lands here and does nothing — matching xEdit's `vstViewEditing`, which sets `Allowed := False`
   // and shows nothing in advance.
   if (!editable || !onCommit) {
@@ -64,8 +60,7 @@ export function ScalarCell({
     return (
       <span
         data-open-trigger
-        onClick={() => { if (isFocused) open(); }}
-        onDoubleClick={open}
+        onClick={open}
         style={{ display: 'block', minHeight: '1em' }}
       >
         <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />

@@ -68,12 +68,10 @@ export function formKeyLabel(value: string, resolution?: Pick<FormKeyResolution,
 // The label is the composite, never the bare EditorID: a FormKey is the identity and the EditorID
 // is decoration, and it is the format the picker's own items use, so a reference reads back as it
 // was chosen.
-export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
+export function FormKeyLink({ value, onOpen, onPlainClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
-  // ADR-0018: both optional — a caller with no mutable open gesture omits them.
-  onDoubleClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
 }>) {
@@ -90,7 +88,6 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         if (e.ctrlKey || e.metaKey) { if (linksTo) onOpen(value); }
         else onPlainClick?.();
       }}
-      onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

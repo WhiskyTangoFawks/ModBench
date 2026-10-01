@@ -11,9 +11,6 @@ interface FormKeyCellProps {
   // (presence of somewhere to write is the editability signal). A VMAD composite leaf that
   // composes this cell but has no write path of its own simply omits it.
   editable?: boolean;
-  // ADR-0018: gates the mutable branch's plain-click open of the QuickPick. Optional, defaulting
-  // to `true`, so a caller outside the field grid's focus model need not pass it.
-  isFocused?: boolean;
   onOpen: (fk: string) => void;
   // Optional for the same reason `editable` is — `onPlainClick`/`openPicker` are gated on
   // `editable` before `onCommit` is ever reached.
@@ -26,7 +23,7 @@ interface FormKeyCellProps {
 
 /** ADR-0018's divergence #1: a native QuickPick rather than an in-webview control, because the
  *  webview cannot host a searchable record list as well as VS Code already does. */
-export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editable, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
   const fk = typeof value === 'string' && value ? value : null;
   const picking = useRef(false);
 
@@ -43,10 +40,10 @@ export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, o
   }
 
   // A FormKey reads the same editable or not — a link, not a form control. Editability shows in
-  // the gesture: a second click on the focused cell opens the picker; on an immutable column plain
+  // the gesture: the cell's open gestures reach the picker; on an immutable column plain
   // click is a no-op.
   function onPlainClick() {
-    if (editable && isFocused) openPicker();
+    if (editable) openPicker();
   }
 
   function renderValue() {
@@ -57,7 +54,6 @@ export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, o
       return (
         <span
           onClick={onPlainClick}
-          onDoubleClick={editable ? openPicker : undefined}
           data-open-trigger={editable || undefined}
           style={{ opacity: 0.35 }}
         >—</span>
@@ -68,7 +64,6 @@ export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, o
         value={fk}
         onOpen={onOpen}
         onPlainClick={onPlainClick}
-        onDoubleClick={editable ? openPicker : undefined}
         openTrigger={editable}
         resolution={resolution}
       />

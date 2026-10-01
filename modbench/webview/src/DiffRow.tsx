@@ -39,14 +39,13 @@ interface RenderCellExtras {
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  isFocused: boolean,
   onOpen: (fk: string) => void,
   { checkError, resolution, onCommit, rowCollapsed }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} isFocused={isFocused}
+        value={value} meta={meta}
         onOpen={onOpen} checkError={checkError} resolution={resolution}
         // Same editability rule as the flags/scalar branches — presence of somewhere to
         // write, ORed with the per-row readOnly veto.
@@ -87,7 +86,6 @@ function renderCell(
     <ScalarCell
       value={value}
       meta={meta}
-      isFocused={isFocused}
       // `meta.readOnly` is a per-row veto a synthesized row can set regardless of what the
       // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
       editable={onCommit != null && !meta.readOnly}
@@ -327,7 +325,7 @@ export function DiffRow({
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {hasElement && renderCell(shown, cellMeta, isFocused, onOpen, {
+            {hasElement && renderCell(shown, cellMeta, onOpen, {
               checkError, resolution: diff.resolutions?.[key],
               onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
               rowCollapsed: isFlagsRow && !rowExpanded,
