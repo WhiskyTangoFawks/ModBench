@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
-import { baseCell, toggleBtnStyle, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
+import { ExpandArrow } from './ExpandArrow';
+import { baseCell, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, CompareOverride } from './types';
@@ -97,7 +98,7 @@ export function RecordHeaderRows({
           style={{ ...baseCell, opacity: 0.75 }} isFocused={isFocused(RECORD_HEADER_ROW, null)}
           onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
         >
-          <button style={toggleBtnStyle} onClick={onToggle}>{expanded ? '▼' : '▶'}</button>
+          <ExpandArrow expanded={expanded} onToggle={onToggle} />
           {RECORD_HEADER_ROW}
         </DiskCell>
         {columns.map(({ key }) => collapsedColumns.has(key)

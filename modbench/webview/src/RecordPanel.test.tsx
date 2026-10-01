@@ -808,10 +808,11 @@ describe('RecordPanel — keys through the rows (editor.md, The focused cell, st
     expect(screen.getByText('X')).toBeInTheDocument();
 
     press(valueCell, 'ArrowDown');
-    expect(focusedCells(container)).toEqual([required(screen.getByText('Y').closest('tr'), 'the Y row').children[2]]);
+    const yRow = required(screen.getByText('Y').closest('tr'), 'the Y row');
+    expect(focusedCells(container)).toEqual([yRow.children[2]]);
 
-    press(valueCell, 'ArrowLeft');
-    expect(focusedCells(container)).toEqual([masterCell]);
+    press(required(yRow.children[2], 'the winner\'s Y cell'), 'ArrowLeft');
+    expect(focusedCells(container)).toEqual([yRow.children[1]]);
   });
 
   it('tells the host the user entered the grid when a key moves the focus', async () => {
@@ -985,7 +986,7 @@ describe('RecordPanel — states (editor.md, States)', () => {
       .mockResolvedValueOnce(loaded(structCompareResult))
       .mockReturnValueOnce(pending.promise);
     renderPanel(structCompareResult, { load });
-    await waitFor(() => screen.getByText('▼', { selector: 'button' }));
+    await waitFor(() => screen.getByText('Bounds'));
     const boundsRow = required(screen.getByText('Bounds').closest('tr'), 'the Bounds row');
     fireEvent.click(within(boundsRow).getByText('▼'));
 
@@ -1245,28 +1246,24 @@ describe('RecordPanel — union element rows', () => {
     return required(rows().getByText(label).closest('td'), `the '${label}' cell's td ancestor`);
   }
 
-  function expandRow(label: string) {
-    fireEvent.click(required(labelCell(label).querySelector('button'), `the '${label}' row's expand button`));
-  }
-
-  async function renderExpandedElement() {
+  async function renderElement() {
     renderPanel(mixedLeafAliasResult);
     await waitFor(() => rows().getByText('aliases'));
-    expandRow('aliases');
     await waitFor(() => rows().getByText('[0]'));
-    expandRow('[0]');
     await waitFor(() => rows().getByText('location'));
   }
 
   it('shows the union of both plugins\' leaf members', async () => {
-    await renderExpandedElement();
+    await renderElement();
     expect(rows().getByText('name')).toBeInTheDocument();
     expect(rows().getByText('location')).toBeInTheDocument();
     expect(rows().getByText('external')).toBeInTheDocument();
   });
 
   it('renders an empty cell for the column whose leaf lacks the member', async () => {
-    await renderExpandedElement();
+    await renderElement();
+    fireEvent.click(required(labelCell('location').querySelector('button'), "the 'location' row's arrow"));
+    fireEvent.click(required(labelCell('external').querySelector('button'), "the 'external' row's arrow"));
     const locationRow = required(labelCell('location').closest('tr'), "the 'location' row");
     const locationCells = locationRow.querySelectorAll('td');
     expect(required(locationCells[1], "the 'location' row's second cell").textContent).toBe('{…}');
@@ -1283,22 +1280,20 @@ describe('RecordPanel — union element rows', () => {
   it('shows no row for a member no plugin\'s leaf declares', async () => {
     renderPanel(singleLeafAliasResult);
     await waitFor(() => rows().getByText('aliases'));
-    expandRow('aliases');
     await waitFor(() => rows().getByText('[0]'));
-    expandRow('[0]');
     await waitFor(() => rows().getByText('location'));
     expect(rows().queryByText('external')).not.toBeInTheDocument();
   });
 
   it('indents each nesting level by its own depth', async () => {
-    await renderExpandedElement();
+    await renderElement();
     expect(labelCell('aliases')).not.toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('[0]')).toHaveStyle({ paddingLeft: '24px' });
     expect(labelCell('location')).toHaveStyle({ paddingLeft: '48px' });
 
-    expandRow('location');
-    await waitFor(() => rows().getByText('alias_id'));
-    expect(labelCell('alias_id')).toHaveStyle({ paddingLeft: '72px' });
+    for (const aliasId of rows().getAllByText('alias_id')) {
+      expect(aliasId.closest('td')).toHaveStyle({ paddingLeft: '72px' });
+    }
   });
 });
 
@@ -1357,15 +1352,14 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
 
   afterEach(() => vi.unstubAllGlobals());
 
-  async function expandLevel() {
+  async function renderLevel() {
     renderPanel(unionCompareResult, { plugins: unionTrackedPluginsResponse });
     await waitFor(() => expect(screen.getByText('Level')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: '▶' }));
     await waitFor(() => expect(screen.getByText('Kind')).toBeInTheDocument());
   }
 
   it('labels the row from the schema and never shows the class name it holds', async () => {
-    await expandLevel();
+    await renderLevel();
 
     expect(screen.queryByText('MutagenObjectType')).not.toBeInTheDocument();
     expect(screen.getByText('Npc Level')).toBeInTheDocument();
@@ -1373,7 +1367,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
   });
 
   it('opens a dropdown of the union\'s leaves, listed by label', async () => {
-    await expandLevel();
+    await renderLevel();
 
     fireEvent.doubleClick(screen.getByText('Npc Level'));
 
@@ -1383,7 +1377,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
 
   // A discriminator switch is the Kind row's own set; the backend switches the leaf.
   it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label', async () => {
-    await expandLevel();
+    await renderLevel();
     fireEvent.doubleClick(screen.getByText('Npc Level'));
     vi.mocked(vscode.postMessage).mockClear();
 
@@ -1450,7 +1444,6 @@ describe('RecordPanel — an absent member reads as its default', () => {
   async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Stats'));
-    fireEvent.click(required(required(rows().getByText('Stats').closest('td'), "the 'Stats' cell's td ancestor").querySelector('button'), "the 'Stats' row's expand button"));
     await waitFor(() => rows().getByText('Weight'));
   }
 
@@ -1538,7 +1531,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Bounds'));
     expect(cellAt('Bounds', 2).textContent).toBe('');
-    fireEvent.click(required(required(rows().getByText('Bounds').closest('td'), "the 'Bounds' cell's td ancestor").querySelector('button'), "the 'Bounds' row's expand button"));
     await waitFor(() => rows().getByText('X'));
 
     expect(cellAt('X', 1).textContent).toBe('10');
@@ -1548,7 +1540,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   it('an element past the column\'s own length reads as nothing, not zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Values'));
-    fireEvent.click(required(required(rows().getByText('Values').closest('td'), "the 'Values' cell's td ancestor").querySelector('button'), "the 'Values' row's expand button"));
     await waitFor(() => rows().getByText('[1]'));
 
     expect(cellAt('[1]', 1).textContent).toBe('2');
@@ -1582,6 +1573,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
       })],
     }), { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     expect(cellAt('Size', 1).textContent).toBe('{…}');
     expect(cellAt('Size', 2).textContent).toBe('');
 
@@ -1627,15 +1619,14 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  async function renderCollapsed() {
+  async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => rows().getByText('Size'));
+    await waitFor(() => rows().getByText('Width'));
   }
 
-  async function renderExpanded() {
-    await renderCollapsed();
+  async function renderCollapsed() {
+    await renderExpanded();
     fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
-    await waitFor(() => rows().getByText('Width'));
   }
 
   it('the struct the column omits reads as a struct, not as nothing', async () => {

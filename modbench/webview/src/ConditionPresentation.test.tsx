@@ -210,12 +210,19 @@ function renderPanel() {
   })} />);
 }
 
-async function expandConditions() {
+async function openConditions() {
   await waitFor(() => screen.getByText('Conditions'));
-  const [trigger] = screen.getAllByText('▶');
-  if (!trigger) throw new Error('the collapse triangle getAllByText should have found');
-  fireEvent.click(trigger);
   await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
+}
+
+async function collapseConditions() {
+  await openConditions();
+  const indexCells = screen.getAllByText(/^\[\d+\]$/).filter(el => el.tagName === 'TD');
+  for (const cell of indexCells) {
+    const toggle = required(cell.closest('tr')?.querySelector('button'), 'the element row toggle');
+    fireEvent.click(toggle);
+  }
+  await waitFor(() => expect(screen.getAllByText('▶')).toHaveLength(indexCells.length));
 }
 
 function summaryOf(index: number): string {
@@ -234,30 +241,13 @@ function summaryOf(index: number): string {
 const labelCell = (name: string): HTMLElement | undefined =>
   screen.queryAllByText(name).find(el => el.tagName === 'TD');
 
-// The row a `labelCell` names, and the expand button in its own row — the shape every "click to
-// expand this member" step below shares.
-function expandButtonFor(cell: HTMLElement): HTMLButtonElement {
-  const row = cell.closest('tr');
-  if (!row) throw new Error("the label cell's row");
-  const button = row.querySelector('button');
-  if (!button) throw new Error("the row's expand button");
-  return button;
-}
-
-async function expandFirstConditionData() {
-  await expandConditions();
-  const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
-  if (!element) throw new Error('the [0] row cell');
-  fireEvent.click(expandButtonFor(element));
-  await waitFor(() => expect(labelCell('Data')).toBeDefined());
-  const dataCell = labelCell('Data');
-  if (!dataCell) throw new Error('the Data row label cell');
-  fireEvent.click(expandButtonFor(dataCell));
+async function openFirstConditionData() {
+  await openConditions();
   await waitFor(() => expect(labelCell('Function')).toBeDefined());
 }
 
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
-  await expandFirstConditionData();
+  await openFirstConditionData();
   const labelled = labelCell(memberName);
   if (!labelled) throw new Error(`the ${memberName} row label cell`);
   const row = labelled.closest('tr');
@@ -296,7 +286,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       { '00123456:MyMod.esp': 'MQ101' },
     );
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('CombatTarget.GetStageDone(MQ101, 10) = 1.000000 AND');
   });
@@ -310,7 +300,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       { '00000014:Fallout4.esm': 'PlayerRef', '00AABBCC:MyMod.esp': 'ArmorKeyword' },
     );
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('(PlayerRef).HasKeyword(ArmorKeyword) = 1.000000');
   });
@@ -318,7 +308,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('a function with no parameters is written without parentheses', async () => {
     currentCompare = oneColumn([condition({ CompareOperator: 'NotEqualTo' }, { Function: 'IsSneaking' })]);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking <> 1.000000');
   });
@@ -328,7 +318,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       Function: 'GetGraphVariableFloat', ParameterOneString: 'bAllowRotation',
     })]);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.GetGraphVariableFloat = 1.000000');
   });
@@ -342,7 +332,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       { '00000014:Fallout4.esm': 'PlayerRef', '00003333:MyMod.esp': 'MyAssocType' },
     );
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.HasAssociationType(PlayerRef, MyAssocType) = 1.000000');
   });
@@ -356,7 +346,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       { '00000F1E:MyMod.esp': 'MyQuest' },
     );
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.GetVMQuestVariable(MyQuest) = 1.000000');
   });
@@ -370,7 +360,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       { '00000ABC:MyMod.esp': 'MyGlobal' },
     );
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking >= MyGlobal');
   });
@@ -381,7 +371,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       condition({ Flags: ['OR'] }, { Function: 'IsSneaking' }),
     ]);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000 OR');
     expect(summaryOf(1)).toBe('Subject.IsSneaking = 1.000000');
@@ -394,7 +384,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       'Other.esp': [condition({}, { Function: 'IsSneaking' })],
     });
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
     if (!td) throw new Error('the [0] row cell');
@@ -415,7 +405,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
       MutagenObjectType: 'GetEventData', Function: null, EventFunction: 0, EventMember: 0,
     })]);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.GetEventData = 1.000000');
   });
@@ -423,8 +413,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
   it('an expanded condition shows its members instead of the summary', async () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await expandConditions();
-    fireEvent.click(required(screen.getAllByText('▶')[0], "the first expand toggle"));
+    await openConditions();
 
     await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
@@ -450,7 +439,7 @@ describe('the table keys on the leaf type name', () => {
     delete noDiscriminator.MutagenObjectType;
     currentCompare = oneColumn([noDiscriminator], {}, notAUnion);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
   });
@@ -465,7 +454,7 @@ describe('the table keys on the leaf type name', () => {
     const unnamed = condition({ MutagenObjectType: null }, { Function: 'IsSneaking' });
     currentCompare = oneColumn([unnamed], {}, declared);
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('{…}');
   });
@@ -477,7 +466,7 @@ describe('a condition shows one row per parameter slot in use', () => {
       Function: 'HasKeyword', ParameterOneRecord: '00AABBCC:MyMod.esp',
     })]);
     renderPanel();
-    await expandFirstConditionData();
+    await openFirstConditionData();
 
     expect(labelCell('ParameterOneRecord')).toBeDefined();
     expect(labelCell('ParameterOneNumber')).toBeUndefined();
@@ -492,7 +481,7 @@ describe('a condition shows one row per parameter slot in use', () => {
       Function: 'GetVATSValue', ParameterOneNumber: 10, ParameterTwoNumber: 0,
     })]);
     renderPanel();
-    await expandFirstConditionData();
+    await openFirstConditionData();
 
     expect(labelCell('ParameterOneNumber')).toBeDefined();
     expect(labelCell('ParameterTwoNumber')).toBeDefined();
@@ -503,7 +492,7 @@ describe('a condition shows one row per parameter slot in use', () => {
   it('Parameter #3 is written whatever the function is, so it is never hidden', async () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await expandFirstConditionData();
+    await openFirstConditionData();
 
     expect(labelCell('Unknown3')).toBeDefined();
   });
@@ -511,7 +500,7 @@ describe('a condition shows one row per parameter slot in use', () => {
   it('the reference row appears only under Run On = Reference', async () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await expandFirstConditionData();
+    await openFirstConditionData();
 
     expect(labelCell('Reference')).toBeUndefined();
   });
@@ -522,7 +511,7 @@ describe('a condition shows one row per parameter slot in use', () => {
       'Other.esp': [condition({}, { Function: 'GetVATSValue', ParameterOneNumber: 3 })],
     });
     renderPanel();
-    await expandFirstConditionData();
+    await openFirstConditionData();
 
     expect(labelCell('ParameterOneRecord')).toBeDefined();
     expect(labelCell('ParameterOneNumber')).toBeDefined();
@@ -581,10 +570,7 @@ describe('switching a condition\'s leaf', () => {
   it('posts one set of the discriminator member with the chosen leaf\'s wire value', async () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await expandConditions();
-    const element = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
-    const elementRow = required(element.closest('tr'), "the '[0]' element's row");
-    fireEvent.click(required(elementRow.querySelector('button'), "the '[0]' row's expand button"));
+    await openConditions();
     await waitFor(() => expect(labelCell('Kind')).toBeDefined());
 
     const kindLabelCell = required(labelCell('Kind'), "the 'Kind' row's label cell");
@@ -614,10 +600,7 @@ describe('a type-varying member takes its cell from each column\'s own leaf', ()
       }, { Function: 'IsSneaking' })],
     }, { '00000ABC:MyMod.esp': 'MyGlobal' });
     renderPanel();
-    await expandConditions();
-    const element = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
-    const elementRow = required(element.closest('tr'), "the '[0]' element's row");
-    fireEvent.click(required(elementRow.querySelector('button'), "the '[0]' row's expand button"));
+    await openConditions();
     await waitFor(() => expect(labelCell('ComparisonValue')).toBeDefined());
 
     const comparisonValueLabelCell = required(labelCell('ComparisonValue'), "the 'ComparisonValue' row's label cell");
@@ -632,17 +615,7 @@ describe('the function picker comes from the schema', () => {
   it('Fallout 4 picks the function from the function member’s own enum', async () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
-    await waitFor(() => screen.getByText('Conditions'));
-    fireEvent.click(required(screen.getAllByText('▶')[0], "the first expand toggle"));
-    await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
-    const el0 = required(screen.getAllByText('[0]').find(e => e.tagName === 'TD'), "the '[0]' index cell");
-    const el0Row = required(el0.closest('tr'), "the '[0]' element's row");
-    fireEvent.click(required(el0Row.querySelector('button'), "the '[0]' row's expand button"));
-    await waitFor(() => expect(labelCell('Data')).toBeDefined());
-    const dataLabelCell = required(labelCell('Data'), "the 'Data' row's label cell");
-    const dataRow = required(dataLabelCell.closest('tr'), "the 'Data' row");
-    fireEvent.click(required(dataRow.querySelector('button'), "the 'Data' row's expand button"));
-    await waitFor(() => expect(labelCell('Function')).toBeDefined());
+    await openFirstConditionData();
 
     const functionLabelCell = required(labelCell('Function'), "the 'Function' row's label cell");
     const functionRow = required(functionLabelCell.closest('tr'), "the 'Function' row");
@@ -680,7 +653,7 @@ describe('a Run On label that contains spaces', () => {
       overrides: [{ ...baseOverride, fields: [{ metadata: labelled, value: [element] }] }],
     };
     renderPanel();
-    await expandConditions();
+    await collapseConditions();
 
     expect(summaryOf(0)).toBe('CombatTarget.IsSneaking = 1.000000');
   });
