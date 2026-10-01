@@ -83,9 +83,9 @@ describe('the createTreeView sites', () => {
   });
 
   // commands.md, Chrome: Collapse All is on trees only, never on a flat list.
-  it('collapse-all views are the Mods tree and the merged Plugins tree', () => {
+  it('collapse-all views are the trees: Mods, the merged Plugins tree and Referenced By', () => {
     const collapsible = new Set(sites.filter((s) => /showCollapseAll:\s*true/.test(s.options)).map((s) => s.id));
-    expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree']);
+    expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree', 'modbench.referencedByTree']);
   });
 
   // common.md, A view, story 6: every list selects several rows. The Toolbox is a readout, where

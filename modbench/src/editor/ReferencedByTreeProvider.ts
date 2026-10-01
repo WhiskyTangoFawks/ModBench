@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
+import { trackLoadOrderStatus } from './loadOrderStatusTracker';
+import { recordTitle } from './recordTitle';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
@@ -31,14 +33,17 @@ function referrerName(formKey: string, editorId: string | undefined): string {
 export class ReferencedByReferrerNode extends vscode.TreeItem {
   readonly copyText: string;
 
+  readonly name: string;
+
   constructor(
     target: string,
     readonly formKey: string,
     editorId: string | undefined,
-    recordTypeName: string,
+    readonly recordTypeName: string,
     readonly holders: readonly ReferencedByHolderNode[],
   ) {
     super(editorId ?? formKey, vscode.TreeItemCollapsibleState.Collapsed);
+    this.name = editorId ?? formKey;
     this.copyText = referrerName(formKey, editorId);
     // The target is in the id so a referrer collapses again when the list follows a new record.
     this.id = JSON.stringify([target, formKey]);
@@ -53,30 +58,17 @@ export class ReferencedByReferrerNode extends vscode.TreeItem {
   }
 }
 
-export class EmptyStateNode extends vscode.TreeItem {
-  constructor() {
-    super('No references found.', vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon('check');
-  }
-}
-
 export class ErrorNode extends vscode.TreeItem {
-  constructor() {
-    super('Failed to load references.', vscode.TreeItemCollapsibleState.None);
+  constructor(reason: string) {
+    super(`Failed to load: ${reason}`, vscode.TreeItemCollapsibleState.None);
+    this.tooltip = reason;
     this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 
-/** The view is always visible and retargets on the active record panel, so it needs a row for
- *  having no record at all. */
-export class NoActiveRecordNode extends vscode.TreeItem {
-  constructor() {
-    super('Open a record to see what references it.', vscode.TreeItemCollapsibleState.None);
-  }
-}
+export type ReferencedByTreeNode = ReferencedByReferrerNode | ReferencedByHolderNode | ErrorNode;
 
-export type ReferencedByTreeNode =
-  | ReferencedByReferrerNode | ReferencedByHolderNode | EmptyStateNode | ErrorNode | NoActiveRecordNode;
+export type ReferrerDirection = 'ascending' | 'descending';
 
 /** One line per selected referrer. A row beneath a referrer adds nothing. */
 export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
@@ -132,32 +124,102 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
   return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);
 }
 
+type ReferencedByClient =
+  Pick<MEditClient, 'getReferences' | 'getComparison' | 'subscribe' | 'onStatusChanged' | 'onReconnected'>;
+
+function messageLine(...parts: (string | undefined)[]): string | undefined {
+  return parts.filter(part => part !== undefined).join(' ') || undefined;
+}
+
+const NO_RECORD_MESSAGE = 'Open a record to see what references it.';
+const NO_REFERENCES_MESSAGE = 'No references found.';
+const INDEXING_MESSAGE = 'mEdit is still indexing plugins: this list may not be complete.';
+
 /** A Panel view that follows the active record editor rather than an explicit command, so its
  *  target is set by `showFor`, never by an invocation. */
-export class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode> {
+export class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ReferencedByTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private readonly _onDidChangeView = new vscode.EventEmitter<void>();
+  /** Fires when what the view says about itself changes: its count, its record, its message. */
+  readonly onDidChangeView = this._onDidChangeView.event;
 
   private target: string | undefined;
-
-  private readonly log: (msg: string) => void;
-  private readonly onCountChanged: (count: number | undefined) => void;
+  private name: string | undefined;
+  private referrers: readonly ReferencedByReferrerNode[] | undefined;
+  private failure: string | undefined;
+  private reading: Promise<void> | undefined;
+  private generation = 0;
+  private term = '';
+  private direction: ReferrerDirection = 'ascending';
+  private readonly indexed: ReturnType<typeof trackLoadOrderStatus>;
+  private readonly unsubscribe: (() => void)[];
 
   constructor(
-    private readonly client: MEditClient,
-    log?: (msg: string) => void,
-    // Feeds the view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption).
-    // `undefined` is "no known count" — no active record, or a failed fetch — so neither
-    // renders a misleading "(0)".
-    onCountChanged?: (count: number | undefined) => void,
+    private readonly client: ReferencedByClient,
+    private readonly log: (msg: string) => void = () => {},
   ) {
-    this.log = log ?? (() => {});
-    this.onCountChanged = onCountChanged ?? (() => {});
+    this.indexed = trackLoadOrderStatus(client, undefined, () => this.reread());
+    this.unsubscribe = [
+      client.subscribe('rows-changed', () => this.reread()),
+      client.subscribe('plugin-changed', () => this.reread()),
+      client.onReconnected(() => this.reread()),
+    ];
+  }
+
+  dispose(): void {
+    this.indexed.dispose();
+    for (const off of this.unsubscribe) off();
   }
 
   showFor(formKey: string | undefined): void {
-    this.target = formKey;
+    if (formKey !== this.target) {
+      this.target = formKey;
+      this.name = undefined;
+      this.referrers = undefined;
+      this.failure = undefined;
+    }
+    this.reread();
+  }
+
+  setFilter(text: string): void {
+    this.term = text;
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  setDirection(direction: ReferrerDirection): void {
+    this.direction = direction;
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** The count of every record that references the target, whatever the filter hides. Undefined
+   *  while it is not known, so a title never shows a zero it has not confirmed. */
+  count(): number | undefined {
+    return this.referrers?.length;
+  }
+
+  recordName(): string | undefined {
+    return this.name;
+  }
+
+  viewMessage(): string | undefined {
+    if (this.target === undefined) return NO_RECORD_MESSAGE;
+    const empty = this.referrers?.length === 0 ? NO_REFERENCES_MESSAGE : undefined;
+    return messageLine(empty, this.standingMessage());
+  }
+
+  /** What stays on the message line beside the filter's no-match message. */
+  standingMessage(): string | undefined {
+    if (this.target === undefined) return undefined;
+    const lastGoodRead = this.referrers !== undefined && this.failure !== undefined
+      ? `Showing the last good read: ${this.failure}` : undefined;
+    return messageLine(this.indexed.current() ? undefined : INDEXING_MESSAGE, lastGoodRead);
+  }
+
+  /** False only when the term hides every referrer there is, which is when no match is the news. */
+  async hasRows(): Promise<boolean> {
+    await this.read();
+    return this.referrers === undefined || this.referrers.length === 0 || this.visibleReferrers().length > 0;
   }
 
   getTreeItem(element: ReferencedByTreeNode): vscode.TreeItem {
@@ -167,30 +229,46 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   async getChildren(element?: ReferencedByTreeNode): Promise<ReferencedByTreeNode[]> {
     if (element instanceof ReferencedByReferrerNode) return [...element.holders];
     if (element) return [];
-    return this.rootNodes();
+    if (this.target === undefined) return [];
+    await this.read();
+    if (this.referrers === undefined) return this.failure === undefined ? [] : [new ErrorNode(this.failure)];
+    return this.visibleReferrers();
   }
 
-  private async rootNodes(): Promise<ReferencedByTreeNode[]> {
-    if (!this.target) {
-      this.onCountChanged(undefined);
-      return [new NoActiveRecordNode()];
-    }
-    const target = this.target;
-    let references: ReferenceResult[];
-    try {
-      references = await this.client.getReferences(target);
-    } catch (e) {
-      this.log(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${errorMessage(e)}`);
-      this.onCountChanged(undefined);
-      return [new ErrorNode()];
-    }
-    if (references.length === 0) {
-      this.onCountChanged(0);
-      return [new EmptyStateNode()];
-    }
+  private reread(): void {
+    this.generation++;
+    this.reading = undefined;
+    this._onDidChangeTreeData.fire(undefined);
+    this._onDidChangeView.fire();
+  }
 
-    const referrers = groupBy(references, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []);
-    this.onCountChanged(referrers.length);
-    return referrers;
+  private read(): Promise<void> {
+    this.reading ??= this.load();
+    return this.reading;
+  }
+
+  private async load(): Promise<void> {
+    const target = this.target;
+    if (target === undefined) return;
+    const mine = this.generation;
+    const [references, comparison] = await Promise.allSettled([this.client.getReferences(target), this.client.getComparison(target)]);
+    if (mine !== this.generation) return;
+    this.name = recordTitle(target, comparison.status === 'fulfilled' ? comparison.value?.overrides : undefined);
+    if (references.status === 'fulfilled') {
+      this.referrers = groupBy(references.value, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []);
+      this.failure = undefined;
+    } else {
+      this.failure = errorMessage(references.reason);
+      this.log(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${this.failure}`);
+    }
+    this._onDidChangeView.fire();
+  }
+
+  private visibleReferrers(): ReferencedByReferrerNode[] {
+    const term = this.term.toLowerCase();
+    const sign = this.direction === 'ascending' ? 1 : -1;
+    return (this.referrers ?? [])
+      .filter(r => r.name.toLowerCase().includes(term))
+      .sort((a, b) => sign * (a.recordTypeName.localeCompare(b.recordTypeName) || a.name.localeCompare(b.name)));
   }
 }
