@@ -143,8 +143,9 @@ describe('install commands', () => {
     const before = new Set((await snapshotTree(root)).keys());
     const seen = new Set<string>();
     let observing = true;
+    const stillObserving = () => observing;
     const observer = (async () => {
-      while (observing) {
+      while (stillObserving()) {
         for (const path of (await snapshotTree(root)).keys()) {
           if (!before.has(path) && !path.startsWith(`mods/${MOD}/`)) seen.add(path);
         }
