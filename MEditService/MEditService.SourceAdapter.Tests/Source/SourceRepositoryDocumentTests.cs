@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -184,17 +185,54 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         Assert.NotNull(repository.Get(Plugin, Npc));
     }
 
+    private static string WithEditorId(string editorId) => NpcBody.Replace(NpcEditorId, editorId, StringComparison.Ordinal);
+
+    private IEnumerable<string> NpcFileNames() =>
+        Directory.EnumerateFiles(NpcGroupFolder).Select(Path.GetFileName).OfType<string>();
+
+    private string RunGit(params string[] args) =>
+        GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
+
     [Fact]
-    public void Rename_MovesTheFileToTheNameTheNewEditorIdComputes_AndGetStillFindsItByFormKey()
+    public void Put_WithANewEditorId_MovesTheFileToTheNameItComputes_AndGetStillFindsItByFormKey()
     {
         var repository = Opened();
 
-        repository.Rename(Plugin, Npc, "RenamedNpc");
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc")));
 
+        Assert.Equal([$"RenamedNpc - 000800_{PluginName}.json"], NpcFileNames());
         Assert.Equal(
-            [$"RenamedNpc - 000800_{PluginName}.json"],
-            Directory.EnumerateFiles(NpcGroupFolder).Select(Path.GetFileName).ToList());
-        Assert.Equal(NpcBody, repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", "RenamedNpc"))?.Body);
+            WithEditorId("RenamedNpc"),
+            repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", "RenamedNpc"))?.Body);
+    }
+
+    [Fact]
+    public void Put_WithAnEditorIdTooLongForAPath_NamesTheFileByACappedEditorId()
+    {
+        var repository = Opened();
+        var longId = new string('A', 300);
+
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", longId, WithEditorId(longId)));
+
+        Assert.Equal([$"{new string('A', 64)} - 000800_{PluginName}.json"], NpcFileNames());
+        Assert.Equal(WithEditorId(longId), repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", longId))?.Body);
+    }
+
+    [Fact]
+    public void Put_WithANewEditorId_LeavesTheNextValidationOneChangedDocumentAtTheNewPathAndTheOldOneGone()
+    {
+        var repository = Opened();
+        RunGit("add", "-A");
+        RunGit("commit", "-q", "-m", "baseline");
+        var validated = repository.ChangesSince(Plugin, validatedHead: null).Head.Require();
+
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc")));
+
+        var changed = repository.ChangesSince(Plugin, validated).Documents.Require();
+        Assert.Equal(2, changed.Count);
+        Assert.All(changed, document => Assert.Equal(NpcFormKey, document.FormKey));
+        Assert.Single(changed, document => document.WorkingTreeText == null);
+        Assert.Single(changed, document => document.WorkingTreeText == WithEditorId("RenamedNpc"));
     }
 
     [Fact]
@@ -211,17 +249,52 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Rename_ToTheEditorIdTheRecordAlreadyHas_LeavesAFileSomethingElseRenamedWhereItIs()
+    public void Put_WithANewEditorIdOnACell_MovesItsDirectoryAndKeepsItsBlockFolders()
+    {
+        const string cellKey = "000A00:Fixture.esp";
+        Track();
+        var repository = RequireOpened();
+        static string CellBody(string editorId) => $"{{\n  \"FormKey\": \"{cellKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "OldCell", CellBody("OldCell")));
+        var cells = Path.Combine(_modFolder, "plugin-source", PluginName, "Cells");
+        var oldLeaf = Directory.GetDirectories(cells, "OldCell*", SearchOption.AllDirectories).Single();
+        var blockFolder = Path.GetDirectoryName(oldLeaf) ?? throw new InvalidOperationException(oldLeaf);
+
+        repository.Put(Plugin, new SourceDocument(cellKey, "cell", "NewCell", CellBody("NewCell")));
+
+        Assert.Equal(
+            [Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}")],
+            Directory.GetDirectories(blockFolder));
+        Assert.Equal(
+            CellBody("NewCell"),
+            File.ReadAllText(Path.Combine(blockFolder, $"NewCell - 000A00_{PluginName}", "RecordData.json")));
+    }
+
+    [Fact]
+    public void Put_OverADocumentThatIsNotJson_RefusesWithAReason_AndLeavesTheFileAsItWas()
+    {
+        var repository = Opened();
+        var file = Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json");
+        File.WriteAllText(file, "this is not a document");
+
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", "RenamedNpc", WithEditorId("RenamedNpc"))));
+
+        Assert.Contains("not a readable document", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal("this is not a document", File.ReadAllText(file));
+        Assert.Equal([Path.GetFileName(file)], NpcFileNames());
+    }
+
+    [Fact]
+    public void Put_OfTheEditorIdTheDocumentAlreadyHas_LeavesAFileSomethingElseRenamedWhereItIs()
     {
         var repository = Opened();
         var renamed = Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json");
         File.Move(Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"), renamed);
 
-        repository.Rename(Plugin, Npc, NpcEditorId);
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
 
-        Assert.Equal(
-            [Path.GetFileName(renamed)],
-            Directory.EnumerateFiles(NpcGroupFolder).Select(Path.GetFileName).ToList());
+        Assert.Equal([Path.GetFileName(renamed)], NpcFileNames());
     }
 
     [Fact]

@@ -117,14 +117,19 @@ public sealed partial class SourceRepository
     private static string BlockLevelName(int? x, int? y) =>
         string.Create(CultureInfo.InvariantCulture, $"{x ?? 0}, {y ?? 0}");
 
-    // "[<EditorID> - ]<hex6>_<originModKey>", with ".json" for a flat file and without for a
-    // container's directory — the reason an EditorID edit is a rename.
+    // "[<EditorID> - ]<hex6>_<originModKey>", ".json" on a flat file only. The EditorID is cut so a
+    // deep path stays under Windows' 260 characters; the FormKey part keeps the name unique.
+    private const int MaxEditorIdInLeaf = 64;
+
     private static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
     {
         var extension = isDirectory ? string.Empty : JsonSuffix;
         var filesafe = FilesafeFormKey(formKey);
 
-        return string.IsNullOrEmpty(editorId) ? $"{filesafe}{extension}" : $"{editorId} - {filesafe}{extension}";
+        if (string.IsNullOrEmpty(editorId)) return $"{filesafe}{extension}";
+
+        var named = editorId.Length > MaxEditorIdInLeaf ? editorId[..MaxEditorIdInLeaf] : editorId;
+        return $"{named} - {filesafe}{extension}";
     }
 
     internal static string FilesafeFormKey(string formKey) => FilesafeFormKey(FormKey.Factory(formKey));

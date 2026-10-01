@@ -10,9 +10,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0014 invariant 3). The target, the pre-write gate and
-/// the rename on an EditorID change are <see cref="WriteTargets"/>'s, so nothing here re-derives
-/// one.</summary>
+/// <summary>The Edit gesture's handler (ADR-0014 invariant 3). The target and the pre-write gate are
+/// <see cref="WriteTargets"/>'s, so nothing here re-derives one.</summary>
 public sealed class EditRecordHandler
 {
     private readonly WriteTargets _targets;
@@ -120,11 +119,7 @@ public sealed class EditRecordHandler
         // or history entry.
         if (string.Equals(newText, text, StringComparison.Ordinal)) return RecordEditResult.Success();
 
-        // The leaf name carries the EditorID, so an EditorID edit is a rename too. Done before the
-        // write; newText is the written document's own text, so its root EditorID is the new name.
-        var newEditorId = WriteTargets.EditorIdOf(newText);
-        _targets.RenameTo(repository, plugin, target, newEditorId);
-        repository.Put(plugin, new SourceDocument(target.FormKey, target.RecordType, newEditorId, newText));
+        repository.Put(plugin, new SourceDocument(target.FormKey, target.RecordType, WriteTargets.EditorIdOf(newText), newText));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

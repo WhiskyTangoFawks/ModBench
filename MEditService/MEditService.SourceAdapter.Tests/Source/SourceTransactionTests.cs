@@ -57,6 +57,19 @@ public sealed class SourceTransactionTests : IDisposable
     private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
+    public void Put_WithANewEditorId_IsRefusedBeforeTheTreeIsTouched()
+    {
+        Seed(Fk("000800"), "npc_", "OldName");
+        var before = TreeSnapshot.Of(_root);
+
+        var transaction = new SourceRepository.SourceTransaction();
+
+        Assert.Throws<NotSupportedException>(() => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "NewName", Body(Fk("000800"), "NewName"))));
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
     public void Rollback_PutsBackAnOverwrite_ACreate_ARemove_AndAMovedContainer()
     {
         Seed(Fk("000800"), "npc_", "ExistingNpc");

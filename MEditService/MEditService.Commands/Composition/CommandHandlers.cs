@@ -21,8 +21,7 @@ public static class CommandHandlers
             sp.GetRequiredService<LoadOrderHolder>(),
             sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<RecordTextCodec>(),
-            sp.GetRequiredService<SchemaReflector>(),
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(WriteTargets))));
+            sp.GetRequiredService<SchemaReflector>()));
 
         services.AddSingleton(sp => new EditRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
