@@ -22,10 +22,12 @@ function asksBeside(argument: unknown): boolean {
 
 /** `modbench.record.open`'s Argument is a record's address, or several, with the placement Option.
  *  A context menu hands over the clicked row and the selection, which opens beside; every other
- *  caller hands over the Argument itself. */
-export function recordOpenPlan(argument: unknown, selection: unknown): RecordOpenPlan {
+ *  caller hands over the Argument itself, and a palette entry or key hands over none, so it takes
+ *  the selection of the focused view (commands.md, Principles). */
+export function recordOpenPlan(argument: unknown, selection: unknown, focusedSelection: readonly unknown[]): RecordOpenPlan {
   const fromMenu = Array.isArray(selection);
-  const subjects: unknown[] = fromMenu ? (selection.length > 0 ? selection : [argument])
+  const subjects: readonly unknown[] = fromMenu ? (selection.length > 0 ? selection : [argument])
+    : argument === undefined ? focusedSelection
     : Array.isArray(argument) ? argument : [argument];
   const addresses = subjects.flatMap((s) => addressOf(s) ?? []);
   const beside = fromMenu || asksBeside(argument);

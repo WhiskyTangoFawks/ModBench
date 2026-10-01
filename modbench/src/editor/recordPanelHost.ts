@@ -39,6 +39,8 @@ export interface EditorCommandDeps {
   // The merged Plugins tree's selection, which the record gestures act on. Narrowed to the one
   // cross-context fact this file needs, not the composition root's session object.
   mergedTreeSelection: () => readonly unknown[];
+  // The rows selected in the view the user last selected in, which a palette open acts on.
+  focusedViewSelection: () => readonly unknown[];
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like mergedTreeSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
@@ -182,7 +184,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
     vscode.commands.registerCommand('modbench.record.open', (argument?: unknown, selection?: unknown) =>
-      openRecordTabs(recordOpenPlan(argument, selection))),
+      openRecordTabs(recordOpenPlan(argument, selection, deps.focusedViewSelection()))),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.record.showReferencedBy',
@@ -197,6 +199,10 @@ async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColu
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
 async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
+  if (addresses.length === 0) {
+    vscode.window.setStatusBarMessage('Select a record in Plugins or Referenced By to open it.', 5000);
+    return;
+  }
   let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.One;
   for (const address of addresses) {
     await openRecordTab(address, column, preview);

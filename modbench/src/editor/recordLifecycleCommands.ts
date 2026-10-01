@@ -7,8 +7,7 @@ import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
- *  plain identity literal, the way `recordOpenIdentity` (recordPanelHost.ts) already reads an
- *  unknown node. Editor names no Plugins-view node type. */
+ *  plain identity literal. Editor names no Plugins-view node type. */
 export interface RecordArgument {
   formKey: string;
   plugin: string;

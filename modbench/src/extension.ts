@@ -12,6 +12,7 @@ import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
+import { lastSelectedViewSelection } from './treeViews';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
@@ -181,6 +182,12 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
+      focusedViewSelection: lastSelectedViewSelection(
+        (disposable) => { context.subscriptions.push(disposable); return disposable; },
+        [
+          { id: 'modbench.referencedByTree', view: referencedByTreeView },
+          ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
+        ]),
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),
