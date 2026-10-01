@@ -2054,14 +2054,36 @@ describe('RecordPanel — a column whose record failed to parse', () => {
   });
 });
 
-// editor.md, The FormID: the first row of the grid, under Record Header, edited as any field is,
-// and read-only on a plugin header. It reads as xEdit's does, as the record it names.
 describe('RecordPanel — the Record Header', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
+  const header = (m: Parameters<typeof fieldMeta>[0]) => fieldMeta({ ...m, isRecordHeaderMember: true });
+  const flagsMeta = header({
+    name: 'MajorRecordFlagsRaw', type: 'int', displayLabel: 'Record Flags',
+    enumMembers: [{ value: 'Deleted', bitValue: '32' }, { value: 'Persistent', bitValue: '1024' }],
+  });
+  const formKeyMeta = header({ name: 'FormKey', type: 'string', displayLabel: 'FormID' });
+  const vciMeta = header({ name: 'VersionControl', type: 'int', displayLabel: 'Version Control Info 1' });
   const native = (formKey: string, editorId: string | null, formIdReadOnlyReason?: string): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
         formKey, plugin: 'MyMod.esp', isWinner: true, editorId, formIdReadOnlyReason,
+        fields: [
+          { metadata: flagsMeta, value: 1024 }, { metadata: formKeyMeta, value: formKey },
+          { metadata: vciMeta, value: 5 }, { metadata: nameMeta, value: 'A Name' },
+        ],
+      }),
+    ],
+    diffs: [
+      diffNode({ fieldName: 'MajorRecordFlagsRaw', values: { 'MyMod.esp': 1024 }, winnerColumn: 'MyMod.esp' }),
+      diffNode({ fieldName: 'FormKey', values: { 'MyMod.esp': formKey }, winnerColumn: 'MyMod.esp' }),
+      diffNode({ fieldName: 'VersionControl', values: { 'MyMod.esp': 5 }, winnerColumn: 'MyMod.esp' }),
+      diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
+    ],
+  });
+  const pluginHeader = (reason: string): CompareResult => compareResultFixture({
+    overrides: [
+      compareOverride({
+        formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: null, formIdReadOnlyReason: reason,
         fields: [{ metadata: nameMeta, value: 'A Name' }],
       }),
     ],
@@ -2072,22 +2094,61 @@ describe('RecordPanel — the Record Header', () => {
   const rows = (container: HTMLElement) => Array.from(container.querySelectorAll('tbody tr'));
   const rowLabels = (container: HTMLElement) =>
     rows(container).map(tr => tr.querySelector('td')?.textContent.replace(/^[▶▼]/, ''));
-  const formIdCell = (container: HTMLElement) =>
-    required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'FormID')?.querySelectorAll('td')[1],
-      'the FormID cell');
+  const cellOf = (container: HTMLElement, label: string) =>
+    required(rows(container).find(tr => tr.querySelector('td')?.textContent.replace(/^[▶▼]/, '') === label)?.querySelectorAll('td')[1],
+      `the ${label} cell`);
+  const formIdCell = (container: HTMLElement) => cellOf(container, 'FormID');
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('is the grid\'s first row, with the FormID under it, reading as the record it names', async () => {
+  it('is the grid\'s first row, holding the header members mEdit names, in its order and under its labels', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
     const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
 
-    expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
+    expect(rowLabels(container)).toEqual(['Record Header', 'Record Flags', 'FormID', 'Version Control Info 1', 'Name']);
     expect(formIdCell(container).textContent).toBe('MovedNpc [000800:MyMod.esp]');
   });
 
-  it('opens on the FormKey and posts a set of the record\'s FormKey member with the one typed', async () => {
+  it('collapses to its own row, hiding the header members', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(screen.getByText('Record Header'));
+
+    expect(rowLabels(container)).toEqual(['Record Header', 'Name']);
+  });
+
+  it('edits a header member as any field: a typed number posts a set of that member', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const cell = cellOf(container, 'Version Control Info 1');
+    fireEvent.doubleClick(within(cell).getByText('5'));
+    const input = required(cell.querySelector('input'), 'the cell\'s input');
+    fireEvent.change(input, { target: { value: '7' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('VersionControl')], value: 7 });
+  });
+
+  it('reads Record Flags as its flags, and a check box posts the integer with that bit set', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const boxes = within(cellOf(container, 'Record Flags')).getAllByRole('checkbox');
+    expect(boxes.map(b => b.matches(':checked'))).toEqual([false, true]);
+    fireEvent.click(required(boxes[0], 'the Deleted check box'));
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('MajorRecordFlagsRaw')], value: 1024 | 32 });
+  });
+
+  it('opens the FormID on the FormKey and posts a set of the record\'s FormKey member with the one typed', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
     const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
@@ -2105,10 +2166,18 @@ describe('RecordPanel — the Record Header', () => {
     });
   });
 
+  it('keeps a plugin header\'s FormID, which mEdit names no header member for, as its first row', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    const { container } = renderPanel(pluginHeader('names the plugin itself'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
+  });
+
   it('opens no editor on a FormID the record carries a read-only reason for, and shows the reason', async () => {
     const reason = 'names the plugin itself';
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { container } = renderPanel(native('000000:MyMod.esp', null, reason), { plugins: tracked });
+    const { container } = renderPanel(pluginHeader(reason), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
 
     fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));

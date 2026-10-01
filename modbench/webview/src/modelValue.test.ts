@@ -81,6 +81,31 @@ describe('modelValue — flags', () => {
   });
 });
 
+const recordFlagsMeta = fieldMeta({
+  name: 'MajorRecordFlagsRaw', type: 'int',
+  enumMembers: [{ value: 'Deleted', bitValue: '32' }, { value: 'Persistent', bitValue: '1024' }],
+});
+
+describe('an integer whose bits the schema names reads, copies and pastes as flags', () => {
+  it('reads the names of the bits set, then each unnamed bit in hex', () => {
+    expect(modelValue(1024 | 32 | 0x4000, recordFlagsMeta)).toBe('Deleted, Persistent, 0x4000');
+    expect(copiedText(1024, recordFlagsMeta)).toBe('Persistent');
+  });
+
+  it('reads no bits set as no names', () => {
+    expect(modelValue(0, recordFlagsMeta)).toBe('');
+  });
+
+  it('pastes the names and hex bits a copy leaves as the integer', () => {
+    expect(pastedValue('Deleted, Persistent, 0x4000', recordFlagsMeta, 0)).toBe(1024 | 32 | 0x4000);
+    expect(pastedValue('', recordFlagsMeta, 32)).toBe(0);
+  });
+
+  it('pastes a name the schema does not list as the text, for mEdit to refuse', () => {
+    expect(pastedValue('Persistent, Bogus', recordFlagsMeta, 0)).toBe('Persistent, Bogus');
+  });
+});
+
 describe('modelValue — formKey', () => {
   it('resolved: the EditorID [FormKey] composite — the same label FormKeyLink/the picker use', () => {
     expect(modelValue('000001:Fallout4.esm', fkMeta, resolved)).toBe('Dogmeat [000001:Fallout4.esm]');

@@ -61,7 +61,11 @@ internal sealed record SchemaAnnotations(
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
     // Members the document never spells but one bit of a flags member says: the ESL flag, the
     // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
-    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers)
+    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
+    // The record header's members in xEdit's order, each under xEdit's label (wbRecordHeader in
+    // wbDefinitionsCommon.pas), keyed by the interface that declares it. A game's base declares
+    // which of them its records carry.
+    IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -201,7 +205,15 @@ internal sealed record SchemaAnnotations(
                 [("IWorldspaceGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
                 [("IQuestGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
                 [("IDialogTopicGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
-            }),
+            },
+            RecordHeaderMembers:
+            [
+                ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
+                ("IFormKeyGetter", "FormKey", "FormID"),
+                ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
+                ("IFallout4MajorRecordGetter", "FormVersion", "Form Version"),
+                ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
+            ]),
 
         [GameCategory.Skyrim] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -221,7 +233,8 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
-            SyntheticFlagMembers: []),
+            SyntheticFlagMembers: [],
+            RecordHeaderMembers: []),
 
         [GameCategory.Starfield] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -247,7 +260,8 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
-            SyntheticFlagMembers: []),
+            SyntheticFlagMembers: [],
+            RecordHeaderMembers: []),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -546,6 +560,7 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedKeyMembers(typesByName),
             .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
             .. UnresolvedSyntheticFlags(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(RecordHeaderMembers), RecordHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
         ];
 
         if (missing.Length > 0)

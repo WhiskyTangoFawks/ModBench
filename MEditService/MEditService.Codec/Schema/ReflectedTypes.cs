@@ -131,6 +131,8 @@ internal static class ReflectedTypes
 
     internal static bool IsModKey(Type type) => type == typeof(ModKey);
 
+    internal static bool IsFormKey(Type type) => type == typeof(FormKey);
+
     /// <summary>One property's value off any instance, or null when the accessor throws. Mutagen's
     /// getters throw for a subrecord that is genuinely absent, which is a value, not a defect.</summary>
     internal static object? ReadOrNull(object obj, PropertyInfo prop)

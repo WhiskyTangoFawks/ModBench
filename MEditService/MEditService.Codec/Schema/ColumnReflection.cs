@@ -4,31 +4,27 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>One record type's top-level columns: every member of its getter interface that is not
-/// record-header metadata, built by the same leaf builders every nested member uses.</summary>
+/// <summary>One record type's top-level columns: its record header's members, then every other
+/// member of its getter interface, built by the same leaf builders every nested member uses.</summary>
 internal static class ColumnReflection
 {
-    // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game: identity and header
-    // metadata, never a column. Per-game header-adjacent members (GRUP timestamps) are
-    // SchemaAnnotations.ExcludedColumns instead.
-    private static readonly HashSet<string> MajorRecordHeaderMembers = new(StringComparer.OrdinalIgnoreCase)
-    {
-        nameof(IMajorRecordGetter.FormKey), nameof(IMajorRecordGetter.EditorID),
-        nameof(IMajorRecordGetter.IsCompressed), nameof(IMajorRecordGetter.FormVersion),
-        nameof(IMajorRecordGetter.VersionControl), nameof(IMajorRecordGetter.MajorRecordFlagsRaw),
-    };
+    // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game, and the write path's to
+    // handle as the record's identity. Per-game header-adjacent members (GRUP timestamps) are
+    // SchemaAnnotations.ExcludedColumns.
+    private const string EditorIdMember = nameof(IMajorRecordGetter.EditorID);
 
     internal static List<ColumnSpec> ReflectColumns(
         Type getterType, GameReflection game, ILogger logger)
     {
+        var (columns, aliases) = RecordHeaderColumns.For(getterType, game, logger);
+        var notMembers = columns.Select(c => c.Name).Concat(aliases).Append(EditorIdMember)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var grouped = ReflectedTypes.GetAllInterfaceProperties(getterType)
-            .Where(p => !MajorRecordHeaderMembers.Contains(p.Name))
+            .Where(p => !notMembers.Contains(p.Name))
             .Where(p => !game.Annotations.IsExcludedColumn(p))
             .Where(p => !game.Annotations.IsExcludedMember(p))
             .Where(p => !SchemaRefusals.IsExcludedUnionColumn(p, game))
             .GroupBy(p => p.Name, StringComparer.Ordinal);
-
-        var columns = new List<ColumnSpec>();
 
         foreach (var group in grouped)
         {

@@ -12,7 +12,9 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
       case 'formKey':
         return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
       case 'flags':
-        return flagNames(value).join(', ');
+        return flagNames(value, meta).join(', ');
+      case 'int':
+        return readsAsFlags(meta) ? flagNames(value, meta).join(', ') : toStr(value);
       case 'translatedString':
         return toStr(translatedText(value));
       case 'struct':
@@ -21,7 +23,6 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
       case 'bool':
         return value === true ? 'True' : 'False';
       case 'string':
-      case 'int':
       case 'float':
       case 'enum':
       case 'hex':
@@ -53,9 +54,49 @@ export function copiedText(value: unknown, meta: FieldMetadata, resolution?: For
   return unnamed ? modelValue(value, meta) : displayValue(value, meta, resolution);
 }
 
-// The codec spells a flags member as the array of the names that are set; absent means none.
-export function flagNames(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String) : [];
+/** A flags member, or an integer whose bits the schema names, as the record header's flags are. */
+export function readsAsFlags(meta: FieldMetadata): boolean {
+  return meta.type === 'flags' || (meta.type === 'int' && meta.enumMembers.length > 0);
+}
+
+const bitOf = (name: string, meta: FieldMetadata): number | undefined => {
+  const named = meta.enumMembers.find(m => m.value === name)?.bitValue;
+  if (named != null) return Number(named) | 0;
+  return /^0x[0-9a-f]+$/i.test(name) ? Number(name) | 0 : undefined;
+};
+
+const hexOf = (bit: number) => `0x${(bit >>> 0).toString(16).toUpperCase()}`;
+
+// The codec spells a flags member as the array of the names that are set; an integer's bits read
+// by the names the schema gives them, and an unnamed bit as the codec spells one. Absent means none.
+export function flagNames(value: unknown, meta: FieldMetadata): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value !== 'number') return [];
+  let unnamed = value | 0;
+  const names = meta.enumMembers.filter(m => {
+    const bit = Number(m.bitValue) | 0;
+    if (bit === 0 || (unnamed & bit) === 0) return false;
+    unnamed &= ~bit;
+    return true;
+  }).map(m => m.value);
+  for (let bit = 1; unnamed !== 0; bit <<= 1) {
+    if ((unnamed & bit) !== 0) names.push(hexOf(bit));
+    unnamed &= ~bit;
+  }
+  return names;
+}
+
+/** The names set, as the member spells them: the names themselves, or the integer their bits make,
+ *  as the signed 32-bit value the member holds. Undefined for a name the schema does not give. */
+export function flagsValue(names: readonly string[], meta: FieldMetadata): unknown {
+  if (meta.type === 'flags') return [...names];
+  let bits = 0;
+  for (const name of names) {
+    const bit = bitOf(name, meta);
+    if (bit === undefined) return undefined;
+    bits |= bit;
+  }
+  return bits;
 }
 
 // The codec spells a translated string as an object whose `Value` is the text.
@@ -89,12 +130,14 @@ function enumValueNamed(text: string, meta: FieldMetadata): string {
  *  stays text, so mEdit refuses it by the field's name rather than this repairing it. */
 export function pastedValue(text: string, meta: FieldMetadata, current: unknown): unknown {
   const trimmed = text.trim();
+  const names = trimmed === '' ? [] : trimmed.split(',').map(name => name.trim());
   switch (meta.type) {
     case 'bool': {
       const word = trimmed.toLowerCase();
       return word === 'true' || word === 'false' ? word === 'true' : text;
     }
     case 'int': {
+      if (readsAsFlags(meta)) return flagsValue(names, meta) ?? text;
       const whole = WHOLE_NUMBER.test(trimmed) ? Number(trimmed) : NaN;
       return Number.isSafeInteger(whole) ? whole : text;
     }
@@ -103,7 +146,7 @@ export function pastedValue(text: string, meta: FieldMetadata, current: unknown)
       return Number.isFinite(number) ? number : text;
     }
     case 'enum': return enumValueNamed(trimmed, meta);
-    case 'flags': return trimmed === '' ? [] : trimmed.split(',').map(name => name.trim());
+    case 'flags': return names;
     case 'formKey': return trimmed === '' ? null : BRACKETED_FORM_KEY.exec(trimmed)?.[1] ?? trimmed;
     case 'struct':
     case 'array': return parsedJson(text);

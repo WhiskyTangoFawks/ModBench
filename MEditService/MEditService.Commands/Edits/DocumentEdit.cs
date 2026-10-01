@@ -57,6 +57,7 @@ internal static class DocumentEdit
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
+        foreach (var alias in cursor.Column.Aliases) record.Remove(alias);
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {

@@ -611,6 +611,32 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void RecordFlags_WritesTheRawInteger_AndTheCodecsViewsOfItFollow()
+    {
+        const int persistent = 0x0400, cantWait = 0x0008_0000;
+        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = persistent };
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
+
+        var set = Applied(formKey, SetAt(Json($"{persistent | cantWait}"), Member("MajorRecordFlagsRaw")));
+
+        Assert.Equal(persistent | cantWait, Node(set, "MajorRecordFlagsRaw").GetValue<int>());
+        Assert.Equal(["CantWait", "Persistent"], Node(set, "MajorFlags").AsArray().Select(n => n.Require().GetValue<string>()).Order(StringComparer.Ordinal));
+        AssertOnlyChanged(before, set, "MajorRecordFlagsRaw", "Fallout4MajorRecordFlags", "MajorFlags");
+    }
+
+    [Fact]
+    public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0420 };
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var cleared = JsonNode.Parse(Applied(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw")))).Require().AsObject();
+
+        Assert.DoesNotContain(cleared, p => p.Key is "MajorRecordFlagsRaw" or "IsDeleted" or "Fallout4MajorRecordFlags" or "MajorFlags");
+    }
+
+    [Fact]
     public void PartialForm_OnATypeThatCannotCarryIt_IsRefusedByName()
     {
         var formKey = SeedNpc();

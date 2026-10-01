@@ -19,7 +19,7 @@ public sealed class CommittedOnlyReadPathTests
 
     private static FakeRow Row(Fallout4Mod mod, string editorId) =>
         new(Plugin, LoadOrderIndex: 0, IsWinner: true,
-            RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_", ["IsDeleted"]));
+            RealDocuments.Of(mod.Npcs.First(n => n.EditorID == editorId), Plugin, 0, isWinner: true, Release, "npc_", ["MajorRecordFlagsRaw"]));
 
     private static RecordQueryService Service(params FakeRow[] rows)
     {
@@ -52,8 +52,8 @@ public sealed class CommittedOnlyReadPathTests
         Assert.Equal(PluginName, only.Plugin);
         Assert.Equal("TestNPC01", only.EditorId);
         // A scalar field read straight off the real codec's own text — the slot a staged value could
-        // otherwise stand in for. The document omits a false flag, which reads as its default.
-        var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "IsDeleted");
-        Assert.Null(deleted.Value);
+        // otherwise stand in for. The document omits flags none of which is set, which read as their default.
+        var flags = Assert.Single(only.Fields, f => f.Metadata.Name == "MajorRecordFlagsRaw");
+        Assert.Null(flags.Value);
     }
 }

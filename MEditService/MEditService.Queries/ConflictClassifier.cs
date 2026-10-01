@@ -119,10 +119,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var diffs = new List<FieldDiff>();
         foreach (var member in memberMeta.Values)
         {
-            // A Partial Form override's fields are excluded as if null (ADR-0018), so they fall
-            // through to the previous non-partial override with no new state.
-            var values = records.ToDictionary(Column, r => r.IsPartialForm ? null : MemberValue(r, member.Name));
-            if (values.Values.All(v => v == null)) continue;
+            // A Partial Form override's own fields are excluded as if null (ADR-0018), so they fall
+            // through to the previous non-partial override. Its record header, which every copy
+            // holds, takes part as xEdit's does.
+            var header = member.IsRecordHeaderMember;
+            var values = records.ToDictionary(Column, r => r.IsPartialForm && !header ? null : MemberValue(r, member.Name));
+            if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
             diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
         }

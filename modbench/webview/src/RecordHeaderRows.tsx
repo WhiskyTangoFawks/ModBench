@@ -12,8 +12,9 @@ import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
 export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
-// An edit of the FormID names the document member a record's FormID is (editor.md, The record header, story 2).
-export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
+// The document member a record's FormID is (editor.md, The record header, story 2).
+export const FORM_KEY_MEMBER = 'FormKey';
+export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: FORM_KEY_MEMBER }];
 const INDENT = 24;
 
 interface FormIdCellProps {
@@ -24,7 +25,7 @@ interface FormIdCellProps {
 }
 
 // xEdit's FormID reads as the record it names, and edits as the ID typed; mEdit spells both as
-// the FormKey (xedit.md, divergence 12).
+// the FormKey (xedit.md, divergence 16).
 function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellProps>) {
   const [draft, setDraft] = useState<string | null>(null);
   const settled = useRef(true);
@@ -70,82 +71,95 @@ function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellP
   );
 }
 
-interface RecordHeaderRowsProps {
+interface RecordHeaderRowProps {
+  columns: Column[];
+  collapsedColumns: Set<ColumnKey>;
+  columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
+  expanded: boolean;
+  onToggle: () => void;
+  focusedCell: FocusedCell | null;
+  onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
+}
+
+const isFocused = (focusedCell: FocusedCell | null, rowKey: string, key: ColumnKey | null) =>
+  focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
+const rowStyle = (focusedCell: FocusedCell | null, rowKey: string) =>
+  (focusedCell?.rowKey === rowKey ? focusedRowStyle : undefined);
+
+/** editor.md, The record header: the grid's first row, which the header members sit under. */
+export function RecordHeaderRow({
+  columns, collapsedColumns, columnStyle, expanded, onToggle, focusedCell, onFocusCell,
+}: Readonly<RecordHeaderRowProps>) {
+  const cellStyle = (key: ColumnKey): React.CSSProperties => ({ ...baseCell, ...columnStyle(key) });
+  return (
+    <tr style={rowStyle(focusedCell, RECORD_HEADER_ROW)}>
+      <DiskCell
+        style={labelCell(columnStyle(LABEL_COLUMN))} isFocused={isFocused(focusedCell, RECORD_HEADER_ROW, null)}
+        onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
+        copyText={RECORD_HEADER_ROW}
+      >
+        <ExpandArrow expanded={expanded} onToggle={onToggle} />
+        {RECORD_HEADER_ROW}
+      </DiskCell>
+      {columns.map(({ key }) => collapsedColumns.has(key)
+        ? <td key={key} style={cellStyle(key)} />
+        : (
+          <DiskCell
+            key={key} style={cellStyle(key)} isFocused={isFocused(focusedCell, RECORD_HEADER_ROW, key)}
+            onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, key)}
+          >
+            {!expanded && <span style={{ opacity: 0.5 }}>{'{…}'}</span>}
+          </DiskCell>
+        ))}
+    </tr>
+  );
+}
+
+interface FormIdRowProps {
+  label: string;
   columns: Column[];
   collapsedColumns: Set<ColumnKey>;
   columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   editableColumns: Set<ColumnKey>;
-  expanded: boolean;
-  onToggle: () => void;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
   writeAt: WriteAt;
 }
 
-/** editor.md, The record header: the grid's first rows, Record Header and the record's FormID under it,
- *  each column reading its own copy's FormKey. */
-export function RecordHeaderRows({
-  columns, collapsedColumns, columnStyle, editableColumns, expanded, onToggle,
-  focusedCell, onFocusCell, onCommitFormId, writeAt,
-}: Readonly<RecordHeaderRowsProps>) {
-  const cellStyle = (key: ColumnKey): React.CSSProperties =>
-    ({ ...baseCell, ...columnStyle(key) });
-  const rowStyle = (rowKey: string) => (focusedCell?.rowKey === rowKey ? focusedRowStyle : undefined);
-  const isFocused = (rowKey: string, key: ColumnKey | null) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
-
+/** editor.md, The record header, story 2: each column reads its own copy's FormKey. */
+export function FormIdRow({
+  label, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
+}: Readonly<FormIdRowProps>) {
+  const cellStyle = (key: ColumnKey): React.CSSProperties => ({ ...baseCell, ...columnStyle(key) });
   return (
-    <>
-      <tr style={rowStyle(RECORD_HEADER_ROW)}>
-        <DiskCell
-          style={labelCell(columnStyle(LABEL_COLUMN))} isFocused={isFocused(RECORD_HEADER_ROW, null)}
-          onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
-          copyText={RECORD_HEADER_ROW}
-        >
-          <ExpandArrow expanded={expanded} onToggle={onToggle} />
-          {RECORD_HEADER_ROW}
-        </DiskCell>
-        {columns.map(({ key }) => collapsedColumns.has(key)
-          ? <td key={key} style={cellStyle(key)} />
-          : (
-            <DiskCell
-              key={key} style={cellStyle(key)} isFocused={isFocused(RECORD_HEADER_ROW, key)}
-              onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, key)}
-            >
-              {!expanded && <span style={{ opacity: 0.5 }}>{'{…}'}</span>}
-            </DiskCell>
-          ))}
-      </tr>
-      {expanded && (
-        <tr style={rowStyle(FORM_ID_ROW)}>
+    <tr style={rowStyle(focusedCell, FORM_ID_ROW)}>
+      <DiskCell
+        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
+        onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText={label}
+      >{label}</DiskCell>
+      {columns.map(({ key, override }) => collapsedColumns.has(key)
+        ? <td key={key} style={cellStyle(key)} />
+        : (
           <DiskCell
-            style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
-            onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText="FormID"
-          >FormID</DiskCell>
-          {columns.map(({ key, override }) => collapsedColumns.has(key)
-            ? <td key={key} style={cellStyle(key)} />
-            : (
-              <DiskCell
-                key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
-                onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
-                title={override.formIdReadOnlyReason ?? undefined}
-                copyText={formKeyLabel(override.formKey, override)}
-              >
-                <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
-                  {value => (
-                    <FormIdCell
-                      formKey={toStr(value)}
-                      // A FormKey the disk does not hold yet names no record.
-                      label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
-                      editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
-                      onCommit={formKey => onCommitFormId(key, formKey)}
-                    />
-                  )}
-                </WrittenValue>
-              </DiskCell>
-            ))}
-        </tr>
-      )}
-    </>
+            key={key} style={cellStyle(key)} isFocused={isFocused(focusedCell, FORM_ID_ROW, key)}
+            onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
+            title={override.formIdReadOnlyReason ?? undefined}
+            copyText={formKeyLabel(override.formKey, override)}
+          >
+            <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
+              {value => (
+                <FormIdCell
+                  formKey={toStr(value)}
+                  // A FormKey the disk does not hold yet names no record.
+                  label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
+                  editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
+                  onCommit={formKey => onCommitFormId(key, formKey)}
+                />
+              )}
+            </WrittenValue>
+          </DiskCell>
+        ))}
+    </tr>
   );
 }

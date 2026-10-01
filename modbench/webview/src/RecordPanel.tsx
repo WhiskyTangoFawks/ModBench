@@ -10,6 +10,7 @@ import {
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getCellStyle, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
 import { collapsedSummaries } from './presentation';
+import { readsAsFlags } from './modelValue';
 import { idleMembers } from './siblingsInUse';
 import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
@@ -20,7 +21,7 @@ import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
-import { RecordHeaderRows, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH } from './RecordHeaderRows';
+import { RecordHeaderRow, FormIdRow, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH, FORM_KEY_MEMBER } from './RecordHeaderRows';
 import { navigate, type NavRow } from './gridNavigation';
 import { useCellWrites } from './unconfirmedWrites';
 
@@ -310,10 +311,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const title = recordLabel(overrides, formKey);
 
   const headerExpanded = !collapsedRows.has(RECORD_HEADER_ROW);
-  const navRows: NavRow[] = [
-    { key: RECORD_HEADER_ROW, parent: null, expandable: true, expanded: headerExpanded },
-    ...(headerExpanded ? [{ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false }] : []),
-  ];
+  const navRows: NavRow[] = [{ key: RECORD_HEADER_ROW, parent: null, expandable: true, expanded: headerExpanded }];
   const navColumns = columns.filter(c => !collapsedColumns.has(c.key)).map(c => c.key);
 
   function handleGridKey(e: React.KeyboardEvent<HTMLTableSectionElement>) {
@@ -342,7 +340,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     if (!meta) return [];
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = !collapsedRows.has(rowKey);
-    navRows.push({ key: rowKey, parent, expandable: hasChildren || meta.type === 'flags', expanded: isExpanded });
+    navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -412,6 +410,46 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return rows;
   }
 
+  // The FormID reads each copy's own FormKey; it stands where mEdit names that member, and first in
+  // a record whose header members mEdit does not name, as a plugin header's.
+  function formIdRow(label: string) {
+    navRows.push({ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false });
+    return (
+      <FormIdRow
+        key={FORM_ID_ROW}
+        label={label}
+        columns={columns}
+        collapsedColumns={collapsedColumns}
+        columnStyle={columnStyle}
+        editableColumns={editableColumns}
+        focusedCell={focusedCell}
+        onFocusCell={handleFocusCell}
+        onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
+        writeAt={writeAt}
+      />
+    );
+  }
+
+  const isHeaderMember = (diff: FieldDiff) => fieldMetaMap[diff.fieldName]?.isRecordHeaderMember === true;
+  const headerDiffs = diffs.filter(isHeaderMember);
+  const headerMemberRows = (diff: FieldDiff) => {
+    const meta = fieldMetaMap[diff.fieldName];
+    return diff.fieldName === FORM_KEY_MEMBER
+      ? [formIdRow(meta?.displayLabel ?? diff.fieldName)]
+      : buildRows(diff, meta, [], diff.fieldName, `${RECORD_HEADER_ROW}.${diff.fieldName}`, RECORD_HEADER_ROW, () => true, 1);
+  };
+  const headerRows = !headerExpanded ? [] : [
+    ...(headerDiffs.some(d => d.fieldName === FORM_KEY_MEMBER) ? [] : [formIdRow('FormID')]),
+    ...headerDiffs.flatMap(headerMemberRows),
+  ];
+  // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
+  // since the record's own fields are not there to be members of.
+  const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(
+    diff => buildRows(
+      diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName, null,
+      column => !overrideFor(column)?.isPartialForm),
+  );
+
   return (
     <div style={containerStyle}>
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600 }}>
@@ -463,25 +501,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             </tr>
           </thead>
           <tbody onKeyDown={handleGridKey}>
-            {/* A Partial Form column's own fields are nulled by the classifier: none is absent by
-                default, since the record's own fields are not there to be members of. */}
-            <RecordHeaderRows
+            <RecordHeaderRow
               columns={columns}
               collapsedColumns={collapsedColumns}
               columnStyle={columnStyle}
-              editableColumns={editableColumns}
               expanded={headerExpanded}
               onToggle={() => toggleRow(RECORD_HEADER_ROW)}
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
-              onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
-              writeAt={writeAt}
             />
-            {diffs.flatMap(
-              diff => buildRows(
-                diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName, null,
-                column => !overrideFor(column)?.isPartialForm),
-            )}
+            {headerRows}
+            {fieldRows}
           </tbody>
         </table>
       </div>

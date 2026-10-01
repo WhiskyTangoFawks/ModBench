@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { copiedText, modelValue, pastedValue } from './modelValue';
+import { copiedText, modelValue, pastedValue, readsAsFlags } from './modelValue';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
@@ -65,7 +65,7 @@ function renderCell(
       </span>
     );
   }
-  if (meta.type === 'flags') {
+  if (readsAsFlags(meta)) {
     return (
       <FlagCell
         value={value}
@@ -194,7 +194,7 @@ export function DiffRow({
 
   // A flags row is collapsible like a struct row, though its "children" are the checkbox lines
   // inside the cell, not sub-rows. It starts collapsed, sharing struct rows' default exactly.
-  const isFlagsRow = meta.type === 'flags';
+  const isFlagsRow = readsAsFlags(meta);
   const rowExpanded = !!isExpanded;
   // A row no column carries a value for holds nothing but its children, so it is present in every
   // column — nothing there is absent relative to anything, and `hasElement` below stays true

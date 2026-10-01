@@ -20,6 +20,10 @@ public sealed record ColumnSpec(
     string? ViewDefaultLiteral = null,
     SyntheticBit? Synthetic = null)
 {
+    /// <summary>The document's other spellings of this column's value, which the reader takes over
+    /// it, so a write clears them.</summary>
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+
     /// <summary>The document's own member name, which is the wire name and the view column name.</summary>
     public string Name => Field.Name;
 

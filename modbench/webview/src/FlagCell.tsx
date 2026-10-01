@@ -1,5 +1,5 @@
 import React from 'react';
-import { flagNames } from './modelValue';
+import { flagNames, flagsValue } from './modelValue';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -8,7 +8,7 @@ interface FlagCellProps {
   // Whether this cell's column can be written — presence of somewhere to write is the
   // editability signal (see ScalarCell's identical contract).
   editable?: boolean;
-  // The names now set, as the document spells a flags member. Optional: a caller with nowhere to
+  // The flags now set, as the member spells them. Optional: a caller with nowhere to
   // write renders read-only rather than crashing.
   onCommit?: (v: unknown) => void;
   // The row's collapse state (the grid's chevron/double-click gesture, owned by the row —
@@ -22,7 +22,7 @@ interface FlagCellProps {
  *  text state and nothing to open, so F2 is inert. */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {
   // Absent means default: no names set.
-  const names = flagNames(value);
+  const names = flagNames(value, meta);
 
   if (collapsed) return <span>{names.join(', ')}</span>;
 
@@ -31,7 +31,7 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
   const writable = editable && onCommit != null;
   // A name the metadata does not list stays where the document put it; only the toggled name moves.
   const toggle = (name: string) => {
-    if (writable) onCommit(names.includes(name) ? names.filter(n => n !== name) : [...names, name]);
+    if (writable) onCommit(flagsValue(names.includes(name) ? names.filter(n => n !== name) : [...names, name], meta));
   };
 
   return (
