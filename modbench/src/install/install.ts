@@ -1,6 +1,5 @@
-// A release is extracted inside the mod's own folder and nowhere else: a new mod's folder is made
-// for it and removed again if the install fails, and an upgrade keeps its folder, so its identity
-// and every watcher armed on it survive the release.
+// A release is extracted inside the mod's own folder and nowhere else. An upgrade keeps its folder,
+// so its identity and every watcher armed on it survive the release.
 
 import { basename } from 'node:path';
 import { detectRoot } from './detectRoot';
@@ -161,9 +160,8 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
 }
 
-/** Extracts into the mod's own folder and settles the detected mod root as its contents, then
- *  marks the downloaded file the archive is, if it is one — a failed mark is reported beside the
- *  landed install, never instead of it. */
+/** Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
+ *  one — a failed mark is reported beside the landed install, never instead of it. */
 export async function installFromArchive(
   access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {

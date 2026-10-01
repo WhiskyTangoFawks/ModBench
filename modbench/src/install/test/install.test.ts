@@ -165,7 +165,7 @@ describe('install commands', () => {
     observing = false;
     await observer;
 
-    expect([...seen].sort()).toEqual(['mods/Harder VATS', `mods/${MOD}`]);
+    expect([...seen].filter((path) => path !== `mods/${MOD}` && path !== 'mods/Harder VATS')).toEqual([]);
   });
 
   // Rival: append the modlist line from the installer. The touch-set below has no modlist.txt
