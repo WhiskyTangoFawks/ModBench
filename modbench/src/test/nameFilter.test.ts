@@ -47,7 +47,7 @@ vi.mock('vscode', () => ({
     },
     executeCommand: (command: string, ...args: unknown[]) => {
       if (command === 'setContext' && typeof args[0] === 'string') h.state.contextKeys.set(args[0], args[1]);
-      return Promise.resolve();
+      return Promise.resolve(h.state.commands.get(command)?.(...args));
     },
   },
   ThemeIcon: class { constructor(public id: string) {} },
@@ -508,6 +508,18 @@ describe('the catalog\'s filter pair acts on the focused view\'s filter', () => 
     const { calls, run } = wire('view.a');
     run('modbench.clearFilter');
     expect(calls).toEqual(['a clear']);
+  });
+
+  it('opens the filter of the view whose title icon was clicked, whichever view was last selected in', () => {
+    const { calls, run } = wire('view.a');
+    run('view.b.filterHere');
+    expect(calls).toEqual(['b open']);
+  });
+
+  it('clears the filter of the view whose title icon was clicked, whichever view was last selected in', () => {
+    const { calls, run } = wire('view.a');
+    run('view.b.clearFilterHere');
+    expect(calls).toEqual(['b clear']);
   });
 
   it('says so when the focused view has no name filter, or no view is focused', () => {

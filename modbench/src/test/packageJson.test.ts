@@ -344,7 +344,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
 
   // commands.md, Chrome: the order.
   it('keeps modbench.plugin.filter at slot 1 (unchanged by this slice)', () => {
-    expect(entryFor('modbench.filter').group).toBe('navigation@1');
+    expect(entryFor('modbench.pluginListTree.filterHere').group).toBe('navigation@1');
   });
 
   // plugins.md, Menus and keys: "3: filter records, or clear the record filter while active".
@@ -401,9 +401,9 @@ describe('package.json filtering is one UX', () => {
 
   // commands.md, Chrome: the icons.
   const FILTERED_VIEWS = [
-    ['modbench.modList', 'modbench.filter'],
-    ['modbench.pluginListTree', 'modbench.filter'],
-    ['modbench.downloads', 'modbench.filter'],
+    ['modbench.modList', 'modbench.modList.filterHere'],
+    ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere'],
+    ['modbench.downloads', 'modbench.downloads.filterHere'],
   ] as const;
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
@@ -429,9 +429,9 @@ describe('package.json filtering is one UX', () => {
   // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
   // so slot 1 shows exactly one of the pair at a time. The key is per view.
   const DURABLE_FILTERS = [
-    ['modbench.modList', 'modbench.filter', 'modbench.clearFilter', 'modbench.mod.filterActive'],
-    ['modbench.pluginListTree', 'modbench.filter', 'modbench.clearFilter', 'modbench.plugin.filterActive'],
-    ['modbench.downloads', 'modbench.filter', 'modbench.clearFilter', 'modbench.downloadedFile.filterActive'],
+    ['modbench.modList', 'modbench.modList.filterHere', 'modbench.modList.clearFilterHere', 'modbench.mod.filterActive'],
+    ['modbench.pluginListTree', 'modbench.pluginListTree.filterHere', 'modbench.pluginListTree.clearFilterHere', 'modbench.plugin.filterActive'],
+    ['modbench.downloads', 'modbench.downloads.filterHere', 'modbench.downloads.clearFilterHere', 'modbench.downloadedFile.filterActive'],
   ] as const;
 
   it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
@@ -550,8 +550,8 @@ describe('package.json command titles and categories', () => {
 
   const gatedFalse = (): Set<string> => new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
 
-  it('gates only the system commands out of the palette', () => {
-    const unexpectedGate = [...gatedFalse()].filter((c) => !(INTERNAL_COMMANDS as readonly string[]).includes(c));
+  it('gates only the system commands and the entry points out of the palette', () => {
+    const unexpectedGate = [...gatedFalse()].filter((c) => !(INTERNAL_COMMANDS as readonly string[]).includes(c) && !FILTER_ENTRY_POINTS.includes(c));
     expect(unexpectedGate).toEqual([]);
   });
 
@@ -571,6 +571,10 @@ describe('package.json command titles and categories', () => {
     'modbench.mod.sync',
     'modbench.plugin.sync',
   ] as const;
+
+  it('gates every filter entry point out of the palette too', () => {
+    expect(FILTER_ENTRY_POINTS.filter((c) => !gatedFalse().has(c))).toEqual([]);
+  });
 
   it('gates every internal system command out of the palette too', () => {
     const systemCommandIds = catalogCommandIds(commandsMarkdown.slice(commandsMarkdown.indexOf('## System commands')));
@@ -601,8 +605,8 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
       ['modbench.plugin.sortLosingAtTop', 'navigation@2'],
     ]));
     expect(placed(inPluginsView('view/title'))).toEqual([
-      ['modbench.filter', 'navigation'],
-      ['modbench.clearFilter', 'navigation'],
+      ['modbench.pluginListTree.filterHere', 'navigation'],
+      ['modbench.pluginListTree.clearFilterHere', 'navigation'],
       ['modbench.plugin.sortWinningAtTop', 'navigation'],
       ['modbench.plugin.sortLosingAtTop', 'navigation'],
       ['modbench.record.filter', 'navigation'],
@@ -1156,8 +1160,8 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
   // VS Code adds Collapse All itself, as a navigation icon at order Number.MAX_SAFE_INTEGER.
   it('title bar: filter or clear, then sort direction, as icons; install then create empty mod in the overflow', () => {
     expect(placed(inModsView('view/title'))).toEqual([
-      ['modbench.filter', 'navigation'],
-      ['modbench.clearFilter', 'navigation'],
+      ['modbench.modList.filterHere', 'navigation'],
+      ['modbench.modList.clearFilterHere', 'navigation'],
       ['modbench.mod.sortWinningAtTop', 'navigation'],
       ['modbench.mod.sortLosingAtTop', 'navigation'],
       ['modbench.mod.install', '3_create'],
@@ -1311,6 +1315,11 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
+// commands.md, Entry points are not gestures: a title icon cannot name its view, so each view's
+// icons are internal commands that fire the filter gesture with that view.
+const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
+  .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
+
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
 
@@ -1321,7 +1330,7 @@ describe('package.json registers every command under its catalog Command ID', ()
   });
 
   it('registers no ID that is not in the catalog', () => {
-    const offenders = registered.filter((id) => !catalog.has(id));
+    const offenders = registered.filter((id) => !catalog.has(id) && !FILTER_ENTRY_POINTS.includes(id));
     expect(
       offenders,
       offenders.map((id) => `${id} is not a Command ID in docs/architecture/commands.md. The catalog is the `
