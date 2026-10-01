@@ -6,7 +6,7 @@ internal static class ConflictRules
 {
     // The field winner (highest load-order plugin with a value) is ConflictWins if contested by
     // another non-master plugin, else Override; the rest are IdenticalToMaster, ConflictLoses or
-    // Override. `valuesEqual` is supplied so callers can use sorted-array-aware comparison.
+    // Override.
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,

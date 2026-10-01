@@ -15,7 +15,7 @@ public class ConflictClassifierTests
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
 
-    private static FieldValue SortedArrayField(string name, object? value) =>
+    private static FieldValue LinkArrayField(string name, object? value) =>
         new(new FieldMetadata(name, "array", true, [], [],
             ElementType: new FieldMetadata("", "formKey", false, [], [])), value);
 
@@ -407,44 +407,45 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
     }
 
-    // --- Sorted array comparison ---
+    // --- Link array comparison ---
 
     [Fact]
-    public void Classify_SortedArraySameElementsDifferentOrder_ReturnsNoConflict()
+    public void Classify_LinkArraySameElementsDifferentOrder_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\",\"c\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"c\",\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("Packages", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("Packages", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
-        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
+        Assert.Equal(ConflictThis.Override, result.Diffs.Single().CellStates["B.esp"]);
     }
 
     [Fact]
-    public void Classify_SortedArrayDifferentLengths_ReturnsOverride()
+    public void Classify_LinkArrayDifferentLengths_ReturnsOverride()
     {
         // Length check: [a] vs [a,b] differ in count → not equal → Override.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
     [Fact]
-    public void Classify_SortedArrayDifferentElements_ReturnsOverride()
+    public void Classify_LinkArrayDifferentElements_ReturnsOverride()
     {
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"c\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
+            [LinkArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
@@ -452,8 +453,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
     {
-        // isSortedArray=false: [1,2] vs [2,1] differ by raw JSON text → Override, not NoConflict.
-        // An || instead of && in ValuesEqual would sort-compare them and return NoConflict.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[2,1]");
         var master = MakeOverride("A.esp", 0, false, ("Keywords", (object?)arrayA));
@@ -614,7 +613,7 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_NestedStructInsideArrayElement_GrandchildConflictAggregatesTwoLevelsUp()
+    public void Classify_NestedStructInsideTheOverridesElement_GrandchildConflictAggregatesTwoLevelsUp()
     {
         // Array field "Items" of struct elements, each struct carrying a sub-struct "Pos" with
         // field "X" — proves aggregation recurses through more than one level (array -> struct
@@ -635,7 +634,7 @@ public class ConflictClassifierTests
         var result = Classify([master, override1]);
 
         var itemsDiff = result.Diffs.First(d => d.FieldName == "Items");
-        var elementDiff = RequireChildren(itemsDiff).First(c => c.FieldName == "[0]");
+        var elementDiff = RequireChildren(itemsDiff).First(c => c.FieldName == "[1]");
         var posDiff = RequireChildren(elementDiff).First(c => c.FieldName == "Pos");
         var xDiff = RequireChildren(posDiff).First(c => c.FieldName == "X");
 
@@ -821,7 +820,7 @@ public class ConflictClassifierTests
         var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
         Assert.NotNull(yChild.Children);
-        Assert.Equal(2, RequireChildren(yChild).Count);
+        Assert.Equal(4, RequireChildren(yChild).Count);
     }
 
     [Fact]
@@ -889,13 +888,13 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_SortedArrayOfFormKey_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
+    public void Classify_LinkArray_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
     {
         // kw1 resolves, kw2 is dangling — the regression this replaces would let kw2's missing
         // resolution suppress kw1's (or vice versa) by aggregating to the array field's own state.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [SortedArrayField("Keywords", (object?)arrayA)], Origin: "Data");
+            [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data");
 
         static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("kywd", "GoodKeyword") : null;
@@ -905,8 +904,8 @@ public class ConflictClassifierTests
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
 
-        var kw1 = RequireChildren(arrayDiff).First(c => c.FieldName == "000AAA:Test.esp");
-        var kw2 = RequireChildren(arrayDiff).First(c => c.FieldName == "000BBB:Test.esp");
+        var kw1 = RequireChildren(arrayDiff)[0];
+        var kw2 = RequireChildren(arrayDiff)[1];
 
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, RequireResolutions(kw1)["A.esp"].State);
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(kw2)["A.esp"].State);

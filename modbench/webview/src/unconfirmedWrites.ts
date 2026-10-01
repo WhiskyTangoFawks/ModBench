@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { columnKey } from './columnKey';
 import { displayValue } from './modelValue';
-import { defaultOf, isPureLinkArray, recordLabel, variantFor } from './recordUtils';
+import { defaultOf, recordLabel, variantFor } from './recordUtils';
 import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from './types';
 
 const MARK_DELAY_MS = 300;
@@ -15,8 +15,6 @@ export interface CellWrite {
   readonly edit: RecordEditEnvelope;
   /** The array an element is added to, removed from or moved in, as the panel last read it. */
   readonly array: DiskCell | undefined;
-  /** The grid row the panel wrote it from. A write from elsewhere names only the path. */
-  readonly row: string | undefined;
   /** Reads asked for before the host held the panel's reads for it, none of which can cover it. */
   readonly readsAsked: number;
   readonly marked: boolean;
@@ -28,12 +26,11 @@ const cellOf = (column: ColumnKey, path: readonly PathHop[]): string => JSON.str
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-interface DiskCell { row: string; label: string; meta: FieldMetadata; value: unknown }
+interface DiskCell { label: string; meta: FieldMetadata; value: unknown }
 
 interface Node { diff: FieldDiff | undefined; meta: FieldMetadata | null | undefined }
 
-// One hop down the rows as the grid builds them: an element of a sorted array is the row its value
-// at that place in this column names.
+// One hop down the rows as the grid builds them.
 function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: ColumnKey): Node {
   const owner = diff.values[column];
   const children = diff.children ?? [];
@@ -42,9 +39,7 @@ function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: Col
     return { diff: children.find(c => c.fieldName === hop.name), meta: member && variantFor(member, owner, meta) };
   }
   if (hop.kind === 'key') return { diff: children.find(c => c.fieldName === hop.key), meta: meta.elementType };
-  if (!isPureLinkArray(meta)) return { diff: children[hop.index], meta: meta.elementType };
-  const linked: unknown = Array.isArray(owner) ? owner[hop.index] : undefined;
-  return { diff: children.find(c => c.fieldName === linked), meta: meta.elementType };
+  return { diff: children.find(c => c.indexes?.[column] === hop.index), meta: meta.elementType };
 }
 
 function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly PathHop[]): DiskCell | undefined {
@@ -54,15 +49,13 @@ function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly Pat
     diff: result.diffs.find(d => d.fieldName === root.name),
     meta: result.overrides.flatMap(o => o.fields).find(f => f.metadata.name === root.name)?.metadata,
   };
-  let row = root.name;
   for (const hop of hops) {
     if (!node.diff || !node.meta) return undefined;
     node = hopDown(node.diff, node.meta, hop, column);
-    row = `${row}.${node.diff?.fieldName ?? ''}`;
   }
   const { diff, meta } = node;
   if (!diff || !meta) return undefined;
-  return { row, label: meta.displayLabel ?? diff.fieldName, meta, value: diff.values[column] ?? defaultOf(meta) };
+  return { label: meta.displayLabel ?? diff.fieldName, meta, value: diff.values[column] ?? defaultOf(meta) };
 }
 
 const arrayPathOf = ({ op, path }: RecordEditEnvelope): readonly PathHop[] => (op === 'add' ? path : path.slice(0, -1));
@@ -82,8 +75,6 @@ const SHAPE_UNSHOWN = {
   move: (where: string) => `An element was moved in ${where}, and the disk does not show the move.`,
 };
 
-// A sorted array's element sits where the write moved it, so the row the panel wrote from may hold
-// another element by the time the read lands.
 function differenceLine(result: CompareResult, formKey: string, write: CellWrite): string | undefined {
   const plugin = result.overrides.find(o => columnKey(o.plugin, o.origin) === write.column)?.plugin;
   if (plugin === undefined) return undefined;
@@ -95,7 +86,7 @@ function differenceLine(result: CompareResult, formKey: string, write: CellWrite
     return showsShape(edit, elements(array.value), after) ? undefined : SHAPE_UNSHOWN[edit.op](where(array.label));
   }
   const disk = diskCellAt(result, write.column, edit.path);
-  if (!disk || (write.row !== undefined && write.row !== disk.row)) return undefined;
+  if (!disk) return undefined;
   const written = displayValue(edit.value, disk.meta);
   const shown = displayValue(disk.value, disk.meta);
   return written === shown ? undefined : `${where(disk.label)} was written "${written}", and the disk now shows "${shown}".`;
@@ -112,7 +103,7 @@ export function useCellWrites(log: (line: string) => void) {
     setHeld(latest.current);
   }, []);
 
-  const written = useCallback((column: ColumnKey, edit: RecordEditEnvelope, readsAsked: number, row?: string) => {
+  const written = useCallback((column: ColumnKey, edit: RecordEditEnvelope, readsAsked: number) => {
     const cell = cellOf(column, edit.path);
     const now = latest.current.get(cell);
     if (now && sameValue(now.edit, edit)) {
@@ -121,7 +112,7 @@ export function useCellWrites(log: (line: string) => void) {
     }
     const id = ++nextId.current;
     const array = edit.op === 'set' || !lastRead.current ? undefined : diskCellAt(lastRead.current, column, arrayPathOf(edit));
-    change(writes => new Map(writes).set(cell, { id, cell, column, edit, array, row, readsAsked, marked: false }));
+    change(writes => new Map(writes).set(cell, { id, cell, column, edit, array, readsAsked, marked: false }));
     setTimeout(() => {
       const write = latest.current.get(cell);
       if (write?.id === id) change(writes => new Map(writes).set(cell, { ...write, marked: true }));

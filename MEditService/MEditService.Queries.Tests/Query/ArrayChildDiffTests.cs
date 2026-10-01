@@ -14,7 +14,7 @@ public class ArrayChildDiffTests
         ConflictClassifier? classifier = null) =>
         (classifier ?? new ConflictClassifier()).Classify(records, GameRelease.Fallout4);
 
-    private static FieldMetadata SortedArrayMeta(string name) =>
+    private static FieldMetadata LinkArrayMeta(string name) =>
         new(name, "array", true, [], [],
             ElementType: new FieldMetadata("", "formKey", false, [], []));
 
@@ -35,85 +35,166 @@ public class ArrayChildDiffTests
     private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");
 
-    // ── Sorted array tests ───────────────────────────────────────────────────
+    private static JsonElement Json(string text) => JsonSerializer.Deserialize<JsonElement>(text);
+
+    // Each aligned row as its columns hold it, one string per row: the column's element, or "-".
+    private static List<string> Rows(ClassifyResult result, string field, params string[] columns) =>
+        [.. RequireChildren(result.Diffs.First(d => d.FieldName == field)).Select(row => string.Join(" ",
+            columns.Select(c => row.Values[c] is JsonElement e ? e.GetString() ?? e.GetRawText() : "-")))];
+
+    // ── Alignment by values in sequence ──────────────────────────────────────
 
     [Fact]
-    public void SortedArray_TwoPluginsOverlap_ProducesUnionChildren()
+    public void LinkArray_DifferingOnlyInOrder_IsAnOverrideAtTheArrayRow()
     {
-        var meta = SortedArrayMeta("Keywords");
-        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\",\"KwdB\"]");
-        var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\",\"KwdC\"]");
-
-        var master = MakeRecord("A.esp", 0, false, meta, arrayA);
-        var override1 = MakeRecord("B.esp", 1, true, meta, arrayB);
-
-        var result = Classify([master, override1]);
-
-        var kwdDiff = result.Diffs.First(d => d.FieldName == "Keywords");
-        Assert.NotNull(kwdDiff.Children);
-        Assert.Equal(3, RequireChildren(kwdDiff).Count);
-
-        var kwdA = kwdDiff.Children.First(c => c.FieldName == "KwdA");
-        Assert.NotNull(kwdA.Values["A.esp"]);
-        Assert.NotNull(kwdA.Values["B.esp"]);
-        Assert.Equal("B.esp", kwdA.WinnerColumn); // B.esp has higher load order (1 > 0)
-
-        var kwdB = kwdDiff.Children.First(c => c.FieldName == "KwdB");
-        Assert.NotNull(kwdB.Values["A.esp"]);
-        Assert.Null(kwdB.Values["B.esp"]);
-        Assert.False(kwdB.CellStates.ContainsKey("B.esp")); // absent → omitted
-
-        var kwdC = kwdDiff.Children.First(c => c.FieldName == "KwdC");
-        Assert.Null(kwdC.Values["A.esp"]);
-        Assert.NotNull(kwdC.Values["B.esp"]);
-    }
-
-    [Fact]
-    public void SortedArray_UnionOrderIsFirstSeenAcrossPluginsInLoadOrder()
-    {
-        // A=[KwdB,KwdA], B=[KwdC,KwdA] → first-seen order: KwdB, KwdA, KwdC —
-        // not alphabetical (KwdA,KwdB,KwdC), which is the rival ordering this pins against.
-        var meta = SortedArrayMeta("Keywords");
-        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"KwdB\",\"KwdA\"]");
-        var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"KwdC\",\"KwdA\"]");
-
-        var master = MakeRecord("A.esp", 0, false, meta, arrayA);
-        var override1 = MakeRecord("B.esp", 1, true, meta, arrayB);
-
-        var result = Classify([master, override1]);
-
-        var children = RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords"));
-        Assert.Equal(["KwdB", "KwdA", "KwdC"], children.Select(c => c.FieldName).ToList());
-    }
-
-    // Order-insensitivity is a fact the element type states, so it holds however deep the walk
-    // reached the array: the row the elements hang off reads identical, not overridden.
-    [Fact]
-    public void NestedSortedArray_DifferingOnlyInOrder_IsNotAConflictAtTheArrayRow()
-    {
-        var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [SortedArrayMeta("Keywords")]);
-        var a = JsonSerializer.Deserialize<JsonElement>("{\"Keywords\":[\"KwdA\",\"KwdB\"]}");
-        var b = JsonSerializer.Deserialize<JsonElement>("{\"Keywords\":[\"KwdB\",\"KwdA\"]}");
+        var meta = new FieldMetadata("Owner", "struct", false, [], [], Fields: [LinkArrayMeta("Packages")]);
+        var a = Json("{\"Packages\":[\"PkgA\",\"PkgB\"]}");
+        var b = Json("{\"Packages\":[\"PkgB\",\"PkgA\"]}");
 
         var result = Classify([MakeRecord("A.esp", 0, false, meta, a), MakeRecord("B.esp", 1, true, meta, b)]);
 
-        var keywords = RequireChildren(result.Diffs.First(d => d.FieldName == "Owner")).First(c => c.FieldName == "Keywords");
-        Assert.Equal(ConflictThis.IdenticalToMaster, keywords.CellStates["B.esp"]);
-        Assert.Equal(ConflictAll.NoConflict, keywords.ConflictAll);
+        var packages = RequireChildren(result.Diffs.First(d => d.FieldName == "Owner")).First(c => c.FieldName == "Packages");
+        Assert.Equal(ConflictThis.Override, packages.CellStates["B.esp"]);
+    }
+
+    [Fact]
+    public void Array_AnElementTheOverrideLacks_ReadsAsAnAbsenceWhereItIsMissing()
+    {
+        var meta = LinkArrayMeta("Packages");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"x\",\"y\",\"z\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"x\",\"z\"]"))]);
+
+        Assert.Equal(["x x", "y -", "z z"], Rows(result, "Packages", "A.esp", "B.esp"));
+    }
+
+    [Fact]
+    public void Array_AnElementInsertedAtTheFront_LeavesTheRestAligned()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"n\",\"a\",\"b\"]"))]);
+
+        Assert.Equal(["- n", "a a", "b b"], Rows(result, "Items", "A.esp", "B.esp"));
+        var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"));
+        Assert.Equal(ConflictThis.Override, rows[0].CellStates["B.esp"]);
+        Assert.Equal(ConflictThis.IdenticalToMaster, rows[1].CellStates["B.esp"]);
+        Assert.Equal(ConflictThis.IdenticalToMaster, rows[2].CellStates["B.esp"]);
+    }
+
+    // xEdit's diff makes no modification of a pair: a changed element is the old one's absence and
+    // the new one's addition, the absence first.
+    [Fact]
+    public void Array_AChangedElement_IsTheMastersElementAndThenTheOverrides()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\",\"c\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"a\",\"x\",\"c\"]"))]);
+
+        Assert.Equal(["a a", "b -", "- x", "c c"], Rows(result, "Items", "A.esp", "B.esp"));
+    }
+
+    [Fact]
+    public void Array_EachColumnAlignsAgainstEveryColumnBeforeIt()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"a\",\"b\"]")),
+            MakeRecord("B.esp", 1, false, meta, Json("[\"a\",\"c\",\"b\"]")),
+            MakeRecord("C.esp", 2, true, meta, Json("[\"a\",\"b\",\"d\"]"))]);
+
+        Assert.Equal(["a a a", "- c -", "b b b", "- - d"], Rows(result, "Items", "A.esp", "B.esp", "C.esp"));
+    }
+
+    [Fact]
+    public void Array_AColumnWithoutTheArray_AlignsNothing()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, null),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"a\",\"b\"]"))]);
+
+        Assert.Equal(["- a", "- b"], Rows(result, "Items", "A.esp", "B.esp"));
+    }
+
+    [Fact]
+    public void LinkArray_ARepeatedElement_IsARowForEachPlaceItHolds()
+    {
+        var meta = LinkArrayMeta("Packages");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"PkgA\",\"PkgA\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"PkgA\"]"))]);
+
+        Assert.Equal(["PkgA PkgA", "PkgA -"], Rows(result, "Packages", "A.esp", "B.esp"));
+    }
+
+    [Fact]
+    public void Array_EachRowCarriesTheElementsIndexInEachColumnThatHoldsIt()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"x\",null,\"z\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[null,\"z\"]"))]);
+
+        var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"));
+        Assert.Equal(
+            [
+                new Dictionary<string, int> { ["A.esp"] = 0 },
+                new Dictionary<string, int> { ["A.esp"] = 1, ["B.esp"] = 0 },
+                new Dictionary<string, int> { ["A.esp"] = 2, ["B.esp"] = 1 },
+            ],
+            rows.Select(r => r.Indexes));
+    }
+
+    [Fact]
+    public void KeyedArray_EachRowCarriesTheElementsIndexInItsColumn_NotItsPlaceInKeyOrder()
+    {
+        var meta = new FieldMetadata("Stages", "array", true, [], [],
+            ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [new FieldMetadata("Index", "int", false, [], [])]),
+            KeyMembers: ["Index"]);
+
+        var result = Classify([MakeRecord("A.esp", 0, true, meta, Json("[{\"Index\":20},{\"Index\":10}]"))]);
+
+        var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Stages"));
+        Assert.Equal(["10", "20"], rows.Select(r => r.FieldName));
+        Assert.Equal(
+            [new Dictionary<string, int> { ["A.esp"] = 1 }, new Dictionary<string, int> { ["A.esp"] = 0 }],
+            rows.Select(r => r.Indexes));
+    }
+
+    [Fact]
+    public void Array_RowsAreLabelledByTheirPlaceInTheAlignment()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"a\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"n\",\"a\"]"))]);
+
+        Assert.Equal(["[0]", "[1]"], RequireChildren(result.Diffs.First(d => d.FieldName == "Items")).Select(c => c.FieldName));
     }
 
     // The codec omits a member equal to its default but never an element, so an element one column
     // lacks is an absence there, not that column spelling the element's own default.
     [Fact]
-    public void SortedArray_NullSlotInOneColumnOnly_IsNotReadAsThatColumnsDefault()
+    public void LinkArray_NullSlotInOneColumnOnly_IsNotReadAsThatColumnsDefault()
     {
-        var meta = SortedArrayMeta("Keywords");
-        var withoutSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\"]");
-        var withSlot = JsonSerializer.Deserialize<JsonElement>("[\"KwdA\",\"Null\"]");
+        var meta = LinkArrayMeta("Keywords");
 
-        var result = Classify([MakeRecord("A.esp", 0, false, meta, withoutSlot), MakeRecord("B.esp", 1, true, meta, withSlot)]);
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"KwdA\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[\"KwdA\",\"Null\"]"))]);
 
-        var slot = RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords")).First(c => c.FieldName == "Null");
+        var slot = RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords"))[1];
         Assert.Equal(ConflictThis.Override, slot.CellStates["B.esp"]);
     }
 
@@ -122,10 +203,10 @@ public class ArrayChildDiffTests
     {
         var meta = new FieldMetadata("Items", "array", true, [], [],
             ElementType: new FieldMetadata("", "int", false, [], []));
-        var shorter = JsonSerializer.Deserialize<JsonElement>("[1,2]");
-        var longer = JsonSerializer.Deserialize<JsonElement>("[1,2,0]");
 
-        var result = Classify([MakeRecord("A.esp", 0, false, meta, shorter), MakeRecord("B.esp", 1, true, meta, longer)]);
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[1,2]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[1,2,0]"))]);
 
         var third = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"))[2];
         Assert.Equal(ConflictThis.Override, third.CellStates["B.esp"]);
@@ -185,7 +266,7 @@ public class ArrayChildDiffTests
     // ── Struct-typed element test ─────────────────────────────────────────────
 
     [Fact]
-    public void StructTypedArrayElement_ProducesSubFieldChildrenForEachArrayChild()
+    public void StructTypedArrayElement_WithAChangedMember_IsTheMastersElementThenTheOverrides()
     {
         var meta = StructArrayMeta("Ranks",
             new FieldMetadata("Rank", "int", false, [], []));
@@ -198,22 +279,13 @@ public class ArrayChildDiffTests
 
         var result = Classify([master, override1]);
 
-        var ranksDiff = result.Diffs.First(d => d.FieldName == "Ranks");
-        Assert.NotNull(ranksDiff.Children);
-        Assert.Equal(2, RequireChildren(ranksDiff).Count);
+        var ranks = RequireChildren(result.Diffs.First(d => d.FieldName == "Ranks"));
+        Assert.Equal(3, ranks.Count);
+        Assert.All(ranks, element => Assert.Contains(RequireChildren(element), c => c.FieldName == "Rank"));
 
-        // Each array child should have a "Rank" sub-field child
-        foreach (var child in ranksDiff.Children)
-        {
-            Assert.NotNull(child.Children);
-            Assert.Contains(RequireChildren(child), c => c.FieldName == "Rank");
-        }
-
-        // Second element differs — should have conflict state on B.esp
-        var secondChild = ranksDiff.Children[1];
-        var rankSubField = RequireChildren(secondChild).First(c => c.FieldName == "Rank");
-        Assert.True(rankSubField.CellStates.ContainsKey("B.esp"));
-        Assert.Equal(ConflictThis.Override, rankSubField.CellStates["B.esp"]);
+        var overridesRank = RequireChildren(ranks[2]).First(c => c.FieldName == "Rank");
+        Assert.Null(overridesRank.Values["A.esp"]);
+        Assert.Equal(ConflictThis.Override, overridesRank.CellStates["B.esp"]);
     }
     // ── Struct sub-field edge cases ──────────────────────────────────────────
 
@@ -277,9 +349,9 @@ public class ArrayChildDiffTests
     // ── Empty array tests ────────────────────────────────────────────────────
 
     [Fact]
-    public void SortedArray_AllPluginsHaveEmptyArray_ReturnsNullChildren()
+    public void LinkArray_AllPluginsHaveEmptyArray_ReturnsNullChildren()
     {
-        var meta = SortedArrayMeta("Keywords");
+        var meta = LinkArrayMeta("Keywords");
         var emptyArray = JsonSerializer.Deserialize<JsonElement>("[]");
 
         var master = MakeRecord("A.esp", 0, false, meta, emptyArray);
@@ -293,7 +365,7 @@ public class ArrayChildDiffTests
     // ── Overflow boundary tests ──────────────────────────────────────────────
 
     [Fact]
-    public void SortedArray_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
+    public void LinkArray_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
     {
         var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -301,7 +373,7 @@ public class ArrayChildDiffTests
         var classifier = new ConflictClassifier(
             loggerFactory.CreateLogger<ConflictClassifier>());
 
-        var meta = SortedArrayMeta("Keywords");
+        var meta = LinkArrayMeta("Keywords");
         var bigArray = JsonSerializer.Deserialize<JsonElement>(
             "[" + string.Join(",", Enumerable.Range(0, 501).Select(i => $"\"Kwd{i}\"")) + "]");
 
@@ -314,9 +386,9 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
-    public void SortedArray_AtExactlyMaxArrayChildCount_ReturnsChildren()
+    public void LinkArray_AtExactlyMaxArrayChildCount_ReturnsChildren()
     {
-        var meta = SortedArrayMeta("Keywords");
+        var meta = LinkArrayMeta("Keywords");
         var exactly500 = JsonSerializer.Deserialize<JsonElement>(
             "[" + string.Join(",", Enumerable.Range(0, 500).Select(i => $"\"Kwd{i}\"")) + "]");
 

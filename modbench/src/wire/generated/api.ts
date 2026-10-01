@@ -631,6 +631,9 @@ export interface components {
             checkErrors?: {
                 [key: string]: string;
             } | null;
+            indexes?: {
+                [key: string]: number;
+            } | null;
         };
         FieldMetadata: {
             name: string;

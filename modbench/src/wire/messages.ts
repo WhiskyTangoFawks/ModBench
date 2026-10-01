@@ -104,17 +104,16 @@ export interface ColumnHeaderContext {
   preventDefaultContextMenuItems: true;
 }
 
-// A row's hops under its subtree root, each as the diff node states it. A sorted array's element
-// sits at a different position per column: addressed by its value here, an index hop once the
-// envelope is built.
+// A row's hops under its subtree root. An element of an array without a key has its own index in
+// each column that holds it, as its diff node states.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }
   | { kind: 'key'; key: string }
-  | { kind: 'value'; value: string };
+  | { kind: 'element'; indexes: components['schemas']['FieldDiff']['indexes'] };
 
 /** The wire's hop kinds (ADR-0005), narrowed to the closed set the backend resolves. */
-export type PathHop = Exclude<PathSegment, { kind: 'value' }>;
+export type PathHop = Exclude<PathSegment, { kind: 'element' }>;
 
 /** The one write shape: an operation, a path and an optional value, spelled by the webview and
  *  carried unchanged to `POST /records/{formKey}/edit`. */

@@ -156,6 +156,14 @@ describe('RecordPanel — drag and drop', () => {
     });
   });
 
+  // The column holds no element on that row, so there is no element there to write.
+  it('an element dropped on its own row in a column that lacks it changes nothing', async () => {
+    const { landed } = drag(await cellOf('[1]', MASTER), await cellOf('[1]', MOD));
+
+    expect(landed).toBe(false);
+    expect(lastPostedEnvelope(vscode.postMessage)).toBeUndefined();
+  });
+
   it('an element dropped on another array row changes nothing', async () => {
     drag(await cellOf('[1]', MASTER), await cellOf('Others', MOD));
 

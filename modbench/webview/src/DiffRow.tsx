@@ -257,26 +257,27 @@ export function DiffRow({
         const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
           .filter(Boolean).join('\n') || undefined;
-        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null;
+        // The host that invokes these commands holds no document, so it is handed the envelope's
+        // own path, as this column addresses it.
+        const hops = wirePath(rootField, context.path, key);
+        // Under an element this column does not hold, there is nothing to write to.
+        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null && hops !== undefined;
         // Array ops are offered only on a writable cell.
         const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
-        const offersMenu = arrayEditable || meta.type === 'string';
+        const offersMenu = arrayEditable || (meta.type === 'string' && hops !== undefined);
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
-        // The host that invokes these commands holds no document, so it is handed the envelope's
-        // own path, resolved here against this column's own value of the root.
-        const hops = wirePath(rootField, context.path, rootValue?.value);
-        // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every hop
-        // above it rather than just that one.
-        const elementContext = arrayEditable && isArrayElementRow
+        // `hops` ends in the element's own `index`/`key` hop, and carries every hop above it rather
+        // than just that one.
+        const elementContext = hops && arrayEditable && isArrayElementRow
           ? arrayElementContext(
               col.override.formKey, col.override.plugin, col.override.origin, hops,
-              arrayLength(getAtPath(rootValue?.value, context.path.slice(0, -1))))
+              arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))))
           : undefined;
         const fire = (command: ElementCommand, allowed = true) =>
           allowed && elementContext && onElementCommand ? () => onElementCommand(command, elementContext) : undefined;
@@ -288,7 +289,7 @@ export function DiffRow({
           paste: cellEditable ? text => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined,
         };
         // `hops` addresses the array itself here — this row *is* the array.
-        const parentContext = arrayEditable && isArrayParentRow
+        const parentContext = hops && arrayEditable && isArrayParentRow
           ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
           : undefined;
         const drag: CellDrag | undefined = diff.values[key] != null
@@ -333,7 +334,7 @@ export function DiffRow({
               landing={landing}
               vscodeContext={vscodeContext}
             >
-              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
                 {() => !isExpanded && hasElement && (
                   <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
@@ -359,7 +360,7 @@ export function DiffRow({
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
-              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
                 {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, onOpen, {
                   // A reference the disk does not hold yet has no resolution.
                   checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,

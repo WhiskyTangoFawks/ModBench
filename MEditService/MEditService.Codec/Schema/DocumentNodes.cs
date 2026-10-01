@@ -26,18 +26,11 @@ public static class DocumentNodes
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
 
-    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(); an
-    // unordered array as a set; and against an absent side, what `defaultOf` says the codec omits.
-    public static bool SameNode(object? a, object? b, bool unordered, FieldMetadata? absentReadsAs)
+    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(); and
+    // against an absent side, what `defaultOf` says the codec omits.
+    public static bool SameNode(object? a, object? b, FieldMetadata? absentReadsAs)
     {
-        if (a is JsonElement ja && b is JsonElement jb)
-        {
-            if (unordered && ja.ValueKind == JsonValueKind.Array && jb.ValueKind == JsonValueKind.Array)
-                return ja.GetArrayLength() == jb.GetArrayLength()
-                    && ja.EnumerateArray().Select(e => e.GetRawText()).Order()
-                        .SequenceEqual(jb.EnumerateArray().Select(e => e.GetRawText()).Order());
-            return ja.GetRawText() == jb.GetRawText();
-        }
+        if (a is JsonElement ja && b is JsonElement jb) return ja.GetRawText() == jb.GetRawText();
         if (a is null && b is null) return true;
         if (a is null || b is null)
             return absentReadsAs is { } meta && (a ?? b) is JsonElement present && IsOmitted(present, meta);

@@ -35,8 +35,8 @@ public record FieldMetadata(
     // can never re-point a row.
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
 
-    // The element member(s) identifying an element (xEdit's wbArrayS); null for a positional
-    // array. Aligned across plugins by key, written back in key order, duplicates refused. A name
+    // The element member(s) identifying an element (xEdit's wbArrayS); null where an array aligns
+    // by values in sequence. Aligned by key, written back in key order, duplicates refused. A name
     // may be dotted to reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 

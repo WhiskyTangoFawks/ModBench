@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, columnHasNode, elementSegment, rootFieldOf,
+  buildColumns, columnHasNode, elementSegment,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
@@ -126,12 +126,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     editField(formKey, override.plugin, override.origin, envelope);
   }, [overrideFor, formKey]);
 
-  // The hops from the record's own member down to the row, resolved against this column's value
-  // where a hop needs the document (an element of a sorted array).
-  const hopsTo = useCallback((plugin: ColumnKey, rootField: string, path: PathSegment[]) =>
-    wirePath(rootField, path, rootFieldOf(overrideFor(plugin), rootField)?.value),
-    [overrideFor]);
-
   // An answer lands only if no later read was asked for since: reads answer out of order.
   const latestRead = useRef(0);
   const { writeAt, written, refused, landed, clear: forgetWrites } = useCellWrites(logWarning);
@@ -195,8 +189,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }, [result]);
 
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
-  const handleCellCommit = useCallback((plugin: ColumnKey, row: string, hops: PathHop[], value: unknown) => {
-    written(plugin, { op: 'set', path: hops, value }, Infinity, row);
+  const handleCellCommit = useCallback((plugin: ColumnKey, hops: PathHop[], value: unknown) => {
+    written(plugin, { op: 'set', path: hops, value }, Infinity);
     post(plugin, { op: 'set', path: hops, value });
   }, [post, written]);
 
@@ -330,8 +324,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         columns={columns}
         columnStyle={columnStyle}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) =>
-          handleCellCommit(plugin, rowKey, hopsTo(plugin, rootField, path), value)}
+        onEditCell={(plugin: ColumnKey, value: unknown) => {
+          const hops = wirePath(rootField, path, plugin);
+          if (hops) handleCellCommit(plugin, hops, value);
+        }}
         writeAt={writeAt}
         onElementCommand={elementCommand}
         collapsedColumns={collapsedColumns}
@@ -358,7 +354,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
 
     const children = diff.children ?? [];
-    for (const [ordinal, child] of children.entries()) {
+    for (const child of children) {
       if (idle?.has(child.fieldName)) continue;
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
@@ -368,7 +364,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           children.filter(c => c.values[column] != null).at(-1) === child);
         // An element is spelled in full, so a column has it exactly where its value is.
         rows.push(...buildRows(
-          child, meta.elementType, [...path, elementSegment(meta, child.fieldName, ordinal)],
+          child, meta.elementType, [...path, elementSegment(meta, child)],
           rootField, childRowKey, rowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first
@@ -452,7 +448,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               onToggle={() => toggleRow(RECORD_HEADER_ROW)}
               focusedCell={focusedCell}
               onFocusCell={handleFocusCell}
-              onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_ROW, FORM_ID_PATH, value)}
+              onCommitFormId={(plugin, value) => handleCellCommit(plugin, FORM_ID_PATH, value)}
               writeAt={writeAt}
             />
             {diffs.flatMap(

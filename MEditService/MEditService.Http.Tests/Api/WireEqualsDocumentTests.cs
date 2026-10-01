@@ -103,7 +103,7 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         owner?.Type == "array" ? owner.ElementType : owner?.Fields?.FirstOrDefault(f => f.Name == label);
 
     // The array metadata resolving a child is the *parent's* own: a keyed array's child is found by
-    // the key the metadata names, a sorted array's by its value, any other by position.
+    // the key the metadata names, any other by position, which is its row's in a one-column compare.
     private static JsonElement? Resolve(JsonElement? parent, string name, FieldMetadata? meta)
     {
         if (parent is not { } p) return null;
@@ -116,9 +116,6 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         if (meta?.KeyMembers is { } keyMembers)
             foreach (var e in p.EnumerateArray())
                 if (ElementKey.Of(e, keyMembers, meta.ElementType).Text == name) return e;
-        if (meta?.ElementType?.Type == "formKey")
-            foreach (var e in p.EnumerateArray())
-                if (e.ValueKind == JsonValueKind.String && e.GetString() == name) return e;
         return null;
     }
 

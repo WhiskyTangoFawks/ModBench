@@ -13,10 +13,10 @@ namespace MEditService.Http.Tests.Api;
 public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
 {
     // The wire's own column-keyed dictionaries on a FieldDiff node, wherever one appears: nothing
-    // in the JSON schema names them, so a client hardcodes these four the same way this test does.
+    // in the JSON schema names them, so a client hardcodes these five the same way this test does.
     private static readonly HashSet<string> ColumnKeyedProperties = new(StringComparer.Ordinal)
     {
-        "values", "cellStates", "resolutions", "checkErrors",
+        "values", "cellStates", "resolutions", "checkErrors", "indexes",
     };
 
     private ScatteredFixtureData? _fixture;

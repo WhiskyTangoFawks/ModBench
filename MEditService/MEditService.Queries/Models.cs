@@ -98,7 +98,9 @@ public record FieldDiff(
     [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
     // This node's own subtree's link check, per column — a struct row states the errors under it
     // rather than the whole record's, which FieldValue.CheckError on the root field states.
-    [property: ColumnKeyed] IReadOnlyDictionary<string, string>? CheckErrors = null);
+    [property: ColumnKeyed] IReadOnlyDictionary<string, string>? CheckErrors = null,
+    // An array element's own index in each column's array that holds it; null on any other node.
+    [property: ColumnKeyed] IReadOnlyDictionary<string, int>? Indexes = null);
 
 public record ClassifyResult(
     ConflictAll ConflictAll,
