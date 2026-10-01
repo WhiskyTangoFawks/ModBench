@@ -30,9 +30,12 @@ As a user, I want:
 
 One line above the grid: the record type as xEdit names it, then `EditorID [FormKey]`, or the FormKey alone when there is no EditorID. It holds no controls.
 
-## The FormID
+## The record header
 
-As a user, I want the record's FormKey as the first row of the grid, under Record Header, with xEdit's label FormID. It edits as any field does. A plugin header's FormID is read-only, and an override's is refused, naming its master, where the record is native. *xedit.md, divergences 9 and 16*
+As a user, I want:
+
+1. Record Header as the grid's first row, as in xEdit. Its rows are the header members Mutagen reads for the game, such as Record Flags, FormID and Form Version, in xEdit's order and under xEdit's labels. Each edits as any field does. *xEdit; ADR-0005, invariant 1; xedit.md, divergence 18*
+2. The FormID to show and take the FormKey. A plugin header's FormID is read-only, and an override's is refused, naming its master, where the record is native. *xedit.md, divergences 9 and 16*
 
 ## Columns
 
@@ -69,7 +72,7 @@ A column shows one status, the first in this table that applies. A Partial Form 
 
 As a user, I want:
 
-1. One row for each field that any column holds, in the order mEdit gives them. *mEdit's answer*
+1. One row for each field that any column holds, in the order the record holds them in its file, as Mutagen groups them into fields. *xEdit; xedit.md, divergence 21*
 2. A field that holds other fields, a struct or an array, to expand into a row for each of them, indented one step for each level. *xEdit*
 3. Every row expanded when the record opens, as xEdit opens it. *xEdit*
 4. To expand and collapse a row from the arrow beside its label, by double clicking the label, or from the keys below. *VS Code's trees; xEdit*

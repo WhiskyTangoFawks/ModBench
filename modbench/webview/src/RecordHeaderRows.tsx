@@ -12,7 +12,7 @@ import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
 export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
-// An edit of the FormID names the document member a record's FormID is (editor.md, The FormID).
+// An edit of the FormID names the document member a record's FormID is (editor.md, The record header, story 2).
 export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
 const INDENT = 24;
 
@@ -83,7 +83,7 @@ interface RecordHeaderRowsProps {
   writeAt: WriteAt;
 }
 
-/** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
+/** editor.md, The record header: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
   columns, collapsedColumns, columnStyle, editableColumns, expanded, onToggle,

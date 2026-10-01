@@ -40,6 +40,10 @@ Gestures Modbench does differently.
 | 15 | Referenced By | One row per referrer, with a row for each active plugin that holds the reference beneath it | One row per plugin's copy of each referring record | Ruling. |
 | 16 | The FormID row | Shows and takes the FormKey, under xEdit's label | Shows the FormID in load order | Mutagen decides the data: a FormID changes with the load order (divergence 10). |
 | 17 | Collapsed readings | The four readings in editor-fields.md, an array element's key, and an array's one element; any other array reads `[n]` | A summary per definition: summary keys and hand-written callbacks, for each game, and `<N entries>` | Ruling: the generic rules come from what mEdit's schema already knows, and a per-definition port is upkeep for every game. |
+| 18 | Record Header | The header members Mutagen reads, with no Signature or Data Size row | Signature and Data Size rows | Mutagen decides the data: the data size is derived on each write, and the header line names the record type. |
+| 19 | Colours and vectors | One text box: `#AARRGGBB`, or `x, y, z` | A struct of their parts: Red, Green, Blue, and Alpha or Unused; X, Y and Z | Ruling, Minimal by default: one row per value, not three or four. A conflict colours the whole value, not one part. |
+| 20 | Alias numbers | The number | The alias's name, from the field's quest | Ruling: Mutagen types an alias as an integer, and each field finds its quest in its own way, so a reading is a port per definition and per game (divergence 17). |
+| 21 | Field order | The order the record holds them in its file, as Mutagen groups them into fields | The order of its definition | Mutagen decides the data: where Mutagen groups subrecords into fields differently, its grouping decides the order. |
 
 ## Omissions by object
 

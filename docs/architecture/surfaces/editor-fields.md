@@ -28,7 +28,7 @@ As a user, I want:
 | Flags | collapsed, the names of the flags set, joined by `, `; expanded, a check box for each flag | the check boxes, each of which writes as it is clicked | the names, joined by `, ` |
 | Reference | `EditorID [FormKey]`, or the FormKey alone when it resolves to no record of an active plugin; `—` for no reference | the record picker, below | `EditorID [FormKey]` |
 | Bytes | `0x` and the bytes in uppercase hex | a text box; a different length is refused | the text |
-| Colour | `#AARRGGBB`, as mEdit gives it | a text box | the text |
+| Colour | `#AARRGGBB`, or `#RRGGBB` for a colour that holds no alpha, as mEdit gives it | a text box | the text |
 | Vector | `x, y, z`, as mEdit gives it | a text box | the text |
 | Struct | collapsed, `{…}` or its reading, below; expanded, its members | none: its members edit | the whole value, as JSON |
 | Array | collapsed, its reading, below; expanded, its elements | none: its elements edit | the whole value, as JSON |
@@ -50,7 +50,7 @@ A placeholder says a struct or array is there and collapsed, so it is drawn for 
 As a user, I want:
 
 1. The record picker to be VS Code's quick pick, opened on the current reference, with that record selected. *xedit.md, divergence 1*
-2. Typing to search by EditorID, FormID or FormKey. When the field allows one record type, the search is among that type only. *xEdit; mEdit's answer*
+2. Typing to search by EditorID, FormID or FormKey, among the record types the field allows. *xEdit; ADR-0005, invariant 2*
 3. A pasted `EditorID [FormKey]` to search by the FormKey in its brackets, so a label that has gone stale still finds the right record.
 4. Enter to write the record I chose, and Esc to change nothing. *Esc changes nothing*
 5. A dangling or type-mismatched FormLink to carry a warning in its cell, with the reason in its tooltip. Each cell carries its own. *CONTEXT.md, FormLink*
@@ -108,9 +108,20 @@ A condition list is an array like any other. As a user, I want:
 
 A record's script data (its VMAD) is a struct like any other, and its scripts, properties and values edit as the fields above. Editing Papyrus source is not the record panel's.
 
+## Record flags
+
+Record Flags offers the flags the game gives every record and the flags the record's type adds. Three flags change more than their bit, as in xEdit. *xEdit; ADR-0005, invariant 2*
+
+As a user, I want:
+
+1. Setting Partial Form to empty the copy's own fields, all but its EditorID. *xEdit*
+2. Setting Deleted to empty the copy's fields. *xEdit*
+3. Clearing Partial Form or Deleted to fill the copy's own fields from the nearest copy to its left that is neither, so the copy matches it. With no such copy, they stay empty. *xEdit; ADR-0008*
+4. Setting Persistent on a placed record to move it into its cell's persistent group, and clearing it to move it into the temporary group. *xEdit*
+
 ## Partial Form
 
-A Partial Form copy's own fields are read-only, and show empty: the game ignores them. Its children edit as any record's. *xEdit; mEdit's answer*
+A Partial Form copy's own fields are read-only, and show empty: the game ignores them. Its EditorID and its Record Header rows edit, and its children edit as any record's. *xEdit*
 
 ## A plugin's header
 
