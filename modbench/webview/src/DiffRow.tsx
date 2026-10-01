@@ -107,9 +107,9 @@ export interface RowContext {
   depth: number;
 }
 
-// ADR-0018: identifies one cell panel-wide, so one cell is focused at a time. ADR-0012: `plugin`
-// is this column's compound identity, not the bare filename — two columns sharing a filename must
-// not both read as focused. `null` is the label column.
+// ADR-0018: identifies the one focused cell panel-wide. ADR-0012: `plugin` is the column's
+// compound identity, so two columns sharing a filename never both read as focused. `null` is the
+// label column.
 export interface FocusedCell {
   rowKey: string;
   plugin: ColumnKey | null;
