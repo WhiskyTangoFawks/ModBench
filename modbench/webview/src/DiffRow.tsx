@@ -39,14 +39,13 @@ interface RenderCellExtras {
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  isFocused: boolean,
   onOpen: (fk: string) => void,
   { checkError, resolution, onCommit, rowCollapsed }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} isFocused={isFocused}
+        value={value} meta={meta}
         onOpen={onOpen} checkError={checkError} resolution={resolution}
         // Same editability rule as the flags/scalar branches — presence of somewhere to
         // write, ORed with the per-row readOnly veto.
@@ -87,7 +86,6 @@ function renderCell(
     <ScalarCell
       value={value}
       meta={meta}
-      isFocused={isFocused}
       // `meta.readOnly` is a per-row veto a synthesized row can set regardless of what the
       // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
       editable={onCommit != null && !meta.readOnly}
@@ -107,15 +105,15 @@ export interface RowContext {
   depth: number;
 }
 
-// ADR-0018: identifies one cell panel-wide, so one cell is focused at a time. ADR-0012: `plugin`
-// is this column's compound identity, not the bare filename — two columns sharing a filename must
-// not both read as focused.
+// ADR-0018: identifies the one focused cell panel-wide. ADR-0012: `plugin` is the column's
+// compound identity, so two columns sharing a filename never both read as focused. `null` is the
+// label column.
 export interface FocusedCell {
   rowKey: string;
-  plugin: ColumnKey;
+  plugin: ColumnKey | null;
 }
 
-function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey): boolean {
+function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
 
@@ -147,7 +145,7 @@ interface DiffRowProps {
   // the one place that knows how a click turns into a FocusedCell.
   rowKey: string;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
   // once for the whole grid so one definition of "writable" reaches every row.
   editableColumns: Set<ColumnKey>;
@@ -212,8 +210,10 @@ export function DiffRow({
       {/* ADR-0018: double-clicking the label column expands/collapses the node, the same action
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
-      <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+      <DiskCell
+        style={{ ...baseCell, opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        isFocused={isCellFocused(focusedCell, rowKey, null)}
+        onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (
@@ -222,7 +222,7 @@ export function DiffRow({
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
         {label}
-      </td>
+      </DiskCell>
       {columns.map(col => {
         const { key, override } = col;
         // ADR-0018: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
@@ -325,7 +325,7 @@ export function DiffRow({
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
-            {hasElement && renderCell(shown, cellMeta, isFocused, onOpen, {
+            {hasElement && renderCell(shown, cellMeta, onOpen, {
               checkError, resolution: diff.resolutions?.[key],
               onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
               rowCollapsed: isFlagsRow && !rowExpanded,

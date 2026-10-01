@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { baseCell, toggleBtnStyle, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
@@ -13,23 +13,28 @@ const INDENT = 24;
 interface FormIdCellProps {
   record: CompareOverride;
   editable: boolean;
-  isFocused: boolean;
   onCommit: (formKey: string) => void;
 }
 
 // xEdit's FormID reads as the record it names, and edits as the ID typed; mEdit spells both as
 // the FormKey (xedit.md, divergence 12).
-function FormIdCell({ record, editable, isFocused, onCommit }: Readonly<FormIdCellProps>) {
+function FormIdCell({ record, editable, onCommit }: Readonly<FormIdCellProps>) {
   const { formKey } = record;
   const [draft, setDraft] = useState<string | null>(null);
+  const settled = useRef(true);
   const label = formKeyLabel(formKey, record);
   if (!editable) return <span>{label}</span>;
+  function settle(write: boolean) {
+    if (settled.current) return;
+    settled.current = true;
+    if (write && draft !== null && draft !== formKey) onCommit(draft);
+    setDraft(null);
+  }
   if (draft === null) {
     return (
       <span
         data-open-trigger
-        onClick={() => { if (isFocused) setDraft(formKey); }}
-        onDoubleClick={() => setDraft(formKey)}
+        onClick={() => { settled.current = false; setDraft(formKey); }}
         style={{ display: 'block', minHeight: '1em' }}
       >
         {label}
@@ -38,13 +43,19 @@ function FormIdCell({ record, editable, isFocused, onCommit }: Readonly<FormIdCe
   }
   return (
     <input
+      data-editor
       autoFocus
       type="text"
       value={draft}
       onChange={e => setDraft(e.target.value)}
       onFocus={e => e.currentTarget.select()}
-      onBlur={() => { if (draft !== formKey) onCommit(draft); setDraft(null); }}
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      onBlur={() => settle(true)}
+      onKeyDown={e => {
+        if (e.key !== 'Enter' && e.key !== 'Escape') return;
+        const cell = e.currentTarget.closest('td');
+        settle(e.key === 'Enter');
+        cell?.focus();
+      }}
       style={{
         fontFamily: mono, fontSize: '12px', color: fg, width: '100%', boxSizing: 'border-box',
         background: 'var(--vscode-input-background, #3c3c3c)', border: '1px solid var(--vscode-input-border, #555)',
@@ -64,7 +75,7 @@ interface RecordHeaderRowsProps {
   expanded: boolean;
   onToggle: () => void;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
 }
 
@@ -77,15 +88,18 @@ export function RecordHeaderRows({
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
     ({ ...baseCell, opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined });
   const rowStyle = (rowKey: string) => (focusedCell?.rowKey === rowKey ? focusedRowStyle : undefined);
-  const isFocused = (rowKey: string, key: ColumnKey) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
+  const isFocused = (rowKey: string, key: ColumnKey | null) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
 
   return (
     <>
       <tr style={rowStyle(RECORD_HEADER_ROW)}>
-        <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text' }} onDoubleClick={onToggle}>
+        <DiskCell
+          style={{ ...baseCell, opacity: 0.75 }} isFocused={isFocused(RECORD_HEADER_ROW, null)}
+          onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
+        >
           <button style={toggleBtnStyle} onClick={onToggle}>{expanded ? '▼' : '▶'}</button>
           {RECORD_HEADER_ROW}
-        </td>
+        </DiskCell>
         {columns.map(({ key }) => collapsedColumns.has(key)
           ? <td key={key} style={cellStyle(key)} />
           : (
@@ -99,7 +113,10 @@ export function RecordHeaderRows({
       </tr>
       {expanded && (
         <tr style={rowStyle(FORM_ID_ROW)}>
-          <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: INDENT }}>FormID</td>
+          <DiskCell
+            style={{ ...baseCell, opacity: 0.75, paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
+            onFocusCell={() => onFocusCell(FORM_ID_ROW, null)}
+          >FormID</DiskCell>
           {columns.map(({ key, override }) => collapsedColumns.has(key)
             ? <td key={key} style={cellStyle(key)} />
             : (
@@ -110,7 +127,7 @@ export function RecordHeaderRows({
               >
                 <FormIdCell
                   record={override}
-                  editable={!isPluginHeader && editableColumns.has(key)} isFocused={isFocused(FORM_ID_ROW, key)}
+                  editable={!isPluginHeader && editableColumns.has(key)}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               </DiskCell>

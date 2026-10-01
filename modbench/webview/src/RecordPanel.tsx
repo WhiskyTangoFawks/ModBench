@@ -70,7 +70,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   const enteredCell = useRef(false);
-  function handleFocusCell(rowKey: string, plugin: ColumnKey) {
+  function handleFocusCell(rowKey: string, plugin: ColumnKey | null) {
     enteredCell.current = true;
     setFocusedCell({ rowKey, plugin });
   }
