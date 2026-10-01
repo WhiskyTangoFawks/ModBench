@@ -307,13 +307,18 @@ describe('HttpMEditClient — getComparison', () => {
     expect(request?.url).toMatch(/\/records\/000801%3AMyPatch\.esp\/compare$/);
   });
 
-  // The rival: a client that degrades a 404 the way getRecordHolders does, so the record panel's
-  // host would answer a missing record with an empty comparison instead of a load failure.
-  it('rejects on a 404, unlike getRecordHolders\'s own degrade', async () => {
+  it('answers null on a 404, a record gone from every active plugin', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(404, { detail: 'No such record.' })));
     const client = makeClient(fetch);
 
-    await expect(client.getComparison('000801:Gone.esp')).rejects.toThrow(/getComparison.*failed \(404\)/);
+    expect(await client.getComparison('000801:Gone.esp')).toBeNull();
+  });
+
+  it('rejects on any other non-OK answer', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(500, { detail: 'boom' })));
+    const client = makeClient(fetch);
+
+    await expect(client.getComparison('000801:Broken.esp')).rejects.toThrow(/getComparison.*failed \(500\)/);
   });
 });
 

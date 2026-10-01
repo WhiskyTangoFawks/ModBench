@@ -8,7 +8,8 @@ import { requestRecordLoad } from './nativeBridge';
 // slice of state untouched.
 export type LoadResult =
   | {
-      ok: true; result: CompareResult; immutableSet: Set<ColumnKey> | null;
+      // Null is a record held by no active plugin.
+      ok: true; result: CompareResult | null; immutableSet: Set<ColumnKey> | null;
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
       // editable", because wrongly offering an edit that cannot land is worse than wrongly
       // withholding one (ADR-0019). Read fail-closed.
@@ -39,7 +40,7 @@ export function createRecordPanelClient(): RecordPanelClient {
       const pluginList = answer.plugins;
       return {
         ok: true,
-        result: parseCompareResult(answer.compare),
+        result: answer.compare && parseCompareResult(answer.compare),
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
         trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
         conflictsComputed: answer.conflictsComputed,

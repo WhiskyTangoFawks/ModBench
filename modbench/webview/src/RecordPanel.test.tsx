@@ -813,7 +813,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
         immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true,
       });
     renderPanel(compareResult, { load });
-    await waitFor(() => expect(screen.getByText(/Error:/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Failed to load: HTTP 500')).toBeInTheDocument());
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -821,8 +821,135 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
       }));
     });
 
-    await waitFor(() => expect(screen.queryByText(/Error:/)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument());
     await waitFor(() => screen.getByText(/TestNPC/, { selector: 'div' }));
+  });
+});
+
+const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
+  ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed,
+});
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>(r => { resolve = r; });
+  return { promise, resolve };
+}
+
+const sendMessage = (data: unknown) => {
+  act(() => { window.dispatchEvent(new MessageEvent('message', { data })); });
+};
+
+const loadRecord = (formKey = '000001:Fallout4.esm') =>
+  sendMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
+
+describe('RecordPanel — states (editor.md, States)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows an empty panel until the first read lands', () => {
+    const { container } = renderPanel(compareResult, { load: () => new Promise(() => undefined) });
+    expect(container).toHaveTextContent('');
+  });
+
+  it('keeps the grid, with the rows I expanded, while the record is read again', async () => {
+    const pending = deferred<ReturnType<typeof loaded>>();
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(structCompareResult))
+      .mockReturnValueOnce(pending.promise);
+    renderPanel(structCompareResult, { load });
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    const expandedRow = await waitFor(() => screen.getByText('X'));
+
+    loadRecord();
+
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('X')).toBe(expandedRow);
+    pending.resolve(loaded(structCompareResult));
+    await waitFor(() => screen.getByText('X'));
+  });
+
+  it('says the record is gone, naming it, in place of the grid', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(compareResult))
+      .mockResolvedValue(loaded(null));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('Override Name'));
+
+    loadRecord();
+
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+  });
+
+  it('says the last read failed, beside the gone record, until a good read replaces it', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(null))
+      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValue(loaded(compareResult));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
+
+    loadRecord();
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone. The last read failed: HTTP 500'));
+
+    loadRecord();
+    await waitFor(() => screen.getByText('Override Name'));
+  });
+
+  it('shows the record again when a later read finds it', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(null))
+      .mockResolvedValue(loaded(compareResult));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('000001:Fallout4.esm is gone.'));
+
+    loadRecord();
+
+    await waitFor(() => screen.getByText('Override Name'));
+    expect(screen.queryByText(/is gone/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the rows and says "Showing the last good read:" when a later read fails, until the next good one', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce(loaded(compareResult))
+      .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
+      .mockResolvedValue(loaded(compareResult));
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText('Override Name'));
+
+    loadRecord();
+    await waitFor(() => screen.getByText('Showing the last good read: HTTP 500'));
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to load/)).not.toBeInTheDocument();
+
+    loadRecord();
+    await waitFor(() => expect(screen.queryByText(/Showing the last good read/)).not.toBeInTheDocument());
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
+  });
+
+  it('lets a newer read win when an older one answers after it', async () => {
+    const older = deferred<ReturnType<typeof loaded>>();
+    const newer = deferred<ReturnType<typeof loaded>>();
+    const load = vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    renderPanel(compareResult, { load });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    loadRecord();
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+
+    newer.resolve(loaded(compareResult));
+    await waitFor(() => screen.getByText('Override Name'));
+    older.resolve(loaded(null));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
+    expect(screen.queryByText(/is gone/)).not.toBeInTheDocument();
   });
 });
 

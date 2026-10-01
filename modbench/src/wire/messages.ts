@@ -146,7 +146,8 @@ export interface StringValueContext {
 export type RecordLoadAnswer =
   | {
       ok: true;
-      compare: components['schemas']['CompareResult'];
+      // Null is a record held by no active plugin.
+      compare: components['schemas']['CompareResult'] | null;
       plugins: components['schemas']['PluginResponse'][] | null;
       conflictsComputed: boolean;
     }
@@ -285,8 +286,8 @@ function parseRecordLoadAnswer(w: {
     return { requestId: w.requestId, ok: false, error: w.error };
   }
   if (w.ok !== true) throw new Error('Expected "recordLoadAnswered" to carry a boolean ok.');
-  if (!isCompareResultShape(w.compare)) {
-    throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object.');
+  if (w.compare !== null && !isCompareResultShape(w.compare)) {
+    throw new Error('Expected an answered "recordLoadAnswered" to carry a compare object or null.');
   }
   if (w.plugins !== null && !isPluginResponseArray(w.plugins)) {
     throw new Error('Expected "recordLoadAnswered" to carry a plugins array or null.');

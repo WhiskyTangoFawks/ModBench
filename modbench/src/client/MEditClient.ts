@@ -172,8 +172,9 @@ export interface MEditClient {
   /** Every plugin that holds a copy of the record, its own included. */
   getRecordHolders(formKey: string): Promise<PluginAddress[]>;
   /** One record as every active plugin has it: the record panel's host asks for this and posts it
-   *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). */
-  getComparison(formKey: string): Promise<CompareResult>;
+   *  to the webview untransformed (target-architecture.d2 `modbench_driving.editor`). Null is a
+   *  record held by no active plugin. */
+  getComparison(formKey: string): Promise<CompareResult | null>;
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
