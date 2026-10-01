@@ -227,6 +227,42 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.modList.filterHere",
+        "title": "Filter…",
+        "icon": "$(search)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.modList.clearFilterHere",
+        "title": "Clear Filter",
+        "icon": "$(clear-all)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.filterHere",
+        "title": "Filter…",
+        "icon": "$(search)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.clearFilterHere",
+        "title": "Clear Filter",
+        "icon": "$(clear-all)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.filterHere",
+        "title": "Filter…",
+        "icon": "$(search)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.clearFilterHere",
+        "title": "Clear Filter",
+        "icon": "$(clear-all)",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.profile.switch",
         "title": "Switch Profile…",
         "icon": "$(account)",
@@ -530,6 +566,30 @@
           "when": "false"
         },
         {
+          "command": "modbench.modList.filterHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.modList.clearFilterHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.filterHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.clearFilterHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.downloads.filterHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.downloads.clearFilterHere",
+          "when": "false"
+        },
+        {
           "command": "modbench.filter",
           "when": "modbench.folder == instance"
         },
@@ -610,12 +670,12 @@
           "group": "settings@1"
         },
         {
-          "command": "modbench.filter",
+          "command": "modbench.pluginListTree.filterHere",
           "when": "view == modbench.pluginListTree && !modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.clearFilter",
+          "command": "modbench.pluginListTree.clearFilterHere",
           "when": "view == modbench.pluginListTree && modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
@@ -645,12 +705,12 @@
           "group": "navigation@4"
         },
         {
-          "command": "modbench.filter",
+          "command": "modbench.modList.filterHere",
           "when": "view == modbench.modList && !modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.clearFilter",
+          "command": "modbench.modList.clearFilterHere",
           "when": "view == modbench.modList && modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
@@ -675,12 +735,12 @@
           "group": "3_create@2"
         },
         {
-          "command": "modbench.filter",
+          "command": "modbench.downloads.filterHere",
           "when": "view == modbench.downloads && !modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.clearFilter",
+          "command": "modbench.downloads.clearFilterHere",
           "when": "view == modbench.downloads && modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },

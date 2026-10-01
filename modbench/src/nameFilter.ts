@@ -127,21 +127,28 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   };
 }
 
-/** The catalog's filter pair for every view that has a name filter: each acts on the focused
- *  view's. `nothingFocused` speaks when no such view is. */
+/** The catalog's filter pair for every view that has a name filter: each acts on the view it is
+ *  given, else the focused view's. A view-title icon cannot say which view it sits in, so each
+ *  view has an entry point, `<view id>.filterHere` and `<view id>.clearFilterHere`, that fires
+ *  the gesture with its view. `nothingFocused` speaks when no view has a filter to act on. */
 export function registerFilterCommands(
   focusedViewId: () => string | undefined,
   filters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>,
   nothingFocused: () => void,
 ): vscode.Disposable[] {
-  const onFocused = (act: (filter: Pick<NameFilter, 'open' | 'clear'>) => void) => () => {
-    const id = focusedViewId();
-    const filter = id === undefined ? undefined : filters.get(id);
+  const on = (act: (filter: Pick<NameFilter, 'open' | 'clear'>) => void) => (viewId: unknown = focusedViewId()) => {
+    const filter = typeof viewId === 'string' ? filters.get(viewId) : undefined;
     if (filter === undefined) nothingFocused();
     else act(filter);
   };
+  const open = on((filter) => filter.open());
+  const clear = on((filter) => filter.clear());
   return [
-    vscode.commands.registerCommand('modbench.filter', onFocused((filter) => filter.open())),
-    vscode.commands.registerCommand('modbench.clearFilter', onFocused((filter) => filter.clear())),
+    vscode.commands.registerCommand('modbench.filter', open),
+    vscode.commands.registerCommand('modbench.clearFilter', clear),
+    ...[...filters.keys()].flatMap((viewId) => [
+      vscode.commands.registerCommand(`${viewId}.filterHere`, () => vscode.commands.executeCommand('modbench.filter', viewId)),
+      vscode.commands.registerCommand(`${viewId}.clearFilterHere`, () => vscode.commands.executeCommand('modbench.clearFilter', viewId)),
+    ]),
   ];
 }
