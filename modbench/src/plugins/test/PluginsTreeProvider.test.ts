@@ -3642,3 +3642,23 @@ describe('PluginsTreeProvider — an unconfirmed enable or disable (common.md, U
     expect(spinning(tree, shown)).toBe(false);
   });
 });
+
+describe('PluginsTreeProvider — a plugin that vanishes while its write is unconfirmed', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps the mark through one landed value without it, then logs one line', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
+    const logged: string[] = [];
+    const tree = new PluginsTreeProvider({ instance, source: new FakeSource(), log: (_level, line) => logged.push(line) });
+    const [a] = await tree.getChildren();
+    tree.markUnconfirmed(expectInstanceOf(a, PluginNode), false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([plugin({ name: 'B.esp', slot: 0 })]));
+    expect(logged).toEqual([]);
+    instance.publish(valueOf([plugin({ name: 'B.esp', slot: 0 })]));
+
+    expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was written disabled, and it is gone from the disk.']);
+  });
+});

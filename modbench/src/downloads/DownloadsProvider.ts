@@ -11,6 +11,11 @@ import type {
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 
+function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
+  if (shown === undefined) return 'it is gone from the disk';
+  return `the disk now shows it ${shown ? on : off}`;
+}
+
 const MARK_DELAY_MS = 300;
 
 export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
@@ -128,12 +133,12 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     const { rows } = value.downloads;
     for (const [name, write] of this.unconfirmed) {
       const disk = rows.find((row) => row.name === name);
-      if (disk !== undefined && disk.excluded !== write.excluded && !write.differedOnce) {
-        write.differedOnce = true;
-        continue;
-      }
-      if (disk !== undefined && disk.excluded !== write.excluded) {
-        this.log(`"${name}" was written ${write.excluded ? 'excluded' : 'included'}, and the disk now shows it ${disk.excluded ? 'excluded' : 'included'}.`);
+      if (disk?.excluded !== write.excluded) {
+        if (!write.differedOnce) {
+          write.differedOnce = true;
+          continue;
+        }
+        this.log(`"${name}" was written ${write.excluded ? 'excluded' : 'included'}, and ${whatTheDiskShows(disk?.excluded, 'excluded', 'included')}.`);
       }
       clearTimeout(write.timer);
       this.unconfirmed.delete(name);

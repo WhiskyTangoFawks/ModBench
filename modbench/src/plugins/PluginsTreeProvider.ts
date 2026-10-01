@@ -20,6 +20,11 @@ import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadO
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
+function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
+  if (shown === undefined) return 'it is gone from the disk';
+  return `the disk now shows it ${shown ? on : off}`;
+}
+
 const MARK_DELAY_MS = 300;
 
 export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
@@ -359,12 +364,12 @@ export class PluginsTreeProvider
   private settleUnconfirmed(value: InstanceValue): void {
     for (const [address, write] of this.unconfirmed) {
       const disk = value.plugins.find((p) => p.winning && pluginAddressKey(p.name, p.origin) === address);
-      if (disk !== undefined && disk.enabled !== write.enabled && !write.differedOnce) {
-        write.differedOnce = true;
-        continue;
-      }
-      if (disk !== undefined && disk.enabled !== write.enabled) {
-        this.log('warn', `[PluginsTreeProvider] "${write.name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and the disk now shows it ${disk.enabled ? 'enabled' : 'disabled'}.`);
+      if (disk?.enabled !== write.enabled) {
+        if (!write.differedOnce) {
+          write.differedOnce = true;
+          continue;
+        }
+        this.log('warn', `[PluginsTreeProvider] "${write.name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and ${whatTheDiskShows(disk?.enabled, 'enabled', 'disabled')}.`);
       }
       clearTimeout(write.timer);
       this.unconfirmed.delete(address);

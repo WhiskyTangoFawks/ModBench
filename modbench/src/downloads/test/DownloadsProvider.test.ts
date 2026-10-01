@@ -694,3 +694,23 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
     expect(spinning(present(shown, 'a.7z'))).toBe(false);
   });
 });
+
+describe('DownloadsProvider — a file that vanishes while its write is unconfirmed', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps the mark through one landed value without it, then logs one line', async () => {
+    const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('a.7z', true);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([row({ name: 'b.7z' })]));
+    expect(logged).toEqual([]);
+    instance.publish(valueOf([row({ name: 'b.7z' })]));
+
+    expect(logged).toEqual(['"a.7z" was written excluded, and it is gone from the disk.']);
+    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+  });
+});

@@ -1147,3 +1147,38 @@ describe('an unconfirmed separator rename (common.md, Unconfirmed writes)', () =
     expect(iconId(await first(provider))).toBeUndefined();
   });
 });
+
+describe('a subject that vanishes from the disk while its write is unconfirmed', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('a mod keeps its mark through one landed value without it, then logs one line and shows the disk', async () => {
+    const instance = new FakeInstance(valueOf([mod('A'), mod('B')]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmed('A', false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([mod('B')]));
+    expect(logged).toEqual([]);
+    instance.publish(valueOf([mod('B')]));
+
+    expect(logged).toEqual(['"A" was written disabled, and it is gone from the disk.']);
+    const names = (await provider.getChildren()).map((n) => (n instanceof ModNode ? n.mod.name : undefined));
+    expect(names).not.toContain('A');
+  });
+
+  it('a separator rename that lands neither name logs one line after a second value', () => {
+    const instance = new FakeInstance(valueOf([mod('A'), sep('Old')]));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmedRename('Old', 'New');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueOf([mod('A')]));
+    expect(logged).toEqual([]);
+    instance.publish(valueOf([mod('A')]));
+
+    expect(logged).toEqual(['Separator "Old" was renamed "New", and the disk shows neither name.']);
+  });
+});

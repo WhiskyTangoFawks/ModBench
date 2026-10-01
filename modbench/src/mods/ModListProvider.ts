@@ -57,6 +57,11 @@ function markRow(row: vscode.TreeItem): void {
   row.tooltip = UNCONFIRMED_TOOLTIP;
 }
 
+function whatTheDiskShows(shown: boolean | undefined, on: string, off: string): string {
+  if (shown === undefined) return 'it is gone from the disk';
+  return `the disk now shows it ${shown ? on : off}`;
+}
+
 function statusIconId(status?: ModStatusResult): string {
   switch (status?.status.kind) {
     case 'conflicts':
@@ -220,12 +225,13 @@ export class ModListProvider
   private settleUnconfirmed(value: InstanceValue): void {
     for (const [name, write] of this.unconfirmed) {
       const disk = value.mods.find((m) => m.kind === 'mod' && m.name === name);
-      if (disk?.kind === 'mod' && disk.enabled !== write.enabled && !write.differedOnce) {
-        write.differedOnce = true;
-        continue;
-      }
-      if (disk?.kind === 'mod' && disk.enabled !== write.enabled) {
-        this.log(`"${name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and the disk now shows it ${disk.enabled ? 'enabled' : 'disabled'}.`);
+      const shown = disk?.kind === 'mod' ? disk.enabled : undefined;
+      if (shown !== write.enabled) {
+        if (!write.differedOnce) {
+          write.differedOnce = true;
+          continue;
+        }
+        this.log(`"${name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and ${whatTheDiskShows(shown, 'enabled', 'disabled')}.`);
       }
       clearTimeout(write.timer);
       this.unconfirmed.delete(name);
@@ -236,15 +242,18 @@ export class ModListProvider
   private settleUnconfirmedRenames(value: InstanceValue): void {
     const separatorNamed = (name: string) => value.mods.some((m) => m.kind === 'separator' && m.name === name);
     for (const [newName, rename] of this.unconfirmedRenames) {
-      const confirmed = separatorNamed(newName);
-      const unchanged = !confirmed && separatorNamed(rename.oldName);
-      if (unchanged && !rename.differedOnce) {
+      if (separatorNamed(newName)) {
+        clearTimeout(rename.timer);
+        this.unconfirmedRenames.delete(newName);
+        continue;
+      }
+      if (!rename.differedOnce) {
         rename.differedOnce = true;
         continue;
       }
-      if (unchanged) {
-        this.log(`Separator "${rename.oldName}" was renamed "${newName}", and the disk still shows "${rename.oldName}".`);
-      }
+      this.log(separatorNamed(rename.oldName)
+        ? `Separator "${rename.oldName}" was renamed "${newName}", and the disk still shows "${rename.oldName}".`
+        : `Separator "${rename.oldName}" was renamed "${newName}", and the disk shows neither name.`);
       clearTimeout(rename.timer);
       this.unconfirmedRenames.delete(newName);
     }
