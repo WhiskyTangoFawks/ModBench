@@ -26,10 +26,13 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
 
   if (collapsed) return <span>{names.join(', ')}</span>;
 
+  // editor.md, Columns, story 4: a cell that cannot be written reads as one that can, and a click on
+  // it changes nothing.
   const writable = editable && onCommit != null;
   // A name the metadata does not list stays where the document put it; only the toggled name moves.
-  const toggle = (name: string) =>
-    onCommit?.(names.includes(name) ? names.filter(n => n !== name) : [...names, name]);
+  const toggle = (name: string) => {
+    if (writable) onCommit(names.includes(name) ? names.filter(n => n !== name) : [...names, name]);
+  };
 
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -38,8 +41,7 @@ export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCel
           <input
             type="checkbox"
             checked={names.includes(name)}
-            disabled={!writable}
-            onChange={writable ? () => toggle(name) : undefined}
+            onChange={() => toggle(name)}
           />
           {name}
         </label>

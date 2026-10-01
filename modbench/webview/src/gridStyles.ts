@@ -21,9 +21,22 @@ export const baseCell: React.CSSProperties = {
 
 export const headerCell: React.CSSProperties = { ...baseCell, fontWeight: 600 };
 
-// ADR-0013: non-participating plugins render dimmed. Header and cells both carry the cue
-// because the grid's <thead> is not sticky.
+/** A row's label cell, given the label column's look. */
+export const labelCell = (column: React.CSSProperties): React.CSSProperties =>
+  ({ ...baseCell, ...column, opacity: 0.75 });
+
+// editor.md, A column's header: a Partial Form column is dimmed, header and cells alike, since
+// the grid's <thead> is not sticky.
 export const DIMMED_OPACITY = 0.55;
+
+// editor.md, Columns, story 3: the narrow strip a collapsed column becomes, and the narrowest a
+// drag leaves one.
+export const COLLAPSED_COLUMN_WIDTH = 48;
+
+/** A column's width, held by its header and every cell under it alike. The border box, as the
+ *  drag that sets it measures the header. */
+export const columnWidthStyle = (width: number | undefined): React.CSSProperties =>
+  width == null ? {} : { width, minWidth: width, maxWidth: width, boxSizing: 'border-box' };
 
 export const toggleBtnStyle: React.CSSProperties = {
   background: 'none',

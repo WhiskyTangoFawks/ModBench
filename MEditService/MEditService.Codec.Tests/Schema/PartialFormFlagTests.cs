@@ -43,8 +43,6 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsSet(npc));
     }
 
-    // IsPartialFormable is the same container-type gate IsSet already uses, split out so the
-    // write path can ask "is this type eligible" independent of the bit's current state.
     [Fact]
     public void IsPartialFormable_Cell_ReturnsTrue()
     {
