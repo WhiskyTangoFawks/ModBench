@@ -21,7 +21,6 @@ import {
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../wire/messages';
 import type { RecordSummary, CompareResult } from '../../client';
 import { InMemoryMEditClient } from '../../client';
-import { present } from '../../ports/present';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
