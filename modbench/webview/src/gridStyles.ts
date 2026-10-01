@@ -50,39 +50,37 @@ export const toggleBtnStyle: React.CSSProperties = {
 };
 
 // editor-conflicts.md, The colours: each is a theme colour the extension manifest contributes.
-export const CONFLICT_COLOURS = {
-  rowOverride: 'modbench.conflict.rowOverride',
-  rowConflict: 'modbench.conflict.rowConflict',
-  identicalToMaster: 'modbench.conflict.identicalToMaster',
-  override: 'modbench.conflict.override',
-  conflictWins: 'modbench.conflict.conflictWins',
-  conflictLoses: 'modbench.conflict.conflictLoses',
-  conflictLosesText: 'modbench.conflict.conflictLosesText',
-} as const;
+const COLOUR_NAMES = [
+  'rowOverride', 'rowConflict', 'identicalToMaster', 'override', 'conflictWins', 'conflictLoses',
+  'conflictLosesText',
+] as const;
+type ColourName = (typeof COLOUR_NAMES)[number];
 
-const themeColour = (id: string): string => `var(--vscode-${id.replaceAll('.', '-')})`;
+export const CONFLICT_COLOURS: readonly string[] = COLOUR_NAMES.map(name => `modbench.conflict.${name}`);
+
+const themeColour = (name: ColourName): string => `var(--vscode-modbench-conflict-${name})`;
 
 // NoConflict and OnlyOne are absent: they paint no background, so an expanded row deferring to its
 // children reads the same way they do.
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
-  Override: themeColour(CONFLICT_COLOURS.rowOverride),
-  Conflict: themeColour(CONFLICT_COLOURS.rowConflict),
+  Override: themeColour('rowOverride'),
+  Conflict: themeColour('rowConflict'),
 };
 
 export const rowBackground = (conflictAll: ConflictAll): string | undefined => ROW_BG[conflictAll];
 
 const CELL_BG: Partial<Record<ConflictThis, string>> = {
-  IdenticalToMaster: themeColour(CONFLICT_COLOURS.identicalToMaster),
-  Override: themeColour(CONFLICT_COLOURS.override),
-  ConflictWins: themeColour(CONFLICT_COLOURS.conflictWins),
-  ConflictLoses: themeColour(CONFLICT_COLOURS.conflictLoses),
+  IdenticalToMaster: themeColour('identicalToMaster'),
+  Override: themeColour('override'),
+  ConflictWins: themeColour('conflictWins'),
+  ConflictLoses: themeColour('conflictLoses'),
 };
 
 export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProperties {
   const backgroundColor = cellState && CELL_BG[cellState];
   if (!backgroundColor) return {};
   if (cellState === 'ConflictLoses') {
-    return { backgroundColor, color: themeColour(CONFLICT_COLOURS.conflictLosesText) };
+    return { backgroundColor, color: themeColour('conflictLosesText') };
   }
   return { backgroundColor };
 }

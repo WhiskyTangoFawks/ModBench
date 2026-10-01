@@ -21,7 +21,7 @@ function contributedColours(): { id: string; defaults: Record<string, unknown> }
 describe('conflict theme colours', () => {
   it('the manifest contributes each colour the panel paints with, and no other conflict colour', () => {
     const contributed = contributedColours().map(c => c.id).filter(id => id.startsWith('modbench.conflict.'));
-    expect(contributed.sort()).toEqual(Object.values(CONFLICT_COLOURS).sort());
+    expect(contributed.sort()).toEqual([...CONFLICT_COLOURS].sort());
   });
 
   it('each has a default for every kind of theme', () => {
