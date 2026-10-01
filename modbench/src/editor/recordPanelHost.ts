@@ -16,7 +16,7 @@ import type { AskQuestion } from '../ports/dialog';
 import { recordUri, formKeyOfRecordUri, RECORD_EDITOR_VIEW_TYPE } from './recordUri';
 
 export interface EditorCommandDeps {
-  context: vscode.ExtensionContext;
+  context: Pick<vscode.ExtensionContext, 'extensionUri'>;
   // Every open 'modbench.record' custom editor's panel — see RecordEditorProvider's
   // resolveCustomEditor.
   recordPanels: Set<vscode.WebviewPanel>;
@@ -40,7 +40,7 @@ export interface EditorCommandDeps {
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like mergedTreeSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
-  outputChannel: vscode.LogOutputChannel;
+  outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // The two ports (ADR-0019), built over the window API by the composition root: this box
   // surfaces a failure and asks a question, and implements neither.
   reporterFor: (tag: string) => Reporter;
@@ -67,7 +67,7 @@ class RecordDocument implements vscode.CustomDocument {
 }
 
 interface RecordEditorProviderDeps {
-  context: vscode.ExtensionContext;
+  context: Pick<vscode.ExtensionContext, 'extensionUri'>;
   recordPanels: Set<vscode.WebviewPanel>;
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;

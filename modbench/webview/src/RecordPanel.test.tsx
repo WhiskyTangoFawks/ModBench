@@ -830,6 +830,12 @@ const loaded = (result: CompareResult | null, conflictsComputed = true) => ({
   ok: true as const, result, immutableSet: new Set<string>(), trackedSet: new Set<string>(), conflictsComputed,
 });
 
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>(r => { resolve = r; });
+  return { promise, resolve };
+}
+
 const sendMessage = (data: unknown) => {
   act(() => { window.dispatchEvent(new MessageEvent('message', { data })); });
 };
@@ -852,7 +858,7 @@ describe('RecordPanel — states (editor.md, States)', () => {
   });
 
   it('keeps the grid, with the rows I expanded, while the record is read again', async () => {
-    const pending = Promise.withResolvers<ReturnType<typeof loaded>>();
+    const pending = deferred<ReturnType<typeof loaded>>();
     const load = vi.fn()
       .mockResolvedValueOnce(loaded(structCompareResult))
       .mockReturnValueOnce(pending.promise);
@@ -914,8 +920,8 @@ describe('RecordPanel — states (editor.md, States)', () => {
   });
 
   it('lets a newer read win when an older one answers after it', async () => {
-    const older = Promise.withResolvers<ReturnType<typeof loaded>>();
-    const newer = Promise.withResolvers<ReturnType<typeof loaded>>();
+    const older = deferred<ReturnType<typeof loaded>>();
+    const newer = deferred<ReturnType<typeof loaded>>();
     const load = vi.fn().mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
     renderPanel(compareResult, { load });
     await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
