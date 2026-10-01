@@ -5,6 +5,7 @@ using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.TestSupport;
@@ -44,6 +45,15 @@ internal sealed class DocumentEditFixture : IDisposable
         var body = Codec.SerializeToBytes(record, GameRelease.Fallout4);
         SeedRaw(record.FormKey.ToString(), recordType, record.EditorID, System.Text.Encoding.UTF8.GetString(body));
         return record.FormKey.ToString();
+    }
+
+    /// <summary>A landscape has no file of its own, so a new one is seeded inside a cell's document;
+    /// returns the landscape's FormKey.</summary>
+    internal string SeedLandscape(IFallout4Mod mod)
+    {
+        var landscape = new Landscape(mod);
+        Seed(new Cell(mod) { Landscape = landscape }, "cell");
+        return landscape.FormKey.ToString();
     }
 
     /// <summary>Seeds an exact document body, for a case whose input is a shape the codec itself

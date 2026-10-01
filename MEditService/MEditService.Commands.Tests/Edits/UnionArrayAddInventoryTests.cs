@@ -31,6 +31,8 @@ public class UnionArrayAddInventoryTests
     // Written out so a Mutagen change to any leaf set is a visible edit here.
     private static readonly string[] ExercisedShapes =
     [
+        // land.layers
+        "AlphaLayer|BaseLayer",
         // cobj.conditions and every other condition-bearing column
         "ConditionFloat|ConditionGlobal",
         // omod.properties
@@ -55,6 +57,7 @@ public class UnionArrayAddInventoryTests
         { "perk", "Effects" },
         { "aech", "Effects" },
         { "omod", "Properties" },
+        { "land", "Layers" },
     };
 
     [Theory]
@@ -65,7 +68,9 @@ public class UnionArrayAddInventoryTests
         var mod = new Fallout4Mod(Key, Fallout4Release.Fallout4);
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[table];
         var col = schema.RecordColumns.Single(c => c.Name == column);
-        var formKey = fixture.Seed(NewRecord(mod, table), table);
+        var formKey = table == "land"
+            ? fixture.SeedLandscape(mod)
+            : fixture.Seed(NewRecord(mod, table), table);
 
         var (result, after) = fixture.Apply(formKey, Envelopes.AddAt(Envelopes.Member(column)));
 
