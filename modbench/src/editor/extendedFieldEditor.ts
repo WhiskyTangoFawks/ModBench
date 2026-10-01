@@ -38,9 +38,15 @@ async function showBeside(path: string): Promise<void> {
   await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
 }
 
-// Keyed by the temp path, which carries the origin: a cell's open tab is found again, never
-// rewritten or listened to twice.
-const openTabs = new Set<string>();
+// Keyed by the temp path, which carries the origin, and claimed before the first await so two
+// quick opens share one. Resolves to whether the tab opened.
+const openTabs = new Map<string, Promise<boolean>>();
+
+function reportOpenFailure(deps: ExtendedFieldEditorDeps, err: unknown): void {
+  // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
+  // "explicit action failed" row: error notification + log, not a silent swallow.
+  deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
+}
 
 // A temp file, not a FileSystemProvider: a real file gets native dirty-tracking and the native
 // close prompt for free, so abandoning it commits nothing, and read-only is the OS permission bit
@@ -49,15 +55,27 @@ export async function openExtendedFieldEditor(
   params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps,
 ): Promise<void> {
   const { folder, file: path } = deps.fieldFile(params);
+  const claimed = openTabs.get(path);
+  if (claimed) {
+    const opened = await claimed;
+    if (!opened) return;
+    await showBeside(path).catch((err: unknown) => reportOpenFailure(deps, err));
+    return;
+  }
+  const first = openFirst(params, deps, folder, path);
+  openTabs.set(path, first);
+  await first;
+}
+
+async function openFirst(
+  params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps, folder: string, path: string,
+): Promise<boolean> {
+  const listeners: vscode.Disposable[] = [];
   try {
-    if (openTabs.has(path)) {
-      await showBeside(path);
-      return;
-    }
     await mkdir(folder, { recursive: true });
-    // A second open of an immutable cell finds a file already `chmod`-ed 0o444 by the first, and
-    // writeFile against a non-writable file throws EACCES. ENOENT is the one error to ignore —
-    // nothing exists to chmod yet.
+    // A leftover file from a crashed session may be `chmod`-ed 0o444, and writeFile against a
+    // non-writable file throws EACCES. ENOENT is the one error to ignore — nothing exists to
+    // chmod yet.
     await chmod(path, 0o644).catch((err: unknown) => {
       if (errnoCode(err) !== 'ENOENT') throw err;
     });
@@ -68,16 +86,11 @@ export async function openExtendedFieldEditor(
     await chmod(path, params.readOnly ? 0o444 : 0o644);
 
     const uri = vscode.Uri.file(path);
-    openTabs.add(path);
-    await showBeside(path);
-    // files.readonlyFromPermissions is off by default, so the permission bit alone does not make
-    // the tab read-only.
-    if (params.readOnly) await vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
-
     const saveListener = vscode.workspace.onDidSaveTextDocument(async savedDoc => {
       if (savedDoc.uri.fsPath !== uri.fsPath) return;
       await deps.onCommit(savedDoc.getText());
     });
+    listeners.push(saveListener);
     const closeListener = vscode.workspace.onDidCloseTextDocument(async closedDoc => {
       if (closedDoc.uri.fsPath !== uri.fsPath) return;
       openTabs.delete(path);
@@ -90,10 +103,20 @@ export async function openExtendedFieldEditor(
         deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${errorMessage(err)}`);
       });
     });
+    listeners.push(closeListener);
+    await showBeside(path);
   } catch (err) {
     openTabs.delete(path);
-    // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
-    // "explicit action failed" row: error notification + log, not a silent swallow.
-    deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
+    listeners.forEach(listener => listener.dispose());
+    reportOpenFailure(deps, err);
+    return false;
   }
+  try {
+    // files.readonlyFromPermissions is off by default, so the permission bit alone does not make
+    // the tab read-only.
+    if (params.readOnly) await vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
+  } catch (err) {
+    reportOpenFailure(deps, err);
+  }
+  return true;
 }

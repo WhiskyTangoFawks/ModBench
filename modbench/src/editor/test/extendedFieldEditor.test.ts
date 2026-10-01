@@ -322,4 +322,52 @@ describe('openExtendedFieldEditor', () => {
 
     expect(executeCommand).not.toHaveBeenCalled();
   });
+
+  it('two concurrent opens of one cell write once and register one listener pair', async () => {
+    const tempRoot = await makeTempRoot();
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+
+    await Promise.all([
+      openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot)),
+      openExtendedFieldEditor({ ...deacon, value: 'second', readOnly: false }, makeDeps(tempRoot)),
+    ]);
+
+    expect(await readFile(path, 'utf8')).toBe('x');
+    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(1);
+    expect(onDidCloseTextDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failing show on a tab already open keeps it known, so a later open still does not rewrite', async () => {
+    const tempRoot = await makeTempRoot();
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+    showTextDocument.mockRejectedValueOnce(new Error('no window'));
+    const failing = makeDeps(tempRoot);
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, failing);
+    expect(failing.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no window');
+    await writeFile(path, 'unsaved edit on disk');
+
+    await openExtendedFieldEditor({ ...deacon, readOnly: false }, makeDeps(tempRoot));
+
+    expect(await readFile(path, 'utf8')).toBe('unsaved edit on disk');
+    expect(onDidSaveTextDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failing read-only command is reported and the tab still saves', async () => {
+    const tempRoot = await makeTempRoot();
+    const saveEvent = makeFakeDocEvent();
+    onDidSaveTextDocument.mockImplementation(saveEvent.register);
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
+    executeCommand.mockRejectedValueOnce(new Error('no such command'));
+    const deps = makeDeps(tempRoot);
+
+    await openExtendedFieldEditor({ ...deacon, readOnly: true }, deps);
+    await saveEvent.fire({ uri: { fsPath: path }, getText: () => 'saved' });
+
+    expect(deps.reporter.report).toHaveBeenCalledWith('error', 'Could not open the extended editor.', 'no such command');
+    expect(deps.onCommit).toHaveBeenCalledWith('saved');
+  });
 });
