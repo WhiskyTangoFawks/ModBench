@@ -12,14 +12,20 @@ vi.mock('vscode', () => ({
   Uri: { file: (p: string) => ({ fsPath: p }) },
 }));
 
-import { registerModInstallCommands, type ModInstallDeps } from '../mods/installCommands';
+import { registerModInstallCommands } from '../mods/installCommands';
 import { DownloadNode } from '../downloads/DownloadsProvider';
+import { accessTo } from './mo2/adapterOver';
+import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
 
 describe('modbench.mod.install given a Downloads row', () => {
   it('hands the row of the real DownloadNode to the downloaded-file flow', async () => {
     const installDownloaded = vi.fn().mockResolvedValue(true);
-    registerModInstallCommands({ installDownloaded } as unknown as ModInstallDeps);
+    registerModInstallCommands({
+      access: accessTo('/instance'), instance: { value: instanceValueFixture() },
+      runModAction: async (_label, _fail, action) => action(), promptModName: vi.fn(), warnIfFomod: vi.fn(),
+      installDownloaded,
+    });
     const row = downloadRowFixture('foo.7z');
 
     const handler = registerCommand.mock.calls.find((c) => c[0] === 'modbench.mod.install')?.[1];
