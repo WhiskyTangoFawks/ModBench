@@ -39,6 +39,7 @@ vi.mock('../../downloadsCommands/downloads', async (importOriginal) => {
   return { ...real, deleteDownloads: vi.fn(real.deleteDownloads) };
 });
 
+import * as vscode from 'vscode';
 import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -50,7 +51,6 @@ import {
   installDownloadedFile,
   type DownloadInstallDeps,
 } from '../DownloadsPanel';
-import { registerModInstallCommands } from '../../mods/installCommands';
 import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
 import { deleteDownloads } from '../../downloadsCommands/downloads';
 import type { MoveToTrash } from '../../ports/trash';
@@ -94,16 +94,14 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
-// The one install command, with the Downloads flow behind it as the composition root wires it.
+// What the composition root wires behind modbench.mod.install for a downloaded file; the command
+// itself belongs to Mods, which hands this flow the row.
 function registerInstall(
   access: ReturnType<typeof accessTo>, instance: Pick<Instance, 'value'>, reporter: ReturnType<typeof recordingReporter>,
   deps: DownloadInstallDeps,
 ): void {
-  registerModInstallCommands({
-    access, instance, runModAction: async (_label, _fail, action) => action(), promptModName: vi.fn(),
-    warnIfFomod: deps.warnIfFomod,
-    installDownloaded: (file) => installDownloadedFile(file, access, instance, reporter, deps),
-  });
+  vscode.commands.registerCommand('modbench.mod.install', (downloaded: DownloadNode) =>
+    installDownloadedFile(downloaded.row, access, instance, reporter, deps));
 }
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
