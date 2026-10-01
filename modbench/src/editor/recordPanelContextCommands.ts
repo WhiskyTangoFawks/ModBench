@@ -109,7 +109,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
   {
     command: 'modbench.record.openReference',
     run: async (_deps, ctx) => {
-      if (isReferenceContext(ctx)) await vscode.commands.executeCommand('modbench.record.open', { formKey: ctx.referenceTarget });
+      if (isReferenceContext(ctx)) await vscode.commands.executeCommand('modbench.record.open', { formKey: ctx.referenceTarget, placement: 'active' });
     },
   },
   {

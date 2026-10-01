@@ -10,7 +10,7 @@ vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickReco
 vi.mock('vscode', () => ({
   EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { /* no listeners */ } dispose() { /* nothing held */ } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
-  ViewColumn: { One: 1, Beside: -2 },
+  ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {
     registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
       commandHandlers.set(id, handler);
@@ -189,6 +189,18 @@ describe('modbench.record.openToSide, the menus\' entry point', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', [
       { ...a, placement: 'beside' }, { ...b, placement: 'beside' },
     ]);
+  });
+});
+
+describe('modbench.record.open placed in the active group', () => {
+  it('opens the record as a preview in the group the panel is in, not group one', async () => {
+    register();
+
+    await commandHandlers.get('modbench.record.open')?.({ formKey: '000801:A.esp', placement: 'active' });
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      'vscode.openWith', `/${encodeURIComponent('000801:A.esp')}.modbench-record`, 'modbench.record',
+      { viewColumn: -1, preview: true });
   });
 });
 

@@ -6,21 +6,26 @@ const B = { formKey: '000802:A.esp' };
 
 describe('recordOpenPlan', () => {
   it('a click on one record opens it as a preview', () => {
-    expect(recordOpenPlan(A, [])).toEqual({ addresses: [A], beside: false, preview: true });
+    expect(recordOpenPlan(A, [])).toEqual({ addresses: [A], column: 'one', preview: true });
+  });
+
+  it('placement: active opens a lone record as a preview in the active group', () => {
+    expect(recordOpenPlan({ ...A, placement: 'active' }, []))
+      .toEqual({ addresses: [A], column: 'active', preview: true });
   });
 
   it('placement: beside opens pinned and beside', () => {
     expect(recordOpenPlan({ ...A, placement: 'beside' }, []))
-      .toEqual({ addresses: [A], beside: true, preview: false });
+      .toEqual({ addresses: [A], column: 'beside', preview: false });
   });
 
   it('records that each ask beside open beside, each record on its own', () => {
     expect(recordOpenPlan([{ ...A, placement: 'beside' }, { ...B, placement: 'beside' }], []))
-      .toEqual({ addresses: [A, B], beside: true, preview: false });
+      .toEqual({ addresses: [A, B], column: 'beside', preview: false });
   });
 
   it('several records without a placement each open pinned', () => {
-    expect(recordOpenPlan([A, B], [])).toEqual({ addresses: [A, B], beside: false, preview: false });
+    expect(recordOpenPlan([A, B], [])).toEqual({ addresses: [A, B], column: 'one', preview: false });
   });
 
   it('reads a tree row by the FormKey it states', () => {
@@ -43,7 +48,7 @@ describe('recordOpenPlan', () => {
 
   it('with no Argument, opens the records selected in the focused view, each pinned in a tab of its own', () => {
     const rows = [{ kind: 'record', record: { formKey: A.formKey } }, { kind: 'placed', formKey: B.formKey }];
-    expect(recordOpenPlan(undefined, rows)).toEqual({ addresses: [A, B], beside: false, preview: false });
+    expect(recordOpenPlan(undefined, rows)).toEqual({ addresses: [A, B], column: 'one', preview: false });
   });
 
   it('with no Argument and no record selected, opens nothing', () => {

@@ -206,10 +206,10 @@ async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColu
 
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
-async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
-  let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.One;
+async function openRecordTabs({ addresses, column: placement, preview }: RecordOpenPlan): Promise<void> {
+  let column: vscode.ViewColumn = { one: vscode.ViewColumn.One, beside: vscode.ViewColumn.Beside, active: vscode.ViewColumn.Active }[placement];
   for (const address of addresses) {
     await openRecordTab(address, column, preview);
-    if (beside) column = vscode.window.tabGroups.activeTabGroup.viewColumn;
+    if (placement === 'beside') column = vscode.window.tabGroups.activeTabGroup.viewColumn;
   }
 }
