@@ -582,7 +582,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Name'));
     const row = screen.getByText('Name').closest('tr');
     if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
   });
 
   it('applies orange row background to a field whose own conflictAll is Conflict', async () => {
@@ -591,7 +591,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Name'));
     const row = screen.getByText('Name').closest('tr');
     if (!row) throw new Error('expected a tr ancestor of the Name row');
-    expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
+    expect(row.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowConflict)');
   });
 
   // Two sibling fields, only one differing: a record-wide smear would tint both rows alike.
@@ -603,7 +603,7 @@ describe('RecordPanel — conflict color coding', () => {
     const levelRow = screen.getByText('Level').closest('tr');
     if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
     if (!levelRow) throw new Error('expected a tr ancestor of the Level row');
-    expect(nameRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(nameRow.style.backgroundColor).toBe('var(--vscode-modbench-conflict-rowOverride)');
     expect(levelRow.style.backgroundColor).toBe('');
   });
 
@@ -613,7 +613,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('rgba(255, 152, 0, 0.18)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictWins)');
   });
 
   it('applies green cell background when cellStates is Override', async () => {
@@ -622,7 +622,7 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
-    expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-override)');
   });
 
   it('column header background reflects CompareOverride.conflictThis', async () => {
@@ -632,7 +632,108 @@ describe('RecordPanel — conflict color coding', () => {
     // MyMod.esp header: conflictThis = 'ConflictWins' → orange background in the <th>
     const header = screen.getByText('MyMod.esp').closest('th');
     if (!header) throw new Error('expected a th ancestor of the MyMod.esp header cell');
-    expect(header.style.backgroundColor).toBe('rgba(255, 152, 0, 0.35)');
+    expect(header.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictWins)');
+  });
+});
+
+describe('RecordPanel — conflict cell tooltips and colours', () => {
+  const columns = ['Fallout4.esm', 'Same.esp', 'Loser.esp', 'Winner.esp', 'Empty.esp'];
+  const threeWayResult: CompareResult = compareResultFixture({
+    conflictAll: 'Conflict',
+    overrides: columns.map((plugin, i) => compareOverride({
+      formKey: '000001:Fallout4.esm', plugin, isWinner: i === 3, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'x' }], loadIndex: `0${i}`,
+    })),
+    diffs: [diffNode({
+      fieldName: 'Name',
+      values: { 'Fallout4.esm': 'A', 'Same.esp': 'A', 'Loser.esp': 'B', 'Winner.esp': 'C' },
+      winnerColumn: 'Winner.esp',
+      cellStates: { 'Same.esp': 'IdenticalToMaster', 'Loser.esp': 'ConflictLoses', 'Winner.esp': 'ConflictWins' },
+      conflictAll: 'Conflict',
+    })],
+  });
+
+  const cellOf = async (text: string): Promise<HTMLElement> => {
+    const cell = (await screen.findByText(text)).closest('td');
+    if (!cell) throw new Error(`expected a td ancestor of ${text}`);
+    return cell;
+  };
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('paints a losing cell red, in red text, and names it', async () => {
+    renderPanel(threeWayResult);
+    const cell = await cellOf('B');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-conflictLoses)');
+    expect(cell.style.color).toBe('var(--vscode-modbench-conflict-conflictLosesText)');
+    expect(cell.title).toBe('Conflict loser');
+  });
+
+  it('paints an unchanged copy grey and names it', async () => {
+    renderPanel(threeWayResult);
+    const cell = (await screen.findAllByText('A'))[1]?.closest('td');
+    expect(cell?.style.backgroundColor).toBe('var(--vscode-modbench-conflict-identicalToMaster)');
+    expect(cell?.title).toBe('Identical to Master');
+  });
+
+  it('names the winning cell', async () => {
+    renderPanel(threeWayResult);
+    expect((await cellOf('C')).title).toBe('Conflict winner');
+  });
+
+  it('names the first loaded column Master, with no colour', async () => {
+    renderPanel(threeWayResult);
+    const cell = (await screen.findAllByText('A'))[0]?.closest('td');
+    expect(cell?.title).toBe('Master');
+    expect(cell?.style.backgroundColor).toBe('');
+  });
+
+  it('gives a column with nothing on the row no colour and no tooltip', async () => {
+    renderPanel(threeWayResult);
+    await cellOf('B');
+    const nameRow = screen.getByText('Name').closest('tr');
+    const empty = nameRow?.querySelectorAll('td')[columns.length];
+    expect(empty?.style.backgroundColor).toBe('');
+    expect(empty?.title).toBe('');
+  });
+
+  it('paints no colour on the header of a column with no cell state', async () => {
+    renderPanel(compareResultFixture({
+      overrides: [
+        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }], conflictThis: 'Master' }),
+        compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Empty.esp', editorId: 'TestNPC', fields: [], conflictThis: null }),
+      ],
+      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'A' }, winnerColumn: 'Fallout4.esm' })],
+    }));
+    await cellOf('A');
+    expect(screen.getByText('Empty.esp').closest('th')?.style.backgroundColor).toBe('');
+  });
+
+  it('gives the master column no tooltip on a row only a later plugin holds', async () => {
+    renderPanel(compareResultFixture({
+      overrides: columns.slice(0, 2).map(plugin => compareOverride({
+        formKey: '000001:Fallout4.esm', plugin, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
+      })),
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'Same.esp': 'Added' }, winnerColumn: 'Same.esp',
+        cellStates: { 'Same.esp': 'Override' }, conflictAll: 'Override',
+      })],
+    }));
+    await cellOf('Added');
+    const masterCell = screen.getByText('Name').closest('tr')?.querySelectorAll('td')[1];
+    expect(masterCell?.title).toBe('');
+  });
+
+  it('names a lone copy Single Record', async () => {
+    renderPanel(compareResultFixture({
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: true,
+        editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
+      })],
+      diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Only' }, winnerColumn: 'Fallout4.esm', conflictAll: 'OnlyOne' })],
+    }));
+    expect((await cellOf('Only')).title).toBe('Single Record');
   });
 });
 
@@ -730,7 +831,7 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('15'));
     const cell = screen.getByText('15').closest('td');
     if (!cell) throw new Error('expected a td ancestor of the child row\'s 15 cell');
-    expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
+    expect(cell.style.backgroundColor).toBe('var(--vscode-modbench-conflict-override)');
   });
 });
 
@@ -2017,7 +2118,7 @@ describe('RecordPanel — the Record Header', () => {
     fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(formIdCell(container)).toHaveAttribute('title', reason);
+    expect(formIdCell(container)).toHaveAttribute('title', expect.stringContaining(reason));
   });
 
   it('opens the editor on a FormID with no reason, where the plugin header\'s opens none', async () => {
@@ -2068,10 +2169,10 @@ describe('RecordPanel — a field the schema marks read-only', () => {
     fireEvent.doubleClick(screen.getByText('A Name'));
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', reason);
+    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', expect.stringContaining(reason));
   });
 
-  it('gives a field with no reason no tooltip', async () => {
+  it('gives a field with no reason only its state as the tooltip', async () => {
     const open = fieldMeta({ name: 'Name', type: 'string' });
     renderPanel({
       ...compare,
@@ -2082,6 +2183,6 @@ describe('RecordPanel — a field the schema marks read-only', () => {
     }, { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
 
-    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).not.toHaveAttribute('title');
+    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', 'Single Record');
   });
 });

@@ -15,7 +15,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // Resolutions is populated in this pass; null leaves Resolutions empty.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
         GameRelease release,
         Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
@@ -52,14 +51,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         // ADR-0012: keyed by the compound column identity, not the bare plugin — two overrides
         // sharing a filename but differing in origin must land as two independent entries here,
         // not collide (ToDictionary would throw on a literal duplicate key).
-        var pluginConflictThis = conflictingRecords.ToDictionary(
-            Column, o => ConflictRules.AggregateThis(Column(o), ctx.MasterColumn, diffs.Select(d => d.CellStates)));
-
-        // Escalates an existing Override/Conflict to Critical; never overrides a NoConflict result
-        // (a content-identical injected record isn't a real conflict — see xeMainForm.pas
-        // ConflictLevelForNodeDatas).
-        if (conflictAll != ConflictAll.NoConflict && ConflictRules.IsInjected(conflictingRecords, pluginMasters))
-            conflictAll = ConflictAll.ConflictCritical;
+        var pluginConflictThis = new Dictionary<string, ConflictThis>();
+        foreach (var o in conflictingRecords)
+        {
+            if (ConflictRules.AggregateThis(Column(o), ctx.MasterColumn, diffs.Select(d => d.CellStates)) is { } state)
+                pluginConflictThis[Column(o)] = state;
+        }
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }

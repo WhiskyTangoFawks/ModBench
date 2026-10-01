@@ -9,5 +9,4 @@ public enum ConflictAll
     NoConflict,
     Override,
     Conflict,
-    ConflictCritical,
 }

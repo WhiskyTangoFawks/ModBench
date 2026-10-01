@@ -1,6 +1,3 @@
-using MEditService.Index;
-using Mutagen.Bethesda.Plugins;
-
 namespace MEditService.Queries;
 
 // Single owner of the ADR-0018 two-axis model's decision rules, so a rule change cannot drift
@@ -61,9 +58,9 @@ internal static class ConflictRules
         return !ctx.ValuesEqual(pluginValue, ctx.WinnerValue) ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
-    // One column's own state across every row: the most severe cell it holds, and Master for the
-    // master's own column.
-    public static ConflictThis AggregateThis(
+    // One column's own state across every row: the most severe cell it holds, Master for the
+    // master's own column, and none for a column with no cell.
+    public static ConflictThis? AggregateThis(
         string column, string masterColumn, IEnumerable<IReadOnlyDictionary<string, ConflictThis>> rows)
     {
         if (column == masterColumn) return ConflictThis.Master;
@@ -71,26 +68,12 @@ internal static class ConflictRules
         var states = rows.Where(r => r.ContainsKey(column)).Select(r => r[column]).ToList();
         return states switch
         {
-            { Count: 0 } => ConflictThis.IdenticalToMaster,
+            { Count: 0 } => null,
             _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
             _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
             _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
             _ => ConflictThis.IdenticalToMaster,
         };
-    }
-
-    // An override whose master list omits the plugin the FormKey originates in has injected the
-    // record into that plugin's FormID space.
-    public static bool IsInjected(
-        IReadOnlyList<RecordDetail> overrides,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
-    {
-        if (!FormKey.TryFactory(overrides[0].FormKey, out var formKey)) return false;
-        var originPlugin = formKey.ModKey.FileName.String;
-
-        return overrides.Skip(1).Any(o =>
-            pluginMasters.TryGetValue(ColumnKey.Of(o.Plugin, o.Origin), out var masters) &&
-            !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
     }
 
     // Folds a set of per-cell states into the row-level ConflictAll contribution they imply:
@@ -113,13 +96,13 @@ internal static class ConflictRules
         };
     }
 
-    // Takes the more severe of the two; OnlyOne and ConflictCritical are terminal and pass through.
+    // Takes the more severe of the two; OnlyOne is terminal and passes through.
     // Explicit severity table so this doesn't depend on enum declaration order.
     public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
         return generic switch
         {
-            ConflictAll.OnlyOne or ConflictAll.ConflictCritical => generic,
+            ConflictAll.OnlyOne => generic,
             _ => Severity(contribution) > Severity(generic) ? contribution : generic,
         };
     }
@@ -129,6 +112,6 @@ internal static class ConflictRules
         ConflictAll.NoConflict => 0,
         ConflictAll.Override => 1,
         ConflictAll.Conflict => 2,
-        _ => 3, // OnlyOne / ConflictCritical: terminal, never expected as a `contribution` argument.
+        _ => 3, // OnlyOne: terminal, never expected as a `contribution` argument.
     };
 }

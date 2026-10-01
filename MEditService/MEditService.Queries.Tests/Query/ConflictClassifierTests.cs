@@ -7,14 +7,10 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ConflictClassifierTests
 {
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoMasters =
-        new Dictionary<string, IReadOnlyList<string>>();
-
     private static readonly ConflictClassifier Classifier = new ConflictClassifier();
 
-    private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null) =>
-        Classifier.Classify(records, masters ?? NoMasters, GameRelease.Fallout4);
+    private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records) =>
+        Classifier.Classify(records, GameRelease.Fallout4);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -189,6 +185,15 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, result.PluginStates["B.esp"]);
+    }
+
+    [Fact]
+    public void Classify_ColumnWithNoCellStates_HasNoPluginState()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
+        var empty = MakeOverride("B.esp", 1, true);
+        var result = Classify([master, empty]);
+        Assert.DoesNotContain("B.esp", result.PluginStates.Keys);
     }
 
     [Fact]
@@ -400,98 +405,6 @@ public class ConflictClassifierTests
         var result = Classify([master, partial]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
-    }
-
-    // --- Injected record detection ---
-
-    [Fact]
-    public void Classify_InjectedRecord_ReturnsConflictCritical()
-    {
-        // FormKey origin is "Origin.esm" but B.esp's masters don't include it → injected
-        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("Name"), "Bob")], Origin: "Data");
-        var masters = new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["A.esm"] = ["Origin.esm"],
-            ["B.esp"] = ["SomeOther.esm"],  // Origin.esm NOT in masters → injected
-        };
-        var result = Classify([master, override1], masters: masters);
-        Assert.Equal(ConflictAll.ConflictCritical, result.ConflictAll);
-    }
-
-    [Fact]
-    public void Classify_PartialInjection_OnlyOneOverrideMissingOrigin_ReturnsConflictCritical()
-    {
-        // B.esp has originPlugin in masters (not injected), C.esp doesn't (injected).
-        // Any()=true (C.esp injected), All()=false (B.esp is not) — one injected override suffices.
-        var master = new RecordDetail("000001:Origin.esm", "Origin.esm", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, false, null,
-            [new FieldValue(Meta("Name"), "Bob")], Origin: "Data");
-        var override2 = new RecordDetail("000001:Origin.esm", "C.esp", 2, true, null,
-            [new FieldValue(Meta("Name"), "Charlie")], Origin: "Data");
-        var masters = new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["Origin.esm"] = [],
-            ["B.esp"] = ["Origin.esm"],      // has origin → not injected
-            ["C.esp"] = ["SomeOther.esm"],   // missing origin → injected
-        };
-        var result = Classify([master, override1, override2], masters: masters);
-        Assert.Equal(ConflictAll.ConflictCritical, result.ConflictAll);
-    }
-
-    [Fact]
-    public void Classify_InvalidFormKey_TreatedAsNotInjected()
-    {
-        // FormKey.TryFactory fails for "INVALID" → IsInjectedRecord returns false (defensive guard).
-        var master = new RecordDetail("INVALID", "A.esm", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var override1 = new RecordDetail("INVALID", "B.esp", 1, true, null,
-            [new FieldValue(Meta("Name"), "Bob")], Origin: "Data");
-        var masters = new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["A.esm"] = [],
-            ["B.esp"] = ["SomeOther.esm"],  // would be injected if FormKey were valid
-        };
-        var result = Classify([master, override1], masters: masters);
-        Assert.NotEqual(ConflictAll.ConflictCritical, result.ConflictAll);
-    }
-
-    [Fact]
-    public void Classify_InjectedRecord_ContentIdentical_DoesNotBumpToCritical()
-    {
-        // B.esp is injected (origin missing from its masters) but its value matches the master
-        // exactly — xEdit only escalates injected records to caConflictCritical when a real value
-        // difference exists (xeMainForm.pas ConflictLevelForNodeDatas); content-identical stays NoConflict.
-        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var masters = new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["A.esm"] = ["Origin.esm"],
-            ["B.esp"] = ["SomeOther.esm"],  // Origin.esm NOT in masters → injected
-        };
-        var result = Classify([master, override1], masters: masters);
-        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
-    }
-
-    [Fact]
-    public void Classify_NonInjectedRecord_DoesNotBumpToCritical()
-    {
-        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("Name"), "Alice")], Origin: "Data");
-        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("Name"), "Bob")], Origin: "Data");
-        var masters = new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["A.esm"] = ["Origin.esm"],
-            ["B.esp"] = ["A.esm", "Origin.esm"],  // Origin.esm IS in masters → not injected
-        };
-        var result = Classify([master, override1], masters: masters);
-        Assert.NotEqual(ConflictAll.ConflictCritical, result.ConflictAll);
     }
 
     // --- Sorted array comparison ---
@@ -966,7 +879,7 @@ public class ConflictClassifierTests
         static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("race", "GoodRace") : null;
 
-        var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
+        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
 
         var diff = result.Diffs.First(d => d.FieldName == "Race");
         Assert.NotNull(diff.Resolutions);
@@ -987,7 +900,7 @@ public class ConflictClassifierTests
         static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Index.RecordLookupEntry("kywd", "GoodKeyword") : null;
 
-        var result = Classifier.Classify([master], NoMasters, GameRelease.Fallout4, Resolve);
+        var result = Classifier.Classify([master], GameRelease.Fallout4, Resolve);
 
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
@@ -1016,7 +929,7 @@ public class ConflictClassifierTests
         static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
             fk == "000FFF:Test.esp" ? new MEditService.Index.RecordLookupEntry("fact", "GoodFaction") : null;
 
-        var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
+        var result = Classifier.Classify([master, override1], GameRelease.Fallout4, Resolve);
 
         var factions = result.Diffs.First(d => d.FieldName == "Factions");
         var checkErrors = RequireCheckErrors(factions);
@@ -1045,7 +958,7 @@ public class ConflictClassifierTests
         static MEditService.Index.RecordLookupEntry? Resolve(string fk) =>
             new MEditService.Index.RecordLookupEntry("race", "GoodRace");
 
-        var diff = Assert.Single(Classifier.Classify([master, partial], NoMasters, GameRelease.Fallout4, Resolve).Diffs);
+        var diff = Assert.Single(Classifier.Classify([master, partial], GameRelease.Fallout4, Resolve).Diffs);
 
         Assert.Null(diff.CheckErrors);
     }
@@ -1073,7 +986,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
 
         // dangling: every FormKey is unresolved
-        var result = Classifier.Classify([master], NoMasters, GameRelease.Fallout4, _ => null);
+        var result = Classifier.Classify([master], GameRelease.Fallout4, _ => null);
 
         var factionsDiff = result.Diffs.First(d => d.FieldName == "Factions");
         var factionChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Faction");
