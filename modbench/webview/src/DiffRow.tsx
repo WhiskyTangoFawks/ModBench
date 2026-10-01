@@ -261,21 +261,20 @@ export function DiffRow({
         // own path, as this column addresses it.
         const hops = wirePath(rootField, context.path, key);
         // Under an element this column does not hold, there is nothing to write to.
-        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null
-          && hops.every(hop => hop.kind !== 'index' || hop.index >= 0);
+        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null && hops !== undefined;
         // Array ops are offered only on a writable cell.
         const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
-        const offersMenu = arrayEditable || meta.type === 'string';
+        const offersMenu = arrayEditable || (meta.type === 'string' && hops !== undefined);
         // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
         // `hops` ends in the element's own `index`/`key` hop, and carries every hop above it rather
         // than just that one.
-        const elementContext = arrayEditable && isArrayElementRow
+        const elementContext = hops && arrayEditable && isArrayElementRow
           ? arrayElementContext(
               col.override.formKey, col.override.plugin, col.override.origin, hops,
               arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))))
@@ -290,7 +289,7 @@ export function DiffRow({
           paste: cellEditable ? text => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined,
         };
         // `hops` addresses the array itself here — this row *is* the array.
-        const parentContext = arrayEditable && isArrayParentRow
+        const parentContext = hops && arrayEditable && isArrayParentRow
           ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
           : undefined;
         const drag: CellDrag | undefined = diff.values[key] != null
@@ -309,7 +308,7 @@ export function DiffRow({
         const vscodeContext = offersMenu ? combineVscodeContexts(
           parentContext,
           elementContext,
-          meta.type === 'string'
+          meta.type === 'string' && hops
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
                 modelValue(diff.values[key], meta), !cellEditable, hops,
@@ -335,7 +334,7 @@ export function DiffRow({
               landing={landing}
               vscodeContext={vscodeContext}
             >
-              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
                 {() => !isExpanded && hasElement && (
                   <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
@@ -361,7 +360,7 @@ export function DiffRow({
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
-              <WrittenValue write={writeAt(key, hops)} disk={shown}>
+              <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
                 {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, onOpen, {
                   // A reference the disk does not hold yet has no resolution.
                   checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,

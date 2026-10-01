@@ -30,8 +30,7 @@ interface DiskCell { label: string; meta: FieldMetadata; value: unknown }
 
 interface Node { diff: FieldDiff | undefined; meta: FieldMetadata | null | undefined }
 
-// One hop down the rows as the grid builds them: an element by index is the row where this column
-// holds its element at that place.
+// One hop down the rows as the grid builds them.
 function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: ColumnKey): Node {
   const owner = diff.values[column];
   const children = diff.children ?? [];
@@ -40,7 +39,7 @@ function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: Col
     return { diff: children.find(c => c.fieldName === hop.name), meta: member && variantFor(member, owner, meta) };
   }
   if (hop.kind === 'key') return { diff: children.find(c => c.fieldName === hop.key), meta: meta.elementType };
-  return { diff: children.filter(c => c.values[column] != null)[hop.index], meta: meta.elementType };
+  return { diff: children.find(c => c.indexes?.[column] === hop.index), meta: meta.elementType };
 }
 
 function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly PathHop[]): DiskCell | undefined {

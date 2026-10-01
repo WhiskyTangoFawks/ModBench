@@ -61,18 +61,21 @@ const linkArrayCompareResult: CompareResult = compareResultFixture({
       diffNode({
         fieldName: '[0]',
         values: { 'Fallout4.esm': 'PkgA', 'MyMod.esp': 'PkgA' },
+        indexes: { 'Fallout4.esm': 0, 'MyMod.esp': 0 },
         winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       }),
       diffNode({
         fieldName: '[1]',
         values: { 'Fallout4.esm': 'PkgX', 'MyMod.esp': null },
+        indexes: { 'Fallout4.esm': 1 },
         winnerColumn: 'Fallout4.esm',
         cellStates: {},
       }),
       diffNode({
         fieldName: '[2]',
         values: { 'Fallout4.esm': null, 'MyMod.esp': 'PkgA' },
+        indexes: { 'MyMod.esp': 1 },
         winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'Override' },
       }),
@@ -172,6 +175,7 @@ const nestedStructArrayResult: CompareResult = compareResultFixture({
       children: [diffNode({
         fieldName: '[0]',
         values: { 'Fallout4.esm': { Id: 'A', Weight: 1 }, 'MyMod.esp': { Id: 'A', Weight: 1 } },
+        indexes: { 'Fallout4.esm': 0, 'MyMod.esp': 0 },
         winnerColumn: 'Fallout4.esm',
         cellStates: {},
         children: [
@@ -320,9 +324,9 @@ describe('RecordPanel — array editing', () => {
       winnerColumn: 'MyMod.esp',
       cellStates: {},
       children: [
-        diffNode({ fieldName: '[0]', values: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-        diffNode({ fieldName: '[1]', values: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-        diffNode({ fieldName: '[2]', values: { 'MyMod.esp': 3 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+        diffNode({ fieldName: '[0]', values: { 'MyMod.esp': 1 }, indexes: { 'MyMod.esp': 0 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+        diffNode({ fieldName: '[1]', values: { 'MyMod.esp': 2 }, indexes: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+        diffNode({ fieldName: '[2]', values: { 'MyMod.esp': 3 }, indexes: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
       ],
     })],
   });
@@ -420,9 +424,9 @@ const editableIntArrayResult: CompareResult = compareResultFixture({
     winnerColumn: 'MyMod.esp',
     cellStates: {},
     children: [
-      diffNode({ fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-      diffNode({ fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
-      diffNode({ fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+      diffNode({ fieldName: '[0]', values: { 'MyMod.esp': 11 }, indexes: { 'MyMod.esp': 0 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+      diffNode({ fieldName: '[1]', values: { 'MyMod.esp': 22 }, indexes: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+      diffNode({ fieldName: '[2]', values: { 'MyMod.esp': 33 }, indexes: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
     ],
   })],
 });
@@ -811,5 +815,72 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     await waitFor(() => screen.getByText('Packages'));
     const context: unknown = JSON.parse(myCell('Packages').getAttribute('data-vscode-context') ?? '{}');
     expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [member('Packages')] });
+  });
+});
+
+// A null slot is an element its column holds, so the elements after it sit one place further on.
+describe('RecordPanel — an element after a null slot is addressed at its own index', () => {
+  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+  // mEdit's alignment of ['A', 'B'] and ['A', null, 'B'].
+  const withNullSlot = compareResultFixture({
+    overrides: [
+      compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC',
+        fields: [{ metadata: itemsMeta, value: ['A', 'B'] }],
+      }),
+      compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: itemsMeta, value: ['A', null, 'B'] }],
+      }),
+    ],
+    diffs: [diffNode({
+      fieldName: 'Items',
+      values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp': ['A', null, 'B'] },
+      children: [
+        diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 'A', 'MyMod.esp': 'A' }, indexes: { 'Fallout4.esm': 0, 'MyMod.esp': 0 } }),
+        diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': null, 'MyMod.esp': null }, indexes: { 'MyMod.esp': 1 } }),
+        diffNode({ fieldName: '[2]', values: { 'Fallout4.esm': 'B', 'MyMod.esp': 'B' }, indexes: { 'Fallout4.esm': 1, 'MyMod.esp': 2 } }),
+      ],
+    })],
+  });
+
+  const myCell = () => {
+    const cells = required(screen.getByText('[2]').closest('tr'), 'the [2] row').querySelectorAll('td');
+    return required(cells[cells.length - 1], "the [2] row's MyMod.esp cell");
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+    render(<RecordPanel client={panelClient(() => withNullSlot, {
+      plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
+    })} />);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('Delete removes the element at its own index', async () => {
+    await waitFor(() => screen.getByText('[2]'));
+    fireEvent.click(myCell());
+    fireEvent.keyDown(myCell(), { key: 'Delete' });
+
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Items'), at(2)] } });
+  });
+
+  it('Alt+ArrowUp moves the element from its own index', async () => {
+    await waitFor(() => screen.getByText('[2]'));
+    fireEvent.click(myCell());
+    fireEvent.keyDown(myCell(), { key: 'ArrowUp', altKey: true });
+
+    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Items'), at(2)] } });
+  });
+
+  it('an edit sets the element at its own index', async () => {
+    await waitFor(() => screen.getByText('[2]'));
+    fireEvent.doubleClick(within(myCell()).getByText('B'));
+    const input = required(myCell().querySelector('input'), "the cell's input");
+    fireEvent.change(input, { target: { value: 'Z' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Items'), at(2)], value: 'Z' });
   });
 });

@@ -137,6 +137,41 @@ public class ArrayChildDiffTests
     }
 
     [Fact]
+    public void Array_EachRowCarriesTheElementsIndexInEachColumnThatHoldsIt()
+    {
+        var meta = UnsortedArrayMeta("Items");
+
+        var result = Classify([
+            MakeRecord("A.esp", 0, false, meta, Json("[\"x\",null,\"z\"]")),
+            MakeRecord("B.esp", 1, true, meta, Json("[null,\"z\"]"))]);
+
+        var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"));
+        Assert.Equal(
+            [
+                new Dictionary<string, int> { ["A.esp"] = 0 },
+                new Dictionary<string, int> { ["A.esp"] = 1, ["B.esp"] = 0 },
+                new Dictionary<string, int> { ["A.esp"] = 2, ["B.esp"] = 1 },
+            ],
+            rows.Select(r => r.Indexes));
+    }
+
+    [Fact]
+    public void KeyedArray_EachRowCarriesTheElementsIndexInItsColumn_NotItsPlaceInKeyOrder()
+    {
+        var meta = new FieldMetadata("Stages", "array", true, [], [],
+            ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [new FieldMetadata("Index", "int", false, [], [])]),
+            KeyMembers: ["Index"]);
+
+        var result = Classify([MakeRecord("A.esp", 0, true, meta, Json("[{\"Index\":20},{\"Index\":10}]"))]);
+
+        var rows = RequireChildren(result.Diffs.First(d => d.FieldName == "Stages"));
+        Assert.Equal(["10", "20"], rows.Select(r => r.FieldName));
+        Assert.Equal(
+            [new Dictionary<string, int> { ["A.esp"] = 1 }, new Dictionary<string, int> { ["A.esp"] = 0 }],
+            rows.Select(r => r.Indexes));
+    }
+
+    [Fact]
     public void Array_RowsAreLabelledByTheirPlaceInTheAlignment()
     {
         var meta = UnsortedArrayMeta("Items");
@@ -231,7 +266,7 @@ public class ArrayChildDiffTests
     // ── Struct-typed element test ─────────────────────────────────────────────
 
     [Fact]
-    public void StructTypedArrayElement_ProducesSubFieldChildrenForEachArrayChild()
+    public void StructTypedArrayElement_WithAChangedMember_IsTheMastersElementThenTheOverrides()
     {
         var meta = StructArrayMeta("Ranks",
             new FieldMetadata("Rank", "int", false, [], []));
@@ -248,8 +283,6 @@ public class ArrayChildDiffTests
         Assert.Equal(3, ranks.Count);
         Assert.All(ranks, element => Assert.Contains(RequireChildren(element), c => c.FieldName == "Rank"));
 
-        // A changed element is the master's, then the override's: its members never compare
-        // against each other's.
         var overridesRank = RequireChildren(ranks[2]).First(c => c.FieldName == "Rank");
         Assert.Null(overridesRank.Values["A.esp"]);
         Assert.Equal(ConflictThis.Override, overridesRank.CellStates["B.esp"]);

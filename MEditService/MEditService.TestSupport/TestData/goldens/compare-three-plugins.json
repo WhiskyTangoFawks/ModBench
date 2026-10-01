@@ -30,6 +30,7 @@
                     "children": null,
                     "conflictAll": "NoConflict",
                     "fieldName": "Function",
+                    "indexes": null,
                     "resolutions": null,
                     "values": {
                       "Base.esm": "GetIsID",
@@ -43,6 +44,7 @@
                     "children": null,
                     "conflictAll": "NoConflict",
                     "fieldName": "MutagenObjectType",
+                    "indexes": null,
                     "resolutions": null,
                     "values": {
                       "Base.esm": "FunctionConditionData",
@@ -53,6 +55,7 @@
                 ],
                 "conflictAll": "NoConflict",
                 "fieldName": "Data",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": {
@@ -69,6 +72,7 @@
                 "children": null,
                 "conflictAll": "NoConflict",
                 "fieldName": "Flags",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": [
@@ -84,6 +88,7 @@
                 "children": null,
                 "conflictAll": "NoConflict",
                 "fieldName": "Unknown1",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": "0x000000",
@@ -97,6 +102,7 @@
                 "children": null,
                 "conflictAll": "NoConflict",
                 "fieldName": "ComparisonValue",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": 1.0,
@@ -110,6 +116,7 @@
                 "children": null,
                 "conflictAll": "NoConflict",
                 "fieldName": "MutagenObjectType",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": "ConditionFloat",
@@ -120,6 +127,9 @@
             ],
             "conflictAll": "NoConflict",
             "fieldName": "[0]",
+            "indexes": {
+              "Base.esm": 0
+            },
             "resolutions": null,
             "values": {
               "Base.esm": {
@@ -162,6 +172,7 @@
                     "children": null,
                     "conflictAll": "Override",
                     "fieldName": "RunOnType",
+                    "indexes": null,
                     "resolutions": null,
                     "values": {
                       "Base.esm": null,
@@ -177,6 +188,7 @@
                     "children": null,
                     "conflictAll": "Override",
                     "fieldName": "Function",
+                    "indexes": null,
                     "resolutions": null,
                     "values": {
                       "Base.esm": null,
@@ -192,6 +204,7 @@
                     "children": null,
                     "conflictAll": "Override",
                     "fieldName": "MutagenObjectType",
+                    "indexes": null,
                     "resolutions": null,
                     "values": {
                       "Base.esm": null,
@@ -202,6 +215,7 @@
                 ],
                 "conflictAll": "Override",
                 "fieldName": "Data",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": null,
@@ -221,6 +235,7 @@
                 "children": null,
                 "conflictAll": "Override",
                 "fieldName": "Flags",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": null,
@@ -238,6 +253,7 @@
                 "children": null,
                 "conflictAll": "NoConflict",
                 "fieldName": "Unknown1",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": null,
@@ -253,6 +269,7 @@
                 "children": null,
                 "conflictAll": "Override",
                 "fieldName": "ComparisonValue",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": null,
@@ -268,6 +285,7 @@
                 "children": null,
                 "conflictAll": "Override",
                 "fieldName": "MutagenObjectType",
+                "indexes": null,
                 "resolutions": null,
                 "values": {
                   "Base.esm": null,
@@ -278,6 +296,9 @@
             ],
             "conflictAll": "Override",
             "fieldName": "[1]",
+            "indexes": {
+              "Top.esp": 0
+            },
             "resolutions": null,
             "values": {
               "Base.esm": null,
@@ -300,6 +321,7 @@
         ],
         "conflictAll": "Override",
         "fieldName": "Conditions",
+        "indexes": null,
         "resolutions": null,
         "values": {
           "Base.esm": [
@@ -436,6 +458,7 @@
         "children": null,
         "conflictAll": "Conflict",
         "fieldName": "Name",
+        "indexes": null,
         "resolutions": null,
         "values": {
           "Base.esm": {
@@ -466,6 +489,7 @@
         "children": null,
         "conflictAll": "Conflict",
         "fieldName": "Race",
+        "indexes": null,
         "resolutions": {
           "Base.esm": {
             "editorId": null,
@@ -499,6 +523,7 @@
         "children": null,
         "conflictAll": "Conflict",
         "fieldName": "CalculatedHealth",
+        "indexes": null,
         "resolutions": null,
         "values": {
           "Base.esm": 100,

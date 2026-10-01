@@ -144,8 +144,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return children.Count > 0 ? children : null;
     }
 
-    // One row of an aligned array: its label, and the element each column that has one holds there.
-    private sealed record ElementRow(string Label, Dictionary<string, JsonElement> Held);
+    private sealed record ElementRow(string Label, Dictionary<string, (JsonElement Element, int Index)> Held);
 
     // An element one plugin lacks is an absence where it is missing, never a shift of the rest.
     private static List<FieldDiff>? ArrayChildren(
@@ -158,7 +157,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 columns.Add((column, [.. elements.EnumerateArray()]));
         }
 
-        // A column longer than the cap overflows it however the rows align, so no alignment runs.
         List<ElementRow>? rows = null;
         if (columns.TrueForAll(c => c.Elements.Count <= MaxArrayChildCount))
             rows = array.KeyMembers is { } keyMembers ? KeyedRows(keyMembers, element, columns) : SequenceRows(columns);
@@ -174,24 +172,26 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var shapes = values.Keys.ToDictionary(column => column, _ => element);
         return [.. rows.Select(row => DiffNode(
             row.Label,
-            values.Keys.ToDictionary(column => column, column => row.Held.TryGetValue(column, out var e) ? (object?)e : null),
-            shapes, absentMeansDefault: false, ctx))];
+            values.Keys.ToDictionary(column => column, column => row.Held.TryGetValue(column, out var held) ? (object?)held.Element : null),
+            shapes, absentMeansDefault: false, ctx) with
+        {
+            Indexes = row.Held.ToDictionary(held => held.Key, held => held.Value.Index),
+        })];
     }
 
-    // Aligned by key, in key order.
     private static List<ElementRow> KeyedRows(
         IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
     {
-        var rows = new Dictionary<string, (ElementKey Key, Dictionary<string, JsonElement> Held)>(StringComparer.Ordinal);
+        var rows = new Dictionary<string, (ElementKey Key, Dictionary<string, (JsonElement, int)> Held)>(StringComparer.Ordinal);
         foreach (var (column, elements) in columns)
         {
-            foreach (var e in elements)
+            for (var index = 0; index < elements.Count; index++)
             {
-                var key = ElementKey.Of(e, keyMembers, element);
+                var key = ElementKey.Of(elements[index], keyMembers, element);
                 if (!rows.TryGetValue(key.Text, out var row)) rows[key.Text] = row = (key, []);
                 // A second element sharing a key: the first wins — the write path refuses such a
                 // pair, but another tool's plugin can hold one.
-                row.Held.TryAdd(column, e);
+                row.Held.TryAdd(column, (elements[index], index));
             }
         }
         return [.. rows.Values.OrderBy(row => row.Key, Comparer<ElementKey>.Create((a, b) => a.CompareTo(b)))
@@ -202,7 +202,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // with no modified pair, and a row only those rows hold before a row only the column holds.
     private static List<ElementRow> SequenceRows(List<(string Column, List<JsonElement> Elements)> columns)
     {
-        var rows = new List<(string Text, Dictionary<string, JsonElement> Held)>();
+        var rows = new List<(string Text, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
             var texts = elements.Select(e => e.GetRawText()).ToList();
@@ -217,19 +217,20 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 }
             }
 
-            var merged = new List<(string Text, Dictionary<string, JsonElement> Held)>(rows.Count + texts.Count);
+            var merged = new List<(string Text, Dictionary<string, (JsonElement, int)> Held)>(rows.Count + texts.Count);
             var (i, j) = (0, 0);
             while (i < rows.Count || j < texts.Count)
             {
                 if (i < rows.Count && j < texts.Count && rows[i].Text == texts[j])
                 {
-                    rows[i].Held[column] = elements[j++];
+                    rows[i].Held[column] = (elements[j], j);
                     merged.Add(rows[i++]);
+                    j++;
                 }
                 else if (i < rows.Count && (j == texts.Count || common[i + 1, j] >= common[i, j + 1])) merged.Add(rows[i++]);
                 else
                 {
-                    merged.Add((texts[j], new() { [column] = elements[j] }));
+                    merged.Add((texts[j], new() { [column] = (elements[j], j) }));
                     j++;
                 }
             }

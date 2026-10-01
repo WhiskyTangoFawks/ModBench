@@ -613,7 +613,7 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_NestedStructInsideArrayElement_GrandchildConflictAggregatesTwoLevelsUp()
+    public void Classify_NestedStructInsideTheOverridesElement_GrandchildConflictAggregatesTwoLevelsUp()
     {
         // Array field "Items" of struct elements, each struct carrying a sub-struct "Pos" with
         // field "X" — proves aggregation recurses through more than one level (array -> struct
@@ -634,7 +634,6 @@ public class ConflictClassifierTests
         var result = Classify([master, override1]);
 
         var itemsDiff = result.Diffs.First(d => d.FieldName == "Items");
-        // The changed element aligns as the master's, then the override's.
         var elementDiff = RequireChildren(itemsDiff).First(c => c.FieldName == "[1]");
         var posDiff = RequireChildren(elementDiff).First(c => c.FieldName == "Pos");
         var xDiff = RequireChildren(posDiff).First(c => c.FieldName == "X");

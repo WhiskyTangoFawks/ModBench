@@ -2,7 +2,6 @@ import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
-  elementIndexes,
   elementSegment,
   isArrayElementHop,
   isMovableElementHop,
@@ -75,27 +74,16 @@ describe('elementSegment', () => {
     fieldMeta({ name: 'A', type: 'array', isArray: true, ...extra });
 
   it('addresses a keyed array\'s child by the key text it is labelled with, verbatim', () => {
-    expect(elementSegment(array({ keyMembers: ['stage', 'stage_index'], elementType: element() }), '10 / 0', {}))
+    expect(elementSegment(array({ keyMembers: ['stage', 'stage_index'], elementType: element() }), diffNode({ fieldName: '10 / 0' })))
       .toEqual({ kind: 'key', key: '10 / 0' });
   });
 
   // The "[N]" label is the row's place in the alignment, never read back as a position.
-  it('addresses every other array\'s child by its position in each column', () => {
+  it('addresses every other array\'s child by its own index in each column', () => {
     const indexes = { 'A.esp': 0, 'B.esp': 2 };
-    expect(elementSegment(array({ elementType: element({ type: 'formKey' }) }), '[3]', indexes))
-      .toEqual({ kind: 'element', indexes });
-    expect(elementSegment(array({ elementType: element() }), '[3]', indexes)).toEqual({ kind: 'element', indexes });
-  });
-});
-
-describe('elementIndexes', () => {
-  it('counts, for each column, the rows above that it holds an element on', () => {
-    const rows = [
-      diffNode({ fieldName: '[0]', values: { 'A.esp': 'x', 'B.esp': null } }),
-      diffNode({ fieldName: '[1]', values: { 'A.esp': 'y', 'B.esp': 'y' } }),
-      diffNode({ fieldName: '[2]', values: { 'A.esp': null, 'B.esp': 'z' } }),
-    ];
-    expect(elementIndexes(rows)).toEqual([{ 'A.esp': 0 }, { 'A.esp': 1, 'B.esp': 0 }, { 'B.esp': 1 }]);
+    const child = diffNode({ fieldName: '[3]', indexes });
+    expect(elementSegment(array({ elementType: element({ type: 'formKey' }) }), child)).toEqual({ kind: 'element', indexes });
+    expect(elementSegment(array({ elementType: element() }), child)).toEqual({ kind: 'element', indexes });
   });
 });
 
@@ -380,10 +368,8 @@ describe('wirePath', () => {
       .toEqual([{ kind: 'member', name: 'Data' }, { kind: 'member', name: 'Packages' }, { kind: 'index', index: 2 }]);
   });
 
-  // An index of -1 is a hop mEdit refuses; any real position would name another element.
-  it('names no position in a column that does not hold the element', () => {
-    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 } }], columnKey('B.esp', 'Data')))
-      .toEqual([{ kind: 'member', name: 'Packages' }, { kind: 'index', index: -1 }]);
+  it('is no path for a column that does not hold the element', () => {
+    expect(wirePath('Packages', [{ kind: 'element', indexes: { 'A.esp': 0 } }], columnKey('B.esp', 'Data'))).toBeUndefined();
   });
 });
 

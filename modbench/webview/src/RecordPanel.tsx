@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
-  buildColumns, columnHasNode, elementIndexes, elementSegment,
+  buildColumns, columnHasNode, elementSegment,
   wirePath, variantFor, declaresMember,
   headerCellContext, combineVscodeContexts, recordLabel,
 } from './recordUtils';
@@ -324,8 +324,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         columns={columns}
         columnStyle={columnStyle}
         editableColumns={editableColumns}
-        onEditCell={(plugin: ColumnKey, value: unknown) =>
-          handleCellCommit(plugin, wirePath(rootField, path, plugin), value)}
+        onEditCell={(plugin: ColumnKey, value: unknown) => {
+          const hops = wirePath(rootField, path, plugin);
+          if (hops) handleCellCommit(plugin, hops, value);
+        }}
         writeAt={writeAt}
         onElementCommand={elementCommand}
         collapsedColumns={collapsedColumns}
@@ -352,8 +354,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const idle = meta.type === 'struct' ? idleMembers(meta, columns.map(c => diff.values[c.key])) : undefined;
 
     const children = diff.children ?? [];
-    const indexes = meta.type === 'array' ? elementIndexes(children) : [];
-    for (const [ordinal, child] of children.entries()) {
+    for (const child of children) {
       if (idle?.has(child.fieldName)) continue;
       const childRowKey = `${rowKey}.${child.fieldName}`;
       if (meta.type === 'array' && meta.elementType) {
@@ -363,7 +364,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           children.filter(c => c.values[column] != null).at(-1) === child);
         // An element is spelled in full, so a column has it exactly where its value is.
         rows.push(...buildRows(
-          child, meta.elementType, [...path, elementSegment(meta, child.fieldName, indexes[ordinal] ?? {})],
+          child, meta.elementType, [...path, elementSegment(meta, child)],
           rootField, childRowKey, rowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first

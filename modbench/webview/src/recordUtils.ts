@@ -28,11 +28,11 @@ export function recordLabel(overrides: readonly CompareOverride[], formKey: stri
 
 // ── Array child helpers ───────────────────────────────────────────────────────
 
-// A keyed array is stored in key order on every write, so no Move there could change the file.
 export function isArrayElementHop(seg: PathSegment | undefined): boolean {
   return seg !== undefined && seg.kind !== 'member';
 }
 
+// A keyed array is stored in key order on every write, so no Move there could change the file.
 export function isMovableElementHop(seg: PathSegment | undefined): boolean {
   return seg?.kind === 'index';
 }
@@ -43,26 +43,11 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
 }
 
 // A keyed array's child is addressed by the key text as the backend labelled it, every other
-// array's by its position in each column that holds it.
-export function elementSegment(
-  arrayMeta: FieldMetadata, fieldName: string, indexes: Readonly<Record<string, number>>,
-): PathSegment {
-  return arrayMeta.keyMembers ? { kind: 'key', key: fieldName } : { kind: 'element', indexes };
-}
-
-/** Each column's own position for each row of an array without a key: a column holds an element
- *  on exactly the rows where its value is, since an element is spelled in full. */
-export function elementIndexes(rows: readonly FieldDiff[]): Record<string, number>[] {
-  const held = new Map<string, number>();
-  return rows.map(row => {
-    const indexes: Record<string, number> = {};
-    for (const [column, value] of Object.entries(row.values)) {
-      if (value == null) continue;
-      indexes[column] = held.get(column) ?? 0;
-      held.set(column, indexes[column] + 1);
-    }
-    return indexes;
-  });
+// array's by its own index in each column that holds it.
+export function elementSegment(arrayMeta: FieldMetadata, element: FieldDiff): PathSegment {
+  return arrayMeta.keyMembers
+    ? { kind: 'key', key: element.fieldName }
+    : { kind: 'element', indexes: element.indexes };
 }
 
 // ── Native right-click menu contexts ──────────────────────────────────────────
@@ -154,13 +139,20 @@ export function getAtPath(root: unknown, path: readonly PathHop[]): unknown {
   return cur;
 }
 
-/** The hops `column`'s envelope carries for a row under `rootField`; an element the column does
- *  not hold has no position, which mEdit refuses. */
-export function wirePath(rootField: string, path: readonly PathSegment[], column: ColumnKey): PathHop[] {
-  return [
-    { kind: 'member', name: rootField },
-    ...path.map((seg): PathHop => seg.kind === 'element' ? { kind: 'index', index: seg.indexes[column] ?? -1 } : seg),
-  ];
+/** The hops `column`'s envelope carries for a row under `rootField`, or none where the column
+ *  holds no element on the way. */
+export function wirePath(rootField: string, path: readonly PathSegment[], column: ColumnKey): PathHop[] | undefined {
+  const hops: PathHop[] = [{ kind: 'member', name: rootField }];
+  for (const seg of path) {
+    if (seg.kind !== 'element') {
+      hops.push(seg);
+      continue;
+    }
+    const index = seg.indexes?.[column];
+    if (index == null) return undefined;
+    hops.push({ kind: 'index', index });
+  }
+  return hops;
 }
 
 // Absent means default (ADR-0005): the metadata names the default where it is not the type's

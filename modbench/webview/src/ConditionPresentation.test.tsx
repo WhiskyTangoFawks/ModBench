@@ -191,6 +191,7 @@ function compareResult(
       children: firstColumnRows.map((_, i) => diffNode({
         fieldName: `[${i}]`,
         values: valuesFor([], i),
+        indexes: Object.fromEntries(columns.filter(c => i < (byColumn[c]?.length ?? 0)).map(c => [c, i])),
         winnerColumn: columns[0], cellStates: {},
         children: memberDiffs([], i),
       })),

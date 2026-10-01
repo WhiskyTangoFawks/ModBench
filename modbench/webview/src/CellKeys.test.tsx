@@ -47,7 +47,8 @@ const record = compareResultFixture({
     diffNode({
       fieldName: 'Values', values: { 'Fallout4.esm': [4], 'MyMod.esp': [4] }, winnerColumn: 'MyMod.esp', cellStates: {},
       children: [diffNode({
-        fieldName: '[0]', values: { 'Fallout4.esm': 4, 'MyMod.esp': 4 }, winnerColumn: 'MyMod.esp', cellStates: {},
+        fieldName: '[0]', values: { 'Fallout4.esm': 4, 'MyMod.esp': 4 }, indexes: { 'Fallout4.esm': 0, 'MyMod.esp': 0 },
+        winnerColumn: 'MyMod.esp', cellStates: {},
       })],
     }),
   ],

@@ -273,12 +273,12 @@ describe('a replaced element of an array without a key', () => {
     diffs: [diffNode({
       fieldName: 'Items', values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp|ModA': ['A', mine] },
       children: [
-        diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 'A', 'MyMod.esp|ModA': 'A' } }),
+        diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 'A', 'MyMod.esp|ModA': 'A' }, indexes: { 'Fallout4.esm': 0, 'MyMod.esp|ModA': 0 } }),
         ...(mine === 'B'
-          ? [diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': 'B' } })]
+          ? [diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': 'B' }, indexes: { 'Fallout4.esm': 1, 'MyMod.esp|ModA': 1 } })]
           : [
-              diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': null } }),
-              diffNode({ fieldName: '[2]', values: { 'Fallout4.esm': null, 'MyMod.esp|ModA': mine } }),
+              diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': null }, indexes: { 'Fallout4.esm': 1 } }),
+              diffNode({ fieldName: '[2]', values: { 'Fallout4.esm': null, 'MyMod.esp|ModA': mine }, indexes: { 'MyMod.esp|ModA': 1 } }),
             ]),
       ],
     })],
@@ -317,6 +317,48 @@ describe('a replaced element of an array without a key', () => {
 
     await waitFor(() => expect(myCell('[2]')).toHaveTextContent(/^Z$/));
     expect(logged()).toEqual([]);
+  });
+});
+
+describe('a replaced element after a null slot', () => {
+  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+  const items = (last: string): CompareResult => compareResultFixture({
+    overrides: [compareOverride({
+      formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: itemsMeta, value: ['A', null, last] }],
+    })],
+    diffs: [diffNode({
+      fieldName: 'Items', values: { 'MyMod.esp|ModA': ['A', null, last] },
+      children: [
+        diffNode({ fieldName: '[0]', values: { 'MyMod.esp|ModA': 'A' }, indexes: { 'MyMod.esp|ModA': 0 } }),
+        diffNode({ fieldName: '[1]', values: { 'MyMod.esp|ModA': null }, indexes: { 'MyMod.esp|ModA': 1 } }),
+        diffNode({ fieldName: '[2]', values: { 'MyMod.esp|ModA': last }, indexes: { 'MyMod.esp|ModA': 2 } }),
+      ],
+    })],
+  });
+  const lastCell = () =>
+    required(required(screen.getByText('[2]').closest('tr'), 'the [2] row').querySelectorAll('td')[1], "MyMod.esp's [2] cell");
+
+  it('is marked until the covering read, which clears the mark and says what the disk shows', async () => {
+    disk = items('B');
+    renderPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    send({
+      type: EXTENSION_TO_WEBVIEW.EDIT_WRITTEN, formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA',
+      envelope: { op: 'set', path: [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 2 }], value: 'Z' },
+    });
+    expect(lastCell()).toHaveTextContent(/^Z$/);
+    await waitFor(() => expect(within(lastCell()).getByTitle(TOOLTIP)).toBeInTheDocument());
+
+    disk = items('Y');
+    reported();
+
+    await waitFor(() => expect(lastCell()).toHaveTextContent(/^Y$/));
+    expect(within(lastCell()).queryByTitle(TOOLTIP)).not.toBeInTheDocument();
+    expect(logged()).toEqual([{
+      type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn',
+      message: '[recordPanel] [2] of TestNPC [000001:Fallout4.esm] in "MyMod.esp" was written "Z", and the disk now shows "Y".',
+    }]);
   });
 });
 
@@ -365,7 +407,7 @@ describe('an element added, removed or moved, until mEdit confirms it (common.md
     })],
     diffs: [diffNode({
       fieldName: 'Values', values: { 'MyMod.esp|ModA': held },
-      children: held.map((v, i) => diffNode({ fieldName: `[${i}]`, values: { 'MyMod.esp|ModA': v } })),
+      children: held.map((v, i) => diffNode({ fieldName: `[${i}]`, values: { 'MyMod.esp|ModA': v }, indexes: { 'MyMod.esp|ModA': i } })),
     })],
   });
   const VALUES = { kind: 'member', name: 'Values' } as const;

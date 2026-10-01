@@ -104,13 +104,13 @@ export interface ColumnHeaderContext {
   preventDefaultContextMenuItems: true;
 }
 
-// A row's hops under its subtree root. An element of an array without a key sits at its own
-// position in each column that holds it, which becomes an index hop for one column's envelope.
+// A row's hops under its subtree root. An element of an array without a key has its own index in
+// each column that holds it, as its diff node states.
 export type PathSegment =
   | { kind: 'member'; name: string }
   | { kind: 'index'; index: number }
   | { kind: 'key'; key: string }
-  | { kind: 'element'; indexes: Readonly<Record<string, number>> };
+  | { kind: 'element'; indexes: components['schemas']['FieldDiff']['indexes'] };
 
 /** The wire's hop kinds (ADR-0005), narrowed to the closed set the backend resolves. */
 export type PathHop = Exclude<PathSegment, { kind: 'element' }>;
