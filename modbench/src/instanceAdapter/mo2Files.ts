@@ -1,7 +1,7 @@
 // An origin's files as MO2 lays them out: a mod folder walked as MO2's VFS walks it, and the
 // overwrite folder listed whole. Neither answers the adapter's own writes in flight.
 
-import { join, relative, sep } from 'node:path';
+import { sep } from 'node:path';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { MOD_META_FILE_NAME } from './codecs/metaIni';
@@ -19,11 +19,16 @@ interface Walk {
   readonly notes: string[];
 }
 
-const relativeOf = (walk: Walk, path: string): string => relative(walk.root, path).split(sep).join('/');
+export const relativeUnder = (root: string, path: string, separator: string = sep): string => {
+  const below = path.slice(root.length + 1);
+  return separator === '/' ? below : below.split(separator).join('/');
+};
+
+const childOf = (dir: string, name: string): string => dir + sep + name;
 
 // `path` keeps the relative key; `sourcePath` is where the file is read from, its link's target.
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
-  const relativePath = relativeOf(walk, path);
+  const relativePath = relativeUnder(walk.root, path);
   if (!EXCLUDED_RELATIVE_PATHS.has(relativePath)) walk.files.push({ relativePath, path: sourcePath });
 }
 
@@ -69,7 +74,7 @@ async function walkLink(walk: Walk, path: string, ancestors: ReadonlySet<string>
 async function walkDir(walk: Walk, dir: string, ancestors: ReadonlySet<string>): Promise<void> {
   for (const dirent of await listDir(dir)) {
     if (dirent.name.startsWith('.') || isTempWrite(dirent.name)) continue;
-    const path = join(dir, dirent.name);
+    const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) {
       // At the mod root only: a nested folder that happens to share the name is ordinary content,
       // not the plugin's tracked source.
@@ -99,7 +104,7 @@ async function walkMod(folder: string): Promise<Walk> {
 async function listWhole(walk: Walk, dir: string): Promise<void> {
   for (const dirent of await listDir(dir)) {
     if (isTempWrite(dirent.name)) continue;
-    const path = join(dir, dirent.name);
+    const path = childOf(dir, dirent.name);
     if (dirent.isDirectory()) await inSubfolder(walk, path, () => listWhole(walk, path));
     else if (dirent.isFile()) keep(walk, path);
     else if (dirent.isSymbolicLink()) walk.notes.push(`link "${path}" is not followed here, skipped`);
