@@ -4,7 +4,7 @@
 import { errnoCode } from '../ports/errno';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { get, listFolders } from './files';
+import { exists, get, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
 import { entryDir, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
@@ -69,4 +69,11 @@ export function newModFolder({ instanceRoot }: Mo2Context, mod: string): string 
 export async function folderHolding(context: Mo2Context, entry: EntryRef): Promise<ModFolder | undefined> {
   const all = await listModFolders(context);
   return all === undefined ? undefined : modFoldersOf(all).holding(entry);
+}
+
+/** A folder already there, listed or not, is never replaced or adopted: the change is refused
+ *  before anything moves. */
+export async function refuseFolderTaken(context: Mo2Context, entry: EntryRef, folder: string): Promise<void> {
+  const inTheWay = (await folderHolding(context, entry))?.path ?? ((await exists(folder)) ? folder : undefined);
+  if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
 }

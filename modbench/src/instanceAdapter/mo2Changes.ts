@@ -20,7 +20,7 @@ import {
 } from './instanceAdapter';
 import { downloadFile, mo2FolderName, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
 import {
-  currentDownloadsDir, entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, newModFolder, type Mo2Context,
+  currentDownloadsDir, entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, newModFolder, refuseFolderTaken, type Mo2Context,
 } from './mo2Context';
 
 export type Mo2Changes = Pick<InstanceAdapter,
@@ -178,16 +178,9 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
     return sameName ? undefined : change.to;
   };
 
-  // A folder already there, listed or not, is never replaced or adopted: the change is refused
-  // before anything moves.
-  const refuseFolderTaken = async (entry: EntryRef, folder: string): Promise<void> => {
-    const inTheWay = (await folderHolding(context, entry))?.path ?? ((await exists(folder)) ? folder : undefined);
-    if (inTheWay !== undefined) throw new Error(`The folder "${inTheWay}" is in the way`);
-  };
-
   const refuseFolderInTheWay = async (change: ModOrderChange): Promise<void> => {
     const name = folderTaken(change);
-    if (name !== undefined) await refuseFolderTaken({ kind: 'separator', name }, separatorFolderOf(name));
+    if (name !== undefined) await refuseFolderTaken(context, { kind: 'separator', name }, separatorFolderOf(name));
   };
 
   // A separator's folder moves with its line; anything else in mod order is a line alone.
@@ -248,7 +241,7 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
 
     async createModFolder(mod) {
       const folder = newModFolder(context, mod);
-      await refuseFolderTaken({ kind: 'mod', name: mod }, folder);
+      await refuseFolderTaken(context, { kind: 'mod', name: mod }, folder);
       await ensureDir(folder);
     },
 

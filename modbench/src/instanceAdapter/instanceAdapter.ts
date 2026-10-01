@@ -150,18 +150,34 @@ export type DataFolderPlugins =
   | { readonly kind: 'unresolved' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
-/** An entry directly in a staged folder. */
-export interface StagedEntry {
+/** An entry directly in an extracted folder. */
+export interface ExtractedEntry {
   readonly name: string;
   readonly kind: 'folder' | 'file' | 'other';
 }
 
-/** A folder the adapter made for a mod staged before it lands. Only the adapter makes one, so
- *  removing it can never reach a folder a caller named. */
-export interface StagingFolder {
+/** A release on its way into a mod's own folder, in a fresh folder of its own inside it. Only the
+ *  adapter makes one, and it removes only what it made. */
+export interface ModExtraction {
+  /** Where the release is extracted. */
   readonly path: string;
-  /** Removes the folder and whatever is left in it. */
-  remove(): Promise<void>;
+  /** Puts a copy of `folder`'s tree in `path`; `folder` is left as it was. */
+  copyIn(folder: string): Promise<void>;
+  /** Undoes the extraction: a new mod's folder goes whole; an upgrade's folder keeps everything
+   *  but the extraction. */
+  abandon(): Promise<void>;
+}
+
+export interface NewModExtraction extends ModExtraction {
+  /** Makes the tree at `root` the mod's contents, its meta holding `keys` alone. */
+  land(root: string, keys: OwnedMetaKeys): Promise<void>;
+}
+
+export interface UpgradeExtraction extends ModExtraction {
+  /** Replaces the mod's contents with the tree at `root` around its repository and plugin source,
+   *  setting `keys` over the meta and keeping each value `keys` leaves undefined. A release
+   *  holding an entry of either is refused first. */
+  land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
 }
 
 /** An upgrade refused before anything changed names the entry of the mod's repository or plugin
@@ -328,20 +344,12 @@ export interface InstanceAdapter {
   createModFolder(mod: string): Promise<void>;
   /** Moves the folder that holds `entry` out of mods/ into the trash; false when none does. */
   trashEntryFolder(entry: EntryRef, trash: MoveToTrash): Promise<boolean>;
-  /** Writes the staged mod's meta holding `keys` alone, then moves the staged tree into place in
-   *  one rename. */
-  landNewMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<void>;
-  /** Replaces the folder's contents with the staged tree's around its repository and plugin source,
-   *  and sets `keys` over the old meta, keeping each value `keys` leaves undefined. A release
-   *  holding an entry of either is refused first. */
-  upgradeMod(mod: string, staged: string, keys: OwnedMetaKeys): Promise<Upgraded>;
-
-  // Staging: the adapter's own ground beside mods/, on the same volume and outside every watch,
-  // where a mod is put before its one rename into mods/. The caller removes what it stages.
-  stagingFolder(): Promise<StagingFolder>;
-  /** A staging folder holding a copy of `folder`'s tree; `folder` is left as it was. */
-  stagingFolderOf(folder: string): Promise<StagingFolder>;
-  stagedEntries(folder: string): Promise<StagedEntry[]>;
+  /** Makes the folder of a mod that is new. Refuses a folder already there, whatever it holds,
+   *  matched as the manager matches names. */
+  extractNewMod(mod: string): Promise<NewModExtraction>;
+  /** Opens the extraction inside the folder of a mod that is there; rejects when none holds it. */
+  extractUpgrade(mod: string): Promise<UpgradeExtraction>;
+  extractedEntries(folder: string): Promise<ExtractedEntry[]>;
 
   // Subscribe: the instance changed.
   /** Hears that the instance changed: any of its files, the downloads folder and the game folder's

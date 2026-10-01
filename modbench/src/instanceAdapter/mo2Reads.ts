@@ -23,8 +23,8 @@ import { isPluginFile } from './pluginFile';
 
 export type Mo2Reads = Omit<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile' | 'stagingFolder' | 'stagingFolderOf' | 'stagedEntries'
-  | 'landNewMod' | 'upgradeMod' | 'subscribe' | 'names'>;
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'extractedEntries'
+  | 'extractNewMod' | 'extractUpgrade' | 'subscribe' | 'names'>;
 
 async function listDownloadedFiles(downloadsDir: string): Promise<DownloadedFile[] | undefined> {
   const dirents = await readOrAbsent(() => listDir(downloadsDir), undefined);

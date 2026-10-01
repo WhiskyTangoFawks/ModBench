@@ -1,15 +1,14 @@
-// A new target is one rename (ADR-0015 invariant 2); an upgrade is never renamed away, so its
-// identity and every watcher armed on it survive the release.
+// A release is extracted inside the mod's own folder and nowhere else. An upgrade keeps its folder,
+// so its identity and every watcher armed on it survive the release.
 
 import { basename } from 'node:path';
 import { detectRoot } from './detectRoot';
 import { extractArchive, type Runner } from './extractArchive';
 import { markDownloadInstalled } from './installedMark';
-import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
 import { refuse } from '../ports/refuse';
 import {
-  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type StagingFolder, type Upgraded,
+  modNameTakenRefusal, newModNameRefusal, type InstalledFileId, type InstanceAdapter, type ModExtraction, type NewModExtraction, type UpgradeExtraction,
 } from '../instanceAdapter/instanceAdapter';
 
 /** What install reaches the instance through. */
@@ -86,8 +85,8 @@ export interface InstallOptions {
   version?: string;
 }
 
-// Serialized per instance root: the collision check and the rename must not interleave with
-// another install, or two of the same name both pass the check.
+// Serialized per instance root: the collision check and the folder's making must not interleave
+// with another install, or two of the same name both pass the check.
 const installQueues = new Map<string, Promise<unknown>>();
 
 function withInstallLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
@@ -95,16 +94,6 @@ function withInstallLock<T>(instanceRoot: string, task: () => Promise<T>): Promi
   const next = prior.then(task, task);
   installQueues.set(instanceRoot, next.catch(() => undefined));
   return next;
-}
-
-function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommandResult {
-  if (errnoCode(err) === 'EXDEV') {
-    return {
-      applied: false,
-      refusal: `Cannot install "${name}": the staging folder and mods/ are on different drives, so the mod folder cannot be moved into place in one step.`,
-    };
-  }
-  return refuse(err);
 }
 
 // The folder can appear or vanish between the caller's decision and this check — the mod manager,
@@ -118,55 +107,62 @@ function mismatchRefusal(target: InstallTarget, targetExists: boolean): string |
   return undefined;
 }
 
-function landStagedMod(
-  access: InstallAccess, target: InstallTarget, stagedRoot: string, meta: InstallMeta, isFomod: boolean, gameName: string,
+type Opened =
+  | { kind: 'new'; extraction: NewModExtraction }
+  | { kind: 'upgrade'; extraction: UpgradeExtraction };
+
+async function settle(
+  opened: Opened, name: string, root: string, meta: InstallMeta, isFomod: boolean, gameName: string,
 ): Promise<InstallCommandResult> {
-  const { name } = target;
+  const keys = { gameName, ...meta };
+  if (opened.kind === 'new') {
+    await opened.extraction.land(root, keys);
+    return { applied: true, wrote: true, isFomod };
+  }
+  let landed;
+  try {
+    landed = await opened.extraction.land(root, keys);
+  } catch (err) {
+    return { applied: false, refusal: `Upgrading "${name}" failed partway and was not rolled back: ${errorMessage(err)}` };
+  }
+  if (landed.refused) {
+    return {
+      applied: false,
+      refusal: `Cannot upgrade "${name}": the release holds "${landed.repositoryOrPluginSourceEntry}", which is the mod's own repository or plugin source.`,
+    };
+  }
+  return { applied: true, wrote: true, isFomod };
+}
+
+function extractAndLand(
+  access: InstallAccess, target: InstallTarget, fill: (extraction: ModExtraction) => Promise<void>, meta: InstallMeta, gameName: string,
+): Promise<InstallCommandResult> {
   const { adapter } = access;
+  const { name } = target;
   return withInstallLock(access.instanceRoot, async (): Promise<InstallCommandResult> => {
     const holding = await adapter.entryFolder({ kind: 'mod', name });
     const refusal = mismatchRefusal(target, holding !== undefined);
     if (refusal) return { applied: false, refusal };
-    const keys = { gameName, ...meta };
+    const opened: Opened = target.kind === 'new'
+      ? { kind: 'new', extraction: await adapter.extractNewMod(name) }
+      : { kind: 'upgrade', extraction: await adapter.extractUpgrade(name) };
+    const { extraction } = opened;
+    let outcome: InstallCommandResult;
     try {
-      if (target.kind === 'new') {
-        await adapter.landNewMod(name, stagedRoot, keys);
-        return { applied: true, wrote: true, isFomod };
-      }
-      let upgraded: Upgraded;
-      try {
-        upgraded = await adapter.upgradeMod(name, stagedRoot, keys);
-      } catch (err) {
-        return { applied: false, refusal: `Upgrading "${name}" failed partway and was not rolled back: ${errorMessage(err)}` };
-      }
-      if (upgraded.refused) {
-        return {
-          applied: false,
-          refusal: `Cannot upgrade "${name}": the release holds "${upgraded.repositoryOrPluginSourceEntry}", which is the mod's own repository or plugin source.`,
-        };
-      }
-      return { applied: true, wrote: true, isFomod };
+      await fill(extraction);
+      const { sourceDir, isFomod } = await detectRoot(adapter, extraction.path);
+      outcome = await settle(opened, name, sourceDir, meta, isFomod, gameName);
     } catch (err) {
-      return crossVolumeOrGenericRefusal(err, name);
+      outcome = refuse(err);
     }
+    if (outcome.applied) return outcome;
+    try {
+      await extraction.abandon();
+    } catch (err) {
+      return { applied: false, refusal: `${outcome.refusal} Removing what the install left behind failed too: ${errorMessage(err)}` };
+    }
+    return outcome;
   });
-}
-
-// Landing renames the mod root out of the staging folder; whatever is left there goes.
-async function withStaging<T>(stage: () => Promise<StagingFolder>, use: (staging: string) => Promise<T>): Promise<T> {
-  const staging = await stage();
-  try {
-    return await use(staging.path);
-  } finally {
-    await staging.remove();
-  }
-}
-
-async function landDetected(
-  access: InstallAccess, target: InstallTarget, staging: string, meta: InstallMeta, gameName: string,
-): Promise<InstallCommandResult> {
-  const { sourceDir, isFomod } = await detectRoot(access.adapter, staging);
-  return landStagedMod(access, target, sourceDir, meta, isFomod, gameName);
 }
 
 function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
@@ -174,18 +170,14 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
 }
 
-/** Extracts into staging and moves the detected mod root in, then marks the downloaded file the
- *  archive is, if it is one — a failed mark is reported beside the landed install, never instead
- *  of it. */
+/** Extracts into the mod's own folder, then marks the downloaded file the archive is, if it is
+ *  one — a failed mark is reported beside the landed install, never instead of it. */
 export async function installFromArchive(
   access: InstallAccess, target: InstallTarget, archivePath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
     const meta = metaFor({ installationFile: basename(archivePath) }, opts);
-    const outcome = await withStaging(() => access.adapter.stagingFolder(), async (staging) => {
-      await extractArchive(archivePath, staging, opts.run);
-      return landDetected(access, target, staging, meta, opts.gameName);
-    });
+    const outcome = await extractAndLand(access, target, (extraction) => extractArchive(archivePath, extraction.path, opts.run), meta, opts.gameName);
     if (!outcome.applied) return outcome;
     const downloaded = await access.adapter.downloadedFileAt(archivePath);
     if (downloaded === undefined) return outcome;
@@ -196,16 +188,12 @@ export async function installFromArchive(
   }
 }
 
-/** Stages a copy of the folder: the source belongs to the user, so it is never the thing renamed
- *  away. */
+/** Copies the folder in: the source belongs to the user, so it is never the thing moved. */
 export async function installFromFolder(
   access: InstallAccess, target: InstallTarget, folderPath: string, opts: InstallOptions,
 ): Promise<InstallCommandResult> {
   try {
-    return await withStaging(
-      () => access.adapter.stagingFolderOf(folderPath),
-      (staging) => landDetected(access, target, staging, metaFor({}, opts), opts.gameName),
-    );
+    return await extractAndLand(access, target, (extraction) => extraction.copyIn(folderPath), metaFor({}, opts), opts.gameName);
   } catch (err) {
     return refuse(err);
   }
