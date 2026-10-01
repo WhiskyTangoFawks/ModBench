@@ -51,7 +51,7 @@ export type WebviewToExtension =
       envelope: RecordEditEnvelope;
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null }
+  | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
 
 // A `data-vscode-context` payload VS Code hands the invoked command, never a `postMessage` — hence
@@ -178,7 +178,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
   plugin?: unknown; origin?: unknown; envelope?: unknown;
-  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown;
+  requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
 
 function parseOpenRecord(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -221,9 +221,10 @@ function isContextObject(value: unknown): value is Record<string, unknown> {
 }
 
 function parseFocusCell(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (w.context === null) return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null };
+  if (typeof w.entered !== 'boolean') throw new Error('Expected "focusCell" to carry a boolean entered.');
+  if (w.context === null) return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: w.entered };
   if (!isContextObject(w.context)) throw new Error('Expected "focusCell" to carry a context object or null.');
-  return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context };
+  return { type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: w.context, entered: w.entered };
 }
 
 function parseRequestRecordLoad(w: WebviewToExtensionWitness): WebviewToExtension {

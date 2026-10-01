@@ -22,7 +22,7 @@ export interface RouteRecordPanelMessageDeps {
   // Names the panel to the commands the webview's gestures fire, which find its gate by it.
   panelId: string;
   // The panel's own focused cell, which a field gesture from the palette acts on.
-  focusCell: (context: FocusedCellContext | undefined) => void;
+  focusCell: (context: FocusedCellContext | undefined, userFocus: boolean) => void;
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
   // per panel like `formKeyPicker.reply`.
   reply: (msg: ExtensionToWebview) => void;
@@ -47,7 +47,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
     panelId,
-    focusCell: (context) => { focusedCells.setCell(panel, context); },
+    focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     setTitle: (title) => { panel.title = title; },
   };
@@ -73,7 +73,7 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.COPY_VALUE]: async (_deps, m) => { await vscode.commands.executeCommand('modbench.copyValue', { copyText: m.value }); },
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
-  [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined); },
+  [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
 };
 

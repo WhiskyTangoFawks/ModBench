@@ -418,10 +418,10 @@ describe('routeRecordPanelMessage — the focused cell', () => {
     const focusCell = vi.fn();
     const context = { webviewSection: 'stringValue', formKey: '000001:A.esp' };
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context }, makeDeps({ focusCell }));
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null }, makeDeps({ focusCell }));
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered: true }, makeDeps({ focusCell }));
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context: null, entered: false }, makeDeps({ focusCell }));
 
-    expect(focusCell.mock.calls).toEqual([[context], [undefined]]);
+    expect(focusCell.mock.calls).toEqual([[context, true], [undefined, false]]);
   });
 });
 

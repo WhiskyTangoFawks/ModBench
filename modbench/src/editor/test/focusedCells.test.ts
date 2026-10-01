@@ -9,8 +9,9 @@ const text = { webviewSection: 'stringValue' };
 describe('the focused cell of the record tab in focus', () => {
   function tracked() {
     const shown: (object | undefined)[] = [];
-    const cells = new FocusedCells<string>((cell) => shown.push(cell));
-    return { cells, shown };
+    const entries: string[] = [];
+    const cells = new FocusedCells<string>((cell) => shown.push(cell), () => entries.push('entered'));
+    return { cells, shown, entries };
   }
 
   it('is the active panel\'s own focused cell, and follows the active panel', () => {
@@ -60,6 +61,38 @@ describe('the focused cell of the record tab in focus', () => {
     expect(focusedCellKeys(undefined)).toEqual({
       focusedCellSection: undefined, focusedCellCanMoveUp: false, focusedCellCanMoveDown: false,
     });
+  });
+});
+
+// Copy value and the name filter act on the focused view, which the grid takes only by a user's focus.
+describe('the record grid entering the focused view', () => {
+  function tracked() {
+    const entries: string[] = [];
+    const cells = new FocusedCells<string>(() => undefined, () => entries.push('entered'));
+    return { cells, entries };
+  }
+
+  it('enters when a cell reports a user\'s focus', () => {
+    const { cells, entries } = tracked();
+    cells.setActivePanel('A');
+    entries.length = 0;
+    cells.setCell('A', element, true);
+    expect(entries).toEqual(['entered']);
+  });
+
+  it('does not enter when a re-read refreshes the cell\'s context', () => {
+    const { cells, entries } = tracked();
+    cells.setActivePanel('A');
+    entries.length = 0;
+    cells.setCell('A', element);
+    cells.setCell('A', { ...element, copyText: 'changed' });
+    expect(entries).toEqual([]);
+  });
+
+  it('enters when the record panel gains focus', () => {
+    const { cells, entries } = tracked();
+    cells.setActivePanel('A');
+    expect(entries).toEqual(['entered']);
   });
 });
 

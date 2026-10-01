@@ -1639,6 +1639,44 @@ describe('RecordPanel — a column whose record failed to parse', () => {
       isRecord(c) && c.plugin === 'Good.esp' && String(c.webviewSection).split(' ').includes('stringValue'))).toBe(true));
   });
 
+  // Copy value and the name filter act on the focused view: a background re-read that changes the
+  // focused cell's text must not take that focus from the list the user is working in.
+  it('tells the host a cell was entered on a click, and not when a re-read changes its text', async () => {
+    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+    const told = (): { context: unknown; entered: unknown }[] => vi.mocked(vscode.postMessage).mock.calls
+      .map(([m]: unknown[]) => m)
+      .filter((m): m is { type: string; context: unknown; entered: unknown } => isRecord(m) && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL);
+    let shown = compare;
+    const client = panelClient(() => shown, { plugins });
+    render(<RecordPanel client={client} />);
+    await waitFor(() => screen.getByText('Readable Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(screen.getByText('Readable Name'));
+    await waitFor(() => expect(told().some((m) => isRecord(m.context) && m.context.copyText === 'Readable Name')).toBe(true));
+    expect(told().filter((m) => m.entered === true)).toHaveLength(1);
+    vi.mocked(vscode.postMessage).mockClear();
+
+    shown = {
+      ...compare,
+      overrides: [compare.overrides[0], column('Good.esp', 'Renamed')].filter((o) => o !== undefined),
+      diffs: [
+        diffNode({
+          fieldName: 'Name', values: { 'Broken.esp': 'Stored Name', 'Good.esp': 'Renamed' },
+          winnerColumn: 'Good.esp', cellStates: {}, conflictAll: 'Conflict',
+        }),
+        ...compare.diffs.slice(1),
+      ],
+    };
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Broken.esp' },
+      }));
+    });
+    await waitFor(() => expect(told().some((m) => isRecord(m.context) && m.context.copyText === 'Renamed')).toBe(true));
+    expect(told().some((m) => m.entered === true)).toBe(false);
+  });
+
   // The array gestures are host commands gated on the row's own data-vscode-context, so a column
   // that offers no array section offers no Add/Remove/Move at all.
   it('offers no array right-click commands, where the readable column offers them', async () => {

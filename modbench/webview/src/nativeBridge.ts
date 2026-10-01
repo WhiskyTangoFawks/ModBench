@@ -84,8 +84,9 @@ export function editField(formKey: string, plugin: string, origin: string, envel
 
 // commands.md, Record: a field gesture from the palette acts on the focused cell, which only this
 // panel knows. `context` is the one its right-click would hand the command; `null` is no cell.
-export function focusCell(context: Record<string, unknown> | null): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context });
+// `entered` is a user's focus, as against a re-read refreshing the cell.
+export function focusCell(context: Record<string, unknown> | null, entered: boolean): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered });
 }
 
 /** The focused cell's `data-vscode-context`, merged over its ancestors' as VS Code merges them for

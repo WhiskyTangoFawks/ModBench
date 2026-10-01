@@ -106,11 +106,10 @@ export function activate(context: vscode.ExtensionContext) {
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
   const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
-    if (cell !== undefined) focusedView.enter(GRID_VIEW);
     for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
       void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
     }
-  });
+  }, () => focusedView.enter(GRID_VIEW));
 
   // Fires on every completed reconcile and on a landed Track (ADR-0007 — the one reliable point to
   // register the tracked repositories).

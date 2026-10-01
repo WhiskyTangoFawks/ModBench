@@ -7,16 +7,21 @@ export class FocusedCells<TPanel> {
   private readonly cells = new Map<TPanel, FocusedCellContext>();
   private active: TPanel | undefined;
 
-  constructor(private readonly show: (cell: FocusedCellContext | undefined) => void) {}
+  /** `entered` hears the user take the focus: a cell clicked, or the panel gaining it. */
+  constructor(
+    private readonly show: (cell: FocusedCellContext | undefined) => void,
+    private readonly entered: () => void,
+  ) {}
 
   current(): FocusedCellContext | undefined {
     return this.active === undefined ? undefined : this.cells.get(this.active);
   }
 
-  setCell(panel: TPanel, cell: FocusedCellContext | undefined): void {
+  setCell(panel: TPanel, cell: FocusedCellContext | undefined, userFocus = false): void {
     if (cell === undefined) this.cells.delete(panel);
     else this.cells.set(panel, cell);
     if (panel === this.active) this.show(cell);
+    if (userFocus) this.entered();
   }
 
   /** The cell the panel in focus reports; nothing while no panel is. */
@@ -27,6 +32,7 @@ export class FocusedCells<TPanel> {
   setActivePanel(panel: TPanel): void {
     this.active = panel;
     this.show(this.current());
+    this.entered();
   }
 
   removePanel(panel: TPanel): void {
