@@ -70,12 +70,6 @@ export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
   );
 }
 
-// Ctrl+C on a cell is an entry point to the host's copy value, which writes the clipboard (webview
-// clipboard access isn't guaranteed). Fire-and-forget: there is no answer to wait for.
-export function copyValue(value: string): void {
-  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value });
-}
-
 // The grid's entry point to `modbench.record.editField`, which the host fires. Fire-and-forget: the
 // answer to "what does the record say now" is a re-read, never this call's return.
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {

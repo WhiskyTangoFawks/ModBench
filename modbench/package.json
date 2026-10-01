@@ -176,6 +176,26 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.recordGrid.editHere",
+        "title": "Edit Record Field",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.recordGrid.cutHere",
+        "title": "Cut Record Field",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.recordGrid.pasteHere",
+        "title": "Paste Record Field",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.recordGrid.clearHere",
+        "title": "Clear Record Field",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.instance.refresh",
         "title": "Refresh Instance",
         "icon": "$(refresh)",
@@ -631,6 +651,22 @@
         },
         {
           "command": "modbench.record.openReference",
+          "when": "false"
+        },
+        {
+          "command": "modbench.recordGrid.editHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.recordGrid.cutHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.recordGrid.pasteHere",
+          "when": "false"
+        },
+        {
+          "command": "modbench.recordGrid.clearHere",
           "when": "false"
         },
         {
@@ -1238,6 +1274,54 @@
         "args": {
           "view": "modbench.pluginListTree"
         }
+      },
+      {
+        "command": "modbench.recordGrid.editHere",
+        "key": "f2",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\bcell\\b/"
+      },
+      {
+        "command": "modbench.copyValue",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellCopies",
+        "args": {
+          "view": "modbench.recordGrid"
+        }
+      },
+      {
+        "command": "modbench.recordGrid.cutHere",
+        "key": "ctrl+x",
+        "mac": "cmd+x",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\beditableCell\\b/"
+      },
+      {
+        "command": "modbench.recordGrid.pasteHere",
+        "key": "ctrl+v",
+        "mac": "cmd+v",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\beditableCell\\b/"
+      },
+      {
+        "command": "modbench.record.removeElement",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
+      },
+      {
+        "command": "modbench.recordGrid.clearHere",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\beditableCell\\b/ && !(modbench.record.focusedCellSection =~ /\\barrayElement\\b/)"
+      },
+      {
+        "command": "modbench.record.moveElementUp",
+        "key": "alt+up",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
+      },
+      {
+        "command": "modbench.record.moveElementDown",
+        "key": "alt+down",
+        "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && !inputFocus && !modbench.record.focusedCellEditorOpen && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
       }
     ],
     "colors": [

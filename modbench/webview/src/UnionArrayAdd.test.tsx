@@ -84,6 +84,6 @@ describe('RecordPanel — Add on an abstract-union array', () => {
     if (!cell) throw new Error('the table cell containing the "[1]" index label');
 
     const context: unknown = JSON.parse(cell.getAttribute('data-vscode-context') ?? '{}');
-    expect(context).toMatchObject({ webviewSection: 'cell arrayParent', path: [{ kind: 'member', name: 'aliases' }] });
+    expect(context).toMatchObject({ webviewSection: 'cell arrayParent editableCell', path: [{ kind: 'member', name: 'aliases' }] });
   });
 });

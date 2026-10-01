@@ -11,7 +11,7 @@ import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from './messages';
 import {
   compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
-  lastElementCommand,
+  lastToldElement,
 } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
@@ -551,24 +551,19 @@ describe('Add Script is the generic array gesture', () => {
     });
   });
 
-  it('Delete on a property under a keyed script fires remove element through both index hops', async () => {
+  it('a property under a keyed script names both index hops, which Delete removes', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
     await waitFor(() => fieldCell('Radius'));
 
-    const cell = cellAt(rowOf(fieldCell('Radius')), 1);
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
+    fireEvent.click(cellAt(rowOf(fieldCell('Radius')), 1));
 
-    expect(lastElementCommand(vscode.postMessage)).toMatchObject({
-      command: 'removeElement',
-      context: {
-        path: [
-          { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
-          { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
-        ],
-      },
-    });
+    await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({
+      path: [
+        { kind: 'member', name: 'Scripts' }, { kind: 'index', index: 0 },
+        { kind: 'member', name: 'Properties' }, { kind: 'index', index: 0 },
+      ],
+    }));
   });
 });

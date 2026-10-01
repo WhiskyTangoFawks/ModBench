@@ -3,7 +3,7 @@ import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
-import { DiskCell, type CellKeys } from './DiskCell';
+import { DiskCell } from './DiskCell';
 import { copiedText, modelValue, pastedValue } from './modelValue';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
@@ -12,7 +12,7 @@ import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import {
-  arrayElementContext, arrayParentContext, referenceContext, defaultOf, getAtPath, isArrayElementHop,
+  arrayElementContext, arrayParentContext, editableCellContext, referenceContext, defaultOf, getAtPath, isArrayElementHop,
   columnHasNode, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
@@ -273,15 +273,7 @@ export function DiffRow({
               arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))),
               lastPathSegment?.kind === 'element' && lastPathSegment.keyed)
           : undefined;
-        const fire = (command: ElementCommand, allowed = true) =>
-          allowed && elementContext && onElementCommand ? () => onElementCommand(command, elementContext) : undefined;
-        const keys: CellKeys = {
-          remove: fire('removeElement'),
-          moveUp: fire('moveElementUp', elementContext?.canMoveUp),
-          moveDown: fire('moveElementDown', elementContext?.canMoveDown),
-          clear: cellEditable && diff.values[key] != null ? () => onEditCell(key, null) : undefined,
-          paste: cellEditable ? text => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined,
-        };
+        const paste = cellEditable ? (text: string) => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined;
         // `hops` addresses the array itself here — this row *is* the array.
         const parentContext = hops && arrayEditable && isArrayParentRow
           ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
@@ -303,6 +295,9 @@ export function DiffRow({
         const contexts = [
           parentContext,
           elementContext,
+          hops && cellEditable
+            ? editableCellContext(col.override.formKey, col.override.plugin, col.override.origin, hops, diff.values[key] != null)
+            : undefined,
           hops && meta.type === 'string'
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
@@ -327,7 +322,7 @@ export function DiffRow({
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
               copyText={copyText}
-              keys={keys}
+              paste={paste}
               drag={drag}
               landing={landing}
               contexts={contexts}
@@ -344,7 +339,7 @@ export function DiffRow({
         }
         return (
           <DiskCell
-            keys={keys}
+            paste={paste}
             drag={drag}
             landing={landing}
             contexts={contexts}

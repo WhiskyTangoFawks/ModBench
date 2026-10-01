@@ -42,11 +42,11 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
 // VS Code gates these on a `data-vscode-context` attribute carrying JSON it parses itself, never a
 // rendered menu. One row can carry more than one context, so each builder returns a plain object.
 export type {
-  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, ReferenceContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
   StringValueContext,
 } from './messages';
 import type {
-  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, ReferenceContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, EditableCellContext, ReferenceContext,
   StringValueContext,
 } from './messages';
 
@@ -82,6 +82,12 @@ export function headerCellContext(
 // offers copy value the text ADR-0018 says it copies.
 export function cellContext(copyText: string | undefined): { webviewSection: 'cell'; copyText?: string; preventDefaultContextMenuItems: true } {
   return { webviewSection: 'cell', ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true };
+}
+
+export function editableCellContext(
+  formKey: string, plugin: string, origin: string, path: PathHop[], holdsValue: boolean,
+): EditableCellContext {
+  return { webviewSection: 'editableCell', formKey, plugin, origin, path, holdsValue };
 }
 
 export function referenceContext(referenceTarget: string): ReferenceContext {

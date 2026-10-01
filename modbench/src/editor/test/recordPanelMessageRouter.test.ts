@@ -73,14 +73,6 @@ describe('routeRecordPanelMessage', () => {
     expect(channel.debug).not.toHaveBeenCalled();
   });
 
-  it('COPY_VALUE fires copy value with the cell\'s text, and writes no clipboard itself', async () => {
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value: 'copied' }, makeDeps());
-
-    expect(executeCommand).toHaveBeenCalledWith('modbench.copyValue', { copyText: 'copied' });
-    expect(writeText).not.toHaveBeenCalled();
-  });
-
   it('an unrecognized or non-object message is a no-op', async () => {
     await routeRecordPanelMessage({ type: 'somethingElse' }, makeDeps());
     await expect(routeRecordPanelMessage('not an object', makeDeps())).resolves.toBeUndefined();
@@ -139,13 +131,6 @@ describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
 
   beforeEach(() => { executeCommand.mockReset(); });
 
-  it.each(['addElement', 'removeElement', 'moveElementUp', 'moveElementDown'])(
-    'fires %s with the element\'s context, as its right-click menu does', async command => {
-      await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context }, makeDeps());
-
-      expect(executeCommand).toHaveBeenCalledWith(`modbench.record.${command}`, context, undefined);
-    });
-
   it('hands addElement the value a drop supplies as its Option', async () => {
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: 'addElement', context, value: { Keyword: '000800:Mod.esp' } },
@@ -154,12 +139,12 @@ describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.addElement', context, { Keyword: '000800:Mod.esp' });
   });
 
-  it('names no command the catalog does not hold', async () => {
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: 'openFieldValue', context }, makeDeps());
+  it.each(['openFieldValue', 'removeElement', 'moveElementUp', 'moveElementDown'])(
+    'names no %s, which no drop fires', async command => {
+      await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context }, makeDeps());
 
-    expect(executeCommand).not.toHaveBeenCalled();
-  });
+      expect(executeCommand).not.toHaveBeenCalled();
+    });
 });
 
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {

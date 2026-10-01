@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { copyValue, focusedCellContext, pickFormKey, requestRecordLoad } from './nativeBridge';
+import { focusedCellContext, pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // pickFormKey exercises the shared requestReply plumbing once, as the exemplar for the
@@ -120,14 +120,6 @@ describe('requestRecordLoad', () => {
     }));
 
     expect(await resultPromise).toEqual({ ok: false, error: 'HTTP 404' });
-  });
-});
-
-describe('copyValue', () => {
-  it('posts COPY_VALUE with the text the cell reads', () => {
-    copyValue('Reference');
-
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value: 'Reference' });
   });
 });
 
