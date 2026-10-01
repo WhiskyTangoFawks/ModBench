@@ -26,10 +26,8 @@ function deletion(cell: FocusedCellContext | undefined): Firing | undefined {
   return hasSection(cell, 'arrayElement') ? ['modbench.record.removeElement', cell] : clearing(cell);
 }
 
-/** The grid's keys that VS Code cannot hand the focused cell's Arguments (commands.md, Entry points
- *  are not gestures). Clear and cut fire their catalog commands with them; F2 and paste hand the
- *  focused cell of the panel in focus its editor or the clipboard's text, which it writes through
- *  edit field. */
+/** The grid's keys VS Code cannot hand the focused cell's Arguments. Clear and cut fire their catalog
+ *  commands with them; F2 and paste reach the focused cell, which writes through edit field. */
 export function registerGridKeyCommands(deps: GridKeyCommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand(`${GRID_VIEW}.editHere`, () => {
