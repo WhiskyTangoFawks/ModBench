@@ -712,7 +712,7 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('X')).toBeInTheDocument();
   });
 
-  it('double clicking the arrow leaves the row as one click does', async () => {
+  it('a double click on the arrow toggles the row once for each of its two clicks', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('X'));
 
