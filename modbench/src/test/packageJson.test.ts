@@ -909,7 +909,7 @@ describe('package.json Downloads delete key', () => {
 describe('package.json field gestures\' palette entries', () => {
   // The active editor is a record tab and no sidebar or panel holds the focus: VS Code documents no
   // key for a webview's own focus (when-clause-contexts.md).
-  const ON_A_RECORD_TAB = "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus";
+  const ON_A_RECORD_TAB = "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus";
   const FIELD_PALETTE = [
     ['modbench.record.addElement', String.raw`modbench.record.focusedCellSection =~ /\barrayParent\b/`],
     ['modbench.record.removeElement', String.raw`modbench.record.focusedCellSection =~ /\barrayElement\b/`],
@@ -931,7 +931,7 @@ describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
     expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
-      String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/ && compilable`,
+      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && compilable`,
     ]);
     expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
   });
@@ -960,7 +960,7 @@ describe('package.json track and decompile on the record tab', () => {
   const headerMenu = (): MenuEntry[] =>
     present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
       .filter((e) => e.when.includes('recordHeader'));
-  const header = { webviewId: 'modbench', webviewSection: 'recordHeader', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
+  const header = { webviewId: 'modbench.record', webviewSection: 'recordHeader', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
   const offered = (origin: string) =>
     headerMenu().filter((e) => holds(e.when, { ...header, origin, compilable: false })).map((e) => e.command);
 
@@ -983,7 +983,7 @@ describe('package.json copy on the record tab', () => {
   it('is one entry on the column header\'s menu, and the only copy entry on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
     expect(webviewMenu.filter((e) => e.command.startsWith('modbench.record.copy')).map((e) => [e.command, e.when])).toEqual([
-      ['modbench.record.copy', String.raw`webviewId == 'modbench' && webviewSection =~ /\brecordHeader\b/`],
+      ['modbench.record.copy', String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/`],
     ]);
   });
 });

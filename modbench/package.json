@@ -452,23 +452,23 @@
         },
         {
           "command": "modbench.record.addElement",
-          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayParent\\b/"
         },
         {
           "command": "modbench.record.removeElement",
-          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/"
         },
         {
           "command": "modbench.record.moveElementUp",
-          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveUp"
         },
         {
           "command": "modbench.record.moveElementDown",
-          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\barrayElement\\b/ && modbench.record.focusedCellCanMoveDown"
         },
         {
           "command": "modbench.record.openFieldValue",
-          "when": "activeWebviewPanelId == 'modbench' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
+          "when": "activeCustomEditorId == 'modbench.record' && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && modbench.record.focusedCellSection =~ /\\bstringValue\\b/"
         },
         {
           "command": "modbench.downloads.install",
@@ -985,47 +985,47 @@
       "webview/context": [
         {
           "command": "modbench.record.addElement",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayParent\\b/",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayParent\\b/",
           "group": "modbench@1"
         },
         {
           "command": "modbench.record.removeElement",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/",
           "group": "modbench@2"
         },
         {
           "command": "modbench.record.moveElementUp",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
           "group": "modbench@3"
         },
         {
           "command": "modbench.record.moveElementDown",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
           "group": "modbench@4"
         },
         {
           "command": "modbench.mod.track",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
           "group": "modbench@9"
         },
         {
           "command": "modbench.plugin.decompile",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
           "group": "modbench@10"
         },
         {
           "command": "modbench.plugin.compile",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
           "group": "modbench@11"
         },
         {
           "command": "modbench.record.copy",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/",
           "group": "modbench@12"
         },
         {
           "command": "modbench.record.openFieldValue",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bstringValue\\b/",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\bstringValue\\b/",
           "group": "modbench@13"
         }
       ]
