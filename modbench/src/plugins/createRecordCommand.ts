@@ -5,11 +5,13 @@ import { errorMessage } from '../ports/errorMessage';
 import { registerPluginsGesture, singularArgument } from './gestureEntry';
 import type { PluginsTreeNode } from './PluginsTreeProvider';
 import type { RecordGroup } from './createdRecordSelection';
+import type { MarkedRow } from './unconfirmedRecordRows';
 
 export interface RecordCreateDeps {
   client: Pick<MEditClient, 'createRecord' | 'getCreatableRecordTypes'>;
   reporter: Reporter;
   createdRecords: { selectWhenListed(group: RecordGroup): Promise<() => void> };
+  marks: { creating(row: MarkedRow): (formKey: string | undefined) => void };
 }
 
 async function pickRecordType(deps: RecordCreateDeps): Promise<string | undefined> {
@@ -35,7 +37,9 @@ export function registerRecordCreateCommand(
     if (recordType === undefined) return;
 
     const forget = await deps.createdRecords.selectWhenListed({ plugin, recordType });
+    const answered = deps.marks.creating(row.kind === 'plugin' ? { plugin } : { plugin, recordType });
     const result = await deps.client.createRecord(plugin.name, plugin.origin, recordType);
+    answered(isRefused(result) ? undefined : result.formKey);
     if (isRefused(result)) {
       forget();
       deps.reporter.report('error', result.message);
