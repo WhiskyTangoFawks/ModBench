@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 
 import { DownloadNode } from '../DownloadsProvider';
 import { ErrorNode } from '../errorNode';
-import { downloadsKeyContext } from '../keyContext';
+import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
 // commands.md, The surface supplies the Argument; No dead entries: a palette entry is handed no
@@ -43,5 +43,35 @@ describe('what the Downloads palette entries read off the selection', () => {
     expect(downloadsKeyContext([plain, excluded])).toMatchObject({ holdsIncluded: true, holdsExcluded: true });
     expect(downloadsKeyContext([excluded])).toMatchObject({ holdsIncluded: false, holdsExcluded: true });
     expect(downloadsKeyContext([plain])).toMatchObject({ holdsIncluded: true, holdsExcluded: false });
+  });
+});
+
+// downloads.md, Menus and keys, story 3: copy value copies each selected file's file name.
+describe('Downloads\' own text for the catalog\'s copy value', () => {
+  const alpha = new DownloadNode(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
+  const beta = new DownloadNode(downloadRowFixture('beta.7z'));
+  const copy = (selection: readonly (DownloadNode | ErrorNode)[]) => downloadsCopyValueText(() => selection);
+
+  it('is the file name of a right-clicked row, not its display name', () => {
+    expect(copy([])(alpha, undefined)).toBe('alpha.7z');
+  });
+
+  it('is one file name to a line over the selection a menu hands over', () => {
+    expect(copy([])(beta, [alpha, beta])).toBe('alpha.7z\nbeta.7z');
+  });
+
+  it('is the view\'s selection for its Ctrl+C, which names the view', () => {
+    expect(copy([alpha, beta])(DOWNLOADS_KEY_ARGS, undefined)).toBe('alpha.7z\nbeta.7z');
+  });
+
+  it('is empty text for its own Ctrl+C with nothing selected, and skips a row that is no file', () => {
+    expect(copy([])(DOWNLOADS_KEY_ARGS, undefined)).toBe('');
+    expect(copy([new ErrorNode('unreadable'), alpha])(DOWNLOADS_KEY_ARGS, undefined)).toBe('alpha.7z');
+  });
+
+  it('defers on an invocation of another surface', () => {
+    expect(copy([alpha])(undefined, undefined)).toBeUndefined();
+    expect(copy([alpha])({ view: 'modbench.modList' }, undefined)).toBeUndefined();
+    expect(copy([alpha])({ kind: 'mod' }, undefined)).toBeUndefined();
   });
 });

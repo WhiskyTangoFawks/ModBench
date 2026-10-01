@@ -5,7 +5,6 @@ import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
 import { displayValue, modelValue } from './modelValue';
-import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
@@ -302,7 +301,7 @@ export function DiffRow({
               style={cellStyle}
               isFocused={isFocused}
               onFocusCell={() => onFocusCell(rowKey, key)}
-              onCopy={() => copyToClipboard(copyText)}
+              copyText={copyText}
               arrayOps={arrayOps}
               vscodeContext={vscodeContext}
             >
@@ -322,7 +321,7 @@ export function DiffRow({
             style={cellStyle}
             isFocused={isFocused}
             onFocusCell={() => onFocusCell(rowKey, key)}
-            onCopy={() => copyToClipboard(copyText)}
+            copyText={copyText}
           >
             {/* "[3]"/"{…}" say a container is present and merely unexpanded, and a leaf reads its
                 default, so nothing at all stands in for a column that has no such thing. */}

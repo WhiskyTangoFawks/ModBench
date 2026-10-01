@@ -3,7 +3,6 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
-import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
 import type { FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
@@ -17,17 +16,13 @@ export interface RouteRecordPanelMessageDeps {
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
-  // A rejected clipboard write (headless windows, missing Linux clipboard tooling, Wayland
-  // permissions) is "explicit action failed" per ADR-0019 — the user pressed Ctrl+C — so it needs
-  // a notification, not a silent swallow.
-  reporter: Reporter;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
-  // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
+  // reconstructed per message at the call site rather than shared like `channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
   // Names the panel to the commands the webview's gestures fire, which find its gate by it.
   panelId: string;
   // The panel's own focused cell, which a field gesture from the palette acts on.
-  focusCell: (context: FocusedCellContext | undefined) => void;
+  focusCell: (context: FocusedCellContext | undefined, userFocus: boolean) => void;
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
   // per panel like `formKeyPicker.reply`.
   reply: (msg: ExtensionToWebview) => void;
@@ -52,7 +47,7 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
     panelId,
-    focusCell: (context) => { focusedCells.setCell(panel, context); },
+    focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     setTitle: (title) => { panel.title = title; },
   };
@@ -61,17 +56,6 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
 export interface FormKeyPickerDeps {
   meditClient: Pick<MEditClient, 'searchRecords'>;
   reply: (msg: ExtensionToWebview) => void;
-}
-
-// `vscode.env.clipboard.writeText` is extension-host-only, so this is a direct call rather than an
-// injected dep. Its own function because the message is dispatched fire-and-forget, so an
-// unhandled rejection would surface as nothing.
-async function copyToClipboard(reporter: Reporter, value: string): Promise<void> {
-  try {
-    await vscode.env.clipboard.writeText(value);
-  } catch (err) {
-    reporter.report('error', 'Could not copy to the clipboard.', errorMessage(err));
-  }
 }
 
 // One handler per webview message type, total over WEBVIEW_TO_EXTENSION: adding a message
@@ -86,10 +70,10 @@ const HANDLERS: {
     await vscode.commands.executeCommand('modbench.record.open', { formKey: m.formKey });
   },
   [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
-  [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),
+  [WEBVIEW_TO_EXTENSION.COPY_VALUE]: async (_deps, m) => { await vscode.commands.executeCommand('modbench.copyValue', { copyText: m.value }); },
   [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
-  [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined); },
+  [WEBVIEW_TO_EXTENSION.FOCUS_CELL]: (deps, m) => { deps.focusCell(m.context ?? undefined, m.entered); },
   [WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD]: answerRecordLoad,
 };
 
@@ -99,7 +83,7 @@ function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Pro
   switch (m.type) {
     case WEBVIEW_TO_EXTENSION.OPEN_RECORD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.LOG: return HANDLERS[m.type](deps, m);
-    case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.COPY_VALUE: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return HANDLERS[m.type](deps, m);

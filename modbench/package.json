@@ -210,24 +210,19 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.showReferencedBy",
-        "title": "Show Record Referenced By",
+        "command": "modbench.copyValue",
+        "title": "Copy Value",
         "category": "Modbench"
       },
       {
-        "command": "modbench.record.copyValue",
-        "title": "Copy Record Value",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.mod.filter",
-        "title": "Filter Mods…",
+        "command": "modbench.filter",
+        "title": "Filter…",
         "icon": "$(search)",
         "category": "Modbench"
       },
       {
-        "command": "modbench.mod.clearFilter",
-        "title": "Clear Mods Filter",
+        "command": "modbench.clearFilter",
+        "title": "Clear Filter",
         "icon": "$(clear-all)",
         "category": "Modbench"
       },
@@ -347,18 +342,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.downloadedFile.filter",
-        "title": "Filter Downloaded Files…",
-        "icon": "$(search)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.downloadedFile.clearFilter",
-        "title": "Clear Downloaded Files Filter",
-        "icon": "$(clear-all)",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.downloadedFile.sort",
         "title": "Sort Downloaded Files…",
         "category": "Modbench"
@@ -373,18 +356,6 @@
         "command": "modbench.downloadedFile.hideExcluded",
         "title": "Hide Excluded Downloaded Files",
         "icon": "$(eye)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.plugin.filter",
-        "title": "Filter Plugins…",
-        "icon": "$(search)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.plugin.clearFilter",
-        "title": "Clear Plugins Filter",
-        "icon": "$(clear-all)",
         "category": "Modbench"
       },
       {
@@ -568,11 +539,11 @@
           "when": "false"
         },
         {
-          "command": "modbench.mod.filter",
+          "command": "modbench.filter",
           "when": "modbench.folder == instance"
         },
         {
-          "command": "modbench.mod.clearFilter",
+          "command": "modbench.clearFilter",
           "when": "modbench.folder == instance"
         },
         {
@@ -604,14 +575,6 @@
           "when": "focusedView == modbench.modList && modbench.folder == instance"
         },
         {
-          "command": "modbench.downloadedFile.filter",
-          "when": "modbench.folder == instance"
-        },
-        {
-          "command": "modbench.downloadedFile.clearFilter",
-          "when": "modbench.folder == instance"
-        },
-        {
           "command": "modbench.downloadedFile.sort",
           "when": "modbench.folder == instance"
         },
@@ -625,14 +588,6 @@
         },
         {
           "command": "modbench.plugin.create",
-          "when": "modbench.folder == instance"
-        },
-        {
-          "command": "modbench.plugin.filter",
-          "when": "modbench.folder == instance"
-        },
-        {
-          "command": "modbench.plugin.clearFilter",
           "when": "modbench.folder == instance"
         },
         {
@@ -664,12 +619,12 @@
           "group": "settings@1"
         },
         {
-          "command": "modbench.plugin.filter",
+          "command": "modbench.filter",
           "when": "view == modbench.pluginListTree && !modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.plugin.clearFilter",
+          "command": "modbench.clearFilter",
           "when": "view == modbench.pluginListTree && modbench.plugin.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
@@ -699,12 +654,12 @@
           "group": "navigation@4"
         },
         {
-          "command": "modbench.mod.filter",
+          "command": "modbench.filter",
           "when": "view == modbench.modList && !modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.mod.clearFilter",
+          "command": "modbench.clearFilter",
           "when": "view == modbench.modList && modbench.mod.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
@@ -729,12 +684,12 @@
           "group": "3_create@2"
         },
         {
-          "command": "modbench.downloadedFile.filter",
+          "command": "modbench.filter",
           "when": "view == modbench.downloads && !modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.downloadedFile.clearFilter",
+          "command": "modbench.clearFilter",
           "when": "view == modbench.downloads && modbench.downloadedFile.filterActive && modbench.folder == instance",
           "group": "navigation@1"
         },
@@ -766,7 +721,7 @@
           "group": "modbench@2"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@3"
         },
@@ -821,7 +776,7 @@
           "group": "4_sourceControl@1"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.modList && viewItem =~ /\\bmod\\b/",
           "group": "5_copy@1"
         },
@@ -846,7 +801,7 @@
           "group": "6_destroy@1"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "5_copy@1"
         },
@@ -886,9 +841,14 @@
           "group": "downloadActions@5"
         },
         {
-          "command": "modbench.downloadedFile.delete",
+          "command": "modbench.copyValue",
           "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
           "group": "downloadActions@6"
+        },
+        {
+          "command": "modbench.downloadedFile.delete",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
+          "group": "downloadActions@7"
         },
         {
           "command": "modbench.plugin.reveal",
@@ -926,7 +886,7 @@
           "group": "4_sourceControl@3"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.pluginListTree && viewItem =~ /\\bplugin\\b/",
           "group": "5_copy@1"
         },
@@ -936,7 +896,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.pluginListTree && viewItem == pluginImplicit",
           "group": "5_copy@1"
         },
@@ -956,7 +916,7 @@
           "group": "5_copy@1"
         },
         {
-          "command": "modbench.record.copyValue",
+          "command": "modbench.copyValue",
           "when": "view == modbench.pluginListTree && viewItem =~ /^(record|worldspace|cell|placed)\\b/",
           "group": "5_copy@2"
         },
@@ -1044,12 +1004,21 @@
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance && modbench.mod.selectionKind == separator && modbench.mod.singleRow"
       },
       {
-        "command": "modbench.record.copyValue",
+        "command": "modbench.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
         "when": "focusedView == modbench.modList && listFocus && !inputFocus && modbench.folder == instance",
         "args": {
           "view": "modbench.modList"
+        }
+      },
+      {
+        "command": "modbench.copyValue",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "focusedView == modbench.downloads && listFocus && !inputFocus && modbench.folder == instance",
+        "args": {
+          "view": "modbench.downloads"
         }
       },
       {
@@ -1059,10 +1028,13 @@
         "when": "focusedView == modbench.downloads && listFocus && !inputFocus && modbench.folder == instance"
       },
       {
-        "command": "modbench.record.copyValue",
+        "command": "modbench.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
-        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus"
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus",
+        "args": {
+          "view": "modbench.referencedByTree"
+        }
       },
       {
         "command": "modbench.plugin.enable",
@@ -1081,7 +1053,7 @@
         "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance && modbench.plugin.allDeletableRecords"
       },
       {
-        "command": "modbench.record.copyValue",
+        "command": "modbench.copyValue",
         "key": "ctrl+c",
         "mac": "cmd+c",
         "when": "focusedView == modbench.pluginListTree && listFocus && !inputFocus && modbench.folder == instance",

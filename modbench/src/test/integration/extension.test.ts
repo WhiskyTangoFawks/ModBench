@@ -1083,7 +1083,7 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
       await vscode.commands.executeCommand('modbench.modList.focus');
       await vscode.commands.executeCommand('list.focusFirst');
       await vscode.commands.executeCommand('list.select');
-      await vscode.commands.executeCommand('modbench.record.copyValue', MODS_KEY_ARGS);
+      await vscode.commands.executeCommand('modbench.copyValue', MODS_KEY_ARGS);
       return (await vscode.env.clipboard.readText()) === 'Palette Mod';
     });
   };
@@ -1109,6 +1109,18 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
     await vscode.commands.executeCommand('list.toggleExpand');
     await new Promise((r) => setTimeout(r, 750));
     assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+  });
+
+  it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
+    if (!root) this.skip();
+    this.timeout(30_000);
+    await enabledAndSelected();
+    await vscode.env.clipboard.writeText('');
+    await waitFor('the palette\'s copy value to reach the clipboard', async () => {
+      await vscode.commands.executeCommand('workbench.action.quickOpen', '>Modbench: Copy Value');
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      return (await vscode.env.clipboard.readText()) === 'Palette Mod';
+    });
   });
 
   it('offers Disable Mod in the palette while the Mods view has focus, acting on its selection', async function () {
@@ -1146,7 +1158,7 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
       await vscode.commands.executeCommand('list.focusFirst');
       for (let i = 0; i < index; i++) await vscode.commands.executeCommand('list.focusDown');
       await vscode.commands.executeCommand('list.selectAndPreserveFocus');
-      await vscode.commands.executeCommand('modbench.record.copyValue', PLUGINS_KEY_ARGS);
+      await vscode.commands.executeCommand('modbench.copyValue', PLUGINS_KEY_ARGS);
       return (await vscode.env.clipboard.readText()) === ['TestMod.esp', 'Other.esp'][index];
     });
   };

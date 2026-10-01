@@ -58,7 +58,7 @@ function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,
     refreshSourceControlFor: (plugin, origin) => { deps.refreshSourceControlFor(plugin, origin); },
-    // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
+    // ADR-0019 surfacing for a refused edit.
     reporter: deps.reporterFor('recordPanel'),
   };
 }
@@ -185,10 +185,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
     vscode.commands.registerCommand('modbench.record.open', (argument?: unknown, selection?: unknown) =>
       openRecordTabs(recordOpenPlan(argument, selection, deps.focusedViewSelection()))),
-    // Retargets nothing — the view follows activeRecordTracker on its own.
-    // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
-    vscode.commands.registerCommand('modbench.record.showReferencedBy',
-      () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
   ];
 }
 

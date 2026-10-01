@@ -68,7 +68,7 @@ describe('no-gesture-result-use', () => {
   });
 
   it('passes a relay callback whose whole body is the fire (recordPanelHost.ts\'s shape)', () => {
-    const messages = lint("registerCommand('modbench.record.showReferencedBy', () => vscode.commands.executeCommand('modbench.referencedByTree.focus'));\n");
+    const messages = lint("registerCommand('modbench.x', () => vscode.commands.executeCommand('modbench.referencedByTree.focus'));\n");
 
     expect(messages).toEqual([]);
   });

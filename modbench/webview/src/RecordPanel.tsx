@@ -69,18 +69,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
+  const enteredCell = useRef(false);
   function handleFocusCell(rowKey: string, plugin: ColumnKey) {
+    enteredCell.current = true;
     setFocusedCell({ rowKey, plugin });
   }
   // Read off the rendered grid after every render, since a re-read or a move changes what the
-  // focused cell's menu would offer without a new focus.
+  // focused cell's menu would offer without a new focus. Only a user's focus enters the grid.
   const toldFocusedCell = useRef<string | undefined>(undefined);
   useEffect(() => {
     const context = focusedCellContext(document);
     const told = JSON.stringify(context);
-    if (told === toldFocusedCell.current) return;
+    const entered = enteredCell.current;
+    enteredCell.current = false;
+    if (told === toldFocusedCell.current && !entered) return;
     toldFocusedCell.current = told;
-    focusCell(context);
+    focusCell(context, entered);
   });
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
-import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
 import type { Column } from './recordUtils';
 import type { FocusedCell } from './DiffRow';
@@ -92,7 +91,7 @@ export function RecordHeaderRows({
           : (
             <DiskCell
               key={key} style={cellStyle(key)} isFocused={isFocused(RECORD_HEADER_ROW, key)}
-              onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, key)} onCopy={() => undefined}
+              onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, key)}
             >
               {!expanded && <span style={{ opacity: 0.5 }}>{'{…}'}</span>}
             </DiskCell>
@@ -107,7 +106,7 @@ export function RecordHeaderRows({
               <DiskCell
                 key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                 onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
-                onCopy={() => copyToClipboard(formKeyLabel(override.formKey, override))}
+                copyText={formKeyLabel(override.formKey, override)}
               >
                 <FormIdCell
                   record={override}

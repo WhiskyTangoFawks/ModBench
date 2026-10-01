@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
+import { copyValue } from './nativeBridge';
 
 // ADR-0018: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
 // not just painted state — Ctrl+C needs `keydown` to land on a real focused element.
@@ -17,14 +18,14 @@ export interface ArrayOps {
 }
 
 export function DiskCell({
-  style, isFocused, onFocusCell, onCopy, arrayOps, vscodeContext, children,
+  style, isFocused, onFocusCell, copyText, arrayOps, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
-  // ADR-0018: Ctrl+C on the focused cell. A plain thunk, not a value: the cell doesn't need to
-  // know *what* it copies, only *when*.
-  onCopy: () => void;
+  // ADR-0018: what Ctrl+C on the focused cell copies; absent when the cell copies nothing. The
+  // palette's copy value reads it off the cell too.
+  copyText?: string;
   // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu offers,
   // each posting the same envelope the menu entry does, with no extension-host round trip for
   // the keys themselves.
@@ -48,11 +49,12 @@ export function DiskCell({
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       data-vscode-context={vscodeContext}
       data-focused-cell={isFocused || undefined}
+      data-copy-text={copyText}
       onClick={onFocusCell}
       onKeyDown={e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
           e.preventDefault();
-          onCopy();
+          if (copyText !== undefined) copyValue(copyText);
           return;
         }
         // ADR-0018: F2 is xEdit's only keyboard "open the editor" trigger. Dispatched at the

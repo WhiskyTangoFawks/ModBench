@@ -1,4 +1,4 @@
-import type { DownloadNode, DownloadsTreeNode } from './DownloadsProvider';
+import { DownloadNode, type DownloadsTreeNode } from './DownloadsProvider';
 
 /** What the Downloads keys' and palette entries' `when` clauses read off the selection, since
  *  neither is handed a row. */
@@ -29,5 +29,22 @@ export function downloadsKeyContext(selection: readonly DownloadsTreeNode[]): Do
     holdsFile: files.length > 0,
     holdsIncluded: files.some((file) => !file.row.excluded),
     holdsExcluded: files.some((file) => file.row.excluded),
+  };
+}
+
+/** The `args` the Downloads Ctrl+C passes, so the command other surfaces share knows the key is
+ *  the Downloads view's. */
+export const DOWNLOADS_KEY_ARGS = { view: 'modbench.downloads' } as const;
+
+/** Downloads' own text for the catalog's one copy value id: each file's file name, or `undefined`
+ *  unless the invocation is a download row or the Downloads key's args. */
+export function downloadsCopyValueText(
+  viewSelection: () => readonly DownloadsTreeNode[],
+): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
+  const names = (rows: readonly unknown[]) => rows.filter((row) => row instanceof DownloadNode).map((row) => row.row.name).join('\n');
+  return (clicked, allSelected) => {
+    if (typeof clicked === 'object' && clicked !== null && Reflect.get(clicked, 'view') === DOWNLOADS_KEY_ARGS.view) return names(viewSelection());
+    if (!(clicked instanceof DownloadNode)) return undefined;
+    return names(allSelected?.length ? allSelected : [clicked]);
   };
 }
