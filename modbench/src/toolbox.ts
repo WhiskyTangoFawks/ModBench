@@ -558,7 +558,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     access, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
     reporterFor('mod.move'), modListProvider));
-  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), trash, () => modListView.selection, modListProvider));
+  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), ask, trash, () => modListView.selection, modListProvider));
   own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty'), modListProvider));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
