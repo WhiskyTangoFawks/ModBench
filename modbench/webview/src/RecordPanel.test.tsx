@@ -1450,7 +1450,7 @@ describe('RecordPanel — an absent member reads as its default', () => {
   it('an absent int reads 0, an absent bool false, an absent string empty', async () => {
     await renderExpanded();
     expect(cellAt('Weight', 2).textContent).toBe('0');
-    expect(cellAt('Essential', 2).textContent).toBe('false');
+    expect(cellAt('Essential', 2).textContent).toBe('False');
     expect(cellAt('Prefix', 2).textContent).toBe('');
     expect(rows().queryAllByText('—')).toHaveLength(1);
   });

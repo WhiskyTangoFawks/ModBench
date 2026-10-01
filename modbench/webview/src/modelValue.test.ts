@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelValue } from './modelValue';
+import { copiedText, displayValue, modelValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
@@ -48,9 +48,9 @@ describe('modelValue — scalar types', () => {
     expect(modelValue(1.5, floatMeta)).toBe('1.5');
   });
 
-  it('bool: "true"/"false", never a raw boolean', () => {
-    expect(modelValue(true, boolMeta)).toBe('true');
-    expect(modelValue(false, boolMeta)).toBe('false');
+  it('bool: "True"/"False", never a raw boolean', () => {
+    expect(modelValue(true, boolMeta)).toBe('True');
+    expect(modelValue(false, boolMeta)).toBe('False');
   });
 
   it('enum: the enum name, never an integer index', () => {
@@ -132,5 +132,21 @@ describe('modelValue — a type the wire sends that this union does not name', (
   it('stringifies like every other scalar, rather than reading as unset', () => {
     const futureMeta: FieldMetadata = { ...fieldMeta({ name: 'Future', type: 'string' }), type: 'quaternion' };
     expect(modelValue(42, futureMeta)).toBe('42');
+  });
+});
+
+describe('displayValue and copiedText — an enum value the enum does not name', () => {
+  it('reads <Unknown: n>', () => {
+    expect(displayValue(5, enumMeta)).toBe('<Unknown: 5>');
+    expect(displayValue('5', enumMeta)).toBe('<Unknown: 5>');
+  });
+
+  it('a named member reads as its name', () => {
+    expect(displayValue('Female', enumMeta)).toBe('Female');
+  });
+
+  it('copies the value, which the editor can take back', () => {
+    expect(copiedText(5, enumMeta)).toBe('5');
+    expect(copiedText('Female', enumMeta)).toBe('Female');
   });
 });

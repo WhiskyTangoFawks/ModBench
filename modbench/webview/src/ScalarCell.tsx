@@ -129,8 +129,8 @@ export function ScalarCell({
       <input
         {...editorProps}
         type="checkbox"
-        checked={draft === 'true'}
-        onChange={e => { setDraft(String(e.target.checked)); commitIfChanged(e.target.checked); }}
+        checked={draft === 'True'}
+        onChange={e => { setDraft(modelValue(e.target.checked, meta)); commitIfChanged(e.target.checked); }}
       />
     );
   }

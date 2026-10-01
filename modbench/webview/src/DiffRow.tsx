@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { displayValue, modelValue } from './modelValue';
+import { copiedText, modelValue } from './modelValue';
 import { ExpandArrow } from './ExpandArrow';
 import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
@@ -253,7 +253,7 @@ export function DiffRow({
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
         // ADR-0018: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
-        const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
+        const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column.
         const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
