@@ -57,6 +57,19 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
+    public void GetRecords_WithSearchFormKey_AlsoOffersTheRecordsWhoseEditorIdMatches()
+    {
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var other = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC02", Limit: 100)).Items.Single();
+
+        var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", SearchFormKey: other.FormKey, Limit: 100));
+
+        Assert.Equal(["TestNPC01", "TestNPC02"], result.Items.Select(r => r.EditorId));
+        Assert.Equal(2, result.Total);
+    }
+
+    [Fact]
     public void GetRecords_Pagination_RespectsLimitAndOffset()
     {
         using var index = LoadedIndex();

@@ -3,7 +3,9 @@ import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
   type ExtensionToWebview, type WebviewToExtension,
 } from '../wire/messages';
-import type { RecordSummary, MEditClient, PluginLoadFailure } from '../client';
+import type { MEditClient, PluginLoadFailure } from '../client';
+import type { Reporter } from '../ports/reporter';
+import { pickRecord, type RecordPickerDeps } from './recordPicker';
 import type { FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
@@ -16,6 +18,7 @@ export interface RouteRecordPanelMessageDeps {
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
+  reporter: Pick<Reporter, 'insideDialog'>;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
@@ -42,15 +45,14 @@ export function routerDepsForPanel<Panel extends FollowedPanel>(
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
-    formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
+    formKeyPicker: { meditClient: shared.meditClient, reporter: shared.reporter, reply: (m) => { void panel.webview.postMessage(m); } },
     focusCell: (context, userFocus) => { focusedCells.setCell(panel, context, userFocus); },
     reply: (m) => { void panel.webview.postMessage(m); },
     setTitle: (title) => { panel.title = title; },
   };
 }
 
-export interface FormKeyPickerDeps {
-  meditClient: Pick<MEditClient, 'searchRecords'>;
+export interface FormKeyPickerDeps extends RecordPickerDeps {
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -105,81 +107,12 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   await dispatch(deps, m);
 }
 
-// The same "EditorID [FormKey]" label the picker's items have always
-// rendered — the same composite FormKeyLink/FormKeyCell use to display a resolved reference, so
-// what a reference is *chosen* in and what it is *read back* in are identical.
-function toFormKeyQuickPickItem(r: RecordSummary): vscode.QuickPickItem & { formKey: string } {
-  return { label: r.editorId ? `${r.editorId} [${r.formKey}]` : r.formKey, formKey: r.formKey };
-}
-
-// A user can paste a whole "EditorID [FormKey]" label into a picker, where searching the literal
-// would find nothing. The *first* bracketed segment wins: a VMAD object reference's trailing
-// bracket is an alias index, not identity.
-export function normalizeFormKeyQuery(query: string): string {
-  const bracketed = /\[([^\]]*)\]/.exec(query)?.[1]?.trim();
-  return bracketed || query;
-}
-
-// Seeded with the current reference so it is visible instead of an empty-query default; setting
-// `.value` does not fire onDidChangeValue, so the seed is searched explicitly. A stale in-flight
-// search is dropped by a sequence guard.
-async function pickFormKeyViaQuickPick(
-  deps: FormKeyPickerDeps, seed: string, validTypes: string[],
-): Promise<string | null> {
-  const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem & { formKey: string }>();
-  quickPick.placeholder = 'Search EditorID or FormKey…';
-  quickPick.value = seed;
-
-  let seq = 0;
-  const runSearch = async (query: string) => {
-    const mySeq = ++seq;
-    if (!query.trim()) { quickPick.items = []; return; }
-    quickPick.busy = true;
-    try {
-      const { items } = await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes);
-      if (mySeq !== seq) return;
-      const qpItems = items.map(toFormKeyQuickPickItem);
-      quickPick.items = qpItems;
-      // Normalized, because the seed is the composite the cell displays — comparing
-      // the raw seed against a bare formKey would match only when the reference is unresolved.
-      const seeded = qpItems.find(i => i.formKey === normalizeFormKeyQuery(seed));
-      if (seeded) quickPick.activeItems = [seeded];
-    } finally {
-      if (mySeq === seq) quickPick.busy = false;
-    }
-  };
-
-  void runSearch(seed);
-
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  quickPick.onDidChangeValue(value => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    if (!value.trim()) { quickPick.items = []; seq++; return; }
-    debounceTimer = setTimeout(() => void runSearch(value), 200);
-  });
-
-  return new Promise<string | null>(resolve => {
-    let accepted = false;
-    quickPick.onDidAccept(() => {
-      accepted = true;
-      quickPick.hide();
-      resolve(quickPick.selectedItems[0]?.formKey ?? null);
-    });
-    quickPick.onDidHide(() => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      quickPick.dispose();
-      if (!accepted) resolve(null);
-    });
-    quickPick.show();
-  });
-}
-
 async function replyFormKeyPicked(
   deps: FormKeyPickerDeps | undefined,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>,
 ): Promise<void> {
   if (!deps) return;
-  const formKey = await pickFormKeyViaQuickPick(deps, m.seed, m.validTypes);
+  const formKey = await pickRecord(deps, m.seed, m.validTypes);
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
 }
 

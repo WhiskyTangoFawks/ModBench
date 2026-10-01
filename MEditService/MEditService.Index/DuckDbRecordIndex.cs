@@ -779,7 +779,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var connection = owner.OpenRead();
             var (where, paramValues) = BuildWhere(
                 query.Plugin?.Name, query.Search, query.Unfiltered ? null : ListingFilter, query.Origin, query.RecordTypes,
-                query.GroupOnly ? NavigatorSql.NotHeld("r") : null);
+                query.GroupOnly ? NavigatorSql.NotHeld("r") : null, query.SearchFormKey);
             var dataParams = new List<string>(paramValues);
             var holdings = HoldingsOf(query.Plugin?.Name, query.Origin, dataParams);
             // Modified is ref='working-tree' with a committed snapshot; Added is the same ref with no
@@ -1205,7 +1205,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,
-            IReadOnlyList<string>? recordTypes = null, string? groupCondition = null)
+            IReadOnlyList<string>? recordTypes = null, string? groupCondition = null, string? searchFormKey = null)
         {
             var conditions = new List<string>();
             var values = new List<string>();
@@ -1232,16 +1232,23 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 // A FormKey-shaped query resolves against form_key rather than an EditorID substring
                 // match; form_key values are stored via FormKey.ToString(), so round-tripping the
                 // query through TryFactory canonicalizes its hex id.
+                var matches = new List<string>();
                 if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
                 {
-                    conditions.Add($"form_key = ${values.Count + 1}");
+                    matches.Add($"form_key = ${values.Count + 1}");
                     values.Add(formKey.ToString());
                 }
                 else
                 {
-                    conditions.Add($"editor_id ILIKE ${values.Count + 1}");
+                    matches.Add($"editor_id ILIKE ${values.Count + 1}");
                     values.Add($"%{search}%");
                 }
+                if (searchFormKey != null)
+                {
+                    matches.Add($"form_key = ${values.Count + 1}");
+                    values.Add(searchFormKey);
+                }
+                conditions.Add($"({string.Join(" OR ", matches)})");
             }
             if (filterCondition != null)
                 conditions.Add(filterCondition);

@@ -35,7 +35,7 @@ export function FormKeyCell({ value, meta, editable, onOpen, onCommit, checkErro
     // input is where a mutable cell's value is selected and copied. The picker normalizes a
     // composite back to its reference before searching.
     void pickFormKey(fk ? formKeyLabel(fk, resolution) : '', meta.validFormKeyTypes)
-      .then(picked => { if (picked) onCommit?.(picked); })
+      .then(picked => { if (picked && picked !== fk) onCommit?.(picked); })
       .finally(() => { picking.current = false; });
   }
 

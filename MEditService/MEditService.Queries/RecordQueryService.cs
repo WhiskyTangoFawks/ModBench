@@ -67,10 +67,14 @@ public sealed class RecordQueryService(
         if (!string.IsNullOrWhiteSpace(plugin)) pluginFilter = plugin;
         var originFilter = string.IsNullOrWhiteSpace(origin) ? null : origin;
         var query = new RecordQuery(
-            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search, Limit: limit, Offset: offset,
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: originFilter, Search: search,
+            SearchFormKey: FormKeyOfFormId(search, reads), Limit: limit, Offset: offset,
             GroupOnly: search is null, Unfiltered: unfiltered);
         return reads.Search(query);
     }
+
+    private string? FormKeyOfFormId(string? search, IRecordReads reads) =>
+        search is null ? null : LoadIndex.FormKeyOf(search, _loadOrder.Require(), reads.OpenedPlugins)?.ToString();
 
     public RecordDetail? GetRecord(string formKey)
     {

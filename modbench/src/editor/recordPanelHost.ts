@@ -3,6 +3,7 @@ import type { MEditClient } from '../client';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import type { EditsInFlight } from './followRecord';
 import { buildWebviewHtml } from './webviewHtml';
+import { pickRecord } from './recordPicker';
 import { routeRecordPanelMessage, routerDepsForPanel, type SharedRecordPanelDeps } from './recordPanelMessageRouter';
 import type { FocusedCells } from './focusedCells';
 import type { RecordWriteDeps } from './applyRecordEdit';
@@ -179,8 +180,17 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
-    vscode.commands.registerCommand('modbench.record.open', (argument?: unknown) =>
-      openRecordTabs(recordOpenPlan(argument, deps.focusedViewSelection()))),
+    vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
+      const plan = recordOpenPlan(argument, deps.focusedViewSelection());
+      if (plan.addresses.length > 0) return openRecordTabs(plan);
+      const reporter = deps.reporterFor('recordOpen');
+      if (argument !== undefined) {
+        reporter.report('error', 'Could not open a record.', 'What was given names no record.');
+        return;
+      }
+      const formKey = await pickRecord({ meditClient, reporter }, '', []);
+      if (formKey) await openRecordTab({ formKey }, vscode.ViewColumn.One, true);
+    }),
     vscode.commands.registerCommand('modbench.record.openToSide', (row?: unknown, selection?: unknown) =>
       vscode.commands.executeCommand('modbench.record.open', besideArgument(row, selection))),
   ];
@@ -193,10 +203,6 @@ async function openRecordTab(address: RecordAddress, viewColumn: vscode.ViewColu
 // `ViewColumn.Beside` resolves once: the first tab opened becomes active, so a second Beside call
 // would cascade a new column per record — the await lets this loop read it after each tab settles.
 async function openRecordTabs({ addresses, beside, preview }: RecordOpenPlan): Promise<void> {
-  if (addresses.length === 0) {
-    vscode.window.setStatusBarMessage('Select a record in Plugins or Referenced By to open it.', 5000);
-    return;
-  }
   let column: vscode.ViewColumn = beside ? vscode.ViewColumn.Beside : vscode.ViewColumn.One;
   for (const address of addresses) {
     await openRecordTab(address, column, preview);
