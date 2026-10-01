@@ -20,11 +20,10 @@ export type { RecordEditEnvelope } from '../wire/messages';
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
- *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm.
- *  `unanswered` marks a request mEdit never answered, which may have written (common.md,
- *  Unconfirmed writes, story 6). */
+ *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
 export interface WriteRefused {
   readonly refused: true;
+  /** mEdit never answered, so the write may have landed (common.md, Unconfirmed writes, story 6). */
   readonly unanswered?: true;
   readonly message: string;
 }
