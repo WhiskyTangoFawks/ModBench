@@ -61,6 +61,7 @@ public sealed class RealInstallSmokeTests
                 {
                     plugins = masters.Select(name => new { name, path = Path.Combine(dataDir.Path, name), origin = PluginOrigin.DataDirectory }),
                     active = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
+                    loadedWithNoLine = masters.Select(name => new PluginAddress(name, PluginOrigin.DataDirectory)),
                     gameDirectory = dataDir.Path,
                     instanceRoot,
                     gameRelease = release.ToString(),

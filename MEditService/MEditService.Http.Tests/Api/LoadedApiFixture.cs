@@ -29,6 +29,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         {
             plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(Plugin.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Plugin.Plugins),
             gameDirectory = Plugin.DataFolder,
             instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",

@@ -38,6 +38,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = badGameDir ?? _fixture.DataFolder,
             instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
@@ -59,6 +60,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "SkyrimSE",

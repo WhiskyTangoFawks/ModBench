@@ -36,11 +36,13 @@ export interface LoadOrderPlugin {
 /** A plugin in the snapshot: the file, and the origin that provides it (ADR-0013 invariant 2). */
 export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
-/** ADR-0013's snapshot: every plugin in the instance, and the active plugins in load order. */
+/** ADR-0013's snapshot: every plugin in the instance, the active plugins in load order, and the
+ *  plugins loaded with no line. */
 export interface LoadOrderSnapshotValue {
   readonly dataFolder: string;
   readonly plugins: SnapshotPlugin[];
   readonly active: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
+  readonly loadedWithNoLine: Pick<LoadOrderPlugin, 'name' | 'origin'>[];
 }
 
 /** A plugins.txt line with no resolvable plugin file: no mod or overwrite/ provides it, and
@@ -238,5 +240,6 @@ export function loadOrderSnapshotOf(value: {
     dataFolder,
     plugins: [...sent.values()],
     active: [...loadedWithNoLine, ...fromLines].map(({ name, origin }) => ({ name, origin })),
+    loadedWithNoLine: loadedWithNoLine.map(({ name, origin }) => ({ name, origin })),
   };
 }

@@ -14,9 +14,10 @@ public sealed record RegisteredPlugin(string Name, string Origin, string Path)
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
-    public static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], []);
+    public static readonly LoadOrderSnapshot Empty = new(string.Empty, null, default, [], [], []);
 
     private readonly Dictionary<PluginAddress, int> _loadOrderIndex;
+    private readonly HashSet<PluginAddress> _loadedWithNoLine;
 
     public string DataFolderPath { get; }
 
@@ -33,11 +34,15 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// them. A plugin's place here is its load index.</summary>
     public IReadOnlyList<RegisteredPlugin> Active { get; }
 
+    /// <summary>The plugins Mod Management loads with no line: the game's own, a DLC's or a Creation
+    /// Club plugin.</summary>
+    public IReadOnlyList<RegisteredPlugin> LoadedWithNoLine { get; }
+
     public LoadOrderSnapshot(
-        string dataFolderPath, string? instanceRoot, GameRelease gameRelease,
-        IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active)
+        string dataFolderPath, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<RegisteredPlugin> plugins,
+        IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine)
     {
-        if (RefusalOf(plugins, active) is { } refusal) throw new ArgumentException(refusal);
+        if (RefusalOf(plugins, active, loadedWithNoLine) is { } refusal) throw new ArgumentException(refusal);
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
@@ -45,17 +50,25 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         Plugins = [.. plugins];
         _loadOrderIndex = active.Select((address, index) => (address, index))
             .ToDictionary(a => a.address, a => a.index, PluginAddress.Comparer);
-        Active = [.. active.Select(address => Plugin(address)
-            ?? throw new InvalidOperationException($"Expected RefusalOf to have refused {address.Name} from {address.Origin}."))];
+        Active = [.. active.Select(PluginRefusalOfVouchesFor)];
+        LoadedWithNoLine = [.. loadedWithNoLine.Select(PluginRefusalOfVouchesFor)];
+        _loadedWithNoLine = loadedWithNoLine.ToHashSet(PluginAddress.Comparer);
     }
+
+    private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
+        ?? throw new InvalidOperationException($"Expected RefusalOf to have refused {address.Name} from {address.Origin}.");
 
     /// <summary>Why these plugins and active plugins make no snapshot, or null when they do. ADR-0012:
     /// the game loads one file per name, and a FormID or a winner is read by filename.</summary>
-    public static string? RefusalOf(IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active)
+    public static string? RefusalOf(
+        IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine)
     {
         var sent = plugins.Select(p => p.Key).ToHashSet(PluginAddress.Comparer);
-        var stray = active.Where(a => !sent.Contains(a)).Select(a => $"{a.Name} from {a.Origin}").FirstOrDefault();
-        if (stray is not null) return $"The active plugin {stray} is not a plugin in the snapshot.";
+        string? StrayIn(IReadOnlyList<PluginAddress> named) =>
+            named.Where(a => !sent.Contains(a)).Select(a => $"{a.Name} from {a.Origin}").FirstOrDefault();
+        if (StrayIn(active) is { } stray) return $"The active plugin {stray} is not a plugin in the snapshot.";
+        if (StrayIn(loadedWithNoLine) is { } unlined)
+            return $"The plugin loaded with no line {unlined} is not a plugin in the snapshot.";
 
         var contested = active
             .GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
@@ -75,9 +88,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
     /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012 invariant 5)
-    /// and a plugin in the game folder, the game's own.</summary>
-    public bool IsImmutable(PluginAddress address) =>
-        !IsActive(address) || PluginOrigin.IsDataDirectory(address.Origin);
+    /// and one loaded with no line, the game's own (editor.md's read-only status).</summary>
+    public bool IsImmutable(PluginAddress address) => !IsActive(address) || _loadedWithNoLine.Contains(address);
 
     /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
     /// Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
@@ -108,7 +120,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
         && string.Equals(DataFolderPath, other.DataFolderPath, StringComparison.OrdinalIgnoreCase)
         && string.Equals(InstanceRoot, other.InstanceRoot, StringComparison.OrdinalIgnoreCase)
         && Plugins.SequenceEqual(other.Plugins)
-        && Active.SequenceEqual(other.Active);
+        && Active.SequenceEqual(other.Active)
+        && LoadedWithNoLine.SequenceEqual(other.LoadedWithNoLine);
 
     public override bool Equals(object? obj) => Equals(obj as LoadOrderSnapshot);
 

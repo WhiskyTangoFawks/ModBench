@@ -10,11 +10,12 @@ public record FilterResponse(string? Sql, string? Source);
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
-// ADR-0013: Mod Management's snapshot, every plugin and the active ones in load order. InstanceRoot
-// (ADR-0009) must be the MO2 instance, because Origin is a mod folder name unique only within one.
+// ADR-0013: Mod Management's snapshot: every plugin, the active ones in load order and those loaded
+// with no line. InstanceRoot (ADR-0009) is the MO2 instance: Origin is unique only within one.
 public record LoadOrderRequest(
-    IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active, string GameDirectory,
-    string InstanceRoot, string GameRelease = "Fallout4");
+    IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
+    IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
+    string GameRelease = "Fallout4");
 public record LoadOrderPlugin(string Name, string Path, string Origin);
 
 // ADR-0009 invariant 5: the Refresh rebuild's own request, keyed on the instance as

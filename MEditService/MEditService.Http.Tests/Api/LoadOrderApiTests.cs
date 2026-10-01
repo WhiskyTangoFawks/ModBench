@@ -21,6 +21,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
@@ -39,6 +40,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(_fixture.Plugins),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
@@ -65,6 +67,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameRelease = "Fallout4",
         });
 
@@ -113,6 +116,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = fx.InstanceRoot,
             plugins = new[] { winner, overridden }.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(new[] { winner, overridden }),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(new[] { winner, overridden }),
             gameRelease = "Fallout4",
         });
 
@@ -143,6 +147,38 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
+    public async Task PutLoadOrder_WithNoLoadedWithNoLineField_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutLoadOrder_APluginLoadedWithNoLineThatIsNoPluginInTheSnapshot_Returns400()
+    {
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
+            active = SnapshotPlugins.Active(_fixture.Plugins),
+            loadedWithNoLine = new[] { new { name = "Fallout4.esm", origin = "Data" } },
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Fallout4.esm", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PutLoadOrder_AnActivePluginThatIsNoPluginInTheSnapshot_Returns400()
     {
         var response = await _client.PutAsJsonAsync("/load-order", new
@@ -151,6 +187,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = _fixture.InstanceRoot,
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = new[] { new { name = "Stray.esp", origin = "StrayMod" } },
+            loadedWithNoLine = Array.Empty<object>(),
             gameRelease = "Fallout4",
         });
 
@@ -169,6 +206,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             instanceRoot = _fixture.InstanceRoot,
             plugins = new[] { new { plugin.Name, plugin.Path, plugin.Origin }, new { plugin.Name, plugin.Path, Origin = "OtherMod" } },
             active = new[] { new { name = plugin.Name, origin = plugin.Origin }, new { name = plugin.Name, origin = "OtherMod" } },
+            loadedWithNoLine = Array.Empty<object>(),
             gameRelease = "Fallout4",
         });
 

@@ -43,6 +43,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
         {
             plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
@@ -76,6 +77,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
         {
             plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameDirectory = fx.DataFolder,
             instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",

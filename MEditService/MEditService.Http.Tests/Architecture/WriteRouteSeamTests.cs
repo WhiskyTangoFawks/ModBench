@@ -50,7 +50,7 @@ public sealed class WriteRouteSeamTests
         """Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400)""",
         """Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400)""",
         """Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin.", statusCode: 400)""",
-        """Results.Problem("The snapshot must state its active plugins.", statusCode: 400)""",
+        """Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400)""",
     ];
 
     public static IEnumerable<object[]> EveryNamedMethodRoute =>

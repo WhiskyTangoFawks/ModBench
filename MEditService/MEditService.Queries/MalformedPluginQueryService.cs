@@ -5,8 +5,8 @@ using MEditService.Ports;
 
 namespace MEditService.Queries;
 
-/// <summary>Kind B diagnoses as rows, the active plugins in load order first. The game folder's
-/// plugins are never reported: they are the proof set the tables were built from.</summary>
+/// <summary>Kind B diagnoses as rows, the active plugins in load order first. The plugins loaded with
+/// no line, the game's own, are never reported: they are the proof set the tables were built from.</summary>
 public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHolder loadOrder)
 {
     public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
@@ -21,7 +21,7 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
         return
         [
             .. held.Plugins
-                .Where(plugin => !PluginOrigin.IsDataDirectory(plugin.Origin))
+                .Where(plugin => !held.LoadedWithNoLine.Contains(plugin))
                 .OrderBy(plugin => held.LoadOrderIndex(plugin.Key) ?? int.MaxValue)
                 .SelectMany(plugin => byPlugin[plugin.Key].Select(row => Report(plugin, row.Diagnosis))),
         ];

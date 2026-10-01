@@ -14,6 +14,7 @@ function snapshot(name: string): LoadOrderSnapshot {
   return {
     plugins: [{ name, path: `/game/Data/${name}`, origin: 'Data' }],
     active: [{ name, origin: 'Data' }],
+    loadedWithNoLine: [],
     gameDirectory: '/game/Data',
     instanceRoot: '/instance',
     gameRelease: 'Fallout4',
@@ -74,9 +75,10 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
 
     await sender.send(snapshot('A.esp'));
 
-    const [plugins, active, gameDirectory, instanceRoot, gameRelease] = present(puts(client)[0], "the sole putLoadOrder call").args;
-    expect({ plugins, active, gameDirectory, instanceRoot, gameRelease }).toEqual({
-      plugins: snapshot('A.esp').plugins, active: snapshot('A.esp').active, gameDirectory: '/game/Data',
+    const [plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease] =
+      present(puts(client)[0], "the sole putLoadOrder call").args;
+    expect({ plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease }).toEqual({
+      plugins: snapshot('A.esp').plugins, active: snapshot('A.esp').active, loadedWithNoLine: [], gameDirectory: '/game/Data',
       instanceRoot: '/instance', gameRelease: 'Fallout4',
     });
   });
@@ -182,7 +184,7 @@ describe('createLoadOrderSender — arm and abandon', () => {
     let started!: () => void;
     const inFlight = new Promise<void>((resolve) => { started = resolve; });
     client.setCommandHandler('putLoadOrder', (...args) => new Promise<LoadOrderOutcome>((resolve) => {
-      const signal = args[5]?.signal;
+      const signal = args[6]?.signal;
       if (!signal) throw new Error('expected putLoadOrder to receive an abort signal');
       started();
       signal.addEventListener('abort', () => resolve(ABANDONED));

@@ -38,7 +38,8 @@ function snapshotOf(instanceRoot: string, value: LoadOrderSource): LoadOrderSnap
   const loaded = loadOrderSnapshotOf(value);
   if (!loaded) return undefined;
   return {
-    plugins: loaded.plugins, active: loaded.active, gameDirectory: loaded.dataFolder, instanceRoot,
+    plugins: loaded.plugins, active: loaded.active, loadedWithNoLine: loaded.loadedWithNoLine,
+    gameDirectory: loaded.dataFolder, instanceRoot,
     gameRelease: releaseOf(value),
   };
 }

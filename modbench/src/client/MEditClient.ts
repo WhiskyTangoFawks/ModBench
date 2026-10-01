@@ -189,11 +189,11 @@ export interface MEditClient {
   // Subscribe by kind (ADR-0014 invariant 2) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
-  // The load-order snapshot (ADR-0013): every plugin in the instance, and the active plugins in
-  // load order.
+  // The load-order snapshot (ADR-0013): every plugin in the instance, the active plugins in load
+  // order, and the plugins loaded with no line.
   putLoadOrder(
-    plugins: LoadOrderPluginInput[], active: PluginAddress[], gameDirectory: string, instanceRoot: string,
-    gameRelease: string, options?: LoadOrderOptions,
+    plugins: LoadOrderPluginInput[], active: PluginAddress[], loadedWithNoLine: PluginAddress[],
+    gameDirectory: string, instanceRoot: string, gameRelease: string, options?: LoadOrderOptions,
   ): Promise<LoadOrderOutcome>;
 
   // The backend process: today's four values, read as a current value and observed through a

@@ -301,6 +301,7 @@ describe('loadOrderSnapshotOf', () => {
       { name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }, address(a),
     ]);
     expect(snapshot?.plugins).toContainEqual({ name: 'Master.esm', origin: 'Data', path: join('/game/Data', 'Master.esm') });
+    expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }]);
   });
 
   // The file the game reads is the one the Mod override order resolves the name to.
@@ -310,6 +311,7 @@ describe('loadOrderSnapshotOf', () => {
     const snapshot = snapshotOf([provided], [address(provided)]);
 
     expect(snapshot?.active).toEqual([address(provided)]);
+    expect(snapshot?.loadedWithNoLine).toEqual([address(provided)]);
     expect(snapshot?.plugins).toEqual([sent(provided)]);
   });
 

@@ -76,6 +76,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
             instanceRoot = fx.InstanceRoot,
             plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
             gameRelease = "Fallout4",
         });
         put.EnsureSuccessStatusCode();

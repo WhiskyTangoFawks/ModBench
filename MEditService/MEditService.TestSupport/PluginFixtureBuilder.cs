@@ -99,7 +99,8 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         }
 
         List<LoadOrderEntry> forced = [.. loadedWithNoLine.Select((name, slot) => new LoadOrderEntry(
-            name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true))];
+            name, Path.Combine(gameDir, name), PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true,
+            LoadedWithNoLine: true))];
         return new ScatteredFixtureData(root, gameDir, [.. forced, .. OneWinnerPerFilename(explicitPlugins)]);
     }
 

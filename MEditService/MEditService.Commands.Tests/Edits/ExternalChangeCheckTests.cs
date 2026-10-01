@@ -29,7 +29,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
     // The snapshot arriving, as the put-load-order door takes it.
     private void Put(LoadOrderSnapshot snapshot) =>
         Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
-            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)]).Applied);
+            snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 

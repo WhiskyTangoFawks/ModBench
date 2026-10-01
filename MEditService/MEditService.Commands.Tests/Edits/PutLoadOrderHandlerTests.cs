@@ -18,7 +18,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     private static RegisteredPlugin Plugin(string name) => new(name, "ModA", $"C:\\Instance\\mods\\ModA\\{name}");
 
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        Handler.Put(_dataFolder, InstanceRoot, release, plugins, [.. active.Select(p => p.Key)]);
+        Handler.Put(_dataFolder, InstanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);
 
     public void Dispose() => Directory.Delete(_dataFolder, recursive: true);
 

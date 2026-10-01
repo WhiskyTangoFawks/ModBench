@@ -13,7 +13,11 @@ public sealed class LoadOrderTests
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name));
 
     private static LoadOrderSnapshot Order(RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
-        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)]);
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], []);
+
+    private static LoadOrderSnapshot OrderLoadingWithNoLine(
+        RegisteredPlugin[] plugins, RegisteredPlugin[] loadedWithNoLine, params RegisteredPlugin[] active) =>
+        new(Data, Instance, GameRelease.Fallout4, plugins, [.. active.Select(p => p.Key)], [.. loadedWithNoLine.Select(p => p.Key)]);
 
     [Fact]
     public void APluginTheSnapshotDoesNotListAsActive_IsNotActive_AndIsStillAPluginInTheInstance()
@@ -67,26 +71,66 @@ public sealed class LoadOrderTests
     {
         RegisteredPlugin[] plugins = [Registered("A.esp", "ModA"), Registered("A.esp", "ModB")];
 
-        var refusal = LoadOrderSnapshot.RefusalOf(plugins, [.. plugins.Select(p => p.Key)]);
+        var refusal = LoadOrderSnapshot.RefusalOf(plugins, [.. plugins.Select(p => p.Key)], []);
 
         Assert.Contains("ModA, ModB", refusal, StringComparison.Ordinal);
         Assert.Throws<ArgumentException>(() => Order(plugins, plugins));
     }
 
-    // ADR-0012 invariant 5 and editor.md's read-only status: a plugin the game does not load, and
-    // the game folder's own plugins, are never edited.
+    // ADR-0012 invariant 5 and editor.md's read-only status: a plugin the game does not load, and one
+    // loaded with no line (the game's own, a DLC's or a Creation Club plugin), is never edited.
     [Fact]
-    public void IsImmutable_OnAnInactivePluginOrAGameFolderPlugin_AndOnlyThere()
+    public void IsImmutable_OnAnInactivePluginOrOneLoadedWithNoLine_AndOnlyThere()
     {
+        var master = Registered("Fallout4.esm", PluginOrigin.DataDirectory);
         var active = Registered("A.esp", "ModA");
         var inactive = Registered("B.esp", "ModB");
-        var gameFolder = Registered("Fallout4.esm", PluginOrigin.DataDirectory);
 
-        var order = Order([gameFolder, active, inactive], gameFolder, active);
+        var order = OrderLoadingWithNoLine([master, active, inactive], [master], master, active);
 
+        Assert.True(order.IsImmutable(master.Key));
         Assert.False(order.IsImmutable(active.Key));
         Assert.True(order.IsImmutable(inactive.Key));
-        Assert.True(order.IsImmutable(gameFolder.Key));
+    }
+
+    // Where the file sits decides nothing: a mod's cleaned copy of the game's master is still the
+    // game's own.
+    [Fact]
+    public void AModsCleanedMaster_LoadedWithNoLine_IsImmutable()
+    {
+        var cleaned = Registered("DLCCoast.esm", "CleanedMasters");
+
+        var order = OrderLoadingWithNoLine([cleaned], [cleaned], cleaned);
+
+        Assert.True(order.IsImmutable(cleaned.Key));
+    }
+
+    [Fact]
+    public void AUserPluginInTheGameFolder_ActiveFromItsLine_IsNotImmutable()
+    {
+        var placed = Registered("UserPatch.esp", PluginOrigin.DataDirectory);
+
+        var order = Order([placed], placed);
+
+        Assert.False(order.IsImmutable(placed.Key));
+    }
+
+    [Fact]
+    public void APluginLoadedWithNoLineThatIsNoPluginInTheInstance_IsRefused()
+    {
+        var a = Registered("A.esp", "ModA");
+
+        var refusal = LoadOrderSnapshot.RefusalOf([a], [a.Key], [new PluginAddress("Fallout4.esm", PluginOrigin.DataDirectory)]);
+
+        Assert.Contains("Fallout4.esm", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SamePlugins_LoadingADifferentPluginWithNoLine_AreDifferentValues()
+    {
+        var a = Registered("A.esp", "ModA");
+
+        Assert.NotEqual(Order([a], a), OrderLoadingWithNoLine([a], [a], a));
     }
 
     [Fact]
@@ -131,7 +175,7 @@ public sealed class LoadOrderTests
     {
         var plugin = Registered("A.esp", "ModA");
         var lower = new LoadOrderSnapshot(
-            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key]);
+            Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [plugin], [plugin.Key], []);
 
         Assert.Equal(Order([plugin], plugin), lower);
         Assert.Equal(Order([plugin], plugin).GetHashCode(), lower.GetHashCode());
@@ -144,7 +188,7 @@ public sealed class LoadOrderTests
         var b = Registered("B.esp", "ModB");
         var plugins = new List<RegisteredPlugin> { a, b };
         var active = new List<PluginAddress> { a.Key };
-        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active);
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, plugins, active, []);
 
         plugins.Add(Registered("C.esp", "ModC"));
         active.Add(b.Key);

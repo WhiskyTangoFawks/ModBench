@@ -33,6 +33,7 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Where(p => p.Origin == Origin).Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins.Where(p => p.Origin == Origin)),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Where(p => p.Origin == Origin)),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();

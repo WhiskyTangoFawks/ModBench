@@ -153,7 +153,7 @@ describe('a backend that disconnects mid-send', () => {
     // connection would be 'failed'.
     client.setCommandHandler('putLoadOrder', (...args) => new Promise((resolve) => {
       putStarted();
-      const options = present(args[5], 'the options the sender always passes to putLoadOrder');
+      const options = present(args[6], 'the options the sender always passes to putLoadOrder');
       const signal = present(options.signal, 'the abort signal the sender always arms');
       signal.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
     }));
@@ -163,7 +163,7 @@ describe('a backend that disconnects mid-send', () => {
     });
 
     const outcome = sender.send({
-      plugins: [], active: [], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+      plugins: [], active: [], loadedWithNoLine: [], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
     });
     await started;
     client.setStatus('disconnected');

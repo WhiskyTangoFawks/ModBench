@@ -16,8 +16,8 @@ public static class LoadOrderEndpoints
             .WithTags(Tag)
             .WithDescription(
                 "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
-                "the instance, each with its origin and path, and the active plugins in load order, " +
-                "as Mod Management decided them. Plugins new to the snapshot are opened and " +
+                "the instance, each with its origin and path, the active plugins in load order, and " +
+                "the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
                 "plugins whose load index moved are re-registered SQL-only; then one winner sweep. " +
                 "Answers as soon as the snapshot is applied; the sweep runs after, reported on " +
@@ -53,14 +53,14 @@ public static class LoadOrderEndpoints
         }
         // ADR-0013 invariant 3: which plugins are active is Mod Management's to state, never
         // defaulted here.
-        if (req.Active is not { } active)
-            return Results.Problem("The snapshot must state its active plugins.", statusCode: 400);
+        if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine)
+            return Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400);
 
         try
         {
             var result = handler.Put(
                 req.GameDirectory, req.InstanceRoot, gameRelease,
-                [.. plugins.Select(p => new RegisteredPlugin(p.Name, p.Origin, p.Path))], active);
+                [.. plugins.Select(p => new RegisteredPlugin(p.Name, p.Origin, p.Path))], active, loadedWithNoLine);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

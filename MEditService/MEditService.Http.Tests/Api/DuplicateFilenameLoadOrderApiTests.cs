@@ -44,6 +44,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             instanceRoot = fx.InstanceRoot,
             plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(plugins),
             gameRelease = "Fallout4",
         });
         put.EnsureSuccessStatusCode();
@@ -173,6 +174,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Where(p => p.Origin != "ModB").Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins.Where(p => p.Origin != "ModB")),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Where(p => p.Origin != "ModB")),
             gameRelease = "Fallout4",
         });
         without.EnsureSuccessStatusCode();

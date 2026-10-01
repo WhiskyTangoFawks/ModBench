@@ -36,6 +36,7 @@ public sealed class PluginBlueprintApiTests(LoadedApiFixture<TestPluginFixture> 
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(fx.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins),
             gameRelease = "Fallout4",
         });
         response.EnsureSuccessStatusCode();

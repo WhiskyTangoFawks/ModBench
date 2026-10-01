@@ -127,7 +127,7 @@
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": true,
+      "isImmutable": false,
       "isLight": false,
       "isMaster": true,
       "loadOrderIndex": 0,
@@ -140,7 +140,7 @@
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": true,
+      "isImmutable": false,
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 1,
@@ -155,7 +155,7 @@
     {
       "hasMatchingRecords": true,
       "inLoadOrder": true,
-      "isImmutable": true,
+      "isImmutable": false,
       "isLight": false,
       "isMaster": false,
       "loadOrderIndex": 2,

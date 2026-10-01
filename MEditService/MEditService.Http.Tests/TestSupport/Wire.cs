@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.TestSupport;
@@ -37,11 +36,11 @@ internal static class Wire
         }
     }
 
-    // The game folder's plugins load whatever mods a snapshot names.
+    // The plugins loaded with no line load whatever mods a snapshot names.
     private static IEnumerable<LoadOrderEntry> Listed(ScatteredFixtureData fx, string[] origins) =>
         origins.Length == 0
             ? fx.Plugins
-            : fx.Plugins.Where(p => PluginOrigin.IsDataDirectory(p.Origin) || origins.Contains(p.Origin, StringComparer.Ordinal));
+            : fx.Plugins.Where(p => p.LoadedWithNoLine || origins.Contains(p.Origin, StringComparer.Ordinal));
 
     internal static Task<HttpResponseMessage> Track(this HttpClient client, string plugin, string origin, string preset = "Edits") =>
         client.Track([(plugin, origin)], preset);

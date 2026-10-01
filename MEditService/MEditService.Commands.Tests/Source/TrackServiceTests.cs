@@ -28,7 +28,7 @@ public sealed class TrackServiceTests
         var gameDir = Directory.CreateTempSubdirectory("medit-track-noorigin-game-").FullName;
         try
         {
-            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], []);
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, [], [], []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
                 .TrackAsync(loadOrder, [new PluginAddress("NoSuch.esp", "NoSuchMod")], SourcePreset.Edits, new Dictionary<string, string>());

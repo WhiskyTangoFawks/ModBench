@@ -3,8 +3,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.TestSupport;
 
-/// <summary>What Mod Management would send for a fixture's entries: every plugin, and the active
-/// ones — the winning plugin of each enabled line, in line order.</summary>
+/// <summary>What Mod Management would send for a fixture's entries: every plugin, the active ones —
+/// the winning plugin of each enabled line, in line order — and those loaded with no line.</summary>
 public static class SnapshotPlugins
 {
     public static IReadOnlyList<RegisteredPlugin> Of(IEnumerable<LoadOrderEntry> entries) =>
@@ -15,11 +15,14 @@ public static class SnapshotPlugins
             .OrderBy(entry => entry.Slot)
             .Select(entry => entry.Key)];
 
+    public static IReadOnlyList<PluginAddress> LoadedWithNoLine(IEnumerable<LoadOrderEntry> entries) =>
+        [.. entries.Where(entry => entry.LoadedWithNoLine).Select(entry => entry.Key)];
+
     public static LoadOrderSnapshot Snapshot(
         string dataFolder, string? instanceRoot, GameRelease gameRelease, IEnumerable<LoadOrderEntry> entries)
     {
         var list = entries.ToList();
-        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list));
+        return new LoadOrderSnapshot(dataFolder, instanceRoot, gameRelease, Of(list), Active(list), LoadedWithNoLine(list));
     }
 
     /// <summary>The PUT /load-order body.</summary>
@@ -33,6 +36,7 @@ public static class SnapshotPlugins
             instanceRoot,
             plugins = list.Select(p => new { p.Name, p.Path, p.Origin }),
             active = Active(list),
+            loadedWithNoLine = LoadedWithNoLine(list),
             gameRelease,
         };
     }

@@ -575,6 +575,7 @@ describe('HttpMEditClient — a group\'s records', () => {
 describe('HttpMEditClient — putLoadOrder', () => {
   const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];
+  const loadedWithNoLine = [{ name: 'Foo.esp', origin: 'A' }];
   const appliedBody = { applied: true, version: 1 };
 
   it('PUTs every plugin, the active plugins, the game directory and the instance root', async () => {
@@ -587,12 +588,12 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4');
+    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
     await vi.waitFor(() => expect(putBody).toBeDefined());
     push(readyTick());
     await load;
 
-    expect(putBody).toEqual({ plugins, active, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
+    expect(putBody).toEqual({ plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
   // The backend publishes its first tick as the PUT lands, so a PUT that outran the stream
@@ -609,7 +610,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4');
+    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
     // No wait needed: streamPromise is still unresolved, so nothing — no amount of elapsed
     // time — could have let the PUT fire yet.
     expect(putFetch).not.toHaveBeenCalled();
@@ -645,7 +646,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await vi.waitFor(() => expect(streams).toHaveLength(2));
 
     let settled = false;
-    const load = client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4').then((r) => { settled = true; return r; });
+    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4').then((r) => { settled = true; return r; });
     await vi.waitFor(() => expect(puts).toBe(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
@@ -667,7 +668,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    await expect(client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4'))
+    await expect(client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4'))
       .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
   });
 
@@ -690,7 +691,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
-    const load = client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4');
+    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
     await new Promise((resolve) => setTimeout(resolve, 20));
     status = { ...status, state: 'Ready', conflictsComputed: true, version: 1 };
     streams[0]?.end();
@@ -711,7 +712,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     const client = makeClient(fetch);
     await client.start();
 
-    const load = client.putLoadOrder(plugins, active, '/game/Data', '/instance', 'Fallout4');
+    const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
     await vi.waitFor(() => expect(answerPut).toBeDefined());
     push(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [], version: 0 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -733,7 +734,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
 
     const result = await client.putLoadOrder(
-      plugins, active, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal },
+      plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal },
     );
 
     expect(result).toEqual({ outcome: 'abandoned' });

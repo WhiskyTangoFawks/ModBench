@@ -98,6 +98,7 @@ public sealed class CompareGoldenApiFixture : IDisposable
             instanceRoot = Fixture.InstanceRoot,
             plugins = Fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin }),
             active = SnapshotPlugins.Active(Fixture.Plugins),
+            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(Fixture.Plugins),
             gameRelease = "Fallout4",
         }).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();

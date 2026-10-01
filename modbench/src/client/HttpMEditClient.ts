@@ -151,6 +151,7 @@ export class HttpMEditClient implements MEditClient {
   async putLoadOrder(
     plugins: LoadOrderPluginInput[],
     active: PluginAddress[],
+    loadedWithNoLine: PluginAddress[],
     gameDirectory: string,
     instanceRoot: string,
     gameRelease: string,
@@ -175,7 +176,7 @@ export class HttpMEditClient implements MEditClient {
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
-        body: { plugins, active, gameDirectory, instanceRoot, gameRelease },
+        body: { plugins, active, loadedWithNoLine, gameDirectory, instanceRoot, gameRelease },
         // Aborts the request itself rather than leaving it to notice a dead socket.
         ...(options.signal ? { signal: options.signal } : {}),
       });

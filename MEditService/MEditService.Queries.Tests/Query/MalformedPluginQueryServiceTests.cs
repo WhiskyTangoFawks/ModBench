@@ -56,14 +56,23 @@ public sealed class MalformedPluginQueryServiceTests
             report.Text);
     }
 
-    // The game folder's plugins are the proof set the tables were built from, so a hit there is a
-    // table bug. The Index stamps every plugin it hashes, so the load order drops these.
+    // The plugins loaded with no line are the proof set the tables were built from, so a hit there is
+    // a table bug. The Index stamps every plugin it hashes, so the load order drops these.
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAGameFolderPlugin_AreNeverReported()
+    public void GetLoadOrderDiagnoses_RowsOfAPluginLoadedWithNoLine_AreNeverReported()
     {
-        var master = Plugin("Fallout4.esm", origin: PluginOrigin.DataDirectory);
+        var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
 
         Assert.Empty(Diagnose([Row(master, Short)], master));
+    }
+
+    // Where the file sits decides nothing: a user's plugin placed in the game folder is the user's.
+    [Fact]
+    public void GetLoadOrderDiagnoses_RowsOfAUserPluginInTheGameFolder_AreReported()
+    {
+        var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
+
+        Assert.Equal(PluginOrigin.DataDirectory, Assert.Single(Diagnose([Row(placed, Short)], placed)).Origin);
     }
 
     // plugins.md, A row: a malformed plugin is one whose bytes depart from what the Creation Kit

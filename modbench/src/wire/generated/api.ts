@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin and path, and the active plugins in load order, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin and path, the active plugins in load order, and the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -698,6 +698,7 @@ export interface components {
         LoadOrderRequest: {
             plugins: components["schemas"]["LoadOrderPlugin"][];
             active: components["schemas"]["PluginAddress"][];
+            loadedWithNoLine: components["schemas"]["PluginAddress"][];
             gameDirectory: string;
             instanceRoot: string;
             gameRelease: string;
