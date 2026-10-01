@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
+import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 
 const MARK_DELAY_MS = 300;
 
@@ -117,6 +117,10 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     this.clearUnconfirmed();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
+  }
+
+  viewMessage(): string | undefined {
+    return this.deps.instance && lastGoodReadMessage(this.deps.instance);
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

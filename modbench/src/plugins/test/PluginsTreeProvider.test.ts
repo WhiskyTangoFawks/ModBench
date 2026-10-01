@@ -327,6 +327,21 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(tree.viewMessage()).toBeUndefined();
   });
 
+  it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const { tree } = makeTree([], { instance });
+    await tree.getChildren();
+    const fired: unknown[] = [];
+    tree.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.fail('EACCES plugins.txt');
+
+    expect(tree.viewMessage()).toBe('Showing the last good read: EACCES plugins.txt');
+    expect(fired).toHaveLength(1);
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    expect(tree.viewMessage()).toBeUndefined();
+  });
+
   // Rival: the provider falls back to some read path of its own instead of the injected value.
   // With that rival, this fixture's rows would be empty/wrong rather than what the value says.
   it('rows exactly match the fixture value — not a re-derivation', async () => {

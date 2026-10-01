@@ -450,6 +450,20 @@ describe('invalidate', () => {
 // ── DownloadsProvider — the Instance is the only way in ────────────────────
 
 describe('DownloadsProvider — reacts to the Instance, never scans on its own', () => {
+  it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
+    const instance = new FakeInstance(valueOf([]));
+    const provider = makeProvider([], { instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.fail('EACCES downloads');
+
+    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES downloads');
+    expect(fired).toHaveLength(1);
+    instance.publish(valueOf([]));
+    expect(provider.viewMessage()).toBeUndefined();
+  });
+
   // The empty value before the first read is "not read yet", never "no downloads": a render asked
   // for before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
