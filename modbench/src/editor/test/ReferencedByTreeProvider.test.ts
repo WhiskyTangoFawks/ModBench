@@ -16,7 +16,7 @@ import {
   REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
 import { InMemoryMEditClient } from '../../client';
-import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
+import { expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
 
