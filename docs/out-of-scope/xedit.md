@@ -44,6 +44,7 @@ Gestures Modbench does differently.
 | 19 | Colours and vectors | One text box: `#AARRGGBB`, or `x, y, z` | A struct of their parts: Red, Green, Blue, and Alpha or Unused; X, Y and Z | Ruling, Minimal by default: one row per value, not three or four. A conflict colours the whole value, not one part. |
 | 20 | Alias numbers | The number | The alias's name, from the field's quest | Ruling: Mutagen types an alias as an integer, and each field finds its quest in its own way, so a reading is a port per definition and per game (divergence 17). |
 | 21 | Field order | The order the record holds them in its file, as Mutagen groups them into fields | The order of its definition | Mutagen decides the data: where Mutagen groups subrecords into fields differently, its grouping decides the order. |
+| 22 | Navigator conflict state | None on the Plugins tree. The record filter finds conflicts, and the record panel shows them. | Colours each record node by ConflictAll and ConflictThis | Limitation: a VS Code tree row has no background, and its label colour holds git's badge. |
 
 ## Omissions by object
 
