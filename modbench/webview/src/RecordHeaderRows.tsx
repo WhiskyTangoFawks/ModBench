@@ -7,7 +7,7 @@ import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, CompareOverride } from './types';
 
 export const RECORD_HEADER_ROW = 'Record Header';
-const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
+export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
 const INDENT = 24;
 
 interface FormIdCellProps {

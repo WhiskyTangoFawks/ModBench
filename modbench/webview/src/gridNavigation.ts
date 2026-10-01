@@ -1,0 +1,50 @@
+import type { FocusedCell } from './DiffRow';
+import type { ColumnKey } from './types';
+
+export interface NavRow {
+  key: string;
+  parent: string | null;
+  expandable: boolean;
+  expanded: boolean;
+}
+
+export type Navigation = { focus: FocusedCell } | { toggle: string } | null;
+
+export function navigate(
+  key: string, rows: readonly NavRow[], columns: readonly ColumnKey[], focused: FocusedCell, page: number,
+): Navigation {
+  const at = rows.findIndex(r => r.key === focused.rowKey);
+  const row = rows[at];
+  if (!row) return null;
+  const toRow = (index: number): Navigation => {
+    const target = rows[Math.min(rows.length - 1, Math.max(0, index))];
+    return target ? { focus: { rowKey: target.key, plugin: focused.plugin } } : null;
+  };
+  const labelAndColumns = [null, ...columns];
+  const toColumn = (step: number): Navigation => {
+    const plugin = labelAndColumns[labelAndColumns.indexOf(focused.plugin) + step];
+    return plugin === undefined ? null : { focus: { rowKey: row.key, plugin } };
+  };
+
+  switch (key) {
+    case 'ArrowDown': return toRow(at + 1);
+    case 'ArrowUp': return toRow(at - 1);
+    case 'PageDown': return toRow(at + page);
+    case 'PageUp': return toRow(at - page);
+    case 'Home': return toRow(0);
+    case 'End': return toRow(rows.length - 1);
+    case 'ArrowRight': {
+      if (focused.plugin !== null) return toColumn(1);
+      if (!row.expandable) return null;
+      if (!row.expanded) return { toggle: row.key };
+      const child = rows[at + 1];
+      return child?.parent === row.key ? { focus: { rowKey: child.key, plugin: null } } : null;
+    }
+    case 'ArrowLeft': {
+      if (focused.plugin !== null) return toColumn(-1);
+      if (row.expandable && row.expanded) return { toggle: row.key };
+      return row.parent === null ? null : { focus: { rowKey: row.parent, plugin: null } };
+    }
+    default: return null;
+  }
+}
