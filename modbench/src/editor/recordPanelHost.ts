@@ -10,7 +10,7 @@ import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
-import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
+import { registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands } from './recordLifecycleCommands';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -40,13 +40,12 @@ export interface EditorCommandDeps {
   // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
   // read changed).
   refreshPanels: () => void;
-  // The merged Plugins tree's selection, which the record gestures act on. Narrowed to the one
-  // cross-context fact this file needs, not the composition root's session object.
-  mergedTreeSelection: () => readonly unknown[];
-  // The rows selected in the view the user last selected in, which a palette open acts on.
+  // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
+  // Each view's own selection, which that view's keys act on.
+  viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
-  // object, narrowed to a callback like mergedTreeSelection.
+  // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
   outputChannel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // The two ports (ADR-0019), built over the window API by the composition root: this box
@@ -143,7 +142,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, recordBadgeSource, meditClient,
-    outputChannel, mergedTreeSelection,
+    outputChannel,
   } = deps;
   // One decoration provider per activation: it reads the tree's cache live, so it needs no copy
   // of that state.
@@ -177,9 +176,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, mergedTreeSelection),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, mergedTreeSelection),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection),
+    ...registerDeleteHereCommands(deps.viewSelections),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       if (plan.addresses.length > 0) return openRecordTabs(plan);

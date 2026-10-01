@@ -175,7 +175,8 @@
       "formKey": "000800:Base.esm",
       "origin": "Data",
       "plugin": "Base.esm",
-      "recordType": "npc_"
+      "recordType": "npc_",
+      "recordTypeName": "Non-Player Character"
     },
     {
       "editorId": "ConflictedNPC",
@@ -183,7 +184,8 @@
       "formKey": "000800:Base.esm",
       "origin": "Data",
       "plugin": "Mid.esp",
-      "recordType": "npc_"
+      "recordType": "npc_",
+      "recordTypeName": "Non-Player Character"
     }
   ],
   "winningRecords": {

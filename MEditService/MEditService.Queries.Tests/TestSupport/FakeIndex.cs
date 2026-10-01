@@ -16,8 +16,8 @@ internal sealed class FakeReads(
 {
     public IReadOnlySet<PluginAddress> MatchingPlugins { get; set; } = new HashSet<PluginAddress>(PluginAddress.Comparer);
 
-    public IReadOnlyDictionary<string, IReadOnlyList<ReferenceResult>> ReferencedBy { get; set; } =
-        new Dictionary<string, IReadOnlyList<ReferenceResult>>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, IReadOnlyList<ReferenceRow>> ReferencedBy { get; set; } =
+        new Dictionary<string, IReadOnlyList<ReferenceRow>>(StringComparer.Ordinal);
 
     public IReadOnlyDictionary<PluginAddress, PluginContent> OpenedPlugins => openedPlugins;
 
@@ -62,7 +62,7 @@ internal sealed class FakeReads(
     public RecordLookupEntry? Resolve(string formKey) =>
         rows.FirstOrDefault(r => r.Document.FormKey == formKey && r.IsWinner) is { Document: { } d } ? new(d.RecordType, d.EditorId) : null;
 
-    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) =>
+    public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey) =>
         ReferencedBy.GetValueOrDefault(targetFormKey, []);
 
     public IReadOnlySet<PluginAddress> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) => MatchingPlugins;

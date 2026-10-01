@@ -418,10 +418,10 @@ public class FormReferencesTests
         Assert.Equal("scen", row.RecordType);
     }
 
-    // The container's document carries its embedded children, so the quest also holds the scene's link
-    // at the scene's path, as a cell holds its Landscape's. Held for the user's ruling; pinned here.
+    // editor-referenced-by.md, The tree, story 5: the scene's link is the scene's, though the quest's
+    // document carries the scene inline.
     [Fact]
-    public void Index_AQuest_CarriesItsInlineScenesScriptReference_AsItsOwn()
+    public void Index_AQuest_DoesNotListItsInlineScenesScriptReference()
     {
         FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-carries-scene")
@@ -443,9 +443,7 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == questFormKey.ToString());
-        Assert.Equal("Scenes[0].VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
-        Assert.Equal("qust", row.RecordType);
+        Assert.DoesNotContain(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == questFormKey.ToString());
     }
 
     [Fact]

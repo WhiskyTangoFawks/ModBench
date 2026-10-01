@@ -38,7 +38,7 @@ public interface IRecordReads
     /// backed by <c>form_lookup</c> (ADR-0005).</summary>
     RecordLookupEntry? Resolve(string formKey);
 
-    IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey);
+    IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
     /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
