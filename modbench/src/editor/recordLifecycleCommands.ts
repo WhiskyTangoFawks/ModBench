@@ -75,11 +75,20 @@ function selectedRecords(clicked: unknown, selected: readonly unknown[] | undefi
 
 type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 
+/** The rows a view shows for what a delete or copy writes, marked until the disk confirms it
+ *  (common.md, Unconfirmed writes). Each is told before the write, and what it returns is told what
+ *  landed. */
+export interface RecordWriteMarks {
+  deleting(records: readonly RecordAddress[]): (landed: readonly RecordAddress[]) => void;
+  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void;
+}
+
 /** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
+  marks: RecordWriteMarks,
 ): vscode.Disposable[] {
   return [
     // Asked once for the whole selection and naming each record, so the user confirms the right thing.
@@ -89,7 +98,9 @@ export function registerRecordLifecycleCommands(
       const label = (record: RecordArgument) => addressLabel(record, editorIds);
       if (records.length > 0 && await askToDelete(records.map(label), ask) !== 'Delete') return;
 
+      const answered = marks.deleting(records);
       const answer = records.length > 0 ? await client.deleteRecords(records) : { landed: [], refused: [] };
+      answered(isRefused(answer) ? [] : answer.landed);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
       const refused = [...originless, ...answer.refused];
       reporter.selectionOutcome(
@@ -199,6 +210,7 @@ export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
   // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
+  marks: RecordWriteMarks,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.record.copy', async (clicked?: unknown, selected?: unknown[]) => {
@@ -219,9 +231,12 @@ export function registerRecordCopyCommands(
         : false;
       if (replace === undefined) return;
 
+      const copies = records.flatMap((record) => destinations.map((destination) => ({ record, destination })));
+      const answered = marks.copying(copiesWritten(copies, mode));
       const answer = await client.copyRecords(records, mode, destinations, replace);
+      const written = isRefused(answer) ? [] : copiesWritten(answer.landed, mode);
+      answered(written);
       if (isRefused(answer)) { reporter.report('error', answer.message); return; }
-      const written = copiesWritten(answer.landed, mode);
       if (written.length > 0) reporter.landed(landedMessage(written, editorIds));
       const into = (item: CopyItem) =>
         `${addressLabel(item.record, editorIds)} into ${item.destination.name} (${item.destination.origin})`;

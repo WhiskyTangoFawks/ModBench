@@ -12,9 +12,6 @@ export interface MarkedRow {
   formKey?: string;
 }
 
-/** One copy a copy wrote: a new record's FormKey is the one mEdit minted for it. */
-export type CopyWritten = CopyItem & { newFormKey?: string | null };
-
 // A write is unconfirmed until mEdit's index shows `formKey` held by `plugin`, or not held by it.
 interface Pending {
   readonly row: MarkedRow;
@@ -76,7 +73,7 @@ export class UnconfirmedRecordRows {
     };
   }
 
-  copying(items: readonly CopyItem[]): (landed: readonly CopyWritten[]) => void {
+  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void {
     const marks = items.map((item) => ({
       item,
       pending: this.mark({ plugin: item.destination }, item.destination, true, undefined,

@@ -17,7 +17,7 @@ import { pluginAddressKey } from './trackedRepositories';
 import { isRecordRow } from './gestureEntry';
 import type { RecordGroup } from './createdRecordSelection';
 import {
-  MARK_DELAY_MS, UNCONFIRMED_TOOLTIP, UnconfirmedRecordRows, type CopyWritten, type MarkedRow,
+  MARK_DELAY_MS, UNCONFIRMED_TOOLTIP, UnconfirmedRecordRows, type MarkedRow,
 } from './unconfirmedRecordRows';
 import { errorMessage } from '../ports/errorMessage';
 import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
@@ -390,7 +390,7 @@ export class PluginsTreeProvider
   }
 
   /** Each destination's plugin row carries the mark. */
-  copying(items: readonly CopyItem[]): (landed: readonly CopyWritten[]) => void {
+  copying(items: readonly CopyItem[]): (landed: readonly CopyItem[]) => void {
     return this.recordMarks.copying(items);
   }
 

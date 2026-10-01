@@ -349,7 +349,7 @@ export class HttpMEditClient implements MEditClient {
     if (answer === undefined) return { refused: true, message: `Could not copy ${counted} — no answer` };
     if (isRefused(answer)) return answer;
     return {
-      landed: answer.applied.map(({ record, destination }) => ({ record, destination })),
+      landed: answer.applied.map(({ record, destination, newFormKey }) => ({ record, destination, newFormKey })),
       refused: answer.refused.map((r) => ({ item: { record: r.record, destination: r.destination }, reason: r.message })),
     };
   }

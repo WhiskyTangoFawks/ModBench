@@ -272,12 +272,22 @@ describe('HttpMEditClient — copying records answers per record and destination
     const outcome = await client.copyRecords([npc], 'Override', [patch, other], true);
 
     expect(outcome).toEqual({
-      landed: [{ record: npc, destination: patch }],
+      landed: [{ record: npc, destination: patch, newFormKey: null }],
       refused: [{ item: { record: npc, destination: other }, reason: 'Other.esp already holds it.' }],
     });
     const request = fetch.mock.calls[0]?.[0];
     expect(request?.url).toMatch(/\/records\/copy$/);
     expect(await request?.json()).toEqual({ records: [npc], mode: 'Override', destinations: [patch, other], replace: true });
+  });
+
+  it('names the FormKey mEdit minted for a new record\'s copy', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, {
+      applied: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [],
+    })));
+
+    const outcome = await makeClient(fetch).copyRecords([npc], 'New', [patch], false);
+
+    expect(outcome).toEqual({ landed: [{ record: npc, destination: patch, newFormKey: '000900:Patch.esp' }], refused: [] });
   });
 
   it('asks the record\'s holders by plugin and origin', async () => {

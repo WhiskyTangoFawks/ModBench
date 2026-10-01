@@ -24,8 +24,10 @@ vi.mock('vscode', () => ({
   window: { showQuickPick },
 }));
 
-import { registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument } from '../recordLifecycleCommands';
-import { InMemoryMEditClient } from '../../client';
+import {
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument, type RecordWriteMarks,
+} from '../recordLifecycleCommands';
+import { InMemoryMEditClient, type CopyItem, type RecordAddress } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -42,6 +44,21 @@ const RECORD_NODE = {
   record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null },
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
+
+// What the gesture tells the view's marks, in order (common.md, Unconfirmed writes).
+function recordingMarks(): { marks: RecordWriteMarks; told: string[] } {
+  const told: string[] = [];
+  const named = (records: readonly RecordAddress[]) => records.map((r) => `${r.formKey} ${r.origin}`).join(', ');
+  const copies = (items: readonly CopyItem[]) =>
+    items.map((i) => `${i.record.formKey} into ${i.destination.name}${i.newFormKey ? ` as ${i.newFormKey}` : ''}`).join(', ');
+  return {
+    told,
+    marks: {
+      deleting: (records) => { told.push(`deleting ${named(records)}`); return (landed) => { told.push(`deleted ${named(landed)}`); }; },
+      copying: (items) => { told.push(`copying ${copies(items)}`); return (landed) => { told.push(`copied ${copies(landed)}`); }; },
+    },
+  };
+}
 
 describe('recordArgument — structural, not node-typed', () => {
   it('reads a RecordNode-shaped row', () => {
@@ -69,8 +86,9 @@ describe('registerRecordLifecycleCommands', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection);
-    return { reporter, ask };
+    const { marks, told } = recordingMarks();
+    registerRecordLifecycleCommands(client, reporter, ask, () => viewSelection, marks);
+    return { reporter, ask, told };
   }
 
   // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
@@ -272,6 +290,33 @@ describe('registerRecordLifecycleCommands', () => {
         { severity: 'error', message: 'Could not delete 2 records — boom', detail: undefined },
       ]);
     });
+
+    // common.md, Unconfirmed writes, story 2: each deleted record's row keeps its place, marked.
+    it('marks the records before the write, then tells the marks which landed', async () => {
+      const client = new InMemoryMEditClient();
+      const { told } = invoke(client, 'Delete');
+      client.setCommandHandler('deleteRecords', () => {
+        told.push('write');
+        return Promise.resolve({ landed: [FIRST], refused: [{ item: SECOND, reason: 'no' }] });
+      });
+
+      await deleteRecords(SECOND_NODE, [RECORD_NODE, SECOND_NODE]);
+
+      expect(told).toEqual([
+        'deleting 000801:MyPatch.esp ModA, 000802:MyPatch.esp ModA', 'write', 'deleted 000801:MyPatch.esp ModA',
+      ]);
+    });
+
+    it('tells the marks nothing landed when the call itself fails, and marks nothing when cancelled', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { refused: true, message: 'boom' });
+      const { told } = invoke(client, 'Delete', undefined);
+
+      await deleteRecords(SECOND_NODE);
+      await deleteRecords(SECOND_NODE);
+
+      expect(told).toEqual(['deleting 000802:MyPatch.esp ModA', 'deleted ']);
+    });
   });
 });
 
@@ -296,8 +341,9 @@ describe('modbench.record.copy', () => {
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordCopyCommands(client, reporter, ask, () => viewSelection);
-    return { reporter, ask };
+    const { marks, told } = recordingMarks();
+    registerRecordCopyCommands(client, reporter, ask, () => viewSelection, marks);
+    return { reporter, ask, told };
   }
 
   const copy = (...args: unknown[]) =>
@@ -575,5 +621,42 @@ describe('modbench.record.copy', () => {
 
     expect(reporter.landings).toEqual(['No plugin can take the copy: Track a plugin to edit it.']);
     expect(showQuickPick).toHaveBeenCalledOnce();
+  });
+
+  // common.md, Unconfirmed writes, story 2: each destination's row carries the mark.
+  it('marks each copy it writes before the write, then tells the marks which landed and under what FormKey', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    pick('New', [PATCH, OTHER]);
+    const { told } = invoke(client);
+    client.setCommandHandler('copyRecords', () => {
+      told.push('write');
+      return Promise.resolve({
+        landed: [{ record: SOURCE, destination: PATCH, newFormKey: '000900:Patch.esp' }],
+        refused: [{ item: { record: SOURCE, destination: OTHER }, reason: 'no' }],
+      });
+    });
+
+    await copy(RECORD_NODE);
+
+    expect(told).toEqual([
+      'copying 000801:MyPatch.esp into Patch.esp, 000801:MyPatch.esp into Other.esp',
+      'write',
+      'copied 000801:MyPatch.esp into Patch.esp as 000900:Patch.esp',
+    ]);
+  });
+
+  it('marks no override into a record\'s own plugin, which writes nothing, and nothing when a call fails', async () => {
+    const client = new InMemoryMEditClient();
+    destinations(client);
+    client.setQueryAnswer('getRecordHolders', []);
+    client.setCommandResult('copyRecords', { refused: true, message: 'boom' });
+    const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
+    pick('Override', [PATCH]);
+    const { told } = invoke(client);
+
+    await copy(RECORD_NODE, [RECORD_NODE, elsewhere]);
+
+    expect(told).toEqual(['copying 000801:MyPatch.esp into Patch.esp', 'copied ']);
   });
 });

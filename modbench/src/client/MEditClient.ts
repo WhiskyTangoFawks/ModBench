@@ -118,8 +118,9 @@ export type RecordCreateResponse = components['schemas']['RecordCreateResponse']
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
-/** One record into one destination: the unit a copy lands or is refused by. */
-export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination'>;
+/** One record into one destination: the unit a copy lands or is refused by. A new record's copy
+ *  that landed names the FormKey mEdit minted for it. */
+export type CopyItem = Pick<components['schemas']['RecordCopyLanded'], 'record' | 'destination' | 'newFormKey'>;
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 /** The record filter mEdit holds: its SQL and the name of the source it came from
  *  (plugins.md, Record filter). */

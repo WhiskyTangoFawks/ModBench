@@ -192,6 +192,10 @@ export function activate(context: vscode.ExtensionContext) {
       focusedViewSelection: lastSelectedViewSelection(
         (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
       viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
+      recordMarks: {
+        deleting: (records) => session.pluginsTree?.deleting(records) ?? (() => undefined),
+        copying: (items) => session.pluginsTree?.copying(items) ?? (() => undefined),
+      },
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),

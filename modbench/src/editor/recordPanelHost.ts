@@ -10,7 +10,9 @@ import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
-import { registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands } from './recordLifecycleCommands';
+import {
+  registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, type RecordWriteMarks,
+} from './recordLifecycleCommands';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -44,6 +46,8 @@ export interface EditorCommandDeps {
   focusedViewSelection: () => readonly unknown[];
   // Each view's own selection, which that view's keys act on.
   viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
+  // The rows a record delete or copy changes, which a view marks until the disk confirms the write.
+  recordMarks: RecordWriteMarks;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
@@ -176,9 +180,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (delete/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection),
+      meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection, deps.recordMarks),
     ...registerRecordCopyCommands(
-      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection),
+      meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection, deps.recordMarks),
     ...registerDeleteHereCommands(deps.viewSelections),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
