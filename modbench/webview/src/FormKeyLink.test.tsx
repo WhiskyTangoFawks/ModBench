@@ -67,10 +67,7 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
     expect(link.style.cursor).toBe('pointer');
   });
 
-  // ADR-0018: DiskCell sets `grab` on the parent <td> and the cell is a drag source throughout,
-  // so an inline `cursor: 'default'` here would paint an arrow over the one gesture always
-  // available on the cell.
-  it('does not mask the parent drag cursor with its own cursor style at rest', () => {
+  it('sets no cursor of its own at rest', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.cursor).toBe('');
   });

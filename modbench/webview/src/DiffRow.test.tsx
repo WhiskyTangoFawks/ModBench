@@ -64,6 +64,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
     context: { path: [], rootField: effectiveDiff.fieldName, depth: 0 },
     rowKey: 'Name',
+    parentRowKey: null,
     focusedCell: null,
     onFocusCell: vi.fn(),
     writeAt: () => undefined,

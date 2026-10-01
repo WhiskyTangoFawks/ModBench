@@ -45,7 +45,7 @@ export const WEBVIEW_TO_EXTENSION = {
 
 export type LogLevel = 'debug' | 'info' | 'warn';
 
-export const ELEMENT_COMMANDS = ['removeElement', 'moveElementUp', 'moveElementDown'] as const;
+export const ELEMENT_COMMANDS = ['addElement', 'removeElement', 'moveElementUp', 'moveElementDown'] as const;
 export type ElementCommand = typeof ELEMENT_COMMANDS[number];
 
 export type WebviewToExtension =
@@ -61,7 +61,7 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND; command: ElementCommand; context: Record<string, unknown> }
+  | { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND; command: ElementCommand; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
@@ -237,7 +237,7 @@ function isElementCommand(value: unknown): value is ElementCommand {
 function parseElementCommand(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isElementCommand(w.command)) throw new Error('Expected "elementCommand" to name an element command.');
   if (!isContextObject(w.context)) throw new Error('Expected "elementCommand" to carry a context object.');
-  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context };
+  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context, value: w.command === 'addElement' ? w.value : undefined };
 }
 
 function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {

@@ -18,7 +18,8 @@ import {
 } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { LABEL_COLUMN } from './columnKey';
-import type { ArrayElementContext, ElementCommand } from './messages';
+import type { ArrayElementContext, ArrayParentContext, ElementCommand } from './messages';
+import type { CellDrag } from './cellDrag';
 
 interface RenderCellExtras {
   checkError?: string | null;
@@ -141,6 +142,8 @@ interface DiffRowProps {
   // onFocusCell takes rowKey explicitly rather than closing over it here, so RecordPanel stays
   // the one place that knows how a click turns into a FocusedCell.
   rowKey: string;
+  // The row of the array this row is an element of, which an element dragged from here is added to.
+  parentRowKey: string | null;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
@@ -149,7 +152,9 @@ interface DiffRowProps {
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   writeAt: WriteAt;
-  onElementCommand?: (command: ElementCommand, context: ArrayElementContext) => void;
+  onElementCommand?: (
+    command: ElementCommand, context: ArrayElementContext | ArrayParentContext, value?: unknown,
+  ) => void;
   // What each column's cell reads while this row is collapsed, when the presentation table has an
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
@@ -166,7 +171,7 @@ export function DiffRow({
   diff, meta, columns, columnStyle,
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
-  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
+  rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
   onElementCommand, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
@@ -282,11 +287,25 @@ export function DiffRow({
           clear: cellEditable && diff.values[key] != null ? () => onEditCell(key, null) : undefined,
           paste: cellEditable ? text => onEditCell(key, pastedValue(text, cellMeta, shown)) : undefined,
         };
+        // `hops` addresses the array itself here — this row *is* the array.
+        const parentContext = arrayEditable && isArrayParentRow
+          ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
+          : undefined;
+        const drag: CellDrag | undefined = diff.values[key] != null
+          ? { row: rowKey, arrayRow: isArrayElementRow ? parentRowKey : null, value: diff.values[key] }
+          : undefined;
+        const landing = (dragged: CellDrag): (() => void) | undefined => {
+          if (dragged.row === rowKey) {
+            return cellEditable && JSON.stringify(dragged.value) !== JSON.stringify(shown)
+              ? () => onEditCell(key, dragged.value)
+              : undefined;
+          }
+          return parentContext && dragged.arrayRow === rowKey
+            ? () => onElementCommand?.('addElement', parentContext, dragged.value)
+            : undefined;
+        };
         const vscodeContext = offersMenu ? combineVscodeContexts(
-          // `hops` addresses the array itself here — this row *is* the array.
-          arrayEditable && isArrayParentRow
-            ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, hops)
-            : undefined,
+          parentContext,
           elementContext,
           meta.type === 'string'
             ? stringValueContext(
@@ -310,6 +329,8 @@ export function DiffRow({
               onFocusCell={() => onFocusCell(rowKey, key)}
               copyText={copyText}
               keys={keys}
+              drag={drag}
+              landing={landing}
               vscodeContext={vscodeContext}
             >
               {!isExpanded && hasElement && (
@@ -323,6 +344,8 @@ export function DiffRow({
         return (
           <DiskCell
             keys={keys}
+            drag={drag}
+            landing={landing}
             vscodeContext={vscodeContext}
             key={key}
             style={cellStyle}
