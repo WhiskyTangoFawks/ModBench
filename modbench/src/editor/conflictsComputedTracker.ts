@@ -16,7 +16,7 @@ export function trackConflictsComputed(
   });
   // Mirrors reconcileNarrator's own detached() reset, on the same two signals (toolbox.ts): a
   // crash-and-restart or a reattached stream starts the next process's reconcile from unsettled.
-  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'attached') value = false; });
+  const unsubscribeStatusChanged = client.onStatusChanged((status) => { if (status !== 'running') value = false; });
   const unsubscribeReconnected = client.onReconnected(() => { value = false; });
   return {
     current: () => value,

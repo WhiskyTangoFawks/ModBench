@@ -124,16 +124,16 @@ describe('InMemoryMEditClient — status', () => {
   it('starts as "starting" and is settable', () => {
     const client = new InMemoryMEditClient();
     expect(client.status).toBe('starting');
-    client.setStatus('attached');
-    expect(client.status).toBe('attached');
+    client.setStatus('running');
+    expect(client.status).toBe('running');
   });
 
   it('notifies onStatusChanged listeners, and unsubscribe stops further notice', () => {
     const client = new InMemoryMEditClient();
     const listener = vi.fn();
     const unsubscribe = client.onStatusChanged(listener);
-    client.setStatus('attached');
-    expect(listener).toHaveBeenCalledWith('attached');
+    client.setStatus('running');
+    expect(listener).toHaveBeenCalledWith('running');
     unsubscribe();
     client.setStatus('stopped');
     expect(listener).toHaveBeenCalledTimes(1);

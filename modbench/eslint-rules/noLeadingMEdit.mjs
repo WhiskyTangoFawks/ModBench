@@ -8,7 +8,7 @@ export const LEADING_MEDIT_MESSAGE =
     'A message never begins "mEdit:". Every notification, Output line, tree row and webview text is '
     + "Modbench's own voice, and the Output channel is called Modbench. mEdit is named in a sentence "
     + 'that is about it, never as a label. Only the status bar item carries the prefix, after its icon: '
-    + '"$(plug) mEdit: Attached" (common.md, The status bar).';
+    + '"$(plug) mEdit: Running" (common.md, The status bar).';
 
 const LEADING_MEDIT = /^\s*mEdit:/i;
 

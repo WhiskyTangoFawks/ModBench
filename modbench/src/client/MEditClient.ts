@@ -15,9 +15,9 @@ import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
  *  type, and the client is the seam it reaches the backend through (ADR-0007). */
 export type { RecordEditEnvelope } from '../wire/messages';
 
-/** The backend process as the extension reports it: starting while it comes up, attached while
+/** The backend process as the extension reports it: starting while it comes up, running while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
-export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
+export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
  *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
@@ -201,9 +201,8 @@ export interface MEditClient {
   // status-changed event.
   readonly status: BackendStatus;
   onStatusChanged(listener: (status: BackendStatus) => void): () => void;
-  /** The notification stream opened again while `attached`. The client attaches to any healthy
-   *  backend on its port, so the process behind the stream may be another, holding nothing sent
-   *  before. */
+  /** The notification stream opened again while `running`. The process behind the stream may
+   *  be a restarted one, holding nothing sent before. */
   onReconnected(listener: () => void): () => void;
   start(): Promise<void>;
   stop(): Promise<void>;

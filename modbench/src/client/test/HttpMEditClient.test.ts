@@ -15,7 +15,7 @@ function neverFetch(): (input: Request) => Promise<Response> {
 function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up', timeoutMs?: number) {
   return new HttpMEditClient({
     backend: {
-      port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
+      attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
     },
     fetch, timeoutMs,
@@ -68,7 +68,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
 
     await client.start();
 
-    expect(client.status).toBe('attached');
+    expect(client.status).toBe('running');
   });
 
   it('reports every status change to its listeners', async () => {
@@ -79,7 +79,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
     await client.start();
     await client.stop();
 
-    expect(seen).toEqual(['attached', 'stopped']);
+    expect(seen).toEqual(['running', 'stopped']);
   });
 
   it('an unsubscribed listener hears nothing more', async () => {
@@ -91,7 +91,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
     off();
     await client.stop();
 
-    expect(seen).toEqual(['attached']);
+    expect(seen).toEqual(['running']);
   });
 });
 

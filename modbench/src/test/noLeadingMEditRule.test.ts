@@ -6,7 +6,7 @@ const MESSAGE =
   'A message never begins "mEdit:". Every notification, Output line, tree row and webview text is '
   + "Modbench's own voice, and the Output channel is called Modbench. mEdit is named in a sentence "
   + 'that is about it, never as a label. Only the status bar item carries the prefix, after its icon: '
-  + '"$(plug) mEdit: Attached" (common.md, The status bar).';
+  + '"$(plug) mEdit: Running" (common.md, The status bar).';
 
 function lint(code: string): Linter.LintMessage[] {
   const linter = new Linter();
@@ -68,7 +68,7 @@ describe('no-leading-medit', () => {
   });
 
   it('passes the status bar item\'s text, whose prefix follows its icon', () => {
-    const messages = lint("setStatusText('$(plug) mEdit: Attached');\nsetStatusText(`$(check) mEdit: Ready (${n} plugins)`);\n");
+    const messages = lint("setStatusText('$(plug) mEdit: Running');\nsetStatusText(`$(check) mEdit: Ready (${n} plugins)`);\n");
 
     expect(messages).toEqual([]);
   });
