@@ -155,6 +155,17 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  // commands.md, Doing nothing is not an error: choosing the record already there writes nothing.
+  it('commits nothing when the picked FormKey is the one the cell already holds', async () => {
+    const onCommit = vi.fn();
+    pickFormKey.mockResolvedValueOnce('000019:Fallout4.esm');
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('000019:Fallout4.esm'));
+    await vi.waitFor(() => expect(pickFormKey).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   // The picker's input is a mutable column's only surface for copying the value, so a bare
   // FormKey seed would leave the one editable column unable to hand over what it displays.
   it('seeds the picker with the composite label the cell displays', () => {
