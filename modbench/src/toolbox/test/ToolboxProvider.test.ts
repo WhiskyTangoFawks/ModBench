@@ -66,6 +66,32 @@ describe('the Toolbox view, given an instance value', () => {
   });
 });
 
+describe('the Toolbox view, given a later read that fails', () => {
+  it('keeps its rows, says it shows the last good read, and clears the line once a read lands', () => {
+    const instance = new FakeInstance(VALUE);
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.fail('EACCES modlist.txt');
+
+    expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile']);
+    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
+    expect(fired).toHaveLength(1);
+    instance.publish(VALUE);
+    expect(provider.viewMessage()).toBeUndefined();
+  });
+
+  it('says nothing of a last good read while the first read has failed: the error row is the message', () => {
+    const instance = new FakeInstance(VALUE, 0);
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
+
+    instance.fail('ENOENT modlist.txt');
+
+    expect(provider.viewMessage()).toBeUndefined();
+  });
+});
+
 describe('the Toolbox view, given the game folder not found', () => {
   const NOT_FOUND = { ...VALUE, gameFolder: GAME_FOLDER_NOT_FOUND };
 

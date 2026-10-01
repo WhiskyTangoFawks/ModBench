@@ -3,7 +3,7 @@ import type {
   PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient, LoadOrderRefusal, PluginAddress,
   NotificationEvent,
 } from '../client';
-import type { InstanceValue, InstanceView, PluginEntry } from '../instanceLoader/instance';
+import { lastGoodReadMessage, type InstanceValue, type InstanceView, type PluginEntry } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
 import type { PluginsDrop } from '../pluginsCommands/plugins';
@@ -361,7 +361,7 @@ export class PluginsTreeProvider
       this.settleUnconfirmed(value);
       this.instanceValue = value;
       this.invalidate();
-    }));
+    }), options.instance.onReadFailure(() => this.render()));
     if (options.records) {
       this.subscriptions.push(options.records.onDidChangeTreeData((child) => this._onDidChangeTreeData.fire(child)));
     }
@@ -502,10 +502,13 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** The view's message line, first that holds: the game folder not found (common.md, States 5),
-   *  a failed index (plugins.md, States 6), no rows (States 1), a record filter matching nothing
-   *  (States 5). */
   viewMessage(): string | undefined {
+    return [this.firstHeldMessage(), lastGoodReadMessage(this.instance)].filter((part) => part !== undefined).join(' ') || undefined;
+  }
+
+  /** The first that holds: the game folder not found (common.md, States 5), a failed index
+   *  (plugins.md, States 6), no rows (States 1), a record filter matching nothing (States 5). */
+  private firstHeldMessage(): string | undefined {
     const { gameFolder } = this.instanceValue;
     if (this.instance.sequence !== 0 && gameFolder.kind !== 'found') {
       return `Game folder not found: set ${gameFolder.setting}. The Toolbox's Game row names each place Modbench looked.`;

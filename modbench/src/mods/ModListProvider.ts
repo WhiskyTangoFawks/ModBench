@@ -3,7 +3,7 @@ import type { Mod, ModlistEntry, Separator } from '../instanceLoader/instance';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
-import type { InstanceValue, InstanceView } from '../instanceLoader/instance';
+import { lastGoodReadMessage, type InstanceValue, type InstanceView } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
@@ -245,6 +245,7 @@ export class ModListProvider
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
+  private readonly readFailureSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
@@ -258,6 +259,7 @@ export class ModListProvider
       this.instanceValue = value;
       this.invalidate();
     });
+    this.readFailureSubscription = options.instance.onReadFailure(() => this.render());
   }
 
   private settleUnconfirmed(value: InstanceValue): void {
@@ -454,6 +456,7 @@ export class ModListProvider
   dispose(): void {
     this.clearUnconfirmed();
     this.instanceSubscription.dispose();
+    this.readFailureSubscription.dispose();
     this.firstRead.dispose();
   }
 
@@ -494,9 +497,9 @@ export class ModListProvider
 
   /** The view's message line while no filter is active. Overwrite is always a row, so an empty
    *  list says so here, above it. */
-  emptyListMessage(): string | undefined {
-    if (this.instance.sequence === 0 || this.instanceValue.mods.length > 0) return undefined;
-    return NO_MODS_MESSAGE;
+  viewMessage(): string | undefined {
+    const empty = this.instance.sequence !== 0 && this.instanceValue.mods.length === 0 ? NO_MODS_MESSAGE : undefined;
+    return [empty, lastGoodReadMessage(this.instance)].filter((part) => part !== undefined).join(' ') || undefined;
   }
 
   // No stable API names the focused row. VS Code appends the row a click selects to the selection

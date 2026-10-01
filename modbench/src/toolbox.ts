@@ -605,7 +605,9 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   const side = opened.folder === 'instance' ? buildInstanceSide(own, opened.instanceRoot, deps) : undefined;
 
   const provider = side?.toolboxProvider ?? own(new ToolboxProvider({ instance: undefined, log: () => undefined }));
-  own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
+  const toolboxView = own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
+  const showMessage = () => { toolboxView.message = provider.viewMessage(); };
+  own(provider.onDidChangeTreeData(showMessage));
   own(registerCreatePluginCommand(client, side?.instance, reporterFor('newPlugin')));
   // Registered here, not inside buildInstanceSide: Referenced By's own copy reaches this regardless
   // of whether the folder is an instance.

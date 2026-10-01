@@ -245,11 +245,11 @@ describe('what the view says of itself', () => {
   });
 
   it('says there are no mods or separators, and how to add one', () => {
-    expect(makeProvider([]).emptyListMessage()).toBe(NO_MODS);
+    expect(makeProvider([]).viewMessage()).toBe(NO_MODS);
   });
 
   it('says nothing of an empty list while a separator alone is listed', () => {
-    expect(makeProvider([sep('Only')]).emptyListMessage()).toBeUndefined();
+    expect(makeProvider([sep('Only')]).viewMessage()).toBeUndefined();
   });
 
   // Before the first read the value is the empty sentinel, which is "not read yet".
@@ -257,7 +257,21 @@ describe('what the view says of itself', () => {
     const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 0) });
 
     expect(provider.description()).toBeUndefined();
-    expect(provider.emptyListMessage()).toBeUndefined();
+    expect(provider.viewMessage()).toBeUndefined();
+  });
+
+  it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
+    const instance = new FakeInstance(valueOf([mod('A')]));
+    const provider = makeProvider([], { instance });
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData((e) => fired.push(e));
+
+    instance.fail('EACCES modlist.txt');
+
+    expect(provider.viewMessage()).toBe('Showing the last good read: EACCES modlist.txt');
+    expect(fired).toHaveLength(1);
+    instance.publish(valueOf([mod('A')]));
+    expect(provider.viewMessage()).toBeUndefined();
   });
 });
 
