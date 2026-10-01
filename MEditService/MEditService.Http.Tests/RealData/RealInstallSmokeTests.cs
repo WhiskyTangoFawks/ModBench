@@ -42,9 +42,6 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // The test stands in for Mod Management, which sends the game's masters present in the game
-            // directory as the active plugins (ADR-0013 invariant 3). The instance is a temp one: a real
-            // install is not an MO2 instance.
             var masters = Implicits.Get(release).Listings
                 .Select(master => master.FileName.String)
                 .Where(name => File.Exists(Path.Combine(dataDir.Path, name)))

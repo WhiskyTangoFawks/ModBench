@@ -38,9 +38,7 @@ public static class LoadOrderEndpoints
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
-        // ADR-0009 invariant 3: the MO2 instance root is what the index file is keyed on, so a
-        // snapshot that cannot name one has nowhere to keep its rows — a bad request, not a
-        // degraded reconcile.
+        // ADR-0009 invariant 3: no instance root, nowhere to keep the rows.
         if (!Directory.Exists(req.InstanceRoot))
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
 

@@ -3,9 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009: one index file per MO2 instance, inside the instance root. `origin` is a mod folder
-// name unique only within an instance and every row is keyed (plugin, origin), so the instance is
-// the only honest scope.
 public sealed class IndexFileLocationTests : IDisposable
 {
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("index-file").WithPlugin("A.esp").Build();
@@ -14,11 +11,8 @@ public sealed class IndexFileLocationTests : IDisposable
 
     private string Instance(string name) => Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, name)).FullName;
 
-    // The instance root is MO2's working directory, but `mods/`, `overwrite/`, `profiles/` and
-    // `downloads/` are content it manages: a reinstall, a profile delete or a download sweep would
-    // take an index under any of them with it.
     [Fact]
-    public void TheIndexFile_LivesInTheInstanceRoot_BesideTheContentMO2Manages_NeverInsideIt()
+    public void TheIndexFile_LivesInTheInstanceRoot_BesideTheModManagersContent_NeverInsideIt()
     {
         var instance = Instance("instance");
         foreach (var managed in new[] { "mods", "overwrite", "profiles", "downloads" })

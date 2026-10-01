@@ -2,8 +2,8 @@
 ...@../styles
 shape: sequence_diagram
 tools: "MO2 · another tool · the user" {class: other}
-mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "the mod's folder"
+instance: @../target-architecture.modbench_data.instance
+instance.label: "the mod's folder"
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
 instanceloader: @../target-architecture.modbench_driven.instanceloader
@@ -25,8 +25,8 @@ port.label: Ports
 plugins: @../target-architecture.modbench_driving.plugins
 plugins.label: Plugins
 
-tools -> mo2: bytes, at any time {class: outside}
-mo2 -> instanceadapter: watch {class: signal}
+tools -> instance: bytes, at any time {class: outside}
+instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
 instancecommands -> client: snapshot {class: loadorder}

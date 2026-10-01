@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>A <see cref="DuckDbRecordIndex"/> per game, opened over the calling MO2 instance's
+/// <summary>A <see cref="DuckDbRecordIndex"/> per game, opened over the calling instance's
 /// persistent file when it names one.</summary>
 internal sealed class DuckDbRecordIndexFactory(
     SchemaReflector schemaReflector,

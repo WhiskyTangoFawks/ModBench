@@ -125,8 +125,6 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 public sealed record PluginFixtureData(
     string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable
 {
-    // The MO2 instance root this fixture stands in for (ADR-0009): the temp directory the Data
-    // folder sits under, never the Data folder itself.
     public string InstanceRoot => CleanupRoot;
 
     public void Dispose() => Directory.Delete(CleanupRoot, recursive: true);
@@ -145,7 +143,6 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 public sealed record ScatteredFixtureData(
     string Root, string GameDirectory, IReadOnlyList<LoadOrderEntry> Plugins) : IDisposable
 {
-    // The MO2 instance root this fixture stands in for (ADR-0009), also its cleanup root.
     public string InstanceRoot => Root;
 
     public void Dispose() => Directory.Delete(Root, recursive: true);

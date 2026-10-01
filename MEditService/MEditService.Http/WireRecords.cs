@@ -12,7 +12,7 @@ public record FilterResponse(string? Sql, string? Source);
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
 // ADR-0013: Mod Management's snapshot: every plugin, the active ones in load order and those loaded
-// with no line. InstanceRoot (ADR-0009) is the MO2 instance: Origin is unique only within one.
+// with no line. InstanceRoot: ADR-0009 invariant 3.
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,

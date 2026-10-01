@@ -8,9 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0009: one index file per MO2 instance. The two instances share one game directory on purpose,
-// the shape the bug lives in: keyed by the Data install both get one index file; keyed by the
-// instance they never meet.
 public sealed class InstanceScopedIndexTests : IDisposable
 {
     private const string Origin = "Unofficial Patch";
@@ -51,7 +48,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     // Warm on both sides: the second load of each instance is the one that would register the other's
     // file_path if the store were shared.
     [Fact]
-    public void TwoInstancesWithSameNamedModFolders_NeverSeeEachOthersRows()
+    public void TwoInstancesOverOneGameDirectory_WithSameNamedModFolders_NeverSeeEachOthersRows()
     {
         var holder = new LoadOrderHolder();
         var gameDirectory = GameDirectory;

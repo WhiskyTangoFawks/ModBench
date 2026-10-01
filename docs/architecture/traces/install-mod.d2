@@ -8,8 +8,8 @@ install: @../target-architecture.modbench_core.install
 install.label: install
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
-mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "MO2 instance\nmods/<name>/, meta.ini · downloads/<file>.meta"
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nthe mod's folder and meta · the downloaded file's metadata"
 views: "every view" {class: driving}
 
 instanceloader -> downloads: "value: mods with this Nexus id, their installed files" {class: loadorder}
@@ -27,9 +27,9 @@ from download: "from a downloaded file" {
   install -> instanceadapter: "the downloaded file: installed" {class: loadorder}
 }
 
-instanceadapter -> mo2: "the folder · the .meta" {class: loadorder}
+instanceadapter -> instance: "the folder · the metadata" {class: loadorder}
 install -> downloads: applied or refusal {class: loadorder}
-mo2 -> instanceadapter: watch {class: signal}
+instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader."mod sync: update-load-order-file"

@@ -4,7 +4,7 @@ MO2 and xEdit are two programs: MO2 deploys a virtual `Data/` and launches xEdit
 
 ## Strategic invariants
 
-1. **Modbench never depends on MO2's runtime.** It reconstructs MO2's effective view from the physical mod folders plus the load order, the same merge usVFS performs, and edits the files in place. MO2 and Modbench coexist at the filesystem level, not the process level, and MO2 need not be running.
+1. **Modbench never depends on the mod manager's runtime.** It reconstructs the instance's effective view from the physical mod folders plus the load order, the same merge deployment performs, and edits the files in place. The mod manager and Modbench coexist at the filesystem level, not the process level, and the mod manager need not be running.
 2. **The extension owns the editing backend.** It spawns it, restarts it on a crash and stops it with the extension, so the backend runs for the extension's whole lifetime. No view has a mode for its absence: a disconnect is a status the client reports and the views surface as an error. Nothing outside the client names the process, the port or the health check.
 3. **The plugins and the active plugins flow from Mod Management to Editing as state**, sent whenever anything that feeds them changes and reconciled, never reloaded ([ADR-0013](0013-mod-management-hands-editing-the-load-order.md)). That is what makes a mod change visible in the editor at once.
 4. **Deploy is for the game, never for editing.** Editing reads the physical folders.

@@ -9,8 +9,8 @@ client: @../target-architecture.modbench_driven.client
 client.label: mEdit client
 instanceadapter: @../target-architecture.modbench_driven.instanceadapter
 instanceadapter.label: Instance adapter
-mo2: @../target-architecture.modbench_data.mo2
-mo2.label: "MO2 instance\nmodlist.txt · plugins.txt · ModOrganizer.ini · mods/ · downloads/"
+instance: @../target-architecture.modbench_data.instance
+instance.label: "Instance\nmod order · plugins.txt · the mod manager's configuration · mods · downloaded files"
 views: "every view" {class: driving}
 
 surfaces -> cmds: "the gesture: its Argument and Options" {class: loadorder}
@@ -21,9 +21,9 @@ cmds -> instanceadapter: "the change: lines and folders" {class: loadorder}
 uninstall: "an uninstall, from a downloaded file" {
   cmds -> instanceadapter: "the downloaded file's .meta: uninstalled" {class: loadorder}
 }
-instanceadapter -> mo2: bytes {class: loadorder}
+instanceadapter -> instance: bytes {class: loadorder}
 cmds -> surfaces: "applied or refusal, per item" {class: loadorder}
-mo2 -> instanceadapter: watch {class: signal}
+instance -> instanceadapter: watch {class: signal}
 instanceadapter -> instanceloader: "the instance changed" {class: signal}
 instanceloader -> views: value {class: loadorder}
 instanceloader -> cmds: "put load order: the snapshot" {class: loadorder}

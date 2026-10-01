@@ -64,12 +64,12 @@ modbench_core.deploy -> modbench_driven.instanceadapter {class: ref}
 modbench_core.deploy -> modbench_driven.deployment {class: ref}
 # Modbench: driven adapters (the kernel by the band's rule, not drawn)
 modbench_driven.instanceloader -> modbench_driven.instanceadapter {class: ref}
-modbench_driven.instanceadapter -> modbench_data.mo2 {class: store}
+modbench_driven.instanceadapter -> modbench_data.instance {class: store}
 modbench_driven.instanceadapter -> modbench_data.gamedata {class: store}
 modbench_driven.deployment -> modbench_data.gamedata {class: store}
 # other tools
 medit_data.tools -> medit_data.plugin {class: outside}
-modbench_data.tools -> modbench_data.mo2 {class: outside}
+modbench_data.tools -> modbench_data.instance {class: outside}
 
 legend: "One arrow per reference, from the box that references to the box it references." {
   class: band; grid-rows: 1
