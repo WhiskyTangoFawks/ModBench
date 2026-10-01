@@ -13,13 +13,27 @@ vi.mock('./nativeBridge', () => ({
 import { DiskCell } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
-import { fieldMeta } from './test/fixtures';
+import { fieldMeta, parseJsonRecord } from './test/fixtures';
 
 const renderCell = (props: Partial<React.ComponentProps<typeof DiskCell>> = {}, child: React.ReactNode = <span>cell</span>) =>
   render(
     <table><tbody><tr>
       <DiskCell style={{}} isFocused onFocusCell={vi.fn()} copyText="copied" {...props}>{child}</DiskCell>
     </tr></tbody></table>);
+
+describe('DiskCell — the right-click menu', () => {
+  const contextOf = () => parseJsonRecord(screen.getByText('cell').closest('td')?.getAttribute('data-vscode-context') ?? '{}');
+
+  it('is the spec\'s items alone on every cell, offering copy value its text', () => {
+    renderCell();
+    expect(contextOf()).toEqual({ webviewSection: 'cell', copyText: 'copied', preventDefaultContextMenuItems: true });
+  });
+
+  it('merges what the caller adds', () => {
+    renderCell({ contexts: [{ webviewSection: 'extra', more: 1 }] });
+    expect(contextOf()).toMatchObject({ webviewSection: 'cell extra', more: 1, preventDefaultContextMenuItems: true });
+  });
+});
 
 describe('DiskCell — the grid keys act only while no editor is open', () => {
   beforeEach(() => { copyValue.mockClear(); });
@@ -150,7 +164,7 @@ describe('DiskCell — one gesture opens one editor', () => {
   const reference = (
     <FormKeyCell
       value="000019:Fallout4.esm" meta={fieldMeta({ name: 'Race', type: 'formKey', validFormKeyTypes: ['race'] })}
-      editable onOpen={vi.fn()} onCommit={vi.fn()}
+      editable onCommit={vi.fn()}
     />);
   const cellOf = (container: HTMLElement) => {
     const td = container.querySelector('td');

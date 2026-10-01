@@ -960,7 +960,7 @@ describe('package.json compile on the record tab', () => {
   it('is on the column header\'s menu of a compilable plugin, and nowhere else on the tab', () => {
     const webviewMenu = present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
     expect(webviewMenu.filter((e) => e.command === 'modbench.plugin.compile').map((e) => e.when)).toEqual([
-      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && compilable`,
+      String.raw`webviewId == 'modbench.record' && webviewSection =~ /\brecordHeader\b/ && editable`,
     ]);
     expect(pkg.contributes.menus['editor/title'] ?? []).toEqual([]);
   });
@@ -982,28 +982,59 @@ describe('package.json track\'s palette entry', () => {
   });
 });
 
-// editor.md, Menus and keys: the column header offers track in a mod with no repository and
-// decompile in a tracked mod, before compile. The header names its origin, and the Mods fact
-// names the mods of each kind.
-describe('package.json track and decompile on the record tab', () => {
-  const headerMenu = (): MenuEntry[] =>
-    present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']")
-      .filter((e) => e.when.includes('recordHeader'));
-  const header = { webviewId: 'modbench.record', webviewSection: 'recordHeader', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
-  const offered = (origin: string) =>
-    headerMenu().filter((e) => holds(e.when, { ...header, origin, compilable: false })).map((e) => e.command);
+// editor.md, Menus and keys: the row menus follow VS Code's groups, open, change, source control,
+// copy, then destroy, and hold only the spec's items in its order.
+describe('package.json record tab menus', () => {
+  const menu = (): MenuEntry[] => present(pkg.contributes.menus['webview/context'], "contributes.menus['webview/context']");
+  const tab = { webviewId: 'modbench.record', 'modbench.mod.tracked': ['Tracked'], 'modbench.mod.untracked': ['Untracked'] };
+  const offered = (facts: Record<string, unknown>): string[] =>
+    placed(menu().filter((e) => holds(e.when, { ...tab, ...facts }))).map(([command]) => command);
 
-  it('orders track, decompile, then compile', () => {
-    expect(placed(headerMenu()).map(([command]) => command).slice(0, 3))
-      .toEqual(['modbench.mod.track', 'modbench.plugin.decompile', 'modbench.plugin.compile']);
+  it('places each item in its group', () => {
+    expect(placed(menu())).toEqual([
+      ['modbench.record.openReference', '1_open'],
+      ['modbench.record.openFieldValue', '1_open'],
+      ['modbench.record.addElement', '2_change'],
+      ['modbench.record.removeElement', '2_change'],
+      ['modbench.record.moveElementUp', '2_change'],
+      ['modbench.record.moveElementDown', '2_change'],
+      ['modbench.mod.track', '4_sourceControl'],
+      ['modbench.plugin.decompile', '4_sourceControl'],
+      ['modbench.plugin.compile', '4_sourceControl'],
+      ['modbench.copyValue', '5_copy'],
+      ['modbench.record.copy', '5_copy'],
+      ['modbench.record.delete', '6_destroy'],
+    ]);
+  });
+
+  it('offers on a cell go to record, open field value, add, remove, move and copy value, in that order', () => {
+    expect(offered({
+      webviewSection: 'cell reference stringValue arrayParent arrayElement', copyText: 'x', canMoveUp: true, canMoveDown: true,
+    })).toEqual([
+      'modbench.record.openReference', 'modbench.record.openFieldValue', 'modbench.record.addElement',
+      'modbench.record.removeElement', 'modbench.record.moveElementUp', 'modbench.record.moveElementDown', 'modbench.copyValue',
+    ]);
+  });
+
+  it('offers copy value on a cell with something to copy and none on a cell with nothing', () => {
+    expect(offered({ webviewSection: 'cell', copyText: 'x' })).toEqual(['modbench.copyValue']);
+    expect(offered({ webviewSection: 'cell' })).toEqual([]);
   });
 
   it.each([
-    ['a mod with no repository', 'Untracked', ['modbench.mod.track', 'modbench.record.copy']],
-    ['a tracked mod', 'Tracked', ['modbench.plugin.decompile', 'modbench.record.copy']],
-    ['Overwrite', 'Overwrite', ['modbench.record.copy']],
-  ])('offers on a column of a plugin in %s only what applies', (_what, origin, commands) => {
-    expect(offered(origin)).toEqual(commands);
+    ['an untracked mod', 'Untracked', false, ['modbench.mod.track', 'modbench.record.copy']],
+    ['a tracked mod', 'Tracked', false, ['modbench.plugin.decompile', 'modbench.record.copy']],
+    ['a tracked mod, editable', 'Tracked', true, [
+      'modbench.plugin.decompile', 'modbench.plugin.compile', 'modbench.record.copy', 'modbench.record.delete',
+    ]],
+  ])('offers on the column of a plugin in %s only what applies', (_what, origin, editable, commands) => {
+    expect(offered({ webviewSection: 'recordHeader', origin, editable })).toEqual(commands);
+  });
+
+  it('hides the internal command that follows a reference from the palette', () => {
+    const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
+      .filter((e) => e.command === 'modbench.record.openReference');
+    expect(entries.map((e) => e.when)).toEqual(['false']);
   });
 });
 
@@ -1350,10 +1381,11 @@ const catalog = catalogCommandIds(commandsMarkdown);
 // commands.md, Entry points are not gestures: a title icon or a menu cannot name its view or pass
 // an Option, so an internal command fires the gesture with them.
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
+const OPEN_REFERENCE = 'modbench.record.openReference';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads', 'modbench.referencedByTree']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
 const DELETE_ENTRY_POINTS = ['modbench.pluginListTree', 'modbench.referencedByTree'].map((view) => `${view}.deleteHere`);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, OPEN_TO_THE_SIDE];
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, OPEN_TO_THE_SIDE, OPEN_REFERENCE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);

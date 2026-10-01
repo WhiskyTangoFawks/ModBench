@@ -11,7 +11,6 @@ interface FormKeyCellProps {
   // (presence of somewhere to write is the editability signal). A VMAD composite leaf that
   // composes this cell but has no write path of its own simply omits it.
   editable?: boolean;
-  onOpen: (fk: string) => void;
   // Optional for the same reason `editable` is — `onPlainClick`/`openPicker` are gated on
   // `editable` before `onCommit` is ever reached.
   onCommit?: (fk: string) => void;
@@ -23,7 +22,7 @@ interface FormKeyCellProps {
 
 /** ADR-0018's divergence #1: a native QuickPick rather than an in-webview control, because the
  *  webview cannot host a searchable record list as well as VS Code already does. */
-export function FormKeyCell({ value, meta, editable, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editable, onCommit, checkError, resolution }: FormKeyCellProps) {
   const fk = typeof value === 'string' && value ? value : null;
   const picking = useRef(false);
 
@@ -62,8 +61,7 @@ export function FormKeyCell({ value, meta, editable, onOpen, onCommit, checkErro
     return (
       <FormKeyLink
         value={fk}
-        onOpen={onOpen}
-        onPlainClick={onPlainClick}
+        onClick={onPlainClick}
         openTrigger={editable}
         resolution={resolution}
       />

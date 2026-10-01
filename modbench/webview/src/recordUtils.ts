@@ -42,11 +42,11 @@ export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
 // VS Code gates these on a `data-vscode-context` attribute carrying JSON it parses itself, never a
 // rendered menu. One row can carry more than one context, so each builder returns a plain object.
 export type {
-  ArrayElementContext, ArrayParentContext, ColumnHeaderContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, ReferenceContext,
   StringValueContext,
 } from './messages';
 import type {
-  ArrayElementContext, ArrayParentContext, ColumnHeaderContext,
+  ArrayElementContext, ArrayParentContext, ColumnHeaderContext, ReferenceContext,
   StringValueContext,
 } from './messages';
 
@@ -73,9 +73,19 @@ export function arrayParentContext(
 }
 
 export function headerCellContext(
-  formKey: string, plugin: string, origin: string, compilable: boolean,
+  formKey: string, plugin: string, origin: string, editable: boolean,
 ): ColumnHeaderContext {
-  return { webviewSection: 'recordHeader', formKey, plugin, origin, compilable, preventDefaultContextMenuItems: true };
+  return { webviewSection: 'recordHeader', formKey, plugin, origin, editable, preventDefaultContextMenuItems: true };
+}
+
+// Every cell suppresses VS Code's own Cut, Copy and Paste, which act on the text on the screen, and
+// offers copy value the text ADR-0018 says it copies.
+export function cellContext(copyText: string | undefined): { webviewSection: 'cell'; copyText?: string; preventDefaultContextMenuItems: true } {
+  return { webviewSection: 'cell', ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true };
+}
+
+export function referenceContext(referenceTarget: string): ReferenceContext {
+  return { webviewSection: 'reference', referenceTarget };
 }
 
 // ADR-0018: a `string` cell's right-click entry is the extended editor's only trigger, since no

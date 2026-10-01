@@ -7,8 +7,12 @@ const registerCommand = vi.fn((command: string, handler: (ctx?: unknown, option?
   return { dispose: vi.fn() };
 });
 const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
+const executeCommand = vi.fn<(command: string, ...args: unknown[]) => Promise<void>>();
 vi.mock('vscode', () => ({
-  commands: { registerCommand: (...args: [string, (ctx?: unknown, option?: unknown) => void]) => registerCommand(...args) },
+  commands: {
+    registerCommand: (...args: [string, (ctx?: unknown, option?: unknown) => void]) => registerCommand(...args),
+    executeCommand: (...args: [string, ...unknown[]]) => executeCommand(...args),
+  },
   window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
 }));
 
@@ -28,7 +32,7 @@ import { EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
-beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); });
+beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });
 
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   const meditClient = new InMemoryMEditClient();
@@ -470,5 +474,22 @@ describe('modbench.record.editField', () => {
     await editField()({ formKey: IDENTITY.formKey }, envelope);
 
     expect(editRecordCalls(meditClient)).toEqual([]);
+  });
+});
+
+describe('modbench.record.openReference', () => {
+  function reference() {
+    registerRecordPanelContextCommands(makeDeps().deps);
+    return present(handlers.get('modbench.record.openReference'), "the handler registered for 'modbench.record.openReference'");
+  }
+
+  it('opens the record the clicked reference points to, not the record the panel shows', async () => {
+    await reference()({ webviewSection: 'cell reference', ...IDENTITY, referenceTarget: '000F:Fallout4.esm' });
+    expect(executeCommand).toHaveBeenCalledWith('modbench.record.open', { formKey: '000F:Fallout4.esm' });
+  });
+
+  it('opens nothing from a cell that holds no reference', async () => {
+    await reference()({ webviewSection: 'cell', ...IDENTITY });
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });

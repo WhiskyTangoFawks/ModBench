@@ -12,7 +12,7 @@ import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
 import {
-  arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, getAtPath, isArrayElementHop,
+  arrayElementContext, arrayParentContext, referenceContext, defaultOf, getAtPath, isArrayElementHop,
   columnHasNode, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
@@ -38,14 +38,13 @@ interface RenderCellExtras {
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  onOpen: (fk: string) => void,
   { checkError, resolution, onCommit, rowCollapsed }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
         value={value} meta={meta}
-        onOpen={onOpen} checkError={checkError} resolution={resolution}
+        checkError={checkError} resolution={resolution}
         editable={onCommit != null}
         onCommit={onCommit}
       />
@@ -132,7 +131,6 @@ interface DiffRowProps {
   // can never disagree.
   columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   collapsedColumns: Set<ColumnKey>;
-  onOpen: (fk: string) => void;
   // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
   // file is filed under it, and only the panel knows it.
   recordLabel: string;
@@ -169,7 +167,7 @@ interface DiffRowProps {
 
 export function DiffRow({
   diff, meta, columns, columnStyle,
-  collapsedColumns, onOpen,
+  collapsedColumns,
   recordLabel, context, isExpanded, onToggle,
   rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
   onElementCommand, collapsedSummary, ownerPresent, cellMetas,
@@ -264,12 +262,7 @@ export function DiffRow({
         const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null && hops !== undefined;
         // Array ops are offered only on a writable cell.
         const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
-        // ADR-0018: a `string` cell always carries its own right-click context, mutable or
-        // immutable alike — a read-only tab is still the only way to read a long immutable
-        // value in full.
-        const offersMenu = arrayEditable || (meta.type === 'string' && hops !== undefined);
-        // Hoisted above vscodeContext because stringValueContext needs it too — a string cell's
-        // own `readOnly` is this same boolean negated, so the right-click menu and the
+        // A string cell's right-click `readOnly` is this boolean negated, so the menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
         // `hops` ends in the element's own `index` hop, and carries every hop above it rather than
@@ -306,16 +299,20 @@ export function DiffRow({
             ? () => onElementCommand?.('addElement', parentContext, dragged.value)
             : undefined;
         };
-        const vscodeContext = offersMenu ? combineVscodeContexts(
+        const resolution = diff.resolutions?.[key];
+        const contexts = [
           parentContext,
           elementContext,
-          meta.type === 'string'
+          hops && meta.type === 'string'
             ? stringValueContext(
                 col.override.formKey, col.override.plugin, col.override.origin, recordLabel, label,
                 modelValue(diff.values[key], meta), !cellEditable, hops,
               )
             : undefined,
-        ) : undefined;
+          typeof shown === 'string' && cellMeta.type === 'formKey' && resolution && resolution.state !== 'Unresolved'
+            ? referenceContext(shown)
+            : undefined,
+        ];
         if (hasChildren) {
           const len = meta.type === 'array' && Array.isArray(shown) ? shown.length : '…';
           // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
@@ -333,7 +330,7 @@ export function DiffRow({
               keys={keys}
               drag={drag}
               landing={landing}
-              vscodeContext={vscodeContext}
+              contexts={contexts}
             >
               <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
                 {() => !isExpanded && hasElement && (
@@ -350,7 +347,7 @@ export function DiffRow({
             keys={keys}
             drag={drag}
             landing={landing}
-            vscodeContext={vscodeContext}
+            contexts={contexts}
             key={key}
             style={cellStyle}
             title={cellTitle}
@@ -362,9 +359,9 @@ export function DiffRow({
                 default, so nothing at all stands in for a column that has no such thing. */}
             {hasElement && (
               <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
-                {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, onOpen, {
+                {value => renderCell(value ?? defaultOf(cellMeta), cellMeta, {
                   // A reference the disk does not hold yet has no resolution.
-                  checkError, resolution: value === shown ? diff.resolutions?.[key] : undefined,
+                  checkError, resolution: value === shown ? resolution : undefined,
                   onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
                   rowCollapsed: isFlagsRow && !rowExpanded,
                 })}
