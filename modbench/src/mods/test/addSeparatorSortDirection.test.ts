@@ -27,7 +27,7 @@ import { ModListProvider, type ModlistNode, type SortDirection } from '../ModLis
 import { registerSeparatorCommands } from '../modManagementCommands';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
-import { recordingReporter } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { accessTo, readModlistEntries } from '../../test/mo2/adapterOver';
 
 // The row a real tree over the corpus's own modlist, sorted the given way, hands a right click —
@@ -52,7 +52,7 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   showInputBox.mockResolvedValueOnce('New Section');
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
   const reporter = recordingReporter();
-  registerSeparatorCommands(accessTo(root), instance, reporter, vi.fn(), () => [], separatorMarks);
+  registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => [], separatorMarks);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
   if (!call) throw new Error('modbench.separator.add not registered');
   await call[1](anchor);
