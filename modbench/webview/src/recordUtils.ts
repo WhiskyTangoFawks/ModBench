@@ -20,22 +20,6 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ key: columnKey(o.plugin, o.origin), override: o }));
 }
 
-// Every column is an active plugin (editor.md, Columns, story 2), so an immutable one is the game's
-// own.
-export type ColumnStatus = 'parseFailure' | 'vanillaMaster' | 'inOverwrite' | 'untracked' | 'tracked';
-
-/** Ordered by what the user can do about it: a parse failure and an immutable column come first,
- *  since nothing the user does about tracking lifts either. Overwrite comes next, the same way. */
-// isInOverwrite is mEdit's own fact (PluginOrigin.IsOverwrite) — never re-derived from Origin here.
-export function columnStatus(
-  isImmutable: boolean, isTracked = true, parseDiagnosis?: string | null, isInOverwrite = false,
-): ColumnStatus {
-  if (parseDiagnosis != null) return 'parseFailure';
-  if (isImmutable) return 'vanillaMaster';
-  if (isInOverwrite) return 'inOverwrite';
-  return isTracked ? 'tracked' : 'untracked';
-}
-
 /** The record as the panel names it: the EditorID and the FormKey, or the FormKey alone. */
 export function recordLabel(overrides: readonly CompareOverride[], formKey: string): string {
   const editorId = (overrides.find(o => o.isWinner) ?? overrides.at(0))?.editorId;

@@ -8,13 +8,14 @@ import { copiedText, modelValue } from './modelValue';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
+import { baseCell, labelCell, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts, defaultOf, isArrayElementHop,
   columnHasNode, isMovableElementHop, offersArrayAdd, rootFieldOf, stringValueContext, wirePath,
   type Column, type PathSegment,
 } from './recordUtils';
 import type { ColumnKey, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
+import { LABEL_COLUMN } from './columnKey';
 
 
 // NoConflict and OnlyOne are deliberately absent: they paint no background, so an expanded row
@@ -127,9 +128,9 @@ interface DiffRowProps {
   // up and can never render against a shape the panel did not choose.
   meta: FieldMetadata;
   columns: Column[];
-  // ADR-0013/ADR-0012: the columns that render at reduced weight, as one set the panel computes,
-  // so the header and every cell under it can never disagree.
-  dimmedColumns: Set<ColumnKey>;
+  // Each column's look, as the panel gives its header too, so the header and every cell under it
+  // can never disagree.
+  columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
   // "EditorID [FormKey]", the composite the panel's own title uses — the extended editor's temp
@@ -165,7 +166,7 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, meta, columns, dimmedColumns,
+  diff, meta, columns, columnStyle,
   collapsedColumns, onOpen,
   recordLabel, context, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
@@ -209,7 +210,7 @@ export function DiffRow({
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
       <DiskCell
-        style={{ ...baseCell, opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}
         onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
@@ -232,8 +233,7 @@ export function DiffRow({
         // moment a non-Data-origin column exists.
 
         const cellStyle = {
-          ...baseCell, ...getCellStyle(diff.cellStates[key]),
-          opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined,
+          ...baseCell, ...getCellStyle(diff.cellStates[key]), ...columnStyle(key),
         };
         if (collapsedColumns.has(key)) {
           return <td key={key} style={cellStyle} />;

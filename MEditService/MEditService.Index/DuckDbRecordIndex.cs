@@ -1430,9 +1430,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         return new RecordDocument(
             formKey, new PluginAddress(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
             body, BuildFields(schema, root, resolveFormKey, _release),
-            // A ModHeader can neither carry the Partial Form flag nor be a type that could.
+            // A ModHeader cannot carry the Partial Form flag.
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),
-            IsPartialFormable: !schema.IsHeader && PartialFormFlag.IsPartialFormable(schema.RecordType),
             ParseDiagnosis: parseDiagnosis);
     }
 

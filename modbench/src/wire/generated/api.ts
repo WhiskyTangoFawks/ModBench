@@ -532,7 +532,6 @@ export interface components {
             origin: string;
             recordType: string;
             isPartialForm: boolean;
-            isPartialFormable: boolean;
             parseDiagnosis?: string | null;
             formIdReadOnlyReason?: string | null;
             conflictThis: components["schemas"]["ConflictThis"];
@@ -543,6 +542,7 @@ export interface components {
             overrides: components["schemas"]["CompareOverride"][];
             diffs: components["schemas"]["FieldDiff"][];
             conflictAll: components["schemas"]["ConflictAll"];
+            recordTypeName: string;
         };
         CompileDiagnostic: {
             formKey: string;
@@ -878,7 +878,6 @@ export interface components {
             origin: string;
             recordType: string;
             isPartialForm: boolean;
-            isPartialFormable: boolean;
             parseDiagnosis?: string | null;
             formIdReadOnlyReason?: string | null;
         };

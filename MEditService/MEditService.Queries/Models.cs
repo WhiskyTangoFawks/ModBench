@@ -56,9 +56,6 @@ public record RecordDetail(
     // The record header's Partial Form flag, independent of any field value; always false for a
     // record that cannot carry one (the plugin header). Drives field exclusion and column dimming.
     bool IsPartialForm = false,
-    // Whether this record type could carry the flag at all, so the webview can render its Partial
-    // Form toggle without duplicating the container-type table client-side.
-    bool IsPartialFormable = false,
     // Non-null when ingest could not produce this record's document, so Fields are the stub's.
     // The record editor renders the column read-only with this as the reason; every write is
     // refused.
@@ -78,7 +75,6 @@ public record CompareOverride(
     string LoadIndex,
     string RecordType = "",
     bool IsPartialForm = false,
-    bool IsPartialFormable = false,
     string? ParseDiagnosis = null,
     // ADR-0012 invariant 2: Overwrite is an origin, not a mod. Computed here (PluginOrigin.
     // IsOverwrite) so the webview never interprets Origin itself.
@@ -86,7 +82,7 @@ public record CompareOverride(
     string? FormIdReadOnlyReason = null)
     : RecordDetail(
         FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
-        IsPartialFormable, ParseDiagnosis, FormIdReadOnlyReason);
+        ParseDiagnosis, FormIdReadOnlyReason);
 
 public record FieldDiff(
     string FieldName,
@@ -112,7 +108,8 @@ public record ClassifyResult(
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
-    ConflictAll ConflictAll);
+    ConflictAll ConflictAll,
+    string RecordTypeName);
 
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix instead of walking children. IsCreatable: CreatableRecordTypes' own verdict.

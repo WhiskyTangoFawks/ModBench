@@ -3,6 +3,9 @@ import type { ColumnKey } from './types';
 // Mirrors the backend's `ColumnKey.Of`: `|` delimiter (illegal in a Windows filename), Data
 // origin elided. Only the Data check case-folds; the key keeps the caller's casing.
 
+/** The label column, in a place that otherwise names a plugin's column by its key. */
+export const LABEL_COLUMN = null;
+
 /** ADR-0012's one mint point for `ColumnKey` — the only cast to the brand. A `null` origin is
  *  tolerated: the wire schema types every string nullable, though the C# field is NOT NULL. */
 export function columnKey(plugin: string, origin: string | null): ColumnKey {

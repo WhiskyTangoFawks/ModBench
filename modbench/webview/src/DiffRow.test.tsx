@@ -28,7 +28,7 @@ function override(plugin: string, partial: Partial<CompareOverride> = {}): Compa
     formKey: '000001:Fallout4.esm', plugin, loadIndex: '00', isWinner: false,
     editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'disk-value' }],
     conflictThis: 'Master', origin: 'Data',
-    recordType: 'npc_', isPartialForm: false, isPartialFormable: false, isInOverwrite: false,
+    recordType: 'npc_', isPartialForm: false, isInOverwrite: false,
     ...partial,
   };
 }
@@ -55,8 +55,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     diff: effectiveDiff,
     meta: strMeta,
     columns: [diskColumn(master), diskColumn(mod)],
-    // ADR-0013/ADR-0012: dimming is the panel's one answer; immutability alone is not part of it.
-    dimmedColumns: new Set(),
+    columnStyle: () => ({}),
     collapsedColumns: new Set(),
     // Empty by default — editability is opt-in per fixture, never something a test inherits
     // without saying so.
@@ -135,11 +134,12 @@ describe('DiffRow — top-level scalar row', () => {
   });
 });
 
-// The panel decides which columns are dimmed and hands down one set; the row applies it to every
-// cell of that column and asks nothing else.
+// The panel decides each column's look and hands it down; the row applies it to every cell of that
+// column and asks nothing else.
 describe('DiffRow — dimmed columns', () => {
   it('dims a cell whose column the panel named dimmed', () => {
-    renderRow({ dimmedColumns: new Set([columnKey('MyMod.esp', null)]) });
+    const dimmed = columnKey('MyMod.esp', null);
+    renderRow({ columnStyle: column => (column === dimmed ? { opacity: DIMMED_OPACITY } : {}) });
     const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
@@ -418,23 +418,11 @@ describe('DiffRow — flags cell wiring', () => {
   }
 
   // A flags row starts collapsed, so the expanded-state cases pass isExpanded explicitly.
-  it('an expanded flags cell in a non-editable column renders its checkboxes disabled', () => {
-    flagsRow({ isExpanded: true, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes).toHaveLength(4); // both columns, 2 flags each
-    for (const box of boxes) expect(box).toBeDisabled();
-  });
-
-  it('an expanded flags cell in an editable column renders enabled checkboxes', () => {
-    flagsRow({
-      isExpanded: true,
-      editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onEditCell: vi.fn(),
-    });
-    const boxes = screen.getAllByRole('checkbox');
-    expect(boxes).toHaveLength(4);
-    expect(boxes[2]).toBeEnabled();  // MyMod.esp's A
-    expect(boxes[0]).toBeDisabled(); // Fallout4.esm's A — immutable column stays inert
+  it('a click on a flag in a non-editable column writes nothing', () => {
+    const onEditCell = vi.fn();
+    flagsRow({ isExpanded: true, editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell });
+    fireEvent.click(required(screen.getAllByRole('checkbox')[1], "the second checkbox (Fallout4.esm's B)"));
+    expect(onEditCell).not.toHaveBeenCalled();
   });
 
   // Flags rows get the collapse toggle despite having no child rows — the "children" are the

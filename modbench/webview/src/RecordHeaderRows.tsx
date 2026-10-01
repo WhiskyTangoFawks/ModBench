@@ -2,12 +2,13 @@ import React, { useRef, useState } from 'react';
 import { DiskCell } from './DiskCell';
 import { formKeyLabel } from './FormKeyLink';
 import { ExpandArrow } from './ExpandArrow';
-import { baseCell, focusedRowStyle, DIMMED_OPACITY, mono, fg } from './gridStyles';
+import { baseCell, labelCell, focusedRowStyle, mono, fg } from './gridStyles';
 import { toStr, type Column } from './recordUtils';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import type { FocusedCell } from './DiffRow';
 import type { ColumnKey, PathHop } from './types';
+import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
 export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
@@ -72,7 +73,7 @@ function FormIdCell({ formKey, label, editable, onCommit }: Readonly<FormIdCellP
 interface RecordHeaderRowsProps {
   columns: Column[];
   collapsedColumns: Set<ColumnKey>;
-  dimmedColumns: Set<ColumnKey>;
+  columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
   editableColumns: Set<ColumnKey>;
   expanded: boolean;
   onToggle: () => void;
@@ -85,11 +86,11 @@ interface RecordHeaderRowsProps {
 /** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
-  columns, collapsedColumns, dimmedColumns, editableColumns, expanded, onToggle,
+  columns, collapsedColumns, columnStyle, editableColumns, expanded, onToggle,
   focusedCell, onFocusCell, onCommitFormId, writeAt,
 }: Readonly<RecordHeaderRowsProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
-    ({ ...baseCell, opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined });
+    ({ ...baseCell, ...columnStyle(key) });
   const rowStyle = (rowKey: string) => (focusedCell?.rowKey === rowKey ? focusedRowStyle : undefined);
   const isFocused = (rowKey: string, key: ColumnKey | null) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
 
@@ -97,7 +98,7 @@ export function RecordHeaderRows({
     <>
       <tr style={rowStyle(RECORD_HEADER_ROW)}>
         <DiskCell
-          style={{ ...baseCell, opacity: 0.75 }} isFocused={isFocused(RECORD_HEADER_ROW, null)}
+          style={labelCell(columnStyle(LABEL_COLUMN))} isFocused={isFocused(RECORD_HEADER_ROW, null)}
           onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
         >
           <ExpandArrow expanded={expanded} onToggle={onToggle} />
@@ -117,7 +118,7 @@ export function RecordHeaderRows({
       {expanded && (
         <tr style={rowStyle(FORM_ID_ROW)}>
           <DiskCell
-            style={{ ...baseCell, opacity: 0.75, paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
+            style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
             onFocusCell={() => onFocusCell(FORM_ID_ROW, null)}
           >FormID</DiskCell>
           {columns.map(({ key, override }) => collapsedColumns.has(key)
