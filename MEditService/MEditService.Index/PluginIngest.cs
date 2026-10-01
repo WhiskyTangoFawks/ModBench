@@ -252,9 +252,7 @@ internal sealed class PluginIngest
 
         // References are read off the document, never a live object: the document is the model, and
         // what Referenced-By answers is what the source file holds.
-        var refs = Rows(
-            _containers.OwnReferences(document.RecordType, FormReferences.Collect(root, schema)),
-            document.FormKey, editorId, document.RecordType);
+        var refs = Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
         var childRows = new List<ContainerChildRow>();
         var containerType = _containers.ContainerTypeOf(document.RecordType);
@@ -355,11 +353,13 @@ internal sealed class PluginIngest
         }
     }
 
-    // The rows the shared kernel's answer becomes once the record naming the links is known. Shared
-    // by ingest and the per-record working-tree rederivation.
+    // The rows a record's own links become: a child it carries inline holds its own. Shared by
+    // ingest and the per-record working-tree rederivation.
     internal static List<FormReferenceRow> Rows(
-        List<FormReference> references, string sourceFormKey, string? sourceEditorId, string recordType) =>
-        [.. references.Select(r => new FormReferenceRow(sourceFormKey, r.TargetFormKey, r.FieldPath, recordType, sourceEditorId))];
+        ContainerDocuments containers, JsonElement root, RecordTableSchema schema,
+        string sourceFormKey, string? sourceEditorId, string recordType) =>
+        [.. containers.OwnReferences(recordType, FormReferences.Collect(root, schema))
+            .Select(r => new FormReferenceRow(sourceFormKey, r.TargetFormKey, r.FieldPath, recordType, sourceEditorId))];
 
     // Shared by ingest and the per-record working-tree rederivation so the two paths cannot append
     // different column orders into the same table.

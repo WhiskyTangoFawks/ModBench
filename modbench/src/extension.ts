@@ -171,6 +171,10 @@ export function activate(context: vscode.ExtensionContext) {
     referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
     gridCopyValueText: gridCopyValueText(() => focusedCells.current()),
   });
+  const recordViews = [
+    { id: REFERENCED_BY_VIEW, view: referencedByTreeView },
+    ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
+  ];
   context.subscriptions.push(
     toolbox,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
@@ -192,11 +196,8 @@ export function activate(context: vscode.ExtensionContext) {
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
       focusedViewSelection: lastSelectedViewSelection(
-        (disposable) => { context.subscriptions.push(disposable); return disposable; },
-        [
-          { id: 'modbench.referencedByTree', view: referencedByTreeView },
-          ...(session.pluginsTreeView ? [{ id: 'modbench.pluginListTree', view: session.pluginsTreeView }] : []),
-        ]),
+        (disposable) => { context.subscriptions.push(disposable); return disposable; }, recordViews, 'modbench.record.selectionIn'),
+      viewSelections: new Map(recordViews.map(({ id, view }) => [id, () => view.selection])),
       refreshSourceControlFor: (plugin, origin) => refreshSourceControlFor(session.pluginRepositories, plugin, origin, outputChannel),
       fieldFile: (field) => extendedFieldFile(EXTENDED_FIELD_TEMP_ROOT, field),
     }),

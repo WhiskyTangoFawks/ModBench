@@ -51,6 +51,7 @@ function register(
     meditClient,
     refreshPanels: override.refreshPanels ?? (() => undefined),
     focusedViewSelection,
+    viewSelections: new Map(),
     refreshSourceControlFor: () => undefined,
     outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     reporterFor: () => reporter,

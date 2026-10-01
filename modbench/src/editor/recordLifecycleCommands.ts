@@ -78,7 +78,7 @@ type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 /** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
-  // A key or the palette hands no row, so delete takes the selection of the view last selected in.
+  // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   return [
@@ -97,6 +97,18 @@ export function registerRecordLifecycleCommands(
         { landed: answer.landed, refused }, label);
     }),
   ];
+}
+
+/** A key cannot name its view, so `<view id>.deleteHere` fires delete with that view's own
+ *  selection, whichever view was selected in last. */
+export function registerDeleteHereCommands(
+  selections: ReadonlyMap<string, () => readonly unknown[]>,
+): vscode.Disposable[] {
+  return [...selections].map(([viewId, selection]) =>
+    vscode.commands.registerCommand(`${viewId}.deleteHere`, () => {
+      const rows = selection();
+      return rows.length > 0 ? vscode.commands.executeCommand('modbench.record.delete', rows[0], rows) : undefined;
+    }));
 }
 
 type RecordCopyClient = Pick<MEditClient, 'copyRecords' | 'getPlugins' | 'getRecordHolders'>;
@@ -185,7 +197,7 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
  *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so copy takes the selection of the view last selected in.
+  // The palette hands no row, so it takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   return [

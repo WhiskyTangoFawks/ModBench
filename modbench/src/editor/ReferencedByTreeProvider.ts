@@ -1,19 +1,23 @@
 import * as vscode from 'vscode';
-import type { MEditClient, ReferenceResult } from '../client';
+import type { MEditClient, PluginAddress, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 
 /** One plugin's copy of a referrer, with the fields that hold the reference. */
 export class ReferencedByHolderNode extends vscode.TreeItem {
+  readonly plugin: string;
+  readonly origin: string;
+
   constructor(
     target: string,
     readonly formKey: string,
     readonly editorId: string | undefined,
-    readonly plugin: string,
-    readonly origin: string,
+    address: PluginAddress,
     fieldPaths: readonly string[],
   ) {
-    super(plugin, vscode.TreeItemCollapsibleState.None);
-    this.id = JSON.stringify([target, formKey, origin, plugin]);
+    super(address.name, vscode.TreeItemCollapsibleState.None);
+    this.plugin = address.name;
+    this.origin = address.origin;
+    this.id = JSON.stringify([target, formKey, address.origin, address.name]);
     this.description = fieldPaths.join(', ');
     this.contextValue = 'referencedByHolder';
   }
@@ -122,7 +126,7 @@ function referrerNode(target: string, copies: readonly ReferenceResult[]): Refer
   const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
     const [held] = fields;
     return held
-      ? [new ReferencedByHolderNode(target, first.formKey, editorId, held.plugin, held.origin, fields.map(r => r.fieldPath))]
+      ? [new ReferencedByHolderNode(target, first.formKey, editorId, { name: held.plugin, origin: held.origin }, fields.map(r => r.fieldPath))]
       : [];
   });
   return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);

@@ -759,7 +759,7 @@ describe('package.json Plugins menus, keys and palette follow plugins.md', () =>
     expect(pluginsKeys).toEqual([
       { command: 'modbench.plugin.enable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == enable`, args: undefined },
       { command: 'modbench.plugin.disable', key: 'space', mac: undefined, when: `${ON_THE_TREE} && modbench.plugin.selectionToggle == disable`, args: undefined },
-      { command: 'modbench.record.delete', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
+      { command: 'modbench.pluginListTree.deleteHere', key: 'Delete', mac: 'cmd+backspace', when: `${ON_THE_TREE} && modbench.plugin.allDeletableRecords`, args: undefined },
       { command: 'modbench.copyValue', key: 'ctrl+c', mac: 'cmd+c', when: ON_THE_TREE, args: PLUGINS_KEY_ARGS },
     ]);
   });
@@ -1019,7 +1019,12 @@ describe('package.json Plugins palette entries', () => {
   it.each(PLUGINS_PALETTE)('%s is in the palette only while the Plugins view has focus and its selection holds: %s', (command, holds) => {
     const entries = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']")
       .filter((e) => e.command === command);
-    expect(entries.map((e) => e.when)).toEqual([`focusedView == modbench.pluginListTree && ${IN_AN_INSTANCE} && ${holds}`]);
+    // Record gestures take the selection of the view last selected in, so the entry waits for it to be this one.
+    const lastSelected = command.startsWith('modbench.record.') && command !== 'modbench.record.create'
+      ? ' && modbench.record.selectionIn == modbench.pluginListTree' : '';
+    expect(entries.map((e) => e.when)).toEqual([
+      `focusedView == modbench.pluginListTree${lastSelected} && ${IN_AN_INSTANCE} && ${holds}`,
+    ]);
   });
 });
 
@@ -1326,7 +1331,8 @@ const catalog = catalogCommandIds(commandsMarkdown);
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
-const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, OPEN_TO_THE_SIDE];
+const DELETE_ENTRY_POINTS = ['modbench.pluginListTree', 'modbench.referencedByTree'].map((view) => `${view}.deleteHere`);
+const ENTRY_POINTS = [...FILTER_ENTRY_POINTS, ...DELETE_ENTRY_POINTS, OPEN_TO_THE_SIDE];
 
 describe('package.json registers every command under its catalog Command ID', () => {
   const registered = pkg.contributes.commands.map((c) => c.command);
@@ -1375,25 +1381,23 @@ describe('package.json palette titles are the verb and the object', () => {
 
 // editor-referenced-by.md, Menus and keys: the row menus follow open, change, copy, then destroy.
 describe('package.json Referenced By menus and keys', () => {
-  const REFERENCED_BY = 'view == modbench.referencedByTree';
   const menuOf = (viewItem: string) =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
-      .filter((e) => e.when.startsWith(`${REFERENCED_BY} && viewItem == ${viewItem}`))
+      .filter((e) => e.when.startsWith(`view == modbench.referencedByTree && viewItem == ${viewItem}`))
       .map((e) => [e.command, e.group]);
 
-  it('offers a referrer open to the side, then copy value', () => {
-    expect(menuOf('referencedByReferrer')).toEqual([[OPEN_TO_THE_SIDE, '1_open@1'], ['modbench.copyValue', '5_copy@1']]);
-  });
-
-  it('offers a plugin copy beneath a referrer copy, then delete', () => {
-    expect(menuOf('referencedByHolder')).toEqual([['modbench.record.copy', '5_copy@1'], ['modbench.record.delete', '6_destroy@1']]);
+  it('offers a referrer open to the side then copy value, and a plugin copy copy… then delete', () => {
+    expect([menuOf('referencedByReferrer'), menuOf('referencedByHolder')]).toEqual([
+      [[OPEN_TO_THE_SIDE, '1_open@1'], ['modbench.copyValue', '5_copy@1']],
+      [['modbench.record.copy', '5_copy@1'], ['modbench.record.delete', '6_destroy@1']],
+    ]);
   });
 
   it('binds Delete in the view only while every selected row is a plugin copy', () => {
-    const keys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.record.delete' && k.when.includes('referencedByTree'));
+    const keys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.referencedByTree.deleteHere');
     expect(keys.map(({ key, mac, when }) => ({ key, mac, when }))).toEqual([{
       key: 'Delete', mac: 'cmd+backspace',
-      when: 'focusedView == modbench.referencedByTree && listFocus && !inputFocus && modbench.folder == instance && modbench.referencedBy.allHolders',
+      when: `focusedView == modbench.referencedByTree && listFocus && !inputFocus && ${IN_AN_INSTANCE} && modbench.referencedBy.allHolders`,
     }]);
   });
 });

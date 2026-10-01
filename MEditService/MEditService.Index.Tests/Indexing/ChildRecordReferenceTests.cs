@@ -8,16 +8,24 @@ namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>editor-referenced-by.md, The tree, story 5: a child record's references are its own,
 /// whichever record carries it inline.</summary>
-public class ChildRecordReferenceTests
+public sealed class ChildRecordReferenceTests : IDisposable
 {
-    [Fact]
-    public void AQuestAndTheTopicInsideItEachListWhatTheyReference()
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _plugin;
+    private readonly string _quest;
+    private readonly string _topic;
+    private readonly string _global;
+    private readonly string _keyword;
+
+    public ChildRecordReferenceTests()
     {
         FormKey quest = default, topic = default, global = default, keyword = default;
-        using var fixture = new PluginFixtureBuilder("child-refs")
+        _fixture = new PluginFixtureBuilder("child-refs")
             .WithPlugin("ChildRefs.esp", mod =>
             {
-                global = mod.Globals.AddNewFloat("Counter").FormKey;
+                var counter = mod.Globals.AddNewFloat("Counter");
+                counter.Data = 1f;
+                global = counter.FormKey;
                 keyword = mod.Keywords.AddNew("TopicKeyword").FormKey;
                 var q = mod.Quests.AddNew("Owner");
                 q.TextDisplayGlobals.Add(new FormLink<IGlobalGetter>(global));
@@ -26,12 +34,39 @@ public class ChildRecordReferenceTests
                 q.DialogTopics.Add(t);
                 quest = q.FormKey;
                 topic = t.FormKey;
-            })
-            .Build();
-        using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
+            }, origin: "ChildMod")
+            .BuildScattered()
+            .Tracked();
+        _plugin = _fixture.Plugins.Single();
+        (_quest, _topic, _global, _keyword) = (quest.ToString(), topic.ToString(), global.ToString(), keyword.ToString());
+    }
 
-        Assert.Equal(quest.ToString(), Assert.Single(reads.GetReferencedBy(global.ToString())).FormKey);
-        Assert.Equal(topic.ToString(), Assert.Single(reads.GetReferencedBy(keyword.ToString())).FormKey);
+    public void Dispose() => _fixture.Dispose();
+
+    private void AssertEachListsOnlyItsOwn(IRecordReads reads)
+    {
+        Assert.Equal(_quest, Assert.Single(reads.GetReferencedBy(_global)).FormKey);
+        Assert.Equal(_topic, Assert.Single(reads.GetReferencedBy(_keyword)).FormKey);
+    }
+
+    [Fact]
+    public void AQuestAndTheTopicInsideItEachListWhatTheyReference()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+
+        AssertEachListsOnlyItsOwn(index.RequireReads());
+    }
+
+    [Fact]
+    public void AnEditedQuestStillListsOnlyWhatItReferences()
+    {
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var committed = reads.DocumentOf(_quest, _plugin.KeyOf());
+
+        index.Edit(_plugin, committed, committed.BodyOf().Replace("Owner", "OwnerEdited", StringComparison.Ordinal));
+
+        Assert.Equal("OwnerEdited", reads.DocumentOf(_quest, _plugin.KeyOf()).EditorId);
+        AssertEachListsOnlyItsOwn(reads);
     }
 }

@@ -6,10 +6,11 @@ type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: bool
 // Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
 // The three message APIs are absent, so a reintroduced direct call throws.
-const { handlers, registerCommand, showQuickPick } = vi.hoisted(() => {
+const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
     handlers,
+    executeCommand: vi.fn((command: string, ...args: unknown[]) => handlers.get(command)?.(...args)),
     registerCommand: vi.fn((command: string, handler: (...args: unknown[]) => Promise<void> | void) => {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
@@ -19,11 +20,11 @@ const { handlers, registerCommand, showQuickPick } = vi.hoisted(() => {
 });
 
 vi.mock('vscode', () => ({
-  commands: { registerCommand },
+  commands: { registerCommand, executeCommand },
   window: { showQuickPick },
 }));
 
-import { registerRecordLifecycleCommands, registerRecordCopyCommands, recordArgument } from '../recordLifecycleCommands';
+import { registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands, recordArgument } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../client';
 import { pluginMetadataFixture } from '../../client/test/fixtures';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
@@ -88,6 +89,54 @@ describe('registerRecordLifecycleCommands', () => {
       expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
         [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
       ]);
+    });
+  });
+
+  // A key cannot name its view: Delete in a view deletes that view's own selection, whichever view
+  // was selected in last.
+  describe('a view\'s Delete key', () => {
+    const PLUGINS_ROW = { kind: 'record', origin: 'ModA', record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null } };
+    const HOLDER_ROW = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB', editorId: 'Held' };
+
+    it('deletes the selection of the view it is bound in, not the view last selected in', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      viewSelection = [HOLDER_ROW];
+      invoke(client, 'Delete');
+      registerDeleteHereCommands(new Map([
+        ['modbench.pluginListTree', () => [PLUGINS_ROW]],
+        ['modbench.referencedByTree', () => [HOLDER_ROW]],
+      ]));
+
+      await present(handlers.get('modbench.pluginListTree.deleteHere'), 'the Plugins delete key command')();
+
+      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
+        [{ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' }],
+      ]);
+    });
+
+    it('deletes a plugin copy in Referenced By as (plugin, origin) of that copy', async () => {
+      const client = new InMemoryMEditClient();
+      client.setCommandResult('deleteRecords', { landed: [], refused: [] });
+      invoke(client, 'Delete');
+      registerDeleteHereCommands(new Map([['modbench.referencedByTree', () => [HOLDER_ROW]]]));
+
+      await present(handlers.get('modbench.referencedByTree.deleteHere'), 'the Referenced By delete key command')();
+
+      expect(client.calls.filter(c => c.method === 'deleteRecords').map(c => c.args[0])).toEqual([
+        [{ formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB' }],
+      ]);
+    });
+
+    it('does nothing with nothing selected, rather than fall back to another view', async () => {
+      const client = new InMemoryMEditClient();
+      viewSelection = [HOLDER_ROW];
+      invoke(client, 'Delete');
+      registerDeleteHereCommands(new Map([['modbench.pluginListTree', () => []]]));
+
+      await present(handlers.get('modbench.pluginListTree.deleteHere'), 'the Plugins delete key command')();
+
+      expect(client.calls.filter(c => c.method === 'deleteRecords')).toEqual([]);
     });
   });
 

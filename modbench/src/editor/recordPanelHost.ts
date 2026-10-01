@@ -10,7 +10,7 @@ import type { RecordWriteDeps } from './applyRecordEdit';
 import type { ExtendedFieldEditorDeps } from './extendedFieldEditor';
 import { RecordDecorationProvider, type RecordBadgeSource } from './RecordDecorationProvider';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
-import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
+import { registerRecordLifecycleCommands, registerRecordCopyCommands, registerDeleteHereCommands } from './recordLifecycleCommands';
 import { trackLoadOrderStatus } from './loadOrderStatusTracker';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
@@ -40,8 +40,10 @@ export interface EditorCommandDeps {
   // Every open panel re-reads the way a completed reconcile makes it (the plugins mEdit cannot
   // read changed).
   refreshPanels: () => void;
-  // The rows selected in the view the user last selected in, which a key or the palette acts on.
+  // The rows selected in the view the user last selected in, which a palette entry acts on.
   focusedViewSelection: () => readonly unknown[];
+  // Each view's own selection, which that view's keys act on.
+  viewSelections: ReadonlyMap<string, () => readonly unknown[]>;
   // The plugin's Source Control status, which a committed field edit redrives, lives on the session
   // object, narrowed to a callback like focusedViewSelection.
   refreshSourceControlFor: (plugin: string, origin: string) => void;
@@ -177,6 +179,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       meditClient, deps.reporterFor('recordLifecycle'), deps.ask, deps.focusedViewSelection),
     ...registerRecordCopyCommands(
       meditClient, deps.reporterFor('recordCopy'), deps.ask, deps.focusedViewSelection),
+    ...registerDeleteHereCommands(deps.viewSelections),
     vscode.commands.registerCommand('modbench.record.open', async (argument?: unknown) => {
       const plan = recordOpenPlan(argument, deps.focusedViewSelection());
       if (plan.addresses.length > 0) return openRecordTabs(plan);
