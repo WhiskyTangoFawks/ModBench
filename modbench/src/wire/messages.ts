@@ -30,7 +30,7 @@ export const WEBVIEW_TO_EXTENSION = {
   // to become a native notification (ADR-0019).
   EDIT_FIELD: 'editField',
   // A drop on an array, an entry point to the add its right-click menu fires, with the dropped value.
-  ELEMENT_COMMAND: 'elementCommand',
+  ADD_ELEMENT: 'addElement',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
@@ -44,8 +44,6 @@ export const WEBVIEW_TO_EXTENSION = {
 
 export type LogLevel = 'debug' | 'info' | 'warn';
 
-export const ELEMENT_COMMANDS = ['addElement'] as const;
-export type ElementCommand = typeof ELEMENT_COMMANDS[number];
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
@@ -58,7 +56,7 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND; command: ElementCommand; context: Record<string, unknown>; value?: unknown }
+  | { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT; context: Record<string, unknown>; value?: unknown }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
@@ -133,6 +131,14 @@ export interface EditableCellContext {
   origin: string;
   path: PathHop[];
   holdsValue: boolean;
+}
+
+/** Whether a `data-vscode-context` names `section` among its space-separated sections, as a menu's
+ *  `=~` reads them. */
+export function hasSection(context: unknown, section: string): boolean {
+  if (typeof context !== 'object' || context === null) return false;
+  const sections: unknown = Reflect.get(context, 'webviewSection');
+  return typeof sections === 'string' && sections.split(' ').includes(section);
 }
 
 // A reference that resolves, or resolves to the wrong type, which go to record follows. The target
@@ -215,7 +221,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
 
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
-  plugin?: unknown; origin?: unknown; envelope?: unknown; command?: unknown;
+  plugin?: unknown; origin?: unknown; envelope?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
 
@@ -235,14 +241,9 @@ function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
   return { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
 }
 
-function isElementCommand(value: unknown): value is ElementCommand {
-  return ELEMENT_COMMANDS.some(command => command === value);
-}
-
-function parseElementCommand(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isElementCommand(w.command)) throw new Error('Expected "elementCommand" to name an element command.');
-  if (!isContextObject(w.context)) throw new Error('Expected "elementCommand" to carry a context object.');
-  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context, value: w.value };
+function parseAddElement(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isContextObject(w.context)) throw new Error('Expected "addElement" to carry a context object.');
+  return { type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context: w.context, value: w.value };
 }
 
 function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -282,7 +283,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
   switch (w.type) {
     case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
-    case WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND: return parseElementCommand(w);
+    case WEBVIEW_TO_EXTENSION.ADD_ELEMENT: return parseAddElement(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
+import { hasSection, isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
@@ -26,10 +26,7 @@ interface ContextCommand {
 function hasWebviewSection<Ctx extends { webviewSection: string }>(
   value: unknown, webviewSection: Ctx['webviewSection'],
 ): value is Ctx {
-  if (typeof value !== 'object' || value === null) return false;
-  // One cell can carry several sections, space-separated, as its menu's `=~` reads them.
-  const sections: unknown = Reflect.get(value, 'webviewSection');
-  return typeof sections === 'string' && sections.split(' ').includes(webviewSection);
+  return hasSection(value, webviewSection);
 }
 
 function isArrayParentContext(value: unknown): value is ArrayParentContext {

@@ -344,7 +344,7 @@ describe('RecordPanel — array editing', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a focused array-element cell names its own index, which Delete removes', async () => {
+  it('a focused array-element cell tells the host its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[1]'));
@@ -355,7 +355,7 @@ describe('RecordPanel — array editing', () => {
     expect(lastEnvelope()).toBeUndefined();
   });
 
-  it('a focused element can move down, as Alt+Down does', async () => {
+  it('a focused element tells the host it can move down', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
@@ -365,7 +365,7 @@ describe('RecordPanel — array editing', () => {
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(0)], canMoveDown: true }));
   });
 
-  it('a focused element can move up, as Alt+Up does', async () => {
+  it('a focused element tells the host it can move up', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[2]'));
@@ -376,7 +376,7 @@ describe('RecordPanel — array editing', () => {
   });
 
   // As VS Code moves a line: at the end of the array nothing happens.
-  it('the first element cannot move up, so Alt+Up does nothing', async () => {
+  it('the first element tells the host it cannot move up', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
@@ -386,7 +386,7 @@ describe('RecordPanel — array editing', () => {
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ canMoveUp: false }));
   });
 
-  it('the last element cannot move down, so Alt+Down does nothing', async () => {
+  it('the last element tells the host it cannot move down', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[2]'));
@@ -509,7 +509,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     });
   });
 
-  it('an element nested inside a struct names every hop, which Delete removes', async () => {
+  it('an element nested inside a struct tells the host every hop', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -642,7 +642,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     });
   });
 
-  it('a keyed element names its index, which Delete removes', async () => {
+  it('a keyed element tells the host its index', async () => {
     await renderGuardAfterAmbush();
     const cell = myCell(rowLabelled('Ambush'));
     fireEvent.click(cell);
@@ -650,7 +650,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Scripts'), at(1)] }));
   });
 
-  it('a keyed element\'s menu and Alt+Up and Alt+Down offer neither move', async () => {
+  it('a keyed element\'s context offers neither move', async () => {
     await renderGuardAfterAmbush();
 
     for (const label of ['Ambush', 'Guard']) {
@@ -659,7 +659,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     }
   });
 
-  it('the second of two elements sharing a key names its own index, which Delete removes', async () => {
+  it('the second of two elements sharing a key tells the host its own index', async () => {
     const second = { name: 'Guard', flags: 'h' };
     renderScripts([], [guard, second], [
       scriptRow('Guard', { 'MyMod.esp': guard }, { 'MyMod.esp': 0 }),
@@ -734,7 +734,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     }));
   });
 
-  it('an element names its own index, which Delete removes', async () => {
+  it('an element tells the host its own index in this column', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
@@ -743,7 +743,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)] }));
   });
 
-  it('an element moves up from its own index, as Alt+Up does', async () => {
+  it('an element tells the host it moves up from its own index', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
@@ -752,7 +752,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Packages'), at(1)], canMoveUp: true }));
   });
 
-  it('the column\'s own last element cannot move down, so Alt+Down does nothing', async () => {
+  it('the column\'s own last element tells the host it cannot move down', async () => {
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('[2]'));
     const cell = myCell('[2]');
@@ -809,14 +809,14 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('an element after a null slot names its own index, which Delete removes', async () => {
+  it('an element after a null slot tells the host its own index', async () => {
     await waitFor(() => screen.getByText('[2]'));
     fireEvent.click(myCell());
 
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Items'), at(2)] }));
   });
 
-  it('an element after a null slot moves up from its own index, as Alt+Up does', async () => {
+  it('an element after a null slot tells the host it moves up from its own index', async () => {
     await waitFor(() => screen.getByText('[2]'));
     fireEvent.click(myCell());
 

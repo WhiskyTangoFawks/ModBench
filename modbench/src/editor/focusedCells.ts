@@ -65,8 +65,8 @@ export function focusedCellKeys(cell: FocusedCellContext | undefined): Record<st
 /** What a copy value key or the palette names as the record grid, as `focusedView` names a list. */
 export const GRID_VIEW = 'modbench.recordGrid';
 
-/** The grid's text for the catalog's copy value: the cell the webview's Ctrl+C names, or, from the
- *  palette with the grid focused, the focused cell of the record tab in focus. */
+/** The grid's text for the catalog's copy value: the cell a right-click names, or, from Ctrl+C or
+ *  the palette with the grid focused, the focused cell of the record tab in focus. */
 export function gridCopyValueText(
   focusedCell: () => FocusedCellContext | undefined,
 ): (invocation: unknown) => string | undefined {

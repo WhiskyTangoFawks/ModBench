@@ -8,7 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastElementCommand, lastPostedEnvelope, member,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastAddElement, lastPostedEnvelope, member,
   panelClient, required,
 } from './test/fixtures';
 
@@ -151,8 +151,8 @@ describe('RecordPanel — drag and drop', () => {
   it('an element dropped on its array row in another column is added to that array', async () => {
     drag(await cellOf('[1]', MASTER), await cellOf('Values', MOD));
 
-    expect(lastElementCommand(vscode.postMessage)).toMatchObject({
-      command: 'addElement', value: 6, context: { webviewSection: 'arrayParent', plugin: 'MyMod.esp' },
+    expect(lastAddElement(vscode.postMessage)).toMatchObject({
+      value: 6, context: { webviewSection: 'arrayParent', plugin: 'MyMod.esp' },
     });
   });
 
@@ -167,13 +167,13 @@ describe('RecordPanel — drag and drop', () => {
   it('an element dropped on another array row changes nothing', async () => {
     drag(await cellOf('[1]', MASTER), await cellOf('Others', MOD));
 
-    expect(lastElementCommand(vscode.postMessage)).toBeUndefined();
+    expect(lastAddElement(vscode.postMessage)).toBeUndefined();
   });
 
   it('an element dropped on an array row in a column that cannot be edited adds nothing', async () => {
     drag(await cellOf('[0]', MOD), await cellOf('Values', MASTER));
 
-    expect(lastElementCommand(vscode.postMessage)).toBeUndefined();
+    expect(lastAddElement(vscode.postMessage)).toBeUndefined();
   });
 
   it('a cell the plugin does not hold is not draggable', async () => {

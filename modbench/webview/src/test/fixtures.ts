@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
-import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from '../messages';
+import { act } from '@testing-library/react';
+import { WEBVIEW_TO_EXTENSION, hasSection, type ExtensionToWebview, type WebviewToExtension } from '../messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
 import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';
@@ -98,16 +99,21 @@ export function lastToldCell(postMessage: (msg: WebviewToExtension) => void): Re
  *  act on. */
 export function lastToldElement(postMessage: (msg: WebviewToExtension) => void): Record<string, unknown> | undefined {
   const cell = lastToldCell(postMessage);
-  return String(cell?.webviewSection).split(' ').includes('arrayElement') ? cell : undefined;
+  return hasSection(cell, 'arrayElement') ? cell : undefined;
 }
 
 /** A drop on an array posts the add element it fires and the array it names. */
-export function lastElementCommand(postMessage: (msg: WebviewToExtension) => void) {
+export function lastAddElement(postMessage: (msg: WebviewToExtension) => void) {
   return vi.mocked(postMessage).mock.calls
     .map(([m]) => m)
-    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND }> =>
-      m.type === WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND)
+    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.ADD_ELEMENT }> =>
+      m.type === WEBVIEW_TO_EXTENSION.ADD_ELEMENT)
     .at(-1);
+}
+
+/** The host posting `message` to the panel. */
+export function tellPanel(message: ExtensionToWebview): void {
+  act(() => { window.dispatchEvent(new MessageEvent('message', { data: message })); });
 }
 
 export const lastPostedEnvelope = (

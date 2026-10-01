@@ -15,7 +15,7 @@ import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
-import { editField, elementCommand, focusCell, focusedCellContext, logWarning } from './nativeBridge';
+import { addElement, editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
@@ -357,7 +357,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           if (hops) handleCellCommit(plugin, hops, value);
         }}
         writeAt={writeAt}
-        onElementCommand={elementCommand}
+        onAddElement={addElement}
         collapsedColumns={collapsedColumns}
         recordLabel={title}
         context={{ path, rootField, depth }}

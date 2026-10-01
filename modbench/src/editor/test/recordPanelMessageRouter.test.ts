@@ -122,7 +122,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   });
 });
 
-describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
+describe('routeRecordPanelMessage — ADD_ELEMENT', () => {
   const context = {
     webviewSection: 'arrayElement', formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
     path: [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }],
@@ -133,18 +133,11 @@ describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
 
   it('hands addElement the value a drop supplies as its Option', async () => {
     await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: 'addElement', context, value: { Keyword: '000800:Mod.esp' } },
+      { type: WEBVIEW_TO_EXTENSION.ADD_ELEMENT, context, value: { Keyword: '000800:Mod.esp' } },
       makeDeps());
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.addElement', context, { Keyword: '000800:Mod.esp' });
   });
-
-  it.each(['openFieldValue', 'removeElement', 'moveElementUp', 'moveElementDown'])(
-    'names no %s, which no drop fires', async command => {
-      await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context }, makeDeps());
-
-      expect(executeCommand).not.toHaveBeenCalled();
-    });
 });
 
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {

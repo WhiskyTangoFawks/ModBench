@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, type EditableCellContext, type ExtensionToWebview } from '../wire/messages';
+import { EXTENSION_TO_WEBVIEW, hasSection, type EditableCellContext, type ExtensionToWebview } from '../wire/messages';
 import { GRID_VIEW, type FocusedCellContext } from './focusedCells';
 
 export interface GridKeyCommandDeps {
@@ -7,13 +7,8 @@ export interface GridKeyCommandDeps {
   tellFocusedPanel: (message: ExtensionToWebview) => void;
 }
 
-const sectionsOf = (cell: FocusedCellContext | undefined): string[] => {
-  const sections: unknown = cell === undefined ? undefined : Reflect.get(cell, 'webviewSection');
-  return typeof sections === 'string' ? sections.split(' ') : [];
-};
-
 function isEditableCell(cell: FocusedCellContext | undefined): cell is EditableCellContext {
-  return cell !== undefined && sectionsOf(cell).includes('editableCell')
+  return cell !== undefined && hasSection(cell, 'editableCell')
     && ['formKey', 'plugin', 'origin'].every(name => typeof Reflect.get(cell, name) === 'string')
     && Array.isArray(Reflect.get(cell, 'path')) && typeof Reflect.get(cell, 'holdsValue') === 'boolean';
 }
@@ -28,11 +23,13 @@ function clearing(cell: FocusedCellContext | undefined): Firing | undefined {
 
 // editor.md, The focused cell, story 6: Delete removes an element, and clears any other field.
 function deletion(cell: FocusedCellContext | undefined): Firing | undefined {
-  return sectionsOf(cell).includes('arrayElement') ? ['modbench.record.removeElement', cell] : clearing(cell);
+  return hasSection(cell, 'arrayElement') ? ['modbench.record.removeElement', cell] : clearing(cell);
 }
 
-/** The grid's keys that VS Code cannot hand their catalog command the focused cell's Arguments:
- *  each is an internal command that fires it with them (commands.md, Entry points are not gestures). */
+/** The grid's keys that VS Code cannot hand the focused cell's Arguments (commands.md, Entry points
+ *  are not gestures). Clear and cut fire their catalog commands with them; F2 and paste hand the
+ *  focused cell of the panel in focus its editor or the clipboard's text, which it writes through
+ *  edit field. */
 export function registerGridKeyCommands(deps: GridKeyCommandDeps): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand(`${GRID_VIEW}.editHere`, () => {

@@ -18,7 +18,7 @@ import {
 } from './recordUtils';
 import type { ColumnKey, ConflictThis, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { LABEL_COLUMN } from './columnKey';
-import type { ArrayElementContext, ArrayParentContext, ElementCommand } from './messages';
+import type { ArrayParentContext } from './messages';
 import type { CellDrag } from './cellDrag';
 
 interface RenderCellExtras {
@@ -150,9 +150,7 @@ interface DiffRowProps {
   // Takes the leaf value alone — the row builder owns the path the envelope carries.
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   writeAt: WriteAt;
-  onElementCommand?: (
-    command: ElementCommand, context: ArrayElementContext | ArrayParentContext, value?: unknown,
-  ) => void;
+  onAddElement?: (context: ArrayParentContext, value: unknown) => void;
   // What each column's cell reads while this row is collapsed, when the presentation table has an
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
@@ -170,7 +168,7 @@ export function DiffRow({
   collapsedColumns,
   recordLabel, context, isExpanded, onToggle,
   rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
-  onElementCommand, collapsedSummary, ownerPresent, cellMetas,
+  onAddElement, collapsedSummary, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
@@ -261,7 +259,7 @@ export function DiffRow({
         // Under an element this column does not hold, there is nothing to write to.
         const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null && hops !== undefined;
         // Array ops are offered only on a writable cell.
-        const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
+        const arrayEditable = !!onAddElement && writable && (isArrayParentRow || isArrayElementRow);
         // A string cell's right-click `readOnly` is this boolean negated, so the menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
@@ -288,7 +286,7 @@ export function DiffRow({
               : undefined;
           }
           return parentContext && dragged.arrayRow === rowKey
-            ? () => onElementCommand?.('addElement', parentContext, dragged.value)
+            ? () => onAddElement?.(parentContext, dragged.value)
             : undefined;
         };
         const resolution = diff.resolutions?.[key];

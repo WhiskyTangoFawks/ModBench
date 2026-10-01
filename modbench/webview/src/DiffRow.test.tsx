@@ -557,7 +557,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
     });
@@ -576,7 +576,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: arrayDiff(),
       meta: intArrayMeta,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
       isExpanded: false,
     });
@@ -590,7 +590,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
@@ -606,7 +606,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       meta: intMetaLeaf,
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
-      onElementCommand: vi.fn(),
+      onAddElement: vi.fn(),
       context: { path, rootField: 'Container', depth: path.length },
     });
     const ctx = vscodeContextFor('5', 1);

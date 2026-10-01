@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
@@ -11,7 +11,8 @@ vi.mock('./nativeBridge', () => ({
 import { DiskCell } from './DiskCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
-import { fieldMeta, parseJsonRecord } from './test/fixtures';
+import { fieldMeta, parseJsonRecord, tellPanel } from './test/fixtures';
+import { EXTENSION_TO_WEBVIEW } from './messages';
 
 const renderCell = (props: Partial<React.ComponentProps<typeof DiskCell>> = {}, child: React.ReactNode = <span>cell</span>) =>
   render(
@@ -34,13 +35,11 @@ describe('DiskCell — the right-click menu', () => {
 });
 
 describe('DiskCell — the keys\' commands reach only the focused cell', () => {
-  const tell = (data: unknown) => { act(() => { window.dispatchEvent(new MessageEvent('message', { data })); }); };
-
   it('F2\'s in an open editor opens no other', () => {
     const open = vi.fn();
     renderCell({}, <><button data-open-trigger onClick={open}>open</button><input data-editor aria-label="editor" /></>);
     screen.getByLabelText('editor').focus();
-    tell({ type: 'openCellEditor' });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR });
     expect(open).not.toHaveBeenCalled();
   });
 
@@ -52,7 +51,7 @@ describe('DiskCell — the keys\' commands reach only the focused cell', () => {
         <DiskCell style={{}} isFocused onFocusCell={vi.fn()} paste={focused}>a</DiskCell>
         <DiskCell style={{}} isFocused={false} onFocusCell={vi.fn()} paste={other}>b</DiskCell>
       </tr></tbody></table>);
-    tell({ type: 'pasteIntoCell', text: 'from the clipboard' });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL, text: 'from the clipboard' });
     expect(focused).toHaveBeenCalledWith('from the clipboard');
     expect(other).not.toHaveBeenCalled();
   });
@@ -137,7 +136,7 @@ describe('DiskCell — one gesture opens one editor', () => {
 
   it('F2\'s command opens the same editor', () => {
     renderCell({}, scalar);
-    act(() => { window.dispatchEvent(new MessageEvent('message', { data: { type: 'openCellEditor' } })); });
+    tellPanel({ type: EXTENSION_TO_WEBVIEW.OPEN_CELL_EDITOR });
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
 });

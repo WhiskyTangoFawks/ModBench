@@ -1,15 +1,16 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, hasSection } from './messages';
 import {
-  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, member, panelClient, required,
+  compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, lastToldCell, member, panelClient,
+  required, tellPanel,
 } from './test/fixtures';
 
 const levelMeta = fieldMeta({ name: 'Level', type: 'int' });
@@ -61,9 +62,7 @@ const plugins = [
 
 const posted = () => vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m);
 
-const toldContext = (): Record<string, unknown> | null | undefined => posted()
-  .flatMap(m => (m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL ? [m.context] : []))
-  .at(-1);
+const toldContext = () => lastToldCell(vscode.postMessage);
 
 async function focusCell(rowLabel: string, column: number): Promise<HTMLElement> {
   await waitFor(() => screen.getByText(rowLabel));
@@ -73,9 +72,6 @@ async function focusCell(rowLabel: string, column: number): Promise<HTMLElement>
   return cell;
 }
 
-const tellPanel = (message: ExtensionToWebview) => {
-  act(() => { window.dispatchEvent(new MessageEvent('message', { data: message })); });
-};
 const pasteIntoCell = (text: string) => tellPanel({ type: EXTENSION_TO_WEBVIEW.PASTE_INTO_CELL, text });
 
 beforeEach(() => {
@@ -116,7 +112,7 @@ describe('RecordPanel — what the focused cell tells the host its keys act on',
     await waitFor(() => expect(toldContext()).toMatchObject({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', path: [member('Level')], holdsValue: true,
     }));
-    expect(String(toldContext()?.webviewSection).split(' ')).toContain('editableCell');
+    expect(hasSection(toldContext(), 'editableCell')).toBe(true);
   });
 
   it('a field the plugin does not hold is editable and holds no value', async () => {
@@ -127,7 +123,7 @@ describe('RecordPanel — what the focused cell tells the host its keys act on',
   it('a cell in a column that cannot be edited is not editable', async () => {
     await focusCell('Level', 1);
     await waitFor(() => expect(toldContext()).toMatchObject({ copyText: '5' }));
-    expect(String(toldContext()?.webviewSection).split(' ')).not.toContain('editableCell');
+    expect(hasSection(toldContext(), 'editableCell')).toBe(false);
   });
 
   it('says the editor is open from when it opens until Esc closes it', async () => {

@@ -551,7 +551,7 @@ describe('Add Script is the generic array gesture', () => {
     });
   });
 
-  it('a property under a keyed script names both index hops, which Delete removes', async () => {
+  it('a property under a keyed script tells the host both index hops', async () => {
     currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
