@@ -319,3 +319,26 @@ describe('FormKeyCell — checkError', () => {
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
   });
 });
+
+describe('FormKeyCell — one gesture opens one picker', () => {
+  afterEach(() => { pickFormKey.mockReset().mockResolvedValue(null); });
+
+  it('a double click, whose click and dblclick both land, opens a single picker', () => {
+    pickFormKey.mockReturnValue(new Promise(() => undefined));
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable isFocused onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+
+    fireEvent.click(link);
+    fireEvent.doubleClick(link);
+
+    expect(pickFormKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the picker again once the first has closed', async () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable isFocused onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+
+    fireEvent.click(link);
+    await vi.waitFor(() => { fireEvent.click(link); expect(pickFormKey).toHaveBeenCalledTimes(2); });
+  });
+});

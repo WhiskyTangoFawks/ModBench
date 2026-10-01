@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { displayValue, modelValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -43,6 +43,8 @@ export function ScalarCell({
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   const [active, setActive] = useState(false);
+  const settled = useRef(true);
+  function open() { settled.current = false; setActive(true); }
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(modelValue(value, meta));
@@ -62,8 +64,8 @@ export function ScalarCell({
     return (
       <span
         data-open-trigger
-        onClick={() => { if (isFocused) setActive(true); }}
-        onDoubleClick={() => setActive(true)}
+        onClick={() => { if (isFocused) open(); }}
+        onDoubleClick={open}
         style={{ display: 'block', minHeight: '1em' }}
       >
         <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />
@@ -80,6 +82,7 @@ export function ScalarCell({
     padding: '1px 4px',
     width: '100%',
     boxSizing: 'border-box',
+    userSelect: 'text',
   };
 
   // A commit writes a file, so every mis-click is a working-tree change. A value equal to the one
@@ -90,35 +93,6 @@ export function ScalarCell({
     if (modelValue(next, meta) !== modelValue(value, meta)) commit(next);
   }
 
-  if (meta.type === 'bool') {
-    return (
-      <input
-        type="checkbox"
-        aria-label={ariaLabel}
-        autoFocus
-        checked={draft === 'true'}
-        onChange={e => { setDraft(String(e.target.checked)); commitIfChanged(e.target.checked); }}
-        onBlur={() => setActive(false)}
-      />
-    );
-  }
-
-  if (meta.type === 'enum' && meta.enumMembers.length > 0) {
-    return (
-      <select
-        aria-label={ariaLabel}
-        autoFocus
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => { commitIfChanged(draft); setActive(false); }}
-        style={inputBase}
-      >
-        {meta.enumMembers.map(m =>
-          <option key={m.value} value={m.value}>{displayValue(m.value, meta)}</option>)}
-      </select>
-    );
-  }
-
   function coerce(): unknown {
     if (meta.type === 'int') { const n = parseInt(draft, 10); return isNaN(n) ? value : n; }
     if (meta.type === 'float') { const n = parseFloat(draft); return isNaN(n) ? value : n; }
@@ -127,10 +101,57 @@ export function ScalarCell({
     return draft;
   }
 
+  const isEnum = meta.type === 'enum' && meta.enumMembers.length > 0;
+  // A checkbox writes as it toggles, so closing it has nothing left to write.
+  const pending = meta.type === 'bool' ? value : isEnum ? draft : coerce();
+
+  // Enter, Esc and a blur each end the editor, and the focus Enter and Esc hand back blurs it again.
+  function settle(write: boolean) {
+    if (settled.current) return;
+    settled.current = true;
+    if (write) commitIfChanged(pending);
+    else setDraft(modelValue(value, meta));
+    setActive(false);
+  }
+
+  function onEditorKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    const cell = e.currentTarget.closest('td');
+    settle(e.key === 'Enter');
+    cell?.focus();
+  }
+
+  const editorProps = {
+    'data-editor': true,
+    'aria-label': ariaLabel,
+    autoFocus: true,
+    onKeyDown: onEditorKeyDown,
+    onBlur: () => settle(true),
+  };
+
+  if (meta.type === 'bool') {
+    return (
+      <input
+        {...editorProps}
+        type="checkbox"
+        checked={draft === 'true'}
+        onChange={e => { setDraft(String(e.target.checked)); commitIfChanged(e.target.checked); }}
+      />
+    );
+  }
+
+  if (isEnum) {
+    return (
+      <select {...editorProps} value={draft} onChange={e => setDraft(e.target.value)} style={inputBase}>
+        {meta.enumMembers.map(m =>
+          <option key={m.value} value={m.value}>{displayValue(m.value, meta)}</option>)}
+      </select>
+    );
+  }
+
   return (
     <input
-      aria-label={ariaLabel}
-      autoFocus
+      {...editorProps}
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
       onChange={e => setDraft(e.target.value)}
@@ -138,9 +159,6 @@ export function ScalarCell({
       // `100` appends rather than replaces. Selecting on focus makes paste replace, and gives
       // type-to-replace for free.
       onFocus={e => e.currentTarget.select()}
-      onBlur={() => { commitIfChanged(coerce()); setActive(false); }}
-      // Enter only leaves the cell; the blur above is the one commit path.
-      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
       style={inputBase}
     />
   );

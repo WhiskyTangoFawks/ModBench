@@ -64,7 +64,7 @@ interface RecordHeaderRowsProps {
   expanded: boolean;
   onToggle: () => void;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   onCommitFormId: (plugin: ColumnKey, formKey: string) => void;
 }
 
@@ -77,15 +77,18 @@ export function RecordHeaderRows({
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
     ({ ...baseCell, opacity: dimmedColumns.has(key) ? DIMMED_OPACITY : undefined });
   const rowStyle = (rowKey: string) => (focusedCell?.rowKey === rowKey ? focusedRowStyle : undefined);
-  const isFocused = (rowKey: string, key: ColumnKey) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
+  const isFocused = (rowKey: string, key: ColumnKey | null) => focusedCell?.rowKey === rowKey && focusedCell.plugin === key;
 
   return (
     <>
       <tr style={rowStyle(RECORD_HEADER_ROW)}>
-        <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text' }} onDoubleClick={onToggle}>
+        <DiskCell
+          style={{ ...baseCell, opacity: 0.75 }} isFocused={isFocused(RECORD_HEADER_ROW, null)}
+          onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
+        >
           <button style={toggleBtnStyle} onClick={onToggle}>{expanded ? '▼' : '▶'}</button>
           {RECORD_HEADER_ROW}
-        </td>
+        </DiskCell>
         {columns.map(({ key }) => collapsedColumns.has(key)
           ? <td key={key} style={cellStyle(key)} />
           : (
@@ -99,7 +102,10 @@ export function RecordHeaderRows({
       </tr>
       {expanded && (
         <tr style={rowStyle(FORM_ID_ROW)}>
-          <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: INDENT }}>FormID</td>
+          <DiskCell
+            style={{ ...baseCell, opacity: 0.75, paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
+            onFocusCell={() => onFocusCell(FORM_ID_ROW, null)}
+          >FormID</DiskCell>
           {columns.map(({ key, override }) => collapsedColumns.has(key)
             ? <td key={key} style={cellStyle(key)} />
             : (

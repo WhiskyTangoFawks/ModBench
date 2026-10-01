@@ -18,11 +18,12 @@ export interface ArrayOps {
 }
 
 export function DiskCell({
-  style, isFocused, onFocusCell, copyText, arrayOps, vscodeContext, children,
+  style, isFocused, onFocusCell, onDoubleClick, copyText, arrayOps, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
+  onDoubleClick?: () => void;
   // ADR-0018: what Ctrl+C on the focused cell copies; absent when the cell copies nothing. The
   // palette's copy value reads it off the cell too.
   copyText?: string;
@@ -51,7 +52,10 @@ export function DiskCell({
       data-focused-cell={isFocused || undefined}
       data-copy-text={copyText}
       onClick={onFocusCell}
+      onDoubleClick={onDoubleClick}
+      onFocus={e => { if (e.target === e.currentTarget && !isFocused) onFocusCell(); }}
       onKeyDown={e => {
+        if (e.target instanceof Element && e.target.closest('[data-editor]')) return;
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
           e.preventDefault();
           if (copyText !== undefined) copyValue(copyText);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { pickFormKey } from './nativeBridge';
 import { FormKeyLink, formKeyLabel } from './FormKeyLink';
 import { CheckErrorIcon } from './CheckErrorIcon';
@@ -28,14 +28,18 @@ interface FormKeyCellProps {
  *  webview cannot host a searchable record list as well as VS Code already does. */
 export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
   const fk = typeof value === 'string' && value ? value : null;
+  const picking = useRef(false);
 
   // Split out so both the gated plain-click path and the unconditional double-click path share it.
   function openPicker() {
+    if (picking.current) return;
+    picking.current = true;
     // Seeded with the composite this cell displays, not the bare FormKey — the picker's native
     // input is where a mutable cell's value is selected and copied. The picker normalizes a
     // composite back to its reference before searching.
     void pickFormKey(fk ? formKeyLabel(fk, resolution) : '', meta.validFormKeyTypes)
-      .then(picked => { if (picked) onCommit?.(picked); });
+      .then(picked => { if (picked) onCommit?.(picked); })
+      .finally(() => { picking.current = false; });
   }
 
   // A FormKey reads the same editable or not — a link, not a form control. Editability shows in

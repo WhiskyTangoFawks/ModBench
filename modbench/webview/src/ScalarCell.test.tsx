@@ -258,3 +258,81 @@ describe('ScalarCell — a translated string', () => {
     expect(onCommit).toHaveBeenCalledWith({ Value: 'Named' });
   });
 });
+
+describe('ScalarCell — Enter writes and Esc cancels', () => {
+  const enumMeta = () => meta({
+    type: 'enum',
+    enumMembers: [{ value: 'A', displayName: 'A' }, { value: 'B', displayName: 'B' }],
+  } as Partial<FieldMetadata>);
+
+  it('Esc closes the text editor and writes nothing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByText('before')).toBeTruthy();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Enter writes the text once and closes the editor', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith('after');
+  });
+
+  it('moving the focus away writes the text', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.blur(screen.getByRole('textbox'));
+
+    expect(onCommit).toHaveBeenCalledWith('after');
+  });
+
+  it('Enter in the enum dropdown writes the chosen member and closes it', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="A" meta={enumMeta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith('B');
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('Esc in the enum dropdown closes it and writes nothing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="A" meta={enumMeta()} editable isFocused onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Esc closes the checkbox editor', () => {
+    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable isFocused onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('false'));
+
+    fireEvent.keyDown(screen.getByRole('checkbox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+});

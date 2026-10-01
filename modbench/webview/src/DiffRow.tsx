@@ -109,13 +109,13 @@ export interface RowContext {
 
 // ADR-0018: identifies one cell panel-wide, so one cell is focused at a time. ADR-0012: `plugin`
 // is this column's compound identity, not the bare filename — two columns sharing a filename must
-// not both read as focused.
+// not both read as focused. `null` is the label column.
 export interface FocusedCell {
   rowKey: string;
-  plugin: ColumnKey;
+  plugin: ColumnKey | null;
 }
 
-function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey): boolean {
+function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey | null): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
 
@@ -147,7 +147,7 @@ interface DiffRowProps {
   // the one place that knows how a click turns into a FocusedCell.
   rowKey: string;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey | null) => void;
   // The columns whose cells can be written — mutable plugin, in the load order, tracked. Computed
   // once for the whole grid so one definition of "writable" reaches every row.
   editableColumns: Set<ColumnKey>;
@@ -212,8 +212,10 @@ export function DiffRow({
       {/* ADR-0018: double-clicking the label column expands/collapses the node, the same action
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
-      <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+      <DiskCell
+        style={{ ...baseCell, opacity: 0.75, paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
+        isFocused={isCellFocused(focusedCell, rowKey, null)}
+        onFocusCell={() => onFocusCell(rowKey, null)}
         onDoubleClick={onToggle}
       >
         {(hasChildren || isFlagsRow) && (
@@ -222,7 +224,7 @@ export function DiffRow({
         {/* The schema's own label when the field's name is a wire name rather than a readable
             one (a union's MutagenObjectType is "Kind"). */}
         {label}
-      </td>
+      </DiskCell>
       {columns.map(col => {
         const { key, override } = col;
         // ADR-0018: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`

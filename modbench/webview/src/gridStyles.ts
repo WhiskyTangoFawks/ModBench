@@ -16,6 +16,7 @@ export const baseCell: React.CSSProperties = {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
+  userSelect: 'none',
 };
 
 export const headerCell: React.CSSProperties = { ...baseCell, fontWeight: 600 };
