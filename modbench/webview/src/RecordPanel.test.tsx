@@ -380,7 +380,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     ).getAttribute('data-vscode-context') ?? '';
     expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: false, preventDefaultContextMenuItems: true,
+      editable: false, preventDefaultContextMenuItems: true,
     });
   });
 
@@ -391,7 +391,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['an untracked', { isTracked: false, isImmutable: false }, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it', async (_what, facts, compilable) => {
+  ])('the header of %s plugin says whether compile applies to it', async (_what, facts, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -410,7 +410,7 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     await waitFor(() => {
       const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-      expect(parseJsonRecord(headerContext).compilable).toBe(compilable);
+      expect(parseJsonRecord(headerContext).editable).toBe(editable);
     });
   });
 
@@ -436,7 +436,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     const headerContext = container.querySelector('th[data-vscode-context]')?.getAttribute('data-vscode-context') ?? '{}';
-    expect(parseJsonRecord(headerContext).compilable).toBe(false);
+    expect(parseJsonRecord(headerContext).editable).toBe(false);
   });
 });
 
@@ -745,16 +745,12 @@ describe('RecordPanel — postMessage wiring', () => {
     vi.mocked(vscode.postMessage).mockClear();
   });
 
-  it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
+  it('posts nothing when a FormKey link is Ctrl+clicked: go to record is the menu\'s', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    // Labelled with the "EditorID [FormKey]" composite, so the reference is identifiable from
-    // the cell alone rather than only by its EditorID.
     await waitFor(() => screen.getByText('HumanRace [00013918:Fallout4.esm]'));
+    vi.mocked(vscode.postMessage).mockClear();
     fireEvent.click(screen.getByText('HumanRace [00013918:Fallout4.esm]'), { ctrlKey: true });
-    expect(vscode.postMessage).toHaveBeenCalledWith({
-      type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
-      formKey: '00013918:Fallout4.esm',
-    });
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'openRecord' }));
   });
 
   it('re-loads with the new formKey when a loadRecord message arrives from the extension', async () => {

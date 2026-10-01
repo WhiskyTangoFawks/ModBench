@@ -19,7 +19,6 @@ export const EXTENSION_TO_WEBVIEW = {
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
-  OPEN_RECORD: 'openRecord',
   // The webview has no route to the 'Modbench' channel of its own — this is
   // the bridge. The webview composes the full message text; the host does a level→method forward.
   LOG: 'log',
@@ -49,7 +48,6 @@ export const ELEMENT_COMMANDS = ['addElement', 'removeElement', 'moveElementUp',
 export type ElementCommand = typeof ELEMENT_COMMANDS[number];
 
 export type WebviewToExtension =
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.COPY_VALUE; value: string }
   | {
@@ -99,8 +97,8 @@ export interface ColumnHeaderContext {
   formKey: string;
   plugin: string;
   origin: string;
-  // commands.md, compile: the column's plugin is tracked and editable.
-  compilable: boolean;
+  // commands.md, compile and delete: the column's plugin is tracked and editable.
+  editable: boolean;
   preventDefaultContextMenuItems: true;
 }
 
@@ -125,6 +123,13 @@ export type RecordEditEnvelope =
 export function moveEnvelope(path: PathHop[], delta: -1 | 1): RecordEditEnvelope | undefined {
   const element = path.at(-1);
   return element?.kind === 'index' ? { op: 'move', path, value: element.index + delta } : undefined;
+}
+
+// A reference that resolves, or resolves to the wrong type, which go to record follows. The target
+// is its own key because `formKey` already names the record the panel shows.
+export interface ReferenceContext {
+  webviewSection: 'reference';
+  referenceTarget: string;
 }
 
 // ADR-0018: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
@@ -202,11 +207,6 @@ type WebviewToExtensionWitness = {
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
 
-function parseOpenRecord(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.formKey)) throw new Error('Expected "openRecord" to carry a string formKey.');
-  return { type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: w.formKey };
-}
-
 function parseLog(w: WebviewToExtensionWitness): WebviewToExtension {
   if (!isLogLevel(w.level)) throw new Error('Expected "log" to carry a level of debug, info or warn.');
   if (!isString(w.message)) throw new Error('Expected "log" to carry a string message.');
@@ -273,7 +273,6 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
   }
   const w = value as WebviewToExtensionWitness;
   switch (w.type) {
-    case WEBVIEW_TO_EXTENSION.OPEN_RECORD: return parseOpenRecord(w);
     case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
     case WEBVIEW_TO_EXTENSION.COPY_VALUE: return parseCopyValue(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);

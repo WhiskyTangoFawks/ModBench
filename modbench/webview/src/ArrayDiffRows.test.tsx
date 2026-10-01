@@ -635,7 +635,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
     await renderGuardAfterAmbush();
 
     const context: unknown = JSON.parse(myCell(rowLabelled('Scripts')).getAttribute('data-vscode-context') ?? '{}');
-    expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [member('Scripts')] });
+    expect(context).toMatchObject({ webviewSection: 'cell arrayParent', path: [member('Scripts')] });
   });
 
   it('a value edit on a keyed element posts set at its index in the written column', async () => {
@@ -676,7 +676,7 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
 
     for (const label of ['Ambush', 'Guard']) {
       expect(JSON.parse(myCell(rowLabelled(label)).getAttribute('data-vscode-context') ?? '{}'))
-        .toMatchObject({ webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: false });
+        .toMatchObject({ webviewSection: 'cell arrayElement', canMoveUp: false, canMoveDown: false });
     }
   });
 
@@ -790,7 +790,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
     renderLinkArrayPanel();
     await waitFor(() => screen.getByText('Packages'));
     const context: unknown = JSON.parse(myCell('Packages').getAttribute('data-vscode-context') ?? '{}');
-    expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [member('Packages')] });
+    expect(context).toMatchObject({ webviewSection: 'cell arrayParent', path: [member('Packages')] });
   });
 });
 

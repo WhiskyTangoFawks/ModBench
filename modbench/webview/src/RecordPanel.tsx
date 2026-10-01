@@ -15,9 +15,8 @@ import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PathHop, PluginLoadFailure, RecordEditEnvelope,
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
-import { vscode } from './vscode';
 import { editField, elementCommand, focusCell, focusedCellContext, logWarning } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -175,10 +174,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     if (skipNextRefreshEffect.current) { skipNextRefreshEffect.current = false; return; }
     void refresh(formKey);
   }, [formKey, refresh]);
-
-  function handleOpen(fk: string) {
-    vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
-  }
 
   function toggleColumnCollapse(key: ColumnKey) {
     setCollapsedColumns(prev => {
@@ -341,7 +336,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         writeAt={writeAt}
         onElementCommand={elementCommand}
         collapsedColumns={collapsedColumns}
-        onOpen={handleOpen}
         recordLabel={title}
         context={{ path, rootField, depth }}
         rowKey={rowKey}

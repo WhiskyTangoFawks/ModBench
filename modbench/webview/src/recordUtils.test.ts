@@ -9,6 +9,8 @@ import {
   arrayParentContext,
   combineVscodeContexts,
   headerCellContext,
+  cellContext,
+  referenceContext,
   stringValueContext,
   metaAtPath,
   type PathHop,
@@ -220,7 +222,7 @@ describe('headerCellContext', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
     expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', true)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: true, preventDefaultContextMenuItems: true,
+      editable: true, preventDefaultContextMenuItems: true,
     });
   });
 
@@ -230,7 +232,7 @@ describe('headerCellContext', () => {
     if (!result) throw new Error('expected a combined context for the header cell context');
     expect(JSON.parse(result)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      compilable: false,
+      editable: false,
       preventDefaultContextMenuItems: true,
     });
   });
@@ -346,5 +348,28 @@ describe('metaAtPath', () => {
 
   it('returns undefined when the root meta itself is undefined', () => {
     expect(metaAtPath(undefined, [{ kind: 'member', name: 'X' }])).toBeUndefined();
+  });
+});
+
+describe('cellContext', () => {
+  it('names the cell and carries the text copy value copies', () => {
+    expect(cellContext('Dogmeat')).toEqual({ webviewSection: 'cell', copyText: 'Dogmeat', preventDefaultContextMenuItems: true });
+  });
+
+  it('carries no text for a cell that copies nothing', () => {
+    expect(cellContext(undefined)).toEqual({ webviewSection: 'cell', preventDefaultContextMenuItems: true });
+  });
+});
+
+describe('referenceContext', () => {
+  it('carries the record the reference points to under its own key, beside the record the panel shows', () => {
+    const merged = combineVscodeContexts(
+      arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 0 }], 2, false),
+      referenceContext('000019:Fallout4.esm'),
+    );
+    const parsed = parseJsonRecord(merged ?? '');
+    expect(parsed.formKey).toBe('000001:Fallout4.esm');
+    expect(parsed.referenceTarget).toBe('000019:Fallout4.esm');
+    expect(parsed.webviewSection).toBe('arrayElement reference');
   });
 });

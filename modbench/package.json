@@ -136,6 +136,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.record.openReference",
+        "title": "Open Record Reference",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.openToSide",
         "title": "Open to the Side",
         "category": "Modbench"
@@ -625,6 +630,10 @@
           "when": "false"
         },
         {
+          "command": "modbench.record.openReference",
+          "when": "false"
+        },
+        {
           "command": "modbench.pluginListTree.filterHere",
           "when": "false"
         },
@@ -1076,49 +1085,64 @@
       ],
       "webview/context": [
         {
-          "command": "modbench.record.addElement",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayParent\\b/",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.record.removeElement",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/",
-          "group": "modbench@2"
-        },
-        {
-          "command": "modbench.record.moveElementUp",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
-          "group": "modbench@3"
-        },
-        {
-          "command": "modbench.record.moveElementDown",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
-          "group": "modbench@4"
-        },
-        {
-          "command": "modbench.mod.track",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
-          "group": "modbench@9"
-        },
-        {
-          "command": "modbench.plugin.decompile",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
-          "group": "modbench@10"
-        },
-        {
-          "command": "modbench.plugin.compile",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && compilable",
-          "group": "modbench@11"
-        },
-        {
-          "command": "modbench.record.copy",
-          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/",
-          "group": "modbench@12"
+          "command": "modbench.record.openReference",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\breference\\b/",
+          "group": "1_open@1"
         },
         {
           "command": "modbench.record.openFieldValue",
           "when": "webviewId == 'modbench.record' && webviewSection =~ /\\bstringValue\\b/",
-          "group": "modbench@13"
+          "group": "1_open@2"
+        },
+        {
+          "command": "modbench.record.addElement",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayParent\\b/",
+          "group": "2_change@1"
+        },
+        {
+          "command": "modbench.record.removeElement",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/",
+          "group": "2_change@2"
+        },
+        {
+          "command": "modbench.record.moveElementUp",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
+          "group": "2_change@3"
+        },
+        {
+          "command": "modbench.record.moveElementDown",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
+          "group": "2_change@4"
+        },
+        {
+          "command": "modbench.mod.track",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.untracked",
+          "group": "4_sourceControl@1"
+        },
+        {
+          "command": "modbench.plugin.decompile",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && origin in modbench.mod.tracked",
+          "group": "4_sourceControl@2"
+        },
+        {
+          "command": "modbench.plugin.compile",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && editable",
+          "group": "4_sourceControl@3"
+        },
+        {
+          "command": "modbench.copyValue",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\bcell\\b/ && copyText",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "modbench.record.copy",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "modbench.record.delete",
+          "when": "webviewId == 'modbench.record' && webviewSection =~ /\\brecordHeader\\b/ && editable",
+          "group": "6_destroy@1"
         }
       ]
     },

@@ -60,7 +60,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     // Empty by default — editability is opt-in per fixture, never something a test inherits
     // without saying so.
     editableColumns: new Set(),
-    onOpen: vi.fn(),
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
     context: { path: [], rootField: effectiveDiff.fieldName, depth: 0 },
     rowKey: 'Name',
@@ -235,8 +234,8 @@ describe('DiffRow — cell focus', () => {
   });
 });
 
-// ADR-0005: the affordance keys off the leaf's own `diff.resolutions` entry, not the parent
-// field's aggregate `checkError` — a dangling sibling must not hide a live link beside it.
+// ADR-0005: go to record keys off the leaf's own `diff.resolutions` entry, not the parent
+// field's aggregate `checkError` — a dangling sibling must not hide a live reference beside it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
   const fkMeta = fieldMeta({ name: '', type: 'formKey' });
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SomeKeyword' };
@@ -269,54 +268,26 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     });
   }
 
-  afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
+  function menuOf(label: string): Record<string, unknown> {
+    const td = required(screen.getByText(label).closest('td'), 'the reference cell');
+    return parseJsonRecord(required(td.getAttribute('data-vscode-context'), "the cell's data-vscode-context attribute"));
+  }
 
-  it('an array-element resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
-    renderRow(leafProps('array-element', validType));
-    const link = screen.getByText('SomeKeyword [000019:Fallout4.esm]');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('underline');
+  it.each([
+    ['an array-element', 'array-element', validType, '000019:Fallout4.esm', 'SomeKeyword [000019:Fallout4.esm]'],
+    ['an array-element wrong-type', 'array-element', wrongType, '00001A:Fallout4.esm', 'SomeNpc [00001A:Fallout4.esm]'],
+    ['a struct-child', 'struct-child', validType, '000019:Fallout4.esm', 'SomeKeyword [000019:Fallout4.esm]'],
+    ['a struct-child wrong-type', 'struct-child', wrongType, '00001A:Fallout4.esm', 'SomeNpc [00001A:Fallout4.esm]'],
+  ] as const)('%s leaf that resolves offers go to record despite the parent field checkError', (_what, kind, resolution, value, label) => {
+    renderRow(leafProps(kind, resolution, value));
+    const menu = menuOf(label);
+    expect(menu.webviewSection).toEqual(expect.stringContaining('reference'));
+    expect(menu.referenceTarget).toBe(value);
   });
 
-  it('an array-element resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
-    renderRow(leafProps('array-element', wrongType, '00001A:Fallout4.esm'));
-    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('underline');
-  });
-
-  it('a struct-child resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
-    renderRow(leafProps('struct-child', validType));
-    const link = screen.getByText('SomeKeyword [000019:Fallout4.esm]');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('underline');
-  });
-
-  it('an array-element unresolved leaf shows no affordance (plain FormKey text)', () => {
-    renderRow(leafProps('array-element', unresolved, 'FFFFFF:Dangling.esm'));
-    const link = screen.getByText('FFFFFF:Dangling.esm');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('none');
-  });
-
-  it('a struct-child unresolved leaf shows no affordance (plain FormKey text)', () => {
-    renderRow(leafProps('struct-child', unresolved, 'FFFFFF:Dangling.esm'));
-    const link = screen.getByText('FFFFFF:Dangling.esm');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('none');
-  });
-
-  it('a struct-child resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
-    renderRow(leafProps('struct-child', wrongType, '00001A:Fallout4.esm'));
-    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
-    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
-    fireEvent.mouseEnter(link);
-    expect(link.style.textDecoration).toBe('underline');
+  it.each(['array-element', 'struct-child'] as const)('%s leaf that is unresolved offers no go to record', (kind) => {
+    renderRow(leafProps(kind, unresolved, 'FFFFFF:Dangling.esm'));
+    expect(menuOf('FFFFFF:Dangling.esm').webviewSection).not.toEqual(expect.stringContaining('reference'));
   });
 });
 
@@ -511,7 +482,8 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
       onEditCell: vi.fn(),
     });
     expect(stringContext('disk-value', 1)).toEqual({
-      webviewSection: 'stringValue',
+      webviewSection: 'cell stringValue',
+      copyText: 'disk-value',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'Data',
@@ -528,7 +500,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
   it('an immutable string cell (no onEditCell wired at all) still carries the context, with readOnly: true', () => {
     renderRow();
     const ctx = stringContext('disk-value', 0);
-    expect(ctx.webviewSection).toBe('stringValue');
+    expect(ctx.webviewSection).toBe('cell stringValue');
     expect(ctx.readOnly).toBe(true);
   });
 
@@ -591,7 +563,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       isExpanded: false,
     });
     const ctx = vscodeContextFor('[2]', 1);
-    expect(ctx.webviewSection).toBe('arrayParent');
+    expect(ctx.webviewSection).toBe('cell arrayParent');
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }]);
     expect(ctx.index).toBeUndefined();
     expect(ctx.fieldName).toBeUndefined();
@@ -623,7 +595,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       context: { path, rootField: 'Items', depth: path.length },
     });
     const ctx = vscodeContextFor('2', 1);
-    expect(ctx.webviewSection).toBe('arrayElement');
+    expect(ctx.webviewSection).toBe('cell arrayElement');
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Items' }, ...path]);
     expect(ctx.index).toBeUndefined();
   });
@@ -791,5 +763,19 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
     const cell = required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), 'its td ancestor');
 
     expect(cell).toHaveAttribute('data-copy-text', 'Reference');
+  });
+});
+
+// editor.md, Menus and keys: only the spec's items show, so VS Code's own Cut, Copy and Paste items
+// are suppressed on every cell, and copy value is offered where a cell has text to copy.
+describe('DiffRow — every cell\'s right-click menu', () => {
+  function cellContext(text: string, index: number): Record<string, unknown> {
+    const td = required(screen.getAllByText(text)[index]?.closest('td'), 'the cell');
+    return parseJsonRecord(required(td.getAttribute('data-vscode-context'), "the cell's data-vscode-context attribute"));
+  }
+
+  it('suppresses the default items and carries the text copy value copies, on a cell nothing else is offered on', () => {
+    renderRow({ meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 7, 'MyMod.esp': 7 } }) });
+    expect(cellContext('7', 0)).toEqual({ webviewSection: 'cell', copyText: '7', preventDefaultContextMenuItems: true });
   });
 });

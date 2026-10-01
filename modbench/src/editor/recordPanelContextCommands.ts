@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../wire/messages';
+import { isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type ReferenceContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
@@ -38,6 +38,10 @@ function isArrayParentContext(value: unknown): value is ArrayParentContext {
 
 function isArrayElementContext(value: unknown): value is ArrayElementContext {
   return hasWebviewSection(value, 'arrayElement');
+}
+
+function isReferenceContext(value: unknown): value is ReferenceContext {
+  return hasWebviewSection(value, 'reference') && typeof Reflect.get(value, 'referenceTarget') === 'string';
 }
 
 function isStringValueContext(value: unknown): value is StringValueContext {
@@ -102,6 +106,12 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
 }
 
 const CONTEXT_COMMANDS: ContextCommand[] = [
+  {
+    command: 'modbench.record.openReference',
+    run: async (_deps, ctx) => {
+      if (isReferenceContext(ctx)) await vscode.commands.executeCommand('modbench.record.open', { formKey: ctx.referenceTarget });
+    },
+  },
   {
     command: 'modbench.record.openFieldValue',
     run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },

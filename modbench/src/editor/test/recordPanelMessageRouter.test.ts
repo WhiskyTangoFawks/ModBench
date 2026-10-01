@@ -58,12 +58,10 @@ describe('routeRecordPanelMessage', () => {
     createQuickPick.mockReset();
   });
 
-  it('OPEN_RECORD opens the named record in the editor', async () => {
-    await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, makeDeps());
+  it('opens nothing for a click on a reference: go to record is the menu\'s', async () => {
+    await routeRecordPanelMessage({ type: 'openRecord', formKey: '000001:Fallout4.esm' }, makeDeps());
 
-    expect(executeCommand).toHaveBeenCalledWith(
-      'modbench.record.open', { formKey: '000001:Fallout4.esm' });
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
   it('LOG forwards the message at its own level', async () => {

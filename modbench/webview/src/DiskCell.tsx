@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
 import { copyValue } from './nativeBridge';
 import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
+import { cellContext, combineVscodeContexts } from './recordUtils';
 
 // ADR-0018: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
 // not just painted state — Ctrl+C needs `keydown` to land on a real focused element.
@@ -32,7 +33,7 @@ export interface CellKeys {
 }
 
 export function DiskCell({
-  style, title, isFocused, onFocusCell, onDoubleClick, copyText, keys, drag, landing, vscodeContext, children,
+  style, title, isFocused, onFocusCell, onDoubleClick, copyText, keys, drag, landing, contexts = [], children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
@@ -47,10 +48,9 @@ export function DiskCell({
   drag?: CellDrag;
   // What dropping a drag here does; absent when the drop cannot land.
   landing?: (dragged: CellDrag) => (() => void) | undefined;
-  // The already-combined `data-vscode-context` JSON string VS Code's own
-  // `contributes.menus["webview/context"]` gates on — undefined when this cell carries no
-  // structural-op menu at all.
-  vscodeContext?: string;
+  // What this cell's right-click menu is gated on beyond every cell's own: each is merged into the
+  // `data-vscode-context` VS Code's `contributes.menus["webview/context"]` reads.
+  contexts?: readonly (object | undefined)[];
   children: React.ReactNode;
 }>) {
   const ref = useRef<HTMLTableCellElement>(null);
@@ -65,7 +65,7 @@ export function DiskCell({
       tabIndex={0}
       title={title}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
-      data-vscode-context={vscodeContext}
+      data-vscode-context={combineVscodeContexts(cellContext(copyText), ...contexts)}
       data-focused-cell={isFocused || undefined}
       data-copy-text={copyText}
       draggable={drag !== undefined}
