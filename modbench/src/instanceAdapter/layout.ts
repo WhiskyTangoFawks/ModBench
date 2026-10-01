@@ -69,6 +69,8 @@ const EXTRACTION_PREFIX = '.medit-extract-';
 /** The prefix a release's extraction folder, inside its mod's folder, is named from. */
 export const extractionPrefix = (modFolder: string): string => join(modFolder, EXTRACTION_PREFIX);
 
+export const isExtractionEntry = (name: string): boolean => name.startsWith(EXTRACTION_PREFIX);
+
 export const overwriteDir = (instanceRoot: string): string => join(instanceRoot, OVERWRITE_DIR_NAME);
 
 /** MO2's own default when `download_directory` is unset. Every other download path function

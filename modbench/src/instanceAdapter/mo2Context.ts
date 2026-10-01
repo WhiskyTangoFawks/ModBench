@@ -4,10 +4,10 @@
 import { errnoCode } from '../ports/errno';
 import { entryNamed, modNameKey, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import type { DownloadsDirectoryResolver } from './downloadsDirectory';
-import { exists, get, listFolders } from './files';
+import { exists, get, listDir, listFolders } from './files';
 import type { GameDirectoryResolver } from './gameDirectory';
 import type { EntryRef, ModFolder, ModFolders, ModlistEntry } from './instanceAdapter';
-import { entryDir, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
+import { entryDir, isExtractionEntry, mo2FolderName, modDir, modsDir, settingsFile } from './layout';
 import type { Mo2Watch } from './mo2Watch';
 
 export interface Mo2Context {
@@ -36,13 +36,23 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-/** The mod folders as entries; the reserved overwrite name holds none. */
+/** A new mod's folder holds nothing but its extraction until the install settles. An installed
+ *  mod being upgraded holds its files beside the extraction and stays a mod. */
+async function isBeingInstalled(folder: string): Promise<boolean> {
+  const entries = await readOrAbsent(() => listDir(folder), undefined);
+  return entries === undefined || (entries.length > 0 && entries.every((entry) => isExtractionEntry(entry.name)));
+}
+
+/** The mod folders as entries; the reserved overwrite name holds none, nor does a folder a new
+ *  mod is being installed into or one removed mid-listing. */
 export async function listModFolders(
   { instanceRoot }: Mo2Context, skippedLink?: (name: string, reason: string) => void,
 ): Promise<ModFolder[] | undefined> {
   const names = await readOrAbsent<string[] | undefined>(() => listFolders(modsDir(instanceRoot), skippedLink), undefined);
-  return names
-    ?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME)
+  const candidates = names?.filter((name) => modNameKey(name) !== OVERWRITE_DIR_NAME);
+  const installing = await Promise.all(candidates?.map((name) => isBeingInstalled(modDir(instanceRoot, name))) ?? []);
+  return candidates
+    ?.filter((_, i) => !installing[i])
     .map((name) => ({ ...entryNamed(name), path: modDir(instanceRoot, name) }));
 }
 

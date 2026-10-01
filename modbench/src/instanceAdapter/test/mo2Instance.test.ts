@@ -248,6 +248,29 @@ describe('the MO2 Instance adapter', () => {
       expect((await adapter.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
     });
 
+    describe('a folder an install is extracting into', () => {
+      const listed = async (): Promise<string[]> => present(await adapter.modFolders(), 'the mod folders').all.map((f) => f.name);
+
+      it('is not listed while only its extraction is in it', async () => {
+        await adapter.extractNewMod('New Mod');
+
+        expect(await listed()).not.toContain('New Mod');
+      });
+
+      it('is listed once the extraction is gone', async () => {
+        const extraction = await adapter.extractNewMod('New Mod');
+        await rm(extraction.path, { recursive: true });
+
+        expect(await listed()).toContain('New Mod');
+      });
+
+      it('is listed when it is an installed mod being upgraded', async () => {
+        await adapter.extractUpgrade('Harder VATS');
+
+        expect(await listed()).toContain('Harder VATS');
+      });
+    });
+
     it('answers which mod folder holds an entry, matched as MO2 matches names, from the one listing', async () => {
       const folders = present(await adapter.modFolders(), 'the mod folders');
 
