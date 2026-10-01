@@ -5,8 +5,8 @@ import * as vscode from 'vscode';
 import {
   downloadContextValue, filterArchiveRows, filterExcludedRows, sortDownloadRows, type DownloadSortColumn,
 } from './downloadRows';
-import type {
-  DownloadFile, DownloadRow, DownloadStatus, InstanceValue, InstanceView,
+import {
+  lastGoodReadMessage, type DownloadFile, type DownloadRow, type DownloadStatus, type InstanceValue, type InstanceView,
 } from '../instanceLoader/instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from './errorNode';
@@ -111,6 +111,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   private readonly unconfirmedDeletes = new Map<string, UnconfirmedDelete>();
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
+  private readonly readFailureSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
 
   private cache?: DownloadNode[];
@@ -133,6 +134,11 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
       this.instanceValue = value;
       this.invalidate();
     });
+    this.readFailureSubscription = options.instance.onReadFailure(() => this._onDidChangeTreeData.fire(undefined));
+  }
+
+  viewMessage(): string | undefined {
+    return lastGoodReadMessage(this.instance);
   }
 
   private settleUnconfirmed(value: InstanceValue): void {
@@ -219,6 +225,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
     this.unconfirmed.clear();
     this.unconfirmedDeletes.clear();
     this.instanceSubscription.dispose();
+    this.readFailureSubscription.dispose();
     this.firstRead.dispose();
   }
 

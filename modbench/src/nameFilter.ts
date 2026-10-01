@@ -26,6 +26,8 @@ export interface NameFilterDeps {
   /** What the view's message line says about the view itself, asked again on each row change.
    *  The no-match message takes the line while a filter matches nothing. */
   viewMessage?: () => string | undefined;
+  /** The part of the view's message that stays beside the no-match message. */
+  standingMessage?: () => string | undefined;
   onRowsChanged?: vscode.Event<unknown>;
   /** What else `viewMessage` reads changed: a sync's failure began, changed or cleared. */
   onViewMessageChanged?: (listener: () => void) => { dispose(): void };
@@ -63,7 +65,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   const ownsMessage = (): boolean => deps.view.message === undefined || deps.view.message === lastWritten;
   const renderMessage = async (): Promise<void> => {
     const mine = ++generation;
-    const text = term === '' || (await deps.hasRows()) ? deps.viewMessage?.() : `No matches for "${term}".`;
+    const text = term === '' || (await deps.hasRows()) ? deps.viewMessage?.() : messageLine(`No matches for "${term}".`, deps.standingMessage?.());
     if (mine !== generation) return;
     if (!ownsMessage()) return;
     if (text !== undefined) {

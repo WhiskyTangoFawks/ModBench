@@ -305,6 +305,20 @@ describe('the view\'s own message', () => {
     expect(view.message).toBe('Nothing here yet.');
   });
 
+  it('keeps the standing message beside the no-match message while a filter matches nothing', async () => {
+    const rows = fakeRowsChangedEvent();
+    const { view } = setup({
+      hasRows: () => Promise.resolve(false), onRowsChanged: rows.event,
+      viewMessage: () => 'Showing the last good read: EACCES', standingMessage: () => 'Showing the last good read: EACCES',
+    });
+
+    await open();
+    currentBox().type('zzz');
+    await flush();
+
+    expect(view.message).toBe('No matches for "zzz". Showing the last good read: EACCES');
+  });
+
   it('takes it down once the view has something to show', async () => {
     let message: string | undefined = 'Nothing here yet.';
     const rows = fakeRowsChangedEvent();

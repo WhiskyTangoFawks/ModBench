@@ -106,6 +106,12 @@ export type ReadFailureListener = () => void;
  *  channels they move on. */
 export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
 
+/** The message line a view shows once a read fails after rows landed: the rows stay (common.md,
+ *  States, story 6). Before the first value it is the error row's business, not this. */
+export function lastGoodReadMessage({ sequence, readFailure }: Pick<InstanceView, 'sequence' | 'readFailure'>): string | undefined {
+  return sequence > 0 && readFailure !== undefined ? `Showing the last good read: ${readFailure}` : undefined;
+}
+
 /** As much of VS Code's window as the recompute reads. */
 export interface FocusWindow {
   readonly state: { readonly focused: boolean };
