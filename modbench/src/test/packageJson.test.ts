@@ -1321,9 +1321,8 @@ const commandsMarkdown = fs.readFileSync(
 
 const catalog = catalogCommandIds(commandsMarkdown);
 
-// commands.md, Entry points are not gestures: a title icon cannot name its view, so each view's
-// icons are internal commands that fire the filter gesture with that view. A menu cannot pass an
-// Option either, so open to the side is an entry point that fires open with placement: beside.
+// commands.md, Entry points are not gestures: a title icon or a menu cannot name its view or pass
+// an Option, so an internal command fires the gesture with them.
 const OPEN_TO_THE_SIDE = 'modbench.record.openToSide';
 const FILTER_ENTRY_POINTS = ['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads']
   .flatMap((view) => [`${view}.filterHere`, `${view}.clearFilterHere`]);
