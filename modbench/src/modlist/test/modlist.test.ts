@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import ts from 'typescript';
 import { present } from '../../ports/present';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
@@ -57,7 +57,8 @@ const pathsReached = (): string[] =>
 const forgetPathsReached = (): void => {
   for (const op of [access, stat, lstat, readdir, readFile, writeFile, mkdir, rename, rm]) vi.mocked(op).mockClear();
 };
-const listedDirs = (): string[] => vi.mocked(readdir).mock.calls.map(([path]) => String(path));
+const listedDirs = (): string[] =>
+  vi.mocked(readdir).mock.calls.map(([path]) => String(path)).filter((path) => basename(dirname(path)) !== 'mods');
 import {
   createEmptyMod,
   deleteSeparators,

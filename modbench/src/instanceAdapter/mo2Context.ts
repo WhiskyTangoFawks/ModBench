@@ -36,8 +36,8 @@ export const entryKey = (entry: EntryRef): string =>
 export const listedAs = (order: readonly ModlistEntry[], entry: EntryRef): ModlistEntry | undefined =>
   order.find((e) => e.kind === entry.kind && entryKey(e) === entryKey(entry));
 
-/** A new mod's folder holds nothing but its extraction until the install settles. An installed
- *  mod being upgraded holds its files beside the extraction and stays a mod. */
+// A new mod's folder holds nothing but its extraction until the install settles. An installed
+// mod being upgraded holds its files beside the extraction and stays a mod.
 async function isBeingInstalled(folder: string): Promise<boolean> {
   const entries = await readOrAbsent(() => listDir(folder), undefined);
   return entries === undefined || (entries.length > 0 && entries.every((entry) => isExtractionEntry(entry.name)));
