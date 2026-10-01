@@ -96,7 +96,7 @@ describe('modbench.record.open from the palette, with no Argument', () => {
 
     await open();
 
-    expect(pickRecord).toHaveBeenCalledWith(expect.objectContaining({ meditClient: expect.anything(), reporter }), '', []);
+    expect(pickRecord.mock.calls).toEqual([[{ meditClient: expect.any(InMemoryMEditClient) as unknown, reporter }, '', []]]);
     expect(executeCommand).toHaveBeenCalledWith(
       'vscode.openWith', expect.anything(), 'modbench.record', { viewColumn: 1, preview: true });
   });
