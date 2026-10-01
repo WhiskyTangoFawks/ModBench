@@ -777,13 +777,23 @@
         },
         {
           "command": "modbench.record.openToSide",
-          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
-          "group": "modbench@2"
+          "when": "view == modbench.referencedByTree && viewItem == referencedByReferrer",
+          "group": "1_open@1"
         },
         {
           "command": "modbench.copyValue",
-          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
-          "group": "modbench@3"
+          "when": "view == modbench.referencedByTree && viewItem == referencedByReferrer",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "modbench.record.copy",
+          "when": "view == modbench.referencedByTree && viewItem == referencedByHolder",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "modbench.record.delete",
+          "when": "view == modbench.referencedByTree && viewItem == referencedByHolder",
+          "group": "6_destroy@1"
         },
         {
           "command": "modbench.mod.openFolder",
@@ -1095,6 +1105,12 @@
         "args": {
           "view": "modbench.referencedByTree"
         }
+      },
+      {
+        "command": "modbench.record.delete",
+        "key": "Delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == modbench.referencedByTree && listFocus && !inputFocus && modbench.folder == instance && modbench.referencedBy.allHolders"
       },
       {
         "command": "modbench.plugin.enable",

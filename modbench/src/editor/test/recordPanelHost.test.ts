@@ -50,7 +50,6 @@ function register(
     recordBadgeSource: { workingTreeStateOf: () => undefined, onDidReadRecords: () => ({ dispose: () => undefined }) },
     meditClient,
     refreshPanels: override.refreshPanels ?? (() => undefined),
-    mergedTreeSelection: () => [],
     focusedViewSelection,
     refreshSourceControlFor: () => undefined,
     outputChannel: { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },

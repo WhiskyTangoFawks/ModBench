@@ -1144,8 +1144,8 @@ describe('package.json Mods row menu — copy value', () => {
         (e) => e.command === 'modbench.copyValue' && e.when.includes('referencedByTree')),
       'the Referenced By copy value entry',
     );
-    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
-    expect(entry.group).toBe('modbench@3');
+    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByReferrer');
+    expect(entry.group).toBe('5_copy@1');
   });
 });
 
@@ -1280,14 +1280,14 @@ describe('package.json open on Referenced By', () => {
   const contextMenus = (): MenuEntry[] =>
     present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']");
 
-  it('puts open on the Referenced By group row\'s menu once', () => {
+  it('puts open on the Referenced By referrer row\'s menu once', () => {
     const entry = present(
       contextMenus().find((e) =>
         e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')),
       `a ${OPEN_TO_THE_SIDE} entry on the Referenced By tree`,
     );
-    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
-    expect(entry.group).toBe('modbench@2');
+    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByReferrer');
+    expect(entry.group).toBe('1_open@1');
     expect(contextMenus().filter((e) => e.command === OPEN_TO_THE_SIDE && e.when.includes('referencedByTree')))
       .toHaveLength(1);
   });
@@ -1370,5 +1370,30 @@ describe('package.json palette titles are the verb and the object', () => {
 
   it.each(titled.map((c) => [c.command, c.title]))('%s is titled "%s"', (id, title) => {
     expectTitleNamesVerbAndObject(id, title);
+  });
+});
+
+// editor-referenced-by.md, Menus and keys: the row menus follow open, change, copy, then destroy.
+describe('package.json Referenced By menus and keys', () => {
+  const REFERENCED_BY = 'view == modbench.referencedByTree';
+  const menuOf = (viewItem: string) =>
+    present(pkg.contributes.menus['view/item/context'], "contributes.menus['view/item/context']")
+      .filter((e) => e.when.startsWith(`${REFERENCED_BY} && viewItem == ${viewItem}`))
+      .map((e) => [e.command, e.group]);
+
+  it('offers a referrer open to the side, then copy value', () => {
+    expect(menuOf('referencedByReferrer')).toEqual([[OPEN_TO_THE_SIDE, '1_open@1'], ['modbench.copyValue', '5_copy@1']]);
+  });
+
+  it('offers a plugin copy beneath a referrer copy, then delete', () => {
+    expect(menuOf('referencedByHolder')).toEqual([['modbench.record.copy', '5_copy@1'], ['modbench.record.delete', '6_destroy@1']]);
+  });
+
+  it('binds Delete in the view only while every selected row is a plugin copy', () => {
+    const keys = pkg.contributes.keybindings.filter((k) => k.command === 'modbench.record.delete' && k.when.includes('referencedByTree'));
+    expect(keys.map(({ key, mac, when }) => ({ key, mac, when }))).toEqual([{
+      key: 'Delete', mac: 'cmd+backspace',
+      when: 'focusedView == modbench.referencedByTree && listFocus && !inputFocus && modbench.folder == instance && modbench.referencedBy.allHolders',
+    }]);
   });
 });

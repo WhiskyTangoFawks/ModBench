@@ -9,7 +9,7 @@ import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { REFERENCED_BY_VIEW, ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
+import { REFERENCED_BY_VIEW, ReferencedByTreeProvider, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { createFocusedView, lastSelectedViewSelection } from './treeViews';
@@ -132,7 +132,12 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: referencedByTreeProvider,
     canSelectMany: true,
   });
-  context.subscriptions.push(focusedView.follow(REFERENCED_BY_VIEW, referencedByTreeView));
+  context.subscriptions.push(
+    focusedView.follow(REFERENCED_BY_VIEW, referencedByTreeView),
+    referencedByTreeView.onDidChangeSelection(() => {
+      void vscode.commands.executeCommand('setContext', 'modbench.referencedBy.allHolders', allHolders(referencedByTreeView.selection));
+    }),
+  );
   const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
     (formKey) => referencedByTreeProvider.showFor(formKey));
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
@@ -186,7 +191,6 @@ export function activate(context: vscode.ExtensionContext) {
       refreshPanels: () => announceConflictsComputed(recordPanels, editsInFlight),
       reporterFor: (tag) => makeReporter(outputChannel, tag),
       ask: askQuestion,
-      mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       focusedViewSelection: lastSelectedViewSelection(
         (disposable) => { context.subscriptions.push(disposable); return disposable; },
         [

@@ -78,7 +78,7 @@ type RecordLifecycleClient = Pick<MEditClient, 'deleteRecords'>;
 /** ADR-0018: xEdit hosts its Remove in its tree's context menu, not the grid. */
 export function registerRecordLifecycleCommands(
   client: RecordLifecycleClient, reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so delete takes the Plugins selection.
+  // A key or the palette hands no row, so delete takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   return [
@@ -185,7 +185,7 @@ function landedMessage(landed: readonly CopyItem[], editorIds: ReadonlyMap<strin
  *  would replace copies the destinations already hold (commands.md, Confirm what destroys). */
 export function registerRecordCopyCommands(
   client: RecordCopyClient, reporter: Reporter, ask: AskQuestion,
-  // The palette hands no row, so copy takes the Plugins selection.
+  // The palette hands no row, so copy takes the selection of the view last selected in.
   viewSelection: () => readonly unknown[],
 ): vscode.Disposable[] {
   return [

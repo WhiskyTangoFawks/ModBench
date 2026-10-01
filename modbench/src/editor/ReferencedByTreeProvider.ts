@@ -2,38 +2,50 @@ import * as vscode from 'vscode';
 import type { MEditClient, ReferenceResult } from '../client';
 import { errorMessage } from '../ports/errorMessage';
 
-/** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
- *  than as several. */
-export class ReferencedByGroupNode extends vscode.TreeItem {
-  // `this.label` is `string | vscode.TreeItemLabel` on the base class; the constructor below
-  // always passes the template-literal string, so this is that same string, kept typed.
-  readonly displayLabel: string;
+/** One plugin's copy of a referrer, with the fields that hold the reference. */
+export class ReferencedByHolderNode extends vscode.TreeItem {
+  constructor(
+    target: string,
+    readonly formKey: string,
+    readonly editorId: string | undefined,
+    readonly plugin: string,
+    readonly origin: string,
+    fieldPaths: readonly string[],
+  ) {
+    super(plugin, vscode.TreeItemCollapsibleState.None);
+    this.id = JSON.stringify([target, formKey, origin, plugin]);
+    this.description = fieldPaths.join(', ');
+    this.contextValue = 'referencedByHolder';
+  }
+}
+
+function referrerName(formKey: string, editorId: string | undefined): string {
+  return editorId ? `${editorId} [${formKey}]` : formKey;
+}
+
+/** One row for a referrer, however many plugins hold the reference. */
+export class ReferencedByReferrerNode extends vscode.TreeItem {
+  readonly copyText: string;
 
   constructor(
+    target: string,
     readonly formKey: string,
-    readonly results: ReferenceResult[],
+    editorId: string | undefined,
+    recordTypeName: string,
+    readonly holders: readonly ReferencedByHolderNode[],
   ) {
-    const first = results.at(0);
-    const recordType = first?.recordType ?? '';
-    const recordLabel = first?.editorId ?? formKey;
-    const displayLabel = `${recordType} / ${recordLabel}`;
-    super(displayLabel, vscode.TreeItemCollapsibleState.Collapsed);
-    this.displayLabel = displayLabel;
-    if (results.length > 1) this.description = `${results.length} plugins`;
-    this.contextValue = 'referencedByGroup';
-    this.iconPath = new vscode.ThemeIcon('references');
+    super(editorId ?? formKey, vscode.TreeItemCollapsibleState.Collapsed);
+    this.copyText = referrerName(formKey, editorId);
+    // The target is in the id so a referrer collapses again when the list follows a new record.
+    this.id = JSON.stringify([target, formKey]);
+    this.description = holders.length > 1 ? `${recordTypeName} · ${holders.length} plugins` : recordTypeName;
+    this.tooltip = [this.copyText, recordTypeName, holders.map(h => h.plugin).join(', ')].join('\n');
+    this.contextValue = 'referencedByReferrer';
     this.command = {
       command: 'modbench.record.open',
       title: 'Open Record',
       arguments: [{ formKey }],
     };
-  }
-}
-
-/** Informational, not a navigation target — hence no `command`. */
-export class ReferencedByFieldNode extends vscode.TreeItem {
-  constructor(result: ReferenceResult) {
-    super(`${result.plugin} · ${result.fieldPath}`, vscode.TreeItemCollapsibleState.None);
   }
 }
 
@@ -60,18 +72,22 @@ export class NoActiveRecordNode extends vscode.TreeItem {
 }
 
 export type ReferencedByTreeNode =
-  | ReferencedByGroupNode | ReferencedByFieldNode | EmptyStateNode | ErrorNode | NoActiveRecordNode;
+  | ReferencedByReferrerNode | ReferencedByHolderNode | EmptyStateNode | ErrorNode | NoActiveRecordNode;
 
-/** One line per selected *referrer*. A field row is detail under a group, never independently
- *  copyable, so it contributes nothing — a field-rows-only selection copies empty text. */
+/** One line per selected referrer. A row beneath a referrer adds nothing. */
 export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
   return nodes
-    .filter((n): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode)
-    .map(n => n.displayLabel)
+    .filter((n): n is ReferencedByReferrerNode => n instanceof ReferencedByReferrerNode)
+    .map(n => n.copyText)
     .join('\n');
 }
 
 export const REFERENCED_BY_VIEW = 'modbench.referencedByTree';
+
+/** Whether every selected row is one plugin's copy of a referrer, the rows copy and delete act on. */
+export function allHolders(selection: readonly unknown[]): boolean {
+  return selection.length > 0 && selection.every(n => n instanceof ReferencedByHolderNode);
+}
 
 /** Referenced By's own text for copy value, or `undefined` unless the invocation is a referrer row
  *  or its Ctrl+C, which names the view. */
@@ -79,13 +95,37 @@ export function referencedByCopyValueText(
   referencedByTreeView: Pick<vscode.TreeView<ReferencedByTreeNode>, 'selection'>,
   clicked: unknown, allSelected: readonly unknown[] | undefined,
 ): string | undefined {
-  const isGroup = (n: unknown): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode;
+  const isReferrer = (n: unknown): n is ReferencedByReferrerNode => n instanceof ReferencedByReferrerNode;
   const fromKey = typeof clicked === 'object' && clicked !== null && Reflect.get(clicked, 'view') === REFERENCED_BY_VIEW;
-  if (!isGroup(clicked) && !fromKey) return undefined;
-  const selected = allSelected?.filter(isGroup) ?? [];
+  if (!isReferrer(clicked) && !fromKey) return undefined;
+  const selected = allSelected?.filter(isReferrer) ?? [];
   if (selected.length) return referencedByCopyText(selected);
   if (referencedByTreeView.selection.length) return referencedByCopyText(referencedByTreeView.selection);
-  return referencedByCopyText(isGroup(clicked) ? [clicked] : []);
+  return referencedByCopyText(isReferrer(clicked) ? [clicked] : []);
+}
+
+function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyOf(item);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.values()];
+}
+
+function referrerNode(target: string, copies: readonly ReferenceResult[]): ReferencedByReferrerNode | undefined {
+  const [first] = copies;
+  if (!first) return undefined;
+  const editorId = first.editorId ?? undefined;
+  const holders = groupBy(copies, r => JSON.stringify([r.origin, r.plugin])).flatMap(fields => {
+    const [held] = fields;
+    return held
+      ? [new ReferencedByHolderNode(target, first.formKey, editorId, held.plugin, held.origin, fields.map(r => r.fieldPath))]
+      : [];
+  });
+  return new ReferencedByReferrerNode(target, first.formKey, editorId, first.recordTypeName, holders);
 }
 
 /** A Panel view that follows the active record editor rather than an explicit command, so its
@@ -121,9 +161,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   }
 
   async getChildren(element?: ReferencedByTreeNode): Promise<ReferencedByTreeNode[]> {
-    if (element instanceof ReferencedByGroupNode) {
-      return element.results.map(r => new ReferencedByFieldNode(r));
-    }
+    if (element instanceof ReferencedByReferrerNode) return [...element.holders];
     if (element) return [];
     return this.rootNodes();
   }
@@ -133,12 +171,12 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
       this.onCountChanged(undefined);
       return [new NoActiveRecordNode()];
     }
-    const formKey = this.target;
+    const target = this.target;
     let references: ReferenceResult[];
     try {
-      references = await this.client.getReferences(formKey);
+      references = await this.client.getReferences(target);
     } catch (e) {
-      this.log(`[ReferencedByTreeProvider] getReferences(${formKey}) failed: ${errorMessage(e)}`);
+      this.log(`[ReferencedByTreeProvider] getReferences(${target}) failed: ${errorMessage(e)}`);
       this.onCountChanged(undefined);
       return [new ErrorNode()];
     }
@@ -147,14 +185,8 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
       return [new EmptyStateNode()];
     }
 
-    const groups = new Map<string, ReferenceResult[]>();
-    for (const r of references) {
-      const key = r.formKey;
-      const existing = groups.get(key);
-      if (existing) existing.push(r);
-      else groups.set(key, [r]);
-    }
-    this.onCountChanged(groups.size);
-    return Array.from(groups.entries()).map(([formKey, results]) => new ReferencedByGroupNode(formKey, results));
+    const referrers = groupBy(references, r => r.formKey).flatMap(copies => referrerNode(target, copies) ?? []);
+    this.onCountChanged(referrers.length);
+    return referrers;
   }
 }
