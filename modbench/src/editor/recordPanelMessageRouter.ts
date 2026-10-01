@@ -5,15 +5,14 @@ import {
 } from '../wire/messages';
 import type { Reporter } from '../ports/reporter';
 import type { RecordSummary, MEditClient } from '../client';
-import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
-import type { EditGate, EditsInFlight, FollowedPanel } from './followRecord';
+import type { FollowedPanel } from './followRecord';
 import type { FocusedCellContext, FocusedCells } from './focusedCells';
 import { errorMessage } from '../ports/errorMessage';
 
-export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
-  // The write path's own port call, widened by the FormKey picker's search and the panel's own
-  // read — one client serves all three, and the per-panel picker bundle below reuses it.
-  meditClient: Pick<MEditClient, 'editRecord' | 'searchRecords' | 'getComparison' | 'getPlugins'>;
+export interface RouteRecordPanelMessageDeps {
+  // The FormKey picker's search and the panel's own read — one client serves both, and the
+  // per-panel picker bundle below reuses it.
+  meditClient: Pick<MEditClient, 'searchRecords' | 'getComparison' | 'getPlugins'>;
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -24,9 +23,8 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
   // reconstructed per message at the call site rather than shared like `channel`/`reporter`.
   formKeyPicker: FormKeyPickerDeps | undefined;
-  // The panel an edit came from holds its reads until the answer, and an edit of the FormID takes
-  // that tab along: its column names the plugin the edit landed on (ADR-0012).
-  editInFlight: EditGate;
+  // Names the panel to the commands the webview's gestures fire, which find its gate by it.
+  panelId: string;
   // The panel's own focused cell, which a field gesture from the palette acts on.
   focusCell: (context: FocusedCellContext | undefined) => void;
   // Posts straight back to the panel that asked — REQUEST_RECORD_LOAD's own reply, built fresh
@@ -37,20 +35,20 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
 }
 
 /** What every panel's messages share: the rest is the panel's own. */
-export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'editInFlight' | 'focusCell' | 'reply'>;
+export type SharedRecordPanelDeps = Omit<RouteRecordPanelMessageDeps, 'formKeyPicker' | 'panelId' | 'focusCell' | 'reply'>;
 
 /** The router's bundle for one panel's messages: the picker and the record load both reply to it,
- *  and its edits are held in flight for it. */
+ *  and the commands it fires name it. */
 export function routerDepsForPanel<Panel extends FollowedPanel>(
   shared: SharedRecordPanelDeps,
   panel: Panel,
-  edits: EditsInFlight<Panel>,
+  panelId: string,
   focusedCells: FocusedCells<Panel>,
 ): RouteRecordPanelMessageDeps {
   return {
     ...shared,
     formKeyPicker: { meditClient: shared.meditClient, reply: (m) => { void panel.webview.postMessage(m); } },
-    editInFlight: edits.gate(panel),
+    panelId,
     focusCell: (context) => { focusedCells.setCell(panel, context); },
     reply: (m) => { void panel.webview.postMessage(m); },
   };
@@ -201,13 +199,17 @@ async function replyFormKeyPicked(
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
 }
 
-// The webview's inline and keyboard edits reach the same host-side write path the right-click
-// menus call directly (ADR-0007).
+// The grid's edit is an entry point to the command the palette fires too (commands.md, Entry points
+// are not gestures).
 async function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,
 ): Promise<void> {
-  await deps.editInFlight(m, formKey => applyRecordEdit(deps, formKey, m.plugin, m.origin, m.envelope));
+  await vscode.commands.executeCommand(
+    'modbench.record.editField',
+    { formKey: m.formKey, plugin: m.plugin, origin: m.origin, panelId: deps.panelId },
+    m.envelope,
+  );
 }
 
 // A failed comparison fails the whole load; a failed plugin list degrades to null (ADR-0002

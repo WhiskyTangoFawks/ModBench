@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { moveEnvelope, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../wire/messages';
+import { isRecordEditEnvelope, moveEnvelope, type ArrayElementContext, type ArrayParentContext, type StringValueContext } from '../wire/messages';
 import type { RecordEditEnvelope } from '../client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
@@ -19,7 +19,7 @@ export interface RecordPanelContextCommandDeps extends RecordWriteDeps {
 
 interface ContextCommand {
   command: string;
-  run: (deps: RecordPanelContextCommandDeps, ctx: unknown) => Promise<void>;
+  run: (deps: RecordPanelContextCommandDeps, ctx: unknown, option: unknown) => Promise<void>;
 }
 
 // The `when` clause on each contribution guarantees the shape VS Code hands back — but as
@@ -66,6 +66,28 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
   };
 }
 
+interface PluginCopyAddress { formKey: string; plugin: string; origin: string }
+
+function isPluginCopyAddress(value: unknown): value is PluginCopyAddress {
+  if (typeof value !== 'object' || value === null) return false;
+  return ['formKey', 'plugin', 'origin'].every(name => typeof Reflect.get(value, name) === 'string');
+}
+
+// The grid's edit fires this with the column's plugin copy as the Argument and the value, spelled
+// as an envelope, as the Option. From the palette the focused string cell is asked for its new text.
+async function editField(deps: RecordPanelContextCommandDeps, address: unknown, option: unknown): Promise<void> {
+  if (!isPluginCopyAddress(address)) return;
+  const envelope = isRecordEditEnvelope(option) ? option : await promptedSet(address);
+  if (!envelope) return;
+  await deps.editGateOf(panelIdOf(address))(address, formKey => applyRecordEdit(deps, formKey, address.plugin, address.origin, envelope));
+}
+
+async function promptedSet(address: object): Promise<RecordEditEnvelope | undefined> {
+  if (!isStringValueContext(address)) return undefined;
+  const value = await vscode.window.showInputBox({ value: address.value, prompt: address.fieldName });
+  return value === undefined ? undefined : { op: 'set', path: address.path, value };
+}
+
 // ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
@@ -90,6 +112,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
     command: 'modbench.record.openFieldValue',
     run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },
   },
+  { command: 'modbench.record.editField', run: editField },
   editCommand('modbench.record.addElement', isArrayParentContext, ctx => ({ op: 'add', path: ctx.path })),
   editCommand('modbench.record.removeElement', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
   editCommand('modbench.record.moveElementUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
@@ -100,9 +123,9 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
  *  the envelope its own `data-vscode-context` spells (ADR-0007), posting nothing into the panel. */
 export function registerRecordPanelContextCommands(deps: RecordPanelContextCommandDeps): vscode.Disposable[] {
   return CONTEXT_COMMANDS.map(({ command, run }) =>
-    vscode.commands.registerCommand(command, (clicked?: unknown) => {
+    vscode.commands.registerCommand(command, (clicked?: unknown, option?: unknown) => {
       const ctx = clicked ?? deps.focusedCell();
-      return ctx ? run(deps, ctx) : undefined;
+      return ctx ? run(deps, ctx, option) : undefined;
     }),
   );
 }

@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Captures every registerCommand(id, handler) so each row's handler can be invoked directly.
-const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
-const registerCommand = vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
+const handlers = new Map<string, (ctx?: unknown, option?: unknown) => Promise<void> | void>();
+const registerCommand = vi.fn((command: string, handler: (ctx?: unknown, option?: unknown) => Promise<void> | void) => {
   handlers.set(command, handler);
   return { dispose: vi.fn() };
 });
+const showInputBox = vi.fn<(options: { value?: string }) => Promise<string | undefined>>();
 vi.mock('vscode', () => ({
-  commands: { registerCommand: (...args: [string, (ctx?: unknown) => void]) => registerCommand(...args) },
+  commands: { registerCommand: (...args: [string, (ctx?: unknown, option?: unknown) => void]) => registerCommand(...args) },
+  window: { showInputBox: (options: { value?: string }) => showInputBox(options) },
 }));
 
 import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
@@ -26,7 +28,7 @@ import type { ArrayElementContext, ArrayParentContext, StringValueContext } from
 import { InMemoryMEditClient } from '../../client';
 import { present } from '../../ports/present';
 
-beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); });
+beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); });
 
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   const meditClient = new InMemoryMEditClient();
@@ -307,5 +309,97 @@ describe('a field gesture from the palette', () => {
     await present(handlers.get('modbench.record.removeElement'), 'the remove element handler')();
 
     expect(editRecordCalls(meditClient).map(c => c.args[3])).toEqual([{ op: 'remove', path }]);
+  });
+});
+
+// commands.md, Record: the grid's edit and the palette fire one command. The grid names the column's
+// (origin, filename) as the Argument (ADR-0012, invariant 1).
+describe('modbench.record.editField', () => {
+  const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Height' }];
+  const envelope = { op: 'set' as const, path, value: 0.75 };
+  const editField = () => present(handlers.get('modbench.record.editField'), 'the editField handler');
+
+  it('writes the envelope to the plugin copy its Argument names', async () => {
+    const { deps, meditClient, refreshSourceControlFor } = makeDeps();
+    registerRecordPanelContextCommands(deps);
+
+    await editField()(IDENTITY, envelope);
+
+    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin, envelope]]);
+    expect(refreshSourceControlFor).toHaveBeenCalledWith(IDENTITY.plugin, IDENTITY.origin);
+  });
+
+  it('goes through the gate of the panel its Argument names', async () => {
+    const asked: (string | undefined)[] = [];
+    const { deps } = makeDeps({ editGateOf: panelId => { asked.push(panelId); return async (address, write) => { await write(address.formKey); }; } });
+    registerRecordPanelContextCommands(deps);
+
+    await editField()({ ...IDENTITY, panelId: 'record-panel-2' }, envelope);
+
+    expect(asked).toEqual(['record-panel-2']);
+  });
+
+  it('surfaces a refusal as a warning, and re-reads nothing', async () => {
+    const { deps, meditClient, refreshSourceControlFor, report } = makeDeps();
+    meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
+    registerRecordPanelContextCommands(deps);
+
+    await editField()(IDENTITY, envelope);
+
+    expect(report).toHaveBeenCalledWith('warning', 'Track the mod first.');
+    expect(refreshSourceControlFor).not.toHaveBeenCalled();
+  });
+
+  it('reports a transport failure as an error', async () => {
+    const { deps, meditClient, report } = makeDeps();
+    meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
+    registerRecordPanelContextCommands(deps);
+
+    await editField()(IDENTITY, envelope);
+
+    expect(report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
+  });
+
+  it('from the palette, asks for the focused string cell\'s new text and sets it at the cell\'s path', async () => {
+    showInputBox.mockResolvedValue('a new description');
+    const { deps, meditClient } = makeDeps({ focusedCell: () => stringContext() });
+    registerRecordPanelContextCommands(deps);
+
+    await editField()();
+
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ value: 'a long description' }));
+    expect(editRecordCalls(meditClient).map(c => c.args)).toEqual([[
+      IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
+      { op: 'set', path: [{ kind: 'member', name: 'Description' }], value: 'a new description' },
+    ]]);
+  });
+
+  it('from the palette, writes nothing when the prompt is dismissed', async () => {
+    showInputBox.mockResolvedValue(undefined);
+    const { deps, meditClient } = makeDeps({ focusedCell: () => stringContext() });
+    registerRecordPanelContextCommands(deps);
+
+    await editField()();
+
+    expect(editRecordCalls(meditClient)).toEqual([]);
+  });
+
+  it('from the palette, on a cell that is not a string value, writes nothing', async () => {
+    const { deps, meditClient } = makeDeps({ focusedCell: () => parentContext(path) });
+    registerRecordPanelContextCommands(deps);
+
+    await editField()();
+
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(editRecordCalls(meditClient)).toEqual([]);
+  });
+
+  it('writes nothing for an Argument that is not a record\'s plugin copy', async () => {
+    const { deps, meditClient } = makeDeps();
+    registerRecordPanelContextCommands(deps);
+
+    await editField()({ formKey: IDENTITY.formKey }, envelope);
+
+    expect(editRecordCalls(meditClient)).toEqual([]);
   });
 });
