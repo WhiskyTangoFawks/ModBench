@@ -23,25 +23,25 @@ describe('FormKeyCell — read-only column', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('shows "—" when value is null', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   it('shows the formKey string as a link', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
   it('Ctrl+click navigates to the referenced record', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} resolution={resolvedFixture} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} resolution={resolvedFixture} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'), { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
   });
 
   it('plain click neither navigates nor opens the picker', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     expect(onOpen).not.toHaveBeenCalled();
     expect(pickFormKey).not.toHaveBeenCalled();
@@ -56,20 +56,20 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 
   it('a plain click opens no input', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'DogmeatRace [000019:Fallout4.esm]' })).toBeInTheDocument();
   });
 
   it('a double click opens no input either', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
-    fireEvent.doubleClick(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('opens no input for a reference that does not resolve either', () => {
-    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
@@ -77,7 +77,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   // Ctrl+click and plain click share the same DOM click event, so the two must not both fire.
   it('Ctrl+click follows the reference without opening anything', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} resolution={validType} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'), { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -86,12 +86,12 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   // A `cursor: 'pointer'` here would paint over the parent DiskCell's `grab`, and an empty cell
   // is still a drag target.
   it('does not mask the parent drag cursor on an empty cell', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('—').style.cursor).not.toBe('pointer');
   });
 
   it('opens nothing on a null value — the em-dash is a placeholder', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   it('keeps the checkError icon visible', () => {
     render(
       <FormKeyCell
-        value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false}
+        value="000019:Fallout4.esm" meta={fkMeta} editable={false}
         onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" resolution={validType}
       />,
     );
@@ -113,18 +113,18 @@ describe('FormKeyCell — editable column', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('shows "—" when value is null, not a picker button', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
     expect(pickFormKey).not.toHaveBeenCalled();
   });
 
   it('shows the current formKey as a link at rest', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
   it('plain click on an empty cell opens the picker with an empty seed', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
@@ -132,7 +132,7 @@ describe('FormKeyCell — editable column', () => {
   // Seeded with the current reference — the picker needs to know what it's replacing.
   it('plain click on a cell with a value opens the picker, not navigation', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={onOpen} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={onOpen} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
     expect(onOpen).not.toHaveBeenCalled();
@@ -141,7 +141,7 @@ describe('FormKeyCell — editable column', () => {
   it('commits the picked FormKey when pickFormKey resolves with a selection', async () => {
     const onCommit = vi.fn();
     pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={onCommit} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('—'));
     await vi.waitFor(() => expect(onCommit).toHaveBeenCalledWith('00001A:Fallout4.esm'));
   });
@@ -149,7 +149,7 @@ describe('FormKeyCell — editable column', () => {
   it('leaves the field unchanged when pickFormKey resolves null (Escape/blur)', async () => {
     const onCommit = vi.fn();
     pickFormKey.mockResolvedValueOnce(null);
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={onCommit} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     await vi.waitFor(() => expect(pickFormKey).toHaveBeenCalled());
     expect(onCommit).not.toHaveBeenCalled();
@@ -159,14 +159,14 @@ describe('FormKeyCell — editable column', () => {
   // FormKey seed would leave the one editable column unable to hand over what it displays.
   it('seeds the picker with the composite label the cell displays', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
     expect(pickFormKey).toHaveBeenCalledWith('DogmeatRace [000019:Fallout4.esm]', ['race']);
   });
 
   it('Ctrl+click navigates instead of opening the picker', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={onOpen} onCommit={vi.fn()} resolution={resolvedFixture} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={onOpen} onCommit={vi.fn()} resolution={resolvedFixture} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'), { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
     expect(pickFormKey).not.toHaveBeenCalled();
@@ -178,37 +178,25 @@ describe('FormKeyCell — editable column', () => {
 describe('FormKeyCell — mutable column gates opening on the focus check', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
-  it('a click on a cell with a value, while not the focused cell, does not open the picker', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+  it('the open trigger opens the picker on a cell with a value', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
-    expect(pickFormKey).not.toHaveBeenCalled();
-  });
-
-  it('a click on an empty cell, while not the focused cell, does not open the picker', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('—'));
-    expect(pickFormKey).not.toHaveBeenCalled();
-  });
-
-  it('a double click opens the picker even when not the focused cell', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    fireEvent.doubleClick(screen.getByText('000019:Fallout4.esm'));
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
   });
 
-  it('a double click on an empty cell opens the picker even when not the focused cell', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    fireEvent.doubleClick(screen.getByText('—'));
+  it('the open trigger opens the picker on an empty cell', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('—'));
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
 
   it('marks the mutable link as the open trigger', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).not.toBeNull();
   });
 
   it('does not mark the immutable link as an open trigger', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).toBeNull();
   });
 });
@@ -220,14 +208,14 @@ describe('FormKeyCell — Ctrl-hover link affordance', () => {
   afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
 
   it('shows no link affordance at rest', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     const link = screen.getByText('000019:Fallout4.esm');
     expect(link.style.textDecoration).toBe('none');
   });
 
   it('shows the link affordance when Ctrl is held and the cell is hovered', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: null };
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
     const link = screen.getByText('000019:Fallout4.esm');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
@@ -237,7 +225,7 @@ describe('FormKeyCell — Ctrl-hover link affordance', () => {
 
   it('shows no link affordance on Ctrl-hover when the reference does not resolve', () => {
     const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
-    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={unresolved} />);
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={unresolved} />);
     const link = screen.getByText('FFFFFF:Dangling.esm');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
@@ -249,13 +237,13 @@ describe('FormKeyCell — Ctrl-hover link affordance', () => {
   it('Ctrl+click does not navigate when the reference does not resolve', () => {
     const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
     const onOpen = vi.fn();
-    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} resolution={unresolved} />);
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} resolution={unresolved} />);
     fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'), { ctrlKey: true });
     expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('drops the affordance again when Ctrl is released', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     const link = screen.getByText('000019:Fallout4.esm');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
@@ -275,14 +263,14 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
 
   // The composite, not the bare EditorID: the path the grid's generic FormKey fields take.
   it('labels the link with the resolved EditorID [FormKey] composite', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
   it('shows the affordance for a resolved-wrong-type reference even though it carries a checkError', () => {
     render(
       <FormKeyCell
-        value="00001A:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false}
+        value="00001A:Fallout4.esm" meta={fkMeta} editable={false}
         onOpen={vi.fn()} onCommit={vi.fn()}
         checkError="[00001A:Fallout4.esm] <Warning: resolves to unexpected type>"
         resolution={wrongType}
@@ -295,7 +283,7 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
   });
 
   it('suppresses the affordance when unresolved, even with no checkError present', () => {
-    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={unresolved} />);
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={unresolved} />);
     const link = screen.getByText('FFFFFF:Dangling.esm');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
@@ -305,17 +293,40 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
 
 describe('FormKeyCell — checkError', () => {
   it('shows no warning icon when checkError is absent', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.queryByText('⚠')).not.toBeInTheDocument();
   });
 
   it('shows a warning icon with the checkError as its title in view mode', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
   });
 
   it('shows a warning icon in edit mode too', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} checkError="null not allowed" />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} checkError="null not allowed" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
+  });
+});
+
+describe('FormKeyCell — one gesture opens one picker', () => {
+  afterEach(() => { pickFormKey.mockReset().mockResolvedValue(null); });
+
+  it('two open gestures while the picker is open leave a single picker', () => {
+    pickFormKey.mockReturnValue(new Promise(() => undefined));
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+
+    fireEvent.click(link);
+    fireEvent.click(link);
+
+    expect(pickFormKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the picker again once the first has closed', async () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+
+    fireEvent.click(link);
+    await vi.waitFor(() => { fireEvent.click(link); expect(pickFormKey).toHaveBeenCalledTimes(2); });
   });
 });

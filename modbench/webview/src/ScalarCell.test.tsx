@@ -12,26 +12,10 @@ const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
 
 describe('ScalarCell — the xEdit open gesture', () => {
-  it('a first click on an unfocused cell focuses it and does not open an editor', () => {
-    render(<ScalarCell value="before" meta={meta()} editable isFocused={false} onCommit={vi.fn()} />);
+  it('the open trigger opens the editor', () => {
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('before'));
-
-    expect(screen.queryByRole('textbox')).toBeNull();
-  });
-
-  it('a second click on the already-focused cell opens the editor', () => {
-    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={vi.fn()} />);
-
-    fireEvent.click(screen.getByText('before'));
-
-    expect(screen.getByRole('textbox')).toBeTruthy();
-  });
-
-  it('a double click opens the editor even on a cell that was not focused', () => {
-    render(<ScalarCell value="before" meta={meta()} editable isFocused={false} onCommit={vi.fn()} />);
-
-    fireEvent.doubleClick(screen.getByText('before'));
 
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
@@ -40,10 +24,10 @@ describe('ScalarCell — the xEdit open gesture', () => {
     // F2 is dispatched by the containing cell at `[data-open-trigger]` — its presence *is* the
     // contract, so this asserts the attribute rather than simulating a key on the wrong element.
     const { container, rerender } = render(
-      <ScalarCell value="before" meta={meta()} editable isFocused onCommit={vi.fn()} />);
+      <ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
     expect(container.querySelector('[data-open-trigger]')).toBeTruthy();
 
-    rerender(<ScalarCell value="before" meta={meta()} editable={false} isFocused onCommit={vi.fn()} />);
+    rerender(<ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
     expect(container.querySelector('[data-open-trigger]')).toBeNull();
   });
 });
@@ -51,10 +35,10 @@ describe('ScalarCell — the xEdit open gesture', () => {
 describe('ScalarCell — a column with nowhere to write', () => {
   it('opens nothing under any of the three triggers', () => {
     const { container } = render(
-      <ScalarCell value="before" meta={meta()} editable={false} isFocused onCommit={vi.fn()} />);
+      <ScalarCell value="before" meta={meta()} editable={false} onCommit={vi.fn()} />);
 
     fireEvent.click(screen.getByText('before'));
-    fireEvent.doubleClick(screen.getByText('before'));
+    fireEvent.click(screen.getByText('before'));
 
     expect(screen.queryByRole('textbox')).toBeNull();
     // No F2 target either — the key is inert here by construction, not by a second rule.
@@ -66,7 +50,7 @@ describe('ScalarCell — a column with nowhere to write', () => {
     // nowhere to write, so the cell must not open an editor whose commit would go nowhere.
     render(<ScalarCell value="before" meta={meta()} editable />);
 
-    fireEvent.doubleClick(screen.getByText('before'));
+    fireEvent.click(screen.getByText('before'));
 
     expect(screen.queryByRole('textbox')).toBeNull();
   });
@@ -75,7 +59,7 @@ describe('ScalarCell — a column with nowhere to write', () => {
 describe('ScalarCell — committing', () => {
   it('commits the typed value on Enter', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
@@ -86,7 +70,7 @@ describe('ScalarCell — committing', () => {
 
   it('commits exactly once on Enter, though Enter also blurs the input', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
     const input = screen.getByRole('textbox');
 
@@ -98,7 +82,7 @@ describe('ScalarCell — committing', () => {
 
   it('commits a number as a number, not as the text that was typed', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={1} meta={meta({ type: 'float' })} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value={1} meta={meta({ type: 'float' })} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('1'));
 
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0.75' } });
@@ -111,7 +95,7 @@ describe('ScalarCell — committing', () => {
     // A commit writes a source file. Re-typing the same value would produce a diff of nothing and
     // show the record as dirty in the Source Control panel for a keystroke the user never made.
     const onCommit = vi.fn();
-    render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'before' } });
@@ -125,14 +109,14 @@ describe('ScalarCell — committing', () => {
 // synchronously — no left click may cost latency waiting to see whether a second is coming.
 describe('ScalarCell — string cell has no debounce (ADR-0018)', () => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable isFocused onCommit={vi.fn()} />);
+    render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
     expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
   });
 
   it('a double click on a mutable string cell opens the inline editor, matching every other type', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable isFocused onCommit={vi.fn()} />);
-    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
     expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
   });
 });
@@ -141,13 +125,13 @@ describe('ScalarCell — string cell has no debounce (ADR-0018)', () => {
 // path for a long value is the right-click menu.
 describe('ScalarCell — immutable string cell (ADR-0018)', () => {
   it('opens nothing on double click', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);
-    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('carries no data-open-trigger, same as every other immutable cell', () => {
-    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);
+    render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('Dogmeat').closest('[data-open-trigger]')).toBeNull();
   });
 });
@@ -159,7 +143,7 @@ describe('ScalarCell — a hex row', () => {
 
   it('edits as text and commits the typed hex verbatim', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="0x11223344" meta={hexMeta} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value="0x11223344" meta={hexMeta} editable onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('0x11223344'));
     const input = screen.getByRole('textbox');
@@ -173,7 +157,7 @@ describe('ScalarCell — a hex row', () => {
 
   it('hands a value the writer will refuse straight through, rather than silently correcting it', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="0x11223344" meta={hexMeta} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value="0x11223344" meta={hexMeta} editable onCommit={onCommit} />);
 
     fireEvent.click(screen.getByText('0x11223344'));
     const input = screen.getByRole('textbox');
@@ -203,7 +187,7 @@ describe('ScalarCell — an enum whose values are wire tokens', () => {
   it('commits the chosen option\'s own value, not the label the user read', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value="NpcLevel" meta={kind} editable onCommit={onCommit} />);
-    fireEvent.doubleClick(screen.getByText('Npc Level'));
+    fireEvent.click(screen.getByText('Npc Level'));
 
     const select = screen.getByRole('combobox');
     fireEvent.change(select, { target: { value: 'PcLevelMult' } });
@@ -217,7 +201,7 @@ describe('ScalarCell — an enum whose values are wire tokens', () => {
     render(<ScalarCell value="Alpha" meta={plain} editable onCommit={vi.fn()} />);
 
     expect(screen.getByText('Alpha')).toBeInTheDocument();
-    fireEvent.doubleClick(screen.getByText('Alpha'));
+    fireEvent.click(screen.getByText('Alpha'));
     expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Alpha', 'Beta']);
   });
 });
@@ -236,7 +220,7 @@ describe('ScalarCell — a translated string', () => {
 
   it('commits the object with the typed text as its Value, keeping the rest', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={value} meta={nameMeta} editable isFocused onCommit={onCommit} />);
+    render(<ScalarCell value={value} meta={nameMeta} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('Base name'));
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'New name' } });
@@ -247,14 +231,107 @@ describe('ScalarCell — a translated string', () => {
 
   it('commits a bare object from an absent value', () => {
     const onCommit = vi.fn();
-    const { container } = render(<ScalarCell value={null} meta={nameMeta} editable isFocused onCommit={onCommit} />);
+    const { container } = render(<ScalarCell value={null} meta={nameMeta} editable onCommit={onCommit} />);
     const openTrigger = container.querySelector('[data-open-trigger]');
     if (!openTrigger) throw new Error('expected an open trigger on a bare-object cell with an absent value');
-    fireEvent.doubleClick(openTrigger);
+    fireEvent.click(openTrigger);
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'Named' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(onCommit).toHaveBeenCalledWith({ Value: 'Named' });
+  });
+});
+
+describe('ScalarCell — Enter writes and Esc cancels', () => {
+  const enumMeta = () => meta({
+    type: 'enum',
+    enumMembers: [{ value: 'A' }, { value: 'B' }],
+  });
+
+  it('Esc closes the text editor and writes nothing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByText('before')).toBeTruthy();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Enter writes the text once and closes the editor', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith('after');
+  });
+
+  it('moving the focus away writes the text', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.blur(screen.getByRole('textbox'));
+
+    expect(onCommit).toHaveBeenCalledWith('after');
+  });
+
+  it('Enter in the enum dropdown writes the chosen member and closes it', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="A" meta={enumMeta()} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith('B');
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('Esc in the enum dropdown closes it and writes nothing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="A" meta={enumMeta()} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'B' } });
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Esc hands the focus back to the cell without the blur writing the text', () => {
+    const onCommit = vi.fn();
+    render(
+      <table><tbody><tr><td tabIndex={0} data-testid="cell">
+        <ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />
+      </td></tr></tbody></table>);
+    fireEvent.click(screen.getByText('before'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'after' } });
+
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+
+    expect(screen.getByTestId('cell')).toHaveFocus();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('Esc closes the checkbox editor', () => {
+    render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('false'));
+
+    fireEvent.keyDown(screen.getByRole('checkbox'), { key: 'Escape' });
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 });

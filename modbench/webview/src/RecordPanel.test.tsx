@@ -1677,6 +1677,34 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     expect(told().some((m) => m.entered === true)).toBe(false);
   });
 
+  it('tells the host the user entered the grid when the keyboard focuses a cell', async () => {
+    const entered = (): unknown[] => vi.mocked(vscode.postMessage).mock.calls
+      .map(([m]: unknown[]) => m)
+      .filter((m): m is { type: string; entered: unknown } =>
+        typeof m === 'object' && m !== null && 'type' in m && m.type === WEBVIEW_TO_EXTENSION.FOCUS_CELL
+        && 'entered' in m && m.entered === true);
+    renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Readable Name'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    act(() => { screen.getByText('Readable Name').closest('td')?.focus(); });
+
+    await waitFor(() => expect(entered()).toHaveLength(1));
+  });
+
+  it('focuses the label cell on a click, and selects no text in the grid', async () => {
+    const { container } = renderPanel(compare, { plugins });
+    await waitFor(() => screen.getByText('Readable Name'));
+    const label = screen.getAllByText('Name')[0]?.closest('td');
+    if (!label) throw new Error('no label cell');
+
+    fireEvent.click(label);
+
+    expect(label).toHaveAttribute('data-focused-cell');
+    expect(label).toHaveStyle({ userSelect: 'none' });
+    expect(container.querySelectorAll('[data-focused-cell]')).toHaveLength(1);
+  });
+
   // The array gestures are host commands gated on the row's own data-vscode-context, so a column
   // that offers no array section offers no Add/Remove/Move at all.
   it('offers no array right-click commands, where the readable column offers them', async () => {
