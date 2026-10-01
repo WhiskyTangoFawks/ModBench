@@ -87,7 +87,7 @@ As a user, I want:
 2. A second click on the focused cell, F2, or a double click to open the cell's editor, in place. Each opens the same editor, at once. *xEdit; xedit.md, divergence 6*
 3. The editor to take the whole value, so typing or pasting replaces it. Enter, or moving the focus away, writes it; Esc closes it and writes nothing. *VS Code's inline rename*
 4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down. On the label column, Right expands a row or steps into it, and Left collapses it or steps out to its parent, as in a tree. On a value column, Left and Right move the focus a column, since a tree has no columns. *VS Code's trees; common, A view, story 5*
-5. Ctrl+C to copy the focused cell's value in any column; Ctrl+X to copy it and then clear it, and Ctrl+V to paste over it, in a column that can be edited. *xEdit; [editor-fields.md](editor-fields.md)*
+5. Ctrl+C to copy the focused cell's value in any column; Ctrl+X to copy it and then delete it, as Delete does, and Ctrl+V to paste over it, in a column that can be edited. *xEdit; [editor-fields.md](editor-fields.md)*
 6. Delete to remove the focused element, and Alt+Up or Alt+Down to move it one step, as VS Code moves a line. Delete on a field that is not an element clears it, as xEdit's Clear does. Add has no key, since VS Code has none for it. *VS Code; catalog `remove element`, `move element`, `edit field`*
 7. The keys to act on the grid only while no editor is open. In an open editor they edit its text.
 8. A right click to focus the cell and open its menu. *xEdit*
@@ -125,7 +125,7 @@ The row menus follow VS Code's groups: open, change, source control, copy, then 
 
 As a user, I want:
 
-1. Go to record to show the record the reference points to, in the same tab. *xedit.md, divergence 8; catalog `open`; Stay in the panel*
+1. Go to record to show the record the reference points to, in the panel's editor group, as VS Code's Go to Definition does. *xedit.md, divergence 8; catalog `open`; Stay in the panel*
 2. Open field value to open the field's text in a text editor tab beside the panel, titled `<field> [<file name>]`. Each save writes it; closing without saving writes nothing. Opened again, the same tab shows. In a column that cannot be edited, the tab is read-only, so a long value can still be read. *xedit.md, divergences 2 and 6; catalog `open field value`*
 3. Copy on a column to copy that plugin's copy of the record, asking for the mode and then the destination, as in Plugins. *catalog `copy`; xEdit's column header menu*
 4. Delete on a column to remove that plugin's copy of the record, after one confirmation naming it. *catalog `delete`; xEdit's column header menu*
