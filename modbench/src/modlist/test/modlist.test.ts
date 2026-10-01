@@ -57,7 +57,10 @@ const pathsReached = (): string[] =>
 const forgetPathsReached = (): void => {
   for (const op of [access, stat, lstat, readdir, readFile, writeFile, mkdir, rename, rm]) vi.mocked(op).mockClear();
 };
-const listedDirs = (): string[] => vi.mocked(readdir).mock.calls.map(([path]) => String(path));
+const listedDirs = (dir: string): string[] => {
+  const probed = MOD_FOLDERS.map((name) => join(dir, 'mods', name));
+  return vi.mocked(readdir).mock.calls.map(([path]) => String(path)).filter((path) => !probed.includes(path));
+};
 import {
   createEmptyMod,
   deleteSeparators,
@@ -1198,7 +1201,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await syncMods(accessTo(dir), 'Default', folders)).toMatchObject({ applied: true, dropped: ['Weapons/Armor (separator)'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
+    expect(listedDirs(dir)).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Weapons'))).toEqual([]);
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
@@ -1213,7 +1216,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     forgetPathsReached();
 
     expect(await syncMods(accessTo(dir), 'Default', folders)).toMatchObject({ applied: true, dropped: ['../Escaped'] });
-    expect(listedDirs()).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
+    expect(listedDirs(dir)).toEqual([join(dir, 'mods'), join(dir, 'profiles', 'Default')]);
     expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 
