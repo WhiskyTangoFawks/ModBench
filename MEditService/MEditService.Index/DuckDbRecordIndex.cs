@@ -21,7 +21,15 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
-    private static readonly string[] PlacedTableNames = ["refr", "achr"];
+    private static readonly string[] CellChildTableNames = ["refr", "achr", "land", "navm"];
+
+    // What a cell holds: its placed objects and actors by placement group, and the records filed
+    // beside them (landscape, navmeshes), which xEdit lists among the temporary ones.
+    private const string CellChildren = """
+        (SELECT form_key, plugin, origin, parent_cell, placement_group FROM placement
+         UNION ALL
+         SELECT child_form_key, plugin, origin, parent_form_key, 'temporary' FROM container_child)
+        """;
     private bool _filterActive;
 
     // The records holding a filter match in the match's own plugin, so it stays reachable beneath them.
@@ -1056,7 +1064,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                            WHERE a.form_key = cl.cell_form_key AND a.plugin = cl.plugin AND a.origin = cl.origin
                        ),
                        EXISTS (
-                           SELECT 1 FROM placement p
+                           SELECT 1 FROM {CellChildren} p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
                            WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                              {InListingFilter("p")}
@@ -1105,7 +1113,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey)
         {
             var schemas = owner.RequireSchemas();
-            var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
+            var placedTypes = CellChildTableNames.Where(schemas.ContainsKey).ToList();
             if (placedTypes.Count == 0)
                 return new CellReferences([], []);
 
@@ -1126,7 +1134,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
                         LIMIT 1)
-                FROM placement p
+                FROM {CellChildren} p
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
                   AND r.record_type IN ({typeList}){InListingFilter("p")}
