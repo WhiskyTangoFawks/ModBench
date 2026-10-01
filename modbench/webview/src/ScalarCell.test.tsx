@@ -328,7 +328,7 @@ describe('ScalarCell — Enter writes and Esc cancels', () => {
 
   it('Esc closes the checkbox editor', () => {
     render(<ScalarCell value={false} meta={meta({ type: 'bool' })} editable onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('false'));
+    fireEvent.click(screen.getByText('False'));
 
     fireEvent.keyDown(screen.getByRole('checkbox'), { key: 'Escape' });
 
