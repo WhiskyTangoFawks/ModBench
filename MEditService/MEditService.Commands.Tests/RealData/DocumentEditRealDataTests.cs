@@ -26,7 +26,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-docedit-real-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-docedit-real-game-").FullName;
-    private readonly SourceRepository _repository;
     private readonly PluginAddress _plugin;
     private readonly EditRecordHandler _editHandler;
 
@@ -43,8 +42,6 @@ public sealed class DocumentEditRealDataTests : IDisposable
             .TrackModAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
-        _repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)
-            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _editHandler = TestEditService.EditHandler(holder);
@@ -77,27 +74,18 @@ public sealed class DocumentEditRealDataTests : IDisposable
         using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
         var identities = documents.Records
             .Where((_, index) => index % stride == 0)
-            .Select(d => _repository.IdentityOf(_plugin, d.FormKey, Schemas)
+            .Select(d => TreeAsTheHandlerLeftIt().IdentityOf(_plugin, d.FormKey, Schemas)
                 ?? throw new InvalidOperationException($"Expected the tracked tree to hold {d.FormKey}."))
             .ToList();
         Assert.True(identities.Count > minIdentities, $"Expected a substantial sample of the cut-down plugin; got {identities.Count} documents.");
 
         var failures = new List<string>();
         var gestures = 0;
-        var settledIntoKeyOrder = 0;
         foreach (var identity in identities)
         {
             var schema = Schemas[identity.RecordType];
-            var before = _repository.Get(_plugin, identity)?.Body
+            var before = TreeAsTheHandlerLeftIt().Get(_plugin, identity)?.Body
                 ?? throw new InvalidOperationException($"Expected the tracked tree to hold a document for {identity.FormKey}.");
-            if (!schema.IsHeader)
-            {
-                var (settleResult, settled) = Apply(identity, SetAt(Json(JsonSerializer.Serialize(identity.EditorId)), Member("EditorID")));
-                if (!settleResult.Applied) { failures.Add($"{identity.RecordType} {identity.FormKey}: settling refused, {settleResult.Refusal} {settleResult.Message}"); continue; }
-                if (settled != before) settledIntoKeyOrder++;
-                before = settled ?? throw new InvalidOperationException("Expected a successful settle to report the settled body.");
-                Reset(identity, before);
-            }
             var (envelope, path) = schema.IsHeader
                 ? (SetAt(Json("true"), Member("IsSmallMaster")), "ModHeader.Flags")
                 : (SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
@@ -119,7 +107,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             }
         }
 
-        _output.WriteLine($"{identities.Count} records set, {gestures} further gestures, {settledIntoKeyOrder} were first put in key order.");
+        _output.WriteLine($"{identities.Count} records set, {gestures} further gestures.");
         Assert.True(gestures > minGestures, $"the sample should offer plenty of array and union gestures; it offered {gestures}");
         Assert.True(failures.Count == 0, $"{failures.Count} gestures did not land as exactly their path:\n{string.Join("\n", failures.Take(20))}");
     }
@@ -130,16 +118,19 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private (RecordEditResult Result, string? After) Apply(RecordIdentity identity, RecordEditEnvelope envelope)
     {
         var result = _editHandler.Edit(_plugin, identity.FormKey, envelope);
-        var after = result.Applied ? _repository.Get(_plugin, identity)?.Body : null;
+        var after = result.Applied ? TreeAsTheHandlerLeftIt().Get(_plugin, identity)?.Body : null;
         return (result, after);
     }
 
     // Every case reads and writes independently against the same starting text, never chained.
     private void Reset(RecordIdentity identity, string body) =>
-        _repository.Put(_plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
+        TreeAsTheHandlerLeftIt().Put(_plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
 
-    // Every gesture the record's shape offers, named by the path it may change: a remove by
-    // position or key, an add, a move, a leaf switch on the first union element, and a function
+    private SourceRepository TreeAsTheHandlerLeftIt() => SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+        ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+
+    // Every gesture the record's shape offers, named by the path it may change: a remove, an add,
+    // a move, a leaf switch on the first union element, and a function
     // change (the cascade).
     private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> Gestures(RecordTableSchema schema, JsonElement root)
     {
@@ -153,18 +144,11 @@ public sealed class DocumentEditRealDataTests : IDisposable
             if (DocumentNodes.At(root, column.PropertyName) is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() == 0) continue;
             var meta = DocumentNodes.VariantFor(column.ToFieldMetadata(), root);
             var first = array[0];
-            if (meta.KeyMembers is { } keyMembers)
-            {
-                yield return (RemoveAt(Member(column.Name), Key(ElementKey.Of(first, keyMembers, meta.ElementType).Text)), column.Name);
-            }
-            else
-            {
-                yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
-                yield return (AddAt(Member(column.Name)), column.Name);
-                // Moving one of two identical elements changes nothing, which is not a stray.
-                if (array.GetArrayLength() > 1 && first.GetRawText() != array[1].GetRawText())
-                    yield return (MoveTo(1, Member(column.Name), At(0)), column.Name);
-            }
+            yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
+            yield return (AddAt(Member(column.Name)), column.Name);
+            // Moving one of two identical elements changes nothing, which is not a stray.
+            if (array.GetArrayLength() > 1 && first.GetRawText() != array[1].GetRawText())
+                yield return (MoveTo(1, Member(column.Name), At(0)), column.Name);
 
             var discriminator = meta.ElementType?.Fields?.FirstOrDefault(f => f.IsDiscriminator);
             if (discriminator != null && first.ValueKind == JsonValueKind.Object

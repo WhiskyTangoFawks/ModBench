@@ -1,4 +1,4 @@
-import { isFieldType, type ColumnKey, type CompareOverride, type FieldDiff, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
+import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
 import { columnKey } from './columnKey';
 
 export function toStr(v: unknown): string {
@@ -32,22 +32,9 @@ export function isArrayElementHop(seg: PathSegment | undefined): boolean {
   return seg !== undefined && seg.kind !== 'member';
 }
 
-// A keyed array is stored in key order on every write, so no Move there could change the file.
-export function isMovableElementHop(seg: PathSegment | undefined): boolean {
-  return seg?.kind === 'index';
-}
-
 // A keyed array included, where a new element starts with the empty key.
 export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
   return meta?.type === 'array' && !!meta.elementType;
-}
-
-// A keyed array's child is addressed by the key text as the backend labelled it, every other
-// array's by its own index in each column that holds it.
-export function elementSegment(arrayMeta: FieldMetadata, element: FieldDiff): PathSegment {
-  return arrayMeta.keyMembers
-    ? { kind: 'key', key: element.fieldName }
-    : { kind: 'element', indexes: element.indexes };
 }
 
 // ── Native right-click menu contexts ──────────────────────────────────────────
@@ -63,17 +50,17 @@ import type {
   StringValueContext,
 } from './messages';
 
-// `siblings` is the length of the array in this column's own document.
+// `siblings` is the length of the array in this column's own document. xedit.md, divergence 14: a
+// keyed array takes no move.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number,
+  formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number, keyed: boolean,
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
-  const movable = isMovableElementHop(lastSeg);
-  const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
+  const index = lastSeg?.kind === 'index' && !keyed ? lastSeg.index : -1;
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, path,
-    canMoveUp: movable && index > 0,
-    canMoveDown: movable && index < siblings - 1,
+    canMoveUp: index > 0,
+    canMoveDown: index >= 0 && index < siblings - 1,
     preventDefaultContextMenuItems: true,
   };
 }
@@ -133,8 +120,7 @@ export function getAtPath(root: unknown, path: readonly PathHop[]): unknown {
   let cur = root;
   for (const seg of path) {
     if (seg.kind === 'member') cur = (cur as Record<string, unknown> | undefined)?.[seg.name];
-    else if (seg.kind === 'index') cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
-    else cur = undefined;
+    else cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
   }
   return cur;
 }

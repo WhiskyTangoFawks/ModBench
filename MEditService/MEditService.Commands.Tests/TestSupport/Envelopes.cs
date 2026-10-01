@@ -10,7 +10,6 @@ internal static class Envelopes
 {
     internal static PathHop Member(string name) => PathHop.Member(name);
     internal static PathHop At(int index) => PathHop.At(index);
-    internal static PathHop Key(string key) => PathHop.ByKey(key);
 
     internal static RecordEditEnvelope SetAt(JsonElement value, params PathHop[] path) =>
         new(RecordEditEnvelope.Set, path, value);

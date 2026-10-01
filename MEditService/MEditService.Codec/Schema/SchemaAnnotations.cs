@@ -51,7 +51,7 @@ internal sealed record SchemaAnnotations(
     // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
-    // down), not by position. Aligned by key in the compare grid, written back in key order, duplicates refused.
+    // down), not by position. Aligned by key in the compare grid, kept in the order held, duplicates refused.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.

@@ -26,15 +26,30 @@ public static class DocumentNodes
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
 
-    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(); and
-    // against an absent side, what `defaultOf` says the codec omits.
-    public static bool SameNode(object? a, object? b, FieldMetadata? absentReadsAs)
+    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(), with
+    // every keyed array in key order, as it aligns; and against an absent side, what the codec
+    // omits.
+    public static bool SameNode(object? a, object? b, FieldMetadata shape, bool absentMeansDefault)
     {
-        if (a is JsonElement ja && b is JsonElement jb) return ja.GetRawText() == jb.GetRawText();
+        if (a is JsonElement ja && b is JsonElement jb)
+            return ja.GetRawText() == jb.GetRawText() || InKeyOrder(ja, shape) == InKeyOrder(jb, shape);
         if (a is null && b is null) return true;
         if (a is null || b is null)
-            return absentReadsAs is { } meta && (a ?? b) is JsonElement present && IsOmitted(present, meta);
+            return absentMeansDefault && (a ?? b) is JsonElement present && IsOmitted(present, shape);
         return Equals(a, b);
+    }
+
+    // A stable sort, so elements sharing a key keep their turn, as they align.
+    private static string InKeyOrder(JsonElement value, FieldMetadata meta)
+    {
+        var node = JsonNode.Parse(value.GetRawText());
+        foreach (var keyed in KeyedArrays.Under(node, meta))
+        {
+            var ordered = keyed.Elements.Zip(keyed.Keys).OrderBy(pair => pair.Second, ElementKey.Order).Select(pair => pair.First).ToList();
+            keyed.Elements.Clear();
+            foreach (var element in ordered) keyed.Elements.Add(element);
+        }
+        return node?.ToJsonString() ?? "null";
     }
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,

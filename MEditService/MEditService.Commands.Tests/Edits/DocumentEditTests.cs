@@ -46,7 +46,6 @@ public sealed class DocumentEditTests : IDisposable
         _npc.Race.SetTo(_race);
         _npc.HeightMax = 1f;
         _npc.Keywords = [_keyword.ToLink<IKeywordGetter>()];
-        // In key order already, so a gesture's only change is its own.
         var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
         var alpha = new ScriptEntry { Name = "Alpha", Flags = ScriptEntry.Flag.Local };
         alpha.Properties.Add(new ScriptIntProperty { Name = "Count", Flags = ScriptProperty.Flag.Edited, Data = 1 });
@@ -128,12 +127,12 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void Set_ThroughTwoKeyHops_ChangesExactlyThatPath()
+    public void Set_ThroughTwoKeyedArrays_ChangesExactlyThatPath()
     {
         var formKey = SeedNpc();
         var before = _fixture.Document(formKey);
 
-        var after = Applied(formKey, SetAt(Json("9"), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Alpha"), Member("Properties"), Key("Count"), Member("Data")));
+        var after = Applied(formKey, SetAt(Json("9"), Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Properties"), At(0), Member("Data")));
 
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Properties[0].Data: 1 -> 9"], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -248,30 +247,29 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void Add_OnAKeyedArray_LandsInKeyOrder_AndAKeyHopFindsIt()
+    public void Add_OnAKeyedArray_AppendsTheElement()
     {
         var formKey = SeedNpc();
         var before = _fixture.Document(formKey);
 
         var added = Applied(formKey, AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        Assert.Equal(["Aardvark", "Alpha", "Beta"], Node(added, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
-        AssertOnlyChanged(before, added, "VirtualMachineAdapter.Scripts[");
-
-        var removed = Applied(formKey, RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark")));
-        Assert.Equal(["Alpha", "Beta"], Node(removed, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
+        Assert.Equal(["Alpha", "Beta", "Aardvark"], ScriptNames(added));
+        AssertOnlyChanged(before, added, "VirtualMachineAdapter.Scripts[2]");
     }
 
     [Fact]
-    public void Set_OfAKeyMember_MovesTheElementToItsNewKeysPlace()
+    public void Set_OfAKeyMember_LeavesTheElementWhereItIs()
     {
         var formKey = SeedNpc();
-        Applied(formKey, AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        var after = Applied(formKey, SetAt(Json("\"Zulu\""), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark"), Member("Name")));
+        var after = Applied(formKey, SetAt(Json("\"Zulu\""), Member("VirtualMachineAdapter"), Member("Scripts"), At(0), Member("Name")));
 
-        Assert.Equal(["Alpha", "Beta", "Zulu"], Node(after, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
+        Assert.Equal(["Zulu", "Beta"], ScriptNames(after));
     }
+
+    private static IEnumerable<string> ScriptNames(string document) =>
+        Node(document, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>());
 
     // An element that is not there is a path the document does not know, on every operation.
     [Theory]
@@ -290,22 +288,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
         Assert.Equal("Keywords[7]", result.Path);
         Assert.Contains("holds 1 element", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
-    }
-
-    [Fact]
-    public void AKeyNoElementCarries_IsRefusedNamingThePathAndTheLength()
-    {
-        var formKey = SeedNpc();
-        var before = _fixture.Document(formKey);
-
-        var (result, after) = _fixture.Apply(formKey, RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Gamma")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", result.Path);
-        Assert.Contains("holds 2 element", result.Message, StringComparison.Ordinal);
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));
     }
@@ -504,17 +486,6 @@ public sealed class DocumentEditTests : IDisposable
         var after = Applied(formKey, SetAt(Json($"\"{linkTarget}\""), Member("Race")));
 
         Assert.Equal(linkTarget, Node(after, "Race").GetValue<string>());
-    }
-
-    [Fact]
-    public void KeyHop_IntoAnArrayTheSchemaDoesNotKey_IsRefused()
-    {
-        var formKey = SeedNpc();
-
-        var (result, _) = _fixture.Apply(formKey, RemoveAt(Member("Keywords"), Key("x")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
     [Theory]

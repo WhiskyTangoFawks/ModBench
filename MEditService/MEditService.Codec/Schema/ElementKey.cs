@@ -30,6 +30,8 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 
     public static ElementKey OfValue(string value) => new([(null, value)]);
 
+    public static IComparer<ElementKey> Order { get; } = Comparer<ElementKey>.Create((a, b) => a.CompareTo(b));
+
     public int CompareTo(ElementKey other)
     {
         for (var i = 0; i < Segments.Count; i++)

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
@@ -79,7 +78,7 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         foreach (var child in children.EnumerateArray())
         {
             var childName = child.GetProperty("fieldName").GetString().Require();
-            Collect(child, Resolve(node, childName, shape), ChildMeta(shape, childName), here, mismatches);
+            Collect(child, Resolve(node, child, childName), ChildMeta(shape, childName), here, mismatches);
         }
     }
 
@@ -102,29 +101,17 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
     private static FieldMetadata? ChildMeta(FieldMetadata? owner, string label) =>
         owner?.Type == "array" ? owner.ElementType : owner?.Fields?.FirstOrDefault(f => f.Name == label);
 
-    // The array metadata resolving a child is the *parent's* own: a keyed array's child is found by
-    // the key the metadata names, any other by position, which is its row's in a one-column compare.
-    private static JsonElement? Resolve(JsonElement? parent, string name, FieldMetadata? meta)
+    private static JsonElement? Resolve(JsonElement? parent, JsonElement child, string name)
     {
         if (parent is not { } p) return null;
         if (p.ValueKind == JsonValueKind.Object)
             return p.TryGetProperty(name, out var member) ? member : null;
-        if (p.ValueKind != JsonValueKind.Array) return null;
-
-        if (ElementIndex(name) is { } i)
-            return i >= 0 && i < p.GetArrayLength() ? p[i] : null;
-        if (meta?.KeyMembers is { } keyMembers)
-            foreach (var e in p.EnumerateArray())
-                if (ElementKey.Of(e, keyMembers, meta.ElementType).Text == name) return e;
-        return null;
+        if (p.ValueKind != JsonValueKind.Array || !child.TryGetProperty("indexes", out var indexes)
+            || indexes.ValueKind != JsonValueKind.Object)
+            return null;
+        var index = indexes.EnumerateObject().Single().Value.GetInt32();
+        return index < p.GetArrayLength() ? p[index] : null;
     }
-
-    // An array child is labelled by its position; every other label is a member name.
-    private static int? ElementIndex(string label) =>
-        label.StartsWith('[') && label.EndsWith(']')
-        && int.TryParse(label[1..^1], NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-            ? index
-            : null;
 
     private static bool JsonEquals(JsonElement a, JsonElement b) =>
         JsonNode.DeepEquals(JsonNode.Parse(a.GetRawText()), JsonNode.Parse(b.GetRawText()));

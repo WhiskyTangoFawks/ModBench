@@ -36,7 +36,7 @@ public record FieldMetadata(
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
 
     // The element member(s) identifying an element (xEdit's wbArrayS); null where an array aligns
-    // by values in sequence. Aligned by key, written back in key order, duplicates refused. A name
+    // by values in sequence. Aligned by key, kept in the order held, duplicates refused. A name
     // may be dotted to reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 

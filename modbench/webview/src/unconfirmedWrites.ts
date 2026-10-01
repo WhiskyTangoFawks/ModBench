@@ -38,7 +38,6 @@ function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: Col
     const member = meta.fields?.find(f => f.name === hop.name);
     return { diff: children.find(c => c.fieldName === hop.name), meta: member && variantFor(member, owner, meta) };
   }
-  if (hop.kind === 'key') return { diff: children.find(c => c.fieldName === hop.key), meta: meta.elementType };
   return { diff: children.find(c => c.indexes?.[column] === hop.index), meta: meta.elementType };
 }
 

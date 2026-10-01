@@ -742,7 +742,6 @@ export interface components {
             name?: string | null;
             /** Format: int32 */
             index?: number | null;
-            key?: string | null;
         };
         PlacedSummary: {
             formKey: string;

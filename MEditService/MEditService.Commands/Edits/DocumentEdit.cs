@@ -16,8 +16,8 @@ internal sealed record DocumentEditRequest(
     GameRelease Release,
     Func<string, string> RoundTrip);
 
-/// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch, key
-/// order, codec round trip, compare what came back with what was asked. Pure: text and metadata
+/// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
+/// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
 /// in, text or one refusal out.</summary>
 internal static class DocumentEdit
 {
@@ -58,7 +58,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
 
-        if (KeyedArrays.Normalize(record, RootMetadata(request.Schema), "") is { } duplicate)
+        if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.DuplicateKeyInKeyedArray, duplicate.Path,
@@ -114,11 +114,11 @@ internal static class DocumentEdit
         if (envelope.Path.Count == 0 || envelope.Path[0].Kind != PathHop.MemberKind)
             return Malformed(spelled, "a path starts with a member hop");
         if (envelope.Path.Any(hop => !WellFormed(hop)))
-            return Malformed(spelled, "every hop is a member with a name, an index with a position, or a key with its text");
+            return Malformed(spelled, "every hop is a member with a name or an index with a position");
         if (envelope.Op == RecordEditEnvelope.Set && envelope.Value is null)
             return Malformed(spelled, "set takes a value (JSON null clears a member)");
         if (envelope.Op is RecordEditEnvelope.Remove or RecordEditEnvelope.Move && envelope.Path[^1].Kind == PathHop.MemberKind)
-            return Malformed(spelled, $"{envelope.Op} addresses an element, by index or by key");
+            return Malformed(spelled, $"{envelope.Op} addresses an element by its index");
         if (envelope.Op == RecordEditEnvelope.Move && envelope.Value is not { ValueKind: JsonValueKind.Number })
             return Malformed(spelled, "move takes the destination index as its value");
         return null;
@@ -127,9 +127,8 @@ internal static class DocumentEdit
     // A hop names exactly what its kind needs.
     private static bool WellFormed(PathHop hop) => hop.Kind switch
     {
-        PathHop.MemberKind => hop.Name is { Length: > 0 } && hop.Index is null && hop.Key is null,
-        PathHop.IndexKind => hop.Index is >= 0 && hop.Name is null && hop.Key is null,
-        PathHop.KeyKind => hop.Key is not null && hop.Name is null && hop.Index is null,
+        PathHop.MemberKind => hop.Name is { Length: > 0 } && hop.Index is null,
+        PathHop.IndexKind => hop.Index is >= 0 && hop.Name is null,
         _ => false,
     };
 
@@ -262,24 +261,10 @@ internal static class DocumentEdit
                 array = new JsonArray();
                 if (creating) Attach(cursor, array);
             }
-            int index;
-            if (hop.Kind == PathHop.IndexKind)
-            {
-                index = hop.RequireIndex();
-            }
-            else
-            {
-                if (cursor.Meta.KeyMembers is not { } keyMembers)
-                    return Malformed(sofar, $"'{RecordEditEnvelope.Spell(path.Take(i))}' is not a keyed array; address its elements by position");
-                index = -1;
-                for (var e = 0; e < array.Count; e++)
-                {
-                    if (string.Equals(ElementKey.Of(array[e], keyMembers, elementMeta).Text, hop.Key, StringComparison.Ordinal)) { index = e; break; }
-                }
-            }
+            var index = hop.RequireIndex();
             // An element that is not there is a path the document does not know, on every operation:
             // a stale panel must never hear that a write which did nothing landed.
-            if (index < 0 || index >= array.Count) return NoElement(sofar, array.Count);
+            if (index >= array.Count) return NoElement(sofar, array.Count);
             cursor = new Cursor
             {
                 Column = column,
@@ -287,6 +272,7 @@ internal static class DocumentEdit
                 Meta = elementMeta,
                 Field = elementMeta,
                 OwnerArray = array,
+                OwnerMeta = cursor.Meta,
                 Index = index,
             };
         }
@@ -510,7 +496,7 @@ internal static class DocumentEdit
         var array = cursor.RequireOwnerArray();
         array.RemoveAt(cursor.Index);
         edited = array;
-        editedMeta = ArrayMeta(cursor);
+        editedMeta = cursor.RequireOwnerMeta();
         return null;
     }
 
@@ -519,6 +505,9 @@ internal static class DocumentEdit
         edited = null;
         editedMeta = cursor.Meta;
         var array = cursor.RequireOwnerArray();
+        // xedit.md, divergence 14.
+        if (cursor.RequireOwnerMeta().KeyMembers != null)
+            return Malformed(spelled, $"'{Owner(spelled)}' is a keyed array, and a keyed array's elements take no move");
         // ValidateEnvelope confirms a move's value is a non-null number before Move ever runs.
         var destination = (value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
         if (destination < 0 || destination >= array.Count) return NoElement($"{Owner(spelled)}[{destination}]", array.Count);
@@ -527,17 +516,12 @@ internal static class DocumentEdit
         array.RemoveAt(cursor.Index);
         array.Insert(destination, node);
         edited = array;
-        editedMeta = ArrayMeta(cursor);
+        editedMeta = cursor.RequireOwnerMeta();
         return null;
     }
 
     // The array's own spelling, which is the element's without its last hop.
     private static string Owner(string spelledElement) => spelledElement[..spelledElement.LastIndexOf('[')];
-
-    // The array an element cursor sits in has the element's shape as its ElementType; its own key
-    // members are what the comparison needs, so the array's metadata is rebuilt around the element's.
-    private static FieldMetadata ArrayMeta(Cursor cursor) =>
-        new("", "array", true, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, ElementType: cursor.Meta);
 
     // ── the closed pre-check list ───────────────────────────────────────────
 
@@ -641,8 +625,8 @@ internal static class DocumentEdit
         EmbeddedChildPath.Walk(root, prefix) as JsonObject
             ?? throw new InvalidOperationException($"The document has no object at {RecordEditEnvelope.Spell(prefix)}.");
 
-    // The node's place from the root, by member name and by position, read after keyed arrays were
-    // put in key order so the same chain addresses it in what the codec wrote back.
+    // The node's place from the root, by member name and by position, so the same chain addresses
+    // it in what the codec wrote back.
     private static List<object> IndexChain(JsonNode node)
     {
         var chain = new List<object>();

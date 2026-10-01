@@ -115,17 +115,17 @@ describe('right-click array ops write one envelope from the host', () => {
       .toEqual({ op: 'add', path: [{ kind: 'member', name: 'Values' }], value: 6 });
   });
 
-  it('Remove lands a remove envelope at a keyed element\'s own path', async () => {
+  it('Remove lands a remove envelope at the element\'s own path', async () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
     await present(handlers.get('modbench.record.removeElement'), "the handler registered for 'modbench.record.removeElement'")(elementContext(
-      [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }],
+      [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }],
     ));
 
     expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
-      { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }] },
+      { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'index', index: 1 }] },
     ]);
   });
 
