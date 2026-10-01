@@ -534,6 +534,7 @@ export interface components {
             isPartialForm: boolean;
             isPartialFormable: boolean;
             parseDiagnosis?: string | null;
+            formIdReadOnlyReason?: string | null;
             conflictThis: components["schemas"]["ConflictThis"];
             loadIndex: string;
             isInOverwrite: boolean;
@@ -879,6 +880,7 @@ export interface components {
             isPartialForm: boolean;
             isPartialFormable: boolean;
             parseDiagnosis?: string | null;
+            formIdReadOnlyReason?: string | null;
         };
         /** @enum {string} */
         RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "PluginNotActive" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "RecordTypeNotFound" | "FormKeyCollision" | "NotNativeRecord" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "SourceWriteFailed" | "AmbiguousSourceUnit" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DestinationHoldsRecord" | "DuplicateKeyInKeyedArray" | "HeaderDeleteNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed" | "GitUnavailable";

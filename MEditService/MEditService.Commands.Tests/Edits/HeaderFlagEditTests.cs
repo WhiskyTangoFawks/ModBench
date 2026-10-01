@@ -1,15 +1,17 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The ESL flag's one sanctioned write door is the synthetic <c>IsSmallMaster</c> header field;
-/// the raw <c>flags</c> column stays read-only.</summary>
+/// a write to the raw <c>Flags</c> column changes every other bit and refuses this one.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
     private readonly SourceEditFixture _fixture = SourceEditFixture.Tracked();
@@ -101,30 +103,61 @@ public sealed class HeaderFlagEditTests : IDisposable
     private PluginCompileService CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);
 
-    // The raw flags column stays exactly as read-only as it was — IsSmallMaster is the one door.
     [Fact]
-    public void EditField_RawFlagsColumn_StillRefusesAsReadOnly()
+    public void EditField_Masters_RefusesAsReadOnly_AndChangesNothing()
     {
-        var result = Service().Set(
-            _fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse("[\"Small\"]").RootElement);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-    }
-
-    // Masters and Author refuse identically to Flags — the evidence that no masters-specific
-    // mechanism exists, only the shared absence of a write delegate on every header column.
-    [Fact]
-    public void EditField_MastersOrAuthor_RefusesAsReadOnly_LikeTheFlagsColumn()
-    {
-        // "MasterReferences" is PluginHeader.MastersFieldName's wire name (Codec-internal).
         var masters = Service().Set(
             _fixture.Plugin, HeaderFormKey, "MasterReferences", JsonDocument.Parse("[\"Other.esm\"]").RootElement);
-        var author = Service().Set(
-            _fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone Else\"").RootElement);
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, author.Refusal);
         Assert.Empty(_fixture.GitStatus());
+    }
+
+    private RecordEditResult SetFlags(string names) =>
+        Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
+
+    [Fact]
+    public void EditField_RawFlagsSettingSmall_IsRefusedNamingTheLightFlagsDoor()
+    {
+        var result = SetFlags("[\"Small\"]");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
+        Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
+        Assert.Empty(_fixture.GitStatus());
+    }
+
+    [Fact]
+    public void EditField_RawFlagsChangingAnotherBit_IsAccepted()
+    {
+        var result = SetFlags("[\"Master\"]");
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public void EditField_RawFlagsLeavingSmallAsItIs_WhileChangingAnotherBit_IsAccepted()
+    {
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
+
+        var result = SetFlags("[\"Small\", \"Master\"]");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.True(HeaderDocument.IsLight(System.Text.Encoding.UTF8.GetBytes(_fixture.Document(HeaderFormKey).Require().Body)));
+    }
+
+    [Fact]
+    public async Task EditField_Author_CompilesIntoTheBinary()
+    {
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "Author", JsonDocument.Parse("\"Someone\"").RootElement).Applied);
+
+        var compile = await CompileService().CompileAsync(_fixture.Plugin);
+        Assert.True(compile.Succeeded, compile.RefusalReason);
+
+        using var written = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
+                Path.Combine(_fixture.ModFolder, SourceEditFixture.PluginName)),
+            GameRelease.Fallout4);
+        Assert.Equal("Someone", ((IFallout4ModGetter)written).ModHeader.Author);
     }
 }

@@ -71,8 +71,6 @@ interface RecordHeaderRowsProps {
   collapsedColumns: Set<ColumnKey>;
   dimmedColumns: Set<ColumnKey>;
   editableColumns: Set<ColumnKey>;
-  // A plugin header's FormID names the plugin, and is read-only (editor.md, The FormID).
-  isPluginHeader: boolean;
   expanded: boolean;
   onToggle: () => void;
   focusedCell: FocusedCell | null;
@@ -83,7 +81,7 @@ interface RecordHeaderRowsProps {
 /** editor.md, The FormID: the grid's first rows, Record Header and the record's FormID under it,
  *  each column reading its own copy's FormKey. */
 export function RecordHeaderRows({
-  columns, collapsedColumns, dimmedColumns, editableColumns, isPluginHeader, expanded, onToggle,
+  columns, collapsedColumns, dimmedColumns, editableColumns, expanded, onToggle,
   focusedCell, onFocusCell, onCommitFormId,
 }: Readonly<RecordHeaderRowsProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties =>
@@ -124,11 +122,12 @@ export function RecordHeaderRows({
               <DiskCell
                 key={key} style={cellStyle(key)} isFocused={isFocused(FORM_ID_ROW, key)}
                 onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
+                title={override.formIdReadOnlyReason ?? undefined}
                 copyText={formKeyLabel(override.formKey, override)}
               >
                 <FormIdCell
                   record={override}
-                  editable={!isPluginHeader && editableColumns.has(key)}
+                  editable={editableColumns.has(key) && override.formIdReadOnlyReason == null}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               </DiskCell>

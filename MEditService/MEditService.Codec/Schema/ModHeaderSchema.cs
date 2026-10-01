@@ -16,15 +16,13 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The members of the header the editor presents, and why a write reaching each is refused. A mod
-    // header is not a major record, so the table names them; each is built by the same builder every
-    // record column is.
-    private static readonly (string Member, string ReadOnlyReason)[] PresentedMembers =
+    // The members of the header the editor presents, and why a write reaching one is refused, if it
+    // is. A mod header is not a major record, so the table names them.
+    private static readonly (string Member, string? ReadOnlyReason)[] PresentedMembers =
     [
-        ("Author", SchemaRefusals.HeaderNoWritePathReason),
-        ("Flags", SchemaRefusals.HeaderNoWritePathReason),
-        // Masters are read-only: content-derived at compile time (ADR-0008), so a write reaching
-        // them is refused FieldReadOnly.
+        ("Author", null),
+        ("Flags", null),
+        // Content-derived at compile time (ADR-0008).
         (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
     ];
 
@@ -56,7 +54,7 @@ internal static class ModHeaderSchema
 
             // A member the builder declines has already said so through SchemaRefusals.
             if (ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is { } column)
-                columns.Add(column with { Field = column.Field with { ReadOnlyReason = readOnlyReason } });
+                columns.Add(column with { Field = column.Field with { ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason } });
         }
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that

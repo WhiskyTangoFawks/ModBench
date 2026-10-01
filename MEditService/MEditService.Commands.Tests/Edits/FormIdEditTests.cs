@@ -71,6 +71,7 @@ public sealed class FormIdEditTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Equal("FormKey", result.Path);
+        Assert.Equal(PluginHeader.FormIdReadOnlyReason(headerFormKey, mod.Plugin.Name), result.Message);
         Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
     }
 
