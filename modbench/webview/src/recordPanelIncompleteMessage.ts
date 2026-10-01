@@ -3,6 +3,5 @@
  *  winners until it re-runs (ADR-0013). */
 export function recordPanelIncompleteMessage(conflictsComputed: boolean): string | undefined {
   if (conflictsComputed) return undefined;
-  return 'This record\'s comparison is not yet complete: conflict information has not been '
-    + 'computed for every plugin, so the colouring here is not final.';
+  return 'This record\'s comparison is not complete: the colours are not final.';
 }

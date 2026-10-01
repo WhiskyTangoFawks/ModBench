@@ -221,6 +221,7 @@ async function answerRecordLoad(
     deps.meditClient.getPlugins(),
   ]);
   if (compare.status === 'rejected') {
+    deps.channel.warn(`Failed to read ${m.formKey}: ${errorMessage(compare.reason)}`);
     deps.reply({
       type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: m.requestId,
       ok: false, error: errorMessage(compare.reason),

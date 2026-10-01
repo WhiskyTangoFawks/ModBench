@@ -33,6 +33,13 @@ describe('RecordPanelClient.load', () => {
     });
   });
 
+  it('reads a record held by no active plugin as a null result, not a failure', async () => {
+    const promise = createRecordPanelClient().load('000001:A.esp');
+    answer(lastRequestId(), { ok: true, compare: null, plugins: null, conflictsComputed: true });
+
+    expect(await promise).toMatchObject({ ok: true, result: null });
+  });
+
   it('returns a composite view on success', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
@@ -43,7 +50,7 @@ describe('RecordPanelClient.load', () => {
     const r = await promise;
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.result.conflictAll).toBe('OnlyOne');
+    expect(r.result?.conflictAll).toBe('OnlyOne');
     // Keyed by compound column identity, not the bare plugin name; this fixture has no
     // `origin`, which columnKey() treats as the elided Data origin.
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
@@ -115,6 +122,6 @@ describe('RecordPanelClient.load', () => {
     const r = await promise;
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.result.conflictAll).toBe('NoConflict');
+    expect(r.result?.conflictAll).toBe('NoConflict');
   });
 });

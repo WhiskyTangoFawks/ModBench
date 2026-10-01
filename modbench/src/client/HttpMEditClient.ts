@@ -511,10 +511,9 @@ export class HttpMEditClient implements MEditClient {
     return (data?.overrides ?? []).map((o) => ({ name: o.plugin, origin: o.origin }));
   }
 
-  // Unlike getRecordHolders, a 404 is not degraded here: the record panel reports any non-OK
-  // compare as one generic load failure.
-  async getComparison(formKey: string): Promise<CompareResult> {
+  async getComparison(formKey: string): Promise<CompareResult | null> {
     const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
+    if (response.status === 404) return null;
     this.ensureOk(`getComparison(${formKey})`, response, error);
     if (!data) throw new Error(`getComparison(${formKey}): ok response carried no body`);
     return data;

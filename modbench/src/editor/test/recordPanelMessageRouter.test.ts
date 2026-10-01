@@ -634,6 +634,18 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     });
   });
 
+  it('answers a record held by no active plugin as a null comparison, not a failure', async () => {
+    meditClient.setQueryAnswer('getComparison', null);
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const reply = vi.fn();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply, conflictsComputed: () => true }));
+
+    expect(reply).toHaveBeenCalledWith({
+      type: EXTENSION_TO_WEBVIEW.RECORD_LOAD_ANSWERED, requestId: 'r1', ok: true, compare: null, plugins, conflictsComputed: true,
+    });
+  });
+
   it('asks the comparison by the message\'s own formKey', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
     meditClient.setQueryAnswer('getPlugins', plugins);
@@ -641,6 +653,16 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     await routeRecordPanelMessage(loadMessage, makeDeps({ reply: vi.fn() }));
 
     expect(meditClient.calls).toContainEqual({ method: 'getComparison', args: ['000001:A.esp'] });
+  });
+
+  it('writes a failed comparison to the Output, naming the record', async () => {
+    meditClient.setQueryFailure('getComparison', new Error('ECONNREFUSED'));
+    meditClient.setQueryAnswer('getPlugins', plugins);
+    const channel = fakeChannel();
+
+    await routeRecordPanelMessage(loadMessage, makeDeps({ reply: vi.fn(), channel }));
+
+    expect(channel.warn).toHaveBeenCalledWith('Failed to read 000001:A.esp: ECONNREFUSED');
   });
 
   it('fails the whole load when the comparison itself fails', async () => {
