@@ -62,9 +62,9 @@ internal sealed record SchemaAnnotations(
     // Members the document never spells but one bit of a flags member says: the ESL flag, the
     // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
     Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
-    // The record header's members in xEdit's order, each under xEdit's label (wbRecordHeader in
-    // wbDefinitionsCommon.pas), keyed by the interface that declares it. A type carries the rows
-    // whose interface it has: a game's major-record base, or its mod header.
+    // The record header's members in xEdit's order, under xEdit's labels (wbRecordHeader in
+    // wbDefinitionsCommon.pas), keyed by the declaring interface: a type carries the rows whose
+    // interface it has.
     IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
