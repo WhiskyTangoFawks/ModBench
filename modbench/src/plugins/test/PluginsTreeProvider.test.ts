@@ -3506,3 +3506,139 @@ describe('PluginsTreeProvider — the row of a record create wrote', () => {
     expect(await tree.recordRow(NPCS, NEW_NPC)).toBeUndefined();
   });
 });
+
+describe('PluginsTreeProvider — an unconfirmed enable or disable (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const valueWith = (...enabled: [string, string, boolean][]): InstanceValue =>
+    valueOf(enabled.map(([name, origin, on], slot) => plugin({ name, origin, slot, enabled: on })));
+
+  const rowOf = async (tree: PluginsTreeProvider, name: string, origin: string): Promise<PluginNode> =>
+    present((await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode)
+      .find((n) => n.plugin.name === name && n.origin === origin), name);
+  const spinning = (tree: PluginsTreeProvider, row: PluginNode) => {
+    const icon = tree.getTreeItem(row).iconPath;
+    return icon instanceof ThemeIcon && icon.id === 'sync~spin';
+  };
+
+  function treeOver(instance: FakeInstance, log: (line: string) => void = () => undefined) {
+    return new PluginsTreeProvider({
+      instance, source: new FakeSource(), log: (_level, line) => log(line),
+    });
+  }
+
+  it('shows the new state at once, and the mark only after a delay, on that row alone', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true], ['B.esp', 'ModTwo', true]));
+    const tree = treeOver(instance);
+    const a = await rowOf(tree, 'A.esp', 'ModOne');
+
+    tree.markUnconfirmed(a, false);
+
+    const written = await rowOf(tree, 'A.esp', 'ModOne');
+    expect(written.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
+    expect(spinning(tree, written)).toBe(false);
+
+    vi.advanceTimersByTime(1000);
+    const marked = await rowOf(tree, 'A.esp', 'ModOne');
+    expect(spinning(tree, marked)).toBe(true);
+    expect(tree.getTreeItem(marked).tooltip).toBe('Written; waiting for the disk to confirm');
+    expect(spinning(tree, await rowOf(tree, 'B.esp', 'ModTwo'))).toBe(false);
+  });
+
+  it('keys the mark on (origin, filename): a plugin of the same name from another origin is untouched', async () => {
+    const instance = new FakeInstance(valueOf([
+      plugin({ name: 'Same.esp', origin: 'ModOne', slot: 0 }),
+      plugin({ name: 'Same.esp', origin: 'ModTwo', slot: 1, winning: false }),
+    ]));
+    const tree = treeOver(instance);
+    const winner = await rowOf(tree, 'Same.esp', 'ModOne');
+
+    tree.markUnconfirmed(new PluginNode({ name: 'Same.esp', enabled: true }, 'ModTwo'), false);
+    vi.advanceTimersByTime(1000);
+
+    expect(spinning(tree, await rowOf(tree, 'Same.esp', 'ModOne'))).toBe(false);
+    expect(tree.isEnabled(winner)).toBe(true);
+  });
+
+  it('goes when the confirming value lands, with no log line, and never flickers when that is at once', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const logged: string[] = [];
+    const tree = treeOver(instance, (line) => logged.push(line));
+    tree.markUnconfirmed(await rowOf(tree, 'A.esp', 'ModOne'), false);
+
+    instance.publish(valueWith(['A.esp', 'ModOne', false]));
+    vi.advanceTimersByTime(1000);
+
+    expect(spinning(tree, await rowOf(tree, 'A.esp', 'ModOne'))).toBe(false);
+    expect(logged).toEqual([]);
+  });
+
+  it('keeps the mark and the written state through a pre-write value, then clears silently on the confirming one', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const logged: string[] = [];
+    const tree = treeOver(instance, (line) => logged.push(line));
+    tree.markUnconfirmed(await rowOf(tree, 'A.esp', 'ModOne'), false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueWith(['A.esp', 'ModOne', true]));
+    const held = await rowOf(tree, 'A.esp', 'ModOne');
+    expect(held.checkboxState).toBe(TreeItemCheckboxState.Unchecked);
+    expect(spinning(tree, held)).toBe(true);
+
+    instance.publish(valueWith(['A.esp', 'ModOne', false]));
+    expect(spinning(tree, await rowOf(tree, 'A.esp', 'ModOne'))).toBe(false);
+    expect(logged).toEqual([]);
+  });
+
+  it('shows the disk\'s value and logs one line once a second landed value still differs', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const logged: string[] = [];
+    const tree = treeOver(instance, (line) => logged.push(line));
+    tree.markUnconfirmed(await rowOf(tree, 'A.esp', 'ModOne'), false);
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueWith(['A.esp', 'ModOne', true]));
+    instance.publish(valueWith(['A.esp', 'ModOne', true]));
+
+    const shown = await rowOf(tree, 'A.esp', 'ModOne');
+    expect(shown.checkboxState).toBe(TreeItemCheckboxState.Checked);
+    expect(spinning(tree, shown)).toBe(false);
+    expect(logged).toEqual(['[PluginsTreeProvider] "A.esp" was written disabled, and the disk now shows it enabled.']);
+  });
+
+  it('stays while the disk cannot be read', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const tree = treeOver(instance);
+    tree.markUnconfirmed(await rowOf(tree, 'A.esp', 'ModOne'), false);
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(spinning(tree, await rowOf(tree, 'A.esp', 'ModOne'))).toBe(true);
+  });
+
+  it('feeds the key context the written state while the write is unconfirmed', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const tree = treeOver(instance);
+    const a = await rowOf(tree, 'A.esp', 'ModOne');
+
+    tree.markUnconfirmed(a, false);
+
+    expect(tree.isEnabled(a)).toBe(false);
+  });
+
+  it('a write forgotten before its delay never shows the mark, and shows the disk\'s value', async () => {
+    const instance = new FakeInstance(valueWith(['A.esp', 'ModOne', true]));
+    const tree = treeOver(instance);
+    const a = await rowOf(tree, 'A.esp', 'ModOne');
+    tree.markUnconfirmed(a, false);
+
+    tree.forgetUnconfirmed(a);
+    vi.advanceTimersByTime(1000);
+
+    const shown = await rowOf(tree, 'A.esp', 'ModOne');
+    expect(shown.checkboxState).toBe(TreeItemCheckboxState.Checked);
+    expect(spinning(tree, shown)).toBe(false);
+  });
+});

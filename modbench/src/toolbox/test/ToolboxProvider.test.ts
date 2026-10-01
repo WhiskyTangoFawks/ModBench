@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../../test/vscodeMock';
 
 // The Toolbox renders the Instance's value and nothing else: no disk read, no backend state.
@@ -18,7 +18,7 @@ const VALUE = instanceValueFixture({
 });
 
 function rowsOf(instance: FakeInstance | undefined) {
-  return new ToolboxProvider({ instance }).getChildren();
+  return new ToolboxProvider({ instance, log: () => undefined }).getChildren();
 }
 
 function row(instance: FakeInstance, label: string) {
@@ -55,7 +55,7 @@ describe('the Toolbox view, given an instance value', () => {
 
   it('follows a landed value', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -93,7 +93,7 @@ describe('the Toolbox view, given the game folder not found', () => {
 
   it('clears the warning on the next value with the game folder found', () => {
     const instance = new FakeInstance(NOT_FOUND);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
 
     instance.publish(VALUE);
 
@@ -116,7 +116,7 @@ describe('the Toolbox view\'s states', () => {
 
   it('shows one error row in place of its rows when the first read fails, and rows once a read lands', () => {
     const instance = new FakeInstance(VALUE, 0);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -146,7 +146,7 @@ describe('the Toolbox view\'s states', () => {
 
   it('stops following the instance once disposed', () => {
     const instance = new FakeInstance(VALUE);
-    const provider = new ToolboxProvider({ instance });
+    const provider = new ToolboxProvider({ instance, log: () => undefined });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -155,5 +155,95 @@ describe('the Toolbox view\'s states', () => {
     instance.fail('gone');
 
     expect(fired).toEqual([]);
+  });
+});
+
+describe('the Profile row and an unconfirmed switch (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const withProfile = (activeProfile: string) => instanceValueFixture({ ...VALUE, activeProfile });
+  const profileOf = (provider: ToolboxProvider) => present(provider.getChildren().find((r) => r.label === 'Profile'), 'the Profile row');
+
+  function toolbox(log: (line: string) => void = () => undefined) {
+    const instance = new FakeInstance(withProfile('Survival'));
+    return { instance, provider: new ToolboxProvider({ instance, log }) };
+  }
+
+  it('shows the picked profile at once, and the mark only after a delay', () => {
+    const { provider } = toolbox();
+
+    provider.markUnconfirmedProfile('Modding');
+
+    expect(profileOf(provider).description).toBe('Modding');
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('account'));
+
+    vi.advanceTimersByTime(1000);
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('sync~spin'));
+    expect(profileOf(provider).tooltip).toBe('Written; waiting for the disk to confirm');
+    expect(provider.getChildren().find((r) => r.label === 'Game')?.iconPath).toEqual(new ThemeIcon('game'));
+  });
+
+  it('goes silently when the disk shows the picked profile, and never flickers when that is at once', () => {
+    const logged: string[] = [];
+    const { instance, provider } = toolbox((line) => logged.push(line));
+    provider.markUnconfirmedProfile('Modding');
+
+    instance.publish(withProfile('Modding'));
+    vi.advanceTimersByTime(1000);
+
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('account'));
+    expect(profileOf(provider).description).toBe('Modding');
+    expect(logged).toEqual([]);
+  });
+
+  it('keeps the picked profile and the mark through a pre-write value, then clears silently on the confirming one', () => {
+    const logged: string[] = [];
+    const { instance, provider } = toolbox((line) => logged.push(line));
+    provider.markUnconfirmedProfile('Modding');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(withProfile('Survival'));
+    expect(profileOf(provider).description).toBe('Modding');
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('sync~spin'));
+
+    instance.publish(withProfile('Modding'));
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('account'));
+    expect(logged).toEqual([]);
+  });
+
+  it('shows the disk\'s profile and logs one line once a second landed value still differs', () => {
+    const logged: string[] = [];
+    const { instance, provider } = toolbox((line) => logged.push(line));
+    provider.markUnconfirmedProfile('Modding');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(withProfile('Survival'));
+    instance.publish(withProfile('Survival'));
+
+    expect(profileOf(provider).description).toBe('Survival');
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('account'));
+    expect(logged).toEqual(['Profile "Modding" was selected, and the disk now shows "Survival".']);
+  });
+
+  it('stays while the disk cannot be read', () => {
+    const { instance, provider } = toolbox();
+    provider.markUnconfirmedProfile('Modding');
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('sync~spin'));
+  });
+
+  it('a switch forgotten shows the disk\'s profile at once, with no mark', () => {
+    const { provider } = toolbox();
+    provider.markUnconfirmedProfile('Modding');
+
+    provider.forgetUnconfirmedProfile();
+    vi.advanceTimersByTime(1000);
+
+    expect(profileOf(provider).description).toBe('Survival');
+    expect(profileOf(provider).iconPath).toEqual(new ThemeIcon('account'));
   });
 });

@@ -40,6 +40,7 @@ import type { RefreshResult } from '../../instanceCommands/loadOrder';
 const value = instanceValueFixture({ activeProfile: 'Default', profiles: ['Default', 'Modding', 'Survival'] });
 
 const access = accessTo('/instance');
+const marks = { markUnconfirmedProfile: vi.fn(), forgetUnconfirmedProfile: vi.fn() };
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
@@ -48,6 +49,7 @@ function register(over: Partial<ToolboxCommandDeps> = {}) {
     instance: { value },
     extensionId: 'publisher.modbench',
     reporterFor: () => reporter,
+    marks,
     ...over,
   });
   return {
@@ -117,6 +119,40 @@ describe('Switch profile', () => {
     await run('modbench.profile.switch');
 
     expect(switchProfile).toHaveBeenCalledWith(access, 'Modding', ['Default', 'Modding', 'Survival']);
+  });
+
+  it('marks the picked profile before the write, and keeps the mark when it lands', async () => {
+    const order: string[] = [];
+    marks.markUnconfirmedProfile.mockImplementation(() => order.push('mark'));
+    switchProfile.mockImplementationOnce(() => { order.push('write'); return Promise.resolve({ applied: true }); });
+    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
+
+    const { run } = register();
+    await run('modbench.profile.switch');
+
+    expect(order).toEqual(['mark', 'write']);
+    expect(marks.markUnconfirmedProfile).toHaveBeenCalledWith('Modding');
+    expect(marks.forgetUnconfirmedProfile).not.toHaveBeenCalled();
+  });
+
+  it('marks nothing on Esc, or when the pick is the active profile', async () => {
+    showQuickPick.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ label: 'Default' });
+
+    const { run } = register();
+    await run('modbench.profile.switch');
+    await run('modbench.profile.switch');
+
+    expect(marks.markUnconfirmedProfile).not.toHaveBeenCalled();
+  });
+
+  it('forgets the mark when the switch is refused', async () => {
+    showQuickPick.mockResolvedValueOnce({ label: 'Modding' });
+    switchProfile.mockResolvedValueOnce({ applied: false, refusal: 'read-only' });
+
+    const { run } = register();
+    await run('modbench.profile.switch');
+
+    expect(marks.forgetUnconfirmedProfile).toHaveBeenCalledOnce();
   });
 
   it('reports a refused switch at error', async () => {

@@ -42,13 +42,15 @@ async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) =>
   return row;
 }
 
+const separatorMarks = { markUnconfirmedRename: vi.fn(), forgetUnconfirmedRename: vi.fn() };
+
 async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const root = await cloneCorpusFixture();
   registerCommand.mockClear();
   showInputBox.mockResolvedValueOnce('New Section');
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
   const reporter = recordingReporter();
-  registerSeparatorCommands(accessTo(root), instance, reporter, vi.fn(), () => []);
+  registerSeparatorCommands(accessTo(root), instance, reporter, vi.fn(), () => [], separatorMarks);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
   if (!call) throw new Error('modbench.separator.add not registered');
   await call[1](anchor);

@@ -20,6 +20,18 @@ import { DATA_DIRECTORY_ORIGIN, OVERWRITE_ORIGIN } from '../instanceLoader/loadO
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
+const MARK_DELAY_MS = 300;
+
+export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
+
+interface UnconfirmedWrite {
+  readonly name: string;
+  readonly enabled: boolean;
+  marked: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a
 // second cast of its own.
@@ -286,6 +298,7 @@ export class PluginsTreeProvider
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   private readonly publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
   private instanceValue: InstanceValue;
+  private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly firstRead: FirstRead;
   // The plugin rows' plugins.txt lines as last rendered, which a drop's order check reads: the
@@ -315,6 +328,7 @@ export class PluginsTreeProvider
     this.instanceValue = options.instance.value;
     this.firstRead = firstReadOf(options.instance);
     this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
+      this.settleUnconfirmed(value);
       this.instanceValue = value;
       this.invalidate();
     }));
@@ -337,8 +351,53 @@ export class PluginsTreeProvider
   }
 
   dispose(): void {
+    this.clearUnconfirmed();
     for (const subscription of this.subscriptions) subscription.dispose();
     this._onDidChangeTreeData.dispose();
+  }
+
+  private settleUnconfirmed(value: InstanceValue): void {
+    for (const [address, write] of this.unconfirmed) {
+      const disk = value.plugins.find((p) => p.winning && pluginAddressKey(p.name, p.origin) === address);
+      if (disk !== undefined && disk.enabled !== write.enabled && !write.differedOnce) {
+        write.differedOnce = true;
+        continue;
+      }
+      if (disk !== undefined && disk.enabled !== write.enabled) {
+        this.log('warn', `[PluginsTreeProvider] "${write.name}" was written ${write.enabled ? 'enabled' : 'disabled'}, and the disk now shows it ${disk.enabled ? 'enabled' : 'disabled'}.`);
+      }
+      clearTimeout(write.timer);
+      this.unconfirmed.delete(address);
+    }
+  }
+
+  /** A check box's new state shows at once; the mark follows after a delay. */
+  markUnconfirmed(row: PluginNode, enabled: boolean): void {
+    const address = pluginAddressKey(row.plugin.name, row.origin);
+    clearTimeout(this.unconfirmed.get(address)?.timer);
+    const write: UnconfirmedWrite = {
+      name: row.plugin.name, enabled, marked: false, differedOnce: false,
+      timer: setTimeout(() => {
+        write.marked = true;
+        this.render();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmed.set(address, write);
+    this.cache = undefined;
+    this.render();
+  }
+
+  /** A refused or failed write shows the disk's value at once, with no mark. */
+  forgetUnconfirmed(row: PluginNode): void {
+    const address = pluginAddressKey(row.plugin.name, row.origin);
+    clearTimeout(this.unconfirmed.get(address)?.timer);
+    this.unconfirmed.delete(address);
+    this.invalidate();
+  }
+
+  private clearUnconfirmed(): void {
+    for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
+    this.unconfirmed.clear();
   }
 
   // ── rows ──────────────────────────────────────────────────────────────────
@@ -406,6 +465,8 @@ export class PluginsTreeProvider
   /** Whether the row's line is enabled now: a row the view still holds may predate the value. */
   isEnabled(row: PluginNode): boolean {
     const address = pluginAddressKey(row.plugin.name, row.origin);
+    const written = this.unconfirmed.get(address);
+    if (written !== undefined) return written.enabled;
     return this.instanceValue.plugins.some((p) => p.winning && p.enabled && pluginAddressKey(p.name, p.origin) === address);
   }
 
@@ -520,7 +581,9 @@ export class PluginsTreeProvider
     this.lastLockedRowUris = new Set(lockedRows.flatMap((row) => (row.resourceUri ? [row.resourceUri.toString()] : [])));
     return [
       ...lockedRows,
-      ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, p.origin)),
+      ...dedupedOrder.map((p) => new PluginNode({
+        name: p.name, enabled: this.unconfirmed.get(pluginAddressKey(p.name, p.origin))?.enabled ?? p.enabled,
+      }, p.origin)),
     ];
   }
 
@@ -572,6 +635,10 @@ export class PluginsTreeProvider
     if (this.facts?.get(file, row.origin)?.readOnly === true) lines.push('read-only');
     for (const status of statuses) lines.push(status.tooltipLine);
     row.tooltip = lines.join('\n');
+    if (this.unconfirmed.get(pluginAddressKey(file, row.origin))?.marked) {
+      row.iconPath = new vscode.ThemeIcon('sync~spin');
+      row.tooltip = UNCONFIRMED_TOOLTIP;
+    }
     row.contextValue = this.contextValueOf(row);
   }
 

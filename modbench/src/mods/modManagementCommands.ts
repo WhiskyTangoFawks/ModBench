@@ -46,21 +46,27 @@ export function registerModListCoreCommands(modListProvider: Pick<ModListProvide
 export function registerModEnableCommands(
   access: ModlistAccess, instance: Pick<Instance, 'value'>,
   viewSelection: () => readonly ModlistNode[], reporter: Reporter,
+  marks: Pick<ModListProvider, 'isEnabled' | 'markUnconfirmed' | 'forgetUnconfirmed'>,
 ): vscode.Disposable[] {
   const run = (enabled: boolean) => async (entry: GestureEntry) => {
-    const modNames = pluralArgument(entry, 'mod').map((n) => n.mod.name);
-    if (modNames.length === 0) return;
+    const rows = pluralArgument(entry, 'mod');
+    if (rows.length === 0) return;
+    const modNames = rows.map((n) => n.mod.name);
+    const changing = rows.filter((row) => marks.isEnabled(row) !== enabled).map((row) => row.mod.name);
+    for (const name of changing) marks.markUnconfirmed(name, enabled);
     const verb = enabled ? 'enable' : 'disable';
     const profile = instance.value.activeProfile;
     const result = await setModsEnabled(access, profile, modNames, enabled);
     if (!result.applied) {
       reporter.report('error', `Failed to ${verb} mods.`, result.refusal);
+      for (const name of changing) marks.forgetUnconfirmed(name);
       return;
     }
     reporter.selectionOutcome(
       `Could not ${verb} ${result.outcome.refused.length} of ${modNames.length} mods.`,
       result.outcome, (name) => name,
     );
+    for (const { item } of result.outcome.refused) marks.forgetUnconfirmed(item);
   };
   return [
     registerModsGesture('modbench.mod.enable', viewSelection, run(true)),
@@ -165,7 +171,7 @@ function separatorNamePrompt(
 
 export function registerSeparatorCommands(
   access: ModlistAccess, instance: Pick<Instance, 'value'>, reporter: Reporter, trash: MoveToTrash,
-  viewSelection: () => readonly ModlistNode[],
+  viewSelection: () => readonly ModlistNode[], marks: Pick<ModListProvider, 'markUnconfirmedRename' | 'forgetUnconfirmedRename'>,
 ): vscode.Disposable[] {
   return [
       registerModsGesture('modbench.separator.rename', viewSelection, async (entry) => {
@@ -176,8 +182,14 @@ export function registerSeparatorCommands(
           prompt: 'Rename separator', value: oldName, validateInput: separatorNamePrompt(access, instance, oldName),
         });
         if (!newName || newName === oldName) return;
+        marks.markUnconfirmedRename(oldName, newName);
         await reportFailure(reporter, 'Failed to rename separator.', async () => {
-          applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
+          try {
+            applyOrThrow(await renameSeparator(access, instance.value.activeProfile, oldName, newName));
+          } catch (err) {
+            marks.forgetUnconfirmedRename(newName);
+            throw err;
+          }
         });
       }),
       registerModsGesture('modbench.separator.add', viewSelection, async (entry) => {

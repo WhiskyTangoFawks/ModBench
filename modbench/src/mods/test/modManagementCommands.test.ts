@@ -66,6 +66,7 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
 
 // The access a gesture hands its command, so a test can see it arrive.
 const access = accessTo('/instance');
+const separatorMarks = { markUnconfirmedRename: vi.fn(), forgetUnconfirmedRename: vi.fn() };
 
 describe('the sort direction', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -351,7 +352,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [], separatorMarks);
     await invoke('modbench.separator.delete', groupB, [groupA, groupB]);
 
     expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A', 'Group B'], trash]]);
@@ -361,7 +362,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   it('takes only the separators of a selection mixing mods and separators', async () => {
     deleteSeparators.mockResolvedValue({ applied: true, outcome: { landed: [{ name: 'Group A' }], refused: [] } });
 
-    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => []);
+    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => [], separatorMarks);
     await invoke('modbench.separator.delete', groupA, [modA, groupA]);
 
     expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A'], trash]]);
@@ -372,7 +373,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
       applied: true, outcome: { landed: [{ name: 'Group A' }, { name: 'Group B' }], refused: [] },
     });
 
-    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), trash, () => [groupA, groupB], separatorMarks);
     await invoke('modbench.separator.delete');
 
     expect(deleteSeparators.mock.calls).toEqual([[access, 'Default', ['Group A', 'Group B'], trash]]);
@@ -381,7 +382,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
   it('calls nothing and reports nothing for a selection with no separator', async () => {
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, trash, () => [modA]);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [modA], separatorMarks);
     await invoke('modbench.separator.delete');
 
     expect(deleteSeparators).not.toHaveBeenCalled();
@@ -395,7 +396,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [], separatorMarks);
     await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
 
     expect(reporter.reports).toEqual([{
@@ -407,7 +408,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     deleteSeparators.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [], separatorMarks);
     await invoke('modbench.separator.delete', groupA, [groupA, groupB]);
 
     expect(reporter.reports).toEqual([
@@ -421,7 +422,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked no
     });
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, trash, () => []);
+    registerSeparatorCommands(access, instance, reporter, trash, () => [], separatorMarks);
     await invoke('modbench.separator.delete', groupA);
 
     expect(reporter.reports).toEqual([{
@@ -474,7 +475,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     renameSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('Renamed');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB], separatorMarks);
     await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
 
     expect(promptOptions()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
@@ -488,7 +489,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.rename', groupB);
 
       const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
@@ -509,7 +510,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.rename', groupB);
 
       const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
@@ -526,16 +527,49 @@ describe('rename separator takes its separator through the gesture entry', () =>
     showInputBox.mockResolvedValueOnce('Taken Meanwhile');
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => [], separatorMarks);
     await invoke('modbench.separator.rename', groupB);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to rename separator.', detail: CLASH }]);
   });
 
+  it('marks the new name before the write, and keeps the mark when it lands', async () => {
+    const order: string[] = [];
+    separatorMarks.markUnconfirmedRename.mockImplementation(() => order.push('mark'));
+    renameSeparator.mockImplementation(() => { order.push('write'); return Promise.resolve({ applied: true, wrote: true }); });
+    showInputBox.mockResolvedValueOnce('Renamed');
+
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
+    await invoke('modbench.separator.rename', groupB);
+
+    expect(order).toEqual(['mark', 'write']);
+    expect(separatorMarks.markUnconfirmedRename).toHaveBeenCalledWith('Group B', 'Renamed');
+    expect(separatorMarks.forgetUnconfirmedRename).not.toHaveBeenCalled();
+  });
+
+  it('forgets the mark when the write is refused', async () => {
+    renameSeparator.mockResolvedValue({ applied: false, refusal: CLASH });
+    showInputBox.mockResolvedValueOnce('Taken Meanwhile');
+
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
+    await invoke('modbench.separator.rename', groupB);
+
+    expect(separatorMarks.forgetUnconfirmedRename.mock.calls).toEqual([['Taken Meanwhile']]);
+  });
+
+  it('marks nothing when the prompt is cancelled', async () => {
+    showInputBox.mockResolvedValueOnce(undefined);
+
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
+    await invoke('modbench.separator.rename', groupA);
+
+    expect(separatorMarks.markUnconfirmedRename).not.toHaveBeenCalled();
+  });
+
   it('renames nothing when the prompt is cancelled (Esc) or left empty', async () => {
     showInputBox.mockResolvedValueOnce(undefined).mockResolvedValueOnce('');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
     await invoke('modbench.separator.rename', groupA);
     await invoke('modbench.separator.rename', groupA);
 
@@ -545,7 +579,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
   it('renames nothing when the prompt keeps the same name', async () => {
     showInputBox.mockResolvedValueOnce('Group A');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA], separatorMarks);
     await invoke('modbench.separator.rename', groupA);
 
     expect(renameSeparator).not.toHaveBeenCalled();
@@ -555,7 +589,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     renameSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('Renamed');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupB], separatorMarks);
     await invoke('modbench.separator.rename', ...args);
 
     expect(promptOptions()).toMatchObject({ value: 'Group B' });
@@ -563,7 +597,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
   });
 
   it.each([['F2', [MODS_KEY_ARGS]], ['the palette', []]])('asks nothing from %s while several rows are selected', async (_from, args) => {
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [groupA, groupB], separatorMarks);
     await invoke('modbench.separator.rename', ...args);
 
     expect(showInputBox).not.toHaveBeenCalled();
@@ -588,7 +622,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('New Section');
     const otherMod = new ModNode({ kind: 'mod', name: 'Other Mod', enabled: true });
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherMod, modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherMod, modA], separatorMarks);
     await invoke('modbench.separator.add', modA, [otherMod, modA]);
 
     expect(promptOptions()).toMatchObject({ prompt: 'Separator name', placeHolder: 'My Group' });
@@ -600,7 +634,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.add', modA);
 
       const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
@@ -620,7 +654,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
-      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => []);
+      registerSeparatorCommands(accessTo(root), instance, recordingReporter(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.add', modA);
 
       const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
@@ -636,7 +670,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('Taken Meanwhile');
     const reporter = recordingReporter();
 
-    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => []);
+    registerSeparatorCommands(access, instance, reporter, vi.fn(), () => [], separatorMarks);
     await invoke('modbench.separator.add', modA);
 
     expect(reporter.reports).toEqual([{ severity: 'error', message: 'Failed to add separator.', detail: CLASH }]);
@@ -647,7 +681,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     showInputBox.mockResolvedValueOnce('New Section');
     const otherGroup = new SeparatorNode({ kind: 'separator', name: 'Other Group', enabled: true }, []);
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherGroup, groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [otherGroup, groupA], separatorMarks);
     await invoke('modbench.separator.add', groupA, [otherGroup, groupA]);
 
     expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'separator', name: 'Group A' }]]);
@@ -656,7 +690,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   it('adds nothing when the prompt is cancelled (Esc)', async () => {
     showInputBox.mockResolvedValueOnce(undefined);
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA], separatorMarks);
     await invoke('modbench.separator.add', modA);
 
     expect(insertSeparator).not.toHaveBeenCalled();
@@ -665,7 +699,7 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   it('adds nothing for an empty name', async () => {
     showInputBox.mockResolvedValueOnce('');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA], separatorMarks);
     await invoke('modbench.separator.add', modA);
 
     expect(insertSeparator).not.toHaveBeenCalled();
@@ -675,14 +709,14 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     insertSeparator.mockResolvedValue({ applied: true, wrote: true });
     showInputBox.mockResolvedValueOnce('New Section');
 
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA], separatorMarks);
     await invoke('modbench.separator.add');
 
     expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
   it('asks nothing and adds nothing from the palette while several rows are selected', async () => {
-    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA, groupA]);
+    registerSeparatorCommands(access, instance, recordingReporter(), vi.fn(), () => [modA, groupA], separatorMarks);
     await invoke('modbench.separator.add');
 
     expect(showInputBox).not.toHaveBeenCalled();
@@ -699,11 +733,50 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   const modA = new ModNode({ kind: 'mod', name: 'Mod A', enabled: false });
   const modB = new ModNode({ kind: 'mod', name: 'Mod B', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
+  const marks = {
+    isEnabled: (row: ModNode) => row.mod.enabled,
+    markUnconfirmed: vi.fn(),
+    forgetUnconfirmed: vi.fn(),
+  };
+
+  it('marks each mod the gesture changes before the write, and not one already in that state', async () => {
+    const order: string[] = [];
+    marks.markUnconfirmed.mockImplementation((name: string) => order.push(`mark ${name}`));
+    setModsEnabled.mockImplementation(() => { order.push('write'); return Promise.resolve({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } }); });
+
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    await invoke('modbench.mod.enable', modA, [modA, modB]);
+
+    expect(order).toEqual(['mark Mod A', 'write']);
+    expect(marks.markUnconfirmed).toHaveBeenCalledWith('Mod A', true);
+    expect(marks.forgetUnconfirmed).not.toHaveBeenCalled();
+  });
+
+  it('forgets the mark of a mod refused by name, and keeps the one that landed', async () => {
+    setModsEnabled.mockResolvedValue({
+      applied: true, outcome: { landed: ['Mod A'], refused: [{ item: 'Mod C', reason: 'gone' }] },
+    });
+    const modC = new ModNode({ kind: 'mod', name: 'Mod C', enabled: false });
+
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    await invoke('modbench.mod.enable', modA, [modA, modC]);
+
+    expect(marks.forgetUnconfirmed.mock.calls).toEqual([['Mod C']]);
+  });
+
+  it('forgets every mark when the whole write is refused', async () => {
+    setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT' });
+
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
+    await invoke('modbench.mod.enable', modA);
+
+    expect(marks.forgetUnconfirmed.mock.calls).toEqual([['Mod A']]);
+  });
 
   it('enable applies to every selected mod, whatever its own current state', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
 
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
     await invoke('modbench.mod.enable', modA, [modA, modB]);
 
     expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A', 'Mod B'], true);
@@ -712,7 +785,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   it('disable applies to every selected mod, whatever its own current state', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A', 'Mod B'], refused: [] } });
 
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
     await invoke('modbench.mod.disable', modB, [modA, modB]);
 
     expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A', 'Mod B'], false);
@@ -721,7 +794,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   it('takes only the mods of a selection mixing mods and separators, anchored on the clicked mod', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
 
-    registerModEnableCommands(access, instance, () => [], recordingReporter());
+    registerModEnableCommands(access, instance, () => [], recordingReporter(), marks);
     await invoke('modbench.mod.enable', modA, [modA, groupA]);
 
     expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A'], true);
@@ -730,7 +803,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   it('falls back to the view selection from the palette, where no row is right-clicked', async () => {
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
 
-    registerModEnableCommands(access, instance, () => [modA], recordingReporter());
+    registerModEnableCommands(access, instance, () => [modA], recordingReporter(), marks);
     await invoke('modbench.mod.enable');
 
     expect(setModsEnabled).toHaveBeenCalledWith(access, 'Default', ['Mod A'], true);
@@ -739,7 +812,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
   it('calls nothing and reports nothing for an empty selection', async () => {
     const reporter = recordingReporter();
 
-    registerModEnableCommands(access, instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter, marks);
     await invoke('modbench.mod.enable');
 
     expect(setModsEnabled).not.toHaveBeenCalled();
@@ -750,7 +823,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     setModsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Mod A'], refused: [] } });
     const reporter = recordingReporter();
 
-    registerModEnableCommands(access, instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter, marks);
     await invoke('modbench.mod.enable', modA);
 
     expect(reporter.reports).toEqual([]);
@@ -763,7 +836,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     });
     const reporter = recordingReporter();
 
-    registerModEnableCommands(access, instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter, marks);
     await invoke('modbench.mod.enable', modA, [modA, modB]);
 
     expect(reporter.reports).toEqual([{
@@ -779,7 +852,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
-    registerModEnableCommands(access, instance, () => [], reporter);
+    registerModEnableCommands(access, instance, () => [], reporter, marks);
     await invoke('modbench.mod.disable', modB);
 
     expect(reporter.reports).toEqual([

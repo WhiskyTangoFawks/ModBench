@@ -1068,3 +1068,82 @@ describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
     expect(iconId(await rowNamed(provider, 'A'))).toBe('package');
   });
 });
+
+describe('an unconfirmed separator rename (common.md, Unconfirmed writes)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const separators = async (provider: ModListProvider): Promise<SeparatorNode[]> =>
+    (await provider.getChildren()).filter((n): n is SeparatorNode => n instanceof SeparatorNode);
+  const first = async (provider: ModListProvider) => present((await separators(provider))[0], 'the separator row');
+  const names = async (provider: ModListProvider) => (await separators(provider)).map((s) => s.separator.name);
+  const iconId = (row: SeparatorNode) => (row.iconPath instanceof ThemeIcon ? row.iconPath.id : undefined);
+  const valueWith = (separatorName: string) => valueOf([mod('A'), sep(separatorName)]);
+
+  it('shows the new name at once, and the mark only after a delay', async () => {
+    const provider = makeProvider([mod('A'), sep('Old')]);
+
+    provider.markUnconfirmedRename('Old', 'New');
+
+    expect(await names(provider)).toEqual(['New']);
+    expect(iconId(await first(provider))).toBeUndefined();
+
+    vi.advanceTimersByTime(1000);
+    const marked = await first(provider);
+    expect(iconId(marked)).toBe('sync~spin');
+    expect(marked.tooltip).toBe('Written; waiting for the disk to confirm');
+  });
+
+  it('goes silently when the disk shows the new name', async () => {
+    const instance = new FakeInstance(valueWith('Old'));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmedRename('Old', 'New');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueWith('New'));
+
+    expect(await names(provider)).toEqual(['New']);
+    expect(iconId(await first(provider))).toBeUndefined();
+    expect(logged).toEqual([]);
+  });
+
+  it('keeps the new name and the mark through a pre-write value, then shows the disk\'s name and logs once a second still differs', async () => {
+    const instance = new FakeInstance(valueWith('Old'));
+    const logged: string[] = [];
+    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    provider.markUnconfirmedRename('Old', 'New');
+    vi.advanceTimersByTime(1000);
+
+    instance.publish(valueWith('Old'));
+    expect(await names(provider)).toEqual(['New']);
+    expect(iconId(await first(provider))).toBe('sync~spin');
+
+    instance.publish(valueWith('Old'));
+    expect(await names(provider)).toEqual(['Old']);
+    expect(iconId(await first(provider))).toBeUndefined();
+    expect(logged).toEqual(['Separator "Old" was renamed "New", and the disk still shows "Old".']);
+  });
+
+  it('stays while the disk cannot be read', async () => {
+    const instance = new FakeInstance(valueWith('Old'));
+    const provider = makeProvider([], { instance });
+    provider.markUnconfirmedRename('Old', 'New');
+    vi.advanceTimersByTime(1000);
+
+    instance.fail('locked');
+
+    expect(iconId(await first(provider))).toBe('sync~spin');
+  });
+
+  it('a rename forgotten shows the disk\'s name at once, with no mark', async () => {
+    const provider = makeProvider([mod('A'), sep('Old')]);
+    provider.markUnconfirmedRename('Old', 'New');
+
+    provider.forgetUnconfirmedRename('New');
+    vi.advanceTimersByTime(1000);
+
+    expect(await names(provider)).toEqual(['Old']);
+    expect(iconId(await first(provider))).toBeUndefined();
+  });
+});

@@ -45,6 +45,18 @@ interface UnconfirmedWrite {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+interface UnconfirmedRename {
+  readonly oldName: string;
+  marked: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+function markRow(row: vscode.TreeItem): void {
+  row.iconPath = new vscode.ThemeIcon('sync~spin');
+  row.tooltip = UNCONFIRMED_TOOLTIP;
+}
+
 function statusIconId(status?: ModStatusResult): string {
   switch (status?.status.kind) {
     case 'conflicts':
@@ -186,6 +198,7 @@ export class ModListProvider
   private readonly access: ModlistAccess;
   private readonly log: (line: string) => void;
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
+  private readonly unconfirmedRenames = new Map<string, UnconfirmedRename>();
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -217,6 +230,24 @@ export class ModListProvider
       clearTimeout(write.timer);
       this.unconfirmed.delete(name);
     }
+    this.settleUnconfirmedRenames(value);
+  }
+
+  private settleUnconfirmedRenames(value: InstanceValue): void {
+    const separatorNamed = (name: string) => value.mods.some((m) => m.kind === 'separator' && m.name === name);
+    for (const [newName, rename] of this.unconfirmedRenames) {
+      const confirmed = separatorNamed(newName);
+      const unchanged = !confirmed && separatorNamed(rename.oldName);
+      if (unchanged && !rename.differedOnce) {
+        rename.differedOnce = true;
+        continue;
+      }
+      if (unchanged) {
+        this.log(`Separator "${rename.oldName}" was renamed "${newName}", and the disk still shows "${rename.oldName}".`);
+      }
+      clearTimeout(rename.timer);
+      this.unconfirmedRenames.delete(newName);
+    }
   }
 
   /** A check box's new state shows at once; the mark follows after a delay. */
@@ -239,9 +270,33 @@ export class ModListProvider
     this.invalidate();
   }
 
+  /** A separator's new name shows at once; the mark follows after a delay. */
+  markUnconfirmedRename(oldName: string, newName: string): void {
+    clearTimeout(this.unconfirmedRenames.get(newName)?.timer);
+    const rename: UnconfirmedRename = {
+      oldName, marked: false, differedOnce: false,
+      timer: setTimeout(() => {
+        rename.marked = true;
+        this.render();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmedRenames.set(newName, rename);
+    this.tree = undefined;
+    this.render();
+  }
+
+  /** A refused or failed rename shows the disk's name at once, with no mark. */
+  forgetUnconfirmedRename(newName: string): void {
+    clearTimeout(this.unconfirmedRenames.get(newName)?.timer);
+    this.unconfirmedRenames.delete(newName);
+    this.invalidate();
+  }
+
   private clearUnconfirmed(): void {
     for (const write of this.unconfirmed.values()) clearTimeout(write.timer);
     this.unconfirmed.clear();
+    for (const rename of this.unconfirmedRenames.values()) clearTimeout(rename.timer);
+    this.unconfirmedRenames.clear();
   }
 
   dispose(): void {
@@ -340,7 +395,7 @@ export class ModListProvider
 
   private ensureLoaded(): ModlistTree {
     if (!this.tree) {
-      this.cachedEntries = [...this.instanceValue.mods];
+      this.cachedEntries = this.instanceValue.mods.map((entry) => this.writtenName(entry));
       this.tree = groupModlist(this.cachedEntries);
       this.modsHoldingPlugin = new Set(this.instanceValue.plugins.map((p) => p.origin));
     }
@@ -359,21 +414,33 @@ export class ModListProvider
     if (!this.filterText) {
       return {
         ungrouped: ungrouped.map(this.toModNode),
-        separators: groups.map((g) => new SeparatorNode(g.separator, this.inViewOrder(g.mods))),
+        separators: groups.map((g) => this.separatorNode(g.separator, this.inViewOrder(g.mods))),
       };
     }
     const separators: ModlistNode[] = [];
     for (const g of groups) {
       if (this.matches(g.separator.name)) {
-        separators.push(new SeparatorNode(g.separator, this.inViewOrder(g.mods)));
+        separators.push(this.separatorNode(g.separator, this.inViewOrder(g.mods)));
         continue;
       }
       const matchingMods = g.mods.filter((m) => this.matches(m.name));
       if (matchingMods.length > 0) {
-        separators.push(new SeparatorNode(g.separator, this.inViewOrder(matchingMods), 'matchingMods'));
+        separators.push(this.separatorNode(g.separator, this.inViewOrder(matchingMods), 'matchingMods'));
       }
     }
     return { ungrouped: ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode), separators };
+  }
+
+  private writtenName(entry: ModlistEntry): ModlistEntry {
+    if (entry.kind !== 'separator') return entry;
+    const renamed = [...this.unconfirmedRenames].find(([, rename]) => rename.oldName === entry.name);
+    return renamed === undefined ? entry : { ...entry, name: renamed[0] };
+  }
+
+  private separatorNode(separator: Separator, mods: Mod[], shown?: 'allMods' | 'matchingMods'): SeparatorNode {
+    const row = new SeparatorNode(separator, mods, shown);
+    if (this.unconfirmedRenames.get(separator.name)?.marked) markRow(row);
+    return row;
   }
 
   private overwriteNode(): OverwriteNode {
@@ -385,10 +452,7 @@ export class ModListProvider
     const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
     });
-    if (write?.marked) {
-      row.iconPath = new vscode.ThemeIcon('sync~spin');
-      row.tooltip = UNCONFIRMED_TOOLTIP;
-    }
+    if (write?.marked) markRow(row);
     return row;
   };
 

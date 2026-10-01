@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 import { switchProfile, type ProfileAccess } from '../instanceCommands/profile';
 import type { RefreshResult } from '../instanceCommands/loadOrder';
+import type { ToolboxProvider } from './ToolboxProvider';
 import type { Reporter } from '../ports/reporter';
 
 export interface ToolboxCommandDeps {
@@ -11,12 +12,13 @@ export interface ToolboxCommandDeps {
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;
   reporterFor: (tag: string) => Reporter;
+  marks: Pick<ToolboxProvider, 'markUnconfirmedProfile' | 'forgetUnconfirmedProfile'>;
 }
 
 // The instance-wide gestures the Toolbox view owns (toolbox.md), registered
 // for the box that draws them.
 export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { access, instance, extensionId, reporterFor } = deps;
+  const { access, instance, extensionId, reporterFor, marks } = deps;
   const profileReporter = reporterFor('switchProfile');
   return [
     vscode.commands.registerCommand('modbench.profile.switch', async () => {
@@ -26,8 +28,12 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
         { placeHolder: 'Switch profile' },
       );
       if (!picked || picked.label === active) return;
+      marks.markUnconfirmedProfile(picked.label);
       const outcome = await switchProfile(access, picked.label, profiles);
-      if (!outcome.applied) profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
+      if (!outcome.applied) {
+        profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
+        marks.forgetUnconfirmedProfile();
+      }
     }),
     vscode.commands.registerCommand('modbench.settings.open', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${extensionId}`)),

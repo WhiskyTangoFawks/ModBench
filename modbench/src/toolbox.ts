@@ -245,11 +245,11 @@ function registerPluginListView(
     new ImplicitMasterDecorationProvider(() => pluginsTree.lockedRowUris()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(
-    e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'))));
+    e, access, () => instance.value.activeProfile, reporterFor('pluginListTree.checkbox'), pluginsTree)));
   own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer'), () => pluginListView.selection));
   ownAll(own, registerPluginSortCommands(pluginsTree));
   ownAll(own, registerPluginEnableCommands(
-    access, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable')));
+    access, instance, () => pluginListView.selection, reporterFor('pluginListTree.enableDisable'), pluginsTree));
   return { pluginsTree, pluginListView };
 }
 
@@ -427,6 +427,7 @@ interface InstanceSide {
   instanceRoot: string;
   firstRead: FirstReadMark;
   modListProvider: ModListProvider;
+  toolboxProvider: ToolboxProvider;
   downloadsProvider: DownloadsProvider;
   pluginsTree: PluginsTreeProvider;
   enterEditing: () => Promise<void>;
@@ -533,17 +534,18 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(modListView.onDidChangeCheckboxState((e) =>
     onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
-  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor }));
+  const toolboxProvider = own(new ToolboxProvider({ instance, log: (line) => outputChannel.warn(`[toolbox] ${line}`) }));
+  ownAll(own, registerToolboxCommands({ access, instance, extensionId, reporterFor, marks: toolboxProvider }));
   ownAll(own, registerModInstallCommands({ access, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(
     access, instance, () => modListView.selection, reporterFor('mod.uninstall'), ask, trash,
     (line) => outputChannel.warn(`[modList] ${line}`)));
-  ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable')));
+  ownAll(own, registerModEnableCommands(access, instance, () => modListView.selection, reporterFor('mod.enableDisable'), modListProvider));
   own(registerModMoveCommand(
     access, instance,
     { selection: () => modListView.selection, direction: () => modListProvider.viewDirection() },
     reporterFor('mod.move')));
-  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), trash, () => modListView.selection));
+  ownAll(own, registerSeparatorCommands(access, instance, reporterFor('separator'), trash, () => modListView.selection, modListProvider));
   own(registerCreateEmptyModCommand(access, instance, reporterFor('mod.createEmpty')));
   own(registerOpenFolderCommand(instance, reporterFor('mod.openFolder'), () => modListView.selection));
   own(vscode.commands.registerCommand('modbench.mod.sync', runModSync));
@@ -566,7 +568,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
     refresh: refreshIndex, nextRefill: () => narrator.nextRefill(), instance, reporter: reporterFor('refresh'), instanceRoot,
   }));
   return {
-    instance, instanceRoot, firstRead, modListProvider, downloadsProvider, pluginsTree, enterEditing,
+    instance, instanceRoot, firstRead, modListProvider, toolboxProvider, downloadsProvider, pluginsTree, enterEditing,
     originFiles: (origin) => originFiles(instance.value.plugins, origin),
     modListSelection: () => modListView.selection, pluginsSelection: () => pluginListView.selection, trackSelection,
   };
@@ -601,7 +603,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   const opened = openedFolder(deps.outputChannel);
   const side = opened.folder === 'instance' ? buildInstanceSide(own, opened.instanceRoot, deps) : undefined;
 
-  const provider = own(new ToolboxProvider({ instance: side?.instance }));
+  const provider = side?.toolboxProvider ?? own(new ToolboxProvider({ instance: undefined, log: () => undefined }));
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   own(registerCreatePluginCommand(client, side?.instance, reporterFor('newPlugin')));
   // Registered here, not inside buildInstanceSide: Referenced By's own copy reaches this regardless
