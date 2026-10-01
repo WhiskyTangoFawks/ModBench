@@ -36,10 +36,11 @@ As a user, I want:
 6. Beneath a group, its records, in FormID order. A container record holds its children directly, as
    xEdit folds a record's child group into the record: a worldspace holds its persistent cell and
    its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary
-   placed references, a quest its dialog topics, dialog branches and scenes, and a dialog topic its
-   responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
-7. A row with nothing beneath it to show no expander, and an empty group of placed references not to
-   be a row. *xEdit*
+   child records, its landscape and navmeshes among the temporary ones, a quest its dialog topics,
+   dialog branches and scenes, and a dialog topic its responses. Interior cells sit in blocks and
+   sub-blocks as exterior ones do. *xEdit*
+7. A row with nothing beneath it to show no expander, and an empty group of a cell's child records
+   not to be a row. *xEdit*
 8. Every record at once, with no paging: xEdit shows the full list, and VS Code renders only what
    is on screen.
 9. Every row collapsed each time the extension activates, so the view opens clean. *as in Mods*
