@@ -1,0 +1,7 @@
+extends: existence
+message: "A paragraph is one line: the reader's editor wraps it."
+level: error
+nonword: true
+scope: paragraph
+tokens:
+  - '\S\n\S'

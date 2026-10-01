@@ -55,6 +55,11 @@ class ValeRules(unittest.TestCase):
         self.assertIn("Repo.Date", vale("// maintainer ruling 2026-09-01\nconst a = 1;\n", ".ts"))
         self.assertIn("Repo.Date", vale("Ruling 2026-09-01: the grid renders the stack.\n", ".md"))
 
+    def test_a_paragraph_wrapped_onto_two_lines(self):
+        self.assertIn("Repo.HardWrap", vale("The grid renders\nthe stack.\n", ".md"))
+        one_line = "The grid renders the stack.\n\n| a | b |\n|---|---|\n\n```\nfirst\nsecond\n```\n"
+        self.assertNotIn("Repo.HardWrap", vale(one_line, ".md"))
+
     def test_the_raw_pass_treats_a_date_in_a_string_literal_as_data(self):
         alerts = vale(f'const d = "{HISTORY} 2024-01-01";\n', ".ts", config=".vale-raw.ini")
         self.assertIn("Repo.History", alerts)
