@@ -71,7 +71,7 @@ export function createLoadOrderSender(client: LoadOrderSendClient): LoadOrderSen
   // The backend publishes a PUT's progress the moment that PUT lands, so a snapshot waits for
   // the connect rather than being sent into a backend that is not there yet.
   const pump = (): void => {
-    if (disposed || sending || !waiting || client.status !== 'attached') return;
+    if (disposed || sending || !waiting || client.status !== 'running') return;
     const next = waiting;
     waiting = undefined;
     sending = true;

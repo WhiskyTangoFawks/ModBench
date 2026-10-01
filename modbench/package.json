@@ -39,8 +39,7 @@
       "properties": {
         "modbench.backendPort": {
           "type": "number",
-          "default": 5172,
-          "description": "Port the mEdit backend API listens on."
+          "description": "Attach to an mEdit a developer launched from an IDE on this port, and spawn none. Leave unset: each window spawns its own mEdit."
         },
         "modbench.scriptsPath": {
           "type": "string",

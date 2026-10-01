@@ -31,7 +31,7 @@ const SENT_LOADED_WITH_NO_LINE = [{ name: 'Master.esm', origin: 'Data' }];
 
 function attachedClient(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
-  client.setStatus('attached');
+  client.setStatus('running');
   client.setCommandResult('putLoadOrder', APPLIED);
   return client;
 }

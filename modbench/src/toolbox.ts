@@ -137,7 +137,7 @@ export function registerLoadOrderPut(
     void put().catch((e: unknown) => channel.error(`[loadOrder] handing mEdit the load order threw: ${errorMessage(e)}`));
   };
   own({ dispose: client.onStatusChanged((status) => {
-    if (status !== 'attached') startPutRan = false;
+    if (status !== 'running') startPutRan = false;
   }) });
   own({ dispose: client.onReconnected(() => {
     if (!startPutRan) return;
@@ -326,7 +326,7 @@ function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNar
     log: (m) => outputChannel.error(`[toolbox] ${m}`),
   });
   own({ dispose: subscribeNarratorToLoadOrderStatus(client, narrator) });
-  own({ dispose: client.onStatusChanged((status) => { if (status !== 'attached') narrator.detached(); }) });
+  own({ dispose: client.onStatusChanged((status) => { if (status !== 'running') narrator.detached(); }) });
   own({ dispose: client.onReconnected(() => narrator.detached()) });
   return narrator;
 }
@@ -415,7 +415,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
     // Before the status gate, deliberately: a close stops the backend, so an abandoned launch
     // would otherwise fail this check and report the stop it asked for as a startup failure.
     if (abandoned()) { reportAbandoned(outputChannel); return; }
-    if (client.status !== 'attached') {
+    if (client.status !== 'running') {
       exitEditing(session, client); // tear down the half-started backend
       reporter.report('error', 'Backend failed to start — see the Modbench output for details.');
       return;

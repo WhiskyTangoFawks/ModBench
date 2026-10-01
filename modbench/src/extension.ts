@@ -55,7 +55,7 @@ function wireAutoLaunch(
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'attached') void launch();
+      if (e.affectsConfiguration(GAME_FOLDER_SETTING) && client.status !== 'running') void launch();
     }),
   );
 }
@@ -64,7 +64,7 @@ export type ActivateExports = ReturnType<typeof activate>;
 
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
-  const port: number = meditConfig().get('backendPort') ?? 5172;
+  const attachPort = meditConfig().get<number>('backendPort');
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
   // The mEdit client (ADR-0002): built once here, owning the backend process and every call
   // across the seam; nothing outside this module constructs the generated client, `openapi-fetch`
   // or the notification stream.
-  const meditClient = new HttpMEditClient({ backend: backendOptions(port, outputChannel), log });
+  const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
   activeClient = meditClient; // deactivate()'s only way to reach it
   const treeProvider = new PluginTreeProvider(meditClient, log);
   const recordPanels = new Set<vscode.WebviewPanel>();
@@ -280,12 +280,12 @@ function compileDeps(deps: PluginRowCommandDeps): CompileDeps {
 }
 
 
-function backendOptions(port: number, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
+function backendOptions(attachPort: number | undefined, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
   // out/ at runtime; the published self-contained executable lives in backend/.
   const backendExe = process.platform === 'win32' ? 'MEditService.Http.exe' : 'MEditService.Http';
   return {
-    port,
+    attachPort,
     log: (msg) => channel.info(msg),
     // Pipe the backend's Serilog console output into the same channel, at its own level. Only
     // applies to a backend we spawn — an attached dev-launched one logs to its own terminal.

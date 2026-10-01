@@ -37,7 +37,8 @@ export interface HttpMEditClientDeps {
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
  *  and the notification stream live only here, composed behind {@link MEditClient}. */
 export class HttpMEditClient implements MEditClient {
-  private readonly apiClient: ApiClient;
+  private api?: { port: number; client: ApiClient };
+  private readonly fetchImpl: (input: Request) => Promise<Response>;
   private readonly log: (msg: string) => void;
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
@@ -45,7 +46,7 @@ export class HttpMEditClient implements MEditClient {
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
-    this.apiClient = createApiClient(deps.backend.port, deps.fetch ?? createUnlimitedFetch());
+    this.fetchImpl = deps.fetch ?? createUnlimitedFetch();
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
@@ -54,9 +55,17 @@ export class HttpMEditClient implements MEditClient {
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
     // module outside this one starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
-      if (status === 'attached') this.notifications.start();
+      if (status === 'running') this.notifications.start();
       else this.notifications.stop();
     });
+  }
+
+  // The port is the lifecycle's to choose, so the generated client is built once it is known.
+  private get apiClient(): ApiClient {
+    const port = this.lifecycle.port;
+    if (port === undefined) throw new Error('mEdit has not started');
+    if (this.api?.port !== port) this.api = { port, client: createApiClient(port, this.fetchImpl) };
+    return this.api.client;
   }
 
   // ── lifecycle ────────────────────────────────────────────────────────────
@@ -242,7 +251,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
-  // 'attached' abandons it too — once the stream is gone, nothing is left to hear its tick.
+  // 'running' abandons it too — once the stream is gone, nothing is left to hear its tick.
   private awaitTerminalOrAbort(
     terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
   ): Promise<LoadOrderProgress | undefined> {
@@ -258,7 +267,7 @@ export class HttpMEditClient implements MEditClient {
       const onAbort = (): void => settle(undefined);
       signal?.addEventListener('abort', onAbort, { once: true });
       const unlisten = this.lifecycle.onStatusChanged((status) => {
-        if (status !== 'attached') settle(undefined);
+        if (status !== 'running') settle(undefined);
       });
       void terminal.then(settle);
     });
