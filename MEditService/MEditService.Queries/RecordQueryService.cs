@@ -88,13 +88,7 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var snapshot = _loadOrder.Require();
-        // ADR-0012 invariant 5: the grid is the record's in-game resolution stack, so a plugin that
-        // is not active is not a column.
-        var committedOverrides = stack.Entries
-            .Where(e => snapshot.IsActive(e.Plugin))
-            .Select(e => ToRecordDetail(e.Effective))
-            .ToList();
+        var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
 
         // ADR-0012: keyed by the compound column identity — with a second plugin of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
@@ -103,11 +97,14 @@ public sealed class RecordQueryService(
         var (classification, conflictAll) = ClassifyStack(committedOverrides, pluginMasters, resolveFormKey);
         // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
         // any non-Data-origin column and silently default ConflictThis to OnlyOne.
+        var snapshot = _loadOrder.Require();
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
                 classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
-                Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
+                Origin: o.Origin,
+                LoadIndex: LoadIndex.Of(new PluginAddress(o.Plugin, o.Origin), o.LoadOrderIndex, snapshot, reads.OpenedPlugins),
+                RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
                 IsPartialFormable: o.IsPartialFormable, ParseDiagnosis: o.ParseDiagnosis,
                 IsInOverwrite: PluginOrigin.IsOverwrite(o.Origin)));
 

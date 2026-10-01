@@ -91,6 +91,15 @@ public sealed class ParseFailedRecordTests
         Assert.True(scratch.Reads.OpenedPlugins.Count > 1);
     }
 
+    // plugins.md, A row: Unreadable records is the row's status whether the plugin is active or not.
+    [Fact]
+    public void GetPluginsWithParseFailures_NamesAPluginThatIsNotActive()
+    {
+        using var scratch = new Scratch(Fixture, active: false);
+
+        Assert.Contains(ColumnKey.Of(Fixture, Origin), scratch.Reads.GetPluginsWithParseFailures());
+    }
+
     [Fact]
     public void GetOverrideStack_ReadsTheUnreadableRecordBackFromItsStoredBody()
     {
@@ -208,12 +217,12 @@ public sealed class ParseFailedRecordTests
         public PluginAddress Plugin { get; }
         public string PluginPath { get; }
 
-        public Scratch(string fixtureFileName, bool corruptWholeFile = false)
-            : this(Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName), fixtureFileName, corruptWholeFile)
+        public Scratch(string fixtureFileName, bool corruptWholeFile = false, bool active = true)
+            : this(Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName), fixtureFileName, corruptWholeFile, active)
         {
         }
 
-        public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false)
+        public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false, bool active = true)
         {
             Plugin = new PluginAddress(fixtureFileName, Origin);
             var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
@@ -230,7 +239,7 @@ public sealed class ParseFailedRecordTests
                     inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, inputs.Count, Enabled: true, Winning: true));
+            inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, inputs.Count, Enabled: active, Winning: true));
 
             // Truncated below a TES4 header: no record identity exists to hang a status on.
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);

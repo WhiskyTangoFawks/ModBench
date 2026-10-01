@@ -429,8 +429,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // A key at neither ref is a record the tree has gained, and no document says where the tree
         // puts it: a new exterior cell's block is a directory, not a field.
-        if (formKeys.Any(formKey => At(RecordRef.Effective).GetDocument(formKey, key) == null
-                                    && At(RecordRef.Head).GetDocument(formKey, key) == null))
+        if (formKeys.Any(formKey => StoredRow(EffectiveRows, key, formKey) == null
+                                    && StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey) == null))
         {
             RederiveWholePluginFromSource(key, modFolder, formKeys);
             return;
@@ -446,8 +446,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
     private void RefreshOneKey(SourceRepository repository, PluginAddress key, string formKey)
     {
-        var effective = At(RecordRef.Effective).GetDocument(formKey, key);
-        var head = At(RecordRef.Head).GetDocument(formKey, key);
+        var effective = StoredRow(EffectiveRows, key, formKey);
+        var head = StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey);
         // Gone from both refs since the batch was read: another key's projection in this same batch
         // took it (a container's document carries its children's rows).
         var recordType = effective?.RecordType ?? head?.RecordType;
@@ -470,11 +470,25 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         // Re-read, since the projection above may have moved this record's committed row too. Asked
         // only for a record the index already believes dirty.
-        if (At(RecordRef.Head).GetDocument(formKey, key)?.Body is { } committedBody
+        if (StoredRow(TableDdlBuilder.HeadRowsRelation, key, formKey)?.Body is { } committedBody
             && repository.CommittedTextIfMoved(key, identity, committedBody) is { } movedText)
         {
             SetCommittedBaseline(key, [(formKey, movedText)]);
         }
+    }
+
+    private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
+
+    // A file changing is its own event (ADR-0009 invariant 1), so the projection reads the plugin's
+    // rows whether it is active or not.
+    private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT record_type, editor_id, body FROM {relation} WHERE form_key = $1 AND plugin = $2 AND origin = $3";
+        DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin]);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        return (reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetString(2));
     }
 
     private static bool IsDocument(string text)
@@ -521,7 +535,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private Dictionary<string, string> EffectiveContentHashes(PluginAddress key)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "SELECT form_key, content_hash FROM records WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = $"SELECT form_key, content_hash FROM {EffectiveRows} WHERE plugin = $1 AND origin = $2";
         DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -984,7 +998,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                SELECT DISTINCT plugin, origin FROM {records} WHERE parse_diagnosis IS NOT NULL
+                SELECT DISTINCT r.plugin, r.origin FROM {EffectiveRows} r
+                {TableDdlBuilder.RegisteredJoin("r", "plugin", "origin")}
+                WHERE r.parse_diagnosis IS NOT NULL
                 UNION
                 SELECT DISTINCT plugin, origin FROM record_type_failure
                 """;
@@ -1491,9 +1507,13 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return;
         }
 
+        if (SqlDoor.RefusalOf(Connection, sql) is { } refusal)
+            throw new ArgumentException(refusal);
+
         CreateRecordTypeViews();
         using var probeCmd = Connection.CreateCommand();
-        probeCmd.CommandText = $"SELECT * FROM ({sql}) __probe LIMIT 0";
+        // The newline keeps a trailing line comment in the filter from swallowing the wrapper.
+        probeCmd.CommandText = $"SELECT * FROM ({sql}\n) __probe LIMIT 0";
         using var probeReader = probeCmd.ExecuteReader();
         bool hasFormKey = Enumerable.Range(0, probeReader.FieldCount)
             .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
@@ -1501,7 +1521,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (!hasFormKey)
             throw new ArgumentException("Filter SQL must return a form_key column");
 
-        Execute($"CREATE OR REPLACE TABLE {FilterMatches} AS ({sql})");
+        Execute($"CREATE OR REPLACE TABLE {FilterMatches} AS ({sql}\n)");
         Execute($"""
             CREATE OR REPLACE TABLE {FilterHolders} AS
             WITH RECURSIVE held AS (SELECT plugin, origin, parent, child FROM ({NavigatorSql.Held}) h),

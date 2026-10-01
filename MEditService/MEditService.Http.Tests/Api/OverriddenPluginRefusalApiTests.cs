@@ -15,10 +15,14 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     private const string WinningOrigin = "WinningMod";
     private const string OverriddenOrigin = "OverriddenMod";
 
+    // No read sees a plugin the game does not load, so the overridden NPC's FormKey is the
+    // builder's.
+    private string _overriddenNpc = "";
+
     private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = new PluginFixtureBuilder("api-overridden-plugin")
-            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
+            .WithPlugin(PluginName, mod => _overriddenNpc = mod.Npcs.AddNew("OverriddenNpc").FormKey.ToString(), origin: OverriddenOrigin)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -30,9 +34,8 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheOverriddenPlugin_IsRefused_NamingThePluginItsOriginAndThatTheGameDoesNotLoadIt()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(PluginName, OverriddenOrigin);
 
-        var response = await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
+        var response = await Client.Edit(_overriddenNpc, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Body();
@@ -47,10 +50,9 @@ public sealed class OverriddenPluginRefusalApiTests : HostedTests
     public async Task EditingTheOverriddenPlugin_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(PluginName, OverriddenOrigin);
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin));
 
-        await Client.Edit(formKey, PluginName, OverriddenOrigin, "HeightMax", 0.75);
+        await Client.Edit(_overriddenNpc, PluginName, OverriddenOrigin, "HeightMax", 0.75);
 
         Assert.Equal(before, TreeSnapshot.Of(OtherTool.ModFolderOf(fx, OverriddenOrigin)));
     }

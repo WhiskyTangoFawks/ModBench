@@ -9,36 +9,35 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 
-    // ADR-0009: physical tables live in `mirror`; the public names in `main` are views scoped by
-    // registration. Every writer names `mirror.` explicitly, and a write against a view fails
-    // loudly, so the database enforces the split.
+    // ADR-0009: `mirror` holds every indexed plugin; `main` holds views of the active plugins. Every
+    // writer and every projection read names `mirror.`, and a write against a view fails loudly.
     internal const string MirrorSchema = "mirror";
 
     // ADR-0012 invariant 1 and Mutagen's ModKey: a plugin's filename compares ignoring case, and so
     // does a FormKey, which names its plugin by filename.
     internal const string FilenameIdentity = "COLLATE NOCASE";
 
-    // A mirror table carrying a plugin identity, plus which load-order-derived columns its view
-    // adds. `registrations` is the registration itself; `mirror.files` must answer for plugins the
-    // load order does not register, so neither appears below.
-    private readonly record struct RegisteredRelation(
-        string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder, bool DerivesWinner);
+    // A view in `main` over a mirror table carrying a plugin identity: of records, which only the
+    // active plugins answer, or of a plugin's own facts, which every registered plugin answers.
+    // `registrations` and `mirror.files` have no view.
+    private readonly record struct PublicView(
+        string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner);
 
     // ADR-0009: `load_order_idx` and `is_winner` live on no mirror table — one is a fact about the
     // registration, the other about the registered stack — so the views derive them by joining
     // `registrations` and `winners`, at Effective. `records_head` joins at Head.
-    private static readonly RegisteredRelation[] RegisteredRelations =
+    private static readonly PublicView[] PublicViews =
     [
-        new("records", "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
-        new("records_committed", "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: false),
-        new("form_references", "source_plugin", "source_origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new("form_lookup", "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
-        new("placement", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new("cell_location", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new("container_child", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new("record_type_failure", "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new(PluginDerivationTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
-        new(PluginDiagnosisTable, "plugin", "origin", DerivesLoadOrder: false, DerivesWinner: false),
+        new("records", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
+        new("records_committed", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: false),
+        new("form_references", "source_plugin", "source_origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("form_lookup", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: true, DerivesWinner: true),
+        new("placement", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("cell_location", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("container_child", "plugin", "origin", HoldsRecords: true, DerivesLoadOrder: false, DerivesWinner: false),
+        new("record_type_failure", "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
+        new(PluginDerivationTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
+        new(PluginDiagnosisTable, "plugin", "origin", HoldsRecords: false, DerivesLoadOrder: false, DerivesWinner: false),
     ];
 
     /// <summary>One row per indexed plugin naming which truth its rows came from, its source tree or
@@ -91,9 +90,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateSequenceTable(connection);
         Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.index_version (value VARCHAR NOT NULL)");
 
-        // Views after tables, in dependency order: the registered views over every mirror table, then
-        // the Head views over the registered `records`/`records_committed`.
-        CreateRegisteredViews(connection);
+        // Views after tables: the public views over every mirror table, then the Head views.
+        CreatePublicViews(connection);
         CreateHeadView(connection);
     }
 
@@ -118,13 +116,25 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
-    // ADR-0009: the one "registered" predicate — a row answers iff a registrations row names its
-    // (plugin, origin) — so C# reads and the SQL door cannot scope differently. Registered, not
-    // active (ADR-0013).
-    private static void CreateRegisteredViews(DuckDBConnection connection)
+    /// <summary>ADR-0009: registration is visibility, so a plugin's own facts answer while the
+    /// snapshot names it.</summary>
+    internal static string RegisteredJoin(string alias, string pluginColumn, string originColumn) => $"""
+        JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
+        """;
+
+    // ADR-0009 invariant 1: every read of a record sees only the active plugins, the SQL door
+    // included, through this one predicate. A registration's load index is null when the plugin is
+    // not active (ADR-0013).
+    private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
+        $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
+
+    private static void CreatePublicViews(DuckDBConnection connection)
     {
-        foreach (var relation in RegisteredRelations)
+        foreach (var relation in PublicViews)
         {
+            var scope = relation.HoldsRecords
+                ? ActiveJoin("t", relation.PluginColumn, relation.OriginColumn)
+                : RegisteredJoin("t", relation.PluginColumn, relation.OriginColumn);
             var loadOrderColumn = relation.DerivesLoadOrder ? ", p.load_order_idx" : "";
             var winnerColumn = relation.DerivesWinner ? ", (w.form_key IS NOT NULL) AS is_winner" : "";
             var winnerJoin = relation.DerivesWinner
@@ -134,7 +144,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
                 CREATE OR REPLACE VIEW "{relation.Table}" AS
                 SELECT t.*{loadOrderColumn}{winnerColumn}
                 FROM {MirrorSchema}."{relation.Table}" t
-                JOIN {RegistrationsRelation} p ON p.plugin = t.{relation.PluginColumn} AND p.origin = t.{relation.OriginColumn}
+                {scope}
                 {winnerJoin}
                 """);
         }
@@ -193,25 +203,22 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    /// <summary>The Head membership relation, with no winner column. In the mirror schema because it
-    /// is not part of the SQL door: it exists so the winner sweep and <c>records_head</c> read one
-    /// definition of "what Head holds".</summary>
+    /// <summary>What Head holds, for every indexed plugin, with no winner column. Outside the SQL
+    /// door: the winner sweep, the projection and <c>records_head</c> read this one
+    /// definition.</summary>
     internal const string HeadRowsRelation = $"{MirrorSchema}.head_rows";
 
-    // Reads the registered `records`/`records_committed` views, not the mirror tables, so Head
-    // is scoped by registration through the same predicate as Effective.
     private static void CreateHeadView(DuckDBConnection connection)
     {
         // Disjoint halves by construction (the snapshot write and the `ref` flip share one
-        // transaction), so UNION ALL is exact. Both halves name `main.` explicitly: this view lives
-        // in `mirror`, where an unqualified `records` is the unscoped mirror table.
+        // transaction), so UNION ALL is exact.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW {HeadRowsRelation} AS
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash, parse_diagnosis
-            FROM main.records_committed
+            SELECT form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash, parse_diagnosis
+            FROM {MirrorSchema}.records_committed
             UNION ALL
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash, parse_diagnosis
-            FROM main.records WHERE "ref" = '{SourceRef.Committed}'
+            SELECT form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash, parse_diagnosis
+            FROM {MirrorSchema}.records WHERE "ref" = '{SourceRef.Committed}'
             """);
 
         // is_winner is Head's own answer, never Effective's carried through: a working-tree delete
@@ -219,10 +226,11 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         // Effective's winner would report two winners at Head.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW records_head AS
-            SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
+            SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, p.load_order_idx,
                    (w.form_key IS NOT NULL) AS is_winner,
                    h."ref", h.body, h.content_hash, h.parse_diagnosis
             FROM {HeadRowsRelation} h
+            {ActiveJoin("h", "plugin", "origin")}
             {WinnerJoin("h", RecordRef.Head, "plugin", "origin")}
             """);
     }

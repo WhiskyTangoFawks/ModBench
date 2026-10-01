@@ -1,0 +1,30 @@
+using MEditService.Index.Tests.TestSupport;
+
+namespace MEditService.Index.Tests.Indexing;
+
+/// <summary>ADR-0009 invariant 1: the SQL door sees only the active plugins, so a filter reads the
+/// public relations of <c>main</c> and nothing that reaches past them (ADR-0011 invariant 1).</summary>
+public sealed class SqlDoorSealTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+{
+    [Theory]
+    [InlineData("SELECT form_key FROM mirror.records")]
+    [InlineData("SELECT form_key FROM mirror.records_committed")]
+    [InlineData("SELECT form_key FROM mirror.head_rows")]
+    [InlineData("SELECT form_key FROM records WHERE form_key IN (SELECT form_key FROM mirror.records)")]
+    [InlineData("SELECT table_name AS form_key FROM information_schema.tables")]
+    [InlineData("SELECT form_key FROM query('SELECT form_key FROM mirror.records')")]
+    [InlineData("SELECT form_key FROM query_table('mirror.records')")]
+    [InlineData("SELECT table_name AS form_key FROM duckdb_tables()")]
+    [InlineData("SELECT form_key FROM records; SELECT form_key FROM mirror.records")]
+    public void AFilterThatReachesPastThePublicRelations_IsRefused(string sql) =>
+        Assert.False(fixture.Index.Accepts(sql));
+
+    // The refusals above are this theory's positive control: a door that refused everything would
+    // pass them too.
+    [Theory]
+    [InlineData("SELECT form_key FROM records")]
+    [InlineData("SELECT form_key FROM main.npc_")]
+    [InlineData("WITH held AS (SELECT form_key FROM records) SELECT form_key FROM held")]
+    [InlineData("SELECT form_key FROM records, unnest([1, 2]) AS t(n)")]
+    public void AFilterOfThePublicRelations_IsAccepted(string sql) => Assert.True(fixture.Index.Accepts(sql));
+}

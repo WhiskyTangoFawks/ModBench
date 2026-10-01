@@ -2,9 +2,9 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers, at whichever <see cref="RecordRef"/> the caller is
-/// positioned on. No table-name dispatch crosses this seam; VMAD/condition reconstitution lives in
-/// <c>Queries/</c>, built from the document body.</summary>
+/// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/>. A read of a
+/// record sees only the active plugins (ADR-0009 invariant 1); a plugin's own facts answer while
+/// the snapshot names it.</summary>
 public interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has

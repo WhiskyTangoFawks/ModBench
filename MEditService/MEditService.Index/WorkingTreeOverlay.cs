@@ -15,7 +15,7 @@ namespace MEditService.Index;
 /// derived rows cannot drift from ingest's.</summary>
 internal sealed class WorkingTreeOverlay
 {
-    private const string HeadRelation = "records_head";
+    private const string HeadRelation = TableDdlBuilder.HeadRowsRelation;
 
     // The one covered slot that is a cell rather than a placed object, so the row it derives is a
     // cell_location rather than a placement.
@@ -130,7 +130,7 @@ internal sealed class WorkingTreeOverlay
     }
 
     internal bool RowExistsAtEffective(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, "SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        DuckDbSql.ScalarString(_connection, "SELECT form_key FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin) != null;
 
     internal bool RowExistsAtHead(PluginAddress key, string formKey) =>
@@ -197,7 +197,7 @@ internal sealed class WorkingTreeOverlay
     private void SetOneCommittedBaseline(PluginAddress key, string formKey, string body)
     {
         var effectiveBody = DuckDbSql.ScalarString(_connection,
-            "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
         if (effectiveBody == null) return;
 
@@ -300,7 +300,7 @@ internal sealed class WorkingTreeOverlay
         // An UPDATE alone would silently do nothing for a record deleted in the working tree (no
         // Effective row) and then edited back to a different value, so the row is restored from the
         // snapshot first when missing.
-        if (DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        if (DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin) == null)
         {
             RestoreFromSnapshot(key, formKey);
@@ -326,7 +326,7 @@ internal sealed class WorkingTreeOverlay
     private void RederiveIndexRowsForRecord(PluginAddress key, string formKey, string body, ICollection<string> touched)
     {
         var recordType = DuckDbSql.ScalarString(_connection,
-            "SELECT record_type FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            "SELECT record_type FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
         if (recordType == null || !_schemas.TryGetValue(recordType, out var schema)) return;
 
@@ -465,7 +465,7 @@ internal sealed class WorkingTreeOverlay
     }
 
     private string? EffectiveBody(PluginAddress key, string formKey) =>
-        DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        DuckDbSql.ScalarString(_connection, "SELECT body FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin);
 
     // A container's child set and slot order live in its body, so a delete-then-insert per (parent,

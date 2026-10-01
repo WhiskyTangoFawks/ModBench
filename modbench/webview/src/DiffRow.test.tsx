@@ -25,7 +25,7 @@ const CHILDREN: FieldDiff[] = [diffNode({ fieldName: 'child' })];
 
 function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
-    formKey: '000001:Fallout4.esm', plugin, loadOrderIndex: 0, isWinner: false,
+    formKey: '000001:Fallout4.esm', plugin, loadIndex: '00', isWinner: false,
     editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'disk-value' }],
     conflictThis: 'Master', origin: 'Data',
     recordType: 'npc_', isPartialForm: false, isPartialFormable: false, isInOverwrite: false,

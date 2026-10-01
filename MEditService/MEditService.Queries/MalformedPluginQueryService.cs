@@ -18,10 +18,11 @@ public sealed class MalformedPluginQueryService(IQueryIndex index, LoadOrderHold
         if (index.Status.State != LoadOrderState.Ready) return [];
 
         var byPlugin = reads.GetPluginDiagnoses().ToLookup(row => row.Plugin, PluginAddress.Comparer);
+        var loadedWithNoLine = held.LoadedWithNoLine.Select(plugin => plugin.Key).ToHashSet(PluginAddress.Comparer);
         return
         [
             .. held.Plugins
-                .Where(plugin => !held.LoadedWithNoLine.Contains(plugin))
+                .Where(plugin => !loadedWithNoLine.Contains(plugin.Key))
                 .OrderBy(plugin => held.LoadOrderIndex(plugin.Key) ?? int.MaxValue)
                 .SelectMany(plugin => byPlugin[plugin.Key].Select(row => Report(plugin, row.Diagnosis))),
         ];

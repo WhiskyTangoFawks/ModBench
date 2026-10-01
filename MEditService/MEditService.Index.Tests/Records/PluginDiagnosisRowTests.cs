@@ -49,6 +49,18 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         clean.WriteToBinary(_pluginPath);
     }
 
+    // plugins.md, A row: a malformed plugin is one whose bytes depart from what the Creation Kit
+    // writes, active or not.
+    [Fact]
+    public void AMalformedPluginThatIsNotActive_StillReadsAsItsDiagnosisRows()
+    {
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, _gameDirectory, [Entry with { Enabled = false }], GameRelease.Fallout4, _instanceRoot);
+
+        Assert.Equal(Key, Assert.Single(index.RequireReads().GetPluginDiagnoses()).Plugin);
+    }
+
     [Fact]
     public void AMalformedPlugin_ReadsAsDiagnosisRows_WordedAsTheScanWordsThem()
     {

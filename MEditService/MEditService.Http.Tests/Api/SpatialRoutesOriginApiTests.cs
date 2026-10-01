@@ -64,11 +64,11 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
             cellFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the cell FormKey."));
     }
 
-    private async Task PutBothPlugins(ScatteredFixtureData fx)
+    private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
-        // same slot; only the winning, enabled, listed one is active.
-        var plugins = fx.Plugins;
+        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
+        // only the winning, enabled, listed one is active, and only it is read.
+        var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -87,10 +87,11 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner: "ModB");
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
         Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
+        Assert.Empty((await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModA")).EnumerateArray());
     }
 
     // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
@@ -111,12 +112,14 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, worldspaceFk, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks?origin=ModB");
         var cellB = modB.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0];
         Assert.Equal("CellModB", cellB.GetProperty("editorId").GetString());
+        var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks?origin=ModA");
+        Assert.Empty(modA.GetProperty("blocks").EnumerateArray());
     }
 
     [Fact]
@@ -136,11 +139,13 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, cellFk) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(cellFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModB");
         Assert.Equal("RefModB", modB.GetProperty("persistent")[0].GetProperty("editorId").GetString());
+        var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModA");
+        Assert.Empty(modA.GetProperty("persistent").EnumerateArray());
     }
 
     [Fact]
@@ -160,10 +165,11 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, _) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner: "ModB");
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB");
         Assert.Equal(["InteriorModB"], InteriorEditorIds(modB));
+        Assert.Empty(InteriorEditorIds(await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModA")));
     }
 
     [Fact]

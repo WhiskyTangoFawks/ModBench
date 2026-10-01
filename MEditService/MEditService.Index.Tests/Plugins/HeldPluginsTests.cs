@@ -185,7 +185,7 @@ public sealed class HeldPluginsTests
 
         held.Reconcile(holder, data.DataFolder, [data.Plugins.Single() with { Enabled = false }], GameRelease.Fallout4);
 
-        Assert.False(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
+        Assert.Null(held.RequireReads().GetDocument(npc, Key("A.esp")));
         Assert.Contains(Key("A.esp"), held.RequireReads().OpenedPlugins.Keys);
     }
 

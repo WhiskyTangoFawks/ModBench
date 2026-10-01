@@ -19,19 +19,18 @@ internal sealed record FakeFixtureData(
 // trip runs Mutagen's own master computation, then the real codec serializes each record once.
 internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallout4)
 {
-    private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
+    private readonly List<(string Name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> Configure, string Origin)> _plugins = [];
 
-    internal FakeFixtureBuilder WithPlugin(
-        string name, Action<Fallout4Mod>? configure = null, bool listed = true, bool enabled = true, string origin = "Data")
+    internal FakeFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, string origin = "Data")
     {
-        _plugins.Add((name, listed, enabled, configure is null ? (_, _) => { } : (mod, _) => configure(mod), origin));
+        _plugins.Add((name, configure is null ? (_, _) => { } : (mod, _) => configure(mod), origin));
         return this;
     }
 
     internal FakeFixtureBuilder WithPlugin(
-        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true, string origin = "Data")
+        string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, string origin = "Data")
     {
-        _plugins.Add((name, listed, enabled, configure, origin));
+        _plugins.Add((name, configure, origin));
         return this;
     }
 
@@ -49,7 +48,7 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 
             for (var slot = 0; slot < _plugins.Count; slot++)
             {
-                var (name, listed, enabled, configure, origin) = _plugins[slot];
+                var (name, configure, origin) = _plugins[slot];
                 var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
                 configure(mod, builtMods.AsReadOnly());
                 builtMods.Add(mod);
@@ -71,11 +70,11 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
 
                 opened[key] = new PluginContent(
                     written.IsSmallMaster, IsMaster: masters.Count == 0 && records.Count > 0, IsBlueprint: false, masters, records.Count);
-                if (listed) registered.Add(new LoadOrderEntry(name, name, origin, slot, enabled, Winning: true));
+                registered.Add(new LoadOrderEntry(name, name, origin, slot, Enabled: true, Winning: true));
                 perPlugin.Add((key, slot, records));
             }
 
-            var winners = Winners(registered, perPlugin);
+            var winners = Winners(perPlugin);
             RecordLookupEntry? Resolve(string formKey) =>
                 winners.TryGetValue(formKey, out var winner) ? new RecordLookupEntry(winner.RecordType, winner.Record.EditorID) : null;
 
@@ -99,15 +98,13 @@ internal sealed class FakeFixtureBuilder(GameRelease release = GameRelease.Fallo
     }
 
     // ADR-0013's rule, applied the same way the Indexer's own sweep applies it: the winner of a
-    // FormKey is the highest-slot active plugin.
+    // FormKey is the highest-slot active plugin, and every plugin here is active.
     private static Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)> Winners(
-        List<LoadOrderEntry> registered, List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
+        List<(PluginAddress Key, int Slot, List<(IMajorRecordGetter Record, string RecordType)> Records)> perPlugin)
     {
-        var active = SnapshotPlugins.Active(registered).ToHashSet();
         var winners = new Dictionary<string, (int Slot, IMajorRecordGetter Record, string RecordType)>(StringComparer.Ordinal);
-        foreach (var (key, slot, records) in perPlugin)
+        foreach (var (_, slot, records) in perPlugin)
         {
-            if (!active.Contains(key)) continue;
             foreach (var (record, recordType) in records)
             {
                 var formKey = record.FormKey.ToString();

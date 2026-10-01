@@ -20,11 +20,17 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     private const string StrayOrigin = "StrayMod";
     private const string OverwriteStrayPlugin = "OverwriteStray.esp";
 
+    // No read sees a plugin the game does not load, so each NPC's FormKey is the builder's.
+    private readonly Dictionary<string, string> _npcOf = [];
+
+    private Action<Mutagen.Bethesda.Fallout4.Fallout4Mod> Npc(string plugin, string editorId) =>
+        mod => _npcOf[plugin] = mod.Npcs.AddNew(editorId).FormKey.ToString();
+
     private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = new PluginFixtureBuilder("api-unlisted-plugin")
-            .WithPlugin(UnlistedPlugin, mod => mod.Npcs.AddNew("UnlistedNpc"), origin: UnlistedOrigin)
-            .WithPlugin(DisabledPlugin, mod => mod.Npcs.AddNew("DisabledNpc"), origin: DisabledOrigin)
+            .WithPlugin(UnlistedPlugin, Npc(UnlistedPlugin, "UnlistedNpc"), origin: UnlistedOrigin)
+            .WithPlugin(DisabledPlugin, Npc(DisabledPlugin, "DisabledNpc"), origin: DisabledOrigin)
             .BuildScattered();
 
         var plugins = fx.Plugins.Select(p => p.Origin switch
@@ -45,7 +51,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     private async Task<ScatteredFixtureData> LoadedWithAModFolderStray()
     {
         var built = new PluginFixtureBuilder("api-modfolder-stray")
-            .WithPlugin(StrayPlugin, mod => mod.Npcs.AddNew("StrayNpc"), origin: StrayOrigin)
+            .WithPlugin(StrayPlugin, Npc(StrayPlugin, "StrayNpc"), origin: StrayOrigin)
             .BuildScattered();
         var fx = built with { Plugins = [.. built.Plugins.Select(p => p with { Slot = null })] };
 
@@ -60,7 +66,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     private async Task<ScatteredFixtureData> LoadedWithAnOverwriteStray()
     {
         var built = new PluginFixtureBuilder("api-overwrite-stray")
-            .WithPlugin(OverwriteStrayPlugin, mod => mod.Npcs.AddNew("StrayNpc"), origin: PluginOrigin.Overwrite)
+            .WithPlugin(OverwriteStrayPlugin, Npc(OverwriteStrayPlugin, "StrayNpc"), origin: PluginOrigin.Overwrite)
             .BuildScattered();
         var overwrite = Path.Combine(built.InstanceRoot, "overwrite");
         Directory.Move(OtherTool.ModFolderOf(built, PluginOrigin.Overwrite), overwrite);
@@ -77,7 +83,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndTheWayOut()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(UnlistedPlugin, UnlistedOrigin);
+        var formKey = _npcOf[UnlistedPlugin];
 
         var response = await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
 
@@ -95,7 +101,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_WritesNothing()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(UnlistedPlugin, UnlistedOrigin);
+        var formKey = _npcOf[UnlistedPlugin];
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, UnlistedOrigin));
 
         await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
@@ -107,7 +113,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginOnADisabledLine_IsAConflict_WritingNothing()
     {
         using var fx = await Loaded();
-        var formKey = await Client.FirstFormKey(DisabledPlugin, DisabledOrigin);
+        var formKey = _npcOf[DisabledPlugin];
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, DisabledOrigin));
 
         var response = await Client.Edit(formKey, DisabledPlugin, DisabledOrigin, "HeightMax", 0.75);
@@ -121,7 +127,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAModFolderStray_IsAConflictAsNotActive_WritingNothing()
     {
         using var fx = await LoadedWithAModFolderStray();
-        var formKey = await Client.FirstFormKey(StrayPlugin, StrayOrigin);
+        var formKey = _npcOf[StrayPlugin];
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, StrayOrigin));
 
         var response = await Client.Edit(formKey, StrayPlugin, StrayOrigin, "HeightMax", 0.75);
@@ -135,7 +141,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAnOverwriteStray_IsAConflict_AsNoModFolder_WritingNothing()
     {
         using var fx = await LoadedWithAnOverwriteStray();
-        var formKey = await Client.FirstFormKey(OverwriteStrayPlugin, PluginOrigin.Overwrite);
+        var formKey = _npcOf[OverwriteStrayPlugin];
         var before = TreeSnapshot.Of(OtherTool.ModFolderOf(fx, PluginOrigin.Overwrite));
 
         var response = await Client.Edit(formKey, OverwriteStrayPlugin, PluginOrigin.Overwrite, "HeightMax", 0.75);

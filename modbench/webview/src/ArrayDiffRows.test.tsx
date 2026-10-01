@@ -44,7 +44,7 @@ const sortedArrayCompareResult: CompareResult = compareResultFixture({
     }),
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
-      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }],
       conflictThis: 'Override',
     }),
@@ -93,7 +93,7 @@ const structCollapseExpandResult: CompareResult = compareResultFixture({
     }),
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
-      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: structMeta, value: { X1: 5, X2: 100 } }], conflictThis: 'Override',
     }),
   ],
@@ -149,7 +149,7 @@ const nestedStructArrayResult: CompareResult = compareResultFixture({
     }),
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
-      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: nestedStructArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }] } }], conflictThis: 'IdenticalToMaster',
     }),
   ],
@@ -325,7 +325,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     overrides: [
       compareOverride({
         formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: intArrayMeta, value: [1, 2, 3] }], conflictThis: 'Master',
       }),
     ],
@@ -431,7 +431,7 @@ const editableIntArrayResult: CompareResult = compareResultFixture({
   overrides: [
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: editableIntArrayMeta, value: [11, 22, 33] }], conflictThis: 'Master',
     }),
   ],
@@ -455,7 +455,7 @@ const scalarResult: CompareResult = compareResultFixture({
   overrides: [
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      isWinner: true, editorId: 'TestNPC',
       fields: [{ metadata: scalarMeta, value: 4 }], conflictThis: 'Master',
     }),
   ],
@@ -628,7 +628,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
       }),
       compareOverride({
         formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: scriptMeta, value: override }], conflictThis: 'Override',
       }),
     ],
@@ -732,7 +732,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     const client = panelClient(() => compareResultFixture({
           conflictAll: 'OnlyOne',
           overrides: [compareOverride({
-            formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', loadOrderIndex: 1, isWinner: true,
+            formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', isWinner: true,
             editorId: 'TestNPC', fields: [{ metadata: fragmentsMeta, value: [element] }], conflictThis: 'OnlyOne',
           })],
           diffs: [diffNode({

@@ -200,4 +200,18 @@ public sealed class IndexerTests
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
         Assert.Equal(["CharlieNpc"], matched.Items.Select(i => i.EditorId));
     }
+
+    // common.md, The status bar, story 1: Ready counts the active plugins, while progress counts
+    // every plugin the snapshot holds.
+    [Fact]
+    public void Status_CountsTheActivePlugins_BesideEveryPlugin()
+    {
+        using var data = new PluginFixtureBuilder("status-active")
+            .WithPlugin("A.esp").WithPlugin("B.esp", enabled: false).WithPlugin("C.esp")
+            .Build();
+        using var index = Indexes.Reconciled(data);
+
+        Assert.Equal(3, index.Status.TotalPlugins);
+        Assert.Equal(2, index.Status.ActivePlugins);
+    }
 }

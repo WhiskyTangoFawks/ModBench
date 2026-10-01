@@ -40,6 +40,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly List<IndexedPlugin> _indexed = [];
     private bool _conflictsComputed;
     private int _plannedCount;
+    private int _activeCount;
     // Set only by the reconcile door's own catch, cleared at the top of every attempt: a repeated
     // refusal re-sets it a moment later, a successful one leaves it clear.
     private string? _heldElsewhereMessage;
@@ -158,7 +159,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 else
                 {
                     var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures, Version: _version);
+                    held = new LoadOrderStatus(state, _plannedCount, _activeCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures, Version: _version);
                 }
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
@@ -370,6 +371,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _failedReads.Clear();
             _conflictsComputed = false;
             _plannedCount = 0;
+            _activeCount = 0;
             _heldPlugins = held;
             _index = fresh;
             _gameRelease = snapshot.GameRelease;
@@ -446,6 +448,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         {
             _conflictsComputed = false;
             _plannedCount = resolved.Count;
+            _activeCount = snapshot.Active.Count;
         }
         // Reconciling begins here, with the total known — the first status a subscriber sees for
         // this reconcile.
@@ -1204,6 +1207,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         _failedReads.Clear();
         _conflictsComputed = false;
         _plannedCount = 0;
+        _activeCount = 0;
         _heldElsewhereMessage = null;
         _failureMessage = null;
     }

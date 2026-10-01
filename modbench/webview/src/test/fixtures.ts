@@ -29,7 +29,7 @@ export const diffNode = (
 export const compareOverride = (
   o: Partial<CompareOverride> & Pick<CompareOverride, 'formKey' | 'plugin' | 'fields'>,
 ): CompareOverride => ({
-  loadOrderIndex: 0, isWinner: false, origin: 'Data', recordType: '',
+  loadIndex: '00', isWinner: false, origin: 'Data', recordType: '',
   isPartialForm: false, isPartialFormable: false, conflictThis: 'OnlyOne', isInOverwrite: false, ...o,
 });
 
@@ -44,7 +44,6 @@ export interface FixturePlugin {
   name: string;
   origin?: string | null;
   isImmutable?: boolean;
-  inLoadOrder?: boolean;
   isTracked?: boolean;
 }
 
@@ -69,8 +68,7 @@ export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}):
       // edits and reloads must not hand the panel the same reference twice.
       result: structuredClone(compare()),
       immutableSet: columnsWhere(p => p.isImmutable === true),
-      // ADR-0013/ADR-0007: an unstated plugin is in the load order, and untracked.
-      notInLoadOrderSet: columnsWhere(p => p.inLoadOrder === false),
+      // ADR-0007: an unstated plugin is untracked.
       trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,
     })),

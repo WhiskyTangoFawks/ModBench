@@ -526,8 +526,6 @@ export interface components {
         CompareOverride: {
             formKey: string;
             plugin: string;
-            /** Format: int32 */
-            loadOrderIndex: number;
             isWinner: boolean;
             editorId?: string | null;
             fields: components["schemas"]["FieldValue"][];
@@ -537,6 +535,7 @@ export interface components {
             isPartialFormable: boolean;
             parseDiagnosis?: string | null;
             conflictThis: components["schemas"]["ConflictThis"];
+            loadIndex: string;
             isInOverwrite: boolean;
         };
         CompareResult: {
@@ -714,6 +713,8 @@ export interface components {
             state: components["schemas"]["LoadOrderState"];
             /** Format: int32 */
             totalPlugins: number;
+            /** Format: int32 */
+            activePlugins: number;
             indexedPlugins: components["schemas"]["IndexedPlugin"][];
             conflictsComputed: boolean;
             failures: components["schemas"]["PluginLoadFailure"][];
@@ -870,8 +871,6 @@ export interface components {
         RecordDetail: {
             formKey: string;
             plugin: string;
-            /** Format: int32 */
-            loadOrderIndex: number;
             isWinner: boolean;
             editorId?: string | null;
             fields: components["schemas"]["FieldValue"][];

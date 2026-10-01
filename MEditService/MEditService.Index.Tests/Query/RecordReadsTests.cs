@@ -216,25 +216,25 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
-    // ADR-0012: two origins holding the same file name under different origin values.
+    // ADR-0012: two origins holding the same file name under different origin values. The game loads
+    // one, and the stack is the one it loads.
     [Fact]
-    public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsDistinctOriginPerRow()
+    public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsTheWinningOrigin()
     {
         FormKey npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-two-origins")
             .WithPlugin("Shared.esp", mod => npcFormKey = mod.Npcs.AddNew("SharedNpc").FormKey, origin: "ModA")
             .WithPlugin("Shared.esp", (mod, built) => mod.Npcs.Set(built[0].Npcs.First().DeepCopy()), origin: "ModB")
             .BuildScattered();
-        using var index = Indexes.Reconciled(fixture);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
 
-        var formKey = npcFormKey.ToString();
-        var overrideStack = index.RequireReads().GetOverrideStack(formKey)
-            ?? throw new InvalidOperationException($"Expected an override stack for '{formKey}'.");
-        var overrides = overrideStack.Entries;
-
-        Assert.Equal(2, overrides.Count);
-        Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");
-        Assert.Contains(overrides, o => o.Plugin.Origin == "ModB");
+        foreach (var winner in new[] { "ModA", "ModB" })
+        {
+            var stack = index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner)
+                .GetOverrideStack(npcFormKey.ToString());
+            Assert.Equal(winner, Assert.Single(stack?.Entries ?? []).Plugin.Origin);
+        }
     }
 
     [Fact]

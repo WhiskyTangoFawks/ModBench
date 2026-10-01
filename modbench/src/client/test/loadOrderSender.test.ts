@@ -5,7 +5,7 @@ import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '
 import { present } from '../../ports/present';
 
 const READY_STATUS: LoadOrderProgress = {
-  totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 1, activePlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };

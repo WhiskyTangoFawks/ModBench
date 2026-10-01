@@ -313,13 +313,17 @@ public class PlacementIndexingTests
             .WithPlugin("Placed.esp", configure, origin: "ModA")
             .WithPlugin("Placed.esp", configure, origin: "ModB")
             .BuildScattered();
-        using var index = Indexes.Reconciled(fixture);
-        var reads = index.RequireReads();
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
 
         var formKey = barrel.ToString();
-        Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModA")));
-        Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModB")));
-        Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModC")));
+        foreach (var (winner, other) in new[] { ("ModA", "ModB"), ("ModB", "ModA") })
+        {
+            var reads = index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, winner);
+            Assert.NotNull(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", winner)));
+            Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", other)));
+            Assert.Null(reads.GetPlacement(formKey, new PluginAddress("Placed.esp", "ModC")));
+        }
     }
 
     // ADR-0012: one plugin held twice under the same filename at two real origins. A worldspace tree
@@ -353,13 +357,17 @@ public class PlacementIndexingTests
                 .WithPlugin("SharedWorld.esp", configure, origin: "ModA")
                 .WithPlugin("SharedWorld.esp", configure, origin: "ModB")
                 .BuildScattered();
-            Index = Indexes.Reconciled(Fixture);
+            Index = Indexes.Open(_holder);
             (WorldspaceFk, ExtCellFk, PlacedFk, IntCellFk) = (wrld.ToString(), ext.ToString(), placed.ToString(), intCell.ToString());
         }
 
+        private readonly LoadOrderHolder _holder = new();
+
         public ScatteredFixtureData Fixture { get; }
         public Indexer Index { get; }
-        public IRecordReads Reads => Index.RequireReads();
+
+        public IRecordReads ReadsWithWinner(PluginAddress winner) =>
+            Index.ReadsWithWinner(_holder, Fixture.GameDirectory, Fixture.Plugins, winner.Origin);
         public string WorldspaceFk { get; }
         public string ExtCellFk { get; }
         public string PlacedFk { get; }
@@ -376,14 +384,20 @@ public class PlacementIndexingTests
     private static readonly PluginAddress SharedB = new("SharedWorld.esp", "ModB");
     private static readonly PluginAddress SharedC = new("SharedWorld.esp", "ModC");
 
+    private static readonly (PluginAddress Winner, PluginAddress Other)[] WinnerAndOther = [(SharedA, SharedB), (SharedB, SharedA)];
+
     [Fact]
     public void GetWorldspaceCells_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
         using var f = new TwoOriginWorldspace();
 
-        Assert.Single(f.Reads.GetWorldspaceCells(SharedA, f.WorldspaceFk));
-        Assert.Single(f.Reads.GetWorldspaceCells(SharedB, f.WorldspaceFk));
-        Assert.Empty(f.Reads.GetWorldspaceCells(SharedC, f.WorldspaceFk));
+        foreach (var (winner, other) in WinnerAndOther)
+        {
+            var reads = f.ReadsWithWinner(winner);
+            Assert.Single(reads.GetWorldspaceCells(winner, f.WorldspaceFk));
+            Assert.Empty(reads.GetWorldspaceCells(other, f.WorldspaceFk));
+            Assert.Empty(reads.GetWorldspaceCells(SharedC, f.WorldspaceFk));
+        }
     }
 
     [Fact]
@@ -391,9 +405,13 @@ public class PlacementIndexingTests
     {
         using var f = new TwoOriginWorldspace();
 
-        Assert.Single(f.Reads.GetInteriorCells(SharedA));
-        Assert.Single(f.Reads.GetInteriorCells(SharedB));
-        Assert.Empty(f.Reads.GetInteriorCells(SharedC));
+        foreach (var (winner, other) in WinnerAndOther)
+        {
+            var reads = f.ReadsWithWinner(winner);
+            Assert.Single(reads.GetInteriorCells(winner));
+            Assert.Empty(reads.GetInteriorCells(other));
+            Assert.Empty(reads.GetInteriorCells(SharedC));
+        }
     }
 
     [Fact]
@@ -401,9 +419,13 @@ public class PlacementIndexingTests
     {
         using var f = new TwoOriginWorldspace();
 
-        Assert.Single(f.Reads.GetCellReferences(SharedA, f.ExtCellFk).Persistent);
-        Assert.Single(f.Reads.GetCellReferences(SharedB, f.ExtCellFk).Persistent);
-        Assert.Empty(f.Reads.GetCellReferences(SharedC, f.ExtCellFk).Persistent);
+        foreach (var (winner, other) in WinnerAndOther)
+        {
+            var reads = f.ReadsWithWinner(winner);
+            Assert.Single(reads.GetCellReferences(winner, f.ExtCellFk).Persistent);
+            Assert.Empty(reads.GetCellReferences(other, f.ExtCellFk).Persistent);
+            Assert.Empty(reads.GetCellReferences(SharedC, f.ExtCellFk).Persistent);
+        }
     }
 
     [Fact]

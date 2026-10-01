@@ -27,7 +27,7 @@ export interface ReconciledDeps {
  *  views. Ready is only published after the winner sweep, so conflicts are computed. */
 export async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
-  deps.setStatusText(`$(check) mEdit: Ready (${status.totalPlugins} plugins)`);
+  deps.setStatusText(`$(check) mEdit: Ready (${status.activePlugins} plugins)`);
   // A reconciled load order can move which records a row's page/interior/reference caches hold,
   // so the record browser re-reads them the same as any other write (ADR-0002).
   deps.refreshTree();

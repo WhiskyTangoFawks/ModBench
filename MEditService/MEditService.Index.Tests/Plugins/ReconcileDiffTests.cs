@@ -113,9 +113,8 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        // Still registered and browsable, but a plugin that is not active competes for nothing.
-        Assert.NotEmpty(ReadsOf(index).GetDocuments(bKey));
-        Assert.False(OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey)).IsWinner);
+        // Still registered, but a plugin that is not active is read nowhere and competes for nothing.
+        Assert.Empty(ReadsOf(index).GetDocuments(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -124,7 +123,7 @@ public sealed class ReconcileDiffTests
     }
 
     // An overridden plugin and the winning plugin that share a filename are both held and both
-    // registered (ADR-0013: the snapshot is every plugin file); only the winning one can win.
+    // registered (ADR-0013: the snapshot is every plugin file); only the winning one is read.
     [Fact]
     public void OverriddenPlugin_IsRegisteredBesideTheWinner_AndNeverWins()
     {
@@ -142,21 +141,18 @@ public sealed class ReconcileDiffTests
 
         var modA = new PluginAddress("Shared.esp", "ModA");
         var modB = new PluginAddress("Shared.esp", "ModB");
-        var stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
-        Assert.Equal(2, stack.Count);
-        Assert.True(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
-        Assert.False(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
-
-        // Both plugins are registered — the overridden one is browsable, not absent.
-        Assert.NotEmpty(ReadsOf(index).GetDocuments(modB));
+        var only = Assert.Single(OverrideStackOf(index, "000800:Shared.esp").Entries);
+        Assert.Equal(modA, only.Plugin);
+        Assert.True(only.IsWinner);
+        Assert.Contains(index.RequireReads().OpenedPlugins.Keys, k => k.Equals(modB));
 
         // Reprioritising the mods flips which plugin wins — SQL-only, like every other move.
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
-        stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
-        Assert.True(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
-        Assert.False(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
+        only = Assert.Single(OverrideStackOf(index, "000800:Shared.esp").Entries);
+        Assert.Equal(modB, only.Plugin);
+        Assert.True(only.IsWinner);
         Assert.Equal(opened, opens.OpenedTotal);
     }
 

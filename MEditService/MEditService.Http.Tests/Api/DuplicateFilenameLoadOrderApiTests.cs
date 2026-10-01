@@ -32,11 +32,11 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
                 origin: "TargetMod")
             .BuildScattered();
 
-    private async Task PutBothPlugins(ScatteredFixtureData fx)
+    private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
-        // same slot; only the winning, enabled, listed one is active.
-        var plugins = fx.Plugins;
+        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
+        // only the winning, enabled, listed one is active.
+        var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -66,41 +66,43 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.Equal(["ModA", "ModB"], origins);
     }
 
-    [Fact]
-    public async Task OverriddenPlugin_IndexesItsOwnRecordsNotTheOtherPlugins()
+    // A load order keyed by filename alone reports the right origin with the other plugin's
+    // content, so each plugin is read while it wins and its own records must come back.
+    [Theory]
+    [InlineData("ModA", "FromModA")]
+    [InlineData("ModB", "FromModB")]
+    public async Task EachPlugin_ReadsItsOwnRecordsWhileItWins(string winner, string editorId)
     {
         using var fx = BuildTwoPlugins();
         await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner);
 
-        // Deliberately unfiltered by plugin: `?plugin=` resolves origin from the filename
-        // server-side, so it can only answer for one of two plugins that share a filename.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
-        var byOrigin = records.GetProperty("items").EnumerateArray()
-            .Where(r => r.GetProperty("plugin").GetString() == "Shared.esp")
-            .ToDictionary(r => DocumentNodes.StringValueOf(r.GetProperty("origin")), r => r.GetProperty("editorId").GetString());
+        var shared = Assert.Single(records.GetProperty("items").EnumerateArray(), r => r.GetProperty("plugin").GetString() == "Shared.esp");
 
-        // A load order keyed by filename alone reports two rows with the right origins and the
-        // same content, so the failure being pinned is not a missing row.
-        Assert.Equal("FromModA", byOrigin["ModA"]);
-        Assert.Equal("FromModB", byOrigin["ModB"]);
+        Assert.Equal(winner, DocumentNodes.StringValueOf(shared.GetProperty("origin")));
+        Assert.Equal(editorId, shared.GetProperty("editorId").GetString());
     }
 
+    // The tree row names the plugin it stands for, since a filename alone cannot identify it: the
+    // overridden plugin answers nothing, never the winning plugin's records.
     [Fact]
     public async Task BrowsingByOrigin_ReturnsThatPluginsOwnRecordsAndCounts()
     {
         using var fx = BuildTwoPlugins();
         await PutBothPlugins(fx);
+        Assert.Empty(await NpcEditorIds("ModB"));
 
-        // The tree row names the plugin it stands for, since a filename alone cannot identify it.
-        var records = await _client.GetFromJsonAsync<JsonElement>("/records?plugin=Shared.esp&origin=ModB&type=npc_&limit=10");
-        var editorIds = records.GetProperty("items").EnumerateArray()
-            .Select(r => r.GetProperty("editorId").GetString())
-            .ToList();
-        Assert.Equal(["FromModB"], editorIds);
+        await PutBothPlugins(fx, winner: "ModB");
 
+        Assert.Equal(["FromModB"], await NpcEditorIds("ModB"));
         var types = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/record-types?origin=ModB");
         Assert.Equal(1, types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_").GetProperty("count").GetInt32());
     }
+
+    private async Task<List<string?>> NpcEditorIds(string origin) =>
+        [.. (await _client.GetFromJsonAsync<JsonElement>($"/records?plugin=Shared.esp&origin={origin}&type=npc_&limit=10"))
+            .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("editorId").GetString())];
 
     // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
     // filename, so both routes refuse rather than picking one of the two plugins for it.
@@ -148,8 +150,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             .ToDictionary(o => DocumentNodes.StringValueOf(o.GetProperty("origin")), o => o);
 
         // ADR-0012: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
-        // one file named Shared.esp, so the overridden plugin stays indexed and browsable but never
-        // columns.
+        // one file named Shared.esp, so the overridden plugin stays indexed but never columns.
         var column = Assert.Single(columns);
         Assert.Equal("ModA", column.Key);
         Assert.Equal("FromModA", column.Value.GetProperty("editorId").GetString());

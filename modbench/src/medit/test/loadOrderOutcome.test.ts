@@ -4,7 +4,7 @@ import type { LoadOrderProgress } from '../../client';
 import type { components } from '../../wire/generated/api';
 
 const readyStatus: LoadOrderProgress = {
-  totalPlugins: 2, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
+  totalPlugins: 3, activePlugins: 2, version: 1, indexedPlugins: [], conflictsComputed: true, holdsNone: false, failures: [],
 };
 const applied = { outcome: 'applied' as const, status: readyStatus };
 type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
@@ -44,7 +44,8 @@ describe('settleReconciled', () => {
     applyReconciled: vi.fn().mockResolvedValue(undefined),
   });
 
-  it('writes the ready status text with the backend\'s own count of plugins', async () => {
+  // common.md, The status bar, story 1: N counts the active plugins, not every plugin indexed.
+  it('writes the ready status text counting the active plugins', async () => {
     const deps = settleDeps();
 
     await settleReconciled(readyStatus, deps);

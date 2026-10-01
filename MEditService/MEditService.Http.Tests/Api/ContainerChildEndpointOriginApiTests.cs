@@ -43,11 +43,11 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have captured the quest's FormKey."));
     }
 
-    private async Task PutBothPlugins(ScatteredFixtureData fx)
+    private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, ModB as the overridden plugin at the
-        // same slot; only the winning, enabled, listed one is active.
-        var plugins = fx.Plugins;
+        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
+        // only the winning, enabled, listed one is active, and only it is read.
+        var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
         {
@@ -66,12 +66,14 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     {
         var (fx, questFk) = BuildTwoPlugins();
         using var _fx = fx;
-        await PutBothPlugins(fx);
+        await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(questFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModB");
         var namesB = modB.EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray();
         Assert.Equal(["TopicModB", "BranchModB"], namesB);
+        var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModA");
+        Assert.Empty(modA.EnumerateArray());
     }
 
     // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
