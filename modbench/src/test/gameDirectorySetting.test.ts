@@ -68,7 +68,7 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     const refresh = vi.fn().mockResolvedValue(undefined);
 
     refreshOnGameDirectoryChange(config.subscribe, refresh);
-    config.fire('modbench.backendPort');
+    config.fire('modbench.attachToBackendPort');
     await vi.advanceTimersByTimeAsync(SETTING_SETTLE_MS * 5);
 
     expect(refresh).not.toHaveBeenCalled();

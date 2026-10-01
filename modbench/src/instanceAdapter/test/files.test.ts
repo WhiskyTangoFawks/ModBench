@@ -4,7 +4,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { write, putIfChanged } from '../files';
+import { write, putIfChanged, isTracked } from '../files';
 
 // Set by a test, cleared by the mocked `rename` below, which then rejects instead of renaming —
 // a temp file written but never landed, the shape a crash between the two leaves.
@@ -161,5 +161,26 @@ describe('putIfChanged', () => {
 
     expect(await readFile(path, 'utf8')).toBe('original');
     expect(await readdir(root)).toEqual(['plugins.txt']);
+  });
+});
+
+describe('isTracked', () => {
+  let folder: string;
+
+  beforeEach(async () => {
+    folder = await mkdtemp(join(tmpdir(), 'files-tracked-'));
+  });
+
+  afterEach(async () => {
+    await rm(folder, { recursive: true, force: true });
+  });
+
+  it('is true for a folder holding a .git', async () => {
+    await mkdir(join(folder, '.git'));
+    expect(await isTracked(folder)).toBe(true);
+  });
+
+  it('is false for a folder with no .git', async () => {
+    expect(await isTracked(folder)).toBe(false);
   });
 });
