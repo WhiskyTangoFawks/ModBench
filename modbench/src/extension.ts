@@ -133,7 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: referencedByTreeProvider,
     canSelectMany: true,
   });
-  context.subscriptions.push(focusedView.track(REFERENCED_BY_VIEW, referencedByTreeView));
+  context.subscriptions.push(focusedView.follow(REFERENCED_BY_VIEW, referencedByTreeView));
   const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
     (formKey) => referencedByTreeProvider.showFor(formKey));
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes

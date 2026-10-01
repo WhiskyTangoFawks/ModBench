@@ -575,9 +575,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   own(registerViewOnNexusCommand(instance, reporterFor('mod.viewOnNexus'), nexusRowInLastSelectedView(own, [
     { id: 'modbench.modList', view: modListView }, { id: 'modbench.downloads', view: downloadsView },
   ])));
-  own(deps.focusedView.track('modbench.modList', modListView));
-  own(deps.focusedView.track('modbench.pluginListTree', pluginListView));
-  own(deps.focusedView.track('modbench.downloads', downloadsView));
+  own(deps.focusedView.follow('modbench.modList', modListView));
+  own(deps.focusedView.follow('modbench.pluginListTree', pluginListView));
+  own(deps.focusedView.follow('modbench.downloads', downloadsView));
   ownAll(own, registerFilterCommands(
     () => deps.focusedView.id(),
     new Map([

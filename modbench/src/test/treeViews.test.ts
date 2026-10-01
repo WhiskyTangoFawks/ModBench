@@ -531,12 +531,12 @@ describe('the focused view', () => {
     expect(createFocusedView().id()).toBeUndefined();
   });
 
-  it('is the tracked view last selected in', () => {
+  it('is the followed view last selected in', () => {
     const focused = createFocusedView();
     const mods = fakeView();
     const plugins = fakeView();
-    focused.track('modbench.modList', mods);
-    focused.track('modbench.pluginListTree', plugins);
+    focused.follow('modbench.modList', mods);
+    focused.follow('modbench.pluginListTree', plugins);
     mods.select(['ModA']);
     expect(focused.id()).toBe('modbench.modList');
     plugins.select(['First.esp']);
@@ -546,7 +546,7 @@ describe('the focused view', () => {
   it('is a surface outside the trees from the moment it is entered, until a tree is selected in again', () => {
     const focused = createFocusedView();
     const mods = fakeView();
-    focused.track('modbench.modList', mods);
+    focused.follow('modbench.modList', mods);
     mods.select(['ModA']);
     focused.enter('modbench.recordGrid');
     expect(focused.id()).toBe('modbench.recordGrid');

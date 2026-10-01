@@ -106,7 +106,7 @@ beforeEach(() => {
 });
 
 describe('the name filter is durable', () => {
-  it('keeps the filter applied when the box hides — Enter, Escape and clicking a row are one API event, and none of them is an intent to discard', async () => {
+  it('keeps the filter applied when the box hides — Enter, Escape and clicking a row are one API event, and none of them is an intent to discard', () => {
     const { applied } = setup();
     open();
     currentBox().type('arm');
@@ -114,14 +114,14 @@ describe('the name filter is durable', () => {
     expect(applied.map((a) => a.text)).toEqual(['arm']);
   });
 
-  it('disposes the hidden box — the widget is an entry mechanism, not where the filter lives', async () => {
+  it('disposes the hidden box — the widget is an entry mechanism, not where the filter lives', () => {
     setup();
     open();
     currentBox().hide();
     expect(currentBox().disposed).toBe(true);
   });
 
-  it('reopens prefilled with the active term, so the box edits the filter rather than starting over', async () => {
+  it('reopens prefilled with the active term, so the box edits the filter rather than starting over', () => {
     setup();
     open();
     currentBox().type('arm');
@@ -130,7 +130,7 @@ describe('the name filter is durable', () => {
     expect(currentBox().value).toBe('arm');
   });
 
-  it('clears only on the explicit clear command', async () => {
+  it('clears only on the explicit clear command', () => {
     const { applied } = setup();
     open();
     currentBox().type('arm');
@@ -139,7 +139,7 @@ describe('the name filter is durable', () => {
     expect(applied.map((a) => a.text)).toEqual(['arm', '']);
   });
 
-  it('raises the filter-active context key while filtered and drops it on clear, driving the slot-1 icon swap', async () => {
+  it('raises the filter-active context key while filtered and drops it on clear, driving the slot-1 icon swap', () => {
     setup();
     open();
     currentBox().type('arm');
@@ -161,7 +161,7 @@ describe('the name filter is durable', () => {
     expect([...h.state.commands.keys()]).toEqual([]);
   });
 
-  it('treats a term typed back to empty as no filter, without needing the clear command', async () => {
+  it('treats a term typed back to empty as no filter, without needing the clear command', () => {
     setup();
     open();
     currentBox().type('arm');
@@ -171,14 +171,14 @@ describe('the name filter is durable', () => {
 });
 
 describe('the active term reads out in the view description', () => {
-  it('names the active term, so the user can see what they are filtered by without opening anything', async () => {
+  it('names the active term, so the user can see what they are filtered by without opening anything', () => {
     const { view } = setup();
     open();
     currentBox().type('arm');
     expect(view.description).toBe('"arm"');
   });
 
-  it('says nothing when no filter is active', async () => {
+  it('says nothing when no filter is active', () => {
     const { view } = setup();
     open();
     currentBox().type('arm');
@@ -186,7 +186,7 @@ describe('the active term reads out in the view description', () => {
     expect(view.description).toBeUndefined();
   });
 
-  it('composes with whatever else the view says about itself — the term first, then the base', async () => {
+  it('composes with whatever else the view says about itself — the term first, then the base', () => {
     const { view, filter } = setup();
     filter.setBaseDescription('Default');
     open();
@@ -203,7 +203,7 @@ describe('the active term reads out in the view description', () => {
   // The merged Plugins tree carries two independent narrowing axes (plugins.md, Toolbar):
   // this name filter and the SQL record filter. Both show, and clearing either leaves the
   // other's half of the readout standing.
-  it('puts the term after the base where the view reads its base first', async () => {
+  it('puts the term after the base where the view reads its base first', () => {
     const { view, filter } = setup({ termPlacement: 'afterBase' });
     filter.setBaseDescription('12 / 30');
     open();
@@ -211,7 +211,7 @@ describe('the active term reads out in the view description', () => {
     expect(view.description).toBe('12 / 30 · "arm"');
   });
 
-  it('recomposes when the other axis changes under a live filter', async () => {
+  it('recomposes when the other axis changes under a live filter', () => {
     const { view, filter } = setup();
     open();
     currentBox().type('arm');
@@ -434,7 +434,7 @@ describe('the message follows the view\'s own row-change signal', () => {
 describe('the Mods separator toggle rides on the box', () => {
   const toggle = { icon: 'list-tree', label: 'Group by separator' };
 
-  it('reapplies the current term when the toggle is pressed, so the option takes effect without retyping', async () => {
+  it('reapplies the current term when the toggle is pressed, so the option takes effect without retyping', () => {
     const { applied } = setup({ toggle });
     open();
     currentBox().type('arm');
@@ -442,7 +442,7 @@ describe('the Mods separator toggle rides on the box', () => {
     expect(applied).toEqual([{ text: 'arm', toggleOn: true }, { text: 'arm', toggleOn: false }]);
   });
 
-  it('keeps the toggle state across a reopen, since the filter it belongs to survived the hide', async () => {
+  it('keeps the toggle state across a reopen, since the filter it belongs to survived the hide', () => {
     const { applied } = setup({ toggle });
     open();
     currentBox().type('arm');
@@ -453,7 +453,7 @@ describe('the Mods separator toggle rides on the box', () => {
     expect(applied.at(-1)).toEqual({ text: 'armor', toggleOn: false });
   });
 
-  it('returns to grouped when the term is typed back to empty, so the next term starts grouped', async () => {
+  it('returns to grouped when the term is typed back to empty, so the next term starts grouped', () => {
     const { applied } = setup({ toggle });
     open();
     currentBox().type('arm');
@@ -463,7 +463,7 @@ describe('the Mods separator toggle rides on the box', () => {
     expect(applied.slice(-2)).toEqual([{ text: '', toggleOn: true }, { text: 'w', toggleOn: true }]);
   });
 
-  it('shows the toggle as on again once the term is typed back to empty', async () => {
+  it('shows the toggle as on again once the term is typed back to empty', () => {
     setup({ toggle });
     open();
     currentBox().type('arm');
@@ -472,7 +472,7 @@ describe('the Mods separator toggle rides on the box', () => {
     expect(currentBox().buttons.map((b) => b.tooltip)).toEqual(['Group by separator (on)']);
   });
 
-  it('resets the toggle to on when the filter is cleared', async () => {
+  it('resets the toggle to on when the filter is cleared', () => {
     const { applied } = setup({ toggle });
     open();
     currentBox().type('arm');

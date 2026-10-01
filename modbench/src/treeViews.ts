@@ -128,7 +128,7 @@ export function lastSelectedViewSelection(
 export interface FocusedView {
   id(): string | undefined;
   /** Selecting in `view` makes it the focused one. */
-  track(id: string, view: SelectableView): vscode.Disposable;
+  follow(id: string, view: SelectableView): vscode.Disposable;
   /** A surface that is no tree says it has the focus. */
   enter(id: string): void;
 }
@@ -139,7 +139,7 @@ export function createFocusedView(): FocusedView {
   let last: string | undefined;
   return {
     id: () => last,
-    track: (id, view) => view.onDidChangeSelection(() => { last = id; }),
+    follow: (id, view) => view.onDidChangeSelection(() => { last = id; }),
     enter: (id) => { last = id; },
   };
 }

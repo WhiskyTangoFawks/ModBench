@@ -8,7 +8,7 @@ import { instanceValueFixture } from './mo2/instanceValueFixture';
 import { FakeInstance } from './mo2/fakeInstance';
 import { GAME_FOLDER_NOT_FOUND } from './mo2/gameFolderNotFound';
 import {
-  filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
+  filterBoxWindowMock, filterBoxCommandsMock, currentBoxOf, waitForMessage,
 } from './nameFilterViewHarness';
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../instanceLoader/loadOrderSnapshot';
@@ -52,7 +52,6 @@ const notFoundValueOf = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): In
 const GAME_FOLDER_MESSAGE =
   "Game folder not found: set modbench.mods.gameDirectory. The Toolbox's Game row names each place Modbench looked.";
 
-const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
 // `setImmediate` runs after the whole microtask queue drains, however many `await`s a real
