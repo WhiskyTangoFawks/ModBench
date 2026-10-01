@@ -698,6 +698,21 @@ describe('RecordPanel — conflict cell tooltips and colours', () => {
     expect(empty?.title).toBe('');
   });
 
+  it('gives the master column no tooltip on a row only a later plugin holds', async () => {
+    renderPanel(compareResultFixture({
+      overrides: columns.slice(0, 2).map(plugin => compareOverride({
+        formKey: '000001:Fallout4.esm', plugin, editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'x' }],
+      })),
+      diffs: [diffNode({
+        fieldName: 'Name', values: { 'Same.esp': 'Added' }, winnerColumn: 'Same.esp',
+        cellStates: { 'Same.esp': 'Override' }, conflictAll: 'Override',
+      })],
+    }));
+    await cellOf('Added');
+    const masterCell = screen.getByText('Name').closest('tr')?.querySelectorAll('td')[1];
+    expect(masterCell?.title).toBe('');
+  });
+
   it('names a lone copy Single Record', async () => {
     renderPanel(compareResultFixture({
       overrides: [compareOverride({
