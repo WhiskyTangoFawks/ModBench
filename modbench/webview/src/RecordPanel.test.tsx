@@ -1925,3 +1925,47 @@ describe('RecordPanel — the Record Header', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 });
+
+// editor-fields.md, Every field, story 7: the reason comes from the field's own metadata, and
+// nothing in the panel decides it.
+describe('RecordPanel — a field the schema marks read-only', () => {
+  const reason = 'a known upstream defect';
+  const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
+  const lockedName = fieldMeta({ name: 'Name', type: 'string', readOnlyReason: reason });
+  const compare = compareResultFixture({
+    overrides: [
+      compareOverride({
+        formKey: '000800:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: 'Npc',
+        fields: [{ metadata: lockedName, value: 'A Name' }],
+      }),
+    ],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' })],
+  });
+
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000800:MyMod.esp'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens no editor and gives the reason as the cell\'s tooltip', async () => {
+    renderPanel(compare, { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    fireEvent.doubleClick(screen.getByText('A Name'));
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).toHaveAttribute('title', reason);
+  });
+
+  it('gives a field with no reason no tooltip', async () => {
+    const open = fieldMeta({ name: 'Name', type: 'string' });
+    renderPanel({
+      ...compare,
+      overrides: [compareOverride({
+        formKey: '000800:MyMod.esp', plugin: 'MyMod.esp', isWinner: true, editorId: 'Npc',
+        fields: [{ metadata: open, value: 'A Name' }],
+      })],
+    }, { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    expect(required(screen.getByText('A Name').closest('td'), 'the cell')).not.toHaveAttribute('title');
+  });
+});

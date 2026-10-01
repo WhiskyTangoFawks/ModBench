@@ -19,7 +19,7 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
       case 'array':
         return JSON.stringify(value);
       case 'bool':
-        return value ? 'True' : 'False';
+        return value === true ? 'True' : 'False';
       case 'string':
       case 'int':
       case 'float':

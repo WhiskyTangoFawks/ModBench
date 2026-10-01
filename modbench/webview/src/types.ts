@@ -27,8 +27,6 @@ export function isFieldType(value: string): value is FieldType {
   return (FIELD_TYPES as readonly string[]).includes(value);
 }
 
-/** `readOnly` is the one member the wire does not carry: a per-row stamp regardless of the
- *  column's own mutability — "per column, never a mode". */
 export type FieldMetadata =
   Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'variants'> & {
     // The wire's field type is a string, and the backend may send one this union does not yet name.
@@ -36,7 +34,6 @@ export type FieldMetadata =
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
     variants?: Record<string, FieldMetadata> | null;
-    readOnly?: boolean;
   };
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
