@@ -4,10 +4,10 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // FormKeyCell's pickFormKey import touches vscode.ts's acquireVsCodeApi() at module load.
-const copyToClipboard = vi.fn<(value: string) => void>();
+const copyValue = vi.fn<(value: string) => void>();
 const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
-  copyToClipboard: (value: string) => copyToClipboard(value),
+  copyValue: (value: string) => copyValue(value),
   pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
 }));
 
@@ -788,10 +788,18 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
 
   it('copies what the cell reads, not the class name behind it', () => {
     renderKindRow();
-    copyToClipboard.mockClear();
+    copyValue.mockClear();
 
     fireEvent.keyDown(required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), "its td ancestor"), { key: 'c', ctrlKey: true });
 
-    expect(copyToClipboard).toHaveBeenCalledWith('Reference');
+    expect(copyValue).toHaveBeenCalledWith('Reference');
+  });
+
+  it('carries the text it copies on the cell, for the palette\'s copy value', () => {
+    renderKindRow();
+
+    const cell = required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), 'its td ancestor');
+
+    expect(cell).toHaveAttribute('data-copy-text', 'Reference');
   });
 });

@@ -18,10 +18,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // The webview has no route to the 'Modbench' channel of its own — this is
   // the bridge. The webview composes the full message text; the host does a level→method forward.
   LOG: 'log',
-  // Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
-  // (webview clipboard access isn't guaranteed), so the webview posts the already-computed model
-  // value up. Fire-and-forget: nothing comes back.
-  COPY_TO_CLIPBOARD: 'copyToClipboard',
+  // Ctrl+C on a cell, an entry point to copy value, which writes the clipboard from the host
+  // (webview clipboard access isn't guaranteed). Fire-and-forget: nothing comes back.
+  COPY_VALUE: 'copyValue',
   // ADR-0007: routed through the extension host because an edit can be refused and a refusal has
   // to become a native notification (ADR-0019).
   EDIT_FIELD: 'editField',
@@ -41,7 +40,7 @@ export type LogLevel = 'debug' | 'info' | 'warn';
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_VALUE; value: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
@@ -193,9 +192,9 @@ function parseLog(w: WebviewToExtensionWitness): WebviewToExtension {
   return { type: WEBVIEW_TO_EXTENSION.LOG, level: w.level, message: w.message };
 }
 
-function parseCopyToClipboard(w: WebviewToExtensionWitness): WebviewToExtension {
-  if (!isString(w.value)) throw new Error('Expected "copyToClipboard" to carry a string value.');
-  return { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: w.value };
+function parseCopyValue(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.value)) throw new Error('Expected "copyValue" to carry a string value.');
+  return { type: WEBVIEW_TO_EXTENSION.COPY_VALUE, value: w.value };
 }
 
 function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -244,7 +243,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
   switch (w.type) {
     case WEBVIEW_TO_EXTENSION.OPEN_RECORD: return parseOpenRecord(w);
     case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
-    case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return parseCopyToClipboard(w);
+    case WEBVIEW_TO_EXTENSION.COPY_VALUE: return parseCopyValue(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);

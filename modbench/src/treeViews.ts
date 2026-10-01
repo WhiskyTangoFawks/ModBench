@@ -19,7 +19,7 @@ import type { Own } from './session';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import type { MoveToTrash } from './ports/trash';
-import { messageLine, registerNameFilter } from './nameFilter';
+import { messageLine, registerNameFilter, type NameFilter } from './nameFilter';
 import { modsKeyContext } from './mods/gestureEntry';
 import type { SyncMessage } from './syncFailureReport';
 
@@ -31,7 +31,7 @@ export function createModListView(
   modListProvider: ModListProvider,
   log: (line: string) => void,
   modSync: SyncMessage,
-): { modListView: vscode.TreeView<ModlistNode> } {
+): { modListView: vscode.TreeView<ModlistNode>; modListFilter: NameFilter } {
   const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     canSelectMany: true,
@@ -68,7 +68,7 @@ export function createModListView(
   const expand = () => void expandFilteredSeparators(modListView, modListProvider, log);
   own(modListProvider.onDidChangeTreeData(expand));
   own(modListView.onDidChangeVisibility(expand));
-  return { modListView };
+  return { modListView, modListFilter };
 }
 
 // VS Code keeps the expansion it remembers for a known row identity over the provider's
@@ -125,6 +125,25 @@ export function lastSelectedViewSelection(
   return () => last?.selection ?? [];
 }
 
+export interface FocusedView {
+  id(): string | undefined;
+  /** Selecting in `view` makes it the focused one. */
+  track(id: string, view: SelectableView): vscode.Disposable;
+  /** A surface that is no tree says it has the focus. */
+  enter(id: string): void;
+}
+
+/** No stable API names the focused view, so it is the one last selected in or entered: copy
+ *  value and the name filter, which every list offers, act on it. */
+export function createFocusedView(): FocusedView {
+  let last: string | undefined;
+  return {
+    id: () => last,
+    track: (id, view) => view.onDidChangeSelection(() => { last = id; }),
+    enter: (id) => { last = id; },
+  };
+}
+
 export interface DownloadsViewDeps {
   own: Own;
   access: DownloadsAccess & InstallAccess;
@@ -139,7 +158,7 @@ export interface DownloadsViewDeps {
  *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
   { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
-): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode> } {
+): { downloadsProvider: DownloadsProvider; downloadsView: vscode.TreeView<DownloadsTreeNode>; downloadsFilter: NameFilter } {
   const downloadsProvider = own(new DownloadsProvider({ instance, log: install.log })); // disposes its Instance subscriptions
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -151,7 +170,7 @@ export function registerDownloadsView(
     () => instance.value.paths.downloadsDir, () => downloadsProvider.excludedNames());
   own(vscode.window.registerFileDecorationProvider(excludedDecorations));
   own(downloadsProvider.onDidChangeTreeData(() => excludedDecorations.refresh()));
-  own(registerNameFilter({
+  const downloadsFilter = own(registerNameFilter({
     view: downloadsView, object: 'modbench.downloadedFile', placeholder: 'Filter downloads…',
     setFilter: (text) => downloadsProvider.setFilter(text),
     hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
@@ -179,5 +198,5 @@ export function registerDownloadsView(
     ...registerDownloadsSingleRowCommands(access, instance, reporter, install, () => downloadsView.selection),
     ...registerDownloadsMultiRowCommands(access, reporter, ask, trash, install.log, () => downloadsView.selection, downloadsProvider),
   ]) own(disposable);
-  return { downloadsProvider, downloadsView };
+  return { downloadsProvider, downloadsView, downloadsFilter };
 }

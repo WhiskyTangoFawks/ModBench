@@ -53,12 +53,10 @@ vi.mock('vscode', () => ({
   ThemeIcon: class { constructor(public id: string) {} },
 }));
 
-import { registerNameFilter, type NameFilterDeps } from '../nameFilter';
+import { registerFilterCommands, registerNameFilter, type NameFilterDeps } from '../nameFilter';
 import { present } from '../ports/present';
 
 const OBJECT = 'test.thing';
-const OPEN = `${OBJECT}.filter`;
-const CLEAR = `${OBJECT}.clearFilter`;
 const KEY = `${OBJECT}.filterActive`;
 
 interface Harness {
@@ -67,10 +65,12 @@ interface Harness {
   filter: ReturnType<typeof registerNameFilter>;
 }
 
+let current: ReturnType<typeof registerNameFilter>;
+
 function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
   const view: { description?: string; message?: string } = {};
   const applied: { text: string; toggleOn: boolean }[] = [];
-  const filter = registerNameFilter({
+  const filter = current = registerNameFilter({
     view,
     object: OBJECT,
     placeholder: 'Filter things…',
@@ -81,8 +81,8 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
   return { view, applied, filter };
 }
 
-const open = async () => { await present(h.state.commands.get(OPEN), "the filter's open command")(); };
-const clear = async () => { await present(h.state.commands.get(CLEAR), "the filter's clear command")(); };
+const open = () => { current.open(); };
+const clear = () => { current.clear(); };
 
 // A minimal `vscode.Event<unknown>` double: a view's own row-change signal, fired by the test in
 // place of a real provider's `onDidChangeTreeData`.
@@ -108,7 +108,7 @@ beforeEach(() => {
 describe('the name filter is durable', () => {
   it('keeps the filter applied when the box hides — Enter, Escape and clicking a row are one API event, and none of them is an intent to discard', async () => {
     const { applied } = setup();
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().hide();
     expect(applied.map((a) => a.text)).toEqual(['arm']);
@@ -116,36 +116,36 @@ describe('the name filter is durable', () => {
 
   it('disposes the hidden box — the widget is an entry mechanism, not where the filter lives', async () => {
     setup();
-    await open();
+    open();
     currentBox().hide();
     expect(currentBox().disposed).toBe(true);
   });
 
   it('reopens prefilled with the active term, so the box edits the filter rather than starting over', async () => {
     setup();
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().hide();
-    await open();
+    open();
     expect(currentBox().value).toBe('arm');
   });
 
   it('clears only on the explicit clear command', async () => {
     const { applied } = setup();
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().hide();
-    await clear();
+    clear();
     expect(applied.map((a) => a.text)).toEqual(['arm', '']);
   });
 
   it('raises the filter-active context key while filtered and drops it on clear, driving the slot-1 icon swap', async () => {
     setup();
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().hide();
     expect(h.state.contextKeys.get(KEY)).toBe(true);
-    await clear();
+    clear();
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
@@ -156,14 +156,14 @@ describe('the name filter is durable', () => {
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
-  it('names its commands and context key off the object, so no two views can drift into different conventions', () => {
+  it('registers no command of its own, since the catalog\'s filter is one command for every view', () => {
     setup();
-    expect([...h.state.commands.keys()]).toEqual(['test.thing.filter', 'test.thing.clearFilter']);
+    expect([...h.state.commands.keys()]).toEqual([]);
   });
 
   it('treats a term typed back to empty as no filter, without needing the clear command', async () => {
     setup();
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().type('');
     expect(h.state.contextKeys.get(KEY)).toBe(false);
@@ -173,23 +173,23 @@ describe('the name filter is durable', () => {
 describe('the active term reads out in the view description', () => {
   it('names the active term, so the user can see what they are filtered by without opening anything', async () => {
     const { view } = setup();
-    await open();
+    open();
     currentBox().type('arm');
     expect(view.description).toBe('"arm"');
   });
 
   it('says nothing when no filter is active', async () => {
     const { view } = setup();
-    await open();
+    open();
     currentBox().type('arm');
-    await clear();
+    clear();
     expect(view.description).toBeUndefined();
   });
 
   it('composes with whatever else the view says about itself — the term first, then the base', async () => {
     const { view, filter } = setup();
     filter.setBaseDescription('Default');
-    await open();
+    open();
     currentBox().type('arm');
     expect(view.description).toBe('"arm" · Default');
   });
@@ -206,14 +206,14 @@ describe('the active term reads out in the view description', () => {
   it('puts the term after the base where the view reads its base first', async () => {
     const { view, filter } = setup({ termPlacement: 'afterBase' });
     filter.setBaseDescription('12 / 30');
-    await open();
+    open();
     currentBox().type('arm');
     expect(view.description).toBe('12 / 30 · "arm"');
   });
 
   it('recomposes when the other axis changes under a live filter', async () => {
     const { view, filter } = setup();
-    await open();
+    open();
     currentBox().type('arm');
     filter.setBaseDescription('records: cells.sql');
     expect(view.description).toBe('"arm" · records: cells.sql');
@@ -225,7 +225,7 @@ describe('the active term reads out in the view description', () => {
 describe('a term that matches nothing says so', () => {
   it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -233,7 +233,7 @@ describe('a term that matches nothing says so', () => {
 
   it('says nothing while rows match', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(true) });
-    await open();
+    open();
     currentBox().type('arm');
     await flush();
     expect(view.message).toBeUndefined();
@@ -241,10 +241,10 @@ describe('a term that matches nothing says so', () => {
 
   it('takes the message back down when the filter is cleared', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
-    await clear();
+    clear();
     await flush();
     expect(view.message).toBeUndefined();
   });
@@ -254,7 +254,7 @@ describe('a term that matches nothing says so', () => {
   // debugging the filter instead of the data.
   it('stays silent when what survived the filter is an error row', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(true) });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBeUndefined();
@@ -264,7 +264,7 @@ describe('a term that matches nothing says so', () => {
   // this. The load hands the line back blank before `refresh` restates the filter's own.
   it('restates its message on refresh, once the caller has handed the blanked line back', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     view.message = 'Loading plugins…';
@@ -278,7 +278,7 @@ describe('a term that matches nothing says so', () => {
   it('leaves the message alone when no filter is active — the view has other things to say', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(false) });
     view.message = 'Loading plugins…';
-    await open();
+    open();
     currentBox().hide();
     await flush();
     expect(view.message).toBe('Loading plugins…');
@@ -295,12 +295,12 @@ describe('the view\'s own message', () => {
     await flush();
     expect(view.message).toBe('Nothing here yet.');
 
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
 
-    await clear();
+    clear();
     await flush();
     expect(view.message).toBe('Nothing here yet.');
   });
@@ -312,7 +312,7 @@ describe('the view\'s own message', () => {
       viewMessage: () => 'Showing the last good read: EACCES', standingMessage: () => 'Showing the last good read: EACCES',
     });
 
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
 
@@ -340,7 +340,7 @@ describe('the view\'s own message', () => {
     rows.fire();
     await flush();
 
-    await open();
+    open();
     currentBox().type('thing');
     await flush();
     expect(view.message).toBe('Something is missing.');
@@ -359,7 +359,7 @@ describe('the message follows the view\'s own row-change signal', () => {
     let matches = false;
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -387,7 +387,7 @@ describe('the message follows the view\'s own row-change signal', () => {
     let matches = false;
     const rows = fakeRowsChangedEvent();
     const { view, filter } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -403,7 +403,7 @@ describe('the message follows the view\'s own row-change signal', () => {
     const matches = false;
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -418,7 +418,7 @@ describe('the message follows the view\'s own row-change signal', () => {
     let matches = false;
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ hasRows: () => Promise.resolve(matches), onRowsChanged: rows.event });
-    await open();
+    open();
     currentBox().type('zzz');
     await flush();
     expect(view.message).toBe('No matches for "zzz".');
@@ -436,7 +436,7 @@ describe('the Mods separator toggle rides on the box', () => {
 
   it('reapplies the current term when the toggle is pressed, so the option takes effect without retyping', async () => {
     const { applied } = setup({ toggle });
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().pressButton();
     expect(applied).toEqual([{ text: 'arm', toggleOn: true }, { text: 'arm', toggleOn: false }]);
@@ -444,18 +444,18 @@ describe('the Mods separator toggle rides on the box', () => {
 
   it('keeps the toggle state across a reopen, since the filter it belongs to survived the hide', async () => {
     const { applied } = setup({ toggle });
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().pressButton();
     currentBox().hide();
-    await open();
+    open();
     currentBox().type('armor');
     expect(applied.at(-1)).toEqual({ text: 'armor', toggleOn: false });
   });
 
   it('returns to grouped when the term is typed back to empty, so the next term starts grouped', async () => {
     const { applied } = setup({ toggle });
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().pressButton();
     currentBox().type('');
@@ -465,7 +465,7 @@ describe('the Mods separator toggle rides on the box', () => {
 
   it('shows the toggle as on again once the term is typed back to empty', async () => {
     setup({ toggle });
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().pressButton();
     currentBox().type('');
@@ -474,10 +474,48 @@ describe('the Mods separator toggle rides on the box', () => {
 
   it('resets the toggle to on when the filter is cleared', async () => {
     const { applied } = setup({ toggle });
-    await open();
+    open();
     currentBox().type('arm');
     currentBox().pressButton();
-    await clear();
+    clear();
     expect(applied.at(-1)).toEqual({ text: '', toggleOn: true });
+  });
+});
+
+describe('the catalog\'s filter pair acts on the focused view\'s filter', () => {
+  const filterOf = (calls: string[], name: string) => ({
+    open: () => { calls.push(`${name} open`); },
+    clear: () => { calls.push(`${name} clear`); },
+  });
+
+  function wire(focused: string | undefined) {
+    const calls: string[] = [];
+    registerFilterCommands(
+      () => focused,
+      new Map([['view.a', filterOf(calls, 'a')], ['view.b', filterOf(calls, 'b')]]),
+      () => { calls.push('nothing focused'); },
+    );
+    return { calls, run: (id: string) => { void present(h.state.commands.get(id), id)(); } };
+  }
+
+  it('opens the focused view\'s box, and no other\'s', () => {
+    const { calls, run } = wire('view.b');
+    run('modbench.filter');
+    expect(calls).toEqual(['b open']);
+  });
+
+  it('clears the focused view\'s filter, and no other\'s', () => {
+    const { calls, run } = wire('view.a');
+    run('modbench.clearFilter');
+    expect(calls).toEqual(['a clear']);
+  });
+
+  it('says so when the focused view has no name filter, or no view is focused', () => {
+    for (const focused of ['view.elsewhere', undefined]) {
+      const { calls, run } = wire(focused);
+      run('modbench.filter');
+      run('modbench.clearFilter');
+      expect(calls).toEqual(['nothing focused', 'nothing focused']);
+    }
   });
 });

@@ -71,9 +71,9 @@ describe('the Plugins filter follows a row change with no keystroke', () => {
     await provider.getChildren();
 
     const view: { description?: string; message?: string } = {};
-    registerPluginsNameFilter(view, provider, syncMessageDouble());
+    const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
-    await command('modbench.plugin.filter')();
+    filter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
     expect(view.message).toBe('No matches for "zzznomatch".');
@@ -97,7 +97,7 @@ describe('a running say() statement survives a background row change', () => {
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
-    await command('modbench.plugin.filter')();
+    filter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
 
@@ -115,7 +115,7 @@ describe('a running say() statement survives a background row change', () => {
     const view: { description?: string; message?: string } = {};
     const filter = registerPluginsNameFilter(view, provider, syncMessageDouble());
 
-    await command('modbench.plugin.filter')();
+    filter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
 
@@ -173,13 +173,13 @@ describe('the Plugins view, given the game folder not found', () => {
 
   it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
     const instance = new FakeInstance(notFoundValueOf([plugin('TestMod.esp')]));
-    const { view } = await pluginsView(instance);
+    const { view, filter } = await pluginsView(instance);
 
-    await command('modbench.plugin.filter')();
+    filter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the no-match message');
 
-    await command('modbench.plugin.clearFilter')();
+    filter.clear();
     await waitForMessage(view, (m) => m === GAME_FOLDER_MESSAGE, 'the game folder message returning');
     expect(view.message).toBe(GAME_FOLDER_MESSAGE);
   });
@@ -265,10 +265,10 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource(), client });
     const view: { description?: string; message?: string } = {};
     const pluginSync = syncMessageDouble();
-    registerPluginsNameFilter(view, provider, pluginSync);
+    const filter = registerPluginsNameFilter(view, provider, pluginSync);
     provider.setRecordFilterSource(source ?? undefined);
     await provider.refreshFacts();
-    return { client, provider, view, pluginSync };
+    return { client, provider, view, pluginSync, filter };
   }
 
   // The line once every render before it has landed: the sync's own message is composed after the
@@ -326,10 +326,10 @@ describe('the Plugins view, given a plugin sync that refused', () => {
     await provider.getChildren();
     const view: { description?: string; message?: string } = {};
     const pluginSync = syncMessageDouble();
-    registerPluginsNameFilter(view, provider, pluginSync);
+    const filter = registerPluginsNameFilter(view, provider, pluginSync);
     provider.setRecordFilterSource(recordFilter);
     await provider.refreshFacts();
-    return { view, pluginSync };
+    return { view, pluginSync, filter };
   }
 
   // Rival: the sync's line replacing the view's own, or never reaching the line at all.
@@ -345,15 +345,15 @@ describe('the Plugins view, given a plugin sync that refused', () => {
   });
 
   it('gives the line to the filter\'s no-match message, and takes it back once the filter clears', async () => {
-    const { view, pluginSync } = await refusedView();
+    const { view, pluginSync, filter } = await refusedView();
     pluginSync.say(SYNC_MESSAGE);
     await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message');
 
-    await command('modbench.plugin.filter')();
+    filter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(view, (m) => m === 'No matches for "zzznomatch".', 'the no-match message');
 
-    await command('modbench.plugin.clearFilter')();
+    filter.clear();
     await waitForMessage(view, (m) => m === SYNC_MESSAGE, 'the sync message returning');
     expect(view.message).toBe(SYNC_MESSAGE);
   });

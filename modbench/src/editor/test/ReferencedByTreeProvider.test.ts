@@ -12,6 +12,7 @@ import {
   NoActiveRecordNode,
   referencedByCopyText,
   referencedByCopyValueText,
+  REFERENCED_BY_VIEW,
 } from '../ReferencedByTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
@@ -239,9 +240,9 @@ describe('referencedByCopyValueText — Referenced By\'s own text for the shared
     expect(referencedByCopyValueText({ selection: [stale] }, clicked, [clicked])).toBe(clicked.displayLabel);
   });
 
-  it('falls back to the view\'s own current selection with no menu selection', () => {
+  it('copies the view\'s own current selection for its Ctrl+C, which names the view', () => {
     const row = group();
-    expect(referencedByCopyValueText({ selection: [row] }, undefined, undefined)).toBe(row.displayLabel);
+    expect(referencedByCopyValueText({ selection: [row] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe(row.displayLabel);
   });
 
   it('falls back to the clicked row alone with nothing else selected', () => {
@@ -249,12 +250,15 @@ describe('referencedByCopyValueText — Referenced By\'s own text for the shared
     expect(referencedByCopyValueText({ selection: [] }, row, undefined)).toBe(row.displayLabel);
   });
 
-  it('is empty text when nothing applies', () => {
-    expect(referencedByCopyValueText({ selection: [] }, undefined, undefined)).toBe('');
+  it('is empty text for its own Ctrl+C with nothing selected', () => {
+    expect(referencedByCopyValueText({ selection: [] }, { view: REFERENCED_BY_VIEW }, undefined)).toBe('');
   });
 
-  it('ignores a row of another surface, such as a Mods row', () => {
-    expect(referencedByCopyValueText({ selection: [] }, { kind: 'mod' }, undefined)).toBe('');
+  it('defers on an invocation of another surface, so an adapter after it can run', () => {
+    const selected = { selection: [group()] };
+    expect(referencedByCopyValueText(selected, undefined, undefined)).toBeUndefined();
+    expect(referencedByCopyValueText(selected, { kind: 'mod' }, undefined)).toBeUndefined();
+    expect(referencedByCopyValueText(selected, { view: 'modbench.modList' }, undefined)).toBeUndefined();
   });
 });
 

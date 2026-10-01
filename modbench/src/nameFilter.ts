@@ -7,9 +7,8 @@ export interface NameFilterDeps {
   /** Structural rather than a `TreeView`: the only properties touched are the two VS Code makes
    *  writable. */
   view: { description?: string; message?: string };
-  /** `modbench.<object>`, the catalog's prefix. The two command ids and the context key derive
-   *  from it, so the three views cannot drift apart. The key is not the record filter's
-   *  `modbench.record.filterActive`. */
+  /** `modbench.<object>`, the catalog's prefix, which names the context key the view's title bar
+   *  swaps filter and clear on. The key is not the record filter's `modbench.record.filterActive`. */
   object: string;
   placeholder: string;
   /** Applies the term to the view's provider, which is where the narrowing itself lives. The
@@ -45,6 +44,8 @@ export interface NameFilter extends vscode.Disposable {
   setBaseDescription(text: string | undefined): void;
   /** Restate the readout, when something it reads besides the rows has changed. */
   refresh(): void;
+  open(): void;
+  clear(): void;
 }
 
 export function registerNameFilter(deps: NameFilterDeps): NameFilter {
@@ -113,8 +114,6 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   // A context key outlives an extension host restart; the filter it describes does not.
   void vscode.commands.executeCommand('setContext', `${deps.object}.filterActive`, false);
   const disposables = [
-    vscode.commands.registerCommand(`${deps.object}.filter`, openBox),
-    vscode.commands.registerCommand(`${deps.object}.clearFilter`, () => apply('', true)),
     ...(deps.onRowsChanged ? [deps.onRowsChanged(() => void renderMessage())] : []),
     ...(deps.onViewMessageChanged ? [deps.onViewMessageChanged(() => void renderMessage())] : []),
   ];
@@ -122,6 +121,27 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   return {
     setBaseDescription: (text) => { base = text; render(); },
     refresh: () => { render(); void renderMessage(); },
+    open: openBox,
+    clear: () => apply('', true),
     dispose: () => { for (const d of disposables) d.dispose(); },
   };
+}
+
+/** The catalog's filter pair for every view that has a name filter: each acts on the focused
+ *  view's. `nothingFocused` speaks when no such view is. */
+export function registerFilterCommands(
+  focusedViewId: () => string | undefined,
+  filters: ReadonlyMap<string, Pick<NameFilter, 'open' | 'clear'>>,
+  nothingFocused: () => void,
+): vscode.Disposable[] {
+  const onFocused = (act: (filter: Pick<NameFilter, 'open' | 'clear'>) => void) => () => {
+    const id = focusedViewId();
+    const filter = id === undefined ? undefined : filters.get(id);
+    if (filter === undefined) nothingFocused();
+    else act(filter);
+  };
+  return [
+    vscode.commands.registerCommand('modbench.filter', onFocused((filter) => filter.open())),
+    vscode.commands.registerCommand('modbench.clearFilter', onFocused((filter) => filter.clear())),
+  ];
 }

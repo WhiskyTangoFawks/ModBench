@@ -9,17 +9,17 @@ import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
+import { REFERENCED_BY_VIEW, ReferencedByTreeProvider, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
-import { lastSelectedViewSelection } from './treeViews';
+import { createFocusedView, lastSelectedViewSelection } from './treeViews';
 import { moveToTrash } from './trash';
 import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFieldFiles';
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
-import { FocusedCells, focusedCellKeys, type FocusedCellContext } from './editor/focusedCells';
+import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
 import { GAME_FOLDER_SETTING } from './instanceAdapter/instanceAdapter';
 import {
@@ -104,7 +104,9 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   session.showRecordFilter = makeShowRecordFilter(filterProvider, session);
+  const focusedView = createFocusedView();
   const focusedCells = new FocusedCells<vscode.WebviewPanel>((cell) => {
+    if (cell !== undefined) focusedView.enter(GRID_VIEW);
     for (const [name, value] of Object.entries(focusedCellKeys(cell))) {
       void vscode.commands.executeCommand('setContext', `modbench.record.${name}`, value);
     }
@@ -131,6 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: referencedByTreeProvider,
     canSelectMany: true,
   });
+  context.subscriptions.push(focusedView.track(REFERENCED_BY_VIEW, referencedByTreeView));
   const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
     (formKey) => referencedByTreeProvider.showFor(formKey));
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
@@ -158,9 +161,11 @@ export function activate(context: vscode.ExtensionContext) {
     setStatusText: (t) => { statusBarItem.text = t; },
     notifyConflictsComputed,
     extensionId: context.extension.id,
-    // Copy value's Referenced By adapter (commands.md, Record: copy value) — the Toolbox owns
-    // the command's one registration, alongside the other Mods gestures.
+    // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
+    // the command's one registration, alongside the other lists' gestures.
+    focusedView,
     referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
+    gridCopyValueText: gridCopyValueText(() => focusedCells.current()),
   });
   context.subscriptions.push(
     toolbox,

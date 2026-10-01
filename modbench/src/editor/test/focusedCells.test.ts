@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FocusedCells, focusedCellKeys } from '../focusedCells';
+import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText } from '../focusedCells';
 
 const element = { webviewSection: 'arrayElement', canMoveUp: false, canMoveDown: true };
 const text = { webviewSection: 'stringValue' };
@@ -60,5 +60,27 @@ describe('the focused cell of the record tab in focus', () => {
     expect(focusedCellKeys(undefined)).toEqual({
       focusedCellSection: undefined, focusedCellCanMoveUp: false, focusedCellCanMoveDown: false,
     });
+  });
+});
+
+// commands.md, Every view: copy value copies the grid's focused cell as its column reads it.
+describe('the grid\'s copy value text', () => {
+  it('is the text the webview\'s Ctrl+C names', () => {
+    expect(gridCopyValueText(() => ({ copyText: 'focused' }))({ copyText: 'named' })).toBe('named');
+  });
+
+  it('from the palette with the grid focused, which names no cell, is the focused cell\'s text', () => {
+    expect(gridCopyValueText(() => ({ copyText: 'focused' }))({ view: GRID_VIEW })).toBe('focused');
+  });
+
+  it('is empty for a focused cell that reads empty, which is not a deferral', () => {
+    expect(gridCopyValueText(() => ({ copyText: '' }))({ view: GRID_VIEW })).toBe('');
+  });
+
+  it('defers when the invocation belongs to another view, or no cell holds text', () => {
+    expect(gridCopyValueText(() => ({ copyText: 'focused' }))({ view: 'modbench.modList' })).toBeUndefined();
+    expect(gridCopyValueText(() => ({ copyText: 'focused' }))(undefined)).toBeUndefined();
+    expect(gridCopyValueText(() => undefined)({ view: GRID_VIEW })).toBeUndefined();
+    expect(gridCopyValueText(() => ({}))({ view: GRID_VIEW })).toBeUndefined();
   });
 });
