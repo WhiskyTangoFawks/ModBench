@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -77,6 +77,9 @@ describe('RecordPanel — Add on an abstract-union array', () => {
   it('posts add at the array, carrying no element of its own', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
+    const aliasesRow = screen.getByText('aliases').closest('tr');
+    if (!aliasesRow) throw new Error('the row of the aliases array');
+    fireEvent.click(within(aliasesRow).getByText('▼'));
     const cellText = screen.getAllByText('[1]')[0];
     if (!cellText) throw new Error('the "[1]" index label RecordPanel renders for the array element');
     const cell = cellText.closest('td');
