@@ -37,7 +37,6 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
   return {
     channel: fakeChannel(),
     meditClient,
-    panelId: 'record-panel-1',
     // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     focusCell: vi.fn(),
@@ -163,10 +162,10 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   beforeEach(() => { executeCommand.mockReset(); });
 
   it('fires modbench.record.editField with the column\'s (origin, filename), its panel and the envelope', async () => {
-    await routeRecordPanelMessage(editMessage, makeDeps({ panelId: 'record-panel-3' }));
+    await routeRecordPanelMessage(editMessage, makeDeps());
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.editField', {
-      formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod', panelId: 'record-panel-3',
+      formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
     }, envelope);
     expect(meditClient.calls).toEqual([]);
   });

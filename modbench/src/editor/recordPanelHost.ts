@@ -76,11 +76,8 @@ interface RecordEditorProviderDeps {
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   editsInFlight: EditsInFlight<vscode.WebviewPanel>;
   focusedCells: FocusedCells<vscode.WebviewPanel>;
-  panelsById: Map<string, vscode.WebviewPanel>;
   routerDeps: SharedRecordPanelDeps;
 }
-
-let panelsOpened = 0;
 
 // A VS Code custom editor, one per record address: preview, pinning, history, closed-tab
 // reopening and restore-after-reload are VS Code's own, for any tab backed by a URI.
@@ -93,7 +90,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 
   resolveCustomEditor(document: RecordDocument, panel: vscode.WebviewPanel): void {
     const {
-      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps,
+      context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
     } = this.deps;
     const formKey = document.formKey;
     panel.title = recordTitle(formKey, undefined);
@@ -105,9 +102,7 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
 
     recordPanels.add(panel);
     panel.onDidDispose(() => recordPanels.delete(panel));
-    const panelId = `record-panel-${++panelsOpened}`;
-    panelsById.set(panelId, panel);
-    panel.onDidDispose(() => { panelsById.delete(panelId); editsInFlight.forget(panel); });
+    panel.onDidDispose(() => { editsInFlight.forget(panel); });
 
     // FormKey is recorded before the panel is declared active, so a new panel fires the
     // Referenced By retarget exactly once, already carrying it. onDidChangeViewState announces
@@ -128,13 +123,13 @@ class RecordEditorProvider implements vscode.CustomReadonlyEditorProvider<Record
     panel.webview.onDidReceiveMessage((msg: unknown) => {
       // A reply and a follow reach the one panel that asked, never a broadcast; `routerDeps` is
       // shared across panels, so the per-panel fields are rebuilt with the panel this closure holds.
-      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, panelId, focusedCells));
+      void routeRecordPanelMessage(msg, routerDepsForPanel(routerDeps, panel, focusedCells));
     });
 
     const scriptUri = panel.webview.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'assets', 'main.js'),
     );
-    panel.webview.html = buildWebviewHtml({ panelId, formKey, scriptUri: scriptUri.toString(), cspSource: panel.webview.cspSource });
+    panel.webview.html = buildWebviewHtml({ formKey, scriptUri: scriptUri.toString(), cspSource: panel.webview.cspSource });
   }
 }
 
@@ -146,7 +141,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
   // One decoration provider per activation: it reads the tree's cache live, so it needs no copy
   // of that state.
   const recordDecorationProvider = new RecordDecorationProvider(recordBadgeSource);
-  const panelsById = new Map<string, vscode.WebviewPanel>();
   const writeDeps = recordPanelWriteDeps(deps);
   // Lives for the activation, like the decoration provider above — disposed alongside it.
   const conflictsComputedTracker = trackConflictsComputed(meditClient);
@@ -155,7 +149,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     ...writeDeps, meditClient, channel: outputChannel, conflictsComputed: () => conflictsComputedTracker.current(),
   };
   const recordEditorProvider = new RecordEditorProvider({
-    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, panelsById, routerDeps,
+    context, recordPanels, activeRecordTracker, editsInFlight, focusedCells, routerDeps,
   });
 
   return [
@@ -168,13 +162,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // write deps the router has, plus the extended editor's temp root and log.
     ...registerRecordPanelContextCommands({
       ...writeDeps, fieldFile: deps.fieldFile, log: (m: string) => outputChannel.debug(m),
-      editGateOf: (panelId) => {
-        const panel = panelId === undefined ? undefined : panelsById.get(panelId);
-        return panel
-          ? editsInFlight.gate(panel)
-          // The panel the menu came from has closed, so no panel's reads wait on this write.
-          : async (address, write) => { await write(address.formKey); };
-      },
+      editGateOf: address => editsInFlight.gateShowing(recordPanels, address),
       focusedCell: () => focusedCells.current(),
     }),
     // Editor owns the record gestures (delete/copy) — registered once, here,
