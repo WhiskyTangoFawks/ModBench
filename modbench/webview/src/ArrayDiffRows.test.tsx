@@ -18,8 +18,8 @@ const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 const lastCommand = () => lastElementCommand(vscode.postMessage);
 
 
-const sortedArrayMeta = fieldMeta({
-  name: 'Keywords',
+const linkArrayMeta = fieldMeta({
+  name: 'Packages',
   type: 'array',
   isArray: true,
   elementType: fieldMeta({ name: '', type: 'formKey' }),
@@ -34,43 +34,45 @@ const pluginsResponse = [
   { name: 'MyMod.esp' },
 ];
 
-const sortedArrayCompareResult: CompareResult = compareResultFixture({
+// mEdit's alignment of ['PkgA', 'PkgX'] and ['PkgA', 'PkgA'] in sequence: MyMod.esp's second PkgA
+// is row [2], and its own element 1.
+const linkArrayCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
       isWinner: false, editorId: 'TestNPC',
-      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }],
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgX'] }],
       conflictThis: 'Master',
     }),
     compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
       isWinner: true, editorId: 'TestNPC',
-      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }],
+      fields: [{ metadata: decoyMeta, value: 4 }, { metadata: linkArrayMeta, value: ['PkgA', 'PkgA'] }],
       conflictThis: 'Override',
     }),
   ],
   diffs: [diffNode({
-    fieldName: 'Keywords',
-    values: { 'Fallout4.esm': ['KwdA', 'KwdB'], 'MyMod.esp': ['KwdA', 'KwdC'] },
+    fieldName: 'Packages',
+    values: { 'Fallout4.esm': ['PkgA', 'PkgX'], 'MyMod.esp': ['PkgA', 'PkgA'] },
     winnerColumn: 'MyMod.esp',
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       diffNode({
-        fieldName: 'KwdA',
-        values: { 'Fallout4.esm': 'KwdA', 'MyMod.esp': 'KwdA' },
-        winnerColumn: 'Fallout4.esm',
+        fieldName: '[0]',
+        values: { 'Fallout4.esm': 'PkgA', 'MyMod.esp': 'PkgA' },
+        winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       }),
       diffNode({
-        fieldName: 'KwdB',
-        values: { 'Fallout4.esm': 'KwdB', 'MyMod.esp': null },
+        fieldName: '[1]',
+        values: { 'Fallout4.esm': 'PkgX', 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm',
         cellStates: {},
       }),
       diffNode({
-        fieldName: 'KwdC',
-        values: { 'Fallout4.esm': null, 'MyMod.esp': 'KwdC' },
+        fieldName: '[2]',
+        values: { 'Fallout4.esm': null, 'MyMod.esp': 'PkgA' },
         winnerColumn: 'MyMod.esp',
         cellStates: { 'MyMod.esp': 'Override' },
       }),
@@ -198,46 +200,32 @@ function renderPanel() {
   return { client, ...render(<RecordPanel client={client} />) };
 }
 
-describe('RecordPanel — array child rows (sorted)', () => {
+describe('RecordPanel — array child rows (in sequence)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    currentCompare = sortedArrayCompareResult;
+    currentCompare = linkArrayCompareResult;
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('parent array row shows [2] when collapsed', async () => {
     renderPanel();
-    await waitFor(() => screen.getByText('Keywords'));
-    fireEvent.click(within(required(screen.getByText('Keywords').closest('tr'), "Keywords's row")).getByText('▼'));
-    // Both plugin columns have 2-element arrays; at least one [2] must be visible
+    await waitFor(() => screen.getByText('Packages'));
+    fireEvent.click(within(required(screen.getByText('Packages').closest('tr'), "Packages's row")).getByText('▼'));
     expect(screen.getAllByText('[2]').length).toBeGreaterThan(0);
-    // No {…} placeholder for array parent
     expect(screen.queryByText('{…}')).not.toBeInTheDocument();
   });
 
-  it('opens showing 3 child rows for the sorted array', async () => {
-    renderPanel();
-    // Field name TDs contain the element keys; use getAllByText since FormKey also renders them as links
-    await waitFor(() => screen.getAllByText('KwdA').length > 0);
-    expect(screen.getAllByText('KwdB').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('KwdC').length).toBeGreaterThan(0);
-  });
-
   // An element the column does not carry is nothing there — not a null link, which reads "—".
-  it('KwdB child row is empty for MyMod.esp, whose array has no such element', async () => {
+  it('row [1] is empty for MyMod.esp, whose array has no such element', async () => {
     renderPanel();
-    await waitFor(() => screen.getAllByText('KwdB').length > 0);
-    const kwdBTd = required(screen.getAllByText('KwdB').find(el => el.tagName === 'TD'), 'a KwdB TD');
-    const row = required(kwdBTd.closest('tr'), "the KwdB TD's row");
-    const cells = row.querySelectorAll('td');
-    const secondCell = required(cells[1], "the KwdB row's second cell");
-    const thirdCell = required(cells[2], "the KwdB row's third cell");
-    expect(secondCell.textContent).toBe('KwdB');
-    expect(thirdCell.textContent).toBe('');
-    expect(thirdCell.querySelector('[data-open-trigger]')).toBeNull();
+    await waitFor(() => screen.getByText('[1]'));
+    const cells = required(screen.getByText('[1]').closest('tr'), 'the [1] row').querySelectorAll('td');
+    expect(required(cells[1], "the [1] row's Fallout4.esm cell").textContent).toBe('PkgX');
+    const mine = required(cells[2], "the [1] row's MyMod.esp cell");
+    expect(mine.textContent).toBe('');
+    expect(mine.querySelector('[data-open-trigger]')).toBeNull();
   });
 });
-
 
 describe('RecordPanel — struct row conflict color follows collapse state', () => {
   beforeEach(() => {
@@ -311,7 +299,7 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
 });
 
-describe('RecordPanel — array editing (unsorted)', () => {
+describe('RecordPanel — array editing', () => {
   const intArrayMeta = fieldMeta({
     name: 'Values', type: 'array', isArray: true,
     elementType: fieldMeta({ name: '', type: 'int' }),
@@ -742,15 +730,20 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   });
 });
 
-// A pure-FormLink array is sorted by its own values, so an element sits at a different position in
-// every column; the hop is that position in the column being written.
-describe('RecordPanel — an element of a sorted array is addressed at its position in this column', () => {
-  function renderSortedPanel() {
-    const client = panelClient(() => sortedArrayCompareResult, {
+// Aligned in sequence, an element sits at its own position in each column; the hop is that position
+// in the column being written, whatever the row's place and whatever else holds the same value.
+describe('RecordPanel — an element of an array without a key is addressed at its position in this column', () => {
+  function renderLinkArrayPanel() {
+    const client = panelClient(() => linkArrayCompareResult, {
       plugins: [{ name: 'Fallout4.esm', isImmutable: true }, { name: 'MyMod.esp', isTracked: true }],
     });
     return render(<RecordPanel client={client} />);
   }
+
+  const myCell = (rowLabel: string) => {
+    const cells = required(screen.getByText(rowLabel).closest('tr'), `the ${rowLabel} row`).querySelectorAll('td');
+    return required(cells[cells.length - 1], `the ${rowLabel} row's MyMod.esp cell`);
+  };
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -758,18 +751,12 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a picked replacement posts set at the value\'s own index in the written column', async () => {
-    renderSortedPanel();
-    await waitFor(() => screen.getByText('Keywords'));
-    await waitFor(() => screen.getAllByText('KwdC').length > 0);
-
-    // KwdC is element 1 of MyMod.esp's own ['KwdA', 'KwdC'].
-    const kwdCCell = required(screen.getAllByText('KwdC').find(el => el.tagName === 'TD'), "the 'KwdC' td cell");
-    const row = required(kwdCCell.closest('tr'), "the row for 'KwdC'");
-    const cells = row.querySelectorAll('td');
-    const cell = required(cells[cells.length - 1], "the last cell in the row");
+  it('a picked replacement posts set at the element\'s own index in the written column', async () => {
+    renderLinkArrayPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = myCell('[2]');
     fireEvent.click(cell);
-    fireEvent.doubleClick(within(cell).getByText('KwdC'));
+    fireEvent.doubleClick(within(cell).getByText('PkgA'));
 
     // The native QuickPick answers through the bridge; this is its reply.
     type OpenFormKeyPicker = Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>;
@@ -785,7 +772,44 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
     });
 
     await waitFor(() => expect(lastEnvelope()).toEqual({
-      op: 'set', path: [member('Keywords'), at(1)], value: '000123:Fallout4.esm',
+      op: 'set', path: [member('Packages'), at(1)], value: '000123:Fallout4.esm',
     }));
+  });
+
+  it('Delete fires remove element at the element\'s own index', async () => {
+    renderLinkArrayPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = myCell('[2]');
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastCommand()).toMatchObject({ command: 'removeElement', context: { path: [member('Packages'), at(1)] } });
+  });
+
+  it('Alt+ArrowUp fires move element up from the element\'s own index', async () => {
+    renderLinkArrayPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = myCell('[2]');
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowUp', altKey: true });
+
+    expect(lastCommand()).toMatchObject({ command: 'moveElementUp', context: { path: [member('Packages'), at(1)] } });
+  });
+
+  it('Alt+ArrowDown on the column\'s own last element fires nothing', async () => {
+    renderLinkArrayPanel();
+    await waitFor(() => screen.getByText('[2]'));
+    const cell = myCell('[2]');
+    fireEvent.click(cell);
+
+    expect(fireEvent.keyDown(cell, { key: 'ArrowDown', altKey: true })).toBe(true);
+    expect(lastCommand()).toBeUndefined();
+  });
+
+  it('offers add at the array', async () => {
+    renderLinkArrayPanel();
+    await waitFor(() => screen.getByText('Packages'));
+    const context: unknown = JSON.parse(myCell('Packages').getAttribute('data-vscode-context') ?? '{}');
+    expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [member('Packages')] });
   });
 });

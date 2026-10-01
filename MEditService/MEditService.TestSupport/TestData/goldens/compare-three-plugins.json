@@ -13,11 +13,136 @@
         },
         "children": [
           {
+            "cellStates": {},
+            "checkErrors": {
+              "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: "
+            },
+            "children": [
+              {
+                "cellStates": {},
+                "checkErrors": {
+                  "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: "
+                },
+                "children": [
+                  {
+                    "cellStates": {},
+                    "checkErrors": null,
+                    "children": null,
+                    "conflictAll": "NoConflict",
+                    "fieldName": "Function",
+                    "resolutions": null,
+                    "values": {
+                      "Base.esm": "GetIsID",
+                      "Top.esp": null
+                    },
+                    "winnerColumn": "Base.esm"
+                  },
+                  {
+                    "cellStates": {},
+                    "checkErrors": null,
+                    "children": null,
+                    "conflictAll": "NoConflict",
+                    "fieldName": "MutagenObjectType",
+                    "resolutions": null,
+                    "values": {
+                      "Base.esm": "FunctionConditionData",
+                      "Top.esp": null
+                    },
+                    "winnerColumn": "Base.esm"
+                  }
+                ],
+                "conflictAll": "NoConflict",
+                "fieldName": "Data",
+                "resolutions": null,
+                "values": {
+                  "Base.esm": {
+                    "Function": "GetIsID",
+                    "MutagenObjectType": "FunctionConditionData"
+                  },
+                  "Top.esp": null
+                },
+                "winnerColumn": "Base.esm"
+              },
+              {
+                "cellStates": {},
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "Flags",
+                "resolutions": null,
+                "values": {
+                  "Base.esm": [
+                    "OR"
+                  ],
+                  "Top.esp": null
+                },
+                "winnerColumn": "Base.esm"
+              },
+              {
+                "cellStates": {},
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "Unknown1",
+                "resolutions": null,
+                "values": {
+                  "Base.esm": "0x000000",
+                  "Top.esp": null
+                },
+                "winnerColumn": "Base.esm"
+              },
+              {
+                "cellStates": {},
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "ComparisonValue",
+                "resolutions": null,
+                "values": {
+                  "Base.esm": 1.0,
+                  "Top.esp": null
+                },
+                "winnerColumn": "Base.esm"
+              },
+              {
+                "cellStates": {},
+                "checkErrors": null,
+                "children": null,
+                "conflictAll": "NoConflict",
+                "fieldName": "MutagenObjectType",
+                "resolutions": null,
+                "values": {
+                  "Base.esm": "ConditionFloat",
+                  "Top.esp": null
+                },
+                "winnerColumn": "Base.esm"
+              }
+            ],
+            "conflictAll": "NoConflict",
+            "fieldName": "[0]",
+            "resolutions": null,
+            "values": {
+              "Base.esm": {
+                "ComparisonValue": 1.0,
+                "Data": {
+                  "Function": "GetIsID",
+                  "MutagenObjectType": "FunctionConditionData"
+                },
+                "Flags": [
+                  "OR"
+                ],
+                "MutagenObjectType": "ConditionFloat",
+                "Unknown1": "0x000000"
+              },
+              "Top.esp": null
+            },
+            "winnerColumn": "Base.esm"
+          },
+          {
             "cellStates": {
               "Top.esp": "Override"
             },
             "checkErrors": {
-              "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: ",
               "Top.esp": "Data.ParameterOneRecord: Found a NULL reference, expected: "
             },
             "children": [
@@ -26,7 +151,6 @@
                   "Top.esp": "Override"
                 },
                 "checkErrors": {
-                  "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: ",
                   "Top.esp": "ParameterOneRecord: Found a NULL reference, expected: "
                 },
                 "children": [
@@ -47,30 +171,30 @@
                   },
                   {
                     "cellStates": {
-                      "Top.esp": "IdenticalToMaster"
+                      "Top.esp": "Override"
                     },
                     "checkErrors": null,
                     "children": null,
-                    "conflictAll": "NoConflict",
+                    "conflictAll": "Override",
                     "fieldName": "Function",
                     "resolutions": null,
                     "values": {
-                      "Base.esm": "GetIsID",
+                      "Base.esm": null,
                       "Top.esp": "GetIsID"
                     },
                     "winnerColumn": "Top.esp"
                   },
                   {
                     "cellStates": {
-                      "Top.esp": "IdenticalToMaster"
+                      "Top.esp": "Override"
                     },
                     "checkErrors": null,
                     "children": null,
-                    "conflictAll": "NoConflict",
+                    "conflictAll": "Override",
                     "fieldName": "MutagenObjectType",
                     "resolutions": null,
                     "values": {
-                      "Base.esm": "FunctionConditionData",
+                      "Base.esm": null,
                       "Top.esp": "FunctionConditionData"
                     },
                     "winnerColumn": "Top.esp"
@@ -80,10 +204,7 @@
                 "fieldName": "Data",
                 "resolutions": null,
                 "values": {
-                  "Base.esm": {
-                    "Function": "GetIsID",
-                    "MutagenObjectType": "FunctionConditionData"
-                  },
+                  "Base.esm": null,
                   "Top.esp": {
                     "Function": "GetIsID",
                     "MutagenObjectType": "FunctionConditionData",
@@ -94,17 +215,15 @@
               },
               {
                 "cellStates": {
-                  "Top.esp": "IdenticalToMaster"
+                  "Top.esp": "Override"
                 },
                 "checkErrors": null,
                 "children": null,
-                "conflictAll": "NoConflict",
+                "conflictAll": "Override",
                 "fieldName": "Flags",
                 "resolutions": null,
                 "values": {
-                  "Base.esm": [
-                    "OR"
-                  ],
+                  "Base.esm": null,
                   "Top.esp": [
                     "OR"
                   ]
@@ -121,58 +240,47 @@
                 "fieldName": "Unknown1",
                 "resolutions": null,
                 "values": {
-                  "Base.esm": "0x000000",
+                  "Base.esm": null,
                   "Top.esp": "0x000000"
                 },
                 "winnerColumn": "Top.esp"
               },
               {
                 "cellStates": {
-                  "Top.esp": "IdenticalToMaster"
+                  "Top.esp": "Override"
                 },
                 "checkErrors": null,
                 "children": null,
-                "conflictAll": "NoConflict",
+                "conflictAll": "Override",
                 "fieldName": "ComparisonValue",
                 "resolutions": null,
                 "values": {
-                  "Base.esm": 1.0,
+                  "Base.esm": null,
                   "Top.esp": 1.0
                 },
                 "winnerColumn": "Top.esp"
               },
               {
                 "cellStates": {
-                  "Top.esp": "IdenticalToMaster"
+                  "Top.esp": "Override"
                 },
                 "checkErrors": null,
                 "children": null,
-                "conflictAll": "NoConflict",
+                "conflictAll": "Override",
                 "fieldName": "MutagenObjectType",
                 "resolutions": null,
                 "values": {
-                  "Base.esm": "ConditionFloat",
+                  "Base.esm": null,
                   "Top.esp": "ConditionFloat"
                 },
                 "winnerColumn": "Top.esp"
               }
             ],
             "conflictAll": "Override",
-            "fieldName": "[0]",
+            "fieldName": "[1]",
             "resolutions": null,
             "values": {
-              "Base.esm": {
-                "ComparisonValue": 1.0,
-                "Data": {
-                  "Function": "GetIsID",
-                  "MutagenObjectType": "FunctionConditionData"
-                },
-                "Flags": [
-                  "OR"
-                ],
-                "MutagenObjectType": "ConditionFloat",
-                "Unknown1": "0x000000"
-              },
+              "Base.esm": null,
               "Top.esp": {
                 "ComparisonValue": 1.0,
                 "Data": {

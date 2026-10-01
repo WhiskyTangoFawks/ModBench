@@ -259,45 +259,63 @@ describe('an edit of the FormID', () => {
   });
 });
 
-describe('a replaced element of a sorted array', () => {
-  const keywordsMeta = fieldMeta({ name: 'Keywords', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'formKey' }) });
-  const keywords = (held: string[]): CompareResult => compareResultFixture({
-    overrides: [compareOverride({
-      formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC',
-      fields: [{ metadata: keywordsMeta, value: held }],
-    })],
+describe('a replaced element of an array without a key', () => {
+  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+  // mEdit's alignment, in sequence, of the master's ['A', 'B'] and MyMod.esp's ['A', mine].
+  const items = (mine: string): CompareResult => compareResultFixture({
+    overrides: [
+      compareOverride({ formKey: FORM_KEY, plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: itemsMeta, value: ['A', 'B'] }] }),
+      compareOverride({
+        formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: itemsMeta, value: ['A', mine] }],
+      }),
+    ],
     diffs: [diffNode({
-      fieldName: 'Keywords', values: { 'MyMod.esp|ModA': held },
-      children: held.map(k => diffNode({
-        fieldName: k, values: { 'MyMod.esp|ModA': k },
-        resolutions: { 'MyMod.esp|ModA': { state: 'ResolvedValidType', editorId: `Named${k}` } },
-      })),
+      fieldName: 'Items', values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp|ModA': ['A', mine] },
+      children: [
+        diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 'A', 'MyMod.esp|ModA': 'A' } }),
+        ...(mine === 'B'
+          ? [diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': 'B' } })]
+          : [
+              diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 'B', 'MyMod.esp|ModA': null } }),
+              diffNode({ fieldName: '[2]', values: { 'Fallout4.esm': null, 'MyMod.esp|ModA': mine } }),
+            ]),
+      ],
     })],
   });
-  const cellOf = (keyword: string) => {
-    const row = required(screen.getAllByText(keyword).map(e => e.closest('tr')).find(r => r !== null), `the ${keyword} row`);
-    return required(row.querySelectorAll('td')[1], `the ${keyword} cell`);
-  };
+  const myCell = (row: string) =>
+    required(required(screen.getByText(row).closest('tr'), `the ${row} row`).querySelectorAll('td')[2], `MyMod.esp's ${row} cell`);
 
-  it('shows the disk\'s order once the read lands, and says nothing of the element now in its place', async () => {
-    disk = keywords(['KwdA', 'KwdC']);
+  async function writeSecondElement(value: string) {
+    disk = items('B');
     renderPanel();
-    await waitFor(() => screen.getAllByText('KwdA'));
-    fireEvent.click(cellOf('KwdA'));
-    fireEvent.doubleClick(within(cellOf('KwdA')).getByText('NamedKwdA [KwdA]'));
-    const request = required(vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
-      .find(m => m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER), 'the picker request');
-    send({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'requestId' in request ? request.requestId : '', formKey: 'KwdZ' });
-    await waitFor(() => vi.mocked(vscode.postMessage).mock.calls.some(([m]) => m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD));
+    await waitFor(() => screen.getByText('[1]'));
+    fireEvent.doubleClick(within(myCell('[1]')).getByText('B'));
+    const input = required(myCell('[1]').querySelector('input'), "the cell's input");
+    fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     hostHearsTheEdit();
-    await waitFor(() => expect(cellOf('KwdA')).toHaveTextContent(/^KwdZ$/));
+  }
 
-    disk = keywords(['KwdC', 'KwdZ']);
+  it('says once that the disk shows something else, though the element now aligns on another row', async () => {
+    await writeSecondElement('Z');
+
+    disk = items('Y');
     reported();
 
-    await waitFor(() => expect(screen.queryByText('KwdA')).not.toBeInTheDocument());
-    expect(cellOf('KwdC')).toHaveTextContent('NamedKwdC [KwdC]');
-    expect(cellOf('KwdZ')).toHaveTextContent('NamedKwdZ [KwdZ]');
+    await waitFor(() => expect(logged()).toEqual([{
+      type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn',
+      message: '[recordPanel] [2] of TestNPC [000001:Fallout4.esm] in "MyMod.esp" was written "Z", and the disk now shows "Y".',
+    }]));
+  });
+
+  it('says nothing when the disk holds what was written', async () => {
+    await writeSecondElement('Z');
+
+    disk = items('Z');
+    reported();
+
+    await waitFor(() => expect(myCell('[2]')).toHaveTextContent(/^Z$/));
     expect(logged()).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
+import { isFieldType, type ColumnKey, type CompareOverride, type FieldDiff, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
 import { columnKey } from './columnKey';
 
 export function toStr(v: unknown): string {
@@ -28,34 +28,41 @@ export function recordLabel(overrides: readonly CompareOverride[], formKey: stri
 
 // ── Array child helpers ───────────────────────────────────────────────────────
 
-// A keyed array is stored in key order on every write, so no Move there could change the file; a
-// pure-FormLink array's order is its sort key, so it offers nothing at all.
+// A keyed array is stored in key order on every write, so no Move there could change the file.
 export function isArrayElementHop(seg: PathSegment | undefined): boolean {
-  return seg?.kind === 'index' || seg?.kind === 'key';
+  return seg !== undefined && seg.kind !== 'member';
 }
 
 export function isMovableElementHop(seg: PathSegment | undefined): boolean {
   return seg?.kind === 'index';
 }
 
-// An array sorted by its own element value (xEdit's wbArrayS): its elements are pure links, which
-// the element type alone says.
-export function isPureLinkArray(meta: FieldMetadata): boolean {
-  return meta.elementType?.type === 'formKey';
-}
-
-// Add applies to any array whose elements are not themselves the value — a keyed array included,
-// where a new element starts with the empty key.
+// A keyed array included, where a new element starts with the empty key.
 export function offersArrayAdd(meta: FieldMetadata | undefined): boolean {
-  return meta?.type === 'array' && !!meta.elementType && !isPureLinkArray(meta);
+  return meta?.type === 'array' && !!meta.elementType;
 }
 
-// A keyed array's child is addressed by the key text as the backend labelled it, a pure-FormLink
-// array's by the element value, every other array's by the child's place among its siblings.
-export function elementSegment(arrayMeta: FieldMetadata, fieldName: string, ordinal: number): PathSegment {
-  if (arrayMeta.keyMembers) return { kind: 'key', key: fieldName };
-  if (isPureLinkArray(arrayMeta)) return { kind: 'value', value: fieldName };
-  return { kind: 'index', index: ordinal };
+// A keyed array's child is addressed by the key text as the backend labelled it, every other
+// array's by its position in each column that holds it.
+export function elementSegment(
+  arrayMeta: FieldMetadata, fieldName: string, indexes: Readonly<Record<string, number>>,
+): PathSegment {
+  return arrayMeta.keyMembers ? { kind: 'key', key: fieldName } : { kind: 'element', indexes };
+}
+
+/** Each column's own position for each row of an array without a key: a column holds an element
+ *  on exactly the rows where its value is, since an element is spelled in full. */
+export function elementIndexes(rows: readonly FieldDiff[]): Record<string, number>[] {
+  const held = new Map<string, number>();
+  return rows.map(row => {
+    const indexes: Record<string, number> = {};
+    for (const [column, value] of Object.entries(row.values)) {
+      if (value == null) continue;
+      indexes[column] = held.get(column) ?? 0;
+      held.set(column, indexes[column] + 1);
+    }
+    return indexes;
+  });
 }
 
 // ── Native right-click menu contexts ──────────────────────────────────────────
@@ -137,30 +144,23 @@ export function rootFieldOf(override: CompareOverride | undefined, rootField: st
   return override?.fields.find(f => f.metadata.name === rootField);
 }
 
-export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown {
+export function getAtPath(root: unknown, path: readonly PathHop[]): unknown {
   let cur = root;
   for (const seg of path) {
     if (seg.kind === 'member') cur = (cur as Record<string, unknown> | undefined)?.[seg.name];
     else if (seg.kind === 'index') cur = Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined;
-    else if (seg.kind === 'key') cur = undefined;
-    // value: the element is its own value, so the key is what is there — where the array holds it.
-    else cur = Array.isArray(cur) && cur.includes(seg.value) ? seg.value : undefined;
+    else cur = undefined;
   }
   return cur;
 }
 
-/** The hops an envelope carries for a row under `rootField`: the row's own, with an element of a
- *  sorted array turned into its position in `document`, this column's own value of the root. */
-export function wirePath(rootField: string, path: readonly PathSegment[], document: unknown): PathHop[] {
-  const hops: PathHop[] = [{ kind: 'member', name: rootField }];
-  let node = document;
-  for (const seg of path) {
-    hops.push(seg.kind === 'value'
-      ? { kind: 'index', index: Array.isArray(node) ? node.indexOf(seg.value) : -1 }
-      : seg);
-    node = getAtPath(node, [seg]);
-  }
-  return hops;
+/** The hops `column`'s envelope carries for a row under `rootField`; an element the column does
+ *  not hold has no position, which mEdit refuses. */
+export function wirePath(rootField: string, path: readonly PathSegment[], column: ColumnKey): PathHop[] {
+  return [
+    { kind: 'member', name: rootField },
+    ...path.map((seg): PathHop => seg.kind === 'element' ? { kind: 'index', index: seg.indexes[column] ?? -1 } : seg),
+  ];
 }
 
 // Absent means default (ADR-0005): the metadata names the default where it is not the type's
@@ -210,7 +210,7 @@ export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: Field
 // subtree root, never a nested array's. `?? undefined` collapses the wire's `T | null` here; `root`
 // picks a union member's variant at each hop.
 export function metaAtPath(
-  meta: FieldMetadata | undefined, path: readonly PathSegment[], root?: unknown,
+  meta: FieldMetadata | undefined, path: readonly PathHop[], root?: unknown,
 ): FieldMetadata | undefined {
   let cur: FieldMetadata | null | undefined = meta;
   let value: unknown = root;

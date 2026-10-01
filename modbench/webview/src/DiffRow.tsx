@@ -257,7 +257,12 @@ export function DiffRow({
         const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]
           .filter(Boolean).join('\n') || undefined;
-        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null;
+        // The host that invokes these commands holds no document, so it is handed the envelope's
+        // own path, as this column addresses it.
+        const hops = wirePath(rootField, context.path, key);
+        // Under an element this column does not hold, there is nothing to write to.
+        const writable = editableColumns.has(key) && cellMeta.readOnlyReason == null
+          && hops.every(hop => hop.kind !== 'index' || hop.index >= 0);
         // Array ops are offered only on a writable cell.
         const arrayEditable = !!onElementCommand && writable && (isArrayParentRow || isArrayElementRow);
         // ADR-0018: a `string` cell always carries its own right-click context, mutable or
@@ -268,15 +273,12 @@ export function DiffRow({
         // own `readOnly` is this same boolean negated, so the right-click menu and the
         // inline-editor gate can never disagree.
         const cellEditable = !!onEditCell && writable;
-        // The host that invokes these commands holds no document, so it is handed the envelope's
-        // own path, resolved here against this column's own value of the root.
-        const hops = wirePath(rootField, context.path, rootValue?.value);
-        // `hops` ends in the `index`/`key` hop that gates isArrayElementRow, and carries every hop
-        // above it rather than just that one.
+        // `hops` ends in the element's own `index`/`key` hop, and carries every hop above it rather
+        // than just that one.
         const elementContext = arrayEditable && isArrayElementRow
           ? arrayElementContext(
               col.override.formKey, col.override.plugin, col.override.origin, hops,
-              arrayLength(getAtPath(rootValue?.value, context.path.slice(0, -1))))
+              arrayLength(getAtPath(rootValue?.value, hops.slice(1, -1))))
           : undefined;
         const fire = (command: ElementCommand, allowed = true) =>
           allowed && elementContext && onElementCommand ? () => onElementCommand(command, elementContext) : undefined;

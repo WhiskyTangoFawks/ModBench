@@ -92,7 +92,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         var cellStates = ConflictRules.ComputeCellStates(
             values, ctx.MasterColumn, ctx.ColumnOrder,
-            (a, b) => DocumentNodes.SameNode(a, b, ComparesUnordered(shape), absentMeansDefault ? shape : null));
+            (a, b) => DocumentNodes.SameNode(a, b, absentMeansDefault ? shape : null));
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
@@ -144,52 +144,98 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return children.Count > 0 ? children : null;
     }
 
-    // Keyed, sorted and positional alignment are one union-by-key build over three key functions, so
-    // an element one plugin lacks is an absence at its key, not a shift. Keyed rows come out in key
-    // order.
+    // One row of an aligned array: its label, and the element each column that has one holds there.
+    private sealed record ElementRow(string Label, Dictionary<string, JsonElement> Held);
+
+    // An element one plugin lacks is an absence where it is missing, never a shift of the rest.
     private static List<FieldDiff>? ArrayChildren(
         FieldMetadata array, FieldMetadata element, string label, Dictionary<string, object?> values, DiffContext ctx)
     {
-        Func<JsonElement, int, ElementKey?> keyOf;
-        if (array.KeyMembers is { } keyMembers) keyOf = (e, _) => ElementKey.Of(e, keyMembers, element);
-        // A non-string element (the JSON null of a never-set slot) is not a row.
-        else if (ComparesUnordered(array)) keyOf = (e, _) => e.ValueKind == JsonValueKind.String ? ElementKey.OfValue(DocumentNodes.StringValueOf(e)) : null;
-        else keyOf = (_, index) => ElementKey.OfValue($"[{index}]");
-
-        var byColumn = new Dictionary<string, Dictionary<string, object?>>(StringComparer.Ordinal);
-        var union = new List<ElementKey>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var columns = new List<(string Column, List<JsonElement> Elements)>();
         foreach (var (column, _) in ctx.ColumnOrder)
         {
-            if (values.GetValueOrDefault(column) is not JsonElement { ValueKind: JsonValueKind.Array } elements) continue;
-            var lookup = new Dictionary<string, object?>(StringComparer.Ordinal);
-            var index = 0;
-            foreach (var e in elements.EnumerateArray())
-            {
-                // A second element sharing a key: the first wins — the write path refuses such a
-                // pair, but another tool's plugin can hold one.
-                if (keyOf(e, index++) is { } key && lookup.TryAdd(key.Text, e) && seen.Add(key.Text)) union.Add(key);
-            }
-            byColumn[column] = lookup;
+            if (values.GetValueOrDefault(column) is JsonElement { ValueKind: JsonValueKind.Array } elements)
+                columns.Add((column, [.. elements.EnumerateArray()]));
         }
 
-        if (union.Count > MaxArrayChildCount)
+        // A column longer than the cap overflows it however the rows align, so no alignment runs.
+        List<ElementRow>? rows = null;
+        if (columns.TrueForAll(c => c.Elements.Count <= MaxArrayChildCount))
+            rows = array.KeyMembers is { } keyMembers ? KeyedRows(keyMembers, element, columns) : SequenceRows(columns);
+        if (rows == null || rows.Count > MaxArrayChildCount)
         {
             ctx.Logger.LogWarning(
-                "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
-                label, ctx.FormKey, union.Count, MaxArrayChildCount);
+                "Array field {Field} on {FormKey} has more than MaxArrayChildCount ({Max}) elements across plugins, falling back to opaque display",
+                label, ctx.FormKey, MaxArrayChildCount);
             return null;
         }
-        if (union.Count == 0) return null;
-        if (array.KeyMembers != null) union.Sort((a, b) => a.CompareTo(b));
+        if (rows.Count == 0) return null;
 
         var shapes = values.Keys.ToDictionary(column => column, _ => element);
-        return [.. union.Select(key => DiffNode(
-            key.Text,
-            values.Keys.ToDictionary(
-                column => column,
-                column => byColumn.TryGetValue(column, out var lookup) && lookup.TryGetValue(key.Text, out var e) ? e : null),
+        return [.. rows.Select(row => DiffNode(
+            row.Label,
+            values.Keys.ToDictionary(column => column, column => row.Held.TryGetValue(column, out var e) ? (object?)e : null),
             shapes, absentMeansDefault: false, ctx))];
+    }
+
+    // Aligned by key, in key order.
+    private static List<ElementRow> KeyedRows(
+        IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
+    {
+        var rows = new Dictionary<string, (ElementKey Key, Dictionary<string, JsonElement> Held)>(StringComparer.Ordinal);
+        foreach (var (column, elements) in columns)
+        {
+            foreach (var e in elements)
+            {
+                var key = ElementKey.Of(e, keyMembers, element);
+                if (!rows.TryGetValue(key.Text, out var row)) rows[key.Text] = row = (key, []);
+                // A second element sharing a key: the first wins — the write path refuses such a
+                // pair, but another tool's plugin can hold one.
+                row.Held.TryAdd(column, e);
+            }
+        }
+        return [.. rows.Values.OrderBy(row => row.Key, Comparer<ElementKey>.Create((a, b) => a.CompareTo(b)))
+            .Select(row => new ElementRow(row.Key.Text, row.Held))];
+    }
+
+    // xEdit's TfrmMain.InitChildren: each column in load order diffed against the rows before it,
+    // with no modified pair, and a row only those rows hold before a row only the column holds.
+    private static List<ElementRow> SequenceRows(List<(string Column, List<JsonElement> Elements)> columns)
+    {
+        var rows = new List<(string Text, Dictionary<string, JsonElement> Held)>();
+        foreach (var (column, elements) in columns)
+        {
+            var texts = elements.Select(e => e.GetRawText()).ToList();
+            var common = new int[rows.Count + 1, texts.Count + 1];
+            for (var r = rows.Count - 1; r >= 0; r--)
+            {
+                for (var t = texts.Count - 1; t >= 0; t--)
+                {
+                    common[r, t] = rows[r].Text == texts[t]
+                        ? common[r + 1, t + 1] + 1
+                        : Math.Max(common[r + 1, t], common[r, t + 1]);
+                }
+            }
+
+            var merged = new List<(string Text, Dictionary<string, JsonElement> Held)>(rows.Count + texts.Count);
+            var (i, j) = (0, 0);
+            while (i < rows.Count || j < texts.Count)
+            {
+                if (i < rows.Count && j < texts.Count && rows[i].Text == texts[j])
+                {
+                    rows[i].Held[column] = elements[j++];
+                    merged.Add(rows[i++]);
+                }
+                else if (i < rows.Count && (j == texts.Count || common[i + 1, j] >= common[i, j + 1])) merged.Add(rows[i++]);
+                else
+                {
+                    merged.Add((texts[j], new() { [column] = elements[j] }));
+                    j++;
+                }
+            }
+            rows = merged;
+        }
+        return [.. rows.Select((row, index) => new ElementRow($"[{index}]", row.Held))];
     }
 
     // ADR-0005: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
@@ -220,10 +266,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         }
         return (resolutions.Count > 0 ? resolutions : null, checkErrors.Count > 0 ? checkErrors : null);
     }
-
-    // xEdit's wbArrayS keyed by the element itself: a pure-link array's order carries no meaning, so
-    // two spellings of one set are one value. Read off the element type at every depth.
-    private static bool ComparesUnordered(FieldMetadata meta) => meta.ElementType?.Type == "formKey";
 
     private static object? MemberValue(RecordDetail record, string member) =>
         record.Fields.FirstOrDefault(f => f.Metadata.Name == member)?.Value;

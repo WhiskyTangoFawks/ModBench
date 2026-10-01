@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { columnKey } from './columnKey';
 import { displayValue } from './modelValue';
-import { defaultOf, isPureLinkArray, recordLabel, variantFor } from './recordUtils';
+import { defaultOf, recordLabel, variantFor } from './recordUtils';
 import type { ColumnKey, CompareResult, FieldDiff, FieldMetadata, PathHop } from './types';
 
 const MARK_DELAY_MS = 300;
@@ -14,8 +14,6 @@ export interface CellWrite {
   readonly column: ColumnKey;
   readonly path: readonly PathHop[];
   readonly value: unknown;
-  /** The grid row the panel wrote it from. A write from elsewhere names only the path. */
-  readonly row: string | undefined;
   /** Reads asked for before the host held the panel's reads for it, none of which can cover it. */
   readonly readsAsked: number;
   readonly marked: boolean;
@@ -27,12 +25,12 @@ const cellOf = (column: ColumnKey, path: readonly PathHop[]): string => JSON.str
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-interface DiskCell { row: string; label: string; meta: FieldMetadata; value: unknown }
+interface DiskCell { label: string; meta: FieldMetadata; value: unknown }
 
 interface Node { diff: FieldDiff | undefined; meta: FieldMetadata | null | undefined }
 
-// One hop down the rows as the grid builds them: an element of a sorted array is the row its value
-// at that place in this column names.
+// One hop down the rows as the grid builds them: an element by index is the row where this column
+// holds its element at that place.
 function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: ColumnKey): Node {
   const owner = diff.values[column];
   const children = diff.children ?? [];
@@ -41,9 +39,7 @@ function hopDown(diff: FieldDiff, meta: FieldMetadata, hop: PathHop, column: Col
     return { diff: children.find(c => c.fieldName === hop.name), meta: member && variantFor(member, owner, meta) };
   }
   if (hop.kind === 'key') return { diff: children.find(c => c.fieldName === hop.key), meta: meta.elementType };
-  if (!isPureLinkArray(meta)) return { diff: children[hop.index], meta: meta.elementType };
-  const linked: unknown = Array.isArray(owner) ? owner[hop.index] : undefined;
-  return { diff: children.find(c => c.fieldName === linked), meta: meta.elementType };
+  return { diff: children.filter(c => c.values[column] != null)[hop.index], meta: meta.elementType };
 }
 
 function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly PathHop[]): DiskCell | undefined {
@@ -53,23 +49,19 @@ function diskCellAt(result: CompareResult, column: ColumnKey, path: readonly Pat
     diff: result.diffs.find(d => d.fieldName === root.name),
     meta: result.overrides.flatMap(o => o.fields).find(f => f.metadata.name === root.name)?.metadata,
   };
-  let row = root.name;
   for (const hop of hops) {
     if (!node.diff || !node.meta) return undefined;
     node = hopDown(node.diff, node.meta, hop, column);
-    row = `${row}.${node.diff?.fieldName ?? ''}`;
   }
   const { diff, meta } = node;
   if (!diff || !meta) return undefined;
-  return { row, label: meta.displayLabel ?? diff.fieldName, meta, value: diff.values[column] ?? defaultOf(meta) };
+  return { label: meta.displayLabel ?? diff.fieldName, meta, value: diff.values[column] ?? defaultOf(meta) };
 }
 
-// A sorted array's element sits where the write moved it, so the row the panel wrote from may hold
-// another element by the time the read lands.
 function differenceLine(result: CompareResult, formKey: string, write: CellWrite): string | undefined {
   const plugin = result.overrides.find(o => columnKey(o.plugin, o.origin) === write.column)?.plugin;
   const disk = plugin === undefined ? undefined : diskCellAt(result, write.column, write.path);
-  if (!disk || (write.row !== undefined && write.row !== disk.row)) return undefined;
+  if (!disk) return undefined;
   const written = displayValue(write.value, disk.meta);
   const shown = displayValue(disk.value, disk.meta);
   return written === shown ? undefined
@@ -87,7 +79,7 @@ export function useCellWrites(log: (line: string) => void) {
   }, []);
 
   const written = useCallback((
-    column: ColumnKey, path: readonly PathHop[], value: unknown, readsAsked: number, row?: string,
+    column: ColumnKey, path: readonly PathHop[], value: unknown, readsAsked: number,
   ) => {
     const cell = cellOf(column, path);
     const now = latest.current.get(cell);
@@ -96,7 +88,7 @@ export function useCellWrites(log: (line: string) => void) {
       return;
     }
     const id = ++nextId.current;
-    change(writes => new Map(writes).set(cell, { id, cell, column, path, value, row, readsAsked, marked: false }));
+    change(writes => new Map(writes).set(cell, { id, cell, column, path, value, readsAsked, marked: false }));
     setTimeout(() => {
       const write = latest.current.get(cell);
       if (write?.id === id) change(writes => new Map(writes).set(cell, { ...write, marked: true }));

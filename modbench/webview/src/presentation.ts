@@ -1,7 +1,7 @@
 import { displayValue } from './modelValue';
 import { discriminatorOf, getAtPath, metaAtPath, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
-import type { FieldDiff, FieldMetadata, PathSegment } from './types';
+import type { FieldDiff, FieldMetadata, PathHop } from './types';
 
 // The one place in the webview where a game's own reading conventions live — a game-shaped rule
 // not in this table is in the wrong file. Members are named as the document names them.
@@ -192,7 +192,7 @@ function summarizerFor(
 
 const COLLAPSED_PLACEHOLDER = '{…}';
 
-const memberPath = (path: readonly string[]): PathSegment[] =>
+const memberPath = (path: readonly string[]): PathHop[] =>
   path.map(name => ({ kind: 'member', name }));
 
 function diffAt(diff: FieldDiff, path: readonly string[]): FieldDiff | undefined {
