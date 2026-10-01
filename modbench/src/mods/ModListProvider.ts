@@ -52,6 +52,31 @@ interface UnconfirmedRename {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+type EntryRef = Pick<ModlistEntry, 'kind' | 'name'>;
+
+interface UnconfirmedShape {
+  /** What the write changes: what its refusal forgets, and what its line names. */
+  readonly subjects: EntryRef[];
+  /** The rows that carry the mark. */
+  readonly rows: readonly EntryRef[];
+  readonly covered: (value: InstanceValue) => boolean;
+  /** A value that shows the write's first step but not its last: the write in progress. */
+  readonly partway?: (value: InstanceValue) => boolean;
+  readonly unmet: (subjects: readonly EntryRef[]) => string;
+  marked: boolean;
+  partwaySeen: boolean;
+  differedOnce: boolean;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+const sameEntry = (a: EntryRef, b: EntryRef): boolean => a.kind === b.kind && a.name === b.name;
+
+const isListed = (value: InstanceValue, ref: EntryRef): boolean => value.mods.some((entry) => sameEntry(entry, ref));
+
+const orderOf = (value: InstanceValue): string => value.mods.map((entry) => `${entry.kind}:${entry.name}`).join('\n');
+
+const quoted = (ref: EntryRef): string => (ref.kind === 'separator' ? `Separator "${ref.name}"` : `"${ref.name}"`);
+
 function markRow(row: vscode.TreeItem): void {
   row.iconPath = new vscode.ThemeIcon('sync~spin');
   row.tooltip = UNCONFIRMED_TOOLTIP;
@@ -204,6 +229,7 @@ export class ModListProvider
   private readonly log: (line: string) => void;
   private readonly unconfirmed = new Map<string, UnconfirmedWrite>();
   private readonly unconfirmedRenames = new Map<string, UnconfirmedRename>();
+  private readonly unconfirmedShapes = new Set<UnconfirmedShape>();
   private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -237,6 +263,104 @@ export class ModListProvider
       this.unconfirmed.delete(name);
     }
     this.settleUnconfirmedRenames(value);
+    this.settleUnconfirmedShapes(value);
+  }
+
+  private settleUnconfirmedShapes(value: InstanceValue): void {
+    for (const shape of this.unconfirmedShapes) {
+      if (!shape.covered(value)) {
+        if (shape.partway?.(value) === true && !shape.partwaySeen) {
+          shape.partwaySeen = true;
+          continue;
+        }
+        if (!shape.differedOnce) {
+          shape.differedOnce = true;
+          continue;
+        }
+        this.log(shape.unmet(shape.subjects));
+      }
+      this.dropShape(shape);
+    }
+  }
+
+  private dropShape(shape: UnconfirmedShape): void {
+    clearTimeout(shape.timer);
+    this.unconfirmedShapes.delete(shape);
+  }
+
+  private markShape(
+    subjects: readonly EntryRef[], covered: UnconfirmedShape['covered'], unmet: UnconfirmedShape['unmet'],
+    carriers?: readonly EntryRef[], partway?: UnconfirmedShape['partway'],
+  ): void {
+    const own = [...subjects];
+    const rows = carriers ?? own;
+    if (own.length === 0 || rows.length === 0) return;
+    const shape: UnconfirmedShape = {
+      subjects: own, rows, covered, partway, unmet, marked: false, partwaySeen: false, differedOnce: false,
+      timer: setTimeout(() => {
+        shape.marked = true;
+        this.render();
+      }, MARK_DELAY_MS),
+    };
+    this.unconfirmedShapes.add(shape);
+  }
+
+  /** The rows stay where they are, marked, until the disk's order differs. */
+  markMoved(refs: readonly EntryRef[]): void {
+    const before = orderOf(this.instanceValue);
+    this.markShape(refs, (value) => orderOf(value) !== before,
+      (moved) => `${moved.map(quoted).join(', ')} was moved, and the disk shows the same order.`);
+  }
+
+  /** Each row stays, marked, until the disk omits it. */
+  markRemoved(refs: readonly EntryRef[]): void {
+    for (const ref of refs) {
+      this.markShape([ref], (value) => !isListed(value, ref), () => `${quoted(ref)} was removed, and the disk still lists it.`);
+    }
+  }
+
+  /** The separator that holds the entry at `index` of mod order, or the entry itself when it is one. */
+  private separatorHolding(index: number): EntryRef | undefined {
+    return this.instanceValue.mods.slice(index).find((entry) => entry.kind === 'separator');
+  }
+
+  /** The new mod lands at the winning end, in the separator that holds that end. With none, no
+   *  row holds it and nothing is marked. The folder is the write's first step, its line the last. */
+  markCreatedMod(name: string): void {
+    const created: EntryRef = { kind: 'mod', name };
+    const holder = this.separatorHolding(0);
+    if (holder === undefined) return;
+    this.markShape([created], (value) => isListed(value, created),
+      () => `${quoted(created)} was created, and the disk does not list it.`, [holder],
+      (value) => value.modFolders?.some((folder) => folder.kind === 'mod' && folder.name === name) === true);
+  }
+
+  /** The anchor separator, or the separator that holds the anchor mod, carries the mark. With none,
+   *  nothing is marked. */
+  markAddedSeparator(name: string, anchor: EntryRef): void {
+    const added: EntryRef = { kind: 'separator', name };
+    const at = this.instanceValue.mods.findIndex((entry) => sameEntry(entry, anchor));
+    const holder = at === -1 ? undefined : this.separatorHolding(at);
+    if (holder === undefined) return;
+    this.markShape([added], (value) => isListed(value, added),
+      () => `${quoted(added)} was added, and the disk does not list it.`, [holder]);
+  }
+
+  /** A refused or failed write shows the disk's shape at once, with no mark. */
+  forgetUnconfirmedShape(refs: readonly EntryRef[]): void {
+    if (refs.length === 0) return;
+    let shown = false;
+    for (const shape of this.unconfirmedShapes) {
+      const left = shape.subjects.filter((own) => !refs.some((ref) => sameEntry(ref, own)));
+      shown ||= shape.marked && left.length < shape.subjects.length;
+      shape.subjects.splice(0, shape.subjects.length, ...left);
+      if (left.length === 0) this.dropShape(shape);
+    }
+    if (shown) this.render();
+  }
+
+  private shapeMarked(ref: EntryRef): boolean {
+    return [...this.unconfirmedShapes].some((shape) => shape.marked && shape.rows.some((row) => sameEntry(row, ref)));
   }
 
   private settleUnconfirmedRenames(value: InstanceValue): void {
@@ -306,6 +430,8 @@ export class ModListProvider
     this.unconfirmed.clear();
     for (const rename of this.unconfirmedRenames.values()) clearTimeout(rename.timer);
     this.unconfirmedRenames.clear();
+    for (const shape of this.unconfirmedShapes) clearTimeout(shape.timer);
+    this.unconfirmedShapes.clear();
   }
 
   dispose(): void {
@@ -448,7 +574,7 @@ export class ModListProvider
 
   private separatorNode(separator: Separator, mods: Mod[], shown?: 'allMods' | 'matchingMods'): SeparatorNode {
     const row = new SeparatorNode(separator, mods, shown);
-    if (this.unconfirmedRenames.get(separator.name)?.marked) markRow(row);
+    if (this.unconfirmedRenames.get(separator.name)?.marked || this.shapeMarked(separator)) markRow(row);
     return row;
   }
 
@@ -461,7 +587,7 @@ export class ModListProvider
     const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
     });
-    if (write?.marked) markRow(row);
+    if (write?.marked || this.shapeMarked(m)) markRow(row);
     return row;
   };
 

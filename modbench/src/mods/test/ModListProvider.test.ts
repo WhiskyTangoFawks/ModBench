@@ -53,7 +53,7 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 // provider reaching for `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths' | 'managerNames'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths' | 'managerNames' | 'modFolders'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
@@ -62,6 +62,7 @@ function valueOf(
     overwriteFileCount: extra.overwriteFileCount ?? 0,
     ...(extra.paths ? { paths: extra.paths } : {}),
     ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
+    ...(extra.modFolders ? { modFolders: extra.modFolders } : {}),
   });
 }
 
@@ -1180,5 +1181,348 @@ describe('a subject that vanishes from the disk while its write is unconfirmed',
     instance.publish(valueOf([mod('A')]));
 
     expect(logged).toEqual(['Separator "Old" was renamed "New", and the disk shows neither name.']);
+  });
+});
+
+describe('an unconfirmed shape change (common.md, Unconfirmed writes, story 2)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const allRows = async (provider: ModListProvider): Promise<(ModNode | SeparatorNode)[]> => {
+    const roots = (await provider.getChildren()).filter((n): n is ModNode | SeparatorNode => n instanceof ModNode || n instanceof SeparatorNode);
+    const nested = await Promise.all(roots.map(async (root) => (root instanceof SeparatorNode ? provider.getChildren(root) : [])));
+    return [...roots, ...nested.flat().filter((n): n is ModNode => n instanceof ModNode)];
+  };
+  const spinning = async (provider: ModListProvider): Promise<string[]> =>
+    (await allRows(provider))
+      .filter((row) => row.iconPath instanceof ThemeIcon && row.iconPath.id === 'sync~spin')
+      .map((row) => (row instanceof ModNode ? row.mod.name : row.separator.name));
+  const order = async (provider: ModListProvider): Promise<string[]> =>
+    (await allRows(provider)).map((row) => (row instanceof ModNode ? row.mod.name : row.separator.name));
+
+  describe('a move', () => {
+    const moved = (): ModlistEntry[] => [
+      mod('Early Fix', false), mod('Late Tweak'), sep('Late Section'), mod('Base Patch'), sep('Early Section'), mod('Old Mod'), mod('Oldest Mod'),
+    ];
+
+    it('leaves every row where it is, and marks the moved rows only after a delay', async () => {
+      const provider = makeProvider(ordered());
+      const before = await order(provider);
+
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }, { kind: 'mod', name: 'Old Mod' }]);
+      expect(await order(provider)).toEqual(before);
+      expect(await spinning(provider)).toEqual([]);
+
+      vi.advanceTimersByTime(1000);
+      expect(await order(provider)).toEqual(before);
+      expect(await spinning(provider)).toEqual(['Old Mod', 'Late Tweak']);
+      const [marked] = (await allRows(provider)).filter((row) => row instanceof ModNode && row.mod.name === 'Late Tweak');
+      expect(marked?.tooltip).toBe('Written; waiting for the disk to confirm');
+    });
+
+    it('goes silently, showing the disk\'s order, when the disk\'s order changed', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOf(moved()));
+
+      expect(await spinning(provider)).toEqual([]);
+      expect((await order(provider)).indexOf('Late Tweak')).toBeLessThan((await order(provider)).indexOf('Early Fix'));
+      expect(logged).toEqual([]);
+    });
+
+    it('keeps the mark through a value that shows the old order, then logs one line and shows the disk', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }, { kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOf(ordered()));
+      expect(await spinning(provider)).toEqual(['Old Mod', 'Late Tweak']);
+      expect(logged).toEqual([]);
+
+      instance.publish(valueOf(ordered()));
+      expect(await spinning(provider)).toEqual([]);
+      expect(logged).toEqual(['"Late Tweak", "Old Mod" was moved, and the disk shows the same order.']);
+    });
+
+    it('stays while the disk cannot be read', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const provider = makeProvider([], { instance });
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.fail('locked');
+
+      expect(await spinning(provider)).toEqual(['Late Tweak']);
+    });
+
+    it('forgetting the rows the write refused leaves the others marked', async () => {
+      const provider = makeProvider(ordered());
+      provider.markMoved([{ kind: 'mod', name: 'Late Tweak' }, { kind: 'mod', name: 'Old Mod' }]);
+
+      provider.forgetUnconfirmedShape([{ kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual(['Late Tweak']);
+    });
+
+    it('marks a separator by its kind, not a mod of the same name', async () => {
+      const provider = makeProvider([mod('Same'), sep('Same')]);
+
+      provider.markMoved([{ kind: 'separator', name: 'Same' }]);
+      vi.advanceTimersByTime(1000);
+
+      expect((await allRows(provider)).filter((row) => row.iconPath instanceof ThemeIcon && row.iconPath.id === 'sync~spin').map((row) => row.kind))
+        .toEqual(['separator']);
+    });
+  });
+
+  describe('an uninstall or a delete', () => {
+    it('keeps the row, and marks it only after a delay', async () => {
+      const provider = makeProvider(ordered());
+
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+      expect(await order(provider)).toContain('Old Mod');
+      expect(await spinning(provider)).toEqual([]);
+
+      vi.advanceTimersByTime(1000);
+      expect(await order(provider)).toContain('Old Mod');
+      expect(await spinning(provider)).toEqual(['Old Mod']);
+    });
+
+    it('the row leaves silently once the disk omits it, and stays through a value that lists it', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOf(ordered()));
+      expect(await spinning(provider)).toEqual(['Old Mod']);
+
+      instance.publish(valueOf(ordered().filter((e) => e.name !== 'Old Mod')));
+      expect(await order(provider)).not.toContain('Old Mod');
+      expect(logged).toEqual([]);
+    });
+
+    it('shows the disk\'s row unmarked and logs one line per row the disk still lists after a second value', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markRemoved([{ kind: 'separator', name: 'Early Section' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.publish(valueOf(ordered()));
+      instance.publish(valueOf(ordered()));
+
+      expect(await spinning(provider)).toEqual([]);
+      expect(await order(provider)).toContain('Early Section');
+      expect(logged).toEqual(['Separator "Early Section" was removed, and the disk still lists it.']);
+    });
+
+    it('names a mod as a mod in its line', () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+
+      instance.publish(valueOf(ordered()));
+      instance.publish(valueOf(ordered()));
+
+      expect(logged).toEqual(['"Old Mod" was removed, and the disk still lists it.']);
+    });
+
+    it('stays while the disk cannot be read', async () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const provider = makeProvider([], { instance });
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      instance.fail('locked');
+
+      expect(await spinning(provider)).toEqual(['Old Mod']);
+    });
+
+    it('a write forgotten never shows the mark', async () => {
+      const provider = makeProvider(ordered());
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+
+      provider.forgetUnconfirmedShape([{ kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual([]);
+    });
+
+    it('a write forgotten after its mark showed removes the mark at once', async () => {
+      const provider = makeProvider(ordered());
+      provider.markRemoved([{ kind: 'mod', name: 'Old Mod' }]);
+      vi.advanceTimersByTime(1000);
+      let fired = false;
+      provider.onDidChangeTreeData(() => { fired = true; });
+
+      provider.forgetUnconfirmedShape([{ kind: 'mod', name: 'Old Mod' }]);
+
+      expect(fired).toBe(true);
+      expect(await spinning(provider)).toEqual([]);
+    });
+  });
+
+  describe('a created mod', () => {
+    it('marks the separator the new mod will join, the first one from the winning end', async () => {
+      const provider = makeProvider(ordered());
+
+      provider.markCreatedMod('New Mod');
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual(['Late Section']);
+      expect(await order(provider)).not.toContain('New Mod');
+    });
+
+    it('marks the winning-end separator when the list opens with one', async () => {
+      const provider = makeProvider([sep('Top'), mod('A'), sep('Bottom')]);
+
+      provider.markCreatedMod('New Mod');
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual(['Top']);
+    });
+
+    it('marks no row when no separator holds it', async () => {
+      const provider = makeProvider([mod('A'), mod('B')]);
+
+      provider.markCreatedMod('New Mod');
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual([]);
+    });
+
+    it('marks nothing in an empty list', async () => {
+      const provider = makeProvider([]);
+
+      provider.markCreatedMod('New Mod');
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual([]);
+    });
+
+    describe('landing in two steps, the folder and then its line', () => {
+      const folder = (name: string) => [{ kind: 'mod' as const, name, path: `/instance/mods/${name}` }];
+      const before = () => valueOf([mod('A'), sep('S')]);
+
+      it('goes silently once the disk lists the mod', async () => {
+        const instance = new FakeInstance(before());
+        const logged: string[] = [];
+        const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+        provider.markCreatedMod('New Mod');
+        vi.advanceTimersByTime(1000);
+
+        instance.publish(valueOf([mod('New Mod', false), mod('A'), sep('S')]));
+
+        expect(await spinning(provider)).toEqual([]);
+        expect(logged).toEqual([]);
+      });
+
+      it('counts a value showing the folder alone as the write in progress: no grace used, nothing logged', async () => {
+        const instance = new FakeInstance(before());
+        const logged: string[] = [];
+        const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+        provider.markCreatedMod('New Mod');
+        vi.advanceTimersByTime(1000);
+
+        instance.publish(before());
+        instance.publish(valueOf([mod('A'), sep('S')], { modFolders: folder('New Mod') }));
+        expect(await spinning(provider)).toEqual(['S']);
+        instance.publish(valueOf([mod('New Mod', false), mod('A'), sep('S')], { modFolders: folder('New Mod') }));
+
+        expect(await spinning(provider)).toEqual([]);
+        expect(logged).toEqual([]);
+      });
+
+      it('logs one line when two values show neither step', () => {
+        const instance = new FakeInstance(before());
+        const logged: string[] = [];
+        const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+        provider.markCreatedMod('New Mod');
+
+        instance.publish(before());
+        instance.publish(before());
+
+        expect(logged).toEqual(['"New Mod" was created, and the disk does not list it.']);
+      });
+
+      it('logs once the grace runs out after the folder was seen and the line never came', () => {
+        const instance = new FakeInstance(before());
+        const logged: string[] = [];
+        const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+        provider.markCreatedMod('New Mod');
+        const folderOnly = () => valueOf([mod('A'), sep('S')], { modFolders: folder('New Mod') });
+
+        instance.publish(folderOnly());
+        instance.publish(folderOnly());
+        expect(logged).toEqual([]);
+        instance.publish(folderOnly());
+
+        expect(logged).toEqual(['"New Mod" was created, and the disk does not list it.']);
+      });
+    });
+
+    it('a write forgotten never shows the mark', async () => {
+      const provider = makeProvider([mod('A')]);
+      provider.markCreatedMod('New Mod');
+
+      provider.forgetUnconfirmedShape([{ kind: 'mod', name: 'New Mod' }]);
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual([]);
+    });
+  });
+
+  describe('an added separator', () => {
+    it('marks the separator that holds the anchor mod, and leaves the shape as it is', async () => {
+      const provider = makeProvider(ordered());
+      const before = await order(provider);
+
+      provider.markAddedSeparator('Fresh', { kind: 'mod', name: 'Base Patch' });
+      vi.advanceTimersByTime(1000);
+
+      expect(await order(provider)).toEqual(before);
+      expect(await spinning(provider)).toEqual(['Early Section']);
+    });
+
+    it('marks an anchor separator itself', async () => {
+      const provider = makeProvider(ordered());
+
+      provider.markAddedSeparator('Fresh', { kind: 'separator', name: 'Late Section' });
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual(['Late Section']);
+    });
+
+    it('marks no row when no separator holds the anchor mod', async () => {
+      const provider = makeProvider(ordered());
+
+      provider.markAddedSeparator('Fresh', { kind: 'mod', name: 'Old Mod' });
+      vi.advanceTimersByTime(1000);
+
+      expect(await spinning(provider)).toEqual([]);
+    });
+
+    it('goes silently once the disk lists the separator, and logs one line when a second value does not', () => {
+      const instance = new FakeInstance(valueOf(ordered()));
+      const logged: string[] = [];
+      const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+      provider.markAddedSeparator('Fresh', { kind: 'separator', name: 'Early Section' });
+      provider.markAddedSeparator('Fresh Two', { kind: 'separator', name: 'Late Section' });
+
+      instance.publish(valueOf([...ordered(), sep('Fresh')]));
+      instance.publish(valueOf([...ordered(), sep('Fresh')]));
+
+      expect(logged).toEqual(['Separator "Fresh Two" was added, and the disk does not list it.']);
+    });
   });
 });

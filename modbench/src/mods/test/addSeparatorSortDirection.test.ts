@@ -42,7 +42,9 @@ async function anchorRow(direction: SortDirection, isRow: (node: ModlistNode) =>
   return row;
 }
 
-const separatorMarks = { markUnconfirmedRename: vi.fn(), forgetUnconfirmedRename: vi.fn() };
+const separatorMarks = {
+  markUnconfirmedRename: vi.fn(), forgetUnconfirmedRename: vi.fn(), markRemoved: vi.fn(), markAddedSeparator: vi.fn(), forgetUnconfirmedShape: vi.fn(),
+};
 
 async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const root = await cloneCorpusFixture();
