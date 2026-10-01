@@ -8,11 +8,20 @@ internal static class NavigatorSql
     /// <summary>One row per record a record holds in the same plugin: a topic in its quest, a
     /// response in its topic, a placed reference in its cell, an exterior cell in its worldspace.</summary>
     internal const string Held = """
-        SELECT plugin, origin, parent_form_key AS parent, child_form_key AS child FROM container_child
+        SELECT plugin, origin, parent_form_key AS parent, child_form_key AS child,
+               CAST(NULL AS VARCHAR) AS placement_group FROM container_child
         UNION ALL
-        SELECT plugin, origin, parent_cell, form_key FROM placement
+        SELECT plugin, origin, parent_cell, form_key, placement_group FROM placement
         UNION ALL
-        SELECT plugin, origin, parent_worldspace, cell_form_key FROM cell_location WHERE parent_worldspace IS NOT NULL
+        SELECT plugin, origin, parent_worldspace, cell_form_key, NULL FROM cell_location WHERE parent_worldspace IS NOT NULL
+        """;
+
+    /// <summary>What a cell holds, by <c>parent_cell</c>: a record held outside a placement group,
+    /// such as its landscape or a navmesh, lists among the temporary ones as xEdit lists it.</summary>
+    internal const string CellChildren = $"""
+        SELECT plugin, origin, parent AS parent_cell, child AS form_key,
+               COALESCE(placement_group, 'temporary') AS placement_group
+        FROM ({Held})
         """;
 
     /// <summary>Two CTEs for a <c>WITH RECURSIVE</c>: <c>held</c>, the holdings <paramref name="where"/>

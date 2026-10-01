@@ -21,7 +21,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
-    private static readonly string[] PlacedTableNames = ["refr", "achr"];
+    private static readonly string[] CellChildTypeNames = ["refr", "achr", "land", "navm"];
     private bool _filterActive;
 
     // The records holding a filter match in the match's own plugin, so it stays reachable beneath them.
@@ -1056,7 +1056,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                            WHERE a.form_key = cl.cell_form_key AND a.plugin = cl.plugin AND a.origin = cl.origin
                        ),
                        EXISTS (
-                           SELECT 1 FROM placement p
+                           SELECT 1 FROM ({NavigatorSql.CellChildren}) p
                            JOIN {records} pr ON pr.form_key = p.form_key AND pr.plugin = p.plugin AND pr.origin = p.origin
                            WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                              {InListingFilter("p")}
@@ -1105,8 +1105,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey)
         {
             var schemas = owner.RequireSchemas();
-            var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
-            if (placedTypes.Count == 0)
+            var cellChildTypes = CellChildTypeNames.Where(schemas.ContainsKey).ToList();
+            if (cellChildTypes.Count == 0)
                 return new CellReferences([], []);
 
             using var connection = owner.OpenRead();
@@ -1114,7 +1114,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // ADR-0007: the placed ref's base form comes out of the document rather than a `base`
             // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
             // base reads NULL.
-            var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
+            var typeList = string.Join(", ", cellChildTypes.Select(t => $"'{t}'"));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
@@ -1126,7 +1126,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
                         LIMIT 1)
-                FROM placement p
+                FROM ({NavigatorSql.CellChildren}) p
                 JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
                 WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
                   AND r.record_type IN ({typeList}){InListingFilter("p")}
