@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
+import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient } from './test/fixtures';
 import type { CompareResult } from './types';
 
 // Add on an abstract-union array: the webview contributes no element and no default. A
@@ -66,15 +66,13 @@ describe('RecordPanel — Add on an abstract-union array', () => {
     return render(<RecordPanel client={client} />);
   }
 
-  const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
-
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Quest548.esp');
     vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('posts add at the array, carrying no element of its own', async () => {
+  it('offers add at the array, as its menu does', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
     const aliasesRow = screen.getByText('aliases').closest('tr');
@@ -84,12 +82,8 @@ describe('RecordPanel — Add on an abstract-union array', () => {
     if (!cellText) throw new Error('the "[1]" index label RecordPanel renders for the array element');
     const cell = cellText.closest('td');
     if (!cell) throw new Error('the table cell containing the "[1]" index label');
-    fireEvent.click(cell); // focus
-    fireEvent.keyDown(cell, { key: 'Insert' });
 
-    const envelope = lastEnvelope();
-    expect(envelope).toEqual({ op: 'add', path: [{ kind: 'member', name: 'aliases' }] });
-    if (!envelope) throw new Error('the envelope RecordPanel posted for the add gesture');
-    expect(Object.keys(envelope).sort()).toEqual(['op', 'path']);
+    const context: unknown = JSON.parse(cell.getAttribute('data-vscode-context') ?? '{}');
+    expect(context).toMatchObject({ webviewSection: 'arrayParent', path: [{ kind: 'member', name: 'aliases' }] });
   });
 });

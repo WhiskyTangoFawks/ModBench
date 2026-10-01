@@ -71,10 +71,9 @@ import type {
   StringValueContext,
 } from './messages';
 
-// Only the near end is bounded: the row's index spans every column, so this column's own length
-// is not known here, and a move off the far end is the backend's to refuse by name.
+// `siblings` is the length of the array in this column's own document.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, path: PathHop[],
+  formKey: string, plugin: string, origin: string, path: PathHop[], siblings: number,
 ): ArrayElementContext {
   const lastSeg = path.at(-1);
   const movable = isMovableElementHop(lastSeg);
@@ -82,7 +81,7 @@ export function arrayElementContext(
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, path,
     canMoveUp: movable && index > 0,
-    canMoveDown: movable,
+    canMoveDown: movable && index < siblings - 1,
     preventDefaultContextMenuItems: true,
   };
 }

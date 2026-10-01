@@ -1,7 +1,7 @@
 import { vscode } from './vscode';
 import {
   EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
-  type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
+  type ArrayElementContext, type ElementCommand, type ExtensionToWebview, type RecordEditEnvelope, type RecordLoadAnswer, type WebviewToExtension,
 } from './messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
@@ -80,6 +80,10 @@ export function copyValue(value: string): void {
 // answer to "what does the record say now" is a re-read, never this call's return.
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, envelope });
+}
+
+export function elementCommand(command: ElementCommand, context: ArrayElementContext): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context: { ...context } });
 }
 
 // A line in the Output, which only the host can write.

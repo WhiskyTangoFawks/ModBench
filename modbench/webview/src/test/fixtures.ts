@@ -87,6 +87,15 @@ export function postedEnvelopes(postMessage: (msg: WebviewToExtension) => void):
     .map((m) => m.envelope);
 }
 
+/** A key on a focused element posts the catalog command it fires and the element it names. */
+export function lastElementCommand(postMessage: (msg: WebviewToExtension) => void) {
+  return vi.mocked(postMessage).mock.calls
+    .map(([m]) => m)
+    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND }> =>
+      m.type === WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND)
+    .at(-1);
+}
+
 export const lastPostedEnvelope = (
   postMessage: (msg: WebviewToExtension) => void,
 ): RecordEditEnvelope | undefined => postedEnvelopes(postMessage).at(-1);

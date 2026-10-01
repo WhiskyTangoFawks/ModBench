@@ -63,3 +63,51 @@ export function translatedText(value: unknown): string | undefined {
   const text = (value as { Value?: unknown } | null | undefined)?.Value;
   return typeof text === 'string' ? text : undefined;
 }
+
+// The codec's own spelling of a translated string, with only its text changed.
+function withTranslatedText(current: unknown, text: string): object {
+  return { ...(typeof current === 'object' ? current : null), Value: text };
+}
+
+const WHOLE_NUMBER = /^[+-]?\d+$/;
+const DECIMAL_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+const BRACKETED_FORM_KEY = /\[([^\]]+)\]\s*$/;
+
+function parsedJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function enumValueNamed(text: string, meta: FieldMetadata): string {
+  return meta.enumMembers.find(m => m.label === text || m.value === text)?.value ?? text;
+}
+
+/** The inverse of `copiedText`: pasted text as the field's own value. Text the field cannot hold
+ *  stays text, so mEdit refuses it by the field's name rather than this repairing it. */
+export function pastedValue(text: string, meta: FieldMetadata, current: unknown): unknown {
+  const trimmed = text.trim();
+  switch (meta.type) {
+    case 'bool': {
+      const word = trimmed.toLowerCase();
+      return word === 'true' || word === 'false' ? word === 'true' : text;
+    }
+    case 'int': {
+      const whole = WHOLE_NUMBER.test(trimmed) ? Number(trimmed) : NaN;
+      return Number.isSafeInteger(whole) ? whole : text;
+    }
+    case 'float': {
+      const number = DECIMAL_NUMBER.test(trimmed) ? Number(trimmed) : NaN;
+      return Number.isFinite(number) ? number : text;
+    }
+    case 'enum': return enumValueNamed(trimmed, meta);
+    case 'flags': return trimmed === '' ? [] : trimmed.split(',').map(name => name.trim());
+    case 'formKey': return trimmed === '' ? null : BRACKETED_FORM_KEY.exec(trimmed)?.[1] ?? trimmed;
+    case 'struct':
+    case 'array': return parsedJson(text);
+    case 'translatedString': return withTranslatedText(current, text);
+    default: return text;
+  }
+}

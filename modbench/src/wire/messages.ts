@@ -29,6 +29,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // ADR-0007: routed through the extension host because an edit can be refused and a refusal has
   // to become a native notification (ADR-0019).
   EDIT_FIELD: 'editField',
+  // A key on a focused element, an entry point to the command its right-click menu fires: the host
+  // holds no key handler of its own, so the webview names the command and the element's context.
+  ELEMENT_COMMAND: 'elementCommand',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
@@ -41,6 +44,9 @@ export const WEBVIEW_TO_EXTENSION = {
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
+
+export const ELEMENT_COMMANDS = ['removeElement', 'moveElementUp', 'moveElementDown'] as const;
+export type ElementCommand = typeof ELEMENT_COMMANDS[number];
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
@@ -55,6 +61,7 @@ export type WebviewToExtension =
       origin: string;
       envelope: RecordEditEnvelope;
     }
+  | { type: typeof WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND; command: ElementCommand; context: Record<string, unknown> }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.FOCUS_CELL; context: Record<string, unknown> | null; entered: boolean }
   | { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD; requestId: string; formKey: string };
@@ -193,7 +200,7 @@ export function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelop
 
 type WebviewToExtensionWitness = {
   type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
-  plugin?: unknown; origin?: unknown; envelope?: unknown;
+  plugin?: unknown; origin?: unknown; envelope?: unknown; command?: unknown;
   requestId?: unknown; seed?: unknown; validTypes?: unknown; context?: unknown; entered?: unknown;
 };
 
@@ -221,6 +228,16 @@ function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
     throw new Error('Expected "editField" to carry a record edit envelope with an op and a path.');
   }
   return { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
+}
+
+function isElementCommand(value: unknown): value is ElementCommand {
+  return ELEMENT_COMMANDS.some(command => command === value);
+}
+
+function parseElementCommand(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isElementCommand(w.command)) throw new Error('Expected "elementCommand" to name an element command.');
+  if (!isContextObject(w.context)) throw new Error('Expected "elementCommand" to carry a context object.');
+  return { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: w.command, context: w.context };
 }
 
 function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {
@@ -262,6 +279,7 @@ export function parseWebviewToExtension(value: unknown): WebviewToExtension {
     case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
     case WEBVIEW_TO_EXTENSION.COPY_VALUE: return parseCopyValue(w);
     case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
+    case WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND: return parseElementCommand(w);
     case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
     case WEBVIEW_TO_EXTENSION.FOCUS_CELL: return parseFocusCell(w);
     case WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD: return parseRequestRecordLoad(w);

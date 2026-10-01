@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { copiedText, displayValue, modelValue } from './modelValue';
+import { copiedText, displayValue, modelValue, pastedValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
@@ -148,5 +148,87 @@ describe('displayValue and copiedText — an enum value the enum does not name',
   it('copies the value, which the editor can take back', () => {
     expect(copiedText(5, enumMeta)).toBe('5');
     expect(copiedText('Female', enumMeta)).toBe('Female');
+  });
+});
+
+describe('pastedValue — the text a copy leaves, taken back as the field\'s own value', () => {
+  const labelledEnum = fieldMeta({
+    name: 'Gender', type: 'enum',
+    enumMembers: [{ value: 'Male', label: 'Man' }, { value: 'Female', label: 'Woman' }],
+  });
+
+  it.each([
+    ['True', true],
+    ['False', false],
+    [' true ', true],
+  ])('bool: %j is %j', (text, expected) => {
+    expect(pastedValue(text, boolMeta, undefined)).toBe(expected);
+  });
+
+  it('bool: text that is neither stays text, for the backend to refuse', () => {
+    expect(pastedValue('maybe', boolMeta, undefined)).toBe('maybe');
+  });
+
+  it('int: a whole number is a number', () => {
+    expect(pastedValue('-12', intMeta, undefined)).toBe(-12);
+  });
+
+  it.each(['12abc', '1.5', ''])('int: %j is not repaired to a number', text => {
+    expect(pastedValue(text, intMeta, undefined)).toBe(text);
+  });
+
+  it('float: a number is a number', () => {
+    expect(pastedValue('1.25', floatMeta, undefined)).toBe(1.25);
+  });
+
+  it.each(['1.25kg', '0x1A', 'Infinity', ''])('float: %j is not repaired to a number', text => {
+    expect(pastedValue(text, floatMeta, undefined)).toBe(text);
+  });
+
+  it('enum: a member\'s label is its value', () => {
+    expect(pastedValue('Woman', labelledEnum, undefined)).toBe('Female');
+  });
+
+  it('enum: a member\'s value is itself', () => {
+    expect(pastedValue('Male', labelledEnum, undefined)).toBe('Male');
+  });
+
+  it('flags: the names joined by a comma are the array of names', () => {
+    expect(pastedValue('A, C', flagMeta, undefined)).toEqual(['A', 'C']);
+  });
+
+  it('flags: no names is no flags set', () => {
+    expect(pastedValue('', flagMeta, undefined)).toEqual([]);
+  });
+
+  it('reference: the FormKey in a label\'s brackets', () => {
+    expect(pastedValue('Dogmeat [00001A:Fallout4.esm]', fkMeta, undefined)).toBe('00001A:Fallout4.esm');
+  });
+
+  it('reference: a bare FormKey is itself', () => {
+    expect(pastedValue('00001A:Fallout4.esm', fkMeta, undefined)).toBe('00001A:Fallout4.esm');
+  });
+
+  it('reference: no text is no reference', () => {
+    expect(pastedValue('', fkMeta, undefined)).toBeNull();
+  });
+
+  it('struct and array: the JSON a copy leaves is the whole value', () => {
+    expect(pastedValue('[1,2]', arrayMeta, undefined)).toEqual([1, 2]);
+    expect(pastedValue('{"Rank":3}', structMeta, undefined)).toEqual({ Rank: 3 });
+  });
+
+  it('struct: text that is not JSON stays text, for the backend to refuse', () => {
+    expect(pastedValue('{oops', structMeta, undefined)).toBe('{oops');
+  });
+
+  it('translated text: only the text of the codec\'s object changes', () => {
+    const meta = fieldMeta({ name: 'Name', type: 'translatedString' });
+    expect(pastedValue('New', meta, { Value: 'Old', Id: 7 })).toEqual({ Value: 'New', Id: 7 });
+  });
+
+  it('text and bytes: the text as it is', () => {
+    expect(pastedValue(' Dog ', strMeta, undefined)).toBe(' Dog ');
+    expect(pastedValue('0xAB', fieldMeta({ name: 'Raw', type: 'hex' }), undefined)).toBe('0xAB');
   });
 });
