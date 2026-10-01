@@ -11,13 +11,19 @@ export interface LoadOrderStatusTracker {
 export function trackLoadOrderStatus(
   client: Pick<MEditClient, 'subscribe' | 'onStatusChanged' | 'onReconnected'>,
   onFailuresChanged: () => void = () => undefined,
+  onCurrentChanged: () => void = () => undefined,
 ): LoadOrderStatusTracker {
   let value = false;
   let failures: readonly PluginLoadFailure[] = [];
-  const forget = () => { value = false; failures = []; };
+  const settle = (next: boolean) => {
+    if (next === value) return;
+    value = next;
+    onCurrentChanged();
+  };
+  const forget = () => { settle(false); failures = []; };
   const unsubscribeStatus = client.subscribe('load-order-status', (event) => {
     if (!event.loadOrderStatus) return;
-    value = event.loadOrderStatus.conflictsComputed;
+    settle(event.loadOrderStatus.conflictsComputed);
     const arrived = event.loadOrderStatus.failures;
     if (JSON.stringify(arrived) === JSON.stringify(failures)) return;
     failures = arrived;

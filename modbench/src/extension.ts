@@ -9,7 +9,8 @@ import { HttpMEditClient, type BackendLifecycleOptions } from './client';
 import { announceConflictsComputed, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { REFERENCED_BY_VIEW, ReferencedByTreeProvider, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
+import { REFERENCED_BY_VIEW, allHolders, referencedByCopyValueText } from './editor/ReferencedByTreeProvider';
+import { createReferencedByView } from './editor/referencedByView';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { createFocusedView, lastSelectedViewSelection } from './treeViews';
@@ -18,6 +19,7 @@ import { EXTENDED_FIELD_TEMP_ROOT, extendedFieldFile } from './medit/extendedFie
 import { registerEditorCommands, ActiveRecordTracker, EditsInFlight } from './editor';
 import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
+import { registerNameFilter } from './nameFilter';
 import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { FocusedCells, GRID_VIEW, focusedCellKeys, gridCopyValueText, type FocusedCellContext } from './editor/focusedCells';
 import { meditConfig } from './workspaceConfig';
@@ -121,17 +123,8 @@ export function activate(context: vscode.ExtensionContext) {
     modDirs: () => toolbox.instance?.value.paths.modDirs ?? new Map(),
   });
   const notifyConflictsComputed = () => { void conflictsComputed(); };
-  // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
-  // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
-  // safe because VS Code never calls getChildren until createTreeView returns.
-  const referencedByTreeProvider = new ReferencedByTreeProvider(meditClient, log, (count) => {
-    // The runtime count badge keeps the declared "Plugins - Referenced By" prefix (ADR-0013).
-    referencedByTreeView.title = count === undefined ? 'Plugins - Referenced By' : `Plugins - Referenced By (${count})`;
-  });
-  const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {
-    treeDataProvider: referencedByTreeProvider,
-    canSelectMany: true,
-  });
+  const referencedBy = createReferencedByView(meditClient, log, registerNameFilter);
+  const { provider: referencedByTreeProvider, view: referencedByTreeView } = referencedBy;
   context.subscriptions.push(
     focusedView.follow(REFERENCED_BY_VIEW, referencedByTreeView),
     referencedByTreeView.onDidChangeSelection(() => {
@@ -168,6 +161,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Copy value's Referenced By and grid adapters (commands.md, Every view) — the Toolbox owns
     // the command's one registration, alongside the other lists' gestures.
     focusedView,
+    viewFilters: new Map([[REFERENCED_BY_VIEW, referencedBy.filter]]),
     referencedByCopyValueText: (clicked, allSelected) => referencedByCopyValueText(referencedByTreeView, clicked, allSelected),
     gridCopyValueText: gridCopyValueText(() => focusedCells.current()),
   });
@@ -178,7 +172,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     toolbox,
     { dispose: noticeExternalChanges(makeReporter(outputChannel, 'externalChange'), meditClient) },
-    referencedByTreeView,
+    referencedBy,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(pluginRowDeps),
