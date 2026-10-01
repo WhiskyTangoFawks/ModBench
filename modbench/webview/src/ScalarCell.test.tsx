@@ -32,6 +32,30 @@ describe('ScalarCell — the xEdit open gesture', () => {
   });
 });
 
+describe('ScalarCell — typed text is taken as pasted text is', () => {
+  const typeAndEnter = (cellMeta: FieldMetadata, value: unknown, text: string) => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value={value} meta={cellMeta} editable onCommit={onCommit} />);
+    fireEvent.click(screen.getByText(String(value)));
+    const box = screen.getByRole('spinbutton');
+    fireEvent.change(box, { target: { value: text } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    return onCommit;
+  };
+
+  it('a whole number types as the number', () => {
+    expect(typeAndEnter(meta({ type: 'int' }), 5, '12')).toHaveBeenCalledWith(12);
+  });
+
+  it('a fraction in an integer field is not repaired to a whole number', () => {
+    expect(typeAndEnter(meta({ type: 'int' }), 5, '1.5')).toHaveBeenCalledWith('1.5');
+  });
+
+  it('a decimal in a float field types as the number', () => {
+    expect(typeAndEnter(meta({ type: 'float' }), 5, '1.5')).toHaveBeenCalledWith(1.5);
+  });
+});
+
 describe('ScalarCell — a column with nowhere to write', () => {
   it('opens nothing under any of the three triggers', () => {
     const { container } = render(

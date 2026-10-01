@@ -132,6 +132,30 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   });
 });
 
+describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
+  const context = {
+    webviewSection: 'arrayElement', formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
+    path: [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }],
+    canMoveUp: true, canMoveDown: true, preventDefaultContextMenuItems: true,
+  };
+
+  beforeEach(() => { executeCommand.mockReset(); });
+
+  it.each(['removeElement', 'moveElementUp', 'moveElementDown'])(
+    'fires %s with the element\'s context, as its right-click menu does', async command => {
+      await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context }, makeDeps());
+
+      expect(executeCommand).toHaveBeenCalledWith(`modbench.record.${command}`, context);
+    });
+
+  it('names no command the catalog does not hold', async () => {
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: 'openFieldValue', context }, makeDeps());
+
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+});
+
 describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER', () => {
   const message = { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] };
 

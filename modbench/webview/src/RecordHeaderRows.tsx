@@ -100,6 +100,7 @@ export function RecordHeaderRows({
         <DiskCell
           style={labelCell(columnStyle(LABEL_COLUMN))} isFocused={isFocused(RECORD_HEADER_ROW, null)}
           onFocusCell={() => onFocusCell(RECORD_HEADER_ROW, null)} onDoubleClick={onToggle}
+          copyText={RECORD_HEADER_ROW}
         >
           <ExpandArrow expanded={expanded} onToggle={onToggle} />
           {RECORD_HEADER_ROW}
@@ -119,7 +120,7 @@ export function RecordHeaderRows({
         <tr style={rowStyle(FORM_ID_ROW)}>
           <DiskCell
             style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(FORM_ID_ROW, null)}
-            onFocusCell={() => onFocusCell(FORM_ID_ROW, null)}
+            onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText="FormID"
           >FormID</DiskCell>
           {columns.map(({ key, override }) => collapsedColumns.has(key)
             ? <td key={key} style={cellStyle(key)} />

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { ColumnEdge } from './ColumnEdge';
-import { DiffRow, type ArrayOp, type FocusedCell } from './DiffRow';
+import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, columnHasNode, elementSegment, rootFieldOf,
   wirePath, variantFor, declaresMember,
@@ -16,8 +16,8 @@ import type {
 } from './types';
 import { columnKey, LABEL_COLUMN } from './columnKey';
 import { vscode } from './vscode';
-import { editField, focusCell, focusedCellContext, logWarning } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
+import { editField, elementCommand, focusCell, focusedCellContext, logWarning } from './nativeBridge';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
@@ -194,17 +194,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result]);
 
-  // `path` addresses the array itself for add and the element for the rest. A move off either end
-  // is the backend's to refuse by name, so the direction the row asked for is posted as it is.
-  const handleArrayOp = useCallback((
-    plugin: ColumnKey, path: PathSegment[], rootField: string, op: ArrayOp,
-  ) => {
-    const hops = hopsTo(plugin, rootField, path);
-    if (op === 'add' || op === 'remove') { post(plugin, { op, path: hops }); return; }
-    const envelope = moveEnvelope(hops, op === 'moveUp' ? -1 : 1);
-    if (envelope) post(plugin, envelope);
-  }, [post, hopsTo]);
-
   // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, row: string, hops: PathHop[], value: unknown) => {
     written(plugin, hops, value, Infinity, row);
@@ -344,7 +333,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onEditCell={(plugin: ColumnKey, value: unknown) =>
           handleCellCommit(plugin, rowKey, hopsTo(plugin, rootField, path), value)}
         writeAt={writeAt}
-        onArrayOp={(plugin: ColumnKey, op: ArrayOp) => handleArrayOp(plugin, path, rootField, op)}
+        onElementCommand={elementCommand}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         recordLabel={title}
