@@ -141,12 +141,20 @@ describe('routeRecordPanelMessage — ELEMENT_COMMAND', () => {
 
   beforeEach(() => { executeCommand.mockReset(); });
 
-  it.each(['removeElement', 'moveElementUp', 'moveElementDown'])(
+  it.each(['addElement', 'removeElement', 'moveElementUp', 'moveElementDown'])(
     'fires %s with the element\'s context, as its right-click menu does', async command => {
       await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command, context }, makeDeps());
 
-      expect(executeCommand).toHaveBeenCalledWith(`modbench.record.${command}`, context);
+      expect(executeCommand).toHaveBeenCalledWith(`modbench.record.${command}`, context, undefined);
     });
+
+  it('hands addElement the value a drop supplies as its Option', async () => {
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.ELEMENT_COMMAND, command: 'addElement', context, value: { Keyword: '000800:Mod.esp' } },
+      makeDeps());
+
+    expect(executeCommand).toHaveBeenCalledWith('modbench.record.addElement', context, { Keyword: '000800:Mod.esp' });
+  });
 
   it('names no command the catalog does not hold', async () => {
     await routeRecordPanelMessage(

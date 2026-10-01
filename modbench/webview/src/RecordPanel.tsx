@@ -339,6 +339,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         recordLabel={title}
         context={{ path, rootField, depth }}
         rowKey={rowKey}
+        parentRowKey={parent}
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
         isExpanded={isExpanded}

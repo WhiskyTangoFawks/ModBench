@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
 import { copyValue } from './nativeBridge';
+import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
 
 // ADR-0018: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
 // not just painted state — Ctrl+C needs `keydown` to land on a real focused element.
@@ -31,7 +32,7 @@ export interface CellKeys {
 }
 
 export function DiskCell({
-  style, title, isFocused, onFocusCell, onDoubleClick, copyText, keys, vscodeContext, children,
+  style, title, isFocused, onFocusCell, onDoubleClick, copyText, keys, drag, landing, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   title?: string;
@@ -42,6 +43,10 @@ export function DiskCell({
   // palette's copy value reads it off the cell too.
   copyText?: string;
   keys?: CellKeys;
+  // What dragging this cell carries; absent when there is nothing to drag.
+  drag?: CellDrag;
+  // What dropping a drag here does; absent when the drop cannot land.
+  landing?: (dragged: CellDrag) => (() => void) | undefined;
   // The already-combined `data-vscode-context` JSON string VS Code's own
   // `contributes.menus["webview/context"]` gates on — undefined when this cell carries no
   // structural-op menu at all.
@@ -63,6 +68,27 @@ export function DiskCell({
       data-vscode-context={vscodeContext}
       data-focused-cell={isFocused || undefined}
       data-copy-text={copyText}
+      draggable={drag !== undefined}
+      onDragStart={e => {
+        if (!drag || inside(e.target, '[data-editor]')) { e.preventDefault(); return; }
+        beginDrag(drag);
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', copyText ?? '');
+      }}
+      onDragEnd={endDrag}
+      onDragOver={e => {
+        const current = currentDrag();
+        if (!current || !landing?.(current)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={e => {
+        const current = currentDrag();
+        const land = current && landing?.(current);
+        if (!land) return;
+        e.preventDefault();
+        land();
+      }}
       onClickCapture={e => {
         if (!opening && !isFocused && !e.ctrlKey && !e.metaKey && inside(e.target, '[data-open-trigger]')) {
           e.stopPropagation();

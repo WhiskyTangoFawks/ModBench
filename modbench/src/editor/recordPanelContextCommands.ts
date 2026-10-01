@@ -47,13 +47,13 @@ function isStringValueContext(value: unknown): value is StringValueContext {
 function editCommand<Ctx extends { formKey: string; plugin: string; origin: string }>(
   command: string,
   isCtx: (value: unknown) => value is Ctx,
-  envelopeOf: (ctx: Ctx) => RecordEditEnvelope | undefined,
+  envelopeOf: (ctx: Ctx, option: unknown) => RecordEditEnvelope | undefined,
 ): ContextCommand {
   return {
     command,
-    run: async (deps, raw) => {
+    run: async (deps, raw, option) => {
       if (!isCtx(raw)) return;
-      const envelope = envelopeOf(raw);
+      const envelope = envelopeOf(raw, option);
       if (!envelope) return;
       await deps.editGateOf(raw)(raw, formKey => applyRecordEdit(deps, formKey, raw.plugin, raw.origin, envelope));
     },
@@ -107,7 +107,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
     run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },
   },
   { command: 'modbench.record.editField', run: editField },
-  editCommand('modbench.record.addElement', isArrayParentContext, ctx => ({ op: 'add', path: ctx.path })),
+  editCommand('modbench.record.addElement', isArrayParentContext, (ctx, value) => ({ op: 'add', path: ctx.path, value })),
   editCommand('modbench.record.removeElement', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
   editCommand('modbench.record.moveElementUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
   editCommand('modbench.record.moveElementDown', isArrayElementContext, ctx => moveEnvelope(ctx.path, 1)),

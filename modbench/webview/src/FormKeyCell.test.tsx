@@ -83,9 +83,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  // A `cursor: 'pointer'` here would paint over the parent DiskCell's `grab`, and an empty cell
-  // is still a drag target.
-  it('does not mask the parent drag cursor on an empty cell', () => {
+  it('shows no pointer on an empty cell', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('—').style.cursor).not.toBe('pointer');
   });
