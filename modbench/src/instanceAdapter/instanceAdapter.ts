@@ -163,7 +163,7 @@ export interface ModExtraction {
   readonly path: string;
   /** Puts a copy of `folder`'s tree in `path`; `folder` is left as it was. */
   copyIn(folder: string): Promise<void>;
-  /** Makes the tree at `root`, inside `path`, the mod's contents and sets `keys` over the meta. An
+  /** Makes the tree at `root` the mod's contents and sets `keys` over the meta. An
    *  upgrade replaces the contents around the repository and plugin source, keeps each meta value
    *  `keys` leaves undefined, and refuses a release holding either. */
   land(root: string, keys: OwnedMetaKeys): Promise<Upgraded>;
