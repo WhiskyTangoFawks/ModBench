@@ -391,7 +391,7 @@ describe('ModListProvider', () => {
   // box reaches the same command a context-menu click or key does — one mod, through the entry.
   it('setModEnabled calls the setModsEnabled command with the access, active profile and one-mod selection, and fires no refresh', async () => {
     const access = accessTo(INSTANCE_ROOT);
-    const provider = new ModListProvider({ instance: new FakeInstance(valueOf([mod('A')])), access });
+    const provider = new ModListProvider({ instance: new FakeInstance(valueOf([mod('A')])), access, log: () => undefined });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -949,7 +949,7 @@ describe('an unconfirmed check box (common.md, Unconfirmed writes)', () => {
 
   const rowNamed = async (provider: ModListProvider, name: string): Promise<ModNode> =>
     present((await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode).find((n) => n.mod.name === name), name);
-  const iconId = (row: ModNode) => (row.iconPath as { id: string }).id;
+  const iconId = (row: ModNode) => expectInstanceOf(row.iconPath, ThemeIcon).id;
 
   it('shows the new state at once, and the mark only after a delay, on that row alone', async () => {
     const provider = makeProvider([mod('A'), mod('B')]);

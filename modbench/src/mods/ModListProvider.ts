@@ -34,7 +34,6 @@ export interface ModListProviderOptions {
   log: (line: string) => void;
 }
 
-/** How long a write waits before it is marked, so one the disk confirms at once never flickers. */
 const MARK_DELAY_MS = 300;
 
 export const UNCONFIRMED_TOOLTIP = 'Written; waiting for the disk to confirm';
@@ -204,8 +203,6 @@ export class ModListProvider
     });
   }
 
-  /** The disk's next value covers every write: its value shows, and one that is not what was
-   *  written is said in the Output. */
   private settleUnconfirmed(value: InstanceValue): void {
     for (const [name, write] of this.unconfirmed) {
       const disk = value.mods.find((m) => m.kind === 'mod' && m.name === name);
