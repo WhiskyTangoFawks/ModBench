@@ -199,7 +199,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     ]);
   });
 
-  it('invoking modbench.downloads.install with a DownloadNode installs that row\'s archive', async () => {
+  it('invoking modbench.mod.install with a DownloadNode installs that row\'s archive', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
