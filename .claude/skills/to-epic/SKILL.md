@@ -37,6 +37,7 @@ The spec lines this epic makes true, as pointers. One bullet per file.
 - `surfaces/plugins.md` § The tree, stories 1–9; § A row, stories 10–17
 - `surfaces/common.md` § States, story 5
 - `commands.md`: the `plugin create` and `plugin compile` rows
+
 </scope-example>
 
 ## Out of scope
