@@ -2202,8 +2202,6 @@ describe('RecordPanel — the Record Header', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  // editor-fields.md, Every field, story 1: xEdit's wbVCI1ToStrBeforeFO4 and wbVCI1ToStrAfterFO4,
-  // chosen by the copy's Form Version (wbRecordHeader). The readings are worked by hand.
   const stampMeta = header({ name: 'VersionControl', type: 'int', displayLabel: 'Version Control Info 1', isVersionControlInfo1: true });
   const formVersionMeta = header({ name: 'FormVersion', type: 'int', displayLabel: 'Form Version' });
   const stamped = (copies: { plugin: string; stamp: number | null; formVersion: number | null }[]): CompareResult =>

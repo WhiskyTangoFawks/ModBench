@@ -4,7 +4,7 @@ import { siblingsInUseFor } from './siblingsInUse';
 import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types';
 
 // The one place in the webview where a game's own reading conventions live — a game-shaped rule
-// not in this table is in the wrong file. Members are named as the document names them.
+// not in this file is in the wrong file. Members are named as the document names them.
 
 // A formatter is pure: it renders no markup, reads no panel state, and changes neither the value
 // the row commits nor the value it copies.
