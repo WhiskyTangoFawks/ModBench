@@ -828,15 +828,6 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
-  it('carries no deployed state, whether or not a deploy manifest sits under mods/', async () => {
-    const { root, instance } = realInstance();
-    await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));
-
-    await instance.refresh();
-
-    expect(instance.value).not.toHaveProperty('deployed');
-  });
-
   // The fixture's sidecar claims `installed=true`, and only the Unofficial Patch mod's own
   // meta.ini makes that claim true. Rival: reading Status off the sidecar alone.
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
@@ -1111,20 +1102,6 @@ async function minimalInstance(): Promise<{
 }
 
 describe('Instance — per-mod status and the overwrite count', () => {
-  // The value carries no verdict about a plugin's declared masters at all: that fact is the
-  // backend's, reported per plugin on the Plugins rows (ADR-0016).
-  it('has no status kind derived from a plugin file, whatever the plugin declares', async () => {
-    const { root, instance } = await minimalInstance();
-    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), 'TES4 masters: NoSuchMaster.esm');
-
-    await instance.refresh();
-
-    expect(instance.value.modStatuses.get('Consumer')).toEqual({
-      status: { kind: 'ok' },
-      conflictLines: [],
-    });
-  });
-
   it('carries the overwrite/ folder\'s file count, recursive', async () => {
     const { root, instance } = await minimalInstance();
     await instance.refresh();

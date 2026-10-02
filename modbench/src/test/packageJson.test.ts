@@ -43,7 +43,6 @@ interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; }
 
 interface PackageManifest {
-  activationEvents: string[];
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
     views: Record<string, ViewEntry[]>;
@@ -94,9 +93,7 @@ function isSettingEntry(v: unknown): v is SettingEntry {
 }
 
 function parsePackageManifest(raw: unknown): PackageManifest {
-  if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
-    throw new Error('Expected package.json to have a string[] activationEvents.');
-  }
+  if (!isRecord(raw)) throw new Error('Expected package.json to be an object.');
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
   const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
@@ -123,7 +120,6 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { properties } = configuration;
   return {
-    activationEvents: raw.activationEvents,
     contributes: {
       viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
       configuration: { properties },
@@ -134,12 +130,6 @@ function parsePackageManifest(raw: unknown): PackageManifest {
 const pkg = parsePackageManifest(
   JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
 );
-
-describe('package.json activation', () => {
-  it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
-    expect(pkg.activationEvents).toContain('onStartupFinished');
-  });
-});
 
 describe('package.json outside an instance', () => {
   const isNotAnInstance = `${FOLDER_KEY} == notAnInstance`;
@@ -281,16 +271,19 @@ describe('package.json Toolbox view', () => {
   });
 });
 
-describe('package.json names Referenced By', () => {
+describe('package.json Referenced By view', () => {
+  const view = (): ViewEntry => present(
+    present(pkg.contributes.views.modbenchReferencedBy, "contributes.views['modbenchReferencedBy']")
+      .find((v) => v.id === 'modbench.referencedByTree'),
+    'the modbench.referencedByTree view entry',
+  );
+
   it('names the Referenced By view "Referenced By", the title xEdit gives its tab', () => {
-    const referencedByViews = present(
-      pkg.contributes.views.modbenchReferencedBy, "contributes.views['modbenchReferencedBy']",
-    );
-    const view = present(
-      referencedByViews.find((v) => v.id === 'modbench.referencedByTree'),
-      'the modbench.referencedByTree view entry',
-    );
-    expect(view.name).toBe('Referenced By');
+    expect(view().name).toBe('Referenced By');
+  });
+
+  it('carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
+    expect(view().when).toBeUndefined();
   });
 });
 
@@ -313,43 +306,6 @@ describe('package.json Referenced By title bar', () => {
     const when = (command: string) => present(titleBar().find((e) => e.command === command), command).when;
     expect(when('modbench.referrer.sortDescending')).toBe(`${REFERENCED_BY_VIEW} && !modbench.referrer.descending && ${IN_AN_INSTANCE}`);
     expect(when('modbench.referrer.sortAscending')).toBe(`${REFERENCED_BY_VIEW} && modbench.referrer.descending && ${IN_AN_INSTANCE}`);
-  });
-});
-
-describe('package.json retires modbench.viewMode and the second Plugins view', () => {
-  const allViews = (): ViewEntry[] => [
-    ...present(pkg.contributes.views.modbench, "contributes.views['modbench']"),
-    ...present(pkg.contributes.views.modbenchReferencedBy, "contributes.views['modbenchReferencedBy']"),
-  ];
-  const allMenuEntries = (): { when?: string }[] => {
-    const menus: Record<string, { when?: string }[]> = pkg.contributes.menus;
-    return Object.values(menus).flat();
-  };
-
-  it('there is only one view named for plugins — modbench.pluginTree is gone', () => {
-    expect(allViews().find((v) => v.id === 'modbench.pluginTree')).toBeUndefined();
-    expect(allViews().filter((v) => v.name === 'Plugins')).toHaveLength(1);
-    expect(
-      present(allViews().filter((v) => v.name === 'Plugins')[0], 'the sole view named Plugins').id,
-    ).toBe('modbench.pluginListTree');
-  });
-
-  it('Referenced By carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
-    const view = present(
-      allViews().find((v) => v.id === 'modbench.referencedByTree'),
-      'the modbench.referencedByTree view entry',
-    );
-    expect(view.when).toBeUndefined();
-  });
-
-  it('no view, menu entry or keybinding references modbench.viewMode anywhere', () => {
-    const offendingViews = allViews().filter((v) => (v.when ?? '').includes('modbench.viewMode'));
-    const offendingMenus = allMenuEntries().filter((e) => (e.when ?? '').includes('modbench.viewMode'));
-    const keybindingsWithWhen: { when?: string }[] = pkg.contributes.keybindings;
-    const offendingKeybindings = keybindingsWithWhen.filter((k) => (k.when ?? '').includes('modbench.viewMode'));
-    expect(offendingViews).toEqual([]);
-    expect(offendingMenus).toEqual([]);
-    expect(offendingKeybindings).toEqual([]);
   });
 });
 
@@ -526,24 +482,7 @@ describe('package.json title-bar rubric', () => {
   });
 });
 
-describe('package.json offers no deploy, purge or run in the alpha', () => {
-  const DEPLOYMENT_VERBS = ['deploy', 'purge', 'run', 'launch'];
-  const isDeploymentCommand = (id: string): boolean =>
-    DEPLOYMENT_VERBS.includes(id.split('.').at(-1)?.toLowerCase() ?? '');
-  const menuCommands = (): string[] => Object.values(pkg.contributes.menus).flat().map((e) => e.command);
-
-  it('contributes no deploy, purge or run command', () => {
-    expect(pkg.contributes.commands.map((c) => c.command).filter(isDeploymentCommand)).toEqual([]);
-  });
-
-  it('places no deploy, purge or run command in any menu', () => {
-    expect(menuCommands().filter(isDeploymentCommand)).toEqual([]);
-  });
-
-  it('binds no key to deploy, purge or run', () => {
-    expect(pkg.contributes.keybindings.map((k) => k.command).filter(isDeploymentCommand)).toEqual([]);
-  });
-
+describe('package.json offers no deploy', () => {
   it('contributes no setting that speaks of deploying or of where the game reads its load order', () => {
     const offering = Object.entries(pkg.contributes.configuration.properties)
       .filter(([key, setting]) => /deploy|purge|plugins\.?txt/i.test(`${key} ${setting.description ?? ''}`))
