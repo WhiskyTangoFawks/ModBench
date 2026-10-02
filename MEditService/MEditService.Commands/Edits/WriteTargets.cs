@@ -113,7 +113,7 @@ internal sealed class WriteTargets(
         CopySource? owned = source;
         try
         {
-            if (source.Identity(formKey) is not { } identity)
+            if (IdentityIn(source, formKey) is not { } identity)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
@@ -350,6 +350,13 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
+    // A tree file named for the record that is no document refuses rather than reading as none.
+    private static RecordIdentity? IdentityIn(CopySource source, string formKey) =>
+        source.Identity(formKey)
+        ?? (source.Tree?.UnreadableDocumentFor(source.Plugin, formKey) is { } why
+            ? throw new InvalidDataException($"{source.Plugin.Name}'s document for {formKey} is no record document: {why}")
+            : null);
+
     /// <summary>The nearest copy of <paramref name="formKey"/> left of <paramref name="plugin"/> that
     /// <paramref name="says"/> accepts. A copy that cannot be read ends the walk, since one beyond it is
     /// not the nearest.</summary>
@@ -362,11 +369,7 @@ internal sealed class WriteTargets(
             using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
-                if (source.Identity(formKey) is not { } identity)
-                {
-                    if (source.Tree?.UnreadableDocumentFor(left, formKey) is { } why) return new LeftCopy.Unreadable(left.Name, formKey, why);
-                    continue;
-                }
+                if (IdentityIn(source, formKey) is not { } identity) continue;
                 var body = source.Body(identity);
                 if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new LeftCopy.Found(body);
             }

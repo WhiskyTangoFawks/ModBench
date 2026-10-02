@@ -85,7 +85,7 @@ internal sealed class MutagenModDocuments(
             List<PluginDocument> documents;
             try
             {
-                documents = [.. batch.AsParallel().AsOrdered().Select(record => Document(tableName, record))];
+                documents = [.. batch.AsParallel().AsOrdered().Select(record => Document(tableName, schema, record))];
             }
             catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
             {
@@ -97,13 +97,12 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    private PluginDocument Document(string tableName, IMajorRecordGetter record)
+    private PluginDocument Document(string tableName, RecordTableSchema schema, IMajorRecordGetter record)
     {
         var formKey = record.FormKey.ToString();
         try
         {
-            var text = Encoding.UTF8.GetString(
-                _codec.SerializeToBytes(record, mod.GameRelease));
+            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, schema, mod.GameRelease));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

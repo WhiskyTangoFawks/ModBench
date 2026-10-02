@@ -17,6 +17,8 @@ public sealed class ParseFailedRecordTests
     private const string Origin = "ParseFailedFixtureMod";
     private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
     private const string Diagnosis = "did not have expected parameter type flag";
+    private const string DeletedNpcPluginName = "DeletedNpc.esp";
+    private const string DeletedNpcWithNoSubrecords = "000800:DeletedNpc.esp";
 
     [Fact]
     public void Reconcile_KeepsTheUnreadableRecordInTheIndexWithItsDiagnosis()
@@ -164,6 +166,17 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
+    public void Reconcile_IndexesADeletedRecordWhoseFieldsAreAbsent_AsDeleted_NotParseFailed()
+    {
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(), DeletedNpcPluginName);
+
+        var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpcWithNoSubrecords).Require().Entries).Effective;
+
+        Assert.Null(document.ParseDiagnosis);
+        Assert.Contains("\"MajorRecordFlagsRaw\": 32", document.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Reconcile_OfAPluginThatCannotBeOpenedAtAllStillReportsAPluginLoadFailure()
     {
         using var scratch = new Scratch(Fixture, corruptWholeFile: true);
@@ -209,6 +222,15 @@ public sealed class ParseFailedRecordTests
     // not their content.
     private sealed class Scratch : IDisposable
     {
+        internal static string DeletedNpcPlugin()
+        {
+            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-deletednpc-").FullName, DeletedNpcPluginName);
+            var mod = new Fallout4Mod(ModKey.FromFileName(DeletedNpcPluginName), Fallout4Release.Fallout4);
+            mod.Npcs.Add(new Npc(FormKey.Factory(DeletedNpcWithNoSubrecords), Fallout4Release.Fallout4) { MajorRecordFlagsRaw = 0x20 });
+            mod.WriteToBinary(path);
+            return path;
+        }
+
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 

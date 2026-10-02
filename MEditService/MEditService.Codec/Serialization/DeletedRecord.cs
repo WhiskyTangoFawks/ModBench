@@ -9,8 +9,21 @@ namespace MEditService.Codec.Serialization;
 /// fields are absent; Mutagen's overlay throws reading some absent fields instead.</summary>
 internal static class DeletedRecord
 {
-    /// <summary>Null for a record that is not deleted, or whose children a header alone would drop.</summary>
-    internal static IMajorRecord? HeaderOf(IMajorRecordGetter record, RecordTableSchema schema, GameRelease release)
+    /// <summary>The record's document, or its header's where it is deleted and its fields cannot be read.</summary>
+    internal static byte[] Serialize(RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release)
+    {
+        try
+        {
+            return codec.SerializeToBytes(record, release);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException && HeaderOf(record, schema, release) is { } header)
+        {
+            return codec.SerializeToBytes(header, release);
+        }
+    }
+
+    // A container is left to fail: a header alone would drop its children.
+    private static IMajorRecord? HeaderOf(IMajorRecordGetter record, RecordTableSchema schema, GameRelease release)
     {
         if ((record.MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return null;
         if (ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) != null) return null;
