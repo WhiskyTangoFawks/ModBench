@@ -15,6 +15,7 @@ internal static class Fallout4VmadAnnotations
         ("IScriptStructPropertyGetter", "Members", ["Name"]),
         ("IScriptEntryStructsGetter", "Members", ["Name"]),
         ("IPerkScriptFragmentsGetter", "Fragments", ["Index"]),
+        ("IScriptFragmentsIndexedGetter", "Fragments", ["FragmentIndex"]),
         ("IQuestAdapterGetter", "Fragments", ["Stage", "StageIndex"]),
         ("ISceneScriptFragmentsGetter", "PhaseFragments", ["Index", "Flags"]),
         ("IQuestAdapterGetter", "Aliases", ["Property.Alias"]),
