@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import type { Mod, Separator, ModlistEntry } from '../instance';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
@@ -147,13 +145,11 @@ describe('buildFileConflictIndex — what the adapter answers', () => {
 });
 
 // Proves the override-order direction against a REAL MO2 instance, not synthetic fixtures.
-// Opt-in: skipped when the instance is absent, via the MEDIT_LITR_INSTANCE override.
-const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games', 'FO4', 'LitR');
+// Opt-in: runs only when MEDIT_LITR_INSTANCE names a LitR instance.
+const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
 const litrProfile = 'Life in the Ruins';
-const hasLitr = existsSync(join(litrInstance, 'profiles', litrProfile, 'modlist.txt'));
 
-
-describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in)', () => {
+describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR instance (opt-in)', () => {
   // A real conflict in the live LitR modlist, not planted: a fix patch must override what it
   // fixes, which is an oracle independent of this codebase's own logic.
   const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';
