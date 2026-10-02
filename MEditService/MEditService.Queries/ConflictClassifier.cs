@@ -65,6 +65,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
+    // The game ignores these, so they show and take part in no conflict (xEdit's cpIgnore).
+    private static readonly HashSet<string> VersionStamps = ["VersionControl", "FormVersion"];
+
     // MasterColumn (ADR-0012) is the compound ColumnKey.Of identity, so no plain-plugin comparison
     // can match the wrong column.
     private sealed record DiffContext(
@@ -126,7 +129,10 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var values = records.ToDictionary(Column, r => r.IsPartialForm && !header ? null : MemberValue(r, member.Name));
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
-            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx));
+            var diff = DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx);
+            diffs.Add(header && VersionStamps.Contains(member.Name)
+                ? diff with { CellStates = new Dictionary<string, ConflictThis>(), ConflictAll = ConflictAll.NoConflict }
+                : diff);
         }
         return diffs;
     }
