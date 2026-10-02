@@ -7,9 +7,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>xEdit's Delete, MakePartialForm and their undoing, which makes the copy match the nearest
-/// copy to its left that is neither, as TwbMainRecord.AssignInternal does. TwbRecordHeaderStruct.ElementChanged
-/// applies Partial Form last, so making one of a deleted copy refills it first.</summary>
+/// <summary>xEdit's Delete, MakePartialForm and their undoing, which refills the copy from the nearest
+/// copy to its left that is neither. TwbRecordHeaderStruct.ElementChanged applies Partial Form last, so
+/// making one of a deleted copy refills it first.</summary>
 internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
 {
     /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
