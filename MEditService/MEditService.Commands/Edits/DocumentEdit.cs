@@ -43,6 +43,9 @@ internal static class DocumentEdit
 
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
+        var deletion = RecordDeletion.Of(record, request.Schema, cursor.Column, envelope.Value);
+        if (deletion != null) envelope = envelope with { Value = deletion.Flags };
+
         JsonNode? edited;
         FieldMetadata editedMeta;
         var patched = cursor.Column.Synthetic is { } bit
@@ -58,6 +61,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
+        if (deletion != null) RecordDeletion.EmptyFields(record, request.Schema);
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
@@ -92,7 +96,7 @@ internal static class DocumentEdit
         var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns)
         {
-            if (column.Synthetic is not { } synthetic || column == cursor.Column) continue;
+            if (column.Synthetic is not { } synthetic || column == cursor.Column || deletion?.Changes(synthetic) == true) continue;
             if (SyntheticBits.IsSet(was, synthetic) != SyntheticBits.IsSet(after, synthetic))
             {
                 return RecordEditResult.RefusedAt(
@@ -307,12 +311,16 @@ internal static class DocumentEdit
         new("", "struct", false, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
             Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.ToFieldMetadata())]);
 
-    // A Partial Form record's own fields are never seen by the game (CONTEXT.md). EditorID is exempt
-    // (xEdit's CanAssignInternal, ADR-0018), as is the flag itself: clearing it is the only way out.
+    // A Partial Form record's own fields are never seen by the game (CONTEXT.md). Its EditorID and
+    // record header edit (editor-fields.md § Partial Form), as does the flag itself.
     private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
     {
         if (schema.IsHeader || !PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType)) return null;
-        if (cursor.Column.Name == EditorIdMember || cursor.Column.Synthetic is { Bit: PartialFormFlag.Bit }) return null;
+        if (cursor.Column.Name == EditorIdMember || cursor.Column.Field.IsRecordHeaderMember
+            || cursor.Column.Synthetic is { Bit: PartialFormFlag.Bit })
+        {
+            return null;
+        }
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PartialFormFieldReadOnly, spelled,
             $"{record[FormKeyMember]} is a Partial Form override — its own fields are ignored for conflict " +
