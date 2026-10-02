@@ -8,7 +8,7 @@ What MO2 does: [the surface audit](../research/mo2-surface-audit.md).
 
 | Reason | Why | Gestures | Examples |
 |---|---|---|---|
-| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 30 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch or create an instance |
+| VS Code provides it | VS Code already supplies the file tab, Explorer, Open Folder, tasks, settings and the columnless tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)). A mod's `meta.ini` stays editable as text. | 29 | Visit the game's Nexus page; Open folders: game, MyGames, INIs, instance, mods, profile, downloads; Switch or create an instance |
 | Manual file management | The operation is a compound file operation. VS Code's file tab and Explorer do it, and Modbench does not abstract the file system away. | 10 | Rename a profile; Remove a profile; Transfer saves |
 | An ADR decides it | A watcher feeds the read model, so a list needs no refresh gesture ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)). Modbench never assumes it owns a file, so it never deletes one silently ([ADR-0003](../adr/0003-modbench-never-assumes-exclusive-ownership-of-a-file.md)). | 2 | Delete orphaned .meta files on refresh, without asking; Refresh the list |
 | Platform | MO2 runs programs through a virtual file system. Modbench has no virtual file system. | 1 | Conflicts tab: preview, execute with the virtual file system |
@@ -33,6 +33,9 @@ Gestures Modbench does differently.
 | 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
 | 8 | Drag indicator | VS Code's tree indicator: onto a row, or between rows | An insertion line | Limitation: a tree view cannot style it. |
 | 9 | Conflicts | One table: a row for each file the mod shares, a column for each mod with a copy, coloured as the record panel colours a record order conflict ([mods-conflicts.md](../architecture/surfaces/mods-conflicts.md)) | The Information dialog's Conflicts tab: lists of winning, losing and non-conflicting files, and an Advanced list of each file's other mods | Ruling: every copy of a file in one view, read the same way as a record. |
+| 10 | Data tab | The Mods tree: each mod opens into its files, and the name filter finds a file at every level ([mods.md](../architecture/surfaces/mods.md)) | The Data tab (not audited): the game's Data folder as one merged tree, each path once | Ruling: one tree shows each mod's files; a second tree of the same files is not offered. |
+| 11 | Restore hidden files | Select the excluded files in the Mods tree, then include | Restore hidden files, on the mod | Ruling: select all, then include, as for every *all* variant (commands.md, Principles). |
+| 12 | Conflicts and Flags columns | A badge at the mod row's right edge and a colour on its name, each switched in settings, most off by default. A mod that wins and loses carries two badges. Contains excluded files stands for Contains hidden files ([mods.md](../architecture/surfaces/mods.md), Indicators) | Icons in the Conflicts and Flags columns, all shown, with Mixed as one icon of its own | Limitation: a tree view has no columns. Ruling: winning is the ordinary case. In Modbench, hide acts on the view alone (commands.md), so a renamed file is excluded. |
 
 ## Omissions by object
 
@@ -79,7 +82,7 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Move one step with Ctrl+Up or Ctrl+Down (keys follow VS Code, not the template) | Mod list: Ctrl + Up, Ctrl + Down | Maintainer ruling |
 | Drop an archive, a folder or another mod's files onto the mod list (nothing drops into Mods from outside) | Mod list: drag and drop | Maintainer ruling |
 | Restrict reordering to the priority sort | Mod list: drop refused otherwise | VS Code provides it |
-| Open, rename, delete or add a folder in the overwrite files | Overwrite dialog | Manual file management |
+| Rename, delete or add a folder in the overwrite files | Overwrite dialog | Manual file management |
 | Edit the version, Nexus id or notes cell | Mod list: inline edit | VS Code provides it |
 | Sort by column | Mod list: header | VS Code provides it |
 | Group by category or Nexus id | Mod list: group combo | VS Code provides it |
@@ -88,7 +91,6 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Filter by category | Mod list: filter widgets | VS Code provides it |
 | Clear all filters | Mod list: filter widgets | VS Code provides it |
 | Open in Explorer by key or double click | Mod list: Ctrl + Enter, Ctrl + double click | VS Code provides it |
-| Conflicts tab: open in Explorer | Information dialog | VS Code provides it |
 | Conflicts tab: preview, execute with the virtual file system | Information dialog | Platform |
 | Export to CSV | Mod list: Export to csv... | Scripts, tasks or the agent |
 | Change categories | Mod list: Change Categories | Metadata chrome |
