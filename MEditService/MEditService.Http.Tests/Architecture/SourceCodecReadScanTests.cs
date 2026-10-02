@@ -26,20 +26,23 @@ public sealed class SourceCodecReadScanTests
 
     private static readonly string[] ScannedRoots = ["MEditService.SourceAdapter"];
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/source-codec-read-allowlist.txt";
-
     [Fact]
-    public void TheSourceFolder_TouchesACodecMember_OnlyAsOftenAsTheAllowlistSays()
+    public void TheSourceFolder_TouchesNoCodecMemberButBlankDocument()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
 
-        AssertCountsMatchAllowlist(
-            Counts(root, ScannedRoots),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            counts.Count == 0,
+            "The Source folder touches a RecordTextCodec member outside its bound (ADR-0014 "
+            + "invariant 1): a driven adapter reads the kernel for facts about types and for the "
+            + "spelling of a layout level it mints, never for a record's content. Only "
+            + "RecordTypeDispatch (type facts, not counted here) and RecordTextCodec.BlankDocument "
+            + "(the level it mints) are permitted — read the type fact through RecordTypeDispatch or "
+            + "mint through BlankDocument instead:\n"
+            + string.Join("\n", counts));
     }
 
-    // An empty allowlist and zero references found are the same string: this is what tells them
+    // Zero references found and zero files walked read the same: this is what tells them
     // apart, so a ScannedRoots typo that scans nothing cannot pass by matching nothing.
     [Fact]
     public void TheScan_WalksMoreThanFifteenProductionFiles()
@@ -78,18 +81,6 @@ public sealed class SourceCodecReadScanTests
                 ["MEditService.SourceAdapter/Planted.cs: RecordTextCodec: 1",
                  "MEditService.SourceAdapter/Planted.cs: RoundTrip: 1"],
                 counts);
-
-            var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains("MEditService.SourceAdapter/Planted.cs: RecordTextCodec: 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("MEditService.SourceAdapter/Planted.cs: RoundTrip: 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("RecordTypeDispatch", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("BlankDocument", unallowed.Message, StringComparison.Ordinal);
-
-            var stale = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(
-                    counts, [.. counts, "MEditService.SourceAdapter/Gone.cs: SerializeAsync: 3"], AllowlistPath));
-            Assert.Contains("MEditService.SourceAdapter/Gone.cs: SerializeAsync: 3", stale.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -97,30 +88,6 @@ public sealed class SourceCodecReadScanTests
         }
     }
 
-    private static void AssertCountsMatchAllowlist(
-        IReadOnlyList<string> counts, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = counts.Except(allowlist, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var unmatched = allowlist.Except(counts, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            "The Source folder touches a RecordTextCodec member outside its bound (ADR-0014 "
-            + "invariant 1): a driven adapter reads the kernel for facts about types and for the "
-            + "spelling of a layout level it mints, never for a record's content. Only "
-            + "RecordTypeDispatch (type facts, not counted here) and RecordTextCodec.BlankDocument "
-            + $"(the level it mints) are permitted; every other codec member differs from {allowlistPath}.\n"
-            + $"Counts the allowlist does not name ({unallowed.Count}) — read the type fact through "
-            + "RecordTypeDispatch or mint through BlankDocument instead, or get the maintainer's "
-            + "ruling before adding a line:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; the shortening "
-            + "of this list is what the work is measured by:\n"
-            + string.Join("\n", unmatched));
-    }
-
-    // A count, not a line number: a touch is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. ScannedFiles(root, scannedRoots)
             .SelectMany(file => Occurrences(File.ReadAllText(file))

@@ -9,7 +9,6 @@ namespace MEditService.Http.Tests.Traces;
 
 /// <summary>compile-plugin: compile writes the source tree's documents back as the plugin's
 /// bytes, so the proof is another load of those same bytes answering with the edit.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class CompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Compiled.esp";

@@ -1,4 +1,4 @@
-namespace MEditService.Codec.Tests.Serialization;
+namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>A source-text ban, not one deleted line: record type names collide across games, so one
 /// generator compilation seeds one game and each game needs its own seed class the flag could

@@ -11,7 +11,6 @@ namespace MEditService.Http.Tests.Api;
 
 // ADR-0012: a load order holding two physical files of one filename, so a route that resolved a
 // Quest's children through the wrong plugin shows in the assertion, not just in the row count.
-[Collection(WebHostCollection.Name)]
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

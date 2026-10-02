@@ -11,7 +11,6 @@ namespace MEditService.Http.Tests.Api;
 /// <summary>Edits the FormID of a record fresh off <c>CreateRecord</c>, still working-tree-only
 /// <c>Added</c>: that is the shape that reproduces the stale-record bug; an already committed
 /// record would not exercise it.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {

@@ -1,5 +1,0 @@
-# Every place on the write side outside WriteTargets.cs that implements one of the three concerns the
-# gestures share — target resolution, rename on an EditorID change and FormKey allocation — as file,
-# needle and count. A handler orchestrates over the module and never reimplements it, so this list is
-# empty and stays empty: a line here is a second implementation that needs the maintainer's ruling,
-# not permission.

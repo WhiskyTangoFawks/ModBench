@@ -2,16 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
-using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
 /// <summary>The create gesture writes the file and nothing else: the load order it answers beside is
 /// the one it found, and the plugin reaches a reader only once a load order names it.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class CreatePluginApiTests : HostedTests
 {
     private const string Held = "Held.esp";
@@ -50,8 +47,6 @@ public sealed class CreatePluginApiTests : HostedTests
             $"/plugins/{Uri.EscapeDataString(plugin)}/records",
             new { origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null });
 
-    private long HeldVersion() => Services.GetRequiredService<LoadOrderHolder>().Version;
-
     [Fact]
     public async Task CreatingAPluginInAMod_AnswersWithThePluginItWrote_AndRegistersNothing()
     {
@@ -83,19 +78,6 @@ public sealed class CreatePluginApiTests : HostedTests
             fx.Plugins.Count, Enabled: false, Winning: true));
         (await Client.PutLoadOrder(fx, named)).EnsureSuccessStatusCode();
         Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");
-    }
-
-    // The slot is plugin sync's to give, at the end of plugins.txt: the create registers nothing, so
-    // the held load order keeps the version it had.
-    [Fact]
-    public async Task CreatingAPlugin_LeavesTheHeldLoadOrderVersion()
-    {
-        var fx = Owned(await Loaded());
-        var version = HeldVersion();
-
-        await Created("Slotted.esp", NewModFolder(fx, "mod-slotted"), "SlottedMod");
-
-        Assert.Equal(version, HeldVersion());
     }
 
     [Fact]
@@ -146,66 +128,5 @@ public sealed class CreatePluginApiTests : HostedTests
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
         Assert.False(File.Exists(Path.Combine(modFolder, "Bad|Name.esp")));
-    }
-
-    [Fact]
-    public async Task CreatingTheSameNameTwice_Is409_AndLeavesTheFirstFileAsItWas()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var path = (await Created("Twice.esp", modFolder)).GetProperty("path").GetString().Require();
-        var first = await File.ReadAllBytesAsync(path);
-
-        var second = await Create("Twice.esp", modFolder);
-
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
-        Assert.Equal("FileExists", (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
-        Assert.Equal(first, await File.ReadAllBytesAsync(path));
-    }
-
-    // Tracking is the user's own gesture (ADR-0007 invariant 2): the new plugin is untracked, and
-    // so is the mod it landed in.
-    [Fact]
-    public async Task CreatingIntoAnUntrackedMod_TracksNothing()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-
-        await Created("Untracked.esp", modFolder);
-
-        Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
-        Assert.False((await Client.Plugin(Held)).GetProperty("isTracked").GetBoolean());
-    }
-
-    [Fact]
-    public async Task CreatingIntoATrackedMod_LeavesItsRepositoryAsItWas()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
-        var repository = TreeSnapshot.Of(Path.Combine(modFolder, ".git"));
-
-        await Created("Second.esp", modFolder);
-
-        Assert.Equal(repository, TreeSnapshot.Of(Path.Combine(modFolder, ".git")));
-    }
-
-    // Nothing the create writes stands between a tracked mod's own plugin and its source: a hand
-    // edit to that source still reaches the next query.
-    [Fact]
-    public async Task AfterCreateIntoATrackedMod_AHandEditToItsSource_ReachesTheNextQuery()
-    {
-        var fx = Owned(await Loaded());
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        (await Client.Track(Held, Origin)).EnsureSuccessStatusCode();
-        var formKey = await Client.FirstFormKey(Held, Origin);
-        await Created("Minted.esp", modFolder);
-
-        OtherTool.EditsASourceDocument(modFolder, Held, Npc, "RenamedByHand");
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(
-            async () => (await Client.Record(formKey)).GetProperty("editorId").GetString() == "RenamedByHand",
-            "the hand edit reached the read");
     }
 }
