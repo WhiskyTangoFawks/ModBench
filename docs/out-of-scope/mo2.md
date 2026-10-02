@@ -32,6 +32,7 @@ Gestures Modbench does differently.
 | 6 | Downloads order | Newest file first | By status, newest first within each | Ruling: the file just downloaded is the one wanted next. |
 | 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
 | 8 | Drag indicator | VS Code's tree indicator: onto a row, or between rows | An insertion line | Limitation: a tree view cannot style it. |
+| 9 | Conflicts | One table: a row for each file the mod shares, a column for each mod with a copy, coloured as the record panel colours a record order conflict ([mods-conflicts.md](../architecture/surfaces/mods-conflicts.md)) | The Information dialog's Conflicts tab: lists of winning, losing and non-conflicting files, and an Advanced list of each file's other mods | Ruling: every copy of a file in one view, read the same way as a record. |
 
 ## Omissions by object
 
