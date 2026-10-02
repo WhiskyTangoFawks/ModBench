@@ -12,20 +12,71 @@ public sealed class VersionStampConflictTests
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress OverridePlugin = new("Over.esp", "Data");
-    private static readonly string[] Members = ["VersionControl", "FormVersion", "MajorRecordFlagsRaw", "WaterHeight"];
+    private static readonly string[] Members = ["VersionControl", "FormVersion", "Version2", "MajorRecordFlagsRaw", "WaterHeight"];
 
-    private readonly RecordQueryService _service;
-    private readonly FormKey _cellKey;
+    [Theory]
+    [InlineData("VersionControl")]
+    [InlineData("FormVersion")]
+    [InlineData("Version2")]
+    public void GetCompare_DifferingVersionStamp_ShowsNoConflict(string stamp)
+    {
+        var (service, key) = Compare(WithDifferingStamps);
 
-    public VersionStampConflictTests()
+        var diff = Diffs(service, key).Single(d => d.FieldName == stamp);
+
+        Assert.Equal(ConflictAll.NoConflict, diff.ConflictAll);
+        Assert.Empty(diff.CellStates);
+        Assert.Equal(2, diff.Values.Count(v => v.Value != null));
+    }
+
+    [Fact]
+    public void GetCompare_CopiesDifferingInTheVersionStampsAlone_ShowNoConflictOnTheRecordOrThePlugin()
+    {
+        var (service, key) = Compare(WithDifferingStamps);
+
+        var compare = service.GetCompare(key);
+
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+        Assert.Equal(ConflictThis.IdenticalToMaster, compare.Overrides.Single(o => o.Plugin == "Over.esp").ConflictThis);
+    }
+
+    [Fact]
+    public void GetCompare_CopiesDifferingInTheVersionStampsAndAnotherField_ConflictOnThatFieldAlone()
+    {
+        var (service, key) = Compare(cell =>
+        {
+            WithDifferingStamps(cell);
+            cell.WaterHeight = 200f;
+        });
+
+        var compare = service.GetCompare(key);
+
+        Assert.NotNull(compare);
+        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
+        Assert.Equal(ConflictThis.Override, compare.Overrides.Single(o => o.Plugin == "Over.esp").ConflictThis);
+    }
+
+    private static void WithDifferingStamps(Cell cell)
+    {
+        cell.VersionControl = 2;
+        cell.FormVersion = 121;
+        cell.Version2 = 3;
+    }
+
+    private static IReadOnlyList<FieldDiff> Diffs(RecordQueryService service, string key)
+    {
+        var compare = service.GetCompare(key);
+        Assert.NotNull(compare);
+        return compare.Diffs;
+    }
+
+    private static (RecordQueryService Service, string Key) Compare(Action<Cell> overrideEdit)
     {
         var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esm"), Fallout4Release.Fallout4);
-        var baseCell = new Cell(baseMod) { EditorID = "TestCell", WaterHeight = 100f, VersionControl = 1, FormVersion = 131 };
-        _cellKey = baseCell.FormKey;
+        var baseCell = new Cell(baseMod) { EditorID = "TestCell", WaterHeight = 100f, VersionControl = 1, FormVersion = 120, Version2 = 1 };
         var overrideCell = baseCell.DeepCopy();
-        overrideCell.VersionControl = 2;
-        overrideCell.FormVersion = 132;
-        overrideCell.WaterHeight = 200f;
+        overrideEdit(overrideCell);
 
         var rows = new[]
         {
@@ -42,34 +93,8 @@ public sealed class VersionStampConflictTests
             new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),
             new LoadOrderEntry("Over.esp", "Over.esp", "Data", 1, Enabled: true, Winning: true),
         };
-        _service = new RecordQueryService(
+        var service = new RecordQueryService(
             new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(Release, plugins), SharedSchemaReflector.Instance, new ConflictClassifier());
-    }
-
-    private CompareResult Compare()
-    {
-        var compare = _service.GetCompare(_cellKey.ToString());
-        Assert.NotNull(compare);
-        return compare;
-    }
-
-    [Theory]
-    [InlineData("VersionControl")]
-    [InlineData("FormVersion")]
-    public void GetCompare_DifferingVersionStamp_ShowsNoConflict(string stamp)
-    {
-        var diff = Compare().Diffs.Single(d => d.FieldName == stamp);
-
-        Assert.Equal(ConflictAll.NoConflict, diff.ConflictAll);
-        Assert.Empty(diff.CellStates);
-    }
-
-    [Fact]
-    public void GetCompare_DifferingVersionStampsAlone_LeaveTheRecordWithItsOtherFieldsConflict()
-    {
-        var compare = Compare();
-
-        Assert.Equal(ConflictAll.Override, compare.Diffs.Single(d => d.FieldName == "WaterHeight").ConflictAll);
-        Assert.Equal(ConflictAll.Override, compare.ConflictAll);
+        return (service, baseCell.FormKey.ToString());
     }
 }

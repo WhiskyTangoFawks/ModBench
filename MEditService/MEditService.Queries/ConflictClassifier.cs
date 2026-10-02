@@ -65,9 +65,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
-    // The game ignores these, so they show and take part in no conflict (xEdit's cpIgnore).
-    private static readonly HashSet<string> VersionStamps = ["VersionControl", "FormVersion"];
-
     // MasterColumn (ADR-0012) is the compound ColumnKey.Of identity, so no plain-plugin comparison
     // can match the wrong column.
     private sealed record DiffContext(
@@ -87,15 +84,18 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         Dictionary<string, object?> values,
         Dictionary<string, FieldMetadata> shapes,
         bool absentMeansDefault,
-        DiffContext ctx)
+        DiffContext ctx,
+        bool ignoredInConflicts = false)
     {
         var carrying = ctx.ColumnOrder.Where(c => values.GetValueOrDefault(c.Column) != null).ToList();
         var winnerColumn = carrying.Count > 0 ? carrying.MaxBy(c => c.LoadOrderIndex).Column : ctx.RecordWinnerColumn;
         var shape = shapes[winnerColumn];
 
-        var cellStates = ConflictRules.ComputeCellStates(
-            values, ctx.MasterColumn, ctx.ColumnOrder,
-            (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
+        var cellStates = ignoredInConflicts
+            ? []
+            : ConflictRules.ComputeCellStates(
+                values, ctx.MasterColumn, ctx.ColumnOrder,
+                (a, b) => DocumentNodes.SameNode(a, b, shape, absentMeansDefault));
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
@@ -129,10 +129,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var values = records.ToDictionary(Column, r => r.IsPartialForm && !header ? null : MemberValue(r, member.Name));
             if (!header && values.Values.All(v => v == null)) continue;
             var shapes = recordClass.ToDictionary(kv => kv.Key, kv => DocumentNodes.Variant(member, kv.Value));
-            var diff = DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx);
-            diffs.Add(header && VersionStamps.Contains(member.Name)
-                ? diff with { CellStates = new Dictionary<string, ConflictThis>(), ConflictAll = ConflictAll.NoConflict }
-                : diff);
+            diffs.Add(DiffNode(member.Name, values, shapes, absentMeansDefault: true, ctx, member.IgnoredInConflicts));
         }
         return diffs;
     }
