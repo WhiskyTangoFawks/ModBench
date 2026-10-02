@@ -14,6 +14,7 @@ namespace MEditService.Codec.Serialization;
 internal sealed class ModRecordLookup : IPluginRecordLookup
 {
     private readonly IModGetter _mod;
+    private readonly PluginRecordBytes _file;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
     private readonly IDisposable? _open;
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -22,9 +23,10 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly Lazy<Dictionary<string, CellStructure>> _cells;
 
     internal ModRecordLookup(
-        IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
+        IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
     {
         _mod = mod;
+        _file = file;
         _schemas = schemas;
         _open = open;
         _cache = new Lazy<ILinkCache>(() => mod.ToUntypedImmutableLinkCache());
@@ -37,9 +39,11 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
             ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record, _schemas), record.EditorID)
             : null;
 
+    public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
+
     public string? TextOf(string formKey) =>
         Resolve(formKey) is { } record
-            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, _schemas[RecordTableName.Of(record, _schemas)], _mod.GameRelease))
+            ? Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, _schemas[RecordTableName.Of(record, _schemas)], _mod.GameRelease, _file))
             : null;
 
     public DocumentContainment? ContainmentOf(string formKey) =>

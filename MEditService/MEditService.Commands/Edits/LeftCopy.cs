@@ -17,7 +17,7 @@ internal abstract record LeftCopy
         internal RecordEditResult Refusal(string spelled, string needs) =>
             RecordEditResult.RefusedAt(
                 RecordEditRefusal.RecordParseFailed, spelled,
-                $"'{spelled}': {needs}, and {Plugin}'s copy of {FormKey} cannot be read: {Why}. Nothing was written.");
+                $"'{spelled}': {needs}, and {Plugin}'s copy of {FormKey} cannot be read: {Why.TrimEnd('.')}. Nothing was written.");
     }
 
     internal string? FoundText => (this as Found)?.Text;

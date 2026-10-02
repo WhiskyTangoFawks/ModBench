@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
@@ -33,5 +34,22 @@ public sealed class DeletedRecordCopyTests : IDisposable
         var landed = JsonNode.Parse(_plugins.Text(patch, TheNpc)).Require();
         Assert.Equal(Deleted, landed["MajorRecordFlagsRaw"]?.GetValue<int>());
         Assert.Null(landed["EditorID"]);
+    }
+
+    [Fact]
+    public void CopyAsOverride_OfADeletedRecordThatStillHoldsFieldsItCannotRead_IsRefused_AndWritesNothing()
+    {
+        var deleting = Plugin("Deleting.esp", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted }));
+        var patch = Plugin("Patch.esp", _ => { });
+        _plugins.Load(
+            (Plugin("Fallout4.esm", mod => mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = "Guy" })), false),
+            (deleting, false),
+            (patch, true));
+        _plugins.Rewrite(deleting, path => DeletedNpcPlugin.WriteHoldingFields(path, TheNpc, Fallout4Esm));
+
+        var result = _plugins.CopyHandler.CopyAsOverride(Address(deleting), TheNpc.ToString(), Address(patch));
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Throws<InvalidOperationException>(() => _plugins.Text(patch, TheNpc));
     }
 }

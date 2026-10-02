@@ -5,18 +5,23 @@ using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>A deleted record as its header alone, which is what a mutable read makes of one whose
-/// fields are absent; Mutagen's overlay throws reading some absent fields instead.</summary>
+/// <summary>A deleted record holding no fields as its header alone, which is what a mutable read makes
+/// of it; Mutagen's overlay throws reading some absent fields instead.</summary>
 internal static class DeletedRecord
 {
-    /// <summary>The record's document, or its header's where it is deleted and its fields cannot be read.</summary>
-    internal static byte[] Serialize(RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release)
+    /// <summary>The record's document, or its header's where it is deleted, its file gives it no field and
+    /// the overlay cannot serialize it. Any other failure is the caller's to diagnose.</summary>
+    internal static byte[] Serialize(
+        RecordTextCodec codec, IMajorRecordGetter record, RecordTableSchema schema, GameRelease release, PluginRecordBytes file)
     {
         try
         {
             return codec.SerializeToBytes(record, release);
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException && HeaderOf(record, schema, release) is { } header)
+        catch (Exception ex) when (ex is not OutOfMemoryException
+            && (record.MajorRecordFlagsRaw & DeletedFlag.Bit) != 0
+            && file.HoldsNoFields(record.FormKey)
+            && HeaderOf(record, schema, release) is { } header)
         {
             return codec.SerializeToBytes(header, release);
         }
@@ -25,7 +30,6 @@ internal static class DeletedRecord
     // A container is left to fail: a header alone would drop its children.
     private static IMajorRecord? HeaderOf(IMajorRecordGetter record, RecordTableSchema schema, GameRelease release)
     {
-        if ((record.MajorRecordFlagsRaw & DeletedFlag.Bit) == 0) return null;
         if (ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) != null) return null;
         if (ReflectedTypes.GetSetterType(schema.RecordType) is not { } recordClass) return null;
 

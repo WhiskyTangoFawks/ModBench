@@ -362,10 +362,10 @@ internal sealed class WriteTargets(
             ? throw new InvalidDataException($"{source.Plugin.Name}'s document for {formKey} is no record document: {why}")
             : null);
 
-    /// <summary>The nearest copy of <paramref name="formKey"/> left of <paramref name="plugin"/> that
-    /// <paramref name="says"/> accepts. A copy that cannot be read ends the walk, since one beyond it is
-    /// not the nearest.</summary>
-    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says)
+    /// <summary>The nearest copy left of <paramref name="plugin"/> that <paramref name="says"/> accepts,
+    /// passing over by its header one holding a flag of <paramref name="passOver"/>. An unreadable copy
+    /// ends the walk.</summary>
+    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0)
     {
         var current = loadOrder.Current;
         var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
@@ -375,6 +375,7 @@ internal sealed class WriteTargets(
             try
             {
                 if (IdentityIn(source, formKey) is not { } identity) continue;
+                if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) continue;
                 var body = source.Body(identity);
                 if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new LeftCopy.Found(body);
             }

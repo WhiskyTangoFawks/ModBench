@@ -90,6 +90,21 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatCannotBeRead()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(Deleted));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (middle, false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+        _plugins.Rewrite(middle, path => DeletedNpcPlugin.WriteHoldingFields(path, TheNpc, Fallout4Esm));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
     public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatATrackedPluginHolds()
     {
         Load(

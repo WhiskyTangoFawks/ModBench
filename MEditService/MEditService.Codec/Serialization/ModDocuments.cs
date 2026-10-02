@@ -6,6 +6,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Serialization;
@@ -17,20 +18,20 @@ public static class ModDocuments
     /// <summary><paramref name="open"/> is disposed with the result, so a caller that opened the
     /// plugin hands ownership over rather than outliving the read.</summary>
     public static IPluginDocuments Of(
-        IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new MutagenModDocuments(mod, schemas, open);
+        IModGetter mod, ModPath path, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
+        new MutagenModDocuments(mod, new PluginRecordBytes(path, mod.GameRelease), schemas, open);
 
     /// <summary>The same mod for a caller asking about a handful of records by key rather than
     /// streaming the whole plugin. <paramref name="open"/> is disposed with the result.</summary>
     public static IPluginRecordLookup LookupOf(
-        IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
-        new ModRecordLookup(mod, schemas, open);
+        IModGetter mod, ModPath path, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
+        new ModRecordLookup(mod, new PluginRecordBytes(path, mod.GameRelease), schemas, open);
 }
 
 // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest
 // cell documents stays inside a few hundred MB.
 internal sealed class MutagenModDocuments(
-    IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
+    IModGetter mod, PluginRecordBytes file, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open) : IPluginDocuments
 {
     private const int SerializeBatchSize = 2048;
 
@@ -102,7 +103,7 @@ internal sealed class MutagenModDocuments(
         var formKey = record.FormKey.ToString();
         try
         {
-            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, schema, mod.GameRelease));
+            var text = Encoding.UTF8.GetString(DeletedRecord.Serialize(_codec, record, schema, mod.GameRelease, file));
             return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

@@ -42,12 +42,8 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
             && Of(record, schema, column, envelope.Value) is { Refills: true };
     }
 
-    /// <summary>A copy a refill takes its fields from: neither Deleted nor, where its type can be one, a
-    /// Partial Form.</summary>
-    internal static bool EmptiesNone(JsonObject copy, RecordTableSchema schema) =>
-        (RecordFlagsWrite.HeldBy(copy) & EmptyingBits(schema)) == 0;
-
-    private static long EmptyingBits(RecordTableSchema schema) =>
+    /// <summary>The flags a copy a refill passes over: Deleted, and Partial Form where the type can be one.</summary>
+    internal static long EmptyingBits(RecordTableSchema schema) =>
         PartialFormFlag.IsPartialFormable(schema.RecordType) ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
 
     /// <summary>The refusal of a refill whose nearest copy to the left cannot be read.</summary>

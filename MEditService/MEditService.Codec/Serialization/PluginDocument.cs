@@ -41,6 +41,10 @@ public interface IPluginRecordLookup : IDisposable
     /// without serializing the record; null when it holds nothing under that key.</summary>
     RecordIdentity? IdentityOf(string formKey);
 
+    /// <summary>The record header's flags, read without its fields; null when the plugin holds
+    /// nothing under that key.</summary>
+    long? RecordFlagsOf(string formKey);
+
     /// <summary>The record's own document, or null when the plugin holds nothing under that
     /// key.</summary>
     string? TextOf(string formKey);

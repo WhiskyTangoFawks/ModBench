@@ -97,7 +97,7 @@ public sealed class EditRecordHandler
             cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
 
         var refillCopyOnTheLeft = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema)
-            ? _targets.NearestCopyToTheLeft(plugin, formKey, copy => RecordEmptying.EmptiesNone(copy, schema))
+            ? _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema))
             : null;
 
         Func<string, string> roundTrip = schema.IsHeader

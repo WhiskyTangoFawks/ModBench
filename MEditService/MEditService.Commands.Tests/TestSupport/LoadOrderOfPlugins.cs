@@ -65,6 +65,9 @@ internal sealed class LoadOrderOfPlugins : IDisposable
             .Put(Address(mod), new SourceDocument(formKey.ToString(), recordType, null, unreadable));
     }
 
+    /// <summary>Writes an untracked plugin's file anew, for bytes Mutagen's writer would not produce.</summary>
+    internal void Rewrite(IModGetter mod, Action<string> write) => write(Path.Combine(FolderOf(mod), mod.ModKey.FileName));
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     private LoadOrderHolder Holder => _holder ?? throw new InvalidOperationException("Load the plugins first.");

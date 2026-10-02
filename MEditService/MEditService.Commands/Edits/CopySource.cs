@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -37,6 +38,14 @@ internal sealed class CopySource(
     /// null when it holds nothing under that key.</summary>
     internal RecordIdentity? Identity(string formKey) =>
         _tree != null ? _tree.IdentityOf(plugin, formKey, _schemas) : Loaded()?.IdentityOf(formKey);
+
+    /// <summary>The record header's flags, read without the record's fields.</summary>
+    internal long RecordFlags(RecordIdentity identity)
+    {
+        if (_tree == null) return Loaded()?.RecordFlagsOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
+        var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
+        return JsonNode.Parse(body) is JsonObject document ? RecordFlagsWrite.HeldBy(document) : 0;
+    }
 
     /// <summary>The working tree a tracked plugin answers from; null for an untracked one.</summary>
     internal SourceRepository? Tree => _tree;
