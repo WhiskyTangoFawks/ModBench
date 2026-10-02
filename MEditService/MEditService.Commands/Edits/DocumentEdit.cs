@@ -7,14 +7,16 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Everything a document edit needs and nothing it may touch: the text, where the edited
-/// record sits in it, its schema, the envelope, and the codec round trip as a function.</summary>
+/// record sits in it, its schema, the envelope, the codec round trip as a function, and
+/// <see cref="CellGroupMove.CellToLookUp"/>'s nearest copy.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
     RecordTableSchema Schema,
     RecordEditEnvelope Envelope,
     GameRelease Release,
-    Func<string, string> RoundTrip);
+    Func<string, string> RoundTrip,
+    string? CellCopyOnTheLeft);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
 /// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
@@ -45,6 +47,8 @@ internal static class DocumentEdit
 
         var deletion = RecordDeletion.Of(record, request.Schema, cursor.Column, envelope.Value);
         if (deletion != null) envelope = envelope with { Value = deletion.Flags };
+        var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
+        if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
 
         JsonNode? edited;
         FieldMetadata editedMeta;
@@ -62,6 +66,7 @@ internal static class DocumentEdit
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
         if (deletion != null) RecordDeletion.EmptyFields(record, request.Schema);
+        var prefix = move?.Apply(root) ?? request.Prefix;
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
@@ -92,7 +97,7 @@ internal static class DocumentEdit
                 $"'{dropped}' was not kept by the codec: the record's own class has no member the document can carry it in, so nothing was written.");
         }
 
-        var after = JsonSerializer.SerializeToElement(WalkPrefix(writtenRoot, request.Prefix));
+        var after = JsonSerializer.SerializeToElement(WalkPrefix(writtenRoot, prefix));
         var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns)
         {

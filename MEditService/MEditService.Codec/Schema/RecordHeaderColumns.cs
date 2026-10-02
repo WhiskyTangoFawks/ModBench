@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
@@ -9,7 +8,7 @@ namespace MEditService.Codec.Schema;
 /// row whose interface the type carries and declares the member on.</summary>
 internal static class RecordHeaderColumns
 {
-    private const string FlagsMember = nameof(IMajorRecordGetter.MajorRecordFlagsRaw);
+    private const string FlagsMember = RecordHeaderFlags.Member;
 
     // Every bit, so each flag view Mutagen spells over the raw integer shows up.
     private const long AllBits = -1;
