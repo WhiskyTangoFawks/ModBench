@@ -1,10 +1,8 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -65,14 +63,15 @@ public sealed class CopyFixture : IDisposable
         var relation = new Relation();
         relation.Target.SetTo(faction);
         faction.Relations.Add(relation);
-        sourceMod.WriteToBinary(sourcePath);
+        if (trackSource) TrackedTemplates.WriteTracked(SourceModFolder, sourceMod);
+        else sourceMod.WriteToBinary(sourcePath);
         (SourceNpc, SelfLinkingFaction) = (npc.FormKey, faction.FormKey);
         SourceNpcWithNoEditorId = namelessNpc.FormKey;
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
         var destinationNpc = destinationMod.Npcs.AddNew(DestinationNpcEditorId);
-        destinationMod.WriteToBinary(destinationPath);
+        TrackedTemplates.WriteTracked(DestinationModFolder, destinationMod);
         DestinationNpc = destinationNpc.FormKey;
 
         Entries =
@@ -82,19 +81,12 @@ public sealed class CopyFixture : IDisposable
         ];
         LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
 
-        Track(DestinationOrigin);
-        if (trackSource) Track(SourceOrigin);
-
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
         CopyHandler = TestEditService.CopyHandler(holder);
     }
-
-    private void Track(string origin) =>
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>
     public SourceDocument? Document(PluginAddress plugin, string formKey) =>

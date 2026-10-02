@@ -1,8 +1,5 @@
-using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -43,18 +40,12 @@ internal sealed class SourceModFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, pluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         build(mod);
-        mod.WriteToBinary(pluginPath);
+        if (tracked) TrackedTemplates.WriteTracked(ModFolder, mod);
+        else mod.WriteToBinary(pluginPath);
 
         LoadOrder = SnapshotPlugins.Snapshot(
             GameDirectory, _instanceRoot, GameRelease.Fallout4,
             [new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)]);
-
-        if (tracked)
-        {
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(LoadOrder, origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);

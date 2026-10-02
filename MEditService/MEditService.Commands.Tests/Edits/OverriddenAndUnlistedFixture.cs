@@ -1,9 +1,7 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -70,29 +68,29 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         var winningPath = Path.Combine(WinningModFolder, PluginName);
         var winningMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var winningNpc = winningMod.Npcs.AddNew(WinningNpcEditorId);
-        winningMod.WriteToBinary(winningPath);
+        TrackedTemplates.WriteTracked(WinningModFolder, winningMod);
         WinningNpc = winningNpc.FormKey;
 
         var overriddenPath = Path.Combine(OverriddenModFolder, PluginName);
         var overriddenMod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var overriddenNpc = overriddenMod.Npcs.AddNew(OverriddenNpcEditorId);
-        overriddenMod.WriteToBinary(overriddenPath);
+        TrackedTemplates.WriteTracked(OverriddenModFolder, overriddenMod);
         OverriddenNpc = overriddenNpc.FormKey;
 
         var sourcePath = Path.Combine(SourceModFolder, SourcePluginName);
         var sourceMod = new Fallout4Mod(ModKey.FromFileName(SourcePluginName), Fallout4Release.Fallout4);
         var copySourceNpc = sourceMod.Npcs.AddNew(CopySourceNpcEditorId);
-        sourceMod.WriteToBinary(sourcePath);
+        TrackedTemplates.WriteTracked(SourceModFolder, sourceMod);
         CopySourceNpc = copySourceNpc.FormKey;
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
-        destinationMod.WriteToBinary(destinationPath);
+        TrackedTemplates.WriteTracked(DestinationModFolder, destinationMod);
 
         var unlistedPath = Path.Combine(UnlistedModFolder, UnlistedPluginName);
         var unlistedMod = new Fallout4Mod(ModKey.FromFileName(UnlistedPluginName), Fallout4Release.Fallout4);
         var unlistedNpc = unlistedMod.Npcs.AddNew(UnlistedNpcEditorId);
-        unlistedMod.WriteToBinary(unlistedPath);
+        TrackedTemplates.WriteTracked(UnlistedModFolder, unlistedMod);
         UnlistedNpc = unlistedNpc.FormKey;
 
         // The copy source loads before Shared.esp and the destination after, so copying between
@@ -107,12 +105,6 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
         ];
         LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
 
-        Track(WinningOrigin);
-        Track(OverriddenOrigin);
-        Track(SourceOrigin);
-        Track(DestinationOrigin);
-        Track(UnlistedOrigin);
-
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
@@ -122,10 +114,6 @@ public sealed class OverriddenAndUnlistedFixture : IDisposable
     }
 
     public static OverriddenAndUnlistedFixture Create() => new();
-
-    private void Track(string origin) =>
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     public string ModFolderOf(PluginAddress plugin) => plugin.Origin switch
     {

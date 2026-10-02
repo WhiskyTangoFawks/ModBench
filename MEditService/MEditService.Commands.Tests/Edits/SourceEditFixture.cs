@@ -1,10 +1,8 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -44,9 +42,7 @@ public sealed class SourceEditFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private SourceEditFixture(
-        bool track, string pluginName, bool isLight,
-        SourcePreset preset = SourcePreset.Edits, Action<string>? beforeTrack = null)
+    private SourceEditFixture(bool track, string pluginName, bool isLight)
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
@@ -63,21 +59,15 @@ public sealed class SourceEditFixture : IDisposable
         var npc = mod.Npcs.AddNew(NpcEditorId);
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
-        mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
+
+        // Tracked through the real service: what an edit does to a git working tree is the thing
+        // under test, and no mock can answer that.
+        if (track) TrackedTemplates.WriteTracked(ModFolder, mod);
+        else mod.WriteToBinary(pluginPath);
 
         Entries = [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
         LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, InstanceRoot, GameRelease.Fallout4, Entries);
-
-        // Track through the real service, from the load order value: what an edit does to a git
-        // working tree is the thing under test, and no mock can answer that.
-        if (track)
-        {
-            beforeTrack?.Invoke(ModFolder);
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(LoadOrder, ModFolderOrigin, preset)
-                .GetAwaiter().GetResult();
-        }
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
@@ -88,20 +78,10 @@ public sealed class SourceEditFixture : IDisposable
 
     public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
 
-    /// <summary>Tracked under the Everything preset, so assets alongside the plugin are git-tracked
-    /// too. <paramref name="beforeTrack"/> writes any asset files into the mod folder before Track's
-    /// own initial commit picks them up.</summary>
-    public static SourceEditFixture TrackedEverything(Action<string>? beforeTrack = null) =>
-        new(track: true, PluginName, isLight: false, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
-
     public static SourceEditFixture TrackedLight(string pluginName = PluginName) =>
         new(track: true, pluginName, isLight: true);
 
     public static SourceEditFixture Untracked() => new(track: false, PluginName, isLight: false);
-
-    /// <summary>Tracked under a name of the caller's choosing: a plugin filename carrying a space is
-    /// ref-unsafe, and only a real tracked tree can answer whether that holds.</summary>
-    public static SourceEditFixture TrackedAs(string pluginName) => new(track: true, pluginName, isLight: false);
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — the whole read model these suites have.</summary>
