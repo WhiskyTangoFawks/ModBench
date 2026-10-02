@@ -85,23 +85,46 @@ echo "=== Gate runner tests ==="
 (cd "$ROOT" && python3 -m unittest discover -q -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
+ARCHITECTURE_SCANS=(MEditService.Http.Tests --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.")
+
+# The test projects that reference what the branch changed, from select_backend_tests.py. The
+# architecture scans read every project's source, so they run beside any selection.
+backend_tests() {
+  local results="/tmp/medit-test-results.$(basename "$ROOT")" selected
+  rm -rf "$results" && mkdir -p "$results" || return
+  selected=$(
+    { git -C "$ROOT" diff --name-only --no-renames "$(git -C "$ROOT" merge-base main HEAD)" &&
+      git -C "$ROOT" ls-files --others --exclude-standard; } |
+    python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" "$ROOT/MEditService" "$results/selected.slnf"
+  ) || return
+  echo "Test projects: ${selected:-none, no backend change since main}" | paste -sd ' '
+  local test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
+  if [[ -n $selected ]]; then
+    (cd "$ROOT/MEditService" && "${test[@]}" "$results/selected.slnf") || return
+  fi
+  if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Http.Tests <<< "$selected"; then
+    (cd "$ROOT/MEditService" && "${test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
+  fi
+  echo "=== Gate 3: Backend test times ==="
+  python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results"
+}
+
 if $BACKEND; then
   echo "=== Gate 2: Backend format ==="
   (cd "$ROOT/MEditService" && dotnet format --verify-no-changes) && \
   echo "=== Gate 2: Backend build/lint ===" && \
   (cd "$ROOT/MEditService" && dotnet build -v minimal) && \
   echo "=== Gate 3: Backend tests ===" && \
-  (cd "$ROOT/MEditService" && dotnet test -v minimal) \
+  backend_tests \
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
 # The tests that read docs/ and CONTEXT.md: the backend's architecture scans, and the frontend's
-# check of every Command ID against commands.md. The full runs already hold them.
+# check of every Command ID against commands.md. The backend and frontend runs already hold them.
 if $DOCS; then
   echo "=== Gate 3: Docs scans ==="
   if ! $BACKEND; then
-    (cd "$ROOT/MEditService" && dotnet test MEditService.Http.Tests -v minimal \
-      --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.") \
+    (cd "$ROOT/MEditService" && dotnet test -v minimal "${ARCHITECTURE_SCANS[@]}") \
     || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
   fi
   if ! $FRONTEND; then
