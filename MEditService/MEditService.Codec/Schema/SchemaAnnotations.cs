@@ -239,7 +239,7 @@ internal sealed record SchemaAnnotations(
                 [("IFunctionConditionDataGetter", "Function")] = Fallout4ConditionAnnotations.FunctionParameterSlots,
                 [("IConditionDataGetter", "RunOnType")] = Fallout4ConditionAnnotations.RunOnReference,
             },
-            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4LandscapeAndNavmeshAnnotations.KeyedArrays).ToDictionary(
+            KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             AlphaBearingColorFields: [.. RgbaColorFields],

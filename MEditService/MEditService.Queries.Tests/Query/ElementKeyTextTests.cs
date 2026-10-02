@@ -53,6 +53,18 @@ public class ElementKeyTextTests
         Assert.Equal("6", ElementKey.Of(omitted, ["Version"], element).Text);
     }
 
+    [Fact]
+    public void AnAbsentNullableKeyMember_IsUnset_NotZero()
+    {
+        var element = new FieldMetadata("", "struct", false, [], [], Fields: [new("Number", "int", false, [], [], AllowsNull: true)]);
+        var unset = ElementKey.Of(JsonDocument.Parse("{}").RootElement, ["Number"], element);
+        var zero = ElementKey.Of(JsonDocument.Parse("""{"Number":0}""").RootElement, ["Number"], element);
+
+        Assert.True(unset.IsUnset);
+        Assert.False(zero.IsUnset);
+        Assert.NotEqual(0, unset.CompareTo(zero));
+    }
+
     // A flags member keys by the names the document carries and orders by their bits, as xEdit's
     // wbStructSK does, so OnStart (1) precedes OnCompletion (2) whatever the names' own order.
     [Fact]
