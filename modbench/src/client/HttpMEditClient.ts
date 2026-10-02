@@ -7,7 +7,7 @@ import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import { SseNotificationSubscriber } from './notificationStream';
 import {
-  type BackendStatus, type CellReferences, type CompileOutcome,
+  type BackendStatus, type CellChildRecords, type CompileOutcome,
   type ContainerChildSummary, type InteriorCellBlock, type LoadOrderOptions, type LoadOrderOutcome,
   type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount, type CreatableRecordType,
@@ -589,13 +589,13 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  async getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences> {
-    return this.withTimeout(`getCellReferences(${plugin}, ${cellFormKey})`, async (signal) => {
-      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/references', {
+  async getCellChildRecords(plugin: string, cellFormKey: string, origin: string): Promise<CellChildRecords> {
+    return this.withTimeout(`getCellChildRecords(${plugin}, ${cellFormKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/children', {
         params: { path: { plugin, formKey: cellFormKey }, query: { origin } },
         signal,
       });
-      this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
+      this.ensureOk(`getCellChildRecords(${plugin}, ${cellFormKey})`, response, error);
       return data ?? { persistent: [], temporary: [] };
     });
   }

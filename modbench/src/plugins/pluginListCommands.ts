@@ -7,7 +7,7 @@ import {
 import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
 } from './gestureEntry';
-import { CellNode, PlacedNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
+import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
 import { errorMessage } from '../ports/errorMessage';
@@ -52,11 +52,11 @@ export function registerRevealInExplorerCommand(
   });
 }
 
-type CopiedRow = PluginNode | ImplicitMasterNode | RecordNode | WorldspaceNode | CellNode | PlacedNode;
+type CopiedRow = PluginNode | ImplicitMasterNode | RecordNode | WorldspaceNode | CellNode | ChildRecordNode;
 
 function isCopiedRow(value: unknown): value is CopiedRow {
   return value instanceof PluginNode || value instanceof ImplicitMasterNode || value instanceof RecordNode
-    || value instanceof WorldspaceNode || value instanceof CellNode || value instanceof PlacedNode;
+    || value instanceof WorldspaceNode || value instanceof CellNode || value instanceof ChildRecordNode;
 }
 
 // editor.md, The header: `EditorID [FormKey]`, or the FormKey alone when there is no EditorID.

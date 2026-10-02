@@ -4,8 +4,8 @@ import {
   type NotificationEvent,
   type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState,
   type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
-  type CellReferences, type CellSummary,
-  type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
+  type CellChildRecords, type CellSummary,
+  type ChildRecordSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus, type LoadOrderRefusal,
   type PluginLoadFailure, type CompareResult,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
@@ -185,7 +185,7 @@ export interface MEditClient {
   getReferences(formKey: string): Promise<ReferenceResult[]>;
   getWorldspaces(plugin: string, origin: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin: string): Promise<WorldspaceBlocks>;
-  getCellReferences(plugin: string, cellFormKey: string, origin: string): Promise<CellReferences>;
+  getCellChildRecords(plugin: string, cellFormKey: string, origin: string): Promise<CellChildRecords>;
   getInteriorCells(plugin: string, origin: string): Promise<InteriorCellBlock[]>;
   getContainerChildren(plugin: string, parentFormKey: string, origin: string): Promise<ContainerChildSummary[]>;
   /** Null when mEdit took the filter, or the reason it did not. */
@@ -218,6 +218,6 @@ export interface MEditClient {
 export type {
   NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
-  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
+  CellChildRecords, CellSummary, ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic,
   LoadOrderStatus, LoadOrderRefusal, PluginLoadFailure, CompareResult,
 };

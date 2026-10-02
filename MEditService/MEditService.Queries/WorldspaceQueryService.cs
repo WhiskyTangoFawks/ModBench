@@ -11,7 +11,7 @@ public interface IWorldspaceQueryService
     // `plugin` (a tree row built from one) always knows which origin it means.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);
-    CellReferences GetCellReferences(string plugin, string cellFormKey, string origin);
+    CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin);
     IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin);
 }
 
@@ -83,8 +83,8 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
         return new WorldspaceBlocks(blocks, topCells);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
-        _index.RequireReads().GetCellReferences(new PluginAddress(plugin, origin), cellFormKey);
+    public CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin) =>
+        _index.RequireReads().GetCellChildRecords(new PluginAddress(plugin, origin), cellFormKey);
 
     public IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin)
     {

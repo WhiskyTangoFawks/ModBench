@@ -1104,12 +1104,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        public CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey)
+        public CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey)
         {
             var schemas = owner.RequireSchemas();
             var cellChildTypes = CellChildTypeNames.Where(schemas.ContainsKey).ToList();
             if (cellChildTypes.Count == 0)
-                return new CellReferences([], []);
+                return new CellChildRecords([], []);
 
             using var connection = owner.OpenRead();
 
@@ -1137,12 +1137,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
-            var persistent = new List<PlacedSummary>();
-            var temporary = new List<PlacedSummary>();
+            var persistent = new List<ChildRecordSummary>();
+            var temporary = new List<ChildRecordSummary>();
             while (reader.Read())
             {
                 var group = reader.GetString(0);
-                var summary = new PlacedSummary(
+                var summary = new ChildRecordSummary(
                     reader.GetString(2),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
@@ -1153,7 +1153,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     BaseEditorId: reader.IsDBNull(8) ? null : reader.GetString(8));
                 (group == "persistent" ? persistent : temporary).Add(summary);
             }
-            return new CellReferences(persistent, temporary);
+            return new CellChildRecords(persistent, temporary);
         }
 
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin)

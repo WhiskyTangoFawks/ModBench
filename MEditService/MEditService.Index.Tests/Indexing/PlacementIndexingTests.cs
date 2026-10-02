@@ -153,7 +153,7 @@ public class PlacementIndexingTests
 
         var reads = index.RequireReads();
         Assert.Single(reads.GetWorldspaceCells(key, wrld.ToString()), c => c.FormKey == cell.ToString());
-        Assert.Single(reads.GetCellReferences(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
+        Assert.Single(reads.GetCellChildRecords(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
         Assert.NotNull(reads.GetPlacement(placed.ToString(), key));
     }
 
@@ -217,10 +217,10 @@ public class PlacementIndexingTests
     // ── reads that back the worldspace tree ─────────────────────
 
     [Fact]
-    public void GetCellReferences_SplitsPersistentAndTemporary()
+    public void GetCellChildRecords_SplitsPersistentAndTemporary()
     {
         using var b = new Built();
-        var refs = b.Reads.GetCellReferences(Key, b.ExtCellFk);
+        var refs = b.Reads.GetCellChildRecords(Key, b.ExtCellFk);
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -415,16 +415,16 @@ public class PlacementIndexingTests
     }
 
     [Fact]
-    public void GetCellReferences_SameFilenameDifferentOrigin_ScopesToOrigin()
+    public void GetCellChildRecords_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
         using var f = new TwoOriginWorldspace();
 
         foreach (var (winner, other) in WinnerAndOther)
         {
             var reads = f.ReadsWithWinner(winner);
-            Assert.Single(reads.GetCellReferences(winner, f.ExtCellFk).Persistent);
-            Assert.Empty(reads.GetCellReferences(other, f.ExtCellFk).Persistent);
-            Assert.Empty(reads.GetCellReferences(SharedC, f.ExtCellFk).Persistent);
+            Assert.Single(reads.GetCellChildRecords(winner, f.ExtCellFk).Persistent);
+            Assert.Empty(reads.GetCellChildRecords(other, f.ExtCellFk).Persistent);
+            Assert.Empty(reads.GetCellChildRecords(SharedC, f.ExtCellFk).Persistent);
         }
     }
 

@@ -47,8 +47,8 @@ export type ContainerChildSummary = Schemas['ContainerChildSummary'];
 // surfaces every block-less cell it finds, though a worldspace should have only one.
 export type WorldspaceSummary = Schemas['WorldspaceSummary'];
 export type CellSummary = Schemas['CellSummary'];
-export type PlacedSummary = Schemas['PlacedSummary'];
-export type CellReferences = Schemas['CellReferences'];
+export type ChildRecordSummary = Schemas['ChildRecordSummary'];
+export type CellChildRecords = Schemas['CellChildRecords'];
 export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
 export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
 export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];

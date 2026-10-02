@@ -11,7 +11,7 @@ vi.mock('vscode', () => ({
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorBlockNode, InteriorSubBlockNode,
-  WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
+  WorldspacesNode, WorldspaceNode, SubBlockNode, ChildRecordGroupNode, ChildRecordNode,
 } from '../PluginTreeProvider';
 import { headerFormKeyFor } from '../formKeyIdentity';
 import { ErrorNode } from '../errorNode';
@@ -54,7 +54,7 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
   client.setQueryAnswer('getWorldspaces', []);
   client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [] });
-  client.setQueryAnswer('getCellReferences', { persistent: [], temporary: [] });
+  client.setQueryAnswer('getCellChildRecords', { persistent: [], temporary: [] });
   // A Quest/DialogTopic row's own children — empty by default, overridden per-test below.
   client.setQueryAnswer('getContainerChildren', []);
   client.setQueryAnswer('getInteriorCells', []);
@@ -439,7 +439,7 @@ describe('worldspace, cell and placed rows state their record', () => {
     ['cell', new CellNode('A.esp', {
       formKey: '000801:A.esp', editorId: 'World', cellX: 1, cellY: 2, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false,
     }, 'ModA')],
-    ['placed', new PlacedNode('A.esp', {
+    ['placed', new ChildRecordNode('A.esp', {
       formKey: '000801:A.esp', editorId: 'World', baseFormKey: null, recordType: 'refr', hasParseFailure: false,
     }, 'ModA')],
   ])('a %s row', (_kind, node) => {
@@ -448,7 +448,7 @@ describe('worldspace, cell and placed rows state their record', () => {
   });
 
   it('states no EditorID for a record that has none', () => {
-    const node = new PlacedNode('A.esp', { formKey: '000801:A.esp', editorId: null, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }, 'Data');
+    const node = new ChildRecordNode('A.esp', { formKey: '000801:A.esp', editorId: null, baseFormKey: '000802:A.esp', recordType: 'refr', hasParseFailure: false }, 'Data');
     expect(node.editorId).toBeUndefined();
   });
 });
@@ -487,7 +487,7 @@ describe('a plugin\'s conditions reach every row beneath it', () => {
       blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [cell] }] }],
     });
     repo.setQueryAnswer('getInteriorCells', oneSubBlock([cell]));
-    repo.setQueryAnswer('getCellReferences', { persistent: [placed], temporary: [placed] });
+    repo.setQueryAnswer('getCellChildRecords', { persistent: [placed], temporary: [placed] });
     return repo;
   }
 
@@ -593,7 +593,7 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
     const repo = makeClient();
-    repo.setQueryAnswer('getCellReferences', {
+    repo.setQueryAnswer('getCellChildRecords', {
       persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
@@ -743,9 +743,9 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children[0]).toBeInstanceOf(ErrorNode);
   });
 
-  it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
+  it('fetchCellGroups: renders an error node when getCellChildRecords fails', async () => {
     const repo = makeClient();
-    repo.setQueryFailure('getCellReferences', new Error('boom'));
+    repo.setQueryFailure('getCellChildRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }, 'Data');
 
@@ -821,18 +821,18 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('fetchCellGroups: asks the repository for the node\'s own plugin, and its PlacedGroup/Placed children carry that origin forward', async () => {
     const repo = makeClient();
-    repo.setQueryAnswer('getCellReferences', {
+    repo.setQueryAnswer('getCellChildRecords', {
       persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
     const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }, 'ModB');
 
-    const groupNode = present(expectInstancesOf(await provider.getChildren(node), PlacedGroupNode)[0], 'the sole PlacedGroupNode');
-    expect(repo.calls).toContainEqual({ method: 'getCellReferences', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
+    const groupNode = present(expectInstancesOf(await provider.getChildren(node), ChildRecordGroupNode)[0], 'the sole ChildRecordGroupNode');
+    expect(repo.calls).toContainEqual({ method: 'getCellChildRecords', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
     expect(groupNode.origin).toBe('ModB');
 
-    const placedNode = present(expectInstancesOf(await provider.getChildren(groupNode), PlacedNode)[0], 'the sole PlacedNode');
+    const placedNode = present(expectInstancesOf(await provider.getChildren(groupNode), ChildRecordNode)[0], 'the sole ChildRecordNode');
     expect(placedNode.origin).toBe('ModB');
   });
 
@@ -865,7 +865,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
 
-    expect(repo.calls.filter(c => c.method === 'getCellReferences')).toHaveLength(2);
+    expect(repo.calls.filter(c => c.method === 'getCellChildRecords')).toHaveLength(2);
   });
 
   it('interiorCache: caches each plugin\'s interior cells separately, so one plugin\'s cells are never served for the other', async () => {
@@ -887,7 +887,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
       topCells: [{ formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasChildren: false, fullName: null, hasParseFailure: false }],
       blocks: [],
     });
-    repo.setQueryAnswer('getCellReferences', {
+    repo.setQueryAnswer('getCellChildRecords', {
       persistent: [{ formKey: 'p:M.esp', editorId: 'DoorRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
@@ -904,7 +904,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const cellOf = (nodes: PluginTreeNode[]) =>
       expectInstanceOf(present(nodes.find((n) => n.kind === 'cell'), 'the cell row'), CellNode);
     const placedOf = (nodes: PluginTreeNode[]) =>
-      expectInstanceOf(present(nodes.find((n) => n.kind === 'placed'), 'the placed row'), PlacedNode);
+      expectInstanceOf(present(nodes.find((n) => n.kind === 'placed'), 'the placed row'), ChildRecordNode);
     const cellA = cellOf(fromA);
     const placedA = placedOf(fromA);
     const cellB = cellOf(fromB);
@@ -1175,7 +1175,7 @@ describe('the failure prefix', () => {
       blocks: [{ x: 0, y: 0, hasParseFailure: true, subBlocks: [{ x: 0, y: 0, hasParseFailure: true,
         cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasChildren: false, hasParseFailure: true }] }] }],
     });
-    repo.setQueryAnswer('getCellReferences', {
+    repo.setQueryAnswer('getCellChildRecords', {
       persistent: [{ formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
       temporary: [],
     });

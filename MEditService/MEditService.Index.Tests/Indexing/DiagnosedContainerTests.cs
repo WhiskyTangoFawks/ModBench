@@ -69,7 +69,7 @@ public sealed class DiagnosedContainerTests : IDisposable
     {
         using var index = Indexed(cellDiagnosis: "the codec refused this cell");
 
-        var temporary = index.RequireReads().GetCellReferences(Key, CellFormKey).Temporary;
+        var temporary = index.RequireReads().GetCellChildRecords(Key, CellFormKey).Temporary;
 
         Assert.Equal(
             [(TemporaryRef, "refr", null), (Landscape, "land", null), (Navmesh, "navm", NavmeshDiagnosis)],

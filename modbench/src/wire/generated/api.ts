@@ -466,14 +466,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/cells/{formKey}/references": {
+    "/plugins/{plugin}/cells/{formKey}/children": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["GetCellReferences"];
+        get: operations["GetCellChildRecords"];
         put?: never;
         post?: never;
         delete?: never;
@@ -502,9 +502,9 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        CellReferences: {
-            persistent: components["schemas"]["PlacedSummary"][];
-            temporary: components["schemas"]["PlacedSummary"][];
+        CellChildRecords: {
+            persistent: components["schemas"]["ChildRecordSummary"][];
+            temporary: components["schemas"]["ChildRecordSummary"][];
         };
         CellSummary: {
             formKey: string;
@@ -522,6 +522,16 @@ export interface components {
         ChangedPlugin: {
             name: string;
             bytesSha256?: string | null;
+        };
+        ChildRecordSummary: {
+            formKey: string;
+            editorId?: string | null;
+            baseFormKey?: string | null;
+            recordType: string;
+            hasParseFailure: boolean;
+            fullName?: string | null;
+            baseEditorId?: string | null;
+            parseDiagnosis?: string | null;
         };
         CompareOverride: {
             formKey: string;
@@ -743,16 +753,6 @@ export interface components {
             name?: string | null;
             /** Format: int32 */
             index?: number | null;
-        };
-        PlacedSummary: {
-            formKey: string;
-            editorId?: string | null;
-            baseFormKey?: string | null;
-            recordType: string;
-            hasParseFailure: boolean;
-            fullName?: string | null;
-            baseEditorId?: string | null;
-            parseDiagnosis?: string | null;
         };
         PluginAddress: {
             name: string;
@@ -2183,7 +2183,7 @@ export interface operations {
             };
         };
     };
-    GetCellReferences: {
+    GetCellChildRecords: {
         parameters: {
             query?: {
                 origin?: string;
@@ -2203,7 +2203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CellReferences"];
+                    "application/json": components["schemas"]["CellChildRecords"];
                 };
             };
             /** @description Bad Request */
