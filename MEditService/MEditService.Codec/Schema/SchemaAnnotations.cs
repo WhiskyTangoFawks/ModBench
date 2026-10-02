@@ -21,6 +21,11 @@ public enum KnownDefectEffect
 internal sealed record PluginHeaderMember(
     string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false);
 
+/// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
+/// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
+internal sealed record RecordHeaderMember(
+    string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false);
+
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
@@ -72,7 +77,7 @@ internal sealed record SchemaAnnotations(
     // The record header's members in xEdit's order, under xEdit's labels (wbRecordHeader in
     // wbDefinitionsCommon.pas), keyed by the declaring interface: a type carries the rows whose
     // interface it has.
-    IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers,
+    IReadOnlyList<RecordHeaderMember> RecordHeaderMembers,
     // Record Flags bits no flag view of the type names, under the name Mutagen gives the same bit on
     // another type, keyed by the type's getter interface.
     IReadOnlyList<(string TypeName, long Bit, string Name)> RecordFlagNames,
@@ -116,12 +121,12 @@ internal sealed record SchemaAnnotations(
 
     // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
     // xEdit's order; each game's base adds the rest.
-    private static readonly (string, string, string)[] RecordHeaderMembersInEveryGame =
+    private static readonly RecordHeaderMember[] RecordHeaderMembersInEveryGame =
     [
-        ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
-        ("IFormKeyGetter", "FormKey", "FormID"),
-        ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
-        ("IMajorRecordGetter", "FormVersion", "Form Version"),
+        new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
+        new("IFormKeyGetter", "FormKey", "FormID"),
+        new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true),
+        new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
@@ -250,7 +255,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
+                new("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
             RecordFlagNames:
@@ -285,7 +290,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
+                new("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
             RecordFlagNames:
@@ -327,7 +332,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
+                new("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2", IgnoredInConflicts: true),
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
