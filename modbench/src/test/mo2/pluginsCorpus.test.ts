@@ -26,8 +26,8 @@ const enabledPlugins = async (dir: string): Promise<string[]> =>
 describe('plugins.txt corpus', () => {
   let dir: string;
 
-  beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 

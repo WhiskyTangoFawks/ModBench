@@ -65,7 +65,7 @@ function rowsNamed(rows: readonly ModlistNode[], named: readonly RowName[]): Mod
 async function shownAfter(
   direction: SortDirection, act: (provider: ModListProvider, rows: readonly ModlistNode[]) => Promise<void>,
 ): Promise<string[]> {
-  const root = await cloneCorpusFixture();
+  const root = cloneCorpusFixture();
   const instance = new Instance({
     window: STEADY_WINDOW,
     log: () => {}, logReadFailure: () => {},

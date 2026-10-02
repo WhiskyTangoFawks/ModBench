@@ -47,7 +47,7 @@ const separatorMarks = {
 };
 
 async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
-  const root = await cloneCorpusFixture();
+  const root = cloneCorpusFixture();
   registerCommand.mockClear();
   showInputBox.mockResolvedValueOnce('New Section');
   const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };

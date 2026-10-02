@@ -2,7 +2,8 @@
 // asserts nothing outside the declared touch-set moved by a byte. The per-format
 // round-trip tests prove one writer faithful; this proves writers compose.
 
-import { cp, mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { cpSync, mkdtempSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { expect } from 'vitest';
@@ -22,9 +23,9 @@ export const modFolderNames = async (root: string): Promise<string[]> =>
   (await readdir(join(root, 'mods'), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
 
 /** Caller owns cleanup of the returned temp root. */
-export async function cloneCorpusFixture(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'medit-corpus-'));
-  await cp(CORPUS_FIXTURE, root, { recursive: true });
+export function cloneCorpusFixture(): string {
+  const root = mkdtempSync(join(tmpdir(), 'medit-corpus-'));
+  cpSync(CORPUS_FIXTURE, root, { recursive: true });
   return root;
 }
 

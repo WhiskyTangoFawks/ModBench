@@ -531,13 +531,6 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
   });
 
-  // The provider is never told where the instance is, so a scan of its own has nothing to walk:
-  // every row, and every path on one, arrives in the value.
-  it('never touches disk: it is given no instance root to walk', async () => {
-    const provider = makeProvider([row({ name: 'a.zip' })]);
-    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
-  });
-
   it('a file appearing on disk changes nothing until the Instance publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
     try {

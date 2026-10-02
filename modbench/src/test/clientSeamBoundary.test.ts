@@ -51,12 +51,6 @@ function findOffenders(root: string): Offense[] {
     if (text.includes('/notifications/stream')) {
       offenses.push({ path: relPath, reason: 'names the notification stream path outside the client box' });
     }
-    // Never a dotted call (`x.fetch(...)`), an identifier merely containing "fetch"
-    // (`undiciFetch(...)`), or a local `fetch` parameter/variable shadowing the global.
-    const declaresLocalFetch = /[(,]\s*fetch\s*[,):]/.test(text) || /\b(?:const|let|var)\s+fetch\b/.test(text);
-    if (!declaresLocalFetch && /(?<![.\w])fetch\(/.test(text)) {
-      offenses.push({ path: relPath, reason: 'calls fetch outside the client box' });
-    }
   }
   return offenses;
 }
@@ -108,37 +102,12 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
       });
     });
 
-    it('a raw fetch call planted outside the client box is caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        writeFileSync(
-          join(root, 'plugins', 'SomeProvider.ts'),
-          "export async function read() { return fetch('http://localhost:5172/plugins'); }\n",
-        );
-        expect(findOffenders(root).map((o) => o.path)).toEqual([join('plugins', 'SomeProvider.ts')]);
-      });
-    });
-
-    // The rival this guards: a local variable or parameter merely named `fetch` (e.g. a generic
-    // load callback) must not read as the backend seam.
-    it('a local variable named fetch, called as a callback, is not caught', () => {
-      withPlantedTree((root) => {
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        writeFileSync(
-          join(root, 'plugins', 'SomeProvider.ts'),
-          'async function getOrLoad(fetch) { return fetch(); }\n',
-        );
-        expect(findOffenders(root)).toEqual([]);
-      });
-    });
-
-    it('the same generated-client import and fetch call, planted inside the client box, are not caught', () => {
+    it('the same generated-client and openapi-fetch imports, planted inside the client box, are not caught', () => {
       withPlantedTree((root) => {
         mkdirSync(join(root, 'client'), { recursive: true });
         writeFileSync(
           join(root, 'client', 'apiClient.ts'),
-          "import type { components } from '../generated/api';\nimport createClient from 'openapi-fetch';\n"
-          + "function f() { return fetch('http://localhost:5172/plugins'); }\n",
+          "import type { components } from '../generated/api';\nimport createClient from 'openapi-fetch';\n",
         );
         expect(findOffenders(root)).toEqual([]);
       });

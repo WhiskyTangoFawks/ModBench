@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { cpSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
@@ -43,7 +43,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import {
-  access, cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, utimes, writeFile,
+  access, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, utimes, writeFile,
 } from 'node:fs/promises';
 
 // Every call through the mock that takes a path, so a test can say which paths were reached.
@@ -111,7 +111,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-commands-'));
-    await cp(fixture, dir, { recursive: true });
+    cpSync(fixture, dir, { recursive: true });
     await utimes(modlistPath(), LONG_AGO, LONG_AGO);
   });
   afterEach(async () => {
@@ -1066,7 +1066,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-sync-'));
-    await cp(fixture, dir, { recursive: true });
+    cpSync(fixture, dir, { recursive: true });
     vi.mocked(rename).mockClear();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -1337,7 +1337,7 @@ describe('a mod sync between a separator gesture\'s folder and its line', () => 
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'modlist-gap-'));
-    await cp(fixture, dir, { recursive: true });
+    cpSync(fixture, dir, { recursive: true });
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
