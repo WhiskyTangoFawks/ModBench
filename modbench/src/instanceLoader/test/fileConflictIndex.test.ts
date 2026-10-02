@@ -145,7 +145,6 @@ describe('buildFileConflictIndex — what the adapter answers', () => {
 });
 
 // Proves the override-order direction against a REAL MO2 instance, not synthetic fixtures.
-// Opt-in: runs only when MEDIT_LITR_INSTANCE names a LitR instance.
 const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
 const litrProfile = 'Life in the Ruins';
 

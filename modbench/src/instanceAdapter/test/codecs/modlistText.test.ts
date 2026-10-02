@@ -542,8 +542,7 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
   });
 });
 
-// Opt-in at-scale backstop: byte-faithful round-trip against the real full LitR
-// modlist.txt. Runs only when MEDIT_LITR_INSTANCE names a LitR instance.
+// At-scale backstop: byte-faithful round-trip against the real full LitR modlist.txt.
 const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
 const litrModlist = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
 

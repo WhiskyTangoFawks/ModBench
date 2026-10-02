@@ -43,6 +43,7 @@ interface ViewsContainerEntry { id: string; }
 interface SettingEntry { description?: string; }
 
 interface PackageManifest {
+  activationEvents: string[];
   contributes: {
     viewsWelcome: ViewsWelcomeEntry[];
     views: Record<string, ViewEntry[]>;
@@ -93,7 +94,9 @@ function isSettingEntry(v: unknown): v is SettingEntry {
 }
 
 function parsePackageManifest(raw: unknown): PackageManifest {
-  if (!isRecord(raw)) throw new Error('Expected package.json to be an object.');
+  if (!isRecord(raw) || !isArrayOf(raw.activationEvents, isString)) {
+    throw new Error('Expected package.json to have a string[] activationEvents.');
+  }
   const { contributes } = raw;
   if (!isRecord(contributes)) throw new Error('Expected package.json to have a contributes object.');
   const { viewsWelcome, views, viewsContainers, menus, commands, keybindings, configuration } = contributes;
@@ -120,6 +123,7 @@ function parsePackageManifest(raw: unknown): PackageManifest {
   }
   const { properties } = configuration;
   return {
+    activationEvents: raw.activationEvents,
     contributes: {
       viewsWelcome, views, viewsContainers: { panel: viewsContainers.panel }, menus, commands, keybindings,
       configuration: { properties },
@@ -130,6 +134,12 @@ function parsePackageManifest(raw: unknown): PackageManifest {
 const pkg = parsePackageManifest(
   JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')),
 );
+
+describe('package.json activation', () => {
+  it('auto-activates on startup so the Activity Bar icon is never stuck hidden', () => {
+    expect(pkg.activationEvents).toContain('onStartupFinished');
+  });
+});
 
 describe('package.json outside an instance', () => {
   const isNotAnInstance = `${FOLDER_KEY} == notAnInstance`;
