@@ -16,9 +16,9 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The members of the header the editor presents: first the TES4 record's header (wbRecordHeader
-    // in wbDefinitionsCommon.pas) under xEdit's labels, in its order, then the rest. A mod header is
-    // not a major record, so the table names them, with why a write reaching one is refused.
+    // The TES4 record's header (wbRecordHeader in wbDefinitionsCommon.pas) under xEdit's labels, then
+    // the rest, with why a write reaching one is refused. A mod header is no major record, so the
+    // table names them.
     private static readonly (string Member, string? HeaderLabel, string? ReadOnlyReason)[] PresentedMembers =
     [
         ("Flags", "Record Flags", null),
