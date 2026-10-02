@@ -3,7 +3,7 @@
 BACKEND=false
 FRONTEND=false
 API_DRIFT=false
-DIAGRAMS=false
+DOCS=false
 DETACH=false
 WAIT=false
 FAILED=false
@@ -14,7 +14,7 @@ while [[ $# -gt 0 ]]; do
     --backend)   BACKEND=true;   GATE_ARGS+=("$1"); shift ;;
     --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
     --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
-    --diagrams)  DIAGRAMS=true;  GATE_ARGS+=("$1"); shift ;;
+    --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
@@ -27,12 +27,12 @@ GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
-# Two backend gate runs per machine, measured: a third leaves no memory headroom, and api-drift
-# builds and boots a backend, so it takes a slot too. -o keeps the lock out of
+# Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
+# builds and boots a backend, and docs builds the backend tests, so each takes a slot too. -o keeps the lock out of
 # child processes, so a lingering build server cannot hold it. A waiter queues on the first slot
 # rather than whichever frees first, which costs a wait, never correctness.
 GATE_SLOTS=2
-if { $BACKEND || $API_DRIFT || $DIAGRAMS; } && [[ -z ${GATE_SLOT:-} ]]; then
+if { $BACKEND || $API_DRIFT || $DOCS; } && [[ -z ${GATE_SLOT:-} ]]; then
   for slot in $(seq 1 $GATE_SLOTS); do
     GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${GATE_ARGS[@]}"
     status=$?
@@ -95,13 +95,19 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
-# The backend scans that read docs/architecture live in this namespace; the full backend run
-# already holds them.
-if $DIAGRAMS && ! $BACKEND; then
-  echo "=== Gate 3: Architecture scans ==="
-  (cd "$ROOT/MEditService" && dotnet test MEditService.Http.Tests -v minimal \
-    --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.") \
-  || { echo "--- ARCHITECTURE SCAN GATE FAILED ---"; FAILED=true; }
+# The tests that read docs/ and CONTEXT.md: the backend's architecture scans, and the frontend's
+# check of every Command ID against commands.md. The full runs already hold them.
+if $DOCS; then
+  echo "=== Gate 3: Docs scans ==="
+  if ! $BACKEND; then
+    (cd "$ROOT/MEditService" && dotnet test MEditService.Http.Tests -v minimal \
+      --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.") \
+    || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
+  fi
+  if ! $FRONTEND; then
+    (cd "$ROOT/modbench" && npm run test:unit -- src/test/packageJson.test.ts) \
+    || { echo "--- DOCS SCAN GATE FAILED ---"; FAILED=true; }
+  fi
 fi
 
 # flock on the integration step: its mock backend binds a fixed port (15172), so concurrent
