@@ -46,7 +46,10 @@ public sealed class RefillOnClearingTests : IDisposable
     {
         var cell = new Cell(TheCell, Fallout4Release.Fallout4)
         {
-            EditorID = editorId, Flags = Cell.Flag.IsInteriorCell, WaterHeight = water, MajorRecordFlagsRaw = flags,
+            EditorID = editorId,
+            Flags = Cell.Flag.IsInteriorCell,
+            WaterHeight = water,
+            MajorRecordFlagsRaw = flags,
         };
         also?.Invoke(cell);
         var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
