@@ -103,6 +103,11 @@ internal sealed class CopySource(
             : null;
     }
 
+    /// <summary>The FormKey of the exterior cell this plugin holds at grid (<paramref name="x"/>,
+    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
+    internal string? CellAt(string worldspace, int x, int y) =>
+        _tree != null ? _tree.CellAt(plugin, worldspace, x, y) : Loaded()?.CellAt(worldspace, x, y);
+
     public void Dispose() => _loaded?.Dispose();
 
     // Null when the load order registers no such plugin: it holds nothing, which is an answer.

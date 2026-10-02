@@ -14,7 +14,8 @@ public static class PlacedCell
 
     private const string FlagsMember = "Flags";
     private const string InteriorFlag = "IsInteriorCell";
-    private const string GridPointMember = "Point";
+    /// <summary>The cell grid's member holding its point.</summary>
+    public const string GridPointMember = "Point";
     private const string PositionMember = "Position";
 
     /// <summary>Whether the cell's document says where it sits: interior, or at a grid. A Partial Form
@@ -38,6 +39,11 @@ public static class PlacedCell
         if (cell[RecordTypeDispatch.CellGridMember] is not JsonObject grid) return null;
         return Components(grid[GridPointMember]) is [var x, var y] ? ((int)x, (int)y) : (0, 0);
     }
+
+    /// <summary>A cell's grid member at (<paramref name="x"/>, <paramref name="y"/>), as the codec writes
+    /// it: the inverse of <see cref="Grid"/>.</summary>
+    public static JsonObject GridAt(int x, int y) =>
+        (x, y) == (0, 0) ? [] : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new { X = x, Y = y }) };
 
     /// <summary>The grid cell a placed record's position falls in, or null when it has no position or
     /// the game has no cell width here.</summary>

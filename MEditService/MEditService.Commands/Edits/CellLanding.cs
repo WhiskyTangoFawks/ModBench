@@ -1,0 +1,206 @@
+using System.Text.Json.Nodes;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.SourceAdapter;
+using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
+
+namespace MEditService.Commands.Edits;
+
+/// <summary>A placed record moving into another cell of its worldspace, through one source transaction. A
+/// cell the plugin lacks is copied in from its nearest copy to the left, or created, as xEdit's Add does.</summary>
+internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
+{
+    // The cell document that takes the record in, and where a new one goes.
+    private sealed record Landed(SourceDocument Cell, CellPlacement? Placement);
+
+    private sealed record Move(
+        PluginAddress Plugin, SourceRepository Repository, GameRelease Release, RecordIdentity Moved, string Worldspace,
+        string CellType, string Spelled);
+
+    // One step of a landing: the value it yields, or the refusal that ends the landing.
+    private abstract record Step<T>
+    {
+        private Step()
+        {
+        }
+
+        internal abstract Step<TNext> Then<TNext>(Func<T, Step<TNext>> next);
+
+        internal abstract RecordEditResult? Finish(Func<T, RecordEditResult?> last);
+
+        internal sealed record Refused(RecordEditResult Why) : Step<T>
+        {
+            internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => new Step<TNext>.Refused(Why);
+
+            internal override RecordEditResult? Finish(Func<T, RecordEditResult?> last) => Why;
+        }
+
+        internal sealed record Done(T Value) : Step<T>
+        {
+            internal override Step<TNext> Then<TNext>(Func<T, Step<TNext>> next) => next(Value);
+
+            internal override RecordEditResult? Finish(Func<T, RecordEditResult?> last) => last(Value);
+        }
+    }
+
+    /// <summary>Lands the record that <paramref name="written"/>, <paramref name="holder"/>'s new text,
+    /// still carries at the crossing's prefix. A tree it cannot read refuses, with nothing written.</summary>
+    internal RecordEditResult Land(
+        PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder, string written, CellCrossing crossing, string spelled)
+    {
+        var transaction = new SourceRepository.SourceTransaction();
+        return SourceCommit.Write(
+                transaction, edit.Repository, logger, $"Moving {edit.Identity.FormKey} into another cell failed.",
+                () => Cross(transaction, plugin, edit, holder, written, crossing, spelled))
+            ?? RecordEditResult.Success();
+    }
+
+    private RecordEditResult? Cross(
+        SourceRepository.SourceTransaction transaction, PluginAddress plugin, WriteTargets.EditTarget edit, RecordIdentity holder,
+        string written, CellCrossing crossing, string spelled)
+    {
+        var (release, moved, _, repository) = edit;
+        var root = Parsed(written, holder.FormKey);
+        var group = EmbeddedChildPath.Walk(root, [.. crossing.Prefix.Take(crossing.Prefix.Count - 1)]) as JsonArray
+            ?? throw new InvalidOperationException($"{holder.FormKey}'s document has no group at {RecordEditEnvelope.Spell(crossing.Prefix)}.");
+        var record = group[crossing.Prefix[^1].RequireIndex()]
+            ?? throw new InvalidOperationException($"{holder.FormKey}'s document has no record at {RecordEditEnvelope.Spell(crossing.Prefix)}.");
+        group.RemoveAt(crossing.Prefix[^1].RequireIndex());
+        var given = Document(holder, codec.RoundTrip(root.ToJsonString(), release, holder.RecordType));
+
+        var worldspace = crossing.Prefix is [{ Name: PlacedCell.WorldspacePersistentCellMember }, ..]
+            ? holder.FormKey
+            : repository.CellPlacementOf(plugin, holder)?.ParentWorldspace;
+        if (worldspace is null)
+            return CellGroupMove.Unknown(spelled, moved.FormKey, $"{plugin.Name} holds no worldspace above its cell {holder.FormKey}");
+
+        var move = new Move(
+            plugin, repository, release, moved, worldspace,
+            schemaReflector.GetSchemas(release).Keys.Single(RecordTypeDispatch.For(release).IsCell), spelled);
+        var landing = crossing.Into is AnotherCell.GridCell grid ? IntoGridCell(move, grid, record) : IntoPersistentCell(move, record);
+        return landing.Finish(landed => Write(transaction, move, given, landed));
+    }
+
+    private RecordEditResult? Write(SourceRepository.SourceTransaction transaction, Move move, SourceDocument given, Landed landed)
+    {
+        transaction.Put(move.Repository, move.Plugin, given);
+        if (landed.Placement is { } placement) transaction.Put(move.Repository, move.Plugin, landed.Cell, placement);
+        else transaction.Put(move.Repository, move.Plugin, landed.Cell);
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Moved {FormKey} out of {Holder} into {Cell} in {Plugin} ({Origin}), as its Persistent changed",
+                move.Moved.FormKey, given.FormKey, landed.Cell.FormKey, move.Plugin.Name, move.Plugin.Origin);
+        }
+        return null;
+    }
+
+    private Step<Landed> IntoPersistentCell(Move move, JsonNode record)
+    {
+        if (move.Repository.IdentityOf(move.Plugin, move.Worldspace, schemaReflector.GetSchemas(move.Release)) is not { } identity
+            || move.Repository.Get(move.Plugin, identity) is not { } document)
+        {
+            return new Step<Landed>.Refused(CellGroupMove.Unknown(
+                move.Spelled, move.Moved.FormKey, $"{move.Plugin.Name} holds no document for its worldspace {move.Worldspace}"));
+        }
+
+        var worldspace = Parsed(document.Body, move.Worldspace);
+        Step<JsonObject> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject held
+            ? new Step<JsonObject>.Done(held)
+            : CopiedOrNew(
+                    move,
+                    targets.NearestCopyToTheLeft(move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
+                    copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
+                    PersistentFlag.Bit, (0, 0))
+                .Then<JsonObject>(copied =>
+                {
+                    worldspace[PlacedCell.WorldspacePersistentCellMember] = copied;
+                    return new Step<JsonObject>.Done(copied);
+                });
+
+        return cell.Then<Landed>(landing =>
+        {
+            TakeIn(landing, PersistentFlag.PersistentGroup, record);
+            return new Step<Landed>.Done(
+                new(Document(identity, codec.RoundTrip(worldspace.ToJsonString(), move.Release, identity.RecordType)), null));
+        });
+    }
+
+    private Step<Landed> IntoGridCell(Move move, AnotherCell.GridCell grid, JsonNode record)
+    {
+        if (move.Repository.CellAt(move.Plugin, move.Worldspace, grid.X, grid.Y) is { } held)
+            return new Step<Landed>.Done(IntoHeldCell(move, held, record));
+
+        var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y);
+        if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
+            && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+        {
+            return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
+        }
+
+        return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
+        {
+            TakeIn(cell, PersistentFlag.TemporaryGroup, record);
+            var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
+            return new Step<Landed>.Done(new(
+                new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
+                CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+        });
+    }
+
+    private Landed IntoHeldCell(Move move, string formKey, JsonNode record)
+    {
+        var identity = move.Repository.IdentityOf(move.Plugin, formKey, schemaReflector.GetSchemas(move.Release))
+            ?? throw new InvalidOperationException($"{move.Plugin.Name} named {formKey} as the cell at a grid, but holds no record under it.");
+        var document = move.Repository.Get(move.Plugin, identity)
+            ?? throw new InvalidOperationException($"{move.Plugin.Name} holds {formKey}, but no document in its source tree carries it.");
+        var cell = Parsed(document.Body, formKey);
+        TakeIn(cell, PersistentFlag.TemporaryGroup, record);
+        return new(Document(identity, codec.RoundTrip(cell.ToJsonString(), move.Release, identity.RecordType)), null);
+    }
+
+    // The own fields of the nearest copy to the left, as an override, or else a new cell native to the plugin.
+    private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)
+    {
+        switch (left)
+        {
+            case LeftCopy.Unreadable unreadable:
+                return new Step<JsonObject>.Refused(unreadable.Refusal(
+                    move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from its nearest copy to the left"));
+            case LeftCopy.Found found:
+                var copy = cellIn(found.Text)?.ToJsonString()
+                    ?? throw new InvalidOperationException($"The copy to the left of {move.Plugin.Name} holds no cell where it was found.");
+                return new Step<JsonObject>.Done(
+                    Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace));
+        }
+
+        if (targets.ResolveTargetFormKey(move.Repository, move.Plugin, null, out var formKey) is { } exhausted)
+            return new Step<JsonObject>.Refused(exhausted with { Path = move.Spelled });
+        var cell = Parsed(
+            RecordMint.BareDocument(codec, schemaReflector.GetSchemas(move.Release)[move.CellType], move.Release, formKey, editorId: null, partialForm: false),
+            formKey);
+        if (flags != 0) cell[RecordHeaderFlags.Member] = flags;
+        cell[RecordTypeDispatch.CellGridMember] = PlacedCell.GridAt(grid.X, grid.Y);
+        return new Step<JsonObject>.Done(cell);
+    }
+
+    private static void TakeIn(JsonObject cell, string group, JsonNode record)
+    {
+        if (cell[group] is not JsonArray members) cell[group] = members = [];
+        members.Add(record);
+    }
+
+    private static string FormKeyOf(JsonObject cell) =>
+        cell[RecordMembers.FormKey] is JsonValue key && key.TryGetValue<string>(out var formKey)
+            ? formKey
+            : throw new InvalidDataException("A cell's document names no FormKey.");
+
+    private static JsonObject Parsed(string text, string formKey) =>
+        JsonNode.Parse(text) as JsonObject ?? throw new InvalidOperationException($"Expected {formKey}'s document to hold a JSON object.");
+
+    private static SourceDocument Document(RecordIdentity identity, string text) =>
+        new(identity.FormKey, identity.RecordType, WriteTargets.EditorIdOf(text), text);
+}

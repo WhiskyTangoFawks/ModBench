@@ -336,12 +336,19 @@ public sealed partial class SourceRepository
                 $"tree's layout has exactly {ExteriorBlockLevels}.");
         }
 
-        var block = MintBlockLevel(
-            WorldspaceDirectoryHolding(plugin, placement), levels[0], placement.BlockX, placement.BlockY);
-        var subBlock = MintBlockLevel(block, levels[1], placement.SubX, placement.SubY);
+        var (block, subBlock, cell) = ExteriorCellLevels(plugin, identity, placement);
+        MintBlockLevel(block, levels[0], placement.BlockX, placement.BlockY);
+        MintBlockLevel(subBlock, levels[1], placement.SubX, placement.SubY);
+        return cell;
+    }
 
-        return Path.Combine(
-            subBlock, LeafNameFor(FormKey.Factory(identity.FormKey), identity.EditorId, isDirectory: true));
+    // The directories an exterior cell's put lands in, none of them minted.
+    private (string Block, string SubBlock, string Cell) ExteriorCellLevels(
+        PluginAddress plugin, RecordIdentity identity, CellPlacement placement)
+    {
+        var block = Path.Combine(WorldspaceDirectoryHolding(plugin, placement), BlockLevelName(placement.BlockX, placement.BlockY));
+        var subBlock = Path.Combine(block, BlockLevelName(placement.SubX, placement.SubY));
+        return (block, subBlock, Path.Combine(subBlock, LeafNameFor(FormKey.Factory(identity.FormKey), identity.EditorId, isDirectory: true)));
     }
 
     private const int ExteriorBlockLevels = 2;
@@ -364,10 +371,9 @@ public sealed partial class SourceRepository
 
     // Track writes a level's document with whatever metadata the source mod carried, and a cell
     // landing in the level is no reason to respell it.
-    private string MintBlockLevel(string parentDirectory, Type level, int? x, int? y)
+    private void MintBlockLevel(string directory, Type level, int? x, int? y)
     {
-        var directory = Path.Combine(parentDirectory, BlockLevelName(x, y));
-        if (File.Exists(Path.Combine(directory, GroupRecordDataFileName))) return directory;
+        if (File.Exists(Path.Combine(directory, GroupRecordDataFileName))) return;
 
         var document = RecordTextCodec.BlankDocument(
             level, _release,
@@ -378,7 +384,6 @@ public sealed partial class SourceRepository
             });
         InMintedDirectory(
             directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
-        return directory;
     }
 
     // Interior placement carries no gameplay meaning — every interior cell's block and sub-block are
