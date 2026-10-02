@@ -112,12 +112,34 @@ public sealed class PluginDocumentReadTests
         Assert.NotNull(cell.Contents);
         Assert.Equal(
             [
-                new CellChild("000802:Documents.esp", "Persistent", 0),
-                new CellChild("000803:Documents.esp", "Temporary", 0),
-                new CellChild("000804:Documents.esp", "Landscape", 0),
-                new CellChild("000805:Documents.esp", "NavigationMeshes", 0),
+                new ChildRecord("000802:Documents.esp", "Persistent", 0),
+                new ChildRecord("000803:Documents.esp", "Temporary", 0),
+                new ChildRecord("000804:Documents.esp", "Landscape", 0),
+                new ChildRecord("000805:Documents.esp", "NavigationMeshes", 0),
             ],
             cell.Contents.OrderBy(c => c.FormKey, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void OpenDocuments_GivesAQuestEveryChildRecordItsGrupHolds_BesideItsDocument()
+    {
+        string questFormKey = "", topicFormKey = "";
+        using var data = new PluginFixtureBuilder("documents-quest-contents")
+            .WithPlugin(PluginName, mod =>
+            {
+                var quest = mod.Quests.AddNew("DocumentQuest");
+                var topic = new DialogTopic(mod) { EditorID = "DocumentTopic" };
+                quest.DialogTopics.Add(topic);
+                (questFormKey, topicFormKey) = (quest.FormKey.ToString(), topic.FormKey.ToString());
+            })
+            .Build();
+        var path = Path.Combine(data.DataFolder, PluginName);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+        var quest = documents.Records.Single(d => d.RecordType == "qust" && d.FormKey == questFormKey);
+
+        Assert.Equal([new ChildRecord(topicFormKey, "DialogTopics", 0)], quest.Contents ?? []);
     }
 
     private static PluginFixtureData CellFixture(string prefix, out string extCellFormKey)

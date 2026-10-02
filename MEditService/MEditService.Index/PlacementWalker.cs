@@ -12,11 +12,27 @@ public readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);
 
+/// <summary>The table a child record's parentage lands in.</summary>
+internal enum ParentageTable { ContainerChild, Placement, CellLocation }
+
 /// <summary>The worldspace-tree side tables (ADR-0005) read off documents: a cell's grid and a
 /// placed object's position out of their own text, the block coordinates out of the structure
 /// handed over beside them.</summary>
 internal static class PlacementWalker
 {
+    /// <summary>A cell's two placement groups are placement and a worldspace's top cell is
+    /// cell_location. Every other slot, a cell's landscape and navmeshes included, is
+    /// container_child.</summary>
+    internal static ParentageTable TableFor(string containerType, string slotName) => (containerType, slotName) switch
+    {
+        ("Cell", "Persistent" or "Temporary") => ParentageTable.Placement,
+        ("Worldspace", "TopCell") => ParentageTable.CellLocation,
+        _ => ParentageTable.ContainerChild,
+    };
+
+    /// <summary>The <c>placement_group</c> a placement slot's children land in.</summary>
+    internal static string PlacementGroupOf(string slotName) => slotName.ToLowerInvariant();
+
     private static readonly string GridPointPath = $"{RecordTypeDispatch.CellGridMember}.Point";
 
     private const string PositionMember = "Position";

@@ -170,13 +170,13 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
     // ADR-0005: what a cell holds. Read off its own document, since the tree files a child record
     // inside its cell rather than beside it.
-    private IReadOnlyList<CellChild>? ContentsOf(string recordType, string text)
+    private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text)
     {
         if (!_containers.IsCell(recordType)) return null;
 
         using var document = JsonDocument.Parse(text);
         return [.. _containers.ChildrenOf(recordType, document.RootElement)
-            .Select(c => new CellChild(c.FormKey, c.SlotName, c.SlotIndex))];
+            .Select(c => new ChildRecord(c.FormKey, c.SlotName, c.SlotIndex))];
     }
 
     private const string MutagenObjectTypeMember = "MutagenObjectType";

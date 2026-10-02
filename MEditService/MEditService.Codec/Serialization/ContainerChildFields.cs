@@ -205,7 +205,6 @@ public static class ContainerChildFields
         }
     }
 
-    // Resolved once per runtime type: an ingest walks every cell and every record through here.
     private static readonly ConcurrentDictionary<Type, IReadOnlyList<(string FieldName, PropertyInfo Property)>> ChildProperties = new();
 
     private static IReadOnlyList<(string FieldName, PropertyInfo Property)> ChildPropertiesOf(Type recordType) =>

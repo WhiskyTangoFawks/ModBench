@@ -9,17 +9,18 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
-/// <summary>The placement reads come from the GRUP hierarchy (ADR-0005), read without the codec,
-/// so a cell whose document the codec refuses still lists and still holds its contents.</summary>
-public sealed class DiagnosedCellPlacementTests : IDisposable
+public sealed class DiagnosedContainerTests : IDisposable
 {
     private const string Plugin = "Diagnosed.esp";
+    private const string Worldspace = "000900:Diagnosed.esp";
     private const string CellFormKey = "000800:Diagnosed.esp";
     private const string PersistentRef = "000801:Diagnosed.esp";
     private const string TemporaryRef = "000802:Diagnosed.esp";
     private const string Landscape = "000803:Diagnosed.esp";
     private const string Navmesh = "000804:Diagnosed.esp";
     private const string NavmeshDiagnosis = "the codec refused this navmesh";
+    private const string Quest = "000805:Diagnosed.esp";
+    private const string Topic = "000806:Diagnosed.esp";
     private static readonly PluginAddress Key = new(Plugin, PluginOrigin.DataDirectory);
 
     // Any real binary: the adapter double below answers the documents, the binary only the open.
@@ -38,7 +39,7 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
         var location = index.RequireReads().GetCellLocation(Key, CellFormKey);
 
         Assert.NotNull(location);
-        Assert.Equal("000900:Diagnosed.esp", location.Value.ParentWorldspace);
+        Assert.Equal(Worldspace, location.Value.ParentWorldspace);
         Assert.Equal(3, location.Value.BlockX);
         Assert.Equal(2, location.Value.SubY);
         Assert.Null(location.Value.GridX);
@@ -73,6 +74,27 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
         Assert.Equal(
             [(TemporaryRef, "refr", null), (Landscape, "land", null), (Navmesh, "navm", NavmeshDiagnosis)],
             temporary.Select(t => (t.FormKey, t.RecordType, t.ParseDiagnosis)));
+    }
+
+    [Fact]
+    public void AQuestTheCodecRefuses_StillHoldsItsDialogTopic_WhichIsNotListedAtThePluginRoot()
+    {
+        using var index = Indexed(cellDiagnosis: null);
+        var reads = index.RequireReads();
+
+        Assert.Equal([Topic], reads.GetContainerChildren(Key, Quest).Select(c => c.ChildFormKey));
+        Assert.DoesNotContain(reads.GetRecordTypeCounts(Key), group => group.Type == "dial");
+    }
+
+    [Fact]
+    public void ARefusedNavmesh_MarksTheReadableCellAboveIt_WhichCarriesNoDiagnosisOfItsOwn()
+    {
+        using var index = Indexed(cellDiagnosis: null);
+
+        var cell = index.RequireReads().GetWorldspaceCells(Key, Worldspace).Single();
+
+        Assert.True(cell.HasParseFailure);
+        Assert.Null(cell.ParseDiagnosis);
     }
 
     // The same fixture with the cell readable, so what the diagnosis costs is legible: the grid and
@@ -139,6 +161,14 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
                   "MutagenObjectType": "PlacedObject",
                   "FormKey": "000802:Diagnosed.esp"
                 }
+              ],
+              "Landscape": {
+                "FormKey": "000803:Diagnosed.esp"
+              },
+              "NavigationMeshes": [
+                {
+                  "FormKey": "000804:Diagnosed.esp"
+                }
               ]
             }
             """;
@@ -155,14 +185,18 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
                 "cell", CellFormKey,
                 cellDiagnosis is null ? ReadableCell : RefusedCell,
                 cellDiagnosis,
-                new CellStructure("000900:Diagnosed.esp", 3, 4, 1, 2, IsInterior: false),
+                new CellStructure(Worldspace, 3, 4, 1, 2, IsInterior: false),
                 [
-                    new CellChild(PersistentRef, "Persistent", 0), new CellChild(TemporaryRef, "Temporary", 0),
-                    new CellChild(Landscape, "Landscape", 0), new CellChild(Navmesh, "NavigationMeshes", 0),
+                    new ChildRecord(PersistentRef, "Persistent", 0), new ChildRecord(TemporaryRef, "Temporary", 0),
+                    new ChildRecord(Landscape, "Landscape", 0), new ChildRecord(Navmesh, "NavigationMeshes", 0),
                 ]),
             new PluginDocument("refr", TemporaryRef, $$"""{"FormKey": "{{TemporaryRef}}"}"""),
             new PluginDocument("land", Landscape, $$"""{"FormKey": "{{Landscape}}"}"""),
             new PluginDocument("navm", Navmesh, $$"""{"FormKey": "{{Navmesh}}"}""", NavmeshDiagnosis),
+            new PluginDocument(
+                "qust", Quest, $$"""{"FormKey": "{{Quest}}"}""", "the codec refused this quest",
+                Contents: [new ChildRecord(Topic, "DialogTopics", 0)]),
+            new PluginDocument("dial", Topic, $$"""{"FormKey": "{{Topic}}"}"""),
         ];
 
         public void Dispose()
