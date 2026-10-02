@@ -34,8 +34,6 @@ internal static class Fallout4KeyedArrayAnnotations
         ("IStaticGetter", "Properties", ["ActorValue"]),
         ("ITerminalGetter", "Properties", ["ActorValue"]),
 
-        ("IFurnitureGetter", "Items", ["Item.Item"]),
-        ("INpcGetter", "Items", ["Item.Item"]),
         ("ILeveledItemGetter", "FilterKeywordChances", ["FilterKeyword"]),
         ("ILeveledNpcGetter", "FilterKeywordChances", ["FilterKeyword"]),
         ("IConstructibleObjectGetter", "Components", ["Component"]),

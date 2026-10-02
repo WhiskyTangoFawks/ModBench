@@ -35,7 +35,7 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static readonly (FormKey Key, string RecordType, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
     [
-        (NpcKey, "npc_", ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties"], Npc),
+        (NpcKey, "npc_", ["Factions", "Perks", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties"], Npc),
         (FactionKey, "fact", ["Relations", "Ranks"], Faction),
         (LeveledItemKey, "lvli", ["FilterKeywordChances"], LeveledItem),
         (MiscItemKey, "misc", ["Components"], MiscItem),
@@ -94,9 +94,6 @@ public sealed class Fallout4KeyedArrayCompareTests
         Perks = [.. InOrder(reversed,
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(A), Rank = 1 },
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(B), Rank = 2 })],
-        Items = [.. InOrder(reversed,
-            new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(A), Count = 1 } },
-            new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(B), Count = 2 } })],
         Attacks = [.. InOrder(reversed,
             new Attack { AttackEvent = "attackStart", AttackData = new AttackData { DamageMult = 1 } },
             new Attack { AttackEvent = "bashStart", AttackData = new AttackData { DamageMult = 2 } })],
