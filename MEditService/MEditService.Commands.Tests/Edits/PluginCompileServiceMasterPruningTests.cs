@@ -56,7 +56,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster()
+    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster_LeavingNoTempDirectory()
     {
         var compileService = CompileServices.Over(_loadOrder);
 
@@ -66,16 +66,6 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.RefusalReason);
         Assert.Contains("DLCNukaWorld.esm", result.RefusalReason);
         Assert.Contains("Mutagen #688", result.RefusalReason);
-    }
-
-    [Fact]
-    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
-    {
-        var compileService = CompileServices.Over(_loadOrder);
-
-        var result = await compileService.CompileAsync(_plugin);
-
-        Assert.False(result.Succeeded);
         Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
     }
 

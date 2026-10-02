@@ -9,7 +9,6 @@ namespace MEditService.Http.Tests.Architecture;
 /// <summary>Every write route reaches a handler named for its gesture, and the handlers and the
 /// gestures are one set (ADR-0014 invariant 3). No route is excused, so a gesture written inline in
 /// its endpoint fails here.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class WriteRouteHandlerTests
 {
     // The wire door for each gesture, and the type behind it. Spelled rather than derived, so a

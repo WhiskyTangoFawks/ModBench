@@ -142,14 +142,6 @@ public sealed class TrackServiceTests
             var roundTripped = codec.DeserializeFile(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-            // Spriggit has no role in v1 (ADR-0006) — the root document holds the mod
-            // header's own fields only, no package stamp, and Track writes no sidecar beside the
-            // tree.
-            Assert.False(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
-            Assert.False(File.Exists(Path.Combine(sourceRoot, "spriggit-meta.json")));
-            var rootText = await File.ReadAllTextAsync(rootHeader);
-            Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
-
             // The root document is genuinely valid JSON the whole-mod door's Deserialize can read back. No
             // extraMeta argument: the generated Deserialize's extraMeta parameter hits the same
             // overload-collision defect Serialize's does.

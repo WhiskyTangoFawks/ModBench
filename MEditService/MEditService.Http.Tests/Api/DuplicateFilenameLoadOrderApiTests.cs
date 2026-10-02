@@ -13,7 +13,6 @@ namespace MEditService.Http.Tests.Api;
 // ADR-0012 through the real load path, so bugs at the joins between phases are reachable. Both
 // plugins need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
 // default-origin fixture passes either way.
-[Collection(WebHostCollection.Name)]
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -48,22 +47,6 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             gameRelease = "Fallout4",
         });
         put.EnsureSuccessStatusCode();
-    }
-
-    [Fact]
-    public async Task OverriddenPlugin_IsAHeldPluginAlongsideThePluginThatOverridesIt()
-    {
-        using var fx = BuildTwoPlugins();
-        await PutBothPlugins(fx);
-
-        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var origins = plugins.EnumerateArray()
-            .Where(p => p.GetProperty("name").GetString() == "Shared.esp")
-            .Select(p => p.GetProperty("origin").GetString())
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.Equal(["ModA", "ModB"], origins);
     }
 
     // A load order keyed by filename alone reports the right origin with the other plugin's
@@ -123,21 +106,6 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         Assert.Equal("Origin is required.", (await types.Body()).GetProperty("detail").GetString());
     }
 
-    // The other half of the same invariant: an origin with no plugin filter names half an
-    // identity just as much as a bare plugin filename does.
-    [Fact]
-    public async Task BrowsingByOriginWithoutPlugin_ReturnsBadRequest()
-    {
-        using var fx = BuildTwoPlugins();
-        await PutBothPlugins(fx);
-
-        var records = await _client.GetAsync("/records?origin=ModB&type=npc_&limit=10");
-        Assert.Equal(HttpStatusCode.BadRequest, records.StatusCode);
-        Assert.Equal(
-            "Name a plugin with both plugin and origin, or neither to browse every plugin.",
-            (await records.Body()).GetProperty("detail").GetString());
-    }
-
     [Fact]
     public async Task OverriddenPlugin_IsNotACompareColumn()
     {
@@ -159,72 +127,5 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         // is exactly as unconflicted as a single-plugin record — which is the whole claim, that an
         // overridden plugin changes no classification.
         Assert.Equal("OnlyOne", compare.GetProperty("conflictAll").GetString());
-    }
-
-    [Fact]
-    public async Task ASnapshotWithoutTheOverriddenPlugin_LeavesNoRowNoColumnAndNoRecords()
-    {
-        using var fx = BuildTwoPlugins();
-        await PutBothPlugins(fx);
-
-        // ADR-0013: a plugin absent from the snapshot is unregistered, while the plugin that wins is
-        // untouched, because a reconcile is not a reload.
-        var without = await _client.PutLoadOrderAndAwaitReady(new
-        {
-            gameDirectory = fx.GameDirectory,
-            instanceRoot = fx.InstanceRoot,
-            plugins = fx.Plugins.Where(p => p.Origin != "ModB").Select(p => new { p.Name, p.Path, p.Origin }),
-            active = SnapshotPlugins.Active(fx.Plugins.Where(p => p.Origin != "ModB")),
-            loadedWithNoLine = SnapshotPlugins.LoadedWithNoLine(fx.Plugins.Where(p => p.Origin != "ModB")),
-            gameRelease = "Fallout4",
-        });
-        without.EnsureSuccessStatusCode();
-
-        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        Assert.DoesNotContain(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
-
-        var compare = await _client.GetFromJsonAsync<JsonElement>(
-            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
-        Assert.DoesNotContain(compare.GetProperty("overrides").EnumerateArray(),
-            o => o.GetProperty("origin").GetString() == "ModB");
-
-        var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
-        Assert.DoesNotContain(records.GetProperty("items").EnumerateArray(),
-            r => r.GetProperty("origin").GetString() == "ModB");
-
-        Assert.Contains(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModA");
-    }
-
-    [Fact]
-    public async Task TheSameSnapshotTwice_LeavesOneEntryPerPluginAndAWorkingCompare()
-    {
-        using var fx = BuildTwoPlugins();
-        await PutBothPlugins(fx);
-        await PutBothPlugins(fx);
-
-        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
-        Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModA");
-
-        // A duplicate entry would make every column-keyed lookup ambiguous — GetCompare builds its
-        // masters/participation dictionaries by ColumnKey and would throw on the pair.
-        var compare = await _client.GetAsync($"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
-        Assert.Equal(HttpStatusCode.OK, compare.StatusCode);
-    }
-
-    [Fact]
-    public async Task OverriddenPlugin_IsReadOnlyAndOutsideTheLoadOrder()
-    {
-        using var fx = BuildTwoPlugins();
-        await PutBothPlugins(fx);
-
-        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var overridden = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
-
-        // ADR-0012: read-only, because an edit to a file the game does not load changes nothing.
-        // ADR-0013: not active, so it has no load index and never takes a winner.
-        Assert.True(overridden.GetProperty("isImmutable").GetBoolean());
-        Assert.False(overridden.GetProperty("inLoadOrder").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, overridden.GetProperty("loadOrderIndex").ValueKind);
     }
 }

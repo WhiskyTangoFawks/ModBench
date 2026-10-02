@@ -4,7 +4,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -52,15 +51,12 @@ public sealed class CompileFixture : IDisposable
         var npc = mod.Npcs.AddNew(NpcEditorId);
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew(OtherNpcEditorId);
-        mod.WriteToBinary(PluginPath);
+        TrackedTemplates.WriteTracked(ModFolder, mod);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, _instanceRoot, Release,
             [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
     }
 
     private string PluginPath => Path.Combine(ModFolder, PluginName);

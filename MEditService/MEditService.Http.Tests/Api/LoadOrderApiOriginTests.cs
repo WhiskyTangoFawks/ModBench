@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Http.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
@@ -8,7 +7,6 @@ namespace MEditService.Http.Tests.Api;
 
 // ADR-0012: the wire contract's Origin round-trip — a caller-supplied ExplicitPlugin.Origin
 // travels through /load-order and back out on GET /plugins.
-[Collection(WebHostCollection.Name)]
 public sealed class LoadOrderApiOriginTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

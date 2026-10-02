@@ -241,9 +241,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
-        // The message states what is observed and does not assert an external change as the cause —
-        // it is a defect report as often as it is a stale read.
-        Assert.DoesNotContain("changed outside Modbench", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

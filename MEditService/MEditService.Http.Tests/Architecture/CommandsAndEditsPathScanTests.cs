@@ -4,8 +4,7 @@ using MEditService.TestSupport;
 namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>A path names the Source repository (ADR-0014.5); a plugin's bytes name the Plugin
-/// adapter (ADR-0005.2). Commands and Edits ask one of those layers instead. Counted against an
-/// allowlist that stays empty.</summary>
+/// adapter (ADR-0005.2). Commands and Edits ask one of those layers instead.</summary>
 public sealed class CommandsAndEditsPathScanTests
 {
     // Neither a member named Path nor a type ending in Path (RelativePath, FieldPath) is a BCL call,
@@ -17,17 +16,16 @@ public sealed class CommandsAndEditsPathScanTests
 
     private static readonly string[] ScannedRoots = ["MEditService.Commands"];
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/commands-and-edits-path-allowlist.txt";
-
     [Fact]
-    public void CommandsAndEdits_NameAPathFileOrDirectoryOperation_OnlyAsOftenAsTheAllowlistSays()
+    public void CommandsAndEdits_NameNoPathFileOrDirectoryOperation()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
 
-        AssertCountsMatchAllowlist(
-            Counts(root, ScannedRoots),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            counts.Count == 0,
+            "Path, file or directory operations in Commands or Edits — ask the Source repository for the "
+            + "path or the Plugin adapter for the bytes instead of operating on disk directly:\n"
+            + string.Join("\n", counts));
     }
 
     // Zero offenders and zero files walked read the same: a ScannedRoots typo that scans nothing
@@ -77,19 +75,6 @@ public sealed class CommandsAndEditsPathScanTests
                     "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
                 ],
                 counts);
-
-            var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains(
-                "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains(
-                "MEditService.Commands/TrackHandler.cs: File.ReadAllBytes: 1",
-                unallowed.Message, StringComparison.Ordinal);
-
-            var stale = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, "MEditService.Commands/Edits/Gone.cs: Directory.CreateDirectory: 1"], AllowlistPath));
-            Assert.Contains(
-                "MEditService.Commands/Edits/Gone.cs: Directory.CreateDirectory: 1", stale.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -97,26 +82,6 @@ public sealed class CommandsAndEditsPathScanTests
         }
     }
 
-    private static void AssertCountsMatchAllowlist(
-        IReadOnlyList<string> counts, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = counts.Except(allowlist, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var unmatched = allowlist.Except(counts, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            $"Path, file or directory operations in Commands or Edits differ from {allowlistPath}.\n"
-            + $"Counts the allowlist does not name ({unallowed.Count}) — ask the Source repository for the "
-            + "path or the Plugin adapter for the bytes instead of operating on disk directly, or get the "
-            + "maintainer's ruling before adding a line:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; the shortening of "
-            + "this list is what the work is measured by:\n"
-            + string.Join("\n", unmatched));
-    }
-
-    // A count, not a line number: an operation is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))

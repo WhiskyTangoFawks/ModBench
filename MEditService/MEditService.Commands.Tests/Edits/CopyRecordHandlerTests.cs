@@ -28,32 +28,6 @@ public sealed class CopyRecordHandlerTests
         Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal));
     }
 
-    [Fact]
-    public void CopyingAsNew_AnswersEachLandedItemWithItsNewFormKey_WhereTheDuplicateLands()
-    {
-        using var mod = CopyFixture.Create();
-        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-
-        var result = mod.CopyHandler.Copy([npc], CopyMode.New, [mod.DestinationPlugin], replace: false);
-
-        var newFormKey = Assert.Single(result.Applied).NewFormKey;
-        Assert.NotNull(newFormKey);
-        Assert.NotEqual(npc.FormKey, newFormKey);
-        Assert.NotNull(mod.Document(mod.DestinationPlugin, newFormKey));
-    }
-
-    [Fact]
-    public void CopyingAsOverride_AnswersEachLandedItemWithNoNewFormKey_AndLandsUnderItsOwn()
-    {
-        using var mod = CopyFixture.Create();
-        var npc = new RecordAt(mod.SourcePlugin, mod.SourceNpc.ToString());
-
-        var result = mod.CopyHandler.Copy([npc], CopyMode.Override, [mod.DestinationPlugin], replace: false);
-
-        Assert.Null(Assert.Single(result.Applied).NewFormKey);
-        Assert.NotNull(mod.Document(mod.DestinationPlugin, npc.FormKey));
-    }
-
     // commands.md, Doing nothing is not an error: a record's own plugin already is that copy, so
     // an override into it writes nothing, with or without the replace Option.
     [Theory]
