@@ -43,34 +43,12 @@ public sealed class TrackedPluginDerivationTests : IDisposable
 
     private bool ReadsAsTracked() => _index.RequireReads().GetTrackedPlugins().Contains(_mod.KeyOf());
 
-    // Track's documents carry the bytes the binary already gave, so the validation below moves no
-    // row: what it moves is which truth answers for the plugin.
-    [Fact]
-    public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_OnceASourceRefreshLands()
-    {
-        Assert.False(ReadsAsTracked());
-        TrackedMods.Track(_mod, _fixture.GameDirectory);
-
-        _index.ValidateIndex(_mod.KeyOf());
-
-        Assert.True(ReadsAsTracked());
-    }
-
-    [Fact]
-    public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextValidate()
-    {
-        TrackedMods.Track(_mod, _fixture.GameDirectory);
-
-        _index.ValidateIndex(_mod.KeyOf());
-
-        Assert.True(ReadsAsTracked());
-    }
-
     // The snapshot is the one it already holds: nothing in the load order moved, only which truth
     // the plugin's folder offers.
     [Fact]
     public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextSnapshot()
     {
+        Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
         Reconcile();
@@ -82,24 +60,11 @@ public sealed class TrackedPluginDerivationTests : IDisposable
     public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextSnapshot()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
-        _index.ValidateIndex(_mod.KeyOf());
+        Reconcile();
         Assert.True(ReadsAsTracked());
 
         Directory.Delete(Path.Combine(_mod.ModFolderOf(), ".git"), recursive: true);
         Reconcile();
-
-        Assert.False(ReadsAsTracked());
-    }
-
-    [Fact]
-    public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextValidate()
-    {
-        TrackedMods.Track(_mod, _fixture.GameDirectory);
-        _index.ValidateIndex(_mod.KeyOf());
-        Assert.True(ReadsAsTracked());
-
-        Directory.Delete(Path.Combine(_mod.ModFolderOf(), ".git"), recursive: true);
-        _index.ValidateIndex(_mod.KeyOf());
 
         Assert.False(ReadsAsTracked());
     }

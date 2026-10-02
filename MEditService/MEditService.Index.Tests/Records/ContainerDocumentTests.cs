@@ -13,7 +13,8 @@ namespace MEditService.Index.Tests.Records;
 
 /// <summary>The scope of "embedded" is Spriggit's, so a quest's document carries none of its
 /// topics. Subjects are measured, since a hardcoded FormKey would decay silently.</summary>
-public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 {
     private static readonly string[] CellChildFields = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"];
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);

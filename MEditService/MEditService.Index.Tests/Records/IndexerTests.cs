@@ -42,7 +42,7 @@ public sealed class IndexerTests
     private static void ReDerive(Indexer indexer, LoadOrderEntry entry)
     {
         PluginBinaries.Touch(entry.Path);
-        Assert.True(indexer.Revalidate(entry.KeyOf()));
+        Assert.True(indexer.Revalidate());
     }
 
     private static string SharedNpc(Indexer indexer) =>
@@ -142,7 +142,7 @@ public sealed class IndexerTests
         PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = indexer.Sequence;
 
-        Assert.True(indexer.Revalidate(new PluginAddress("B.esp", PluginOrigin.DataDirectory)));
+        Assert.True(indexer.Revalidate());
 
         Assert.Equal(before + 1, indexer.Sequence);
     }
@@ -157,7 +157,7 @@ public sealed class IndexerTests
         foreach (var entry in fx.Plugins) PluginBinaries.Touch(entry.Path);
         var before = indexer.Sequence;
 
-        indexer.ValidateIndex(null);
+        indexer.NextSnapshot();
 
         Assert.Equal(before + 1, indexer.Sequence);
     }

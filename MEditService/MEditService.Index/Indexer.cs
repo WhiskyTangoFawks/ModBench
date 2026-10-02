@@ -774,39 +774,29 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _schemaReflector.GetSchemas(gameRelease),
             new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), dataFolderPath));
 
-    /// <summary>ADR-0015 invariant 4: validates <paramref name="plugin"/>, or every plugin held when
-    /// null, by content, and repairs what differs. <c>NeedsRebuild</c> names a plugin this call
-    /// re-derived whole.</summary>
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginAddress? plugin) =>
-        ValidateIndex(plugin, CancellationToken.None);
-
-    private List<ValidationReport> ValidateIndex(PluginAddress? plugin, CancellationToken token)
+    // ADR-0015 invariant 4: validates every plugin held, by content, and repairs what differs.
+    private void ValidateIndex(CancellationToken token)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
         using var _ = WriteGate.Enter();
 
         var (held, index) = RequireScopeCore();
-        // One advance for everything this validate re-derives, however many plugins it names.
+        // One advance for everything this validate re-derives.
         using var projection = index.BeginProjection();
         // A plugin not held failed to open, and the reconcile opens it again once its bytes change.
-        IReadOnlyList<PluginMetadata> plugins = held.Plugins;
-        if (plugin is { } one) plugins = held.Find(one) is { } found ? [found] : [];
-
-        var reports = new List<ValidationReport>(plugins.Count);
-        foreach (var metadata in plugins)
+        foreach (var metadata in held.Plugins)
         {
             token.ThrowIfCancellationRequested();
-            reports.Add(ValidateOne(held, index, metadata));
+            ValidateOne(held, index, metadata);
         }
 
         ReapplyFilter();
-        return reports;
     }
 
     // plugins.md, A row, Plugin, "Failed to read": a plugin that cannot be read is flagged, and the
     // rest are still validated. A failed one is read whole again once what it reads from changed.
-    private ValidationReport ValidateOne(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
+    private void ValidateOne(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
         var key = plugin.Key;
         var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path);
@@ -816,14 +806,14 @@ public sealed class Indexer : IQueryIndex, IDisposable
             if (!holdsTree && !File.Exists(plugin.Path))
             {
                 if (index.IndexedContentHash(key) is not null) UnindexGonePlugin(key);
-                return ValidationReport.Clean(key);
+                return;
             }
 
             // Rows a failed read left say nothing of what the plugin now reads from.
             if (held.IsHeldWithAFailure(key))
             {
                 if (!StillFailing(index, key, plugin.Path)) ReindexHeldPlugin(key);
-                return ValidationReport.Clean(key);
+                return;
             }
 
             var report = index.Validate(key, modFolder);
@@ -832,7 +822,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 foreach (var failure in report.Failures)
                     _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
                 FailRead(held, index, key, plugin.Path, ValidationFailure(holdsTree, string.Join("; ", report.Failures)));
-                return report;
+                return;
             }
 
             // Gained records are refreshed by key so the rows that moved are named (ADR-0015,
@@ -846,7 +836,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
             {
                 ReindexHeldPlugin(key);
             }
-            return report;
         }
         catch (Exception ex) when (ex is not (OperationCanceledException or OutOfMemoryException))
         {
@@ -858,7 +847,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 if (ex is IOException or UnauthorizedAccessException) FailReadUntilTheNextSnapshot(held, key, reason);
                 else FailRead(held, index, key, plugin.Path, reason);
             }
-            return new ValidationReport(key, [], NeedsRebuild: false, [PluginLoadFailure.ReasonFor(ex)]);
         }
     }
 
@@ -879,7 +867,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 if (_disposed || _heldPlugins is null || _heldElsewhereMessage is not null || _failureMessage is not null)
                     return;
             }
-            ValidateIndex(null, BeginReconcile());
+            ValidateIndex(BeginReconcile());
         }
         catch (OperationCanceledException ex)
         {

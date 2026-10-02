@@ -1,5 +1,4 @@
 using MEditService.Index.Tests.TestSupport;
-using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -70,7 +69,7 @@ public class FormReferencesTests
         using var index = Indexes.Reconciled(fixture);
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        Assert.True(index.Revalidate(new PluginAddress("Reindex.esp", "Data")));
+        Assert.True(index.Revalidate());
 
         Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
     }

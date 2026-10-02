@@ -50,7 +50,7 @@ public class FormLookupTests
         var before = reads.GetDocuments(key).Count;
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        Assert.True(index.Revalidate(key));
+        Assert.True(index.Revalidate());
 
         Assert.Equal(before, reads.GetDocuments(key).Count);
         Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Total);

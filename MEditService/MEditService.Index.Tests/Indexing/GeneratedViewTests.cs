@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.TestSupport;
@@ -8,30 +9,43 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>ADR-0011: the per-type relations are the contract for user filter SQL, so they are
-/// asked through the filter door over real game data rather than against literals.</summary>
-public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+/// asked over real game data rather than against literals. Asked off the store, past the door,
+/// whose refusals SqlDoorSealTests owns.</summary>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
 {
     private static IReadOnlyDictionary<string, RecordTableSchema> Schemas =>
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private int Matching(string sql) => fixture.Index.Matching(sql);
+    private int Matching(string sql) => IndexFiles.Rows(fixture.InstanceRoot, sql).Count;
 
-    // One filter per table rather than per column: SetFilter re-materializes the whole match set,
-    // and there are thousands of columns.
-    // COLUMNS() with no match is a binder error, so the door refuses a filter naming none of them.
+    private bool Binds(string sql)
+    {
+        try
+        {
+            IndexFiles.Rows(fixture.InstanceRoot, sql);
+            return true;
+        }
+        catch (DuckDBException)
+        {
+            return false;
+        }
+    }
+
+    // COLUMNS() with no match is a binder error.
     private bool AnyColumnOf(string table, IEnumerable<string> columns)
     {
         var names = columns.Select(Regex.Escape).ToList();
-        return names.Count != 0 && fixture.Index.Accepts($"""
+        return names.Count != 0 && Binds($"""
             SELECT form_key FROM "{table}" WHERE EXISTS (SELECT COLUMNS('^({string.Join("|", names)})$') FROM "{table}")
             """);
     }
 
     [Fact]
-    public void EveryRecordType_IsNameableInAFilter()
+    public void EveryRecordType_HasAView()
     {
         var unreachable = Schemas.Keys
-            .Where(table => !fixture.Index.Accepts($"SELECT form_key FROM \"{table}\""))
+            .Where(table => !Binds($"SELECT form_key FROM \"{table}\""))
             .ToList();
 
         Assert.NotEmpty(Schemas);
@@ -39,7 +53,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     }
 
     [Fact]
-    public void ANonNullableScalar_NeverReadsNullThroughTheFilter()
+    public void ANonNullableScalar_NeverReadsNullThroughItsView()
     {
         Assert.Contains(Schemas["npc_"].RecordColumns, c => c.Name == "XpValueOffset");
 
@@ -50,9 +64,8 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     [Fact]
     public void OmittedDefaults_ReadAsTheDefault_NotNull()
     {
-        var absent = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin)
-            .Where(d => d.RecordType == "npc_")
-            .Count(d => !JsonDocument.Parse(d.Body ?? "{}").RootElement.TryGetProperty("CalcMinLevel", out _));
+        var absent = IndexFiles.Rows(fixture.InstanceRoot, "SELECT body FROM records WHERE record_type = 'npc_'")
+            .Count(row => !JsonDocument.Parse(row[0]).RootElement.TryGetProperty("CalcMinLevel", out _));
 
         Assert.True(absent > 0, "Positive control: some npc_ documents must omit CalcMinLevel for this to mean anything.");
         Assert.Equal(0, Matching("SELECT form_key FROM \"npc_\" WHERE \"CalcMinLevel\" IS NULL"));
@@ -73,9 +86,8 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     {
         // Taken off a document rather than written down: the curated slice is regenerable, and a
         // flag it stops carrying would turn the LIKE below into a match against nothing.
-        var flagName = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin)
-            .Where(d => d.RecordType == "cell")
-            .Select(d => d.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
+        var flagName = IndexFiles.Rows(fixture.InstanceRoot, "SELECT form_key FROM cell")
+            .Select(row => fixture.Reads.GetDocument(row[0], CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
             .OfType<JsonElement>()
             .Where(value => value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0)
             .Select(value => value[0].GetString())
@@ -90,7 +102,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     }
 
     [Fact]
-    public void AFilterNamesEveryViewableScalar_AndNoArrayStructOrClassVaryingColumn()
+    public void AViewCarriesEveryViewableScalar_AndNoArrayStructOrClassVaryingColumn()
     {
         var offenders = new List<string>();
         var tablesWithScalars = 0;
@@ -107,7 +119,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     }
 
     [Fact]
-    public void GrupTimestamps_AreAbsentFromTheSchemaAndTheFilterAlike()
+    public void GrupTimestamps_AreAbsentFromTheSchemaAndTheViewAlike()
     {
         string[] timestamps = ["timestamp", "TemporaryTimestamp", "PersistentTimestamp"];
 
@@ -119,7 +131,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
                 $"Positive control: {table} must carry real filterable columns.");
 
             foreach (var name in timestamps) Assert.DoesNotContain(name, schemaNames);
-            Assert.False(AnyColumnOf(table, timestamps), $"{table} names a GRUP timestamp in a filter.");
+            Assert.False(AnyColumnOf(table, timestamps), $"{table}'s view carries a GRUP timestamp.");
         }
     }
 }

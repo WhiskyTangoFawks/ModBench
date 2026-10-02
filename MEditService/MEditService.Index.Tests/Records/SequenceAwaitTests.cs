@@ -20,7 +20,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
     public SequenceAwaitTests()
     {
-        _index = new Indexer(_holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance, timeProvider: _clock);
+        _index = Indexes.Open(_holder, timeProvider: _clock);
         _index.Reconcile(_holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
     }
 
@@ -63,7 +63,7 @@ public sealed class SequenceAwaitTests : IDisposable
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);
-        Assert.True(_index.Revalidate(_fixture.Plugins.Single().KeyOf()));
+        Assert.True(_index.Revalidate());
 
         // The landing already happened above; this wakes the poll due on the fake clock's own
         // timer to re-check, never touching the day-long deadline that answers "not yet".

@@ -2,7 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Index.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>The user is never shown a Mutagen class name, so labels are the wire contract: a
 /// frontend humanizer cannot know the union's base type.</summary>
@@ -30,24 +30,6 @@ public class AbstractUnionDiscriminatorMetadataTests
         Assert.Equal(
             ["QuestReferenceAlias", "QuestLocationAlias", "QuestCollectionAlias"],
             kind.EnumMembers.Select(m => m.Value));
-    }
-
-    [Fact]
-    public void QuestAliasDiscriminator_LabelsTheRowAndEveryLeafWithoutNamingAClass()
-    {
-        var kind = Discriminator("qust", "Aliases", "[]", "MutagenObjectType");
-
-        Assert.Equal("Kind", kind.DisplayLabel);
-        Assert.Equal(["Reference", "Location", "Collection"], kind.EnumMembers.Select(m => m.Label));
-    }
-
-    [Fact]
-    public void NpcLevelDiscriminator_FallsBackToTheLeafsOwnWordsWhenStrippingTheBaseLeavesNothing()
-    {
-        var kind = Discriminator("npc_", "Level", "MutagenObjectType");
-
-        Assert.Equal(["NpcLevel", "PcLevelMult"], kind.EnumMembers.Select(m => m.Value));
-        Assert.Equal(["Npc Level", "Pc Level Mult"], kind.EnumMembers.Select(m => m.Label));
     }
 
     [Fact]

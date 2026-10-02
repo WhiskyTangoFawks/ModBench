@@ -5,7 +5,7 @@ namespace MEditService.Index.Tests.Indexing;
 /// <summary>ADR-0011: a typed read reconstitutes through the codec, so the relations a filter may
 /// name are the record types and the side tables, never a decomposition of a record's own
 /// fields.</summary>
-public sealed class SqlDoorRelationInventoryTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+public sealed class SqlDoorRelationInventoryTests(SqlDoorFixture fixture) : IClassFixture<SqlDoorFixture>
 {
     // Named through EXISTS rather than selected from: a side table keys its rows by source and
     // target, so only `records` and the per-type relations carry a bare form_key.

@@ -2,8 +2,6 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
-using MEditService.LoadOrder;
-using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
@@ -13,15 +11,14 @@ namespace MEditService.Index.Tests.RealData;
 /// <summary>Whole-document equality means nothing unless the codec is a fixed point: deserializing
 /// a stored document and serializing it again gives the same bytes, over every record of the real
 /// plugin rather than a curated few.</summary>
+[Collection(CutDownPluginCollection.Name)]
 public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutputHelper output)
-    : IClassFixture<CutDownPluginFixture>
 {
     [Fact]
     public async Task EveryStoredDocument_DeserializesAndReserializesToItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var documents = fixture.Reads
-            .GetDocuments(new PluginAddress(RealDataPlugin.PluginFileName, "Data"));
+        var documents = IndexFiles.Rows(fixture.InstanceRoot, "SELECT record_type, form_key, editor_id, body FROM records");
 
         // The plugin's own record count, so a fixture that stopped being indexed cannot pass this
         // over an empty list.
@@ -30,10 +27,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
 
         var divergent = new List<string>();
         foreach (var document in documents)
-        {
-            var stored = Assert.IsType<string>(document.Body);
-            divergent.AddRange(await Divergence(codec, document, stored));
-        }
+            divergent.AddRange(await Divergence(codec, document));
 
         output.WriteLine($"{documents.Count} records round-tripped through the codec.");
         Assert.True(divergent.Count == 0,
@@ -41,16 +35,16 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
             + string.Join("\n", divergent.Take(10)));
     }
 
-    private static async Task<IEnumerable<string>> Divergence(
-        RecordTextCodec codec, RecordDocument document, string stored)
+    private static async Task<IEnumerable<string>> Divergence(RecordTextCodec codec, string[] document)
     {
-        var where = $"{document.RecordType} {document.FormKey} ({document.EditorId})";
+        var (recordType, stored) = (document[0], document[3]);
+        var where = $"{recordType} {document[1]} ({document[2]})";
         string reserialized;
         try
         {
-            reserialized = document.RecordType == PluginHeader.RecordType
+            reserialized = recordType == PluginHeader.RecordType
                 ? await RoundTripHeader(stored)
-                : await RoundTripRecord(codec, document.RecordType, stored);
+                : await RoundTripRecord(codec, recordType, stored);
         }
         catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
         {
