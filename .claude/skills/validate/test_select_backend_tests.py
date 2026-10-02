@@ -4,14 +4,12 @@ import contextlib
 import io
 import json
 import pathlib
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import select_backend_tests as sbt  # noqa: E402
+import select_backend_tests as sbt
 
-TEST_SDK = '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />'
+TEST_SDK_REFERENCE = '<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />'
 
 
 def csproj(*items):
@@ -30,9 +28,9 @@ def write_service(root: pathlib.Path):
     projects = {
         'Kernel': csproj(),
         'Core': csproj(reference('Kernel')),
-        'Kernel.Tests': csproj(TEST_SDK, reference('Kernel')),
-        'Core.Tests': csproj(TEST_SDK, reference('Core')),
-        'Support': csproj(TEST_SDK, '<None Include="..\\Data\\TestData\\**" LinkBase="TestData" />'),
+        'Kernel.Tests': csproj(TEST_SDK_REFERENCE, reference('Kernel')),
+        'Core.Tests': csproj(TEST_SDK_REFERENCE, reference('Core')),
+        'Support': csproj(TEST_SDK_REFERENCE, '<None Include="..\\Data\\TestData\\**" LinkBase="TestData" />'),
         'Data': csproj(),
     }
     for name, body in projects.items():

@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
 """Reads changed repo paths on stdin and prints the backend test projects they can break: each
-test project that includes a changed project's files, directly or through other projects. A
-changed path under MEditService/ but outside every project selects every test project. Writes
-the selection as a solution filter for `dotnet test`."""
+test project that references a changed project, directly or through other projects. A file a
+csproj links from another project counts as a reference. A changed path under MEditService/ but
+outside every project selects every test project. Writes the selection as a solution filter for
+`dotnet test`."""
 import json
 import re
 import sys
 from pathlib import Path
 
-INCLUDE_RE = re.compile(r'Include="\.\.[\\/](?P<project>[^\\/"]+)[\\/]')
+REFERENCE_RE = re.compile(r'Include="\.\.[\\/](?P<project>[^\\/"]+)[\\/]')
 TEST_SDK = 'Microsoft.NET.Test.Sdk'
 SERVICE = 'MEditService/'
 
 
 def load_projects(service: Path):
-    """Each project's name mapped to the projects it includes from, and whether it is a test
-    project."""
-    projects = {}
-    for path in service.glob('*/*.csproj'):
+    references, tests = {}, []
+    for path in sorted(service.glob('*/*.csproj')):
         text = path.read_text()
-        projects[path.parent.name] = (set(INCLUDE_RE.findall(text)), TEST_SDK in text)
-    return projects
+        references[path.parent.name] = set(REFERENCE_RE.findall(text))
+        if TEST_SDK in text:
+            tests.append(path.parent.name)
+    return references, tests
 
 
 def select(service: Path, changed):
-    projects = load_projects(service)
-    tests = sorted(name for name, (_, is_test) in projects.items() if is_test)
+    references, tests = load_projects(service)
     changed_projects = set()
     for path in changed:
         if not path.startswith(SERVICE) or path.endswith('.md'):
             continue
         project = path[len(SERVICE):].split('/')[0]
-        if project not in projects:
+        if project not in references:
             return tests
         changed_projects.add(project)
 
@@ -41,7 +41,7 @@ def select(service: Path, changed):
             project = todo.pop()
             if project not in reached:
                 reached.add(project)
-                todo.extend(projects.get(project, (set(), False))[0])
+                todo.extend(references.get(project, ()))
         return reached
 
     return [name for name in tests if reached_from(name) & changed_projects]

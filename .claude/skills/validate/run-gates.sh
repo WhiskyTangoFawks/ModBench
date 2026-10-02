@@ -87,23 +87,22 @@ echo "=== Gate runner tests ==="
 
 ARCHITECTURE_SCANS=(MEditService.Http.Tests --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.")
 
-# The test projects that reference what the branch changed, from select_backend_tests.py. The
-# architecture scans read every project's source, so they run beside any selection.
 backend_tests() {
-  local results="/tmp/medit-test-results.$(basename "$ROOT")" selected
+  local results="/tmp/medit-test-results.$(basename "$ROOT")" base changed selected
   rm -rf "$results" && mkdir -p "$results" || return
-  selected=$(
-    { git -C "$ROOT" diff --name-only --no-renames "$(git -C "$ROOT" merge-base main HEAD)" &&
-      git -C "$ROOT" ls-files --others --exclude-standard; } |
-    python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" "$ROOT/MEditService" "$results/selected.slnf"
-  ) || return
+  base=$(git -C "$ROOT" merge-base main HEAD) || return
+  changed=$(git -C "$ROOT" diff --name-only --no-renames "$base" &&
+    git -C "$ROOT" ls-files --others --exclude-standard) || return
+  selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
+    "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
   echo "Test projects: ${selected:-none, no backend change since main}" | paste -sd ' '
-  local test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
+  local dotnet_test=(dotnet test --no-build -v minimal --logger trx --results-directory "$results")
   if [[ -n $selected ]]; then
-    (cd "$ROOT/MEditService" && "${test[@]}" "$results/selected.slnf") || return
+    (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "$results/selected.slnf") || return
   fi
+  # The architecture scans read every project's source, so a change to any project can fail one.
   if { [[ -n $selected ]] || $DOCS; } && ! grep -qx MEditService.Http.Tests <<< "$selected"; then
-    (cd "$ROOT/MEditService" && "${test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
+    (cd "$ROOT/MEditService" && "${dotnet_test[@]}" "${ARCHITECTURE_SCANS[@]}") || return
   fi
   echo "=== Gate 3: Backend test times ==="
   python3 "$ROOT/.claude/skills/validate/check_test_times.py" "$results"

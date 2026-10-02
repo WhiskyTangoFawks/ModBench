@@ -3,12 +3,10 @@ the time before its assembly's first result."""
 import contextlib
 import io
 import pathlib
-import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import check_test_times as ctt  # noqa: E402
+import check_test_times as ctt
 
 
 def trx(*results):
@@ -58,13 +56,15 @@ class OverCeiling(unittest.TestCase):
                       trx(('B.First', 30, 30), ('B.Blocked', 31, 31))),
             [('A.Late', 30.0)])
 
-    def test_main_names_each_test_and_fails_only_when_one_is_over(self):
+    def test_main_fails_naming_only_the_test_over_the_ceiling(self):
         (self.dir / 'a.trx').write_text(trx(('A.Quick', 1, 0.5), ('A.Slow', 100, ctt.CEILING_SECONDS + 1)))
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
             self.assertEqual(ctt.main([str(self.dir)]), 1)
         self.assertIn('A.Slow', printed.getvalue())
         self.assertNotIn('A.Quick', printed.getvalue())
+
+    def test_main_passes_when_no_test_is_over_the_ceiling(self):
         (self.dir / 'a.trx').write_text(trx(('A.Quick', 1, 0.5)))
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(ctt.main([str(self.dir)]), 0)
