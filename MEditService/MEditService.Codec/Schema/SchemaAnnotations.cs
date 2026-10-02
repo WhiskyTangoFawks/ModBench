@@ -16,15 +16,14 @@ public enum KnownDefectEffect
 }
 
 /// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
-/// record header member, why a write reaching it is refused, whether it reads as the header's
-/// FormKey, and whether it is xEdit's Version Control Info 1.</summary>
+/// record header member, why a write reaching it is refused, and whether it reads as the header's
+/// FormKey.</summary>
 internal sealed record PluginHeaderMember(
     string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
     bool IsVersionControlInfo1 = false);
 
-/// <summary>One member of the record header: its xEdit label, whether the game ignores it, so the
-/// compare shows it and takes it into no conflict (xEdit's cpIgnore), and whether it is xEdit's
-/// Version Control Info 1.</summary>
+/// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
+/// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
 internal sealed record RecordHeaderMember(
     string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false, bool IsVersionControlInfo1 = false);
 
