@@ -8,7 +8,7 @@ Verified means observed, and that includes my claims. A run you watched outranks
 
 Work test-first, using `/tdd` at the seams the ticket names. Typecheck and run the single test files you are touching as you go, rather than saving every failure for the end.
 
-Run `/validate` when the work stands, for the full suite. Report which gates ran and why.
+Run `/validate` when the work stands. Report which gates ran and why.
 
 Review is the orchestrator's and is dispatched against your branch, so do not run `/code-review` yourself.
 
