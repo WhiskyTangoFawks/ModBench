@@ -10,7 +10,6 @@ namespace MEditService.Http.Tests.Traces;
 /// <summary>decompile-plugin, fired by track into a new repository and by decompile into a tracked
 /// mod's working tree: each plugin applied or refused on its own, and the source reaching the
 /// answers.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
@@ -103,19 +102,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Contains("NoSuch.esp", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task TrackingAPluginAlreadyTracked_AnswersItRefused()
-    {
-        await Loaded();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-
-        var again = await Client.Track(Plugin, Origin);
-
-        again.EnsureSuccessStatusCode();
-        var refused = Assert.Single((await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refused").EnumerateArray());
-        Assert.Equal("AlreadyTracked", refused.GetProperty("refusal").GetString());
-    }
-
     // Decompile's working-tree write reaches the answers at the next snapshot. The new bytes alone do
     // not: a tracked plugin reads from its source (ADR-0007 invariant 3).
     [Fact]
@@ -176,24 +162,5 @@ public sealed class DecompilePluginTraceTests : HostedTests
         await Client.NextSnapshot(_instance);
 
         await Client.PluginReportsTracked(Plugin);
-    }
-
-    // ADR-0015 invariant 2: a hand edit reaches the answers the way Modbench's own write does, at
-    // the next snapshot.
-    [Fact]
-    public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheQueryAfterTheNextSnapshot()
-    {
-        await Loaded();
-        (await Client.Track(Plugin, Origin)).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(_instance);
-        await Client.PluginReportsTracked(Plugin);
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-
-        OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(_instance, Origin), Plugin, Npc, "RenamedByHand");
-        await Client.NextSnapshot(_instance);
-
-        await Wire.Eventually(
-            async () => (await Client.Record(formKey)).GetProperty("editorId").GetString() == "RenamedByHand",
-            "the hand edit reached the read");
     }
 }

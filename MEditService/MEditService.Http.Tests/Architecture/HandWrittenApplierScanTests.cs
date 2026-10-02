@@ -18,8 +18,6 @@ public sealed class HandWrittenApplierScanTests
     private static readonly string[] ScannedRoots =
         [Path.Combine("MEditService.Codec", "Schema"), Path.Combine("MEditService.Commands", "Edits")];
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/hand-written-applier-allowlist.txt";
-
     // The name is captured dotted and matched on its last segment, so a fully qualified
     // construction cannot slip past; a name ending the line is an object initializer whose brace
     // opens on the next.
@@ -28,7 +26,7 @@ public sealed class HandWrittenApplierScanTests
     private static readonly IReadOnlySet<string> MutagenTypeNames = MutagenAndNoggogTypeNames();
 
     [Fact]
-    public void EditingStack_HandWritesNoApplier_OutsideTheAllowlist()
+    public void EditingStack_HandWritesNoApplier()
     {
         // The names come from the assemblies, so a load order that resolved none would pass this
         // over an empty set rather than over the surface it guards.
@@ -36,16 +34,16 @@ public sealed class HandWrittenApplierScanTests
         Assert.Contains("TranslatedString", MutagenTypeNames);
         Assert.Contains("FormLink", MutagenTypeNames);
 
-        var root = ArchitectureTests.SolutionDirectory();
+        var sites = Sites(ArchitectureTests.SolutionDirectory(), ScannedRoots);
 
-        AssertSitesMatchAllowlist(
-            Sites(root, ScannedRoots),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            sites.Count == 0,
+            "The editing stack's hand-written applier sites — the codec owns deserialization:\n"
+            + string.Join("\n", sites));
     }
 
     [Fact]
-    public void TheScan_NamesASiteNoLineAllows_AndALineNoSiteMatches()
+    public void TheScan_NamesAMutagenConstruction_AndPassesBuildOutputAndOtherTypes()
     {
         var root = Directory.CreateTempSubdirectory("medit-applier-scan-").FullName;
         try
@@ -64,36 +62,11 @@ public sealed class HandWrittenApplierScanTests
             Assert.Equal(
                 ["Layer/Applier.cs: var made = new MemorySlice<byte>(bytes);", "Layer/Initializer.cs: var made = new TranslatedString"],
                 sites);
-
-            var unallowedSite = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertSitesMatchAllowlist(sites, [], AllowlistPath));
-            Assert.Contains("Layer/Applier.cs", unallowedSite.Message, StringComparison.Ordinal);
-
-            var lineWithNoSite = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertSitesMatchAllowlist([], ["Layer/Gone.cs: var made = new MemorySlice<byte>(bytes);"], AllowlistPath));
-            Assert.Contains("Layer/Gone.cs", lineWithNoSite.Message, StringComparison.Ordinal);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
-    }
-
-    private static void AssertSitesMatchAllowlist(
-        IReadOnlyList<string> sites, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = SourceTree.NotCoveredBy(sites, allowlist);
-        var unmatched = SourceTree.NotCoveredBy(allowlist, sites);
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            $"The editing stack's hand-written applier sites differ from {allowlistPath}.\n"
-            + $"Sites the allowlist does not name ({unallowed.Count}) — the codec owns deserialization, "
-            + "so a site here needs the maintainer's ruling before its line is added:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no site ({unmatched.Count}) — delete them; the shrinking of this "
-            + "list is what the work is measured by:\n"
-            + string.Join("\n", unmatched));
     }
 
     private static List<string> Sites(string root, string[] scannedRoots) =>

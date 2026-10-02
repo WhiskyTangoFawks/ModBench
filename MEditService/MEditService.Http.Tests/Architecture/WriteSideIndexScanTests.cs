@@ -7,8 +7,7 @@ using MEditService.TestSupport;
 namespace MEditService.Http.Tests.Architecture;
 
 /// <summary>The write side names no Index type (ADR-0015 invariants 1, 2, 3 and 5): it writes
-/// source text, and what the Index holds is asked for on the read side. Counted against an
-/// allowlist that stays empty.</summary>
+/// source text, and what the Index holds is asked for on the read side.</summary>
 public sealed class WriteSideIndexScanTests
 {
     // The store and its factory, the read surface, the ref enum, the Index, the query surface, the
@@ -37,20 +36,19 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] NotWriteSide =
         ["MEditService.Index", "MEditService.Queries"];
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/write-side-index-allowlist.txt";
-
     [Fact]
-    public void TheWriteSide_NamesAnIndexType_OnlyAsOftenAsTheAllowlistSays()
+    public void TheWriteSide_NamesNoIndexType()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), ProductionRoots, NotWriteSide, Symbols);
 
-        AssertCountsMatchAllowlist(
-            Counts(root, ProductionRoots, NotWriteSide, Symbols),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            counts.Count == 0,
+            "Index types named on the write side — the write side writes source text and reads nothing "
+            + "back from the Index:\n"
+            + string.Join("\n", counts));
     }
 
-    // An empty allowlist and zero symbols found are the same string: this is what tells them apart,
+    // Zero symbols found and zero files walked read the same: this is what tells them apart,
     // so a ProductionRoots or exclusion typo that scans nothing cannot pass by matching nothing.
     [Fact]
     public void TheScan_WalksMoreThanFiftyProductionFiles()
@@ -62,23 +60,20 @@ public sealed class WriteSideIndexScanTests
         Assert.True(walked > 50, $"The write side scan walked only {walked} files under {string.Join(", ", ProductionRoots)}.");
     }
 
-    // The write side's own suites, which would otherwise keep the shape the production code no
-    // longer has: a write test that builds an Index is a test of the projection, not of the write.
-    private const string TestAllowlistPath = "MEditService.Http.Tests/Architecture/write-side-test-index-allowlist.txt";
-
     [Fact]
-    public void TheWriteSideSuites_BuildAnIndex_OnlyAsOftenAsTheAllowlistSays()
+    public void TheWriteSideSuites_BuildNoIndex()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]);
 
-        AssertCountsMatchAllowlist(
-            Counts(root, ["MEditService.Commands.Tests/Edits"], [], ["new Indexer"]),
-            SourceTree.ReadAllowlist(Path.Combine(root, TestAllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            TestAllowlistPath);
+        Assert.True(
+            counts.Count == 0,
+            "Write-side suites that build an Index — a write test that builds an Index is a test of the "
+            + "projection, not of the write:\n"
+            + string.Join("\n", counts));
     }
 
     [Fact]
-    public void TheScan_CountsPerFileAndSymbol_AndNamesANewReferenceAndADeletedOne()
+    public void TheScan_CountsPerFileAndSymbol_AndSkipsBuildOutputAndAnExcludedSubtree()
     {
         var root = Directory.CreateTempSubdirectory("medit-write-side-index-scan-").FullName;
         try
@@ -104,14 +99,6 @@ public sealed class WriteSideIndexScanTests
                     "Edits/Factory.cs: IRecordIndexFactory: 1",
                 ],
                 counts);
-
-            var newReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, ["Edits/Factory.cs: IRecordIndexFactory: 1"], AllowlistPath));
-            Assert.Contains("Edits/EditService.cs: IRecordReads: 1", newReference.Message, StringComparison.Ordinal);
-
-            var deletedReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, "Edits/Gone.cs: Indexer: 4"], AllowlistPath));
-            Assert.Contains("Edits/Gone.cs: Indexer: 4", deletedReference.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -187,24 +174,6 @@ public sealed class WriteSideIndexScanTests
             "An endpoint names the Source repository. No arrow is drawn from the HTTP endpoints to "
             + "it; resolution under the load order is Commands' to hide:\n"
             + string.Join("\n", named));
-    }
-
-    private static void AssertCountsMatchAllowlist(
-        IReadOnlyList<string> counts, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = counts.Except(allowlist, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var unmatched = allowlist.Except(counts, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            $"Index types named on the write side differ from {allowlistPath}.\n"
-            + $"Counts the allowlist does not name ({unallowed.Count}) — the write side writes source "
-            + "text and reads nothing back from the Index, so a reference here needs the maintainer's "
-            + "ruling before its line is added:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; every line here "
-            + "is a deliberate exception:\n"
-            + string.Join("\n", unmatched));
     }
 
     // A count, not a line number: a reference is the unit of work, and a line number would fail the

@@ -24,19 +24,18 @@ public sealed class SharedConcernScanTests
     // The module itself, which is where all four needles belong.
     private const string SharedModuleFileName = "WriteTargets.cs";
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/shared-concern-allowlist.txt";
-
     // A second copy, not a second implementation: a resolver rebuilt from IdentityOf and Locate,
     // an allocator from Max()+1, or a rename from File.Move matches no needle here.
     [Fact]
-    public void TheWriteSide_ImplementsASharedConcernItself_OnlyAsOftenAsTheAllowlistSays()
+    public void TheWriteSide_ImplementsNoSharedConcernItself()
     {
-        var root = ArchitectureTests.SolutionDirectory();
+        var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
 
-        AssertCountsMatchAllowlist(
-            Counts(root, ScannedRoots),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            counts.Count == 0,
+            "Shared concerns implemented outside the module — each is a second implementation of a "
+            + "concern the gestures share:\n"
+            + string.Join("\n", counts));
     }
 
     // A needle matching nothing anywhere would pass the scan above for the wrong reason, so each is
@@ -70,7 +69,7 @@ public sealed class SharedConcernScanTests
     }
 
     [Fact]
-    public void TheScan_CountsPerFileAndNeedle_AndNamesANewReferenceAndADeletedOne()
+    public void TheScan_CountsPerFileAndNeedle_AndPassesTheModuleAndBuildOutput()
     {
         var root = Directory.CreateTempSubdirectory("medit-shared-concern-scan-").FullName;
         try
@@ -93,37 +92,11 @@ public sealed class SharedConcernScanTests
                     @"Layer/Second.cs: \bUnreadableDocumentFor\b: 1",
                 ],
                 counts);
-
-            var newReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [@"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1"], AllowlistPath));
-            Assert.Contains(@"Layer/Second.cs: \bUnreadableDocumentFor\b: 1", newReference.Message, StringComparison.Ordinal);
-
-            var deletedReference = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, @"Layer/Gone.cs: \bFullIdMask\b: 4"], AllowlistPath));
-            Assert.Contains(@"Layer/Gone.cs: \bFullIdMask\b: 4", deletedReference.Message, StringComparison.Ordinal);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
-    }
-
-    private static void AssertCountsMatchAllowlist(
-        IReadOnlyList<string> counts, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = counts.Except(allowlist, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var unmatched = allowlist.Except(counts, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            $"Shared concerns implemented outside the module differ from {allowlistPath}.\n"
-            + $"Counts the allowlist does not name ({unallowed.Count}) — each is a second implementation "
-            + "of a concern the gestures share, so it needs the maintainer's ruling before its line is "
-            + "added:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; this list is empty "
-            + "and stays empty:\n"
-            + string.Join("\n", unmatched));
     }
 
     // A count, not a line number: a reference is the unit of work, and a line number would fail the

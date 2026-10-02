@@ -27,14 +27,12 @@ public sealed class GameNamespaceScanTests
         "MEditService.PluginAdapter",
     ];
 
-    private const string AllowlistPath = "MEditService.Http.Tests/Architecture/game-namespace-allowlist.txt";
-
     private static readonly Regex Identifier = new(@"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.Compiled);
 
     private static readonly IReadOnlySet<string> GameTypeNames = GameConcreteTypeNames();
 
     [Fact]
-    public void TheStackOutsideTheCodecAndTheAdapter_NamesAGameNamespace_OnlyWhereTheAllowlistSays()
+    public void TheStackOutsideTheCodecAndTheAdapter_NamesNoGameNamespace()
     {
         // The names come from the assemblies, so a load order that resolved none would pass this
         // over an empty set rather than over the surface it guards.
@@ -42,16 +40,18 @@ public sealed class GameNamespaceScanTests
         Assert.Contains("Fallout4Mod", GameTypeNames);
         Assert.Contains("IFallout4ModGetter", GameTypeNames);
 
-        var root = ArchitectureTests.SolutionDirectory();
+        var sites = Sites(ArchitectureTests.SolutionDirectory(), ScannedRoots, ExemptFolders);
 
-        AssertSitesMatchAllowlist(
-            Sites(root, ScannedRoots, ExemptFolders),
-            SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
-            AllowlistPath);
+        Assert.True(
+            sites.Count == 0,
+            "Game-concrete Mutagen names outside the codec and the Plugin adapter — a record is a Mutagen "
+            + "object only while it is being read from bytes or written to them, so ask the codec or the "
+            + "adapter instead of naming a game here:\n"
+            + string.Join("\n", sites));
     }
 
     [Fact]
-    public void TheScan_PassesTheExemptFolders_AndNamesASiteNoLineAllows_AndALineNoSiteMatches()
+    public void TheScan_PassesTheExemptFoldersAndBuildOutput_AndNamesAGameNamespaceOrTypeElsewhere()
     {
         var root = Directory.CreateTempSubdirectory("medit-game-namespace-scan-").FullName;
         try
@@ -72,38 +72,11 @@ public sealed class GameNamespaceScanTests
             Assert.Equal(
                 ["Layer/Rival.cs: using Mutagen.Bethesda.Fallout4;", "Layer/Unqualified.cs: IFallout4ModGetter mod = Open(path);"],
                 sites);
-
-            var unallowedSite = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertSitesMatchAllowlist(sites, [], AllowlistPath));
-            Assert.Contains("Layer/Rival.cs", unallowedSite.Message, StringComparison.Ordinal);
-            Assert.Contains("Layer/Unqualified.cs", unallowedSite.Message, StringComparison.Ordinal);
-
-            var lineWithNoSite = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertSitesMatchAllowlist(sites, [.. sites, "Layer/Gone.cs: using Mutagen.Bethesda.Fallout4;"], AllowlistPath));
-            Assert.Contains("Layer/Gone.cs", lineWithNoSite.Message, StringComparison.Ordinal);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
-    }
-
-    private static void AssertSitesMatchAllowlist(
-        IReadOnlyList<string> sites, IReadOnlyList<string> allowlist, string allowlistPath)
-    {
-        var unallowed = SourceTree.NotCoveredBy(sites, allowlist);
-        var unmatched = SourceTree.NotCoveredBy(allowlist, sites);
-
-        Assert.True(
-            unallowed.Count == 0 && unmatched.Count == 0,
-            $"Game-concrete Mutagen names outside the codec and the Plugin adapter differ from {allowlistPath}.\n"
-            + $"Sites the allowlist does not name ({unallowed.Count}) — a record is a Mutagen object only while "
-            + "it is being read from bytes or written to them, so ask the codec or the adapter instead of naming "
-            + "a game here:\n"
-            + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no site ({unmatched.Count}) — delete them; the shrinking of this list "
-            + "is what the work is measured by:\n"
-            + string.Join("\n", unmatched));
     }
 
     // A site carries no line number: that would fail the gate for any unrelated edit above one.

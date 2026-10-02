@@ -1,4 +1,0 @@
-# Every reference in the C# stack to the retired source order carrier, to the order member it minted
-# into a document and to its drift rule, as file, symbol and count. Children live inline in their
-# container's document and no list carries order, so this list is empty and stays empty: a line here
-# is a reference that needs the maintainer's ruling, not permission.
