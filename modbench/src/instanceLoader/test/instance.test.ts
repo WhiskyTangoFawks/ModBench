@@ -448,9 +448,13 @@ describe('Instance — built by watching', () => {
     await instance.refresh();
     const before = instance.sequence;
 
-    for (let i = 0; i < 6; i++) signal();
-
-    expect(await pastSequenceWithin(instance, before, 2000)).not.toBe(TIMED_OUT);
+    fakeSettleClock();
+    try {
+      for (let i = 0; i < 6; i++) signal();
+      await vi.advanceTimersByTimeAsync(1000);
+    } finally {
+      vi.useRealTimers();
+    }
     // Chains behind anything the burst still had queued, so a per-signal recompute would be
     // counted here rather than landing after the assertion.
     await instance.refresh();
@@ -465,10 +469,20 @@ describe('Instance — built by watching', () => {
     await instance.refresh();
     const before = instance.sequence;
 
-    windowState({ focused: false, active: false });
-    expect(await pastSequenceWithin(instance, before, 1000)).toBe(TIMED_OUT);
-    windowState({ focused: true, active: true });
-    expect(await pastSequenceWithin(instance, before, 2000)).not.toBe(TIMED_OUT);
+    fakeSettleClock();
+    try {
+      windowState({ focused: false, active: false });
+      await vi.advanceTimersByTimeAsync(1000);
+      await instance.refresh();
+      expect(instance.sequence).toBe(before + 1);
+
+      windowState({ focused: true, active: true });
+      await vi.advanceTimersByTimeAsync(1000);
+      await instance.refresh();
+      expect(instance.sequence).toBe(before + 3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('recomputes nothing while the window keeps its focus', async () => {
@@ -476,10 +490,17 @@ describe('Instance — built by watching', () => {
     await instance.refresh();
     const before = instance.sequence;
 
-    windowState({ focused: true, active: false });
-    windowState({ focused: true, active: true });
+    fakeSettleClock();
+    try {
+      windowState({ focused: true, active: false });
+      windowState({ focused: true, active: true });
+      await vi.advanceTimersByTimeAsync(1000);
+      await instance.refresh();
+    } finally {
+      vi.useRealTimers();
+    }
 
-    expect(await pastSequenceWithin(instance, before, 1000)).toBe(TIMED_OUT);
+    expect(instance.sequence).toBe(before + 1);
   });
 
   it('settles the window regaining focus with the adapter\'s signals, into one recompute', async () => {

@@ -69,12 +69,18 @@ const logged = () => vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
   .filter(m => m.type === WEBVIEW_TO_EXTENSION.LOG);
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  // Testing Library's waitFor advances fake timers only when it finds Jest's global.
+  vi.stubGlobal('jest', { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) });
   vi.stubGlobal('mEditFormKey', FORM_KEY);
   vi.mocked(vscode.postMessage).mockClear();
   disk = recordNamed('Before');
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('a record field edit, until mEdit confirms it (common.md, Unconfirmed writes)', () => {
   it('shows the new value in the cell at once, and the mark only after a short delay', async () => {
@@ -513,15 +519,10 @@ describe('an element added, removed or moved, until mEdit confirms it (common.md
     renderPanel();
     await waitFor(() => screen.getByText('[2]'));
 
-    vi.useFakeTimers();
-    try {
-      written({ op: 'remove', path: [VALUES, at(1)] });
-      written({ op: 'remove', path: [VALUES, at(1)] }, EXTENSION_TO_WEBVIEW.EDIT_REFUSED);
-      act(() => { vi.advanceTimersByTime(1000); });
-      expect(marked()).toEqual([]);
-    } finally {
-      vi.useRealTimers();
-    }
+    written({ op: 'remove', path: [VALUES, at(1)] });
+    written({ op: 'remove', path: [VALUES, at(1)] }, EXTENSION_TO_WEBVIEW.EDIT_REFUSED);
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(marked()).toEqual([]);
   });
 
   // The host tells a panel nothing more of a gesture mEdit never answered.
