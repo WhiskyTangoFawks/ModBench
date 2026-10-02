@@ -49,7 +49,7 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
         if (CellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
             return IntoPersistent ? null : IntoAnotherCell(spelled, formKey);
-        if (Said(cell, cellCopyOnTheLeft) is not { } said)
+        if (PlacedCell.SaidBy(cell, cellCopyOnTheLeft) is not { } said)
         {
             return Unknown(
                 spelled, formKey,
@@ -61,12 +61,6 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         if (PlacedCell.GridHolding(record, release) is not { } holding)
             return Unknown(spelled, formKey, "it has no position mEdit can place in a grid cell");
         return holding == PlacedCell.Grid(said) ? null : IntoAnotherCell(spelled, formKey);
-    }
-
-    private static JsonObject? Said(JsonObject cell, string? cellCopyOnTheLeft)
-    {
-        if (PlacedCell.Says(cell)) return cell;
-        return cellCopyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
     }
 
     private RecordEditResult IntoAnotherCell(string spelled, string? formKey) =>

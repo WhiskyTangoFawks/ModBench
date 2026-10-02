@@ -66,6 +66,10 @@ public enum RecordEditRefusal
     /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0018).</summary>
     PartialFormFieldReadOnly,
 
+    /// <summary>xEdit's GetCanBePartial refuses the cell a Partial Form: it is temporary and exterior, or
+    /// a plugin the game's rule excludes defines it, or neither it nor a copy to its left says which.</summary>
+    CannotBePartialForm,
+
     /// <summary>A reflected column aliasing the flags a synthetic member is one bit of would flip that bit
     /// as a side effect; the synthetic member is the one door onto it, so nothing is written.</summary>
     SyntheticMemberIndirectWrite,

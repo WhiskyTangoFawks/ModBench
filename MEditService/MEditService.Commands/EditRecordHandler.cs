@@ -93,6 +93,9 @@ public sealed class EditRecordHandler
                 cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says);
         }
 
+        if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
+            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
+
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);

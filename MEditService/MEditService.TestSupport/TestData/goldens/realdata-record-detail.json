@@ -1776,7 +1776,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -12208,7 +12207,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -26265,7 +26263,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
           "Fallout4MajorRecordFlags": [
@@ -40901,7 +40898,6 @@
         "Category": "Misc",
         "FormKey": "0048EB:Fallout4.esm",
         "FormVersion": 76,
-        "IsPartialForm": false,
         "Keyword": null,
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -50798,7 +50794,6 @@
         "Category": "Misc",
         "FormKey": "0057DD:Fallout4.esm",
         "FormVersion": 42,
-        "IsPartialForm": false,
         "Keyword": null,
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -53793,7 +53788,6 @@
         "Category": "Misc",
         "FormKey": "00581D:Fallout4.esm",
         "FormVersion": 128,
-        "IsPartialForm": false,
         "Keyword": null,
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -134906,7 +134900,6 @@
         "Filter": "Dialogue\\Diamond City\\",
         "FormKey": "003648:Fallout4.esm",
         "FormVersion": null,
-        "IsPartialForm": false,
         "Location": "002CEF:Fallout4.esm",
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -157818,7 +157811,6 @@
         "Filter": "Dialogue\\Generic\\",
         "FormKey": "0179EF:Fallout4.esm",
         "FormVersion": 122,
-        "IsPartialForm": false,
         "Location": null,
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -179673,7 +179665,6 @@
         "Filter": "Dialogue\\Concord\\",
         "FormKey": "0179F3:Fallout4.esm",
         "FormVersion": 130,
-        "IsPartialForm": false,
         "Location": null,
         "MajorRecordFlagsRaw": null,
         "Name": null,
@@ -186753,7 +186744,6 @@
         "HdLodDiffuseTexture": null,
         "HdLodNormalTexture": null,
         "InteriorLighting": null,
-        "IsPartialForm": false,
         "LandDefaults": null,
         "LargeReferences": null,
         "Location": null,

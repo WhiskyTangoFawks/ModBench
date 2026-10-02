@@ -620,23 +620,6 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void PartialForm_WritesExactlyItsBitOfTheHeaderFlags_AndTheCodecsOwnViewsOfIt()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0400 };
-        var formKey = _fixture.Seed(cell, "cell");
-        var before = _fixture.Document(formKey);
-
-        var set = Applied(formKey, SetAt(Json("true"), Member("IsPartialForm")));
-
-        Assert.Equal(0x4400, Node(set, "MajorRecordFlagsRaw").GetValue<int>());
-        Assert.All(ConditionEditTests.DocumentDiff(before, set),
-            d => Assert.Contains(d.Split(':')[0].Split('[')[0], new[] { "MajorRecordFlagsRaw", "Fallout4MajorRecordFlags", "MajorFlags" }));
-
-        var cleared = Applied(formKey, SetAt(Json("false"), Member("IsPartialForm")));
-        Assert.Equal(before, cleared);
-    }
-
-    [Fact]
     public void RecordFlags_WritesTheRawInteger_AndTheCodecsViewsOfItFollow()
     {
         const int persistent = 0x0400, cantWait = 0x0008_0000;
@@ -663,18 +646,7 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void PartialForm_OnATypeThatCannotCarryIt_IsRefusedByName()
-    {
-        var formKey = SeedNpc();
-
-        var (result, _) = _fixture.Apply(formKey, SetAt(Json("true"), Member("IsPartialForm")));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-    }
-
-    [Fact]
-    public void PartialFormRecord_RefusesItsOwnFields_ButNotTheFlagOrTheEditorId()
+    public void PartialFormRecord_RefusesItsOwnFields_ButNotItsFlagsOrItsEditorId()
     {
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = PartialFormFlag.Bit };
         var formKey = _fixture.Seed(cell, "cell");
@@ -687,7 +659,7 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(before, _fixture.Document(formKey));
 
         Assert.True(_fixture.Apply(formKey, SetAt(Json("\"Renamed\""), Member("EditorID"))).Result.Applied);
-        Assert.True(_fixture.Apply(formKey, SetAt(Json("false"), Member("IsPartialForm"))).Result.Applied);
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw"))).Result.Applied);
     }
 
     // ── container children ──────────────────────────────────────────────────

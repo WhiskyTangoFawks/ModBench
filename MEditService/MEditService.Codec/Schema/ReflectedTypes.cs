@@ -111,12 +111,6 @@ internal static class ReflectedTypes
         for (var t = type; t != null && t.Assembly == type.Assembly; t = t.BaseType) yield return t;
     }
 
-    internal static readonly HashSet<Type> IntegerTypes =
-    [
-        typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
-        typeof(int), typeof(uint), typeof(long), typeof(ulong),
-    ];
-
     /// <summary>The name the codec writes as <c>MutagenObjectType</c> for this class (the
     /// serializer's <c>GetNameWithDeclaringType</c>); <paramref name="typeArguments"/> close an open
     /// generic by name, never by constructing the closed type.</summary>
