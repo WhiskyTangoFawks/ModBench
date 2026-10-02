@@ -13,11 +13,15 @@ namespace MEditService.Index.Tests.Records;
 
 /// <summary>What one plugin's documents are, measured against the binary they came from rather
 /// than against literals: the curated slice is regenerable.</summary>
-public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
 {
     private static IModDisposeGetter OpenPlugin() => ModFactory.ImportGetter(
         new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
         GameRelease.Fallout4);
+
+    private int DocumentsOf(string where) =>
+        IndexFiles.Rows(fixture.InstanceRoot, $"SELECT form_key FROM records WHERE {where}").Count;
 
     [Fact]
     public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
@@ -31,7 +35,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
             + 1;
 
-        var actual = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin).Count;
+        var actual = DocumentsOf("TRUE");
 
         Assert.True(expected > 0, "The cut-down plugin should contain records of indexed types.");
         Assert.Equal(expected, actual);
@@ -47,9 +51,8 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
             "Positive control: the cut-down plugin must hold LAND and NAVM records, counted by getter interface, "
             + "since a binary overlay's concrete type name would count none.");
 
-        var documents = fixture.Reads.GetDocuments(CutDownPluginFixture.Plugin);
-        Assert.Equal(landscapes, documents.Count(d => d.RecordType == "land"));
-        Assert.Equal(navmeshes, documents.Count(d => d.RecordType == "navm"));
+        Assert.Equal(landscapes, DocumentsOf("record_type = 'land'"));
+        Assert.Equal(navmeshes, DocumentsOf("record_type = 'navm'"));
     }
 
     [Fact]

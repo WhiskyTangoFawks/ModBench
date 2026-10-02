@@ -136,7 +136,7 @@ public class HeaderIndexingTests
         var key = new PluginAddress("ReindexHeader.esp", "Data");
 
         PluginBinaries.Touch(fixture.Plugins.Single().Path);
-        Assert.True(index.Revalidate(key));
+        Assert.True(index.Revalidate());
 
         var stack = index.RequireReads().GetOverrideStack("000000:ReindexHeader.esp");
         Assert.NotNull(stack);

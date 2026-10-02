@@ -6,7 +6,8 @@ namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Field values only, not <c>FieldMetadata</c>: metadata is schema-derived, identical by
 /// construction, and would bury the values under thousands of lines of enum domains.</summary>
-public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
 {
     private readonly IRecordReads _repo = fixture.Reads;
     private const string Origin = "Data";

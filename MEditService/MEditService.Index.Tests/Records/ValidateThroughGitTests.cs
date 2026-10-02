@@ -25,7 +25,6 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod = _fixture.Plugins.Single();
         _npc = npc.ToString();
         _index = Indexes.Reconciled(_fixture);
-        Validate();
     }
 
     public void Dispose()
@@ -36,7 +35,9 @@ public sealed class ValidateThroughGitTests : IDisposable
 
     private IRecordReads Reads => _index.RequireReads();
 
-    private ValidationReport Validate() => Assert.Single(_index.ValidateIndex(_mod.KeyOf()));
+    private void Validate() => _index.NextSnapshot();
+
+    private bool PluginFailed => _index.Status.Failures.Any(f => f.Name == _mod.Name);
 
     private string NpcFile => _mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf()));
 
@@ -49,21 +50,9 @@ public sealed class ValidateThroughGitTests : IDisposable
     {
         using var held = new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None);
 
-        var report = Validate();
+        Assert.False(_index.Revalidate());
 
-        Assert.Empty(report.Failures);
-        Assert.False(report.NeedsRebuild);
-    }
-
-    [Fact]
-    public void AHandEdit_IsFoundThroughGitStatus()
-    {
-        _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
-
-        var report = Validate();
-
-        Assert.Equal("RenamedByHand", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
-        Assert.Contains(_npc, report.ChangedKeys, StringComparer.Ordinal);
+        Assert.False(PluginFailed);
     }
 
     [Fact]
@@ -71,12 +60,8 @@ public sealed class ValidateThroughGitTests : IDisposable
     {
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         Validate();
-        var before = _index.Sequence;
 
-        var report = Validate();
-
-        Assert.Empty(report.ChangedKeys);
-        Assert.Equal(before, _index.Sequence);
+        Assert.False(_index.Revalidate());
     }
 
     // Clean again, so git names nothing: the index's own dirty row is what brings it back.
@@ -166,7 +151,8 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod.HandEdit(Reads.DocumentOf(_npc, _mod.KeyOf()), "\"FixtureNpc\"", "\"RenamedByHand\"");
         _mod.Git("commit", "-q", "-am", "an edit committed outside Modbench");
         using (new FileStream(NpcFile, FileMode.Open, FileAccess.Read, FileShare.None))
-            Assert.NotEmpty(Validate().Failures);
+            Validate();
+        Assert.True(PluginFailed);
 
         Validate();
 
@@ -181,11 +167,12 @@ public sealed class ValidateThroughGitTests : IDisposable
         File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
         _mod.Git("add", "--", GitPath(stray));
         _mod.Git("commit", "-q", "-m", "a document declaring no FormKey");
-        Assert.NotEmpty(Validate().Failures);
+        Validate();
+        Assert.True(PluginFailed);
 
         Validate();
 
-        Assert.Contains(_index.Status.Failures, f => f.Name == _mod.Name);
+        Assert.True(PluginFailed);
     }
 
     // The tree gone, the rows come from the binary; the tree back at the same HEAD reads clean to
@@ -220,13 +207,13 @@ public sealed class ValidateThroughGitTests : IDisposable
             using (var first = Indexes.Reconciled(_fixture, instanceRoot))
             {
                 File.Delete(file);
-                first.ValidateIndex(_mod.KeyOf());
+                first.NextSnapshot();
             }
             _mod.Git("commit", "-q", "-am", "a deletion committed while the index was closed");
 
             using var second = Indexes.Reconciled(_fixture, instanceRoot);
             File.WriteAllText(file, text);
-            second.ValidateIndex(_mod.KeyOf());
+            second.NextSnapshot();
 
             var listing = second.RequireReads().Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
             Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
@@ -257,11 +244,11 @@ public sealed class ValidateThroughGitTests : IDisposable
         _mod.Git("rm", "-q", "--cached", GitPath(NpcFile));
         _mod.Git("commit", "-q", "-m", "removed from the committed tree outside Modbench");
 
-        var report = Validate();
+        Validate();
 
+        Assert.NotNull(Reads.GetDocument(_npc, _mod.KeyOf()));
         var listing = Reads.Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == _npc).WorkingTreeState);
-        Assert.Contains(_npc, report.ChangedKeys, StringComparer.Ordinal);
     }
 
     // A copy under a name that carries its FormKey reads as a new document for a record HEAD
@@ -273,10 +260,53 @@ public sealed class ValidateThroughGitTests : IDisposable
         var copy = Path.Combine(Path.GetDirectoryName(document).Require(), $"Twin - {Path.GetFileName(document).Split(" - ")[^1]}");
         File.Copy(document, copy);
 
-        Assert.NotEmpty(Validate().Failures);
+        Validate();
 
+        Assert.Equal("FixtureNpc", Reads.DocumentOf(_npc, _mod.KeyOf()).EditorId);
         var failure = Assert.Single(_index.Status.Failures);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), document), failure.Reason, StringComparison.Ordinal);
         Assert.Contains(Path.GetRelativePath(_mod.ModFolderOf(), copy), failure.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ValidatingEveryPlugin_WhenOnePluginsTreeCannotBeRead_StillValidatesTheOthers()
+    {
+        FormKey other = default;
+        using var fixture = new PluginFixtureBuilder("validate-two-tracked")
+            .WithPlugin("Broken.esp", mod => mod.Npcs.AddNew("BrokenNpc"), origin: "BrokenMod")
+            .WithPlugin("Sound.esp", mod => other = mod.Npcs.AddNew("SoundNpc").FormKey, origin: "SoundMod")
+            .BuildScattered()
+            .Tracked();
+        using var index = Indexes.Reconciled(fixture);
+        var broken = fixture.Plugins.Single(p => p.Name == "Broken.esp");
+        var sound = fixture.Plugins.Single(p => p.Name == "Sound.esp");
+        var brokenDocument = broken.SourceFileOf(index.RequireReads().DocumentOf(
+            index.RequireReads().Search(new RecordQuery(Plugin: broken.Name, Origin: broken.Origin, RecordTypes: ["npc_"], Limit: 1)).Items.Single().FormKey,
+            broken.KeyOf()));
+        var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(brokenDocument).Require(), "Backup")).FullName, Path.GetFileName(brokenDocument));
+        File.Copy(brokenDocument, backup);
+        sound.HandEdit(index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()), "\"SoundNpc\"", "\"EditedSoundNpc\"");
+
+        index.NextSnapshot();
+
+        Assert.Equal("EditedSoundNpc", index.RequireReads().DocumentOf(other.ToString(), sound.KeyOf()).EditorId);
+        Assert.Contains(index.Status.Failures, f => f.Name == "Broken.esp");
+    }
+
+    [Fact]
+    public void AnUnreadableCommittedTree_IsReportedAndChangesNothing()
+    {
+        // An unborn HEAD: git cannot list the committed tree, and answers the same way it would for a
+        // repository mid-rebase or with a corrupt object.
+        _mod.Git("symbolic-ref", "HEAD", "refs/heads/no-such-branch");
+        var before = _index.Sequence;
+
+        Validate();
+
+        Assert.True(PluginFailed);
+        var entry = Reads.StackEntry(_npc, _mod.KeyOf());
+        Assert.NotNull(entry);
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.Equal(before, _index.Sequence);
     }
 }

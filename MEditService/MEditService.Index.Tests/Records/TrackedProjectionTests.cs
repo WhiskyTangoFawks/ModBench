@@ -55,7 +55,7 @@ public sealed class TrackedProjectionTests : IDisposable
         PluginBinaries.Touch(_mod.Path);
         var before = _index.Sequence;
 
-        Assert.True(_index.Revalidate(_mod.KeyOf()));
+        Assert.True(_index.Revalidate());
 
         Assert.Equal(before + 1, _index.Sequence);
     }
@@ -67,7 +67,7 @@ public sealed class TrackedProjectionTests : IDisposable
 
         using (_index.BeginProjection())
         {
-            _index.ValidateIndex(_mod.KeyOf());
+            _index.NextSnapshot();
             Assert.Empty(_notifications.Notifications.OfType<RowsChangedNotification>());
         }
 
@@ -94,7 +94,7 @@ public sealed class TrackedProjectionTests : IDisposable
         {
             using (_index.BeginProjection())
             {
-                _index.ValidateIndex(_mod.KeyOf());
+                _index.NextSnapshot();
                 _index.Announce(() => announced.Add(_index.Sequence));
                 firstOpen.Set();
                 Wait(secondOpen);
@@ -108,7 +108,7 @@ public sealed class TrackedProjectionTests : IDisposable
             RenameByHand(_otherNpc, OtherNpcEditorId, "AlsoRenamedByHand");
             using (_index.BeginProjection())
             {
-                _index.ValidateIndex(_mod.KeyOf());
+                _index.NextSnapshot();
                 _index.Announce(() => announced.Add(_index.Sequence));
                 secondOpen.Set();
                 Wait(firstClosed);

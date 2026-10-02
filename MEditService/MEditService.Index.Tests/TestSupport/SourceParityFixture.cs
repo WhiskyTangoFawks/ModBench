@@ -15,8 +15,8 @@ public sealed class SourceParityFixture : IDisposable
     internal Indexer FromSource { get; }
 
     // One store file per launch, so each side's rows stand on their own.
-    private readonly string _binaryInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
-    private readonly string _sourceInstanceRoot = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
+    public string BinaryInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
+    public string SourceInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
 
     public PluginAddress Plugin { get; } = new(RealDataPlugin.PluginFileName, Origin);
 
@@ -27,9 +27,9 @@ public sealed class SourceParityFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, RealDataPlugin.PluginFileName);
         File.Copy(RealDataPlugin.PluginPath, pluginPath);
 
-        FromBinary = NewIndex(pluginPath, _binaryInstanceRoot);
+        FromBinary = NewIndex(pluginPath, BinaryInstanceRoot);
         TrackedMods.Track(pluginPath, _gameDirectory);
-        FromSource = NewIndex(pluginPath, _sourceInstanceRoot);
+        FromSource = NewIndex(pluginPath, SourceInstanceRoot);
     }
 
     private Indexer NewIndex(string pluginPath, string instanceRoot) =>
@@ -44,8 +44,8 @@ public sealed class SourceParityFixture : IDisposable
         FromBinary.Dispose();
         TryDelete(ModFolder);
         TryDelete(_gameDirectory);
-        TryDelete(_binaryInstanceRoot);
-        TryDelete(_sourceInstanceRoot);
+        TryDelete(BinaryInstanceRoot);
+        TryDelete(SourceInstanceRoot);
     }
 
     private static void TryDelete(string path)
