@@ -87,7 +87,7 @@ public sealed class RecordQueryService(
         var reads = RequireReads();
         // ADR-0005: one memoizing cache per response — a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
-        var resolveFormKey = FormKeyResolutionCache.Memoize(reads.Resolve);
+        var resolveFormKey = reads.LinkResolver(formKey);
 
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
