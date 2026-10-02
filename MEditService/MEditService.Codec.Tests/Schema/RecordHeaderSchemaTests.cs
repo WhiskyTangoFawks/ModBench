@@ -72,6 +72,32 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
+    public void APlacedObject_NamesTheBitsEveryBaseTypeNamesAlike()
+    {
+        var members = RecordFlags("refr").Field.EnumMembers;
+
+        Assert.Contains(new EnumMember("Persistent", "1024"), members);
+        Assert.Contains(new EnumMember("MultiBound", "2147483648"), members);
+    }
+
+    [Theory]
+    [InlineData("16")]
+    [InlineData("256")]
+    [InlineData("1073741824")]
+    public void APlacedObjectsBitNamedOnlyForSomeBaseTypes_OrDifferentlyByThem_IsUnnamed(string bit)
+    {
+        Assert.DoesNotContain(RecordFlags("refr").Field.EnumMembers, m => m.BitValue == bit);
+    }
+
+    [Fact]
+    public void AStatic_NamesItsTypesFlags_OverTheGamesNameForTheSameBit()
+    {
+        var bit15 = RecordFlags("stat").Field.EnumMembers.Where(m => m.BitValue == "32768").ToList();
+
+        Assert.Equal([new EnumMember("HasDistantLod", "32768")], bit15);
+    }
+
+    [Fact]
     public void TheDocumentsOtherSpellingsOfTheFlags_AreNoColumns_AndAreTheFlagsAliases()
     {
         var aliases = RecordFlags("cell").Aliases;

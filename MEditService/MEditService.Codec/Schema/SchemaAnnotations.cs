@@ -82,6 +82,9 @@ internal sealed record SchemaAnnotations(
     // Record Flags bits no flag view of the type names, under the name Mutagen gives the same bit on
     // another type, keyed by the type's getter interface.
     IReadOnlyList<(string TypeName, long Bit, string Name)> RecordFlagNames,
+    // Flags enums Mutagen nests in a record class for its Record Flags and spells through no member,
+    // keyed by the type's getter interface. A type with several has one per base record type.
+    IReadOnlyList<(string TypeName, string EnumName)> RecordFlagEnums,
     // An exterior cell's width in world units, or null where the game places no record in a grid
     // cell. Unchecked: Mutagen divides by it as a literal and exposes no member that holds it.
     float? ExteriorCellWidth,
@@ -203,6 +206,16 @@ internal sealed record SchemaAnnotations(
 
     private const string PartialFormName = "PartialForm";
 
+    // PlacedObject.cs's per-base-type enums in every game, as wbREFRRecordFlagsDecider chooses them.
+    private static readonly (string, string)[] PlacedObjectRecordFlagEnums =
+    [
+        .. new[]
+        {
+            "DefaultMajorFlag", "StaticMajorFlag", "ContainerMajorFlag", "DoorMajorFlag", "LightMajorFlag",
+            "MoveableStaticMajorFlag", "AddonNodeMajorFlag", "ItemMajorFlag",
+        }.Select(e => ("IPlacedObjectGetter", e)),
+    ];
+
     private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
     {
         [GameCategory.Fallout4] = new(
@@ -265,6 +278,8 @@ internal sealed record SchemaAnnotations(
                 ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
                 ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
             ],
+            // Static.xml spells its majorFlag attribute majorFlags, so no member carries Static.MajorFlag.
+            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums, ("IStaticGetter", "MajorFlag")],
             // Mutagen's Fallout 4 worldspace bounds divide by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: "Fallout4.esm",
@@ -300,6 +315,7 @@ internal sealed record SchemaAnnotations(
                 ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
                 ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
             ],
+            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums],
             // Mutagen's Skyrim containing-cell lookup divides by it.
             ExteriorCellWidth: 4096f,
             PartialFormCellsDefinedIn: null,
@@ -337,6 +353,8 @@ internal sealed record SchemaAnnotations(
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
+            // Static.xml spells its majorFlag attribute majorFlags here too.
+            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums, ("IStaticGetter", "MajorFlag")],
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
@@ -378,6 +396,14 @@ internal sealed record SchemaAnnotations(
 
     public IEnumerable<(long Bit, string Name)> RecordFlagNamesFor(Type getterType) =>
         RecordFlagNames.Where(r => r.TypeName == getterType.Name).Select(r => (r.Bit, r.Name));
+
+    public IReadOnlyList<Type> RecordFlagEnumsFor(Type getterType) =>
+        ReflectedTypes.GetSetterType(getterType) is { } recordClass
+            ? [.. RecordFlagEnums.Where(r => r.TypeName == getterType.Name).Select(r => NestedEnum(recordClass, r.EnumName)).OfType<Type>()]
+            : [];
+
+    private static Type? NestedEnum(Type recordClass, string name) =>
+        ReflectedTypes.BaseChain(recordClass).Select(c => c.GetNestedType(name)).FirstOrDefault(t => t is { IsEnum: true });
 
     public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
         SyntheticFlagMembers
@@ -474,6 +500,22 @@ internal sealed record SchemaAnnotations(
             owner = prop.PropertyType;
         }
         return null;
+    }
+
+    // A row naming an enum a member already spells repeats what the record's flag views name.
+    private IEnumerable<string> UnresolvedRecordFlagEnums(ILookup<string, Type> typesByName)
+    {
+        foreach (var (typeName, enumName) in RecordFlagEnums)
+        {
+            if (typesByName[typeName].Select(ReflectedTypes.GetSetterType).OfType<Type>().FirstOrDefault() is not { } recordClass) continue;
+            var label = $"{nameof(RecordFlagEnums)}: {typeName} {enumName}";
+            if (NestedEnum(recordClass, enumName) is not { } flags)
+                yield return $"{label} is no enum {recordClass.Name} nests";
+            else if (flags.GetCustomAttribute<FlagsAttribute>() == null)
+                yield return $"{label} is no flags enum";
+            else if (recordClass.GetProperties().Any(p => (Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType) == flags))
+                yield return $"{label} is spelled by a member, so the type's flag views already name it";
+        }
     }
 
     // A row backs onto a flags member the type reaches, and its flag is a name that enum defines.
@@ -628,6 +670,8 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(RecordFlagNames), RecordFlagNames.Select(r => r.TypeName)),
             .. RecordFlagNames.Where(r => r.Bit <= 0 || (r.Bit & (r.Bit - 1)) != 0)
                 .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} names 0x{r.Bit:X}, which is no single bit"),
+            .. UnresolvedTypes(nameof(RecordFlagEnums), RecordFlagEnums.Select(r => r.TypeName)),
+            .. UnresolvedRecordFlagEnums(typesByName),
             .. new[] { PartialFormCellsDefinedIn }.OfType<string>()
                 .Where(p => !Implicits.Get(category.DefaultRelease()).BaseMasters.Contains(ModKey.FromFileName(p)))
                 .Select(p => $"{nameof(PartialFormCellsDefinedIn)}: {p} is no base master of {category}"),
