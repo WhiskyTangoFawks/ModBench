@@ -69,7 +69,10 @@ internal static class DocumentEdit
         emptying?.EmptyFields(record, request.Schema);
         var prefix = move?.Apply(root) ?? request.Prefix;
 
-        if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
+        var started = envelope is { Op: RecordEditEnvelope.Add, Value: null or { ValueKind: JsonValueKind.Null } } && edited is JsonArray grown
+            ? grown[^1]
+            : null;
+        if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema), started) is { } duplicate)
         {
             return RecordEditResult.RefusedAt(
                 RecordEditRefusal.DuplicateKeyInKeyedArray, duplicate.Path,

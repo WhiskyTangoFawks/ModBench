@@ -11,6 +11,9 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 {
     public string Text => string.Join(" / ", Segments.Select(s => s.Text));
 
+    /// <summary>Every member absent with no default to read: a key not yet given.</summary>
+    public bool IsUnset => Segments.All(s => s.Number == null && s.Text.Length == 0);
+
     /// <summary><paramref name="elementMeta"/> lets a flags member order by its bits, as xEdit's
     /// wbStructSK does, rather than by the names the document spells it with.</summary>
     public static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
@@ -82,16 +85,16 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
     }
 
     // The codec omits a member equal to its default, so an absent key member reads as that
-    // default: what the same element spelled out would read as.
-    private static (double?, string) DefaultOf(FieldMetadata? member) => member?.Default is { } declared
-        ? Read(JsonSerializer.SerializeToElement(declared), member)
-        : member?.Type switch
-        {
-            "int" or "float" => (0, "0"),
-            "bool" => (null, "false"),
-            "flags" => (0, ""),
-            _ => Absent,
-        };
+    // default: what the same element spelled out would read as. A nullable one is unset instead.
+    private static (double?, string) DefaultOf(FieldMetadata? member) => member switch
+    {
+        { AllowsNull: true } => Absent,
+        { Default: { } declared } => Read(JsonSerializer.SerializeToElement(declared), member),
+        { Type: "int" or "float" } => (0, "0"),
+        { Type: "bool" } => (null, "false"),
+        { Type: "flags" } => (0, ""),
+        _ => Absent,
+    };
 
     private static (double?, string) Absent => (null, "");
 }
