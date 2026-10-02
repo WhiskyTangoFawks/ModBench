@@ -31,8 +31,6 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const headerBg = (c: ConflictThis | null | undefined): string | undefined => getCellStyle(c ?? undefined).backgroundColor;
 
-// ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
-// dictionaries, so every whole-grid column set is minted the same way.
 // Where a row sits in the grid: `present` says which columns carry the object it is a member of, and
 // `editable` which columns can write it.
 interface RowAt {
@@ -47,6 +45,8 @@ interface RowAt {
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 }
 
+// ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
+// dictionaries, so every whole-grid column set is minted the same way.
 function columnKeysWhere(
   overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
 ): Set<ColumnKey> {
