@@ -10,7 +10,7 @@ As a user, I want:
 
 1. Every list to be a native VS Code tree view, so selection, keyboard navigation, drag and the context menu behave as they do everywhere else in VS Code. *ADR-0017, invariant 3*
 2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. *ADR-0015, invariant 2; Chrome*
-3. A row's icon, or its badge, to carry its status. The description repeats the status only when it is not the default, so an unmarked row reads as the ordinary case.
+3. A row's icon, badge or colour to carry its status. The description repeats the status only when it is not the default, so an unmarked row reads as the ordinary case.
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a setting.
 5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only while the tree has focus and no input box does, as VS Code's list keys do. Modbench adopts no key from xEdit or MO2. *ADR-0017, invariant 5; ADR-0018, invariant 1*
 6. Every list to let me select several rows, and a gesture to act on the whole selection unless it only makes sense for one row, which its Argument in the catalog says.

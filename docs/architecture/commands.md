@@ -139,8 +139,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite, or a file or folder in one | - | MO2 mod list, Overwrite row | Show a mod's folder, or a file or folder in it, in VS Code's Explorer. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
 | open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
-| compare file | reads | `modbench.mod.compareFile` | a mod's copy of a file | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
-| go to mod | reads | `modbench.mod.goTo` | a mod's copy of a file | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod whose copy wins the file, or a mod whose copy it wins over. | none |
+| compare file | reads | `modbench.mod.compareFile` | a copy of a file in a mod or Overwrite | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
+| go to mod | reads | `modbench.mod.goToMod` | a copy of a file in a mod or Overwrite | other mod: a pick, when the copy wins over several | MO2 Information dialog, Conflicts tab, Go to... | Select, in Mods, the mod or Overwrite whose copy wins the file, or a mod whose copy it wins over. | none |
 | exclude / include file | writes | `modbench.mod.excludeFile`, `modbench.mod.includeFile` | files in mods or Overwrite | - | MO2 Information dialog, Conflicts tab, Hide; MO2 mod list, Restore hidden files | Keep each file from the game by renaming it with MO2's `.mohidden` suffix, or restore its name. | update-load-order-file |
 
 ## Separator

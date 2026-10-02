@@ -18,13 +18,12 @@ As a user, I want:
 2. Each separator to hold the mods between it and the next separator toward the winning end, whichever way the list is sorted. *CONTEXT.md, Mod separator; MO2*
 3. The mods on the losing side of the first separator to be ungrouped: top-level rows at the losing end of the view. *MO2*
 4. The Overwrite row pinned at the winning end, outside every separator: last when losing is at the top, first when winning is. *MO2: Overwrite wins over every mod*
-5. Separators and mods collapsed each time the extension activates, so the view opens clean. What I expand stays expanded until then.
+5. Separators, mods, Overwrite and folders collapsed each time the extension activates, so the view opens clean. What I expand stays expanded until then.
 6. A separator with no mods to show no expander. *VS Code*
-7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. A mod with no files shows no expander. *VS Code's Explorer*
-8. Each file to be active or inactive. A file is inactive when the game does not get it: another copy wins its path, it is excluded, or its mod is disabled. An inactive file's name is greyed. *MO2*
-9. Only the files a mod gives the game to show: not `meta.ini`, the repository or plugin source. An excluded file shows under its own name, with its `.mohidden` suffix. *MO2*
-10. An inactive file's tooltip to say why: the mod whose copy wins, excluded, or the mod is disabled.
-11. The same marks on the same files in VS Code's Explorer. *VS Code*
+7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. One with no files shows no expander. *VS Code's Explorer*
+8. The name of a file the game does not get to be greyed. The game does not get a file when another copy wins its path, when it is excluded, or when its mod is disabled. *MO2*
+9. Only the files Modbench deploys from the mod to show: not `meta.ini`, the repository or plugin source. An excluded file shows its full name, `.mohidden` included. A folder with that suffix is excluded with everything in it, and is greyed. *MO2*
+10. The same grey and badges on the same files in VS Code's Explorer. *VS Code*
 
 ## A row
 
@@ -65,23 +64,22 @@ Overwrite is always a row, even when it holds nothing. It is not a mod: it has n
 |---|---|---|
 | Label | the file's or folder's name | VS Code's Explorer |
 | Icon | the file icon theme's icon | VS Code's Explorer |
-| Colour | greyed when the file is inactive (The tree, story 8) | |
-| Tooltip | the path in its mod, and why the file is inactive, when it is | |
+| Colour | greyed when the game does not get the file (The tree, story 8) | |
+| Tooltip | the path in its mod | |
 | Identity | the mod or Overwrite, and the path in it | |
 
 ## Indicators
 
-A mod row carries an indicator for each status that holds. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. *MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1*
+A mod row carries an indicator for each status that holds. A disabled mod carries none. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. *MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1*
 
 | Indicator | Holds when | Badge | Colour |
 |---|---|---|---|
-| Overwrites loose files | a file of the mod wins over another mod's copy | off | off |
-| Overwritten loose files | a file of the mod loses to another mod's copy | on | off |
-| Redundant | every file the mod gives the game loses to another copy | on | off |
-| Overwritten by Overwrite | a file of the mod loses to Overwrite's copy | on | off |
-| Contains hidden files | the mod has an excluded file | off | off |
+| Overwrites loose files | a file of the mod wins over another copy | off | off |
+| Overwritten loose files | a file of the mod loses to another copy, and the mod is not Redundant | on | off |
+| Redundant | the mod has a file the game could get, and every such file loses to another copy | on | off |
+| Contains excluded files | the mod has an excluded file | off | off |
 
-The Badge and Colour columns are the defaults. The inactive file's grey is a setting too, on by default. Each indicator's tooltip uses its name in this table. *MO2*
+The Badge and Colour columns are the defaults. The grey of a file the game does not get is a setting too, on by default. A mod that wins some files and loses others carries both badges. Each indicator's tooltip is its name in this table. *mo2.md, divergence 12*
 
 ## Order and view state
 
@@ -89,7 +87,7 @@ As a user, I want:
 
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the whole tree, separators and the mods inside them. *MO2's priority sort; common, A view, story 7*
 2. The name filter to match the name of any row: a separator, a mod, a folder or a file. A row whose name matches shows all its children; otherwise it shows only its matching children, expanded, and one with none is not shown. Overwrite stays, and does not count as a match; its files follow the same rule. *common, The name filter*
-3. A toggle in the filter box to show the matches as a flat list, with no separators. It returns to grouped whenever the filter clears.
+3. A toggle in the filter box to show the matches as a flat list, with no separators. Mods still open to their matching files. It returns to grouped whenever the filter clears.
 
 ## States
 
@@ -119,9 +117,9 @@ As a user, I want:
 3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for separators.
 4. A click or double click on a separator, a mod, Overwrite or a folder to do nothing but select it; its expander opens it. A click on a file opens it as a preview editor. *VS Code's Explorer*
 5. Copy value to copy each selected mod's or separator's name, and each selected file's or folder's path in its mod. *catalog `copy value`*
-6. Go to mod to select, in this tree, the mod whose copy wins the file. On a file that wins, it asks which of the mods it wins over. *catalog `go to mod`; MO2's Go to...*
+6. Go to mod to select, in this tree, the row it names. *catalog `go to mod`; MO2's Go to...*
 7. Exclude or include, over a selection that mixes both, to apply the right-clicked row's direction to every file, as enable or disable does. *story 2*
-8. Space, Delete and F2 to do nothing on a file or folder: the tree shows files, and the Explorer manages them.
+8. Space, Delete and F2 to do nothing on a file or folder: the tree shows files, and the Explorer manages them. This is an exception to common, A view, story 5.
 
 ## Drag and drop
 
@@ -181,6 +179,10 @@ Install is offered here and on [Downloads](downloads.md#the-install-target). As 
 ### Uninstall
 
 As a user, I want one confirmation for the whole selection, naming the mod when there is one and listing the mods when there are several, and saying the folders go to the trash. *Confirm what destroys; MO2's recycle bin*
+
+### Go to mod
+
+As a user, I want a pick of the mods the file wins over, in mod order, when there are several. Esc selects nothing. *catalog `go to mod`, Options; Esc changes nothing*
 
 ## Reporting
 
