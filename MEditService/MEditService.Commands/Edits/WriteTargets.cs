@@ -350,29 +350,33 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
-    /// <summary>The nearest copy of <paramref name="formKey"/> left of <paramref name="plugin"/> that
-    /// <paramref name="says"/> accepts. A copy that cannot be read ends the walk, since one beyond it is
-    /// not the nearest.</summary>
-    internal string? NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says)
+    /// <summary>The nearest copy left of <paramref name="plugin"/> that <paramref name="says"/> accepts,
+    /// passing over unread a copy holding a flag of <paramref name="passOver"/>. An unreadable copy ends
+    /// the walk: one beyond it is not the nearest.</summary>
+    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0)
     {
         var current = loadOrder.Current;
         var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
-        foreach (var left in current.Active.Take(index).Reverse())
+        foreach (var left in current.Active.Take(index).Reverse().Select(registered => registered.Key))
         {
-            using var source = new CopySource(left.Key, current, adapter, codec, schemaReflector);
+            using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
                 if (source.Identity(formKey) is not { } identity) continue;
+                if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) continue;
                 var body = source.Body(identity);
-                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return body;
+                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new(body, Unreadable: null);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                return null;
+                return new(Text: null, $"{left.Name}'s copy of {formKey} cannot be read: {source.Diagnose(ex)}");
             }
         }
-        return null;
+        return new(Text: null, Unreadable: null);
     }
+
+    /// <summary>The text of the copy the walk found, or why the nearest copy it reached cannot be read.</summary>
+    internal readonly record struct LeftCopy(string? Text, string? Unreadable);
 
     // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
     // header deliberately. Without it, HoldingUnit.IsDirectoryPerRecord (filename-only) answers true

@@ -194,7 +194,7 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void SettingDeletedAndPartialFormTogether_OnACopyHoldingNeither_MakesAPartialForm()
+    public void SettingDeletedAndPartialFormTogether_OnACopyHoldingNeither_WithNoCopyToItsLeft_MakesAnEmptyPartialForm()
     {
         var cell = InteriorCellOfFallout4Esm();
         cell.WaterHeight = 5f;
@@ -203,8 +203,20 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         var partial = SetFlags(formKey, Deleted | PartialForm);
 
         Assert.Equal(PartialForm, FlagsOf(partial));
-        Assert.Equal("C", partial["EditorID"].Require().GetValue<string>());
-        Assert.DoesNotContain(partial, p => p.Key == "WaterHeight");
+        Assert.DoesNotContain(partial, p => p.Key is "EditorID" or "WaterHeight");
+    }
+
+    [Fact]
+    public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
+    {
+        var cell = InteriorCellOfFallout4Esm();
+        cell.WaterHeight = 5f;
+        cell.MajorRecordFlagsRaw = PartialForm;
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var whole = SetFlags(formKey, 0);
+
+        Assert.DoesNotContain(whole, p => p.Key is "EditorID" or "WaterHeight" or "Flags");
     }
 
     [Fact]

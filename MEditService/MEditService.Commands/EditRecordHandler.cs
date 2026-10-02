@@ -90,17 +90,32 @@ public sealed class EditRecordHandler
             }
             prefix = found;
             if (CellGroupMove.CellToLookUp(root, prefix, envelope) is { } cellFormKey)
-                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says);
+                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says).Text;
         }
 
         if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
-            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
+            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says).Text;
+
+        string? refillCopyOnTheLeft = null;
+        if (RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema))
+        {
+            var left = _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema));
+            if (left.Unreadable is { } unreadable)
+            {
+                return RecordEditResult.RefusedAt(
+                    RecordEditRefusal.RecordParseFailed, spelled,
+                    $"'{spelled}': {formKey}'s own fields come from its nearest copy to the left that is neither " +
+                    $"Partial Form nor Deleted, and {unreadable}. Nothing was written.");
+            }
+            refillCopyOnTheLeft = left.Text;
+        }
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
-        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft);
+        var request = new DocumentEditRequest(
+            text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft, refillCopyOnTheLeft);
 
         string newText;
         RecordEditResult? refused;

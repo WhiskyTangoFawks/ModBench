@@ -36,6 +36,8 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
             ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record, _schemas), record.EditorID)
             : null;
 
+    public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
+
     public string? TextOf(string formKey) =>
         Resolve(formKey) is { } record ? _codec.SerializeToText(record, _mod.GameRelease) : null;
 
