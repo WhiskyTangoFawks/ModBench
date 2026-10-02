@@ -32,7 +32,9 @@ public sealed record SubFieldSpec(
     // See FieldMetadata.IsRecordFormKey.
     bool IsRecordFormKey = false,
     // See FieldMetadata.IgnoredInConflicts.
-    bool IgnoredInConflicts = false)
+    bool IgnoredInConflicts = false,
+    // See FieldMetadata.IsVersionControlInfo1.
+    bool IsVersionControlInfo1 = false)
 {
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
     public bool IsArray => ApiType == "array";
@@ -56,6 +58,7 @@ public sealed record SubFieldSpec(
             ReadOnlyReason: reason,
             IsRecordHeaderMember: IsRecordHeaderMember,
             IsRecordFormKey: IsRecordFormKey,
-            IgnoredInConflicts: IgnoredInConflicts);
+            IgnoredInConflicts: IgnoredInConflicts,
+            IsVersionControlInfo1: IsVersionControlInfo1);
     }
 }

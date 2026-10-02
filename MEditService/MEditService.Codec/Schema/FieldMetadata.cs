@@ -67,4 +67,8 @@ public record FieldMetadata(
 
     // A header member the game ignores: it shows and takes part in no conflict (editor-conflicts.md,
     // Rows story 3).
-    bool IgnoredInConflicts = false);
+    bool IgnoredInConflicts = false,
+
+    // The header member xEdit reads as the date, user and index it packs, by the record's Form
+    // Version: xEdit's Version Control Info 1 (wbRecordHeader).
+    bool IsVersionControlInfo1 = false);

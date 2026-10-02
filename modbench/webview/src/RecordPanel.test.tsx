@@ -2202,6 +2202,74 @@ describe('RecordPanel — the Record Header', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
+  const stampMeta = header({ name: 'VersionControl', type: 'int', displayLabel: 'Version Control Info 1', isVersionControlInfo1: true });
+  const formVersionMeta = header({ name: 'FormVersion', type: 'int', displayLabel: 'Form Version' });
+  const stamped = (copies: { plugin: string; stamp: number | null; formVersion: number | null }[]): CompareResult =>
+    compareResultFixture({
+      overrides: copies.map(({ plugin, stamp, formVersion }) => compareOverride({
+        formKey: '000800:Base.esm', plugin, isWinner: plugin === copies.at(-1)?.plugin, editorId: 'Stamped',
+        fields: [
+          { metadata: stampMeta, value: stamp }, { metadata: formVersionMeta, value: formVersion },
+          { metadata: nameMeta, value: 'A Name' },
+        ],
+      })),
+      diffs: [
+        diffNode({ fieldName: 'VersionControl', values: Object.fromEntries(copies.map(c => [c.plugin, c.stamp])) }),
+        diffNode({ fieldName: 'FormVersion', values: Object.fromEntries(copies.map(c => [c.plugin, c.formVersion])) }),
+        diffNode({ fieldName: 'Name', values: Object.fromEntries(copies.map(c => [c.plugin, 'A Name'])) }),
+      ],
+    });
+  const stampPlugins = [
+    { name: 'Base.esm', isImmutable: false, loadOrderIndex: 0, isTracked: true },
+    { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+  ];
+  const stampCells = (container: HTMLElement) =>
+    Array.from(required(rows(container).find(tr => tr.querySelector('td')?.textContent === 'Version Control Info 1'),
+      'the Version Control Info 1 row').querySelectorAll('td')).slice(1);
+
+  it('reads Version Control Info 1 as the date, user and index it packs, by each copy\'s own Form Version', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
+    const { container } = renderPanel(stamped([
+      { plugin: 'Base.esm', stamp: 33890154, formVersion: 43 },
+      { plugin: 'MyMod.esp', stamp: 33890154, formVersion: 44 },
+    ]), { plugins: stampPlugins });
+    await waitFor(() => screen.getAllByText('A Name'));
+
+    expect(stampCells(container).map(c => c.textContent)).toEqual([
+      '2005-07-106 User: 5 Index: 2', '2015-11-10 User: 5 Index: 2',
+    ]);
+  });
+
+  it('reads Version Control Info 1 as None where it packs nothing, and by the older packing where the copy holds no Form Version', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
+    const { container } = renderPanel(stamped([
+      { plugin: 'Base.esm', stamp: null, formVersion: 131 },
+      { plugin: 'MyMod.esp', stamp: 17001482, formVersion: null },
+    ]), { plugins: stampPlugins });
+    await waitFor(() => screen.getAllByText('A Name'));
+
+    expect(stampCells(container).map(c => c.textContent)).toEqual(['None', '2011-12-10 User: 3 Index: 1']);
+  });
+
+  it('reads a Version Control Info 1 held signed, as a plugin header holds it, as the 32 bits it packs', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
+    const { container } = renderPanel(stamped([{ plugin: 'MyMod.esp', stamp: -1, formVersion: 131 }]), { plugins: stampPlugins });
+    await waitFor(() => screen.getAllByText('A Name'));
+
+    expect(stampCells(container).map(c => c.textContent)).toEqual(['2127-15-31 User: 255 Index: 255']);
+  });
+
+  it('opens and copies Version Control Info 1 as the number it holds', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:Base.esm');
+    const { container } = renderPanel(stamped([{ plugin: 'MyMod.esp', stamp: 33890154, formVersion: 131 }]), { plugins: stampPlugins });
+    await waitFor(() => screen.getAllByText('A Name'));
+    const cell = required(stampCells(container)[0], 'the Version Control Info 1 cell');
+
+    expect(cell).toHaveAttribute('data-copy-text', '33890154');
+    fireEvent.doubleClick(within(cell).getByText('2015-11-10 User: 5 Index: 2'));
+    expect(required(cell.querySelector('input'), 'the cell\'s input')).toHaveValue(33890154);
+  });
+
   // editor-fields.md, Partial Form: the classifier sends a Partial Form copy's header members and
   // none of its own fields.
   const partialForm = (): CompareResult => {

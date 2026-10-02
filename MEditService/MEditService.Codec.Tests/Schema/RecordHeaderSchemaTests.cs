@@ -97,6 +97,14 @@ public sealed class RecordHeaderSchemaTests
         Assert.Equal([member], Schema(table).RecordColumns.Where(c => c.Field.IsRecordFormKey).Select(c => c.Name));
     }
 
+    [Theory]
+    [InlineData("npc_", "VersionControl")]
+    [InlineData("header", "Version")]
+    public void TheOneMemberReadAsTheDateUserAndIndexItPacks_IsItsVersionControlInfo1(string table, string member)
+    {
+        Assert.Equal([member], Schema(table).RecordColumns.Where(c => c.Field.IsVersionControlInfo1).Select(c => c.Name));
+    }
+
     [Fact]
     public void VersionControlInfo1_IsAColumnWideEnoughForAllThirtyTwoBits()
     {
