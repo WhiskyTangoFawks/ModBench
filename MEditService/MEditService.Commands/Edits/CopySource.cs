@@ -34,13 +34,12 @@ internal sealed class CopySource(
     internal PluginAddress Plugin => plugin;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
-    /// null when it holds nothing under that key. A document named for it that is no document throws.</summary>
-    internal RecordIdentity? Identity(string formKey)
-    {
-        if (_tree == null) return Loaded()?.IdentityOf(formKey);
-        return _tree.IdentityOf(plugin, formKey, _schemas)
-            ?? (_tree.UnreadableDocumentFor(plugin, formKey) is { } why ? throw new InvalidDataException(why) : null);
-    }
+    /// null when it holds nothing under that key.</summary>
+    internal RecordIdentity? Identity(string formKey) =>
+        _tree != null ? _tree.IdentityOf(plugin, formKey, _schemas) : Loaded()?.IdentityOf(formKey);
+
+    /// <summary>The working tree a tracked plugin answers from; null for an untracked one.</summary>
+    internal SourceRepository? Tree => _tree;
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded
     /// plugin's record through the codec — byte for byte what Track would have written.</summary>

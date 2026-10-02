@@ -362,7 +362,11 @@ internal sealed class WriteTargets(
             using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
-                if (source.Identity(formKey) is not { } identity) continue;
+                if (source.Identity(formKey) is not { } identity)
+                {
+                    if (source.Tree?.UnreadableDocumentFor(left, formKey) is { } why) return new LeftCopy.Unreadable(left.Name, formKey, why);
+                    continue;
+                }
                 var body = source.Body(identity);
                 if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new LeftCopy.Found(body);
             }
