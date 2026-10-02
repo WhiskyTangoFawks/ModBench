@@ -253,19 +253,18 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_AfterTheMapHasRebuiltOnce_AnswersAbsentForAChildTheListedOwnerHasLost()
+    public void UnitHolding_AChildMovedAgainAfterItsOneRebuild_IsAbsentRatherThanTheOwnerTheMapStillLists()
     {
         var repository = Repository;
-        // A miss spends this repository's one rebuild, so the move below cannot buy a second.
-        Assert.Null(repository.Get(Plugin, new RecordIdentity("00FFFF:Embedded.esp", "refr", "Absent")));
+        Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+        MoveTemporaryRefToTheExteriorCell();
+        Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
 
-        _interiorCell.Temporary.Remove(_temporaryRef);
-        _exteriorCell.Temporary.Add(_temporaryRef);
+        _exteriorCell.Temporary.Remove(_temporaryRef);
+        _interiorCell.Temporary.Add(_temporaryRef);
         File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
-        // Absent, never the interior cell the map still lists: an answer the tree does not bear out
-        // would send a write into a document that does not carry the record.
         Assert.Null(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
     }
 
@@ -393,5 +392,110 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains(_topic.FormKey.ToString(), held);
         Assert.Contains(_response.FormKey.ToString(), held);
         Assert.Contains(_response2.FormKey.ToString(), held);
+    }
+
+    private void MoveTemporaryRefToTheExteriorCell()
+    {
+        _interiorCell.Temporary.Remove(_temporaryRef);
+        _exteriorCell.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+    }
+
+    [Fact]
+    public void UnitHolding_OfAChildAnotherToolMovedBetweenTwoOperations_IsItsNewOwner()
+    {
+        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+
+        MoveTemporaryRefToTheExteriorCell();
+
+        Assert.Equal(
+            Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
+            Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
+    }
+
+    [Fact]
+    public void IdentityOf_AChildAnotherToolDeletedBetweenTwoOperations_IsNothing()
+    {
+        Assert.NotNull(IdentityOf(_temporaryRef));
+
+        _interiorCell.Temporary.Remove(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+
+        Assert.Null(IdentityOf(_temporaryRef));
+    }
+
+    [Fact]
+    public void IdentityOf_AChildInADocumentAnotherToolAddedBetweenTwoOperations_NamesIt()
+    {
+        var added = new PlacedObject(_mod) { EditorID = "AddedRef", Position = new P3Float(1f, 1f, 1f), Scale = 1f };
+        Assert.Null(IdentityOf(added));
+
+        var cell = new Cell(_mod) { EditorID = "AddedCell" };
+        cell.Temporary.Add(added);
+        var path = FullPath(Path.Combine(Root, "Cells", "0", "0", Leaf(cell), "RecordData.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory."));
+        File.WriteAllBytes(path, Serialize(cell));
+
+        Assert.Equal(new RecordIdentity(added.FormKey.ToString(), "refr", "AddedRef"), IdentityOf(added));
+    }
+
+    [Fact]
+    public void UnitHolding_OfAChildWhoseOwnerAnotherToolRenamedBetweenTwoOperations_IsTheRenamedDocument()
+    {
+        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_response, "info")));
+
+        var renamed = Path.Combine(Root, "Quests", "Renamed by hand.json");
+        File.Move(FullPath(QuestPath), FullPath(renamed));
+
+        Assert.Equal(renamed, Repository.UnitHolding(Plugin, Identity(_response, "info"))?.RelativePath);
+    }
+
+    [Fact]
+    public void IdentityOf_AChildAnotherToolRewroteUnderAnotherEditorIdBetweenTwoOperations_NamesTheNewEditorId()
+    {
+        Assert.Equal("TempRef", IdentityOf(_temporaryRef)?.EditorId);
+
+        _temporaryRef.EditorID = "RewrittenRef";
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+
+        Assert.Equal("RewrittenRef", IdentityOf(_temporaryRef)?.EditorId);
+    }
+
+    [Fact]
+    public void UnitHolding_OfAChildAnotherToolCopiedIntoASecondOwnerBetweenTwoOperations_IsRefusedAsAmbiguous()
+    {
+        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+
+        _exteriorCell.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+
+        Assert.Throws<AmbiguousSourceUnitException>(() => Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
+    }
+
+    [Fact]
+    public void UnitHolding_OfAChildWhoseFormKeyAnotherToolWroteThroughAJsonEscape_IsItsOwner()
+    {
+        var formKey = _temporaryRef.FormKey.ToString();
+        var escaped = $"\"{formKey.Replace(":", "\\u003A", StringComparison.Ordinal)}\"";
+        var text = File.ReadAllText(FullPath(InteriorCellPath));
+        File.WriteAllText(FullPath(InteriorCellPath), text.Replace($"\"{formKey}\"", escaped, StringComparison.Ordinal));
+
+        Assert.Contains(escaped, File.ReadAllText(FullPath(InteriorCellPath)), StringComparison.Ordinal);
+        Assert.Equal(
+            Path.GetRelativePath(_modFolder, FullPath(InteriorCellPath)),
+            Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
+    }
+
+    [Fact]
+    public void IdentityOf_EveryEmbeddedChildAskedInOneOperation_NamesEachOne()
+    {
+        var repository = Repository;
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(Release);
+        IMajorRecordGetter[] children = [_persistentRef, _temporaryRef, _topCellRef, _exteriorRef, _topic, _response, _response2];
+
+        var named = children.Select(child => repository.IdentityOf(Plugin, child.FormKey.ToString(), schemas)?.EditorId);
+
+        Assert.Equal(children.Select(child => child.EditorID), named);
     }
 }
