@@ -48,7 +48,8 @@ public static class ModelIdentity
         mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
     /// <summary>The first record, in <paramref name="original"/>'s GRUP order, that does not survive a
-    /// round trip, naming the field the mask disagrees on; null when every record is model-identical.</summary>
+    /// round trip, naming the field the mask disagrees on, else the codec document path that differs;
+    /// null when every record is model-identical.</summary>
     internal static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
@@ -127,7 +128,7 @@ public static class ModelIdentity
         return true;
     }
 
-    // Both records through the codec, byte-compared; the document path of the first difference, or null.
+    // Both records through the codec, byte-compared.
     private static string? FirstCodecDocumentDifference(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
@@ -348,7 +349,7 @@ public static class ModelIdentity
             {
                 CollectFailingIndexedItems(items, name, results);
             }
-            else if (specific?.GetType().DeclaringType != null)
+            else if (IsGeneratedMask(specific))
             {
                 CollectFailingFields(specific, results);
             }
@@ -378,12 +379,16 @@ public static class ModelIdentity
             if (itemOverall) continue;
 
             var itemSpecific = GetMemberValue(item, itemType, "Specific");
-            if (itemSpecific?.GetType().DeclaringType != null)
+            if (IsGeneratedMask(itemSpecific))
                 CollectFailingFields(itemSpecific, results);
             else
                 results.Add(fallbackField);
         }
     }
+
+    // Loqui generates each mask as a type nested in the class it masks.
+    private static bool IsGeneratedMask([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] object? candidate) =>
+        candidate?.GetType().DeclaringType != null;
 
     private static object? GetMemberValue(object instance, Type type, string memberName) =>
         type.GetField(memberName, BindingFlags.Public | BindingFlags.Instance) is { } field
