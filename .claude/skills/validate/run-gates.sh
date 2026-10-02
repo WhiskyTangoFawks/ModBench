@@ -3,6 +3,7 @@
 BACKEND=false
 FRONTEND=false
 API_DRIFT=false
+DIAGRAMS=false
 DETACH=false
 WAIT=false
 FAILED=false
@@ -13,6 +14,7 @@ while [[ $# -gt 0 ]]; do
     --backend)   BACKEND=true;   GATE_ARGS+=("$1"); shift ;;
     --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
     --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
+    --diagrams)  DIAGRAMS=true;  GATE_ARGS+=("$1"); shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
@@ -30,7 +32,7 @@ $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]
 # child processes, so a lingering build server cannot hold it. A waiter queues on the first slot
 # rather than whichever frees first, which costs a wait, never correctness.
 GATE_SLOTS=2
-if { $BACKEND || $API_DRIFT; } && [[ -z ${GATE_SLOT:-} ]]; then
+if { $BACKEND || $API_DRIFT || $DIAGRAMS; } && [[ -z ${GATE_SLOT:-} ]]; then
   for slot in $(seq 1 $GATE_SLOTS); do
     GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${GATE_ARGS[@]}"
     status=$?
@@ -91,6 +93,15 @@ if $BACKEND; then
   echo "=== Gate 3: Backend tests ===" && \
   (cd "$ROOT/MEditService" && dotnet test -v minimal) \
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
+fi
+
+# The backend scans that read docs/architecture live in this namespace; the full backend run
+# already holds them.
+if $DIAGRAMS && ! $BACKEND; then
+  echo "=== Gate 3: Architecture scans ==="
+  (cd "$ROOT/MEditService" && dotnet test MEditService.Http.Tests -v minimal \
+    --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.") \
+  || { echo "--- ARCHITECTURE SCAN GATE FAILED ---"; FAILED=true; }
 fi
 
 # flock on the integration step: its mock backend binds a fixed port (15172), so concurrent
