@@ -14,7 +14,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class NearestCopyToTheLeftTests : IDisposable
 {
-    private const int Deleted = 0x0020, Persistent = 0x0400, PartialForm = 0x4000;
+    private const int Bit9 = 0x0200, Deleted = 0x0020, Persistent = 0x0400, InitiallyDisabled = 0x0800, PartialForm = 0x4000, OffLimits = 0x20000, Compressed = 0x40000;
 
     private static readonly FormKey TheNpc = new(Fallout4Esm, 0x900);
     private static readonly FormKey TheCell = new(Fallout4Esm, 0x800);
@@ -25,8 +25,14 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
     public void Dispose() => _plugins.Dispose();
 
-    private static Action<Fallout4Mod> NpcCopy(int flags, string? editorId = null, float height = 0) => mod =>
-        mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = editorId, HeightMax = height, MajorRecordFlagsRaw = flags });
+    private static Action<Fallout4Mod> NpcCopy(int flags, string? editorId = null, float height = 0, ushort formVersion = 131) => mod =>
+        mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4)
+        {
+            EditorID = editorId,
+            HeightMax = height,
+            MajorRecordFlagsRaw = flags,
+            FormVersion = formVersion,
+        });
 
     private static Action<Fallout4Mod> CellCopy(int flags, string? editorId = null, float? water = null, Action<Cell>? also = null) => mod =>
     {
@@ -74,6 +80,19 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
         Assert.Equal("Guy", undeleted["EditorID"]?.GetValue<string>());
         Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_TakesTheRecordFlagsAndFormVersionOfTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(Compressed | InitiallyDisabled, "Guy", formVersion: 120)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted | Bit9, formVersion: 131)), true));
+
+        var undeleted = Written(TheNpc, Bit9);
+
+        Assert.Equal(Compressed | InitiallyDisabled, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(120, undeleted["FormVersion"]?.GetValue<int>());
     }
 
     [Fact]
@@ -146,6 +165,23 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_OnAPlacedRecord_WhoseCopyToItsLeftIsPersistent_MovesItIntoItsCellsPersistentGroup()
+    {
+        var rock = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Rock", MajorRecordFlagsRaw = Persistent };
+        var deleted = new PlacedObject(TheRef, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted };
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: cell => cell.Persistent.Add(rock))), false),
+            (Plugin("Override.esp", CellCopy(0, "Inside", also: Placing(deleted))), true));
+
+        var undeleted = Written(TheRef, 0);
+
+        var cell = JsonNode.Parse(_plugins.Text(Edited, TheCell)).Require().AsObject();
+        Assert.Equal(Persistent, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(["Rock"], cell["Persistent"].Require().AsArray().Select(r => r?["EditorID"]?.GetValue<string>()));
+        Assert.DoesNotContain(cell, p => p.Key == "Temporary" && p.Value is JsonArray { Count: > 0 });
+    }
+
+    [Fact]
     public void ClearingPartialForm_FillsTheCopysOwnFieldsAndEditorId_PassingOverAPartialFormToItsLeft()
     {
         Load(
@@ -197,6 +233,19 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
         Assert.Equal("Inside", partial["EditorID"]?.GetValue<string>());
         Assert.DoesNotContain(partial, p => p.Key == "WaterHeight");
+    }
+
+    [Fact]
+    public void SettingPartialForm_OnADeletedCopy_TakesTheRecordFlagsAndFormVersionOfTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(OffLimits, "Inside", also: cell => cell.FormVersion = 120)), false),
+            (Plugin("Override.esp", CellCopy(Deleted, also: cell => cell.FormVersion = 131)), true));
+
+        var partial = Written(TheCell, PartialForm);
+
+        Assert.Equal(OffLimits | PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(120, partial["FormVersion"]?.GetValue<int>());
     }
 
     [Fact]

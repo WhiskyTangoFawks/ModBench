@@ -234,6 +234,20 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_WithNoCopyToItsLeft_KeepsItsFormVersionAndTheFlagsWritten()
+    {
+        var npc = _mod.Npcs.AddNew("Guy");
+        npc.FormVersion = 120;
+        npc.MajorRecordFlagsRaw = Deleted | Persistent;
+        var formKey = _fixture.Seed(npc, "npc_");
+
+        var undeleted = SetFlags(formKey, Persistent);
+
+        Assert.Equal(Persistent, FlagsOf(undeleted));
+        Assert.Equal(120, undeleted["FormVersion"].Require().GetValue<int>());
+    }
+
+    [Fact]
     public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
     {
         var cell = InteriorCellOfFallout4Esm();
