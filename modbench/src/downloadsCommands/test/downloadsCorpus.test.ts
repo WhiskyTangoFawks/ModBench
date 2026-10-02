@@ -33,7 +33,7 @@ describe('downloads commands corpus', () => {
   let access: DownloadsAccess;
 
   beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+    dir = cloneCorpusFixture();
     access = accessTo(dir);
     await writeFile(join(dir, MANUAL_ARCHIVE), 'archive bytes');
   });

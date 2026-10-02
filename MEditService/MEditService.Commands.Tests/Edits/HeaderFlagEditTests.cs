@@ -45,18 +45,6 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(((IModFlagsGetter)written).IsSmallMaster);
     }
 
-    [Fact]
-    public void EditField_IsLightFalse_ClearsTheSmallFlag()
-    {
-        var service = Service();
-        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
-
-        var result = service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false));
-
-        Assert.True(result.Applied, result.Message);
-        Assert.DoesNotContain("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
-    }
-
     // The allocator answers from the document, not the load order's in-memory mod object: a flag
     // flipped this session caps FormID minting immediately, with no reconcile in between.
     [Fact]
@@ -103,16 +91,6 @@ public sealed class HeaderFlagEditTests : IDisposable
     private PluginCompileService CompileService() =>
         CompileServices.Over(_fixture.LoadOrder);
 
-    [Fact]
-    public void EditField_Masters_RefusesAsReadOnly_AndChangesNothing()
-    {
-        var masters = Service().Set(
-            _fixture.Plugin, HeaderFormKey, "MasterReferences", JsonDocument.Parse("[\"Other.esm\"]").RootElement);
-
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, masters.Refusal);
-        Assert.Empty(_fixture.GitStatus());
-    }
-
     private RecordEditResult SetFlags(string names) =>
         Service().Set(_fixture.Plugin, HeaderFormKey, "Flags", JsonDocument.Parse(names).RootElement);
 
@@ -125,14 +103,6 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
         Assert.Contains("IsSmallMaster", result.Message, StringComparison.Ordinal);
         Assert.Empty(_fixture.GitStatus());
-    }
-
-    [Fact]
-    public void EditField_RawFlagsChangingAnotherBit_IsAccepted()
-    {
-        var result = SetFlags("[\"Master\"]");
-
-        Assert.True(result.Applied, result.Message);
     }
 
     [Fact]

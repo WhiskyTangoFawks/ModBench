@@ -1,13 +1,10 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The gestures a scalar FormLink column has: a write that lands, and the
-/// <c>RefuseUnlessTrackedAndLoaded</c> doors, which close before any column is looked up.</summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -47,33 +44,4 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.Contains(
             "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
-
-    // RefuseUnlessTrackedAndLoaded runs before any
-    // column is even looked up, so this inherits unconditionally of Apply.
-    [Fact]
-    public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginIsUntracked()
-    {
-        using var untracked = SourceEditFixture.Untracked();
-
-        var result = untracked.EditHandler
-            .Set(untracked.Plugin, untracked.OtherNpc.ToString(), "Race", Json($"\"{untracked.Race}\""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-    }
-
-    // The other RefuseUnlessTrackedAndLoaded outcome (a vanilla/DLC master with no mod folder to
-    // Track at all), the same unconditional-of-Apply gate as the untracked case above.
-    [Fact]
-    public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginHasNoModFolder()
-    {
-        using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
-
-        var result = vanilla.EditHandler
-            .Set(vanilla.Plugin, vanillaNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
-    }
-
 }

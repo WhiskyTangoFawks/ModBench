@@ -1,0 +1,161 @@
+using System.Text.Json.Nodes;
+using MEditService.SourceAdapter;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+
+namespace MEditService.Commands.Tests.RealData;
+
+public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
+    : IClassFixture<TrackedCutDownFixture>
+{
+    private static JsonNode RequireNode(JsonNode? node, string what) =>
+        node ?? throw new InvalidOperationException($"Expected {what} to be present.");
+
+    private static string FormKeyOf(JsonNode? recordNode) =>
+        RequireNode(recordNode, "a record node")[nameof(IMajorRecordGetter.FormKey)] is { } formKeyNode
+            ? formKeyNode.GetValue<string>()
+            : throw new InvalidOperationException("Expected a FormKey member.");
+
+    // This class's fixture is the only one with real populated cells and worldspaces; the flat two-NPC
+    // fixture structurally cannot exercise this. Key paths by pattern rather than a hardcoded block
+    // number this test cannot verify independently.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
+    {
+        var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
+            .ToList();
+        Assert.NotEmpty(allFiles);
+
+        // Block and sub-block GRUP directories are the library's own directory layout too, so each
+        // numeric segment carries an optional "[N] " prefix ahead of the block number. That prefix is
+        // what the pattern allows for, not a coordinate.
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
+
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+    }
+
+    // Order is the document's list order, transitively: a quest's document holds its topics, branches
+    // and scenes in the binary's order, each topic its responses, and none has a file or a directory
+    // anywhere.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
+    {
+        using var original = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4);
+        var quests = ((IFallout4ModGetter)original).Quests
+            .Where(q => q.DialogTopics.Count + q.DialogBranches.Count + q.Scenes.Count > 0)
+            .ToList();
+        Assert.Contains(quests, q => q.DialogTopics.Count >= 2);
+        Assert.Contains(quests, q => q.Scenes.Count >= 1);
+
+        var documents = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories).ToList();
+        foreach (var slot in new[] { nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses) })
+        {
+            Assert.DoesNotContain(
+                Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
+                d => Path.GetFileName(d) == slot);
+        }
+
+        foreach (var quest in quests)
+        {
+            var parsed = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))
+                ?? throw new InvalidOperationException($"Expected {quest.FormKey}'s document to parse as JSON.");
+            var root = parsed.AsObject();
+
+            foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
+                     {
+                         (nameof(Quest.DialogTopics), quest.DialogTopics),
+                         (nameof(Quest.DialogBranches), quest.DialogBranches),
+                         (nameof(Quest.Scenes), quest.Scenes),
+                     })
+            {
+                var expected = children.Select(c => c.FormKey.ToString()).ToList();
+                foreach (var child in expected)
+                    Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child));
+                if (expected.Count == 0)
+                {
+                    Assert.Null(root[slot]);
+                    continue;
+                }
+                Assert.Equal(
+                    expected,
+                    RequireNode(root[slot], slot).AsArray().Select(FormKeyOf));
+            }
+
+            foreach (var topic in quest.DialogTopics)
+            {
+                foreach (var response in topic.Responses)
+                {
+                    Assert.Null(SourceRepository.PathCarrying(
+                        documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString()));
+                }
+                var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
+                    .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
+                    ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
+                Assert.Equal(
+                    topic.Responses.Select(r => r.FormKey.ToString()),
+                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
+            }
+        }
+    }
+
+    // GroupRecordData.json is the library's own metadata file for a group or block level, written
+    // only for non-default metadata. None is minted for a flat group to carry its order.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesOnlyTheGroupDocumentsTheLibraryWrites()
+    {
+        var libraryTree = CutDownPluginFixture.DeriveSourceTreeFromBinary(CutDownPluginFixture.PluginPath);
+        var libraryGroupDocuments = libraryTree
+            .Where(kv => Path.GetFileName(kv.Key) == "GroupRecordData.json")
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        Assert.NotEmpty(libraryGroupDocuments);
+
+        var trackedGroupDocuments = fixture.ReadSourceTree()
+            .Where(kv => Path.GetFileName(kv.Key) == "GroupRecordData.json")
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());
+        foreach (var (path, bytes) in libraryGroupDocuments)
+            Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
+    }
+
+    // The layout is the repository's, so which file holds a record is asked of it rather than
+    // spelled here. Asked one path at a time, so Single still fails a tree holding two.
+    internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
+        documents.Single(
+            f => SourceRepository.PathCarrying([f], CutDownPluginFixture.PluginFileName, formKey) != null);
+
+    // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
+    // would pass whether or not the field was suppressed.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesCellTimestampData()
+    {
+        var cellFile = Directory.EnumerateFiles(fixture.SourceRoot, "RecordData.json", SearchOption.AllDirectories)
+            .Single(f => f.Contains("03C0F0", StringComparison.Ordinal));
+        var cellText = File.ReadAllText(cellFile);
+
+        Assert.Contains("\"PersistentTimestamp\": 138972", cellText, StringComparison.Ordinal);
+        Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
+    }
+
+    // This response because its condition Unknown1 is a real non-default pad from Fallout4.esm, so a
+    // missing-field bug cannot pass by writing a coincidental zero.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
+    {
+        // Inline in its topic's document, so the topic's text is where the pad has to appear.
+        var topicText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)));
+        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicText, StringComparison.Ordinal);
+
+        var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
+        Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);
+        Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
+    }
+}

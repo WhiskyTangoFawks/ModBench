@@ -19,6 +19,14 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.True(SourceRepository.HoldsTreeFor(fixture.ModFolder, RealDataPlugin.PluginFileName));
     }
 
+    // A synthetic fixture holds no containers, no worldspace and no embedded children.
+    [Fact]
+    public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
+    {
+        Assert.False(fixture.FromSource.Revalidate());
+        Assert.Empty(fixture.FromSource.Status.Failures);
+    }
+
     [Fact]
     public void TheSameRecordsExist_TrackedAndUntracked()
     {
@@ -53,15 +61,14 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
     {
-        var binaryDocuments = DocumentsByFormKey(fixture.FromBinary);
-        var sourceDocuments = DocumentsByFormKey(fixture.FromSource);
+        var binaryDocuments = DocumentsByFormKey(fixture.BinaryInstanceRoot);
+        var sourceDocuments = DocumentsByFormKey(fixture.SourceInstanceRoot);
 
         var mismatched = new List<string>();
         var byType = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var (formKey, binary) in binaryDocuments)
         {
-            var source = sourceDocuments.GetValueOrDefault(formKey);
-            if (binary.Body == source?.Body) continue;
+            if (sourceDocuments.TryGetValue(formKey, out var source) && binary.Body == source.Body) continue;
             mismatched.Add(formKey);
             byType[binary.RecordType] = byType.GetValueOrDefault(binary.RecordType) + 1;
         }
@@ -74,8 +81,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind
         // the same count.
-        var binaryBody = binaryDocuments[mismatched[0]].BodyOf();
-        var sourceBody = sourceDocuments[mismatched[0]].BodyOf();
+        var binaryBody = binaryDocuments[mismatched[0]].Body;
+        var sourceBody = sourceDocuments[mismatched[0]].Body;
         Assert.Contains("\"Break2\"", binaryBody, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Break2\"", sourceBody, StringComparison.Ordinal);
         Assert.Equal(StripVersioningBlock(binaryBody), StripVersioningBlock(sourceBody));
@@ -109,61 +116,25 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.BodyOf()));
     }
 
-    [Fact]
-    public void PlacementAndCellLocationRows_AreIdentical_TrackedAndUntracked()
+    [Theory]
+    [InlineData("placement")]
+    [InlineData("cell_location")]
+    [InlineData("form_lookup")]
+    [InlineData("form_references")]
+    [InlineData("container_child")]
+    public void ASideTablesRows_AreIdentical_TrackedAndUntracked(string relation)
     {
-        var keys = AllFormKeys(fixture.FromBinary);
-        var placed = 0;
-        var located = 0;
-        foreach (var formKey in keys)
-        {
-            var binaryPlacement = fixture.FromBinary.RequireReads().GetPlacement(formKey, fixture.Plugin);
-            Assert.Equal(binaryPlacement, fixture.FromSource.RequireReads().GetPlacement(formKey, fixture.Plugin));
-            if (binaryPlacement is not null) placed++;
+        var binary = RowsOf(fixture.BinaryInstanceRoot, relation);
+        var source = RowsOf(fixture.SourceInstanceRoot, relation);
 
-            var binaryLocation = fixture.FromBinary.RequireReads().GetCellLocation(fixture.Plugin, formKey);
-            Assert.Equal(binaryLocation, fixture.FromSource.RequireReads().GetCellLocation(fixture.Plugin, formKey));
-            if (binaryLocation is not null) located++;
-        }
-
-        // Positive controls: two empty answers are trivially equal on both sides.
-        Assert.True(placed > 0, "fixture produced no placements");
-        Assert.True(located > 0, "fixture produced no cell locations");
-    }
-
-    [Fact]
-    public void FormLookupAndReferenceRows_AreIdentical_TrackedAndUntracked()
-    {
-        var referenced = 0;
-        foreach (var formKey in AllFormKeys(fixture.FromBinary))
-        {
-            Assert.Equal(
-                fixture.FromBinary.RequireReads().Resolve(formKey),
-                fixture.FromSource.RequireReads().Resolve(formKey));
-
-            var binaryReferences = Ordered(fixture.FromBinary.RequireReads().GetReferencedBy(formKey));
-            Assert.Equal(binaryReferences, Ordered(fixture.FromSource.RequireReads().GetReferencedBy(formKey)));
-            referenced += binaryReferences.Count;
-        }
-
-        Assert.True(referenced > 0, "fixture produced no references");
-    }
-
-    [Fact]
-    public void ContainerChildRows_AreIdentical_TrackedAndUntracked()
-    {
-        var children = 0;
-        foreach (var formKey in AllFormKeys(fixture.FromBinary))
-        {
-            var binaryChildren = fixture.FromBinary.RequireReads().GetContainerChildren(fixture.Plugin, formKey);
-            Assert.Equal(binaryChildren, fixture.FromSource.RequireReads().GetContainerChildren(fixture.Plugin, formKey));
-            Assert.Equal(
-                fixture.FromBinary.RequireReads().GetContainerParent(fixture.Plugin, formKey),
-                fixture.FromSource.RequireReads().GetContainerParent(fixture.Plugin, formKey));
-            children += binaryChildren.Count;
-        }
-
-        Assert.True(children > 0, "fixture produced no container children");
+        // Positive control: two empty relations are trivially equal.
+        Assert.True(binary.Count > 0, $"the fixture produced no {relation} rows");
+        var onlyBinary = binary.Except(source, StringComparer.Ordinal).ToList();
+        var onlySource = source.Except(binary, StringComparer.Ordinal).ToList();
+        Assert.True(
+            binary.SequenceEqual(source, StringComparer.Ordinal),
+            $"{relation}: {binary.Count} rows untracked, {source.Count} tracked." +
+            $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
     // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
@@ -177,12 +148,13 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         index.RequireReads().Search(new RecordQuery(
             RecordTypes: [recordType], Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: 0)).Total;
 
-    private Dictionary<string, RecordDocument> DocumentsByFormKey(Indexer index) =>
-        index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
-
-    private static List<ReferenceRow> Ordered(IEnumerable<ReferenceRow> references) =>
-        [.. references.OrderBy(r => r.FormKey, StringComparer.Ordinal).ThenBy(r => r.FieldPath, StringComparer.Ordinal)];
+    private static Dictionary<string, (string RecordType, string Body)> DocumentsByFormKey(string instanceRoot) =>
+        IndexFiles.Rows(instanceRoot, "SELECT form_key, record_type, body FROM records")
+            .ToDictionary(row => row[0], row => (row[1], row[2]), StringComparer.Ordinal);
 
     private static string StripVersioningBlock(string body) =>
         Regex.Replace(body, "\"Versioning\": \\[[^\\]]*\\]", "\"Versioning\": []");
+
+    private static List<string> RowsOf(string instanceRoot, string relation) =>
+        [.. IndexFiles.Rows(instanceRoot, $"SELECT * FROM {relation}").Select(row => string.Join(" | ", row))];
 }

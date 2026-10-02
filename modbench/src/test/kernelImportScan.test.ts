@@ -9,42 +9,9 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
+import { CORE_BOXES, KERNEL_BOXES, REFERENCING_BOXES, VIEW_BOXES } from './boxes';
 
 const SRC = join(__dirname, '..');
-
-// One directory per kernel box, as the zoom-out draws the Modbench kernel band.
-const KERNEL_BOXES = ['loadOrderFileCodec', 'tables', 'wire', 'ports'];
-
-// The driven column, each with the boxes target-architecture-references.d2 lets it reach: the
-// arrows that leave it, plus its column's kernel by the band's rule.
-const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
-  instanceLoader: ['instanceAdapter', 'ports', 'tables'],
-};
-
-// The core column, read off the same picture.
-const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['instanceAdapter', 'ports'],
-  pluginsCommands: ['instanceLoader', 'loadOrderFileCodec', 'instanceAdapter', 'ports'],
-  instanceCommands: ['client', 'instanceLoader', 'instanceAdapter', 'ports', 'tables'],
-  downloadsCommands: ['instanceAdapter', 'ports'],
-  install: ['instanceAdapter', 'ports'],
-  client: ['ports', 'wire'],
-};
-
-
-// The driving band: each view reads a value and fires a command, with the reference list
-// target-architecture-references.d2 draws for it. No Toolbox file uses its drawn deploy commands
-// or tables, so both are left out.
-const VIEW_BOXES: Record<string, string[]> = {
-  toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
-  mods: ['install', 'instanceLoader', 'modlist', 'ports'],
-  downloads: ['downloadsCommands', 'install', 'instanceLoader', 'ports'],
-  plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
-  editor: ['client', 'ports', 'wire'],
-};
-
-const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 
 const boxRoot = (box: string): string => join(SRC, box);
 
@@ -179,10 +146,6 @@ async function plantedSpecifiers(source: string): Promise<string[]> {
 }
 
 describe('a kernel box references nothing', () => {
-  it('names every box the kernel band draws', () => {
-    expect(KERNEL_BOXES).toEqual(['loadOrderFileCodec', 'tables', 'wire', 'ports']);
-  });
-
   it('every box is a real directory holding production files', () => {
     for (const box of KERNEL_BOXES) {
       expect(existsSync(boxRoot(box))).toBe(true);
@@ -233,19 +196,6 @@ describe('a kernel box references nothing', () => {
 });
 
 describe('a driven or core box reaches only the boxes the diagram draws an arrow to', () => {
-  it('names the two boxes the driven band draws', () => {
-    expect(Object.keys(DRIVEN_BOXES)).toEqual(['instanceAdapter', 'instanceLoader']);
-  });
-
-  it('names the six boxes the core band draws and the code builds', () => {
-    expect(Object.keys(CORE_BOXES))
-      .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install', 'client']);
-  });
-
-  it('names the five views the driving band draws', () => {
-    expect(Object.keys(VIEW_BOXES)).toEqual(['toolbox', 'mods', 'downloads', 'plugins', 'editor']);
-  });
-
   it('every box is a real directory holding production files', () => {
     for (const box of Object.keys(REFERENCING_BOXES)) {
       expect(existsSync(boxRoot(box))).toBe(true);

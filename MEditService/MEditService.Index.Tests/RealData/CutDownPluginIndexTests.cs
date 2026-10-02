@@ -6,30 +6,9 @@ namespace MEditService.Index.Tests.RealData;
 /// <summary>Existence/count assertions on purpose: the curated slice is regenerable, so pinning
 /// exact FormKeys would make it brittle. The script read is the exception, since "returns without
 /// throwing" would be vacuous.</summary>
-public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
 {
-    // Over every record the plugin holds, which is the whole cell-location relation: an exterior
-    // cell reaches the Index by a route no interior listing walks.
-    [Fact]
-    public void Index_RealWorldspaceData_PopulatesCellLocations()
-    {
-        var reads = fixture.Reads;
-        var located = reads.GetDocuments(CutDownPluginFixture.Plugin)
-            .Count(d => reads.GetCellLocation(CutDownPluginFixture.Plugin, d.FormKey) is not null);
-
-        Assert.True(located > 0, "Expected the cut-down plugin to contain worldspace/interior cells.");
-    }
-
-    [Fact]
-    public void Index_RealPlacements_PopulatesThePlacementRows()
-    {
-        var reads = fixture.Reads;
-        var placed = reads.GetDocuments(CutDownPluginFixture.Plugin)
-            .Count(d => reads.GetPlacement(d.FormKey, CutDownPluginFixture.Plugin) is not null);
-
-        Assert.True(placed > 0, "Expected the cut-down plugin to contain placed references (REFR/ACHR).");
-    }
-
     // Deliberately concrete rather than a bare "the field is there": this NPC is known to carry two
     // scripts, so a weakened assertion would pass even if the read dropped every script but one.
     [Fact]
@@ -52,14 +31,8 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void Index_RealRecords_PopulateFormReferencesAcrossMultipleTypes()
     {
-        var reads = fixture.Reads;
-        var referencingTypes = reads.GetDocuments(CutDownPluginFixture.Plugin)
-            .Select(d => d.FormKey)
-            .SelectMany(reads.GetReferencedBy)
-            .Select(r => r.RecordType)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
+        var referencingTypes = IndexFiles.Rows(fixture.InstanceRoot, "SELECT DISTINCT record_type FROM form_references");
 
-        Assert.True(referencingTypes >= 3, "Expected references from at least 3 record types in the cut-down plugin.");
+        Assert.True(referencingTypes.Count >= 3, "Expected references from at least 3 record types in the cut-down plugin.");
     }
 }

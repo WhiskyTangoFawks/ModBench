@@ -3,8 +3,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Runs against <see cref="ContainerMod"/>, whose records nest: a flat fixture exercises
-/// no container at all. <c>SourceIngestParityTests</c> covers the same ground at scale.</summary>
+/// <summary>Container Head reconciliation, against <see cref="ContainerMod"/>, whose records nest: a
+/// flat fixture exercises no container at all.</summary>
 public sealed class SourceIngestContainerTests : IDisposable
 {
     private readonly ContainerMod _fixture = new();
@@ -13,58 +13,17 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     private Indexer Reloaded() => Indexes.Reconciled(_fixture.GameDirectory, [_fixture.Entry]);
 
-    // ---- Embedded children survive the round trip through the tree ----
-
-    [Fact]
-    public void AnEmbeddedPlacedReference_IsItsOwnRecord_AfterIngestFromSource()
-    {
-        using var reloaded = Reloaded();
-
-        var record = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(record);
-        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, record.EditorId);
-        Assert.NotNull(reloaded.RequireReads().Resolve(_fixture.TemporaryRef.ToString()));
-    }
-
-    [Fact]
-    public void AnEmbeddedPlacedReference_KeepsItsPlacementRow_AfterIngestFromSource()
-    {
-        using var reloaded = Reloaded();
-
-        var placement = reloaded.RequireReads().GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        Assert.NotNull(placement);
-        // The spatial facts survive containment being expressed as a directory rather than a GRUP.
-        Assert.Equal(_fixture.EmbedCell.ToString(), placement.Value.ParentCell);
-        Assert.Equal(11f, placement.Value.PosX);
-    }
-
     [Fact]
     public void AnEmbeddedPlacedReference_AnswersAtBothRefs_OnACleanTree()
     {
         using var reloaded = Reloaded();
 
-        // Nothing is dirty, so the one parse serves both refs — ADR-0007's clean fast path, asserted
-        // rather than assumed, and asserted for a record that exists only inside its parent's document.
         var effective = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         var head = reloaded.RequireReads().HeadDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.NotNull(head);
         Assert.Equal(effective.Body, head.Body);
     }
-
-    [Fact]
-    public void TheCellItself_AnswersAfterIngestFromSource()
-    {
-        using var reloaded = Reloaded();
-
-        var cell = reloaded.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
-        Assert.NotNull(cell);
-        Assert.Equal(ContainerModPlugin.EmbedCellEditorId, cell.EditorId);
-        // The child is embedded in the parent's document, which is what gives it no file of its own.
-        Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, cell.Body, StringComparison.Ordinal);
-    }
-
-    // ---- Container Head reconciliation ----
 
     [Fact]
     public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()

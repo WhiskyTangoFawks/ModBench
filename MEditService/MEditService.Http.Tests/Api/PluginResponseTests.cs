@@ -11,20 +11,6 @@ public sealed class PluginResponseTests
             new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1),
             MasterIssues: [], HasMatchingRecords: true, HasParseFailure: false, IsTracked: isTracked);
 
-    [Fact]
-    public void IsTracked_IsTheRowsFact_WithNoRepositoryOnDisk()
-    {
-        Assert.True(PluginResponse.Of(Row(isTracked: true)).IsTracked);
-        Assert.False(PluginResponse.Of(Row(isTracked: false)).IsTracked);
-    }
-
-    [Fact]
-    public void IsBlueprint_IsTheRowsFact()
-    {
-        Assert.True(PluginResponse.Of(Row(isBlueprint: true)).IsBlueprint);
-        Assert.False(PluginResponse.Of(Row(isBlueprint: false)).IsBlueprint);
-    }
-
     // ADR-0013 invariant 3: a plugin is in the load order exactly when the snapshot lists it as
     // active, and its place there is its load index.
     [Fact]

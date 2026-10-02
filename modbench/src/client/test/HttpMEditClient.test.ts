@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { HttpMEditClient } from '../HttpMEditClient';
+import { HttpMEditClient, type HttpMEditClientDeps } from '../HttpMEditClient';
 import { isUnanswered } from '../MEditClient';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -13,13 +13,16 @@ function neverFetch(): (input: Request) => Promise<Response> {
   return () => new Promise<Response>(() => {});
 }
 
-function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up', timeoutMs?: number) {
+function makeClient(
+  fetch: (input: Request) => Promise<Response>,
+  { health = 'up', ...deps }: { health?: 'up' | 'down' } & Pick<HttpMEditClientDeps, 'timeoutMs' | 'reconnectDelayMs'> = {},
+) {
   return new HttpMEditClient({
     backend: {
       attachPort: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
       checkHealth: () => Promise.resolve(health === 'up'),
     },
-    fetch, timeoutMs,
+    fetch, ...deps,
   });
 }
 
@@ -131,7 +134,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
 
   it('closes the stream when the backend goes disconnected', async () => {
     const fetch = vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 })));
-    const client = makeClient(fetch, 'down');
+    const client = makeClient(fetch, { health: 'down' });
 
     await client.start();
 
@@ -725,7 +728,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, status))],
       ['/load-order', () => Promise.resolve(jsonResponse(200, appliedBody))],
     ]);
-    const client = makeClient(fetch);
+    const client = makeClient(fetch, { reconnectDelayMs: 0 });
     await client.start();
     await vi.waitFor(() => expect(streams).toHaveLength(1));
 
@@ -735,7 +738,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
     streams[0]?.end();
 
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
-  }, 10_000);
+  });
 
   it('answers a PUT that heard only an older version\'s tick from the process\'s own status', async () => {
     const { response: stream, push } = pushableStreamResponse();
@@ -825,7 +828,7 @@ describe('HttpMEditClient — read timeout', () => {
       sawSignal = req.signal;
       return new Promise<Response>(() => {}); // never resolves
     });
-    const client = makeClient(fetch, 'up', 20);
+    const client = makeClient(fetch, { timeoutMs: 20 });
 
     await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).rejects.toThrow(/timed out after 20ms/);
     expect(sawSignal?.aborted).toBe(true);
@@ -833,7 +836,7 @@ describe('HttpMEditClient — read timeout', () => {
 
   it('does not time out a read that answers before the deadline', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
-    const client = makeClient(fetch, 'up', 20);
+    const client = makeClient(fetch, { timeoutMs: 20 });
 
     await expect(client.getRecordTypes('MyPatch.esp', 'ModA')).resolves.toEqual([]);
   });

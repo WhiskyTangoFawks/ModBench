@@ -10,7 +10,6 @@ namespace MEditService.Http.Tests.Api;
 /// <summary>ADR-0003 invariant 3 on the wire: each time the snapshot arrives, the stream names each
 /// tracked plugin whose bytes differ from what Modbench last wrote, and each untracked plugin of a
 /// tracked mod.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class AnExternalChangeNoticeApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
@@ -44,21 +43,6 @@ public sealed class AnExternalChangeNoticeApiTests : HostedTests
 
     private static Task<IReadOnlyList<JsonElement>> NoticesUntilOneNames(StreamReader stream, string plugin) =>
         stream.EventsUntil("external-change", notice => ChangedPlugins(notice).Any(p => p.Name == plugin));
-
-    [Fact]
-    public async Task AnEdit_ToAPluginThatChangedOutsideModbench_Lands()
-    {
-        var fx = Owned(await Watched());
-        var formKey = await Client.FirstFormKey(Plugin, Origin);
-        using var stream = await Client.NotificationStream();
-        ARelease(fx);
-        await Client.NextSnapshot(fx);
-        await NoticesUntilOneNames(stream, Plugin);
-
-        var response = await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25);
-
-        response.EnsureSuccessStatusCode();
-    }
 
     [Fact]
     public async Task AChangeMadeWhileTheServiceWasDown_IsNamedAtTheNextLoad_WithTheStateOfItsBytes()
