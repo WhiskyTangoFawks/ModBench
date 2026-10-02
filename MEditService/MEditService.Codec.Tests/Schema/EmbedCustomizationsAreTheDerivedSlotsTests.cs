@@ -62,13 +62,22 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 
         public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IReadOnlyList<IMajorRecordGetter>?>> field) => Record(field);
 
-        // ADR-0006 decision 3: neither customization exists, and a document that grew one would read
-        // here as an unrecorded member rather than as a passing test.
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) =>
-            throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
+            EveryDerivedTypeRedeclares(((MemberExpression)field.Body).Member.Name)
+                ? this
+                : throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
 
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
             throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
+
+        private static bool EveryDerivedTypeRedeclares(string member)
+        {
+            var derived = typeof(TObject).Assembly.GetTypes()
+                .Where(t => t.IsInterface && t != typeof(TObject) && typeof(TObject).IsAssignableFrom(t))
+                .ToList();
+            return derived.Count > 0 && derived.All(t =>
+                t.GetProperty(member, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly) != null);
+        }
 
         private ICustomizationBuilder<TObject> Record(LambdaExpression field)
         {
