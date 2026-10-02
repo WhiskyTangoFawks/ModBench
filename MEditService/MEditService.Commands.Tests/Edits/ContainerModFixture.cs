@@ -1,10 +1,8 @@
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -88,11 +86,7 @@ public sealed class ContainerModFixture : IDisposable
     // child has an order to change.
     public static readonly byte[] ResponseLineNumbers = [1, 2];
 
-    public ContainerModFixture() : this(track: true) { }
-
-    /// <summary>Deferred tracking, for the indexed wrapper: the Index reconciles over the untracked
-    /// binary first, exactly as the process does before Track ever runs.</summary>
-    internal ContainerModFixture(bool track)
+    public ContainerModFixture()
     {
         var holder = new LoadOrderHolder();
         _instanceRoot = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
@@ -123,7 +117,7 @@ public sealed class ContainerModFixture : IDisposable
         quest.Scenes.Add(scene);
         mod.Quests.Add(quest);
 
-        mod.WriteToBinary(pluginPath);
+        TrackedTemplates.WriteTracked(ModFolder, mod);
 
         Npc = npc.FormKey;
         Cell = containerKeys.Cell;
@@ -138,8 +132,6 @@ public sealed class ContainerModFixture : IDisposable
         Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
         LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, Entries);
 
-        if (track) Track();
-
         holder.Apply(LoadOrder);
         Holder = holder;
         EditHandler = TestEditService.EditHandler(holder);
@@ -148,13 +140,6 @@ public sealed class ContainerModFixture : IDisposable
     }
 
     private readonly string _instanceRoot;
-
-    /// <summary>Track through the real service: what an edit does to a git working tree is the thing
-    /// under test, and no mock can answer that.</summary>
-    internal void Track() =>
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, ModFolderOrigin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — an embedded child cut back out of its owner's document included.</summary>
