@@ -8,6 +8,7 @@ import { copiedText, modelValue, pastedValue, readsAsFlags } from './modelValue'
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
+import { versionControlInfo1 } from './presentation';
 import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
@@ -30,6 +31,8 @@ interface RenderCellExtras {
   // The row's own collapse state, threaded to the one leaf that renders differently for it
   // (FlagCell's compact summary) — a row collapses as a row, all columns together.
   rowCollapsed?: boolean;
+  // What the cell reads at rest, where its reading takes more than its value and its schema.
+  reading?: string;
 }
 
 // ADR-0007: leaves render read-only unless the caller supplies `onCommit` — the presence of
@@ -38,7 +41,7 @@ interface RenderCellExtras {
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  { checkError, resolution, onCommit, rowCollapsed }: RenderCellExtras = {},
+  { checkError, resolution, onCommit, rowCollapsed, reading }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -82,6 +85,7 @@ function renderCell(
       meta={meta}
       editable={onCommit != null}
       onCommit={onCommit}
+      displayOverride={reading}
     />
   );
 }
@@ -357,6 +361,7 @@ export function DiffRow({
                   checkError, resolution: value === shown ? resolution : undefined,
                   onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
                   rowCollapsed: isFlagsRow && !rowExpanded,
+                  reading: cellMeta.isVersionControlInfo1 ? versionControlInfo1(value, override) : undefined,
                 })}
               </WrittenValue>
             )}

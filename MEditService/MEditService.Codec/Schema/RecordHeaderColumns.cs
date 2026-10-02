@@ -17,7 +17,7 @@ internal static class RecordHeaderColumns
         Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game, ILogger logger)
     {
         var columns = new List<ColumnSpec>();
-        foreach (var (typeName, member, label, ignoredInConflicts) in game.Annotations.RecordHeaderMembers)
+        foreach (var (typeName, member, label, ignoredInConflicts, isVersionControlInfo1) in game.Annotations.RecordHeaderMembers)
         {
             var declared = declarations[member].ToList();
             if (!declared.Exists(p => ReflectedTypes.DeclaringTypeOf(p).Name == typeName)) continue;
@@ -32,6 +32,7 @@ internal static class RecordHeaderColumns
                     IsRecordHeaderMember = true,
                     IsRecordFormKey = ReflectedTypes.IsFormKey(prop.PropertyType),
                     IgnoredInConflicts = ignoredInConflicts,
+                    IsVersionControlInfo1 = isVersionControlInfo1,
                 },
             };
             columns.Add(member == FlagsMember ? WithFlagViews(header, getterType, declarations, game) : header);

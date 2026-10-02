@@ -668,6 +668,7 @@ export interface components {
             isRecordHeaderMember: boolean;
             isRecordFormKey: boolean;
             ignoredInConflicts: boolean;
+            isVersionControlInfo1: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
