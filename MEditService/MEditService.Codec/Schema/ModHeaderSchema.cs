@@ -16,21 +16,6 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The TES4 record's header (wbRecordHeader in wbDefinitionsCommon.pas) under xEdit's labels, then
-    // the rest, with why a write reaching one is refused. A mod header is no major record, so the
-    // table names them.
-    private static readonly (string Member, string? HeaderLabel, string? ReadOnlyReason)[] PresentedMembers =
-    [
-        ("Flags", "Record Flags", null),
-        ("FormID", "FormID", PluginHeader.FormIdReadOnly),
-        ("Version", "Version Control Info 1", null),
-        ("FormVersion", "Form Version", null),
-        ("Version2", "Version Control Info 2", null),
-        ("Author", null, null),
-        // Content-derived at compile time (ADR-0008).
-        (PluginHeader.MastersFieldName, null, "masters are wholly content-derived at compile time"),
-    ];
-
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
     // root RecordData.json.
     private static RecordTableSchema? BuildHeaderSchema(
@@ -48,13 +33,12 @@ internal static class ModHeaderSchema
         var headerGetterType = modHeaderProp.PropertyType;
         var pathPrefix = $"{modHeaderProp.Name}.";
         var columns = new List<ColumnSpec>();
-        foreach (var (member, headerLabel, readOnlyReason) in PresentedMembers)
+        foreach (var (typeName, member, headerLabel, readOnlyReason) in game.Annotations.PluginHeaderMembers)
         {
-            var prop = headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null)
+            if (headerGetterType.Name != typeName || headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance) is not { } prop)
             {
-                logger.LogWarning("No {Member} found on {HeaderType}; that header column is omitted", member, headerGetterType);
-                continue;
+                throw new InvalidOperationException(
+                    $"{nameof(SchemaAnnotations.PluginHeaderMembers)}: {typeName}.{member} is no member of {headerGetterType.Name}, the plugin header's type");
             }
 
             // A member the builder declines has already said so through SchemaRefusals.

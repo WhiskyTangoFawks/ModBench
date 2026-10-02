@@ -65,7 +65,11 @@ internal sealed record SchemaAnnotations(
     // The record header's members in xEdit's order, under xEdit's labels (wbRecordHeader in
     // wbDefinitionsCommon.pas), keyed by the declaring interface: a type carries the rows whose
     // interface it has.
-    IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers)
+    IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers,
+    // The plugin header's presented members, keyed by the game's ModHeader interface: its record
+    // header under xEdit's labels, then the rest, with why a write reaching one is refused. No
+    // interface over every game's ModHeader names them.
+    IReadOnlyList<(string TypeName, string MemberName, string? HeaderLabel, string? ReadOnlyReason)> PluginHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -103,6 +107,20 @@ internal sealed record SchemaAnnotations(
         ("IFormKeyGetter", "FormKey", "FormID"),
         ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
         ("IMajorRecordGetter", "FormVersion", "Form Version"),
+    ];
+
+    // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
+    // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
+    private static (string, string, string?, string?)[] PluginHeaderMembersOf(string modHeaderGetter) =>
+    [
+        (modHeaderGetter, "Flags", "Record Flags", null),
+        (modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly),
+        (modHeaderGetter, "Version", "Version Control Info 1", null),
+        (modHeaderGetter, "FormVersion", "Form Version", null),
+        (modHeaderGetter, "Version2", "Version Control Info 2", null),
+        (modHeaderGetter, "Author", null, null),
+        // Content-derived at compile time (ADR-0008).
+        (modHeaderGetter, PluginHeader.MastersFieldName, null, "masters are wholly content-derived at compile time"),
     ];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
@@ -220,7 +238,8 @@ internal sealed record SchemaAnnotations(
             [
                 .. RecordHeaderMembersInEveryGame,
                 ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
-            ]),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
         [GameCategory.Skyrim] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -245,7 +264,8 @@ internal sealed record SchemaAnnotations(
             [
                 .. RecordHeaderMembersInEveryGame,
                 ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
-            ]),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -276,7 +296,8 @@ internal sealed record SchemaAnnotations(
             [
                 .. RecordHeaderMembersInEveryGame,
                 ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
-            ]),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -576,6 +597,7 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
             .. UnresolvedSyntheticFlags(typesByName),
             .. UnresolvedMembers(typesByName, nameof(RecordHeaderMembers), RecordHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
+            .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
         ];
 
         if (missing.Length > 0)

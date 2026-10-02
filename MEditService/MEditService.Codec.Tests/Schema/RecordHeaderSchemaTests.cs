@@ -96,6 +96,15 @@ public sealed class RecordHeaderSchemaTests
     }
 
     [Fact]
+    public void APluginHeader_PresentsItsRecordHeader_ThenItsAuthorAndMasters()
+    {
+        Assert.Equal(
+            ["ModHeader.Flags", "ModHeader.FormID", "ModHeader.Version", "ModHeader.FormVersion", "ModHeader.Version2",
+                "ModHeader.Author", "ModHeader.MasterReferences"],
+            Schema("header").RecordColumns.Where(c => c.Synthetic == null).Select(c => c.PropertyName));
+    }
+
+    [Fact]
     public void APluginHeadersHeaderMembers_AreItsModHeaders_UnderTheSameLabels_WithItsFormIdReadOnly()
     {
         var header = HeaderOf("header");
