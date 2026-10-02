@@ -14,7 +14,8 @@ export const fieldMeta = (
   m: Partial<FieldMetadata> & Pick<FieldMetadata, 'name' | 'type'>,
 ): FieldMetadata => ({
   isArray: false, validFormKeyTypes: [], enumMembers: [],
-  allowsNull: false, isDiscriminator: false, isRecordHeaderMember: false, isRecordFormKey: false, ignoredInConflicts: false, ...m,
+  allowsNull: false, isDiscriminator: false, isRecordHeaderMember: false, isRecordFormKey: false, ignoredInConflicts: false,
+  isVersionControlInfo1: false, ...m,
 });
 
 /** A diff node with every required wire member at its neutral value. `NoConflict` paints no row

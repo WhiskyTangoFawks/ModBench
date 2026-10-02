@@ -1,7 +1,7 @@
 import { displayValue } from './modelValue';
-import { discriminatorOf, getAtPath, metaAtPath, toStr } from './recordUtils';
+import { discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
-import type { FieldDiff, FieldMetadata, PathHop } from './types';
+import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types';
 
 // The one place in the webview where a game's own reading conventions live — a game-shaped rule
 // not in this table is in the wrong file. Members are named as the document names them.
@@ -164,6 +164,33 @@ const PRESENTATION_TABLE: Record<string, Summarizer | undefined> = {
   // list of bindings. `asProperty` is what tells the two apart.
   ScriptObjectProperty: row => asProperty(row, scriptObject(row)),
 };
+
+// ── Version Control Info 1 ───────────────────────────────────────────────────
+//
+// xEdit's wbVCI1ToStrBeforeFO4 and wbVCI1ToStrAfterFO4 (wbInterface.pas), chosen by the copy's
+// Form Version as wbRecordHeader's wbFormVersionDecider(44) chooses (wbDefinitionsCommon.pas).
+
+const FORM_VERSION = 'FormVersion';
+const BIT_PACKED_FROM_FORM_VERSION = 44;
+
+const pad = (n: number, width: number) => String(n).padStart(width, '0');
+
+export function versionControlInfo1(stamp: unknown, copy: CompareOverride): string {
+  const packed = Number(stamp ?? 0) >>> 0;
+  if (packed === 0) return 'None';
+  const formVersion = Number(rootFieldOf(copy, FORM_VERSION)?.value ?? 0);
+  const [year, month, day] = formVersion >= BIT_PACKED_FROM_FORM_VERSION
+    ? [2000 + ((packed >>> 9) & 0x7F), (packed >>> 5) & 0x0F, packed & 0x1F]
+    : yearMonthDayInBytes(packed);
+  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)} User: ${(packed >>> 16) & 0xFF} Index: ${packed >>> 24}`;
+}
+
+// The second byte numbers the month from 1 for January 2003. Delphi's div and mod truncate toward
+// zero, so xEdit reads a zero byte as month 0 of 2003.
+function yearMonthDayInBytes(packed: number): [number, number, number] {
+  const months = ((packed >>> 8) & 0xFF) - 1;
+  return [2003 + Math.trunc(months / 12), (months % 12) + 1, packed & 0xFF];
+}
 
 // ── The lookup the grid uses ─────────────────────────────────────────────────
 

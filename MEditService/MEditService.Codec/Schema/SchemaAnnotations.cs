@@ -16,15 +16,17 @@ public enum KnownDefectEffect
 }
 
 /// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
-/// record header member, why a write reaching it is refused, and whether it reads as the header's
-/// FormKey.</summary>
+/// record header member, why a write reaching it is refused, whether it reads as the header's
+/// FormKey, and whether it is xEdit's Version Control Info 1.</summary>
 internal sealed record PluginHeaderMember(
-    string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false);
+    string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false,
+    bool IsVersionControlInfo1 = false);
 
-/// <summary>One member of the record header: its xEdit label, and whether the game ignores it, so the
-/// compare shows it and takes it into no conflict (xEdit's cpIgnore).</summary>
+/// <summary>One member of the record header: its xEdit label, whether the game ignores it, so the
+/// compare shows it and takes it into no conflict (xEdit's cpIgnore), and whether it is xEdit's
+/// Version Control Info 1.</summary>
 internal sealed record RecordHeaderMember(
-    string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false);
+    string TypeName, string MemberName, string Label, bool IgnoredInConflicts = false, bool IsVersionControlInfo1 = false);
 
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
@@ -125,7 +127,7 @@ internal sealed record SchemaAnnotations(
     [
         new("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
         new("IFormKeyGetter", "FormKey", "FormID"),
-        new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true),
+        new("IMajorRecordGetter", "VersionControl", "Version Control Info 1", IgnoredInConflicts: true, IsVersionControlInfo1: true),
         new("IMajorRecordGetter", "FormVersion", "Form Version", IgnoredInConflicts: true),
     ];
 
@@ -135,7 +137,7 @@ internal sealed record SchemaAnnotations(
     [
         new(modHeaderGetter, "Flags", "Record Flags"),
         new(modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
-        new(modHeaderGetter, "Version", "Version Control Info 1"),
+        new(modHeaderGetter, "Version", "Version Control Info 1", IsVersionControlInfo1: true),
         new(modHeaderGetter, "FormVersion", "Form Version"),
         new(modHeaderGetter, "Version2", "Version Control Info 2"),
         new(modHeaderGetter, "Author"),
