@@ -36,7 +36,14 @@ internal sealed class OverrideCopy
         using var source = copy.Source;
         // commands.md, Doing nothing is not an error: the record's own plugin already is this copy.
         if (PluginAddress.Comparer.Equals(sourcePlugin, destinationPlugin)) return RecordEditResult.Success();
-        return CopyAsOverride(copy, destinationPlugin, replace);
+        try
+        {
+            return CopyAsOverride(copy, destinationPlugin, replace);
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return WriteTargets.RefuseUnreadableSourceTree(formKey, ex.Message);
+        }
     }
 
     private RecordEditResult CopyAsOverride(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin, bool replace)

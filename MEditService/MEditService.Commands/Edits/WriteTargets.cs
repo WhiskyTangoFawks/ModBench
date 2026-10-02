@@ -144,6 +144,11 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
+    /// <summary>A copy that reads a source-tree document beyond its own record, as an exterior cell's
+    /// worldspace, refuses naming that document.</summary>
+    internal static RecordEditResult RefuseUnreadableSourceTree(string formKey, string why) =>
+        RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
+
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessTrackedAndLoaded(PluginAddress plugin, out SourceRepository? repository)
     {
