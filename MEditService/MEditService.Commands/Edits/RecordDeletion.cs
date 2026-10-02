@@ -5,30 +5,27 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Setting Deleted through Record Flags is xEdit's Delete (TwbMainRecord.Delete): the
-/// record keeps its header and children and stops being a Partial Form. Mutagen writes a deleted
-/// record as its header alone.</summary>
-internal static class RecordDeletion
+/// <summary>A Record Flags write that newly sets Deleted is xEdit's Delete (TwbMainRecord.Delete):
+/// the record keeps its header, children and kind, and stops being a Partial Form. Mutagen writes a
+/// deleted record as its header alone.</summary>
+internal sealed record RecordDeletion(JsonElement Flags, bool ClearsPartialForm)
 {
-    private const string FlagsMember = "MajorRecordFlagsRaw";
-
-    // Mutagen's Constants.DeletedFlag, which Mutagen keeps internal.
-    private const long DeletedBit = 0x20;
-
-    /// <summary>The flags to write instead of <paramref name="value"/> when it newly sets Deleted;
-    /// null for every other write.</summary>
-    internal static JsonElement? FlagsSettingDeleted(
-        JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
+    /// <summary>The deletion a write of <paramref name="value"/> makes, or null when it does not
+    /// newly set Deleted.</summary>
+    internal static RecordDeletion? Of(JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
-        if (schema.IsHeader || column.Name != FlagsMember || value is not { ValueKind: JsonValueKind.Number } requested) return null;
-        var held = record[FlagsMember] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
+        if (schema.IsHeader || column.Name != DeletedFlag.FlagsMember || value is not { ValueKind: JsonValueKind.Number } requested)
+            return null;
+        var held = record[DeletedFlag.FlagsMember] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
         var next = requested.GetInt64();
-        if ((next & DeletedBit) == 0 || (held & DeletedBit) != 0) return null;
-        if (PartialFormFlag.IsPartialFormable(schema.RecordType)) next &= ~PartialFormFlag.Bit;
-        return JsonSerializer.SerializeToElement(next);
+        if ((next & DeletedFlag.Bit) == 0 || (held & DeletedFlag.Bit) != 0) return null;
+        var clearsPartialForm = PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType);
+        return new(JsonSerializer.SerializeToElement(clearsPartialForm ? next & ~PartialFormFlag.Bit : next), clearsPartialForm);
     }
 
-    /// <summary>Removes every field: all but the record header, the children and the record's kind.</summary>
+    /// <summary>Whether this deletion, rather than the value written, changes <paramref name="bit"/>.</summary>
+    internal bool Changes(SyntheticBit bit) => ClearsPartialForm && bit.Bit == PartialFormFlag.Bit;
+
     internal static void EmptyFields(JsonObject record, RecordTableSchema schema)
     {
         var children = ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) ?? [];

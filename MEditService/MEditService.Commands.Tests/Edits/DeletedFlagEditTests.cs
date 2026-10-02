@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,7 +38,7 @@ public sealed class DeletedFlagEditTests : IDisposable
     private static int FlagsOf(JsonObject document) => document["MajorRecordFlagsRaw"].Require().GetValue<int>();
 
     [Fact]
-    public void SettingDeleted_LeavesTheRecordItsHeaderAlone_EditorIdIncluded()
+    public void SettingDeleted_LeavesTheRecordItsHeaderAlone_RemovingItsEditorId()
     {
         var npc = _mod.Npcs.AddNew("Guy");
         npc.HeightMax = 1f;
@@ -78,6 +79,43 @@ public sealed class DeletedFlagEditTests : IDisposable
     }
 
     [Fact]
+    public void SettingDeleted_OnAPartialForm_KeepsItsChildren()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm, Landscape = new Landscape(_mod) };
+        var formKey = _fixture.Seed(cell, "cell");
+        var landscape = Parse(_fixture.Document(formKey))["Landscape"].Require().DeepClone();
+
+        var deleted = SetFlags(formKey, PartialForm | Deleted);
+
+        Assert.True(JsonNode.DeepEquals(landscape, deleted["Landscape"]), deleted.ToJsonString());
+    }
+
+    [Fact]
+    public void SettingDeletedAndPartialFormTogether_OnACopyHoldingNeither_IsRefused()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f };
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
+
+        var (result, _) = _fixture.Apply(formKey, SetAt(Flags(PartialForm | Deleted), Member("MajorRecordFlagsRaw")));
+
+        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
+        Assert.Equal(before, _fixture.Document(formKey));
+    }
+
+    [Fact]
+    public void ARecordHeaderRow_OnAPartialForm_Edits()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", MajorRecordFlagsRaw = PartialForm };
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var (result, after) = _fixture.Apply(formKey, SetAt(Flags(9), Member("VersionControl")));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(9, Parse(after.Require())["VersionControl"].Require().GetValue<int>());
+    }
+
+    [Fact]
     public void SettingDeleted_OnARecordOfSeveralKinds_KeepsItsKind()
     {
         var global = _mod.Globals.AddNewInt("Gi");
@@ -101,6 +139,7 @@ public sealed class DeletedFlagEditTests : IDisposable
 
         var persistent = SetFlags(formKey, Deleted | Persistent);
 
+        Assert.Equal(Deleted | Persistent, FlagsOf(persistent));
         Assert.Equal(0.5f, persistent["HeightMax"].Require().GetValue<float>());
         Assert.Equal("Guy", persistent["EditorID"].Require().GetValue<string>());
     }

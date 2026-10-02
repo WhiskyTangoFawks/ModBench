@@ -43,8 +43,8 @@ internal static class DocumentEdit
 
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
-        var deletedFlags = RecordDeletion.FlagsSettingDeleted(record, request.Schema, cursor.Column, envelope.Value);
-        if (deletedFlags != null) envelope = envelope with { Value = deletedFlags };
+        var deletion = RecordDeletion.Of(record, request.Schema, cursor.Column, envelope.Value);
+        if (deletion != null) envelope = envelope with { Value = deletion.Flags };
 
         JsonNode? edited;
         FieldMetadata editedMeta;
@@ -61,7 +61,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
-        if (deletedFlags != null) RecordDeletion.EmptyFields(record, request.Schema);
+        if (deletion != null) RecordDeletion.EmptyFields(record, request.Schema);
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
@@ -96,8 +96,7 @@ internal static class DocumentEdit
         var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns)
         {
-            if (column.Synthetic is not { } synthetic || column == cursor.Column) continue;
-            if (deletedFlags != null && synthetic.Bit == PartialFormFlag.Bit) continue;
+            if (column.Synthetic is not { } synthetic || column == cursor.Column || deletion?.Changes(synthetic) == true) continue;
             if (SyntheticBits.IsSet(was, synthetic) != SyntheticBits.IsSet(after, synthetic))
             {
                 return RecordEditResult.RefusedAt(
