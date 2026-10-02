@@ -919,6 +919,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return LinkResolution.Resolve(connection, formKey);
         }
 
+        public Func<string, RecordLookupEntry?> LinkResolver(string formKey)
+        {
+            using var connection = owner.OpenRead();
+            return LinkResolution.ForLinksOf(connection, formKey, Resolve);
+        }
+
         public IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey)
         {
             using var connection = owner.OpenRead();

@@ -14,11 +14,17 @@ internal static class LinkResolution
     /// <summary>Resolves every link form_references lists for <paramref name="formKey"/>, in any
     /// plugin, up front; a FormKey it did not list still resolves alone.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(DuckDBConnection connection, string formKey) =>
-        Prefetched(connection, "source_form_key = $1", formKey);
+        ForLinksOf(connection, formKey, alone => Resolve(connection, alone));
+
+    /// <summary>The same, resolving an unlisted FormKey through <paramref name="resolveAlone"/>, for
+    /// a resolver that outlives <paramref name="connection"/>.</summary>
+    internal static Func<string, RecordLookupEntry?> ForLinksOf(
+        DuckDBConnection connection, string formKey, Func<string, RecordLookupEntry?> resolveAlone) =>
+        Prefetched(connection, resolveAlone, "source_form_key = $1", formKey);
 
     /// <summary>The same, for every link <paramref name="plugin"/>'s records carry.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(DuckDBConnection connection, PluginAddress plugin) =>
-        Prefetched(connection, "source_plugin = $1 AND source_origin = $2", plugin.Name, plugin.Origin);
+        Prefetched(connection, alone => Resolve(connection, alone), "source_plugin = $1 AND source_origin = $2", plugin.Name, plugin.Origin);
 
     internal static RecordLookupEntry? Resolve(DuckDBConnection connection, string formKey)
     {
@@ -29,10 +35,11 @@ internal static class LinkResolution
         return reader.Read() ? Entry(reader) : null;
     }
 
-    private static Func<string, RecordLookupEntry?> Prefetched(DuckDBConnection connection, string sourceFilter, params string[] values)
+    private static Func<string, RecordLookupEntry?> Prefetched(
+        DuckDBConnection connection, Func<string, RecordLookupEntry?> resolveAlone, string sourceFilter, params string[] values)
     {
         var linked = Resolve(connection, LinkTargets(connection, sourceFilter, values));
-        return FormKeyResolutionCache.Memoize(formKey => linked.TryGetValue(formKey, out var entry) ? entry : Resolve(connection, formKey));
+        return FormKeyResolutionCache.Memoize(formKey => linked.TryGetValue(formKey, out var entry) ? entry : resolveAlone(formKey));
     }
 
     private static List<string> LinkTargets(DuckDBConnection connection, string sourceFilter, string[] values)

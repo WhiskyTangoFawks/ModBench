@@ -17,11 +17,14 @@ public sealed class LinkResolutionTests
     [Theory]
     [InlineData(0)]
     [InlineData(300)]
-    public void ALinkResolvesByFilenameIgnoringCase_ADanglingOneDoesNot_AndAWrongTypeIsNamed_HoweverManyLinksTheRecordCarries(int moreKeywords)
+    public void ALinkResolvesToItsWinnerByFilenameIgnoringCase_ADanglingOneDoesNot_AndAWrongTypeIsNamed_HoweverManyLinksTheRecordCarries(int moreKeywords)
     {
         var masterInAnotherCase = ModKey.FromFileName("BASE.ESM");
         FormKey npc = default;
         var linkedKeyword = "";
+        var dangling = new FormKey(masterInAnotherCase, 0xFFFFFF).ToString();
+        var linkedRace = "";
+        List<string> moreLinkedKeywords = [];
         using var fixture = new PluginFixtureBuilder($"link-resolution-{moreKeywords}")
             .WithPlugin("Base.esm", mod =>
             {
@@ -29,18 +32,25 @@ public sealed class LinkResolutionTests
                 mod.Races.AddNew("LinkedRace");
                 for (var i = 0; i < moreKeywords; i++) mod.Keywords.AddNew($"MoreKeyword{i}");
             })
+            .WithPlugin("Patch.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = built[0].ModKey });
+                mod.Keywords.GetOrAddAsOverride(built[0].Keywords.First()).EditorID = "WinningKeyword";
+            })
             .WithPlugin("Over.esp", (mod, built) =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = masterInAnotherCase });
                 var keywords = built[0].Keywords.Select(k => new FormKey(masterInAnotherCase, k.FormKey.ID)).ToList();
                 linkedKeyword = keywords[0].ToString();
+                moreLinkedKeywords = [.. keywords.Skip(1).Select(k => k.ToString())];
+                linkedRace = new FormKey(masterInAnotherCase, built[0].Races.First().FormKey.ID).ToString();
                 var linker = mod.Npcs.AddNew("Linker");
                 npc = linker.FormKey;
                 linker.Keywords =
                 [
                     new FormLink<IKeywordGetter>(keywords[0]),
-                    new FormLink<IKeywordGetter>(new FormKey(masterInAnotherCase, 0xFFFFFF)),
-                    new FormLink<IKeywordGetter>(new FormKey(masterInAnotherCase, built[0].Races.First().FormKey.ID)),
+                    new FormLink<IKeywordGetter>(FormKey.Factory(dangling)),
+                    new FormLink<IKeywordGetter>(FormKey.Factory(linkedRace)),
                     .. keywords.Skip(1).Select(k => new FormLink<IKeywordGetter>(k)),
                 ];
             })
@@ -55,6 +65,12 @@ public sealed class LinkResolutionTests
         Assert.NotNull(stack);
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(Assert.Single(stack.Entries).Effective));
         Assert.Equal(ExpectedKeywordErrors, KeywordErrors(reads.GetDocuments(OverKey).Single(d => d.FormKey == npc.ToString())));
+
+        var resolve = reads.LinkResolver(npc.ToString());
+        Assert.Equal(new RecordLookupEntry("kywd", "WinningKeyword"), resolve(linkedKeyword));
+        Assert.Null(resolve(dangling));
+        Assert.Equal(new RecordLookupEntry("race", "LinkedRace"), resolve(linkedRace));
+        Assert.All(moreLinkedKeywords, k => Assert.Equal("kywd", resolve(k)?.RecordType));
     }
 
     private static string? KeywordErrors(RecordDocument document) =>
