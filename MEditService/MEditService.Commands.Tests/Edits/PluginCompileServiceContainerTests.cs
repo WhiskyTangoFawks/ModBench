@@ -4,7 +4,6 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -127,7 +126,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         mod.Quests.Add(questC);
         (_questC, _topicC2) = (questC.FormKey, topicC2.FormKey);
 
-        mod.WriteToBinary(pluginPath);
+        TrackedTemplates.WriteTracked(_modFolder, mod);
         (_cellA, _cellB, _cellATemporaryRef) = (cellA.FormKey, cellB.FormKey, cellATemporaryRef.FormKey);
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
@@ -135,10 +134,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         _loadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(_loadOrder, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
     }
 
     public void Dispose()

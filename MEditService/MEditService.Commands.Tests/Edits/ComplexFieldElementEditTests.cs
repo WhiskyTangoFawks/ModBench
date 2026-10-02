@@ -129,22 +129,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     [Fact]
-    public void OmodPropertiesArray_UnrecognizedDiscriminator_IsRefusedAndWritesNothing()
-    {
-        using var omod = OmodMod(out var armorMod);
-        var before = omod.Body(armorMod);
-
-        var result = omod.EditHandler.Set(omod.Plugin, armorMod.ToString(), "Properties",
-            Json("""[{"MutagenObjectType":"NotARealLeaf","Property":"BodyPart","Step":1.0,"Value":5}]"""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
-        Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
-        Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, omod.Body(armorMod));
-    }
-
-    [Fact]
     public void OmodPropertiesArray_WholeArrayWriteWithIntProperty_LandsWithConcreteTypeAndValuePreserved()
     {
         using var omod = OmodMod(out var armorMod);

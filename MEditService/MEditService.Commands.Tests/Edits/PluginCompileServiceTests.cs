@@ -159,15 +159,13 @@ public sealed class PluginCompileServiceTests : IDisposable
         }
     }
 
-    // The previous layout minted a group document the reader now skips silently. A file the codec
-    // would not regenerate is a divergence named by path; re-Track is the recovery (ADR-0006).
     [Fact]
-    public async Task Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
+    public async Task Compile_OfATreeHoldingADocumentTheCodecDoesNotProduce_RefusesNamingItAndReTrack()
     {
-        var leftover = Path.Combine(
+        var stray = Path.Combine(
             _mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs", "GroupRecordData.json");
-        Assert.False(File.Exists(leftover));
-        File.WriteAllText(leftover, "{\"MEditChildOrder\": {\"Npcs\": [\"" + _mod.Npc + "\", \"" + _mod.OtherNpc + "\"]}}");
+        Assert.False(File.Exists(stray));
+        File.WriteAllText(stray, "{}");
 
         var result = await CompileService().CompileAsync(_mod.Plugin);
 

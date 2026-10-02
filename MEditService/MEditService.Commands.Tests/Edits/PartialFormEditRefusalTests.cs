@@ -1,9 +1,7 @@
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -44,7 +42,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
         var npc = mod.Npcs.AddNew("OrdinaryNpc");
 
-        mod.WriteToBinary(pluginPath);
+        TrackedTemplates.WriteTracked(_modFolder, mod);
         PartialCell = cell.FormKey;
         OrdinaryNpc = npc.FormKey;
         ChildRef = childRef.FormKey;
@@ -52,9 +50,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         LoadOrder = SnapshotPlugins.Snapshot(
             _gameDirectory, _gameDirectory, GameRelease.Fallout4,
             [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);

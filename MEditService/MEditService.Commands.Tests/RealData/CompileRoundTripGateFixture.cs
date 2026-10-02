@@ -1,78 +1,95 @@
+using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.RealData;
 
+/// <summary>The cut-down plugin tracked, edited at a flat record and at a response its quest's
+/// document carries, then compiled once. The compiled binary is kept apart from the mod folder, which
+/// a later compile writes again.</summary>
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
-    public LoadOrderHolder Holder { get; } = new();
-    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
-    // Snapshotted after Track and before any Compile: the two Compile facts overwrite ModFolder's
-    // plugin binary with non-Track bytes, so mutating facts copy this instead of Tracking again.
-    public string TrackedTemplateFolder { get; } =
-        Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
-    public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
+    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
+    private readonly string _compiledFolder = Directory.CreateTempSubdirectory("medit-compile-roundtrip-compiled-").FullName;
+
     public PluginAddress Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
+    public string PluginPath => Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
+    public LoadOrderHolder Holder { get; } = new();
+
+    public Dictionary<string, byte[]> TrackedTree { get; }
+    public Dictionary<string, byte[]> EditedTree { get; }
+    public IReadOnlyList<string> EditedDocuments { get; }
+
+    public FormKey Npc { get; }
+    public FormKey Topic { get; }
+    public IReadOnlyList<FormKey> TopicResponses { get; }
+    public FormKey RenamedResponse { get; }
+    public string RenamedResponseEditorId { get; }
+
+    public CompileResult Compiled { get; }
+    public string CompiledPluginPath => Path.Combine(_compiledFolder, CutDownPluginFixture.PluginFileName);
 
     public CompileRoundTripGateFixture()
     {
-        var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
-        File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
+        CutDownPluginFixture.TrackedInto(ModFolder);
+        Holder.Apply(SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, PluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
+        TrackedTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
 
-        var loadOrder = SnapshotPlugins.Snapshot(GameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
-        Holder.Apply(loadOrder);
+        using (var original = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4))
+        {
+            var mod = (IFallout4ModGetter)original;
+            var npc = mod.Npcs.First();
+            // The middle response: renaming an edge one would mask a renumbering bug that shifts
+            // the responses after it.
+            var (quest, topic) = mod.Quests
+                .SelectMany(q => q.DialogTopics.Select(t => (Quest: q, Topic: t)))
+                .First(qt => qt.Topic.Responses.Count >= 3 && !string.IsNullOrEmpty(qt.Topic.Responses[1].EditorID));
+            var response = topic.Responses[1];
 
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, Plugin.Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
+            (Npc, Topic, RenamedResponse) = (npc.FormKey, topic.FormKey, response.FormKey);
+            TopicResponses = [.. topic.Responses.Select(r => r.FormKey)];
+            RenamedResponseEditorId = response.EditorID + "Renamed";
+            EditedDocuments =
+            [
+                .. new[]
+                {
+                    SourceDocumentPath.Of(ModFolder, CutDownPluginFixture.PluginFileName, "npc_", Npc.ToString(), npc.EditorID, GameRelease.Fallout4),
+                    SourceDocumentPath.Of(ModFolder, CutDownPluginFixture.PluginFileName, "qust", quest.FormKey.ToString(), quest.EditorID, GameRelease.Fallout4),
+                }.Select(path => Path.GetRelativePath(ModFolder, path)).Order(StringComparer.Ordinal),
+            ];
+        }
 
-        CopyDirectory(ModFolder, TrackedTemplateFolder);
+        var edit = TestEditService.EditHandler(Holder);
+        Require(edit.Set(Plugin, Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement));
+        Require(edit.Set(Plugin, RenamedResponse.ToString(), "EditorID",
+            JsonDocument.Parse(JsonSerializer.Serialize(RenamedResponseEditorId)).RootElement));
+        EditedTree = CutDownPluginFixture.ReadSourceTree(ModFolder);
+
+        Compiled = CompileService().CompileAsync(Plugin).GetAwaiter().GetResult();
+        File.Copy(PluginPath, CompiledPluginPath);
     }
+
+    private static void Require(RecordEditResult result)
+    {
+        if (!result.Applied) throw new InvalidOperationException($"Expected the fixture's edit to land: {result.Message}");
+    }
+
+    public PluginCompileService CompileService() => CompileServices.Over(Holder.Current);
 
     public void Dispose()
     {
-        TryDelete(ModFolder);
-        TryDelete(TrackedTemplateFolder);
-        TryDelete(GameDirectory);
-    }
-
-    public PluginCompileService CompileService() =>
-        CompileServices.Over(Holder.Current);
-
-    public string SourceRoot => SourceRootFor(ModFolder);
-
-    public static string SourceRootFor(string modFolder) =>
-        Path.Combine(modFolder, SourceRepository.RootFor(CutDownPluginFixture.PluginFileName));
-
-    public static Dictionary<string, byte[]> ReadSourceTree(string modFolder) =>
-        Directory.EnumerateFiles(SourceRootFor(modFolder), "*.json", SearchOption.AllDirectories)
-            .ToDictionary(f => Path.GetRelativePath(modFolder, f), File.ReadAllBytes);
-
-    public Dictionary<string, byte[]> ReadSourceTree() => ReadSourceTree(ModFolder);
-
-    // Track's repo is a plain non-bare git init rooted at the mod folder, so it bakes in no absolute
-    // paths and a recursive copy including .git yields a complete working repo.
-    public static void CopyDirectory(string sourceModFolder, string destinationModFolder)
-    {
-        foreach (var dir in Directory.EnumerateDirectories(sourceModFolder, "*", SearchOption.AllDirectories))
-            Directory.CreateDirectory(Path.Combine(destinationModFolder, Path.GetRelativePath(sourceModFolder, dir)));
-
-        foreach (var file in Directory.EnumerateFiles(sourceModFolder, "*", SearchOption.AllDirectories))
-            File.Copy(file, Path.Combine(destinationModFolder, Path.GetRelativePath(sourceModFolder, file)));
-    }
-
-    // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
-    // and a test failing on cleanup would mask the real assertion that already ran.
-    internal static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        TrackedTemplates.TryDelete(ModFolder);
+        TrackedTemplates.TryDelete(_compiledFolder);
+        TrackedTemplates.TryDelete(_gameDirectory);
     }
 }
