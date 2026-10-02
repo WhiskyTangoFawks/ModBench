@@ -226,8 +226,9 @@ internal sealed class PluginIngest
         var root = parsed.RootElement;
         var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
 
-        // ADR-0005: where a cell sits and what it holds come from the GRUP hierarchy, so a cell whose
-        // document the codec refused still lists, still holds its contents, and only loses its grid.
+        // ADR-0005: where a cell sits and what a container holds come from the GRUP hierarchy, so a
+        // container whose document the codec refused still lists and still holds its children. A
+        // refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
         JsonElement? carried = refused ? null : root;
         var containerType = _containers.ContainerTypeOf(document.RecordType);

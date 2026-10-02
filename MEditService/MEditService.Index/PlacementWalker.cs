@@ -20,9 +20,6 @@ internal enum ParentageTable { ContainerChild, Placement, CellLocation }
 /// handed over beside them.</summary>
 internal static class PlacementWalker
 {
-    /// <summary>A cell's two placement groups are placement and a worldspace's top cell is
-    /// cell_location. Every other slot, a cell's landscape and navmeshes included, is
-    /// container_child.</summary>
     internal static ParentageTable TableFor(string containerType, string slotName) => (containerType, slotName) switch
     {
         ("Cell", "Persistent" or "Temporary") => ParentageTable.Placement,
