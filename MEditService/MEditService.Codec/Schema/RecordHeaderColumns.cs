@@ -63,19 +63,35 @@ internal static class RecordHeaderColumns
             var core = ReflectedTypes.CoreOf(view).Core;
             if (!core.IsEnum || core.GetCustomAttribute<FlagsAttribute>() == null) continue;
             var declaring = ReflectedTypes.DeclaringTypeOf(view);
-            foreach (var member in LeafClassification.GetEnumMembers(core))
+            foreach (var (bit, member) in Bits(core))
             {
-                if (member.BitValue is not { } bitValue) continue;
-                var bit = long.Parse(bitValue, CultureInfo.InvariantCulture);
                 if (!byBit.TryGetValue(bit, out var held) || (held.Declaring != declaring && held.Declaring.IsAssignableFrom(declaring)))
                     byBit[bit] = (member, declaring);
             }
         }
+        foreach (var (bit, member) in AgreedBits(game.Annotations.RecordFlagEnumsFor(getterType)))
+            byBit[bit] = (member, getterType);
         foreach (var (bit, name) in game.Annotations.RecordFlagNamesFor(getterType))
         {
             if (!byBit.TryAdd(bit, (new EnumMember(name, bit.ToString(CultureInfo.InvariantCulture)), getterType))) continue;
             game.Observed.NamedFlag(getterType.Name, bit);
         }
         return [.. byBit.Values.Select(v => v.Member)];
+    }
+
+    private static IEnumerable<(long Bit, EnumMember Member)> Bits(Type flagsEnum)
+    {
+        foreach (var member in LeafClassification.GetEnumMembers(flagsEnum))
+        {
+            if (member.BitValue is { } bit) yield return (long.Parse(bit, CultureInfo.InvariantCulture), member);
+        }
+    }
+
+    // Each of several enums is one base record type's, so a bit's name holds for every record of
+    // the type only where all of them give it.
+    private static IEnumerable<(long Bit, EnumMember Member)> AgreedBits(IReadOnlyList<Type> enums)
+    {
+        var alternatives = enums.Select(e => Bits(e).ToList()).ToList();
+        return alternatives.Count == 0 ? [] : alternatives[0].Where(b => alternatives.TrueForAll(a => a.Contains(b)));
     }
 }
