@@ -14,23 +14,6 @@ namespace MEditService.Codec.Serialization;
 /// members. Bare Equals has false negatives.</summary>
 public static class ModelIdentity
 {
-    // The only exclusion ADR-0006 decision 2 allows: fields Mutagen backs from an enclosing GRUP header,
-    // never a subrecord. Scoped per declaring type, since Unknown/Timestamp names collide with real
-    // content elsewhere.
-    private static readonly HashSet<(string RecordType, string Field)> GroupHeaderDerivedFields =
-    [
-        ("Cell", "Timestamp"), ("Cell", "UnknownGroupData"),
-        ("Cell", "PersistentTimestamp"), ("Cell", "PersistentUnknownGroupData"),
-        ("Cell", "TemporaryTimestamp"), ("Cell", "TemporaryUnknownGroupData"),
-        ("Worldspace", "SubCellsTimestamp"), ("Worldspace", "SubCellsUnknown"),
-        // Each block/sub-block is its own nested GRUP with the same shape one level deeper, reached through
-        // SubCells.
-        ("WorldspaceBlock", "LastModified"), ("WorldspaceBlock", "Unknown"),
-        ("WorldspaceSubBlock", "LastModified"), ("WorldspaceSubBlock", "Unknown"),
-        ("Quest", "Timestamp"), ("Quest", "Unknown"),
-        ("DialogTopic", "Timestamp"), ("DialogTopic", "Unknown"),
-    ];
-
     /// <summary>One record that failed the model-identity verdict, or the whole-mod fallback when
     /// every individual record matched (header/container-only divergence).</summary>
     public sealed record Divergence(string RecordType, FormKey FormKey, string? EditorId, string Description)
@@ -65,7 +48,8 @@ public static class ModelIdentity
         mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
     /// <summary>The first record, in <paramref name="original"/>'s GRUP order, that does not survive a
-    /// round trip, naming the field the mask disagrees on; null when every record is model-identical.</summary>
+    /// round trip, naming the field the mask disagrees on, else the codec document path that differs;
+    /// null when every record is model-identical.</summary>
     internal static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
@@ -82,22 +66,15 @@ public static class ModelIdentity
             var normalizedOriginal = NormalizeEncoding(originalRecord);
             var normalizedRecompiled = NormalizeEncoding(recompiledRecord);
 
-            var field = FirstNonExcludedFailingField(normalizedOriginal, normalizedRecompiled);
-            if (field != null)
-            {
-                return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
-                    $"differs after being recompiled from its own tracked source — field '{field}' changed.");
-            }
-
             // The mask lies by omission (a polymorphic hierarchy's derived-only fields bind through the
             // base overload and are never compared), so a mask-equal pair is never the verdict; the codec
             // document is.
-            if (!CodecDocumentsMatch(normalizedOriginal, normalizedRecompiled, original.GameRelease))
+            var changed = FailingFields(normalizedOriginal, normalizedRecompiled).FirstOrDefault()
+                ?? FirstCodecDocumentDifference(normalizedOriginal, normalizedRecompiled, original.GameRelease);
+            if (changed != null)
             {
                 return new Divergence(originalRecord.GetType().Name, originalRecord.FormKey, originalRecord.EditorID,
-                    "differs after being recompiled from its own tracked source — the records' codec " +
-                    "documents differ on a field Mutagen's generated equality mask cannot see " +
-                    "(a derived-only field of a polymorphic sub-record, or similar).");
+                    $"differs after being recompiled from its own tracked source — field '{changed}' changed.");
             }
         }
 
@@ -124,11 +101,8 @@ public static class ModelIdentity
     /// allow-list is shared across games; only the TransientTypes check below is FO4-shaped.</summary>
     internal static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
-        foreach (var (_, field) in FailingFields(original, recompiled))
-        {
-            if (OpaqueHeaderFields.Contains(field))
-                return field;
-        }
+        if (FailingFields(original, recompiled).FirstOrDefault(OpaqueHeaderFields.Contains) is { } field)
+            return field;
 
         // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.
@@ -155,39 +129,41 @@ public static class ModelIdentity
     }
 
     // Both records through the codec, byte-compared.
-    private static bool CodecDocumentsMatch(
+    private static string? FirstCodecDocumentDifference(
         IMajorRecordGetter original, IMajorRecordGetter recompiled, Mutagen.Bethesda.GameRelease release)
     {
         var originalBytes = Codec.SerializeToBytes(original, release);
         var recompiledBytes = Codec.SerializeToBytes(recompiled, release);
-        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return true;
+        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes)) return null;
 
         // Not byte-identical: decide structurally, honouring only the two model-equal respellings a rewrite
         // is entitled to — negative zero and a dictionary field's enumeration order.
         using var originalDoc = System.Text.Json.JsonDocument.Parse(originalBytes);
         using var recompiledDoc = System.Text.Json.JsonDocument.Parse(recompiledBytes);
-        return JsonModelEquals(originalDoc.RootElement, recompiledDoc.RootElement, propertyName: null);
+        return FirstModelDifference(originalDoc.RootElement, recompiledDoc.RootElement, path: "", propertyName: null);
     }
 
-    private static bool JsonModelEquals(
-        System.Text.Json.JsonElement a, System.Text.Json.JsonElement b, string? propertyName)
+    private static string? FirstModelDifference(
+        System.Text.Json.JsonElement a, System.Text.Json.JsonElement b, string path, string? propertyName)
     {
-        if (a.ValueKind != b.ValueKind) return false;
+        if (a.ValueKind != b.ValueKind) return path;
         switch (a.ValueKind)
         {
             case System.Text.Json.JsonValueKind.Object:
                 var aProps = a.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
                 var bProps = b.EnumerateObject().ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal);
-                if (aProps.Count != bProps.Count) return false;
-                foreach (var (name, aValue) in aProps)
+                foreach (var name in aProps.Keys.Union(bProps.Keys))
                 {
-                    if (!bProps.TryGetValue(name, out var bValue) || !JsonModelEquals(aValue, bValue, name)) return false;
+                    var namePath = path.Length == 0 ? name : $"{path}.{name}";
+                    if (!aProps.TryGetValue(name, out var aValue) || !bProps.TryGetValue(name, out var bValue))
+                        return namePath;
+                    if (FirstModelDifference(aValue, bValue, namePath, name) is { } difference) return difference;
                 }
-                return true;
+                return null;
             case System.Text.Json.JsonValueKind.Array:
                 var aItems = a.EnumerateArray().ToList();
                 var bItems = b.EnumerateArray().ToList();
-                if (aItems.Count != bItems.Count) return false;
+                if (aItems.Count != bItems.Count) return path;
                 // Keyed comparison needs BOTH the {Key, Value} shape and a reflected dictionary property name:
                 // NpcMorph is an ordered list whose elements are also exactly {Key, Value}.
                 if (aItems.Count > 0 && propertyName != null && DictionaryPropertyNames.Value.Contains(propertyName)
@@ -198,25 +174,36 @@ public static class ModelIdentity
                     var byKey = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
                     foreach (var entry in bItems)
                     {
-                        if (!byKey.TryAdd(entry.GetProperty("Key").GetRawText(), entry)) return false;
+                        if (!byKey.TryAdd(entry.GetProperty("Key").GetRawText(), entry)) return path;
                     }
                     var seenKeys = new HashSet<string>(StringComparer.Ordinal);
-                    return aItems.All(e =>
-                        seenKeys.Add(e.GetProperty("Key").GetRawText())
-                        && byKey.TryGetValue(e.GetProperty("Key").GetRawText(), out var match)
-                        && JsonModelEquals(e.GetProperty("Value"), match.GetProperty("Value"), propertyName));
+                    foreach (var entry in aItems)
+                    {
+                        var key = entry.GetProperty("Key").GetRawText();
+                        var keyPath = $"{path}[{key}]";
+                        if (!seenKeys.Add(key) || !byKey.TryGetValue(key, out var match)) return keyPath;
+                        if (FirstModelDifference(entry.GetProperty("Value"), match.GetProperty("Value"), keyPath, propertyName)
+                            is { } difference)
+                            return difference;
+                    }
+                    return null;
                 }
-                return aItems.Zip(bItems, (x, y) => JsonModelEquals(x, y, propertyName)).All(equal => equal);
+                return aItems.Zip(bItems)
+                    .Select((pair, i) => FirstModelDifference(pair.First, pair.Second, $"{path}[{i}]", propertyName))
+                    .FirstOrDefault(difference => difference != null);
             case System.Text.Json.JsonValueKind.String:
-                return NormalizeNegativeZeros(DocumentNodes.StringValueOf(a)) == NormalizeNegativeZeros(DocumentNodes.StringValueOf(b));
+                return NormalizeNegativeZeros(DocumentNodes.StringValueOf(a)) == NormalizeNegativeZeros(DocumentNodes.StringValueOf(b))
+                    ? null
+                    : path;
             case System.Text.Json.JsonValueKind.Number:
                 // Only zero's spellings are tolerated (-0 vs 0) — a general numeric comparison
                 // would silently forgive genuinely different large integers that collapse to one
                 // double. Text-shaped on purpose: no float arithmetic decides identity here.
-                return a.GetRawText() == b.GetRawText()
-                    || (IsZeroSpelling(a.GetRawText()) && IsZeroSpelling(b.GetRawText()));
+                return a.GetRawText() == b.GetRawText() || (IsZeroSpelling(a.GetRawText()) && IsZeroSpelling(b.GetRawText()))
+                    ? null
+                    : path;
             default:
-                return true; // kinds already matched: true/false/null carry no further content
+                return null; // kinds already matched: true/false/null carry no further content
         }
     }
 
@@ -289,15 +276,21 @@ public static class ModelIdentity
                 var questCopy = quest.DeepCopy();
                 questCopy.Timestamp = 0;
                 questCopy.Unknown = 0;
+                foreach (var nestedTopic in questCopy.DialogTopics) ZeroTopicGroupFields(nestedTopic);
                 return questCopy;
             case IDialogTopicGetter topic:
                 var topicCopy = topic.DeepCopy();
-                topicCopy.Timestamp = 0;
-                topicCopy.Unknown = 0;
+                ZeroTopicGroupFields(topicCopy);
                 return topicCopy;
             default:
                 return record;
         }
+    }
+
+    private static void ZeroTopicGroupFields(DialogTopic topic)
+    {
+        topic.Timestamp = 0;
+        topic.Unknown = 0;
     }
 
     private static void ZeroCellGroupFields(Cell cell)
@@ -310,20 +303,10 @@ public static class ModelIdentity
         cell.TemporaryUnknownGroupData = 0;
     }
 
-    private static string? FirstNonExcludedFailingField(IMajorRecordGetter original, IMajorRecordGetter recompiled)
-    {
-        foreach (var (recordType, field) in FailingFields(original, recompiled))
-        {
-            if (!GroupHeaderDerivedFields.Contains((recordType, field)))
-                return field;
-        }
-        return null;
-    }
-
-    /// <summary>Every <c>(RecordType, FieldName)</c> pair the generated mask disagrees on, unfiltered.
+    /// <summary>Every field name the generated mask disagrees on.
     /// Typed <see cref="ILoquiObjectGetter"/>, the narrowest type records and the mod header share, so
     /// a caller with no generated mask fails to compile.</summary>
-    internal static IReadOnlyList<(string RecordType, string Field)> FailingFields(
+    internal static IEnumerable<string> FailingFields(
         ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         var method = FindGetEqualsMaskMethod(original.GetType());
@@ -333,15 +316,14 @@ public static class ModelIdentity
         var mask = method.Invoke(null, [original, recompiled, include]);
         if (mask == null) return [];
 
-        var results = new List<(string, string)>();
-        CollectFailingFields(mask, original.GetType().Name, results);
+        var results = new List<string>();
+        CollectFailingFields(mask, results);
         return results;
     }
 
-    // A false bool is a failing scalar; a MaskItem whose Overall is false recurses into Specific scoped
-    // to its own declaring type (so the exclusion list sees the true owner), or into each failing
-    // indexed item.
-    private static void CollectFailingFields(object mask, string recordTypeName, List<(string RecordType, string Field)> results)
+    // A false bool is a failing scalar; a MaskItem whose Overall is false recurses into its Specific
+    // mask, or into each failing indexed item.
+    private static void CollectFailingFields(object mask, List<string> results)
     {
         foreach (var (name, value) in ReadableMembers(mask))
         {
@@ -350,7 +332,7 @@ public static class ModelIdentity
                 case null:
                     continue;
                 case bool isEqual:
-                    if (!isEqual) results.Add((recordTypeName, name));
+                    if (!isEqual) results.Add(name);
                     continue;
             }
 
@@ -365,15 +347,15 @@ public static class ModelIdentity
             var specific = GetMemberValue(value, valueType, "Specific");
             if (specific is System.Collections.IEnumerable items and not string)
             {
-                CollectFailingIndexedItems(items, recordTypeName, name, results);
+                CollectFailingIndexedItems(items, name, results);
             }
-            else if (specific != null && specific.GetType().DeclaringType is { } owningType)
+            else if (IsGeneratedMask(specific))
             {
-                CollectFailingFields(specific, owningType.Name, results);
+                CollectFailingFields(specific, results);
             }
             else
             {
-                results.Add((recordTypeName, name));
+                results.Add(name);
             }
         }
     }
@@ -381,15 +363,14 @@ public static class ModelIdentity
     // A non-MaskItemIndexed item (Cell.Regions' tuples) is reported once, coarse, against the fallback
     // field.
     private static void CollectFailingIndexedItems(
-        System.Collections.IEnumerable items, string fallbackRecordType, string fallbackField,
-        List<(string RecordType, string Field)> results)
+        System.Collections.IEnumerable items, string fallbackField, List<string> results)
     {
         foreach (var item in items)
         {
             var itemType = item.GetType();
             if (itemType.Name != "MaskItemIndexed`2")
             {
-                results.Add((fallbackRecordType, fallbackField));
+                results.Add(fallbackField);
                 return;
             }
 
@@ -398,12 +379,16 @@ public static class ModelIdentity
             if (itemOverall) continue;
 
             var itemSpecific = GetMemberValue(item, itemType, "Specific");
-            if (itemSpecific != null && itemSpecific.GetType().DeclaringType is { } owningType)
-                CollectFailingFields(itemSpecific, owningType.Name, results);
+            if (IsGeneratedMask(itemSpecific))
+                CollectFailingFields(itemSpecific, results);
             else
-                results.Add((fallbackRecordType, fallbackField));
+                results.Add(fallbackField);
         }
     }
+
+    // Loqui generates each mask as a type nested in the class it masks.
+    private static bool IsGeneratedMask([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] object? candidate) =>
+        candidate?.GetType().DeclaringType != null;
 
     private static object? GetMemberValue(object instance, Type type, string memberName) =>
         type.GetField(memberName, BindingFlags.Public | BindingFlags.Instance) is { } field
