@@ -33,6 +33,20 @@ const headerBg = (c: ConflictThis | null | undefined): string | undefined => get
 
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
+// Where a row sits in the grid: `present` says which columns carry the object it is a member of, and
+// `editable` which columns can write it.
+interface RowAt {
+  path: PathSegment[];
+  rootField: string;
+  rowKey: string;
+  parent: string | null;
+  present: (column: ColumnKey) => boolean;
+  editable: Set<ColumnKey>;
+  depth: number;
+  collapsedSummary?: Record<string, string>;
+  cellMetas?: Partial<Record<string, FieldMetadata>>;
+}
+
 function columnKeysWhere(
   overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
 ): Set<ColumnKey> {
@@ -143,7 +157,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // definition of a column's look, so the header and the cells cannot disagree.
   const partialFormColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
   // editor-fields.md, Partial Form: a Partial Form copy's own fields are read-only.
-  const ownFieldColumns = useMemo(
+  const ownFieldEditableColumns = useMemo(
     () => new Set([...editableColumns].filter(key => !partialFormColumns.has(key))), [editableColumns, partialFormColumns]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
     ...(key !== LABEL_COLUMN && partialFormColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
@@ -331,17 +345,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }
 
   // One recursive builder for every nesting depth — including the recursion a script property's
-  // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
-  // columns carry the object this row is a member of.
-  function buildRows(
-    diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rowKey: string, parent: string | null, present: (column: ColumnKey) => boolean,
-    editable: Set<ColumnKey>, depth = 0,
-    collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
-  ): React.ReactNode[] {
+  // struct members need. `meta` is undefined only for a malformed diff tree.
+  function buildRows(diff: FieldDiff, meta: FieldMetadata | undefined, at: RowAt): React.ReactNode[] {
     // A diff node naming a member no override's schema declares has no shape to render against, so
     // it and its subtree are dropped rather than rendered against a guessed one.
     if (!meta) return [];
+    const { path, rootField, rowKey, parent, present, editable, depth, collapsedSummary, cellMetas } = at;
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = !collapsedRows.has(rowKey);
     navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
@@ -391,9 +400,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         const collapsedSummary = collapsedSummaries(child, meta.elementType, column =>
           children.filter(c => c.values[column] != null).at(-1) === child);
         // An element is spelled in full, so a column has it exactly where its value is.
-        rows.push(...buildRows(
-          child, meta.elementType, [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
-          rootField, childRowKey, rowKey, column => child.values[column] != null, editable, depth + 1, collapsedSummary));
+        rows.push(...buildRows(child, meta.elementType, {
+          ...at,
+          path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
+          rowKey: childRowKey, parent: rowKey, present: column => child.values[column] != null, depth: depth + 1,
+          collapsedSummary, cellMetas: undefined,
+        }));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first
         // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
@@ -403,12 +415,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         const cellMetas = member?.variants
           ? Object.fromEntries(columns.map(c => [c.key, variantFor(member, diff.values[c.key], meta)]))
           : undefined;
-        rows.push(...buildRows(
-          child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
-          rootField, childRowKey, rowKey,
-          column => present(column) && columnHasNode(meta, diff.values[column])
+        rows.push(...buildRows(child, memberMeta, {
+          ...at,
+          path: [...path, { kind: 'member', name: child.fieldName }],
+          rowKey: childRowKey, parent: rowKey,
+          present: column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
-          editable, depth + 1, undefined, cellMetas));
+          depth: depth + 1, collapsedSummary: undefined, cellMetas,
+        }));
       }
     }
     return rows;
@@ -440,16 +454,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const meta = fieldMetaMap[diff.fieldName];
     return meta?.isRecordFormKey
       ? [formIdRow(meta)]
-      : buildRows(
-        diff, meta, [], diff.fieldName, `${RECORD_HEADER_ROW}.${diff.fieldName}`, RECORD_HEADER_ROW, () => true, editableColumns, 1);
+      : buildRows(diff, meta, {
+        path: [], rootField: diff.fieldName, rowKey: `${RECORD_HEADER_ROW}.${diff.fieldName}`, parent: RECORD_HEADER_ROW,
+        present: () => true, editable: editableColumns, depth: 1,
+      });
   };
   const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];
   // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
   // since the record's own fields are not there to be members of.
   const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(
-    diff => buildRows(
-      diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName, null,
-      column => !partialFormColumns.has(column), ownFieldColumns),
+    diff => buildRows(diff, fieldMetaMap[diff.fieldName], {
+      path: [], rootField: diff.fieldName, rowKey: diff.fieldName, parent: null,
+      present: column => !partialFormColumns.has(column), editable: ownFieldEditableColumns, depth: 0,
+    }),
   );
 
   return (

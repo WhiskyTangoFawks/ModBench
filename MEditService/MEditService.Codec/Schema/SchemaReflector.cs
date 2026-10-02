@@ -98,7 +98,7 @@ public sealed class SchemaReflector
             ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{majorRecordGetterTypeName}'.");
         var grups = GrupRecordTypes(assembly, majorRecordGetterType, category).ToList();
 
-        annotations.Validate(assembly, grups.Select(g => g.TableName));
+        annotations.Validate(category, assembly, grups.Select(g => g.TableName));
 
         // One GRUP signature can be backed by several concrete subclasses (GMST, GLOB, DMGT) because
         // the discriminant lives on the record, not the table. One winner per table keeps RecordType

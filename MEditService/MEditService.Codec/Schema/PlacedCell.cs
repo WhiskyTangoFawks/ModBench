@@ -21,6 +21,14 @@ public static class PlacedCell
     /// copy says neither.</summary>
     public static bool Says(JsonObject cell) => IsInterior(cell) || Grid(cell) != null;
 
+    /// <summary>The copy that says where the cell sits: its own, or else its nearest copy to the left, which
+    /// xEdit reads as the highest override visible to the file. Null when neither says.</summary>
+    public static JsonObject? SaidBy(JsonObject cell, string? copyOnTheLeft)
+    {
+        if (Says(cell)) return cell;
+        return copyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
+    }
+
     public static bool IsInterior(JsonObject cell) =>
         cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);
 

@@ -8,7 +8,8 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>Everything a document edit needs and nothing it may touch: the text, where the edited
 /// record sits in it, its schema, the envelope, the codec round trip as a function, and
-/// <see cref="CellGroupMove.CellToLookUp"/>'s nearest copy.</summary>
+/// nearest copy to the left of the cell <see cref="CellGroupMove.CellToLookUp"/> or
+/// <see cref="RecordEmptying.CellToLookUp"/> names.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
@@ -46,6 +47,8 @@ internal static class DocumentEdit
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
         var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
+        if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.CellCopyOnTheLeft, spelled) is { } cannot)
+            return cannot;
         if (emptying != null) envelope = envelope with { Value = emptying.Flags };
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;

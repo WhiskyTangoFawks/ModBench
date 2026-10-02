@@ -1,5 +1,6 @@
 using System.Reflection;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Schema;
 
@@ -78,6 +79,9 @@ internal sealed record SchemaAnnotations(
     // An exterior cell's width in world units, or null where the game places no record in a grid
     // cell. Unchecked: Mutagen divides by it as a literal and exposes no member that holds it.
     float? ExteriorCellWidth,
+    // The plugin that alone defines a cell a Partial Form copy can override (xEdit's GetCanBePartial),
+    // or null where any plugin can. Validated as one of the game's base masters.
+    string? PartialFormCellsDefinedIn,
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
     // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
     IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
@@ -257,6 +261,7 @@ internal sealed record SchemaAnnotations(
             ],
             // Mutagen's Fallout 4 worldspace bounds divide by it.
             ExteriorCellWidth: 4096f,
+            PartialFormCellsDefinedIn: "Fallout4.esm",
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
         [GameCategory.Skyrim] = new(
@@ -282,9 +287,16 @@ internal sealed record SchemaAnnotations(
                 .. RecordHeaderMembersInEveryGame,
                 ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
-            RecordFlagNames: [],
+            // Mutagen names bit 14 on no Skyrim type; wbDefinitionsTES5.pas gives it to CELL, DIAL and WRLD.
+            RecordFlagNames:
+            [
+                ("ICellGetter", PartialFormFlag.Bit, PartialFormName),
+                ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
+                ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
+            ],
             // Mutagen's Skyrim containing-cell lookup divides by it.
             ExteriorCellWidth: 4096f,
+            PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
@@ -317,8 +329,10 @@ internal sealed record SchemaAnnotations(
                 .. RecordHeaderMembersInEveryGame,
                 ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
-            RecordFlagNames: [],
+            // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
+            RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
             ExteriorCellWidth: null,
+            PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
     };
 
@@ -562,7 +576,7 @@ internal sealed record SchemaAnnotations(
     /// <summary>Resolves every row against the assembly's types, its GRUP signatures and the shapes
     /// its members hold, and throws naming each row that does not resolve or is not the kind of
     /// thing its table says it is.</summary>
-    public void Validate(Assembly gameAssembly, IEnumerable<string> grupSignatures)
+    public void Validate(GameCategory category, Assembly gameAssembly, IEnumerable<string> grupSignatures)
     {
         var allTypes = gameAssembly.GetTypes()
             .SelectMany(t => t.GetInterfaces().Append(t))
@@ -608,6 +622,9 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(RecordFlagNames), RecordFlagNames.Select(r => r.TypeName)),
             .. RecordFlagNames.Where(r => r.Bit <= 0 || (r.Bit & (r.Bit - 1)) != 0)
                 .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} names 0x{r.Bit:X}, which is no single bit"),
+            .. new[] { PartialFormCellsDefinedIn }.OfType<string>()
+                .Where(p => !Implicits.Get(category.DefaultRelease()).BaseMasters.Contains(ModKey.FromFileName(p)))
+                .Select(p => $"{nameof(PartialFormCellsDefinedIn)}: {p} is no base master of {category}"),
             .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
         ];
 
