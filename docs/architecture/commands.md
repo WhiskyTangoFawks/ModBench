@@ -97,6 +97,7 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Downloads | Activity Bar | 4 | collapsed |
 | Editor, the record panel | an editor tab | - | opened by the user |
 | Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
+| Mods, the conflict table | an editor tab | - | opened by the user |
 
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself. Referenced By is a Panel view because it follows the active record, and a sidebar view cannot sit beside an editor tab.
 
@@ -137,6 +138,8 @@ The Overwrite row is a mod-list row, not a mod; its `Argument` is `overwrite`.
 | sort direction | reads | `modbench.mod.sortWinningAtTop`, `modbench.mod.sortLosingAtTop` | - | - | MO2 mod list | List mods with the winning end at the top or at the bottom. | none |
 | open folder | reads | `modbench.mod.openFolder` | mod, or overwrite | - | MO2 mod list, Overwrite row | Show a mod's files in VS Code's Explorer, decorated by conflict status. The Overwrite row opens the overwrite folder. | none |
 | view on Nexus | reads | `modbench.mod.viewOnNexus` | mod, or downloaded file | - | MO2 mod list; MO2 Downloads | Open the mod's Nexus page. The address comes from the mod's `meta.ini`, or from the downloaded file's `.meta`. | none |
+| open conflicts | reads | `modbench.mod.openConflicts` | mod | - | MO2 Information dialog, Conflicts tab | Open a mod's conflict table in an editor tab. | open-conflicts |
+| compare file | reads | `modbench.mod.compareFile` | a mod's copy of a file | - | none | Open VS Code's diff editor on a mod's copy of a file and the winning copy. | none |
 
 ## Separator
 
