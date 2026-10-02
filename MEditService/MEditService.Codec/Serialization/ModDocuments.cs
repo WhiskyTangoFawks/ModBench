@@ -36,11 +36,7 @@ internal sealed class MutagenModDocuments(
 
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly List<RecordTypeFailure> _failures = [];
-    private readonly Lazy<Dictionary<string, CellRecord>> _cells = new(() => CellsIn(mod));
-
-    // Where a cell sits and what its two placement groups hold, both read off the GRUP hierarchy so
-    // neither depends on the codec having read the cell.
-    internal readonly record struct CellRecord(CellStructure Structure, IReadOnlyList<PlacedInCell> Placed);
+    private readonly Lazy<Dictionary<string, CellStructure>> _cells = new(() => CellsIn(mod));
 
     public PluginDocument Header => new(
         PluginHeader.RecordType,
@@ -108,25 +104,28 @@ internal sealed class MutagenModDocuments(
         {
             var text = Encoding.UTF8.GetString(
                 _codec.SerializeToBytes(record, mod.GameRelease));
-            return Placed(new PluginDocument(tableName, formKey, text), formKey);
+            return WithGrupFacts(new PluginDocument(tableName, formKey, text), record);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
-            return Placed(
+            return WithGrupFacts(
                 new PluginDocument(
                     tableName, formKey, Encoding.UTF8.GetString(stub),
                     PluginDiagnosis.FromParseException(ex).Describe()),
-                formKey);
+                record);
         }
     }
 
-    // The GRUP facts, attached whether or not the codec read the record: a cell the codec refuses
-    // still belongs somewhere and still holds what it holds (ADR-0005).
-    private PluginDocument Placed(PluginDocument document, string formKey) =>
-        _cells.Value.TryGetValue(formKey, out var cell)
-            ? document with { Cell = cell.Structure, Contents = cell.Placed }
-            : document;
+    // Attached whether or not the codec read the record: a record the codec refuses still belongs
+    // somewhere and still holds what it holds (ADR-0005).
+    private PluginDocument WithGrupFacts(PluginDocument document, IMajorRecordGetter record) =>
+        document with
+        {
+            Cell = _cells.Value.TryGetValue(document.FormKey, out var cell) ? cell : null,
+            Contents = [.. ContainerChildFields.EnumerateChildren(record)
+                .Select(c => new ChildRecord(c.Child.FormKey.ToString(), c.SlotName, c.SlotIndex))],
+        };
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
     // just threw, so it answers null rather than taking the plugin down with it.
@@ -138,9 +137,9 @@ internal sealed class MutagenModDocuments(
 
     // ADR-0005: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no
     // document carries. Reflects on Mutagen's property names, the same across every game.
-    internal static Dictionary<string, CellRecord> CellsIn(IModGetter mod)
+    internal static Dictionary<string, CellStructure> CellsIn(IModGetter mod)
     {
-        var cells = new Dictionary<string, CellRecord>(StringComparer.Ordinal);
+        var cells = new Dictionary<string, CellStructure>(StringComparer.Ordinal);
 
         foreach (var worldspace in Enumerate(Get(mod, "Worldspaces")))
         {
@@ -180,22 +179,8 @@ internal sealed class MutagenModDocuments(
         return cells;
     }
 
-    private static void Record(Dictionary<string, CellRecord> cells, object cell, CellStructure structure) =>
-        cells[FormKeyOf(cell)] = new CellRecord(structure, [.. PlacedIn(cell)]);
-
-    // Every placed record the cell's two groups hold, whatever its flavour: the placement table
-    // covers a hazard or a projectile the same as a plain reference, and no schema is consulted.
-    private static IEnumerable<PlacedInCell> PlacedIn(object cell)
-    {
-        foreach (var (slot, group) in new[] { ("Persistent", "persistent"), ("Temporary", "temporary") })
-        {
-            foreach (var placed in List(cell, slot))
-            {
-                if (placed is IMajorRecordGetter record)
-                    yield return new PlacedInCell(record.FormKey.ToString(), group);
-            }
-        }
-    }
+    private static void Record(Dictionary<string, CellStructure> cells, object cell, CellStructure structure) =>
+        cells[FormKeyOf(cell)] = structure;
 
     private static string FormKeyOf(object cell) => ((IMajorRecordGetter)cell).FormKey.ToString();
 

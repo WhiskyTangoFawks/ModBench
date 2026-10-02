@@ -28,14 +28,6 @@ internal sealed class PluginIngest
 
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
 
-    // The placement tables' own slot list, not a container-member list: those come from
-    // ContainerMembers. What placement and cell_location already carry is skipped here so
-    // container_child stays additive rather than competing.
-    internal static readonly HashSet<(string ParentType, string Slot)> CoveredByPlacementTables =
-    [
-        ("Cell", "Persistent"), ("Cell", "Temporary"), ("Worldspace", "TopCell"),
-    ];
-
     // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     private sealed record PreparedRecord(
@@ -234,47 +226,44 @@ internal sealed class PluginIngest
         var root = parsed.RootElement;
         var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
 
-        // ADR-0005: where a cell sits and what it holds come from the GRUP hierarchy, so a cell whose
-        // document the codec refused still lists, still holds its contents, and only loses its grid.
-        JsonElement? carried = document.ParseDiagnosis is null ? root : null;
-        var placements = Placements(document, carried);
+        // ADR-0005: where a cell sits and what a container holds come from the GRUP hierarchy, so a
+        // container whose document the codec refused still lists and still holds its children. A
+        // refused cell loses only its grid.
+        var refused = document.ParseDiagnosis is not null;
+        JsonElement? carried = refused ? null : root;
+        var containerType = _containers.ContainerTypeOf(document.RecordType);
+        var placements = Placements(document, containerType, carried);
         CellLocationRow? cellLocation = document.Cell is { } structure
             ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
             : null;
 
-        // The graph the codec never read answers nothing about references or containment.
-        if (document.ParseDiagnosis is not null)
-        {
-            return new PreparedRecord(
-                document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), [], [],
-                placements, cellLocation, editorId, document.ParseDiagnosis);
-        }
-
         // References are read off the document, never a live object: the document is the model, and
-        // what Referenced-By answers is what the source file holds.
-        var refs = Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
+        // what Referenced-By answers is what the source file holds. A refused document holds none.
+        List<FormReferenceRow> refs = refused
+            ? []
+            : Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
-        var childRows = new List<ContainerChildRow>();
-        var containerType = _containers.ContainerTypeOf(document.RecordType);
-        foreach (var child in _containers.ChildrenOf(document.RecordType, root))
-        {
-            // What placement and cell_location already carry stays out of container_child.
-            if (CoveredByPlacementTables.Contains((containerType, child.SlotName))) continue;
-
-            childRows.Add(new ContainerChildRow(
-                child.FormKey, document.FormKey, document.RecordType, child.SlotName, child.SlotIndex));
-        }
+        // A refused document holds no children either, so the GRUP answers for it.
+        var children = refused
+            ? (document.Contents ?? []).Select(c => (c.FormKey, c.SlotName, c.SlotIndex))
+            : _containers.ChildrenOf(document.RecordType, root).Select(c => (c.FormKey, c.SlotName, c.SlotIndex));
+        List<ContainerChildRow> childRows = [.. children
+            .Where(c => PlacementWalker.TableFor(containerType, c.SlotName) == ParentageTable.ContainerChild)
+            .Select(c => new ContainerChildRow(c.FormKey, document.FormKey, document.RecordType, c.SlotName, c.SlotIndex))];
 
         return new PreparedRecord(
             document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), refs, childRows,
-            placements, cellLocation, editorId, ParseDiagnosis: null);
+            placements, cellLocation, editorId, document.ParseDiagnosis);
     }
 
     // One row per placed record the cell's groups hold, parentage from beside the document and
     // position from the child node the document carries — null where it carries none.
-    private List<PlacementRow> Placements(PluginDocument document, JsonElement? root)
+    private List<PlacementRow> Placements(PluginDocument document, string containerType, JsonElement? root)
     {
-        if (document.Contents is not { Count: > 0 } contents) return [];
+        var placed = (document.Contents ?? [])
+            .Where(c => PlacementWalker.TableFor(containerType, c.SlotName) == ParentageTable.Placement)
+            .ToList();
+        if (placed.Count == 0) return [];
 
         var nodes = root is { } carried
             ? _containers.ChildrenOf(document.RecordType, carried)
@@ -282,11 +271,11 @@ internal sealed class PluginIngest
                 .ToDictionary(g => g.Key, g => g.First().Node, StringComparer.Ordinal)
             : [];
 
-        return [.. contents.Select(placed => PlacementWalker.Placement(
-            placed.FormKey,
-            nodes.TryGetValue(placed.FormKey, out var node) ? node : null,
+        return [.. placed.Select(child => PlacementWalker.Placement(
+            child.FormKey,
+            nodes.TryGetValue(child.FormKey, out var node) ? node : null,
             document.FormKey,
-            placed.PlacementGroup))];
+            PlacementWalker.PlacementGroupOf(child.SlotName)))];
     }
 
     private static void AppendPrepared(
