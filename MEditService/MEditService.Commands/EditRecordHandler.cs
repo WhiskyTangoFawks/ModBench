@@ -69,7 +69,7 @@ public sealed class EditRecordHandler
         // comes back intact.
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
-        string? cellCopyOnTheLeft = null;
+        LeftCopy? cellCopyOnTheLeft = null;
         if (unit.IsEmbedded)
         {
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
@@ -90,25 +90,15 @@ public sealed class EditRecordHandler
             }
             prefix = found;
             if (CellGroupMove.CellToLookUp(root, prefix, envelope) is { } cellFormKey)
-                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says).Text;
+                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says);
         }
 
         if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
-            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says).Text;
+            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
 
-        string? refillCopyOnTheLeft = null;
-        if (RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema))
-        {
-            var left = _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema));
-            if (left.Unreadable is { } unreadable)
-            {
-                return RecordEditResult.RefusedAt(
-                    RecordEditRefusal.RecordParseFailed, spelled,
-                    $"'{spelled}': {formKey}'s own fields come from its nearest copy to the left that is neither " +
-                    $"Partial Form nor Deleted, and {unreadable}. Nothing was written.");
-            }
-            refillCopyOnTheLeft = left.Text;
-        }
+        var refillCopyOnTheLeft = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema)
+            ? _targets.NearestCopyToTheLeft(plugin, formKey, copy => RecordEmptying.EmptiesNone(copy, schema))
+            : null;
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))

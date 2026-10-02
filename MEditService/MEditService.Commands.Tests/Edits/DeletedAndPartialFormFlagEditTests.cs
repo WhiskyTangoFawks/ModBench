@@ -207,6 +207,19 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_WithNoCopyToItsLeft_LeavesItsFieldsEmpty()
+    {
+        var npc = _mod.Npcs.AddNew("Guy");
+        npc.HeightMax = 0.5f;
+        npc.MajorRecordFlagsRaw = Deleted;
+        var formKey = _fixture.Seed(npc, "npc_");
+
+        var undeleted = SetFlags(formKey, 0);
+
+        Assert.DoesNotContain(undeleted, p => p.Key is "EditorID" or "HeightMax");
+    }
+
+    [Fact]
     public void ClearingPartialForm_WithNoCopyToItsLeft_LeavesItsOwnFieldsEmpty()
     {
         var cell = InteriorCellOfFallout4Esm();

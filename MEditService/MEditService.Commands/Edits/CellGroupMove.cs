@@ -41,7 +41,7 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
 
     /// <summary>xEdit keeps the record in its cell when that cell is interior, is a worldspace's
     /// persistent cell taking it in, or is the exterior cell its position falls in.</summary>
-    internal RecordEditResult? RefuseLeavingTheCell(JsonObject root, GameRelease release, string? cellCopyOnTheLeft, string spelled)
+    internal RecordEditResult? RefuseLeavingTheCell(JsonObject root, GameRelease release, LeftCopy? cellCopyOnTheLeft, string spelled)
     {
         var cell = Cell(root);
         var record = EmbeddedChildPath.Walk(root, Prefix) as JsonObject
@@ -49,12 +49,14 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
         if (CellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
             return IntoPersistent ? null : IntoAnotherCell(spelled, formKey);
-        if (PlacedCell.SaidBy(cell, cellCopyOnTheLeft) is not { } said)
+        if (PlacedCell.SaidBy(cell, cellCopyOnTheLeft?.FoundText) is not { } said)
         {
+            if (cellCopyOnTheLeft is LeftCopy.Unreadable unreadable)
+                return unreadable.Refusal(spelled, $"which cell xEdit would move {formKey} into depends on where its cell sits, which only that cell's nearest copy to the left says");
             return Unknown(
                 spelled, formKey,
                 $"its cell {cell[RecordMembers.FormKey]?.GetValue<string>()} says neither that it is interior nor where it " +
-                "sits in its worldspace, and no copy of it to its left that mEdit can read says either");
+                "sits in its worldspace, and no copy of it to its left says either");
         }
         if (PlacedCell.IsInterior(said)) return null;
         if (IntoPersistent) return IntoAnotherCell(spelled, formKey);

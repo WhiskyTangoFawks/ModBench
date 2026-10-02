@@ -15,8 +15,8 @@ internal sealed record DocumentEditRequest(
     RecordEditEnvelope Envelope,
     GameRelease Release,
     Func<string, string> RoundTrip,
-    string? CellCopyOnTheLeft,
-    string? RefillCopyOnTheLeft);
+    LeftCopy? CellCopyOnTheLeft,
+    LeftCopy? RefillCopyOnTheLeft);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
 /// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
@@ -48,6 +48,8 @@ internal static class DocumentEdit
         var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
         if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.CellCopyOnTheLeft, spelled) is { } cannot)
             return cannot;
+        if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
+            return unreadable;
         if (emptying != null) envelope = envelope with { Value = emptying.Flags };
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;

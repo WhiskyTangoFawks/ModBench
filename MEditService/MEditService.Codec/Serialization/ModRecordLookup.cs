@@ -36,10 +36,19 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
             ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record, _schemas), record.EditorID)
             : null;
 
-    public long? RecordFlagsOf(string formKey) => Resolve(formKey)?.MajorRecordFlagsRaw;
-
-    public string? TextOf(string formKey) =>
-        Resolve(formKey) is { } record ? _codec.SerializeToText(record, _mod.GameRelease) : null;
+    public string? TextOf(string formKey)
+    {
+        if (Resolve(formKey) is not { } record) return null;
+        try
+        {
+            return _codec.SerializeToText(record, _mod.GameRelease);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException
+            && DeletedRecord.HeaderOf(record, _schemas[RecordTableName.Of(record, _schemas)], _mod.GameRelease) is { } header)
+        {
+            return _codec.SerializeToText(header, _mod.GameRelease);
+        }
+    }
 
     public DocumentContainment? ContainmentOf(string formKey) =>
         _containments.Value.TryGetValue(formKey, out var found) ? found : null;

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -35,16 +34,12 @@ internal sealed class CopySource(
     internal PluginAddress Plugin => plugin;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
-    /// null when it holds nothing under that key.</summary>
-    internal RecordIdentity? Identity(string formKey) =>
-        _tree != null ? _tree.IdentityOf(plugin, formKey, _schemas) : Loaded()?.IdentityOf(formKey);
-
-    /// <summary>The record header's flags, which a deleted record's missing fields never stop a read of.</summary>
-    internal long RecordFlags(RecordIdentity identity)
+    /// null when it holds nothing under that key. A document named for it that is no document throws.</summary>
+    internal RecordIdentity? Identity(string formKey)
     {
-        if (_tree == null) return Loaded()?.RecordFlagsOf(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
-        var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
-        return JsonNode.Parse(body)?[RecordHeaderFlags.Member] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
+        if (_tree == null) return Loaded()?.IdentityOf(formKey);
+        return _tree.IdentityOf(plugin, formKey, _schemas)
+            ?? (_tree.UnreadableDocumentFor(plugin, formKey) is { } why ? throw new InvalidDataException(why) : null);
     }
 
     /// <summary>The record's own text: the working tree's own bytes when tracked, otherwise the loaded

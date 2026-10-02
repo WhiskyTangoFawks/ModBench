@@ -23,7 +23,9 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
         var flags = write.Next;
         if (makesPartialForm) flags &= ~DeletedFlag.Bit;
         else if (deletes && partialFormable) flags &= ~PartialFormFlag.Bit;
-        var refills = !deletes && ((write.Held & ~flags & EmptyingBits(schema)) != 0 || write.Sets(DeletedFlag.Bit));
+        var clears = !deletes && (write.Held & ~flags & EmptyingBits(schema)) != 0;
+        var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
+        var refills = clears || deletesBeforeMakingPartialForm;
         if (!deletes && !makesPartialForm && !refills) return null;
         var heldPersistent = (write.Held & PersistentFlag.Bit) != 0;
         return new(JsonSerializer.SerializeToElement(flags), deletes, makesPartialForm, refills, heldPersistent);
@@ -40,9 +42,21 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
             && Of(record, schema, column, envelope.Value) is { Refills: true };
     }
 
-    /// <summary>The flags a copy a refill takes its fields from holds neither of.</summary>
-    internal static long EmptyingBits(RecordTableSchema schema) =>
+    /// <summary>A copy a refill takes its fields from: neither Deleted nor, where its type can be one, a
+    /// Partial Form.</summary>
+    internal static bool EmptiesNone(JsonObject copy, RecordTableSchema schema) =>
+        (RecordFlagsWrite.HeldBy(copy) & EmptyingBits(schema)) == 0;
+
+    private static long EmptyingBits(RecordTableSchema schema) =>
         PartialFormFlag.IsPartialFormable(schema.RecordType) ? DeletedFlag.Bit | PartialFormFlag.Bit : DeletedFlag.Bit;
+
+    /// <summary>The refusal of a refill whose nearest copy to the left cannot be read.</summary>
+    internal RecordEditResult? RefuseRefill(LeftCopy? copyOnTheLeft, RecordTableSchema schema, string? formKey, string spelled)
+    {
+        if (!Refills || copyOnTheLeft is not LeftCopy.Unreadable unreadable) return null;
+        var neither = PartialFormFlag.IsPartialFormable(schema.RecordType) ? "neither Partial Form nor Deleted" : "not Deleted";
+        return unreadable.Refusal(spelled, $"{formKey}'s own fields come from its nearest copy to the left that is {neither}");
+    }
 
     /// <summary>The cell whose nearest copy to the left says where it sits, on a write that may make a cell
     /// that does not say so itself a Partial Form.</summary>
@@ -60,16 +74,18 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
     /// plugin other than the one the game names defines.</summary>
     internal RecordEditResult? RefuseCell(
         JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, GameRelease release,
-        string? cellCopyOnTheLeft, string spelled)
+        LeftCopy? cellCopyOnTheLeft, string spelled)
     {
         if (!MakesPartialForm || !RecordTypeDispatch.For(release).IsCell(schema.TableName)) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
         if (!HeldPersistent && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
         {
-            if (PlacedCell.SaidBy(record, cellCopyOnTheLeft) is not { } said)
+            if (PlacedCell.SaidBy(record, cellCopyOnTheLeft?.FoundText) is not { } said)
             {
+                if (cellCopyOnTheLeft is LeftCopy.Unreadable unreadable)
+                    return unreadable.Refusal(spelled, $"whether {formKey} can be a Partial Form depends on where it sits, which only its nearest copy to the left says");
                 return Cannot(spelled, $"whether {formKey} can be a Partial Form is unknown: it says neither that it is " +
-                    "interior nor where it sits in its worldspace, and no copy of it to its left that mEdit can read says either");
+                    "interior nor where it sits in its worldspace, and no copy of it to its left says either");
             }
             if (!PlacedCell.IsInterior(said)) return Cannot(spelled, $"{formKey} is a temporary exterior cell, which xEdit never makes a Partial Form");
         }
@@ -81,9 +97,9 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
     private static RecordEditResult Cannot(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.CannotBePartialForm, spelled, $"'{spelled}': {why}. Nothing was written.");
 
-    internal void Apply(JsonObject record, RecordTableSchema schema, string? copyOnTheLeft)
+    internal void Apply(JsonObject record, RecordTableSchema schema, LeftCopy? copyOnTheLeft)
     {
-        var left = Refills && copyOnTheLeft != null ? JsonNode.Parse(copyOnTheLeft) as JsonObject : null;
+        var left = Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
         foreach (var member in OwnFields(schema))
         {
             var fromTheLeft = Refills && (!MakesPartialForm || member == RecordMembers.EditorId);
