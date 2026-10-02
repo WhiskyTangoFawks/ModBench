@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -348,6 +349,30 @@ internal sealed class WriteTargets(
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
+
+    /// <summary>The nearest copy of <paramref name="formKey"/> left of <paramref name="plugin"/> that
+    /// <paramref name="says"/> accepts. A copy that cannot be read ends the walk, since one beyond it is
+    /// not the nearest.</summary>
+    internal string? NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says)
+    {
+        var current = loadOrder.Current;
+        var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
+        foreach (var left in current.Active.Take(index).Reverse())
+        {
+            using var source = new CopySource(left.Key, current, adapter, codec, schemaReflector);
+            try
+            {
+                if (source.Identity(formKey) is not { } identity) continue;
+                var body = source.Body(identity);
+                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return body;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                return null;
+            }
+        }
+        return null;
+    }
 
     // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
     // header deliberately. Without it, HoldingUnit.IsDirectoryPerRecord (filename-only) answers true

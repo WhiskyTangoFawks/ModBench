@@ -69,15 +69,15 @@ public sealed class EditRecordHandler
         // comes back intact.
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
+        string? cellCopyOnTheLeft = null;
         if (unit.IsEmbedded)
         {
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
+            var root = JsonNode.Parse(text) as JsonObject
+                ?? throw new InvalidOperationException($"Expected '{unit.RelativePath}' to hold a JSON object.");
             var found = parentType == null
                 ? null
-                : EmbeddedChildPath.Find(
-                    JsonNode.Parse(text) as JsonObject
-                        ?? throw new InvalidOperationException($"Expected '{unit.RelativePath}' to hold a JSON object."),
-                    ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
+                : EmbeddedChildPath.Find(root, ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
             if (found == null)
             {
                 return RecordEditResult.Refused(
@@ -89,13 +89,15 @@ public sealed class EditRecordHandler
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
             prefix = found;
+            if (CellGroupMove.CellToLookUp(root, prefix, envelope) is { } cellFormKey)
+                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says);
         }
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
-        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip);
+        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft);
 
         string newText;
         RecordEditResult? refused;

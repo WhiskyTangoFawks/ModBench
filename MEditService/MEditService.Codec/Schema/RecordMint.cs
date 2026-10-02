@@ -24,7 +24,7 @@ public static class RecordMint
         }
         members[nameof(IMajorRecordGetter.FormKey)] = formKey;
         if (editorId != null) members[nameof(IMajorRecordGetter.EditorID)] = editorId;
-        if (partialForm) members[nameof(IMajorRecordGetter.MajorRecordFlagsRaw)] = PartialFormFlag.Bit;
+        if (partialForm) members[RecordHeaderFlags.Member] = PartialFormFlag.Bit;
         return codec.Deserialize(members.ToJsonString(), release, schema.TableName);
     }
 
