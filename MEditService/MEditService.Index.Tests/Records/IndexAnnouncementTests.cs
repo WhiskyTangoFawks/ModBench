@@ -71,7 +71,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         PluginBinaries.Touch(_pluginPath);
-        Assert.True(_index.Revalidate(Key));
+        Assert.True(_index.Revalidate());
 
         TheOnePluginChanged();
     }
@@ -83,7 +83,7 @@ public sealed class IndexAnnouncementTests : IDisposable
         ReconcileHeld();
 
         File.Delete(_pluginPath);
-        Assert.True(_index.Revalidate(Key));
+        Assert.True(_index.Revalidate());
 
         TheOnePluginChanged();
     }
@@ -96,22 +96,9 @@ public sealed class IndexAnnouncementTests : IDisposable
         WriteValidPlugin(_pluginPath);
         ReconcileHeld();
 
-        Assert.False(_index.Revalidate(Key));
+        Assert.False(_index.Revalidate());
 
         Assert.Empty(SinceReconcile.OfType<PluginChangedNotification>());
-    }
-
-    [Fact]
-    public void AValidateThatRebuiltAPlugin_AnnouncesPluginChangedOnce_AtTheSequenceItLandedOn()
-    {
-        WriteValidPlugin(_pluginPath);
-        ReconcileHeld();
-
-        PluginBinaries.Touch(_pluginPath);
-        var report = Assert.Single(_index.ValidateIndex(Key));
-        Assert.True(report.NeedsRebuild);
-
-        TheOnePluginChanged();
     }
 
     [Fact]

@@ -586,7 +586,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     {
         // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
         // away), so there is nothing to compare them against.
-        if (_store.IndexedFile(key) is not { } claim) return ValidationReport.Clean(key);
+        if (_store.IndexedFile(key) is not { } claim) return ValidationReport.Clean;
 
         if (!File.Exists(claim.FilePath))
         {
@@ -597,17 +597,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     key.Name, key.Origin, claim.FilePath);
             }
             Unindex(key);
-            return ValidationReport.Clean(key);
+            return ValidationReport.Clean;
         }
 
         // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
         // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
-            return new ValidationReport(key, [], NeedsRebuild: true, []);
+            return new ValidationReport([], NeedsRebuild: true, []);
 
         return _store.FileContentHash(claim.FilePath) == claim.ContentHash
-            ? ValidationReport.Clean(key)
-            : new ValidationReport(key, [], NeedsRebuild: true, []);
+            ? ValidationReport.Clean
+            : new ValidationReport([], NeedsRebuild: true, []);
     }
 
     // --- Queries ---

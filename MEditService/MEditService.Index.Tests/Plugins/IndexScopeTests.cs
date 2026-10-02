@@ -207,8 +207,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
-            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            manager.Revalidate(plugin.KeyOf());
+            manager.NextSnapshot();
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
@@ -235,8 +234,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
-            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            manager.Revalidate(plugin.KeyOf());
+            manager.NextSnapshot();
 
             var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
@@ -246,7 +244,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     // A filter valid over the rows it was set on and not over the rows a re-index lands: the one
     // way a re-materialization can fail after the write it follows is already durable.
     [Fact]
-    public void Validate_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
+    public void Validate_WhenReapplyingTheFilterFaults_LogsAWarningNamingTheException()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -268,10 +266,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
             RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
-            var plugin = data.Plugins.Single(p => p.Name == "Plugin.esp");
-            var ex = Record.Exception(() => manager.ValidateIndex(plugin.KeyOf()));
+            manager.NextSnapshot();
 
-            Assert.Null(ex);
             Assert.Contains(entries, e =>
                 e.Level == LogLevel.Warning
                 && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)

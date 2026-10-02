@@ -4,7 +4,7 @@ namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>ADR-0009 invariant 1: the SQL door sees only the active plugins, so a filter reads the
 /// public relations of <c>main</c> and nothing that reaches past them (ADR-0011 invariant 1).</summary>
-public sealed class SqlDoorSealTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<SqlDoorFixture>
 {
     [Theory]
     [InlineData("SELECT form_key FROM mirror.records")]

@@ -47,7 +47,7 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Reconcile(active: false);
 
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.ValidateIndex(_mod.KeyOf());
+        _index.NextSnapshot();
         Reconcile(active: true);
 
         Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
@@ -59,10 +59,10 @@ public sealed class InactivePluginProjectionTests : IDisposable
         var document = Reads.DocumentOf(_npc, _mod.KeyOf());
         Reconcile(active: false);
         _mod.HandEdit(document, "\"FixtureNpc\"", "\"RenamedByHand\"");
-        _index.ValidateIndex(_mod.KeyOf());
+        _index.NextSnapshot();
         var projected = _index.Sequence;
 
-        _index.ValidateIndex(_mod.KeyOf());
+        _index.NextSnapshot();
 
         Assert.Equal(projected, _index.Sequence);
     }

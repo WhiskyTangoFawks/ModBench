@@ -1,28 +1,21 @@
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
 // ADR-0012 invariant 1: a key that differs only in case names the same plugin at every door, the
-// opened plugins, the held-plugins lookup and the store's rows alike.
+// opened plugins and the store's rows alike.
 public sealed class PluginAddressComparisonTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("plugin-address-comparison")
         .WithPlugin("Cased.esp", mod => mod.Npcs.AddNew("FromCased").Race.SetTo(mod.Races.AddNew("CasedRace")), origin: "CasedMod")
         .BuildScattered();
 
-    private readonly LoadOrderHolder _holder = new();
-    private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly Indexer _index;
 
-    public PluginAddressComparisonTests()
-    {
-        _index = Indexes.Open(_holder, notifications: _notifications);
-        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
-    }
+    public PluginAddressComparisonTests() => _index = Indexes.Reconciled(_fixture);
 
     public void Dispose()
     {
@@ -92,19 +85,5 @@ public sealed class PluginAddressComparisonTests : IDisposable
             [entry with { Name = OtherCase.Name, Origin = OtherCase.Origin }], _fixture.InstanceRoot);
 
         Assert.Equal(1, reopened.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"])).Total);
-    }
-
-    // The rival this pins: a held-plugins lookup comparing name and origin its own way, which would
-    // miss the plugin the gone report names, unindex nothing and still announce a change.
-    [Fact]
-    public void AValidationUnderAnotherCase_FindsTheHeldPluginStillOnDisk_AndAnnouncesNothing()
-    {
-        var entry = _fixture.Plugins.Single();
-        var published = _notifications.Notifications.Count;
-
-        _index.ValidateIndex(OtherCase);
-
-        Assert.NotEmpty(_index.RequireReads().GetDocuments(entry.KeyOf()));
-        Assert.Empty(_notifications.Notifications.Skip(published).OfType<PluginChangedNotification>());
     }
 }

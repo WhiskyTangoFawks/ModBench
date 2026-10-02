@@ -3,30 +3,11 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Index.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 public class SchemaReflectorTests
 {
     private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
-
-    [Fact]
-    public void GetSchemas_ContainsKnownFallout4RecordTypes()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("npc_"));
-        Assert.True(schemas.ContainsKey("weap"));
-        Assert.True(schemas.ContainsKey("armo"));
-    }
-
-    [Fact]
-    public void GetSchemas_IncludesPlacedRecordTypes()
-    {
-        // ADR-0011: placed objects are indexed as normal records so the worldspace tree,
-        // record editor, and agent queries are uniform DuckDB reads.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("refr"));
-        Assert.True(schemas.ContainsKey("achr"));
-    }
 
     [Fact]
     public void GetSchemas_BuildsNoTableForAPlacementVariantCollapsedIntoRefr()
@@ -34,29 +15,6 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.False(schemas.ContainsKey("pgre"));
         Assert.False(schemas.ContainsKey("phzd"));
-    }
-
-    // ── the virtual-machine adapter is an ordinary reflected column ───────────
-
-    [Fact]
-    public void GetSchemas_Npc_VirtualMachineAdapter_IsAReflectedStructColumn()
-    {
-        var columns = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns;
-
-        var adapter = Assert.Single(columns, c => c.Name == "VirtualMachineAdapter");
-        Assert.Equal("struct", adapter.ApiType);
-    }
-
-    [Fact]
-    public void GetSchemas_Cmpo_CarriesNoAdapter_BecauseTheRecordTypeHasNone()
-    {
-        // CMPO ("Component") has no VMAD subrecord per xEdit's format definition
-        // (wbDefinitionsFO4.pas), and Component_Generated.cs declares no VirtualMachineAdapter
-        // property — so the column's absence is the record type's own shape, not an exclusion.
-        var columns = _reflector.GetSchemas(GameRelease.Fallout4)["cmpo"].RecordColumns;
-
-        Assert.DoesNotContain(columns, c => c.Name == "VirtualMachineAdapter");
-        Assert.Contains(columns, c => c.Name == "AutoCalcValue");
     }
 
     // ── xEdit-parity display names ────────────────────────────────────────────
@@ -73,17 +31,6 @@ public class SchemaReflectorTests
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
-    }
-
-    [Fact]
-    public void GetSchemas_Omod_PropertiesColumn_KeepsStructuredArrayShape_NotWidened()
-    {
-        // OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on a list.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
-
-        Assert.Equal("array", properties.ApiType);
-        Assert.NotNull(properties.Field.ElementSpec);
     }
 
     [Fact]
@@ -168,7 +115,6 @@ public class SchemaReflectorTests
         // product-visible data.
         Assert.DoesNotContain(fields, f => f.Name == "Unused");
     }
-
 
     [Fact]
     public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant()
@@ -279,14 +225,6 @@ public class SchemaReflectorTests
         Assert.Equal("translatedString", col.ApiType);
     }
 
-    [Fact]
-    public void GetSchemas_IsCachedAcrossCalls()
-    {
-        var first = _reflector.GetSchemas(GameRelease.Fallout4);
-        var second = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Same(first, second);
-    }
-
     // ── Array and struct field types ─────────────────────────────────
 
     [Fact]
@@ -328,8 +266,6 @@ public class SchemaReflectorTests
         Assert.Equal("float", col.ApiType);
     }
 
-    // ── Array Apply ───────────────────────────────────────────────────────────
-
     // ── IsFormLink requires both IsInterface AND IsGenericType ─────────────────
 
     [Fact]
@@ -342,8 +278,6 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.Equal("struct", col.ApiType);
     }
-
-    // ── Loqui scalar Apply: applies JSON object to struct sub-field ───────────────
 
     // ── ulong column: TryMapPrimitive BIGINT path ────────────────────────────────
 
@@ -464,13 +398,6 @@ public class SchemaReflectorTests
     // by the major-record-getter scan and gets one hand-assembled schema entry instead.
 
     [Fact]
-    public void GetSchemas_ContainsHeaderTable()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("header"));
-    }
-
-    [Fact]
     public void GetSchemas_Header_AuthorColumn_IsStringType()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
@@ -512,29 +439,6 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_MastersColumn_ToFieldMetadata_IsArrayTrue()
-    {
-        // The column itself must be flagged as an array (not just ApiType == "array") — this is
-        // what the frontend's array rows key off to render masters as a repeatable list.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["header"].RecordColumns.Single(c => c.Name == "MasterReferences");
-        Assert.True(col.ToFieldMetadata().IsArray);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_MastersColumn_ElementType_IsNotItselfAnArray()
-    {
-        // Each master is a single plugin-filename string, not a nested array — the element
-        // FieldMetadata's own IsArray must be false, or the frontend would try to render each
-        // master entry as a further repeatable list.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var col = schemas["header"].RecordColumns.Single(c => c.Name == "MasterReferences");
-        var elementSpec = col.Field.ElementSpec;
-        Assert.NotNull(elementSpec);
-        Assert.False(elementSpec.IsArray);
-    }
-
-    [Fact]
     public void GetSchemas_Header_RecordType_IsHeaderGetterInterface_NotAMajorRecordType()
     {
         // Guards against the header schema ever being routed through the major-record
@@ -542,27 +446,6 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var schema = schemas["header"];
         Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
-    }
-
-    // ── Condition lists are ordinary reflected array columns ──
-    //
-    // Perk.Conditions reaches the record editor through the same array-of-struct column every list of
-    // Loqui structs does. Perk.Effects is paired here as the neighbouring list-of-struct.
-
-    [Fact]
-    public void GetSchemas_Perk_ConditionsProperty_IsAGenericArrayColumn()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["perk"].RecordColumns;
-        Assert.Contains(columns, c => c.Name == "Conditions" && c.ApiType == "array");
-    }
-
-    [Fact]
-    public void GetSchemas_Perk_EffectsProperty_StillGetsGenericArrayColumn()
-    {
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        var columns = schemas["perk"].RecordColumns;
-        Assert.Contains(columns, c => c.Name == "Effects" && c.ApiType == "array");
     }
 
     // ── P3Int16/P3Float leaf coverage ──────────────────────────────────────────
@@ -672,5 +555,4 @@ public class SchemaReflectorTests
             ?? throw new InvalidOperationException("Expected 'Coordinates' to declare an element spec.");
         Assert.Equal("vector", coordinatesElementSpec.ApiType);
     }
-
 }

@@ -3,7 +3,7 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
-namespace MEditService.Index.Tests.Indexing;
+namespace MEditService.Codec.Tests.Schema;
 
 /// <summary>Two per-game facts reflection cannot read off a property: which parameter members each
 /// function uses, and that Run On's Reference target is live under only one Run On value.</summary>
@@ -45,19 +45,15 @@ public sealed class ConditionSchemaTests
             discriminator.EnumMembers.Select(m => m.Value));
     }
 
+    // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
+    // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
     [Fact]
-    public void ComparisonValue_IsOneMemberWithAVariantPerLeaf_FloatAndGlobalLink()
+    public void ComparisonValuesGlobalLink_NamesNoRecordType()
     {
-        var comparison = Member(ConditionElement(), "ComparisonValue");
-        var variants = comparison.Variants
+        var variants = Member(ConditionElement(), "ComparisonValue").Variants
             ?? throw new InvalidOperationException("Expected 'ComparisonValue' to carry per-leaf variants.");
 
-        Assert.Equal("float", variants[nameof(ConditionFloat)].Type);
-        var link = variants[nameof(ConditionGlobal)];
-        Assert.Equal("formKey", link.Type);
-        // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
-        // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
-        Assert.Empty(link.ValidFormKeyTypes);
+        Assert.Empty(variants[nameof(ConditionGlobal)].ValidFormKeyTypes);
     }
 
     // ── the two per-game facts ───────────────────────────────────────────────

@@ -54,7 +54,7 @@ internal sealed class SourceValidation(
         {
             // The re-derivation is what diagnoses the tree on the plugin, as a first ingest would.
             failures.Add(ex.Message);
-            return new ValidationReport(key, [], NeedsRebuild: true, failures);
+            return new ValidationReport([], NeedsRebuild: true, failures);
         }
 
         return Reconcile(key, modFolder, onDisk, HeldDocuments(key), treeFullyRead, validateCommitted: true, failures);
@@ -105,7 +105,7 @@ internal sealed class SourceValidation(
         // A document the index never saw moves which records the plugin has, which only a rebuild
         // expresses; the report names the records gained. Concluded from a whole tree only.
         var gained = treeFullyRead ? onDisk.Keys.Except(held.Keys, StringComparer.Ordinal).ToList() : [];
-        if (gained.Count > 0) return new ValidationReport(key, gained, NeedsRebuild: true, failures);
+        if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, failures);
 
         // A held record with no document here is refreshed by key, which reads it again, so the
         // rows-changed it publishes names it (ADR-0015 invariant 3).
@@ -148,7 +148,7 @@ internal sealed class SourceValidation(
             index.RefreshByKeys(key, modFolder, [.. drifted]);
         }
 
-        return new ValidationReport(key, [.. deleted, .. goneAtHead, .. drifted], NeedsRebuild: false, failures);
+        return new ValidationReport([], NeedsRebuild: false, failures);
     }
 
     // The committed half, from one ls-tree rather than a git process per record: a document whose

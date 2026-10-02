@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 
-namespace MEditService.Index.Tests.Records;
+namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Tests-side deliberately: the check compares against the generated whole-mod mixin,
 /// which <c>RecordTextCodecGeneratorSeedTests</c>' whitelist keeps out of Core.</summary>

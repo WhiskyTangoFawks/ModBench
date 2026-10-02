@@ -9,7 +9,8 @@ namespace MEditService.Index.Tests.RealData;
 /// <summary>Real records read through the index, where a union's document names the leaf each value
 /// turned out to be. Quest aliases are the real overlay proof: Mutagen materializes
 /// <c>Npc.Level</c> eagerly whatever the read mode.</summary>
-public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
+[Collection(CutDownPluginCollection.Name)]
+public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
 {
     private JsonElement? Field(string type, string editorId, string column)
     {
