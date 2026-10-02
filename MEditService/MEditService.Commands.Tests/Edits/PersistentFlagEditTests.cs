@@ -31,6 +31,7 @@ public sealed class PersistentFlagEditTests : IDisposable
             unmarked.Temporary.Add(Placed(plugin, "UnmarkedTemp", 0, 1f, 2f));
             var ruin = NewCell(plugin, "Ruin", Cell.Flag.IsInteriorCell);
             ruin.Temporary.Add(Placed(plugin, "RuinDeleted", Deleted, 1f, 2f));
+            ruin.Persistent.Add(Placed(plugin, "RuinDeletedPersistent", Deleted | Persistent, 1f, 2f));
             var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
             subBlock.Cells.Add(inside);
             subBlock.Cells.Add(ruin);
@@ -234,6 +235,14 @@ public sealed class PersistentFlagEditTests : IDisposable
 
         AssertRefusedUnchanged(result, RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
         Assert.Contains("Deleted", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClearingPersistent_OnADeletedPlacedRecord_IsRefused()
+    {
+        var before = Document("Ruin");
+
+        AssertRefusedUnchanged(SetFlags("RuinDeletedPersistent", Deleted), RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
     }
 
     [Fact]

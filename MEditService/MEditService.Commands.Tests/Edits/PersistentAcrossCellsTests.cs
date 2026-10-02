@@ -135,6 +135,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         Assert.Equal(Override.ModKey, FormKey.Factory(persistentCell["FormKey"].Require().GetValue<string>()).ModKey);
         Assert.Equal(Persistent, persistentCell["MajorRecordFlagsRaw"].Require().GetValue<int>() & Persistent);
         Assert.Equal(["Mover"], Group(persistentCell, "Persistent"));
+        Assert.Empty(Group(Document(_keys["Here"]), "Temporary"));
     }
 
     [Fact]
@@ -173,6 +174,7 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var created = Tree.CellAt(Address(Override), World.ToString(), 9, 9).Require();
         Assert.Equal(Override.ModKey, FormKey.Factory(created).ModKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created)), "Temporary"));
+        Assert.Equal(["Leaver"], Group(Document(_keys["Here"]), "Persistent"));
         var identity = Tree.IdentityOf(Address(Override), created, SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)) ?? throw new InvalidOperationException("Expected the created cell to be held.");
         Assert.Equal(new CellPlacement(World.ToString(), 0, 0, 1, 1, IsInterior: false), Tree.CellPlacementOf(Address(Override), identity));
     }

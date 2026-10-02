@@ -78,7 +78,7 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
         return null;
     }
 
-    private static RecordEditResult Unknown(string spelled, string? formKey, string why) =>
+    internal static RecordEditResult Unknown(string spelled, string? formKey, string why) =>
         RecordEditResult.RefusedAt(
             RecordEditRefusal.PersistentMoveDestinationUnknown, spelled,
             $"Which cell xEdit would move {formKey} into is unknown: {why}. Nothing was written.");

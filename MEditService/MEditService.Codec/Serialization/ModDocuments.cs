@@ -8,8 +8,12 @@ using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Codec.Serialization;
+
+/// <summary>A cell the mod holds, where its GRUP hierarchy puts it.</summary>
+internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 
 /// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The one place a
 /// getter becomes text, so every caller downstream of it holds documents.</summary>
@@ -37,7 +41,7 @@ internal sealed class MutagenModDocuments(
 
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly List<RecordTypeFailure> _failures = [];
-    private readonly Lazy<Dictionary<string, CellStructure>> _cells = new(() => CellsIn(mod));
+    private readonly Lazy<Dictionary<string, HeldCell>> _cells = new(() => CellsIn(mod));
 
     public PluginDocument Header => new(
         PluginHeader.RecordType,
@@ -122,7 +126,7 @@ internal sealed class MutagenModDocuments(
     private PluginDocument WithGrupFacts(PluginDocument document, IMajorRecordGetter record) =>
         document with
         {
-            Cell = _cells.Value.TryGetValue(document.FormKey, out var cell) ? cell : null,
+            Cell = _cells.Value.TryGetValue(document.FormKey, out var cell) ? cell.Structure : null,
             Contents = [.. ContainerChildFields.EnumerateChildren(record)
                 .Select(c => new ChildRecord(c.Child.FormKey.ToString(), c.SlotName, c.SlotIndex))],
         };
@@ -137,9 +141,9 @@ internal sealed class MutagenModDocuments(
 
     // ADR-0005: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no
     // document carries. Reflects on Mutagen's property names, the same across every game.
-    internal static Dictionary<string, CellStructure> CellsIn(IModGetter mod)
+    internal static Dictionary<string, HeldCell> CellsIn(IModGetter mod)
     {
-        var cells = new Dictionary<string, CellStructure>(StringComparer.Ordinal);
+        var cells = new Dictionary<string, HeldCell>(StringComparer.Ordinal);
 
         foreach (var worldspace in Enumerate(Get(mod, "Worldspaces")))
         {
@@ -179,8 +183,12 @@ internal sealed class MutagenModDocuments(
         return cells;
     }
 
-    private static void Record(Dictionary<string, CellStructure> cells, object cell, CellStructure structure) =>
-        cells[FormKeyOf(cell)] = structure;
+    private static void Record(Dictionary<string, HeldCell> cells, object cell, CellStructure structure) =>
+        cells[FormKeyOf(cell)] = new HeldCell(structure, cell);
+
+    /// <summary>The grid the cell names, or null when it names none.</summary>
+    internal static (int X, int Y)? GridOf(object cell) =>
+        Get(Get(cell, RecordTypeDispatch.CellGridMember), PlacedCell.GridPointMember) is P2Int point ? (point.X, point.Y) : null;
 
     private static string FormKeyOf(object cell) => ((IMajorRecordGetter)cell).FormKey.ToString();
 

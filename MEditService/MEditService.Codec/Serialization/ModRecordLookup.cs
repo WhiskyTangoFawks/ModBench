@@ -5,7 +5,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog;
 
 namespace MEditService.Codec.Serialization;
 
@@ -21,7 +20,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Lazy<ILinkCache> _cache;
     private readonly Lazy<Dictionary<string, DocumentContainment>> _containments;
-    private readonly Lazy<Dictionary<string, CellStructure>> _cells;
+    private readonly Lazy<Dictionary<string, HeldCell>> _cells;
     private readonly Lazy<Dictionary<(string Worldspace, int X, int Y), string>> _cellsByGrid;
 
     internal ModRecordLookup(
@@ -33,7 +32,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _open = open;
         _cache = new Lazy<ILinkCache>(() => mod.ToUntypedImmutableLinkCache());
         _containments = new Lazy<Dictionary<string, DocumentContainment>>(BuildContainments);
-        _cells = new Lazy<Dictionary<string, CellStructure>>(() => MutagenModDocuments.CellsIn(mod));
+        _cells = new Lazy<Dictionary<string, HeldCell>>(() => MutagenModDocuments.CellsIn(mod));
         _cellsByGrid = new Lazy<Dictionary<(string Worldspace, int X, int Y), string>>(BuildCellsByGrid);
     }
 
@@ -53,7 +52,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _containments.Value.TryGetValue(formKey, out var found) ? found : null;
 
     public CellStructure? CellStructureOf(string formKey) =>
-        _cells.Value.TryGetValue(formKey, out var cell) ? cell : null;
+        _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : null;
 
     public string? CellAt(string worldspace, int x, int y) =>
         _cellsByGrid.Value.TryGetValue((worldspace, x, y), out var cell) ? cell : null;
@@ -70,26 +69,17 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
             ? record
             : null;
 
-    // A worldspace's cells under its blocks, by the grid each names in Mutagen's Grid.Point, the same
-    // member on every game's cell.
+    // A worldspace's cells under its blocks, by the grid each names.
     private Dictionary<(string Worldspace, int X, int Y), string> BuildCellsByGrid()
     {
         var cells = new Dictionary<(string Worldspace, int X, int Y), string>();
-        foreach (var (formKey, structure) in _cells.Value)
+        foreach (var (formKey, (structure, cell)) in _cells.Value)
         {
             if (structure is not { ParentWorldspace: { } worldspace, BlockX: not null }) continue;
-            if (Resolve(formKey) is { } cell && GridPointOf(cell) is { } point) cells.TryAdd((worldspace, point.X, point.Y), formKey);
+            if (MutagenModDocuments.GridOf(cell) is { } grid) cells.TryAdd((worldspace, grid.X, grid.Y), formKey);
         }
         return cells;
     }
-
-    private static P2Int? GridPointOf(object cell) =>
-        cell.GetType().GetProperty(RecordTypeDispatch.CellGridMember)?.GetValue(cell) is { } grid
-        && grid.GetType().GetProperty(GridPointMember)?.GetValue(grid) is P2Int point
-            ? point
-            : null;
-
-    private const string GridPointMember = "Point";
 
     // Every child slot names its parent, which is what a tracked plugin reads out of the owner
     // document instead. A block is not a record, so a worldspace's cells are not here.
