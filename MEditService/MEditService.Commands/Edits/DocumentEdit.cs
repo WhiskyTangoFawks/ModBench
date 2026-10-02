@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Everything a document edit needs and nothing it may touch: the text, where the edited
-/// record sits in it, its schema, the envelope, the codec round trip as a function, and the nearest
-/// copy to its left of a cell that says nothing of where it sits (<see cref="CellGroupMove.CellToLookUp"/>).</summary>
+/// record sits in it, its schema, the envelope, the codec round trip as a function, and
+/// <see cref="CellGroupMove.CellToLookUp"/>'s nearest copy.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
