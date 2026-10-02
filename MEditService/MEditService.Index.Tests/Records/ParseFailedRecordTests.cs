@@ -17,6 +17,8 @@ public sealed class ParseFailedRecordTests
     private const string Origin = "ParseFailedFixtureMod";
     private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
     private const string Diagnosis = "did not have expected parameter type flag";
+    private const string DeletedNpcPluginName = "DeletedNpc.esp";
+    private const string DeletedNpc = "000800:DeletedNpc.esp";
 
     [Fact]
     public void Reconcile_KeepsTheUnreadableRecordInTheIndexWithItsDiagnosis()
@@ -164,6 +166,27 @@ public sealed class ParseFailedRecordTests
     }
 
     [Fact]
+    public void Reconcile_IndexesADeletedRecordWhoseFieldsAreAbsent_AsDeleted_NotParseFailed()
+    {
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
+
+        var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
+
+        Assert.Null(document.ParseDiagnosis);
+        Assert.Contains("\"MajorRecordFlagsRaw\": 32", document.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Reconcile_KeepsADeletedRecordThatStillHoldsFieldsItCannotRead_WithItsDiagnosis()
+    {
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
+
+        var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
+
+        Assert.NotNull(document.ParseDiagnosis);
+    }
+
+    [Fact]
     public void Reconcile_OfAPluginThatCannotBeOpenedAtAllStillReportsAPluginLoadFailure()
     {
         using var scratch = new Scratch(Fixture, corruptWholeFile: true);
@@ -209,6 +232,13 @@ public sealed class ParseFailedRecordTests
     // not their content.
     private sealed class Scratch : IDisposable
     {
+        internal static string DeletedNpcPlugin(Action<string, FormKey> write)
+        {
+            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-deletednpc-").FullName, DeletedNpcPluginName);
+            write(path, FormKey.Factory(DeletedNpc));
+            return path;
+        }
+
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 

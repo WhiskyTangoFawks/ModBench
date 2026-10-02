@@ -113,7 +113,7 @@ internal sealed class WriteTargets(
         CopySource? owned = source;
         try
         {
-            if (source.Identity(formKey) is not { } identity)
+            if (IdentityIn(source, formKey) is not { } identity)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
@@ -143,6 +143,11 @@ internal sealed class WriteTargets(
             RecordEditRefusal.RecordParseFailed,
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
+
+    /// <summary>A copy that reads a source-tree document beyond its own record, as an exterior cell's
+    /// worldspace, refuses naming that document.</summary>
+    internal static RecordEditResult RefuseUnreadableSourceTree(string formKey, string why) =>
+        RecordEditResult.Refused(RecordEditRefusal.RecordParseFailed, $"{formKey} cannot be copied: {why} Nothing was written.");
 
     // The six record gestures enter here first.
     internal RecordEditResult? RefuseUnlessTrackedAndLoaded(PluginAddress plugin, out SourceRepository? repository)
@@ -350,28 +355,36 @@ internal sealed class WriteTargets(
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
-    /// <summary>The nearest copy of <paramref name="formKey"/> left of <paramref name="plugin"/> that
-    /// <paramref name="says"/> accepts. A copy that cannot be read ends the walk, since one beyond it is
-    /// not the nearest.</summary>
-    internal string? NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says)
+    // A tree file named for the record that is no document refuses rather than reading as none.
+    private static RecordIdentity? IdentityIn(CopySource source, string formKey) =>
+        source.Identity(formKey)
+        ?? (source.Tree?.UnreadableDocumentFor(source.Plugin, formKey) is { } why
+            ? throw new InvalidDataException($"{source.Plugin.Name}'s document for {formKey} is no record document: {why}")
+            : null);
+
+    /// <summary>The nearest copy left of <paramref name="plugin"/> that <paramref name="says"/> accepts,
+    /// passing over by its header one holding a flag of <paramref name="passOver"/>. An unreadable copy
+    /// ends the walk.</summary>
+    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0)
     {
         var current = loadOrder.Current;
         var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
-        foreach (var left in current.Active.Take(index).Reverse())
+        foreach (var left in current.Active.Take(index).Reverse().Select(registered => registered.Key))
         {
-            using var source = new CopySource(left.Key, current, adapter, codec, schemaReflector);
+            using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
-                if (source.Identity(formKey) is not { } identity) continue;
+                if (IdentityIn(source, formKey) is not { } identity) continue;
+                if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) continue;
                 var body = source.Body(identity);
-                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return body;
+                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new LeftCopy.Found(body);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                return null;
+                return new LeftCopy.Unreadable(left.Name, formKey, source.Diagnose(ex));
             }
         }
-        return null;
+        return new LeftCopy.None();
     }
 
     // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the

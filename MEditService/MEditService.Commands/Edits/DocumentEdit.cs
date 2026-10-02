@@ -6,8 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Everything a document edit needs and nothing it may touch, with the nearest copy to the
-/// left of a cell whose own copy does not say where it sits.</summary>
+/// <summary>Everything a document edit needs and nothing it may touch, with the nearest copies to the
+/// left that a cell's place and a refill read.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
@@ -15,7 +15,8 @@ internal sealed record DocumentEditRequest(
     RecordEditEnvelope Envelope,
     GameRelease Release,
     Func<string, string> RoundTrip,
-    string? CellCopyOnTheLeft);
+    LeftCopy? CellCopyOnTheLeft,
+    LeftCopy? RefillCopyOnTheLeft);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
 /// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
@@ -47,6 +48,8 @@ internal static class DocumentEdit
         var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
         if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.CellCopyOnTheLeft, spelled) is { } cannot)
             return cannot;
+        if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
+            return unreadable;
         if (emptying != null) envelope = envelope with { Value = emptying.Flags };
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
@@ -66,7 +69,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
-        emptying?.EmptyFields(record, request.Schema);
+        emptying?.Apply(record, request.Schema, request.RefillCopyOnTheLeft);
         var prefix = move?.Apply(root) ?? request.Prefix;
 
         var started = envelope is { Op: RecordEditEnvelope.Add, Value: null or { ValueKind: JsonValueKind.Null } } && edited is JsonArray grown

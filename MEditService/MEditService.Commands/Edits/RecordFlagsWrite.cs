@@ -12,9 +12,11 @@ internal readonly record struct RecordFlagsWrite(long Held, long Next)
     {
         if (schema.IsHeader || column.Name != RecordHeaderFlags.Member || value is not { ValueKind: JsonValueKind.Number } requested)
             return null;
-        var held = record[RecordHeaderFlags.Member] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
-        return new(held, requested.GetInt64());
+        return new(HeldBy(record), requested.GetInt64());
     }
+
+    internal static long HeldBy(JsonObject record) =>
+        record[RecordHeaderFlags.Member] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
 
     internal bool Sets(long bit) => (Next & bit) != 0 && (Held & bit) == 0;
 

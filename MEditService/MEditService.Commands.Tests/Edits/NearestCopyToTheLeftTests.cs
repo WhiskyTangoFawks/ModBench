@@ -1,0 +1,280 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
+using MEditService.TestSupport;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Noggog;
+using static MEditService.Commands.Tests.TestSupport.Envelopes;
+using static MEditService.Commands.Tests.TestSupport.LoadOrderOfPlugins;
+
+namespace MEditService.Commands.Tests.Edits;
+
+public sealed class NearestCopyToTheLeftTests : IDisposable
+{
+    private const int Deleted = 0x0020, Persistent = 0x0400, PartialForm = 0x4000;
+
+    private static readonly FormKey TheNpc = new(Fallout4Esm, 0x900);
+    private static readonly FormKey TheCell = new(Fallout4Esm, 0x800);
+    private static readonly FormKey TheRef = new(Fallout4Esm, 0x901);
+
+    private readonly LoadOrderOfPlugins _plugins = new();
+    private Fallout4Mod? _edited;
+
+    public void Dispose() => _plugins.Dispose();
+
+    private static Action<Fallout4Mod> NpcCopy(int flags, string? editorId = null, float height = 0) => mod =>
+        mod.Npcs.Add(new Npc(TheNpc, Fallout4Release.Fallout4) { EditorID = editorId, HeightMax = height, MajorRecordFlagsRaw = flags });
+
+    private static Action<Fallout4Mod> CellCopy(int flags, string? editorId = null, float? water = null, Action<Cell>? also = null) => mod =>
+    {
+        var cell = new Cell(TheCell, Fallout4Release.Fallout4)
+        {
+            EditorID = editorId,
+            Flags = Cell.Flag.IsInteriorCell,
+            WaterHeight = water,
+            MajorRecordFlagsRaw = flags,
+        };
+        also?.Invoke(cell);
+        mod.Cells.Records.Add(BlockOf(cell));
+    };
+
+    private static Action<Cell> Placing(PlacedObject placed) => cell => cell.Temporary.Add(placed);
+
+    private void Load(params (Fallout4Mod Mod, bool Tracked)[] plugins)
+    {
+        _plugins.Load(plugins);
+        _edited = plugins[^1].Mod;
+    }
+
+    private Fallout4Mod Edited => _edited ?? throw new InvalidOperationException("Load the plugins first.");
+
+    private RecordEditResult WriteFlags(FormKey formKey, int raw) =>
+        _plugins.EditHandler.Edit(
+            Address(Edited), formKey.ToString(),
+            SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
+
+    private JsonObject Written(FormKey formKey, int raw)
+    {
+        var result = WriteFlags(formKey, raw);
+        Assert.True(result.Applied, result.Message);
+        return JsonNode.Parse(_plugins.Text(Edited, formKey)).Require().AsObject();
+    }
+
+    [Fact]
+    public void ClearingDeleted_FillsTheCopysOwnFields_FromTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal("Guy", undeleted["EditorID"]?.GetValue<string>());
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Middle.esp", NpcCopy(Deleted)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatCannotBeRead()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(Deleted));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (middle, false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+        _plugins.Rewrite(middle, path => DeletedNpcPlugin.WriteHoldingFields(path, TheNpc, Fallout4Esm));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_PassesOverADeletedCopyToItsLeft_ThatATrackedPluginHolds()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Middle.esp", NpcCopy(Deleted)), true),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_TakesTheNearestCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.9f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_OnAPlacedRecord_FillsItFromTheCopyToItsLeft()
+    {
+        var rock = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Rock", Position = new P3Float(1, 2, 3) };
+        var deleted = new PlacedObject(TheRef, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted };
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: Placing(rock))), false),
+            (Plugin("Override.esp", CellCopy(0, "Inside", also: Placing(deleted))), true));
+
+        var undeleted = Written(TheRef, 0);
+
+        Assert.Equal("Rock", undeleted["EditorID"]?.GetValue<string>());
+        Assert.Equal("1, 2, 3", undeleted["Position"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ClearingPartialForm_FillsTheCopysOwnFieldsAndEditorId_PassingOverAPartialFormToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f)), false),
+            (Plugin("Middle.esp", CellCopy(PartialForm, "Middle", 4f)), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Mine", 3f)), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.Equal("Inside", whole["EditorID"]?.GetValue<string>());
+        Assert.Equal(5f, whole["WaterHeight"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingPartialForm_RemovesAFieldTheCopyToItsLeftLacks()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", 3f)), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.DoesNotContain(whole, p => p.Key == "WaterHeight");
+    }
+
+    [Fact]
+    public void ClearingPartialForm_KeepsTheCopysRecordHeaderRowsAndChildren()
+    {
+        var theirs = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Theirs" };
+        var mine = new PlacedObject(new FormKey(ModKey.FromFileName("Override.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Mine" };
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f, cell => { cell.VersionControl = 3; cell.Temporary.Add(theirs); })), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => { cell.VersionControl = 7; cell.Temporary.Add(mine); })), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.Equal(7, whole["VersionControl"]?.GetValue<int>());
+        Assert.Equal([mine.FormKey.ToString()], whole["Temporary"].Require().AsArray().Select(r => r?["FormKey"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void SettingPartialForm_OnADeletedCopy_TakesItsEditorIdFromTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f)), false),
+            (Plugin("Override.esp", CellCopy(Deleted)), true));
+
+        var partial = Written(TheCell, PartialForm);
+
+        Assert.Equal("Inside", partial["EditorID"]?.GetValue<string>());
+        Assert.DoesNotContain(partial, p => p.Key == "WaterHeight");
+    }
+
+    [Fact]
+    public void ClearingDeleted_WhenTheNearestCopyToItsLeftCannotBeRead_IsRefusedNamingItsPlugin_AndWritesNothing()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (middle, true),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+        _plugins.MakeUnreadable(middle, TheNpc, "npc_", "0.9", "\"tall\"");
+        var before = _plugins.Text(Edited, TheNpc);
+
+        var result = WriteFlags(TheNpc, 0);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("Middle.esp's copy of", result.Message, StringComparison.Ordinal);
+        Assert.Contains("that is not Deleted", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _plugins.Text(Edited, TheNpc));
+    }
+
+    [Fact]
+    public void ClearingDeleted_WhenTheNearestCopyToItsLeftIsNoJsonDocument_IsRefusedNamingItsPlugin()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (middle, true),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+        _plugins.MakeUnreadable(middle, TheNpc, "npc_", "{", "[");
+
+        var result = WriteFlags(TheNpc, 0);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("Middle.esp's copy of", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WhenItsCopyToTheLeftCannotBeRead_IsRefusedNamingItsPlugin()
+    {
+        var middle = Plugin("Middle.esp", CellCopy(0, "Inside", 4f));
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (middle, true),
+            (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
+        _plugins.MakeUnreadable(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
+
+        var result = WriteFlags(TheCell, PartialForm);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("Middle.esp's copy of", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingPersistent_OnARecordWhoseCellSaysNotWhereItSits_WhenTheCellsCopyToTheLeftCannotBeRead_IsRefusedNamingItsPlugin()
+    {
+        var middle = Plugin("Middle.esp", CellCopy(0, "Inside", 4f));
+        var rock = new PlacedObject(new FormKey(ModKey.FromFileName("Override.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Rock" };
+        var placing = new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" };
+        placing.Temporary.Add(rock);
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (middle, true),
+            (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(placing))), true));
+        _plugins.MakeUnreadable(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
+
+        var result = WriteFlags(rock.FormKey, Persistent);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("Middle.esp's copy of", result.Message, StringComparison.Ordinal);
+    }
+
+    private static CellBlock BlockOf(Cell cell)
+    {
+        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+        block.SubBlocks.Add(subBlock);
+        return block;
+    }
+}

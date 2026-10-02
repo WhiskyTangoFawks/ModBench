@@ -69,7 +69,7 @@ public sealed class EditRecordHandler
         // comes back intact.
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
-        string? cellCopyOnTheLeft = null;
+        LeftCopy? cellCopyOnTheLeft = null;
         if (unit.IsEmbedded)
         {
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
@@ -96,11 +96,16 @@ public sealed class EditRecordHandler
         if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
             cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
 
+        var refillCopyOnTheLeft = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema)
+            ? _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema))
+            : null;
+
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
-        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft);
+        var request = new DocumentEditRequest(
+            text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft, refillCopyOnTheLeft);
 
         string newText;
         RecordEditResult? refused;

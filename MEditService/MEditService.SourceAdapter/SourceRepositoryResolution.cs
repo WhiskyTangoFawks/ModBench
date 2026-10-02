@@ -325,8 +325,8 @@ public sealed partial class SourceRepository
                 .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
-    /// holds it. The block levels are directories, which is why only the repository reads them back
-    /// (ADR-0014 invariant 5).</summary>
+    /// holds it. Only the repository reads block directories back (ADR-0014 invariant 5). A
+    /// worldspace document declaring no FormKey throws.</summary>
     public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
@@ -340,7 +340,8 @@ public sealed partial class SourceRepository
         if (!path.UnderWorldspaceBlockLevels) return null;
 
         var worldspaceDocument = Path.Combine(_modFolder, path.WorldspaceDirectory, RecordDataFileName);
-        if (FormKeyDeclaredBy(worldspaceDocument, plugin.Name) is not { } worldspace) return null;
+        var worldspace = FormKeyDeclaredBy(worldspaceDocument, plugin.Name)
+            ?? throw new UnreadableSourceDocumentException(worldspaceDocument, "it declares no FormKey, so the worldspace its exterior cells sit in is unknown");
 
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);

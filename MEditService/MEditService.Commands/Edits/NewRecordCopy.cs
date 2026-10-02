@@ -25,7 +25,14 @@ internal sealed class NewRecordCopy
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
-        return CopyAsNewRecord(copy, destinationPlugin);
+        try
+        {
+            return CopyAsNewRecord(copy, destinationPlugin);
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return WriteTargets.RefuseUnreadableSourceTree(formKey, ex.Message);
+        }
     }
 
     private RecordEditResult CopyAsNewRecord(WriteTargets.CopyTarget copy, PluginAddress destinationPlugin)
