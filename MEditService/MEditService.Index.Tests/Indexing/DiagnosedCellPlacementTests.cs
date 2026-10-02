@@ -17,6 +17,9 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
     private const string CellFormKey = "000800:Diagnosed.esp";
     private const string PersistentRef = "000801:Diagnosed.esp";
     private const string TemporaryRef = "000802:Diagnosed.esp";
+    private const string Landscape = "000803:Diagnosed.esp";
+    private const string Navmesh = "000804:Diagnosed.esp";
+    private const string NavmeshDiagnosis = "the codec refused this navmesh";
     private static readonly PluginAddress Key = new(Plugin, PluginOrigin.DataDirectory);
 
     // Any real binary: the adapter double below answers the documents, the binary only the open.
@@ -58,6 +61,18 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
         Assert.NotNull(temporary);
         Assert.Equal(CellFormKey, temporary.Value.ParentCell);
         Assert.Equal("temporary", temporary.Value.PlacementGroup);
+    }
+
+    [Fact]
+    public void ACellTheCodecRefuses_StillListsItsLandscapeAndNavmeshesAmongItsTemporaryChildRecords_EachWithItsOwnDiagnosis()
+    {
+        using var index = Indexed(cellDiagnosis: "the codec refused this cell");
+
+        var temporary = index.RequireReads().GetCellReferences(Key, CellFormKey).Temporary;
+
+        Assert.Equal(
+            [(TemporaryRef, "refr", null), (Landscape, "land", null), (Navmesh, "navm", NavmeshDiagnosis)],
+            temporary.Select(t => (t.FormKey, t.RecordType, t.ParseDiagnosis)));
     }
 
     // The same fixture with the cell readable, so what the diagnosis costs is legible: the grid and
@@ -141,7 +156,13 @@ public sealed class DiagnosedCellPlacementTests : IDisposable
                 cellDiagnosis is null ? ReadableCell : RefusedCell,
                 cellDiagnosis,
                 new CellStructure("000900:Diagnosed.esp", 3, 4, 1, 2, IsInterior: false),
-                [new PlacedInCell(PersistentRef, "persistent"), new PlacedInCell(TemporaryRef, "temporary")]),
+                [
+                    new CellChild(PersistentRef, "Persistent", 0), new CellChild(TemporaryRef, "Temporary", 0),
+                    new CellChild(Landscape, "Landscape", 0), new CellChild(Navmesh, "NavigationMeshes", 0),
+                ]),
+            new PluginDocument("refr", TemporaryRef, $$"""{"FormKey": "{{TemporaryRef}}"}"""),
+            new PluginDocument("land", Landscape, $$"""{"FormKey": "{{Landscape}}"}"""),
+            new PluginDocument("navm", Navmesh, $$"""{"FormKey": "{{Navmesh}}"}""", NavmeshDiagnosis),
         ];
 
         public void Dispose()

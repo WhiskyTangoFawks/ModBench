@@ -38,9 +38,9 @@ internal sealed class MutagenModDocuments(
     private readonly List<RecordTypeFailure> _failures = [];
     private readonly Lazy<Dictionary<string, CellRecord>> _cells = new(() => CellsIn(mod));
 
-    // Where a cell sits and what its two placement groups hold, both read off the GRUP hierarchy so
-    // neither depends on the codec having read the cell.
-    internal readonly record struct CellRecord(CellStructure Structure, IReadOnlyList<PlacedInCell> Placed);
+    // Where a cell sits and what it holds, both read off the GRUP hierarchy so neither depends on the
+    // codec having read the cell.
+    internal readonly record struct CellRecord(CellStructure Structure, IReadOnlyList<CellChild> Children);
 
     public PluginDocument Header => new(
         PluginHeader.RecordType,
@@ -125,7 +125,7 @@ internal sealed class MutagenModDocuments(
     // still belongs somewhere and still holds what it holds (ADR-0005).
     private PluginDocument Placed(PluginDocument document, string formKey) =>
         _cells.Value.TryGetValue(formKey, out var cell)
-            ? document with { Cell = cell.Structure, Contents = cell.Placed }
+            ? document with { Cell = cell.Structure, Contents = cell.Children }
             : document;
 
     // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
@@ -181,21 +181,10 @@ internal sealed class MutagenModDocuments(
     }
 
     private static void Record(Dictionary<string, CellRecord> cells, object cell, CellStructure structure) =>
-        cells[FormKeyOf(cell)] = new CellRecord(structure, [.. PlacedIn(cell)]);
-
-    // Every placed record the cell's two groups hold, whatever its flavour: the placement table
-    // covers a hazard or a projectile the same as a plain reference, and no schema is consulted.
-    private static IEnumerable<PlacedInCell> PlacedIn(object cell)
-    {
-        foreach (var (slot, group) in new[] { ("Persistent", "persistent"), ("Temporary", "temporary") })
-        {
-            foreach (var placed in List(cell, slot))
-            {
-                if (placed is IMajorRecordGetter record)
-                    yield return new PlacedInCell(record.FormKey.ToString(), group);
-            }
-        }
-    }
+        cells[FormKeyOf(cell)] = new CellRecord(
+            structure,
+            [.. ContainerChildFields.EnumerateChildren((IMajorRecordGetter)cell)
+                .Select(c => new CellChild(c.Child.FormKey.ToString(), c.SlotName, c.SlotIndex))]);
 
     private static string FormKeyOf(object cell) => ((IMajorRecordGetter)cell).FormKey.ToString();
 

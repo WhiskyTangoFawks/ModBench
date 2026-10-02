@@ -168,23 +168,16 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
     }
 
-    // ADR-0005: what a cell's two placement groups hold. Read off its own document, since the tree
-    // files a placed record inside its cell rather than beside it.
-    private IReadOnlyList<PlacedInCell>? ContentsOf(string recordType, string text)
+    // ADR-0005: what a cell holds. Read off its own document, since the tree files a child record
+    // inside its cell rather than beside it.
+    private IReadOnlyList<CellChild>? ContentsOf(string recordType, string text)
     {
         if (!_containers.IsCell(recordType)) return null;
 
-        var containerType = _containers.ContainerTypeOf(recordType);
         using var document = JsonDocument.Parse(text);
         return [.. _containers.ChildrenOf(recordType, document.RootElement)
-            .Where(c => PlacementGroups.Contains((containerType, c.SlotName)))
-            .Select(c => new PlacedInCell(c.FormKey, c.SlotName.ToLowerInvariant()))];
+            .Select(c => new CellChild(c.FormKey, c.SlotName, c.SlotIndex))];
     }
-
-    // The two slots the placement table covers, named here rather than reached for through Records:
-    // the tree reader is upstream of the index, not a caller of it.
-    private static readonly HashSet<(string ParentType, string Slot)> PlacementGroups =
-        [("Cell", "Persistent"), ("Cell", "Temporary")];
 
     private const string MutagenObjectTypeMember = "MutagenObjectType";
 

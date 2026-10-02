@@ -99,10 +99,8 @@ public sealed class PluginDocumentReadTests
         Assert.Equal(new CellStructure("000800:Documents.esp", 3, 4, 1, 2, IsInterior: false), cell.Cell);
     }
 
-    // ADR-0005: the two placement groups are the GRUP's answer, not the codec's, so they travel
-    // beside a cell's document rather than only inside it.
     [Fact]
-    public void OpenDocuments_GivesACellTheRefsItsGrupGroupsHold()
+    public void OpenDocuments_GivesACellEveryChildRecordItsGrupHolds_BesideItsDocument()
     {
         using var data = CellFixture("documents-contents", out var extCellFormKey);
         var path = Path.Combine(data.DataFolder, PluginName);
@@ -113,8 +111,13 @@ public sealed class PluginDocumentReadTests
 
         Assert.NotNull(cell.Contents);
         Assert.Equal(
-            [("000802:Documents.esp", "persistent"), ("000803:Documents.esp", "temporary")],
-            cell.Contents.Select(c => (c.FormKey, c.PlacementGroup)).ToList());
+            [
+                new CellChild("000802:Documents.esp", "Persistent", 0),
+                new CellChild("000803:Documents.esp", "Temporary", 0),
+                new CellChild("000804:Documents.esp", "Landscape", 0),
+                new CellChild("000805:Documents.esp", "NavigationMeshes", 0),
+            ],
+            cell.Contents.OrderBy(c => c.FormKey, StringComparer.Ordinal));
     }
 
     private static PluginFixtureData CellFixture(string prefix, out string extCellFormKey)
@@ -128,6 +131,8 @@ public sealed class PluginDocumentReadTests
                 formKey = cell.FormKey.ToString();
                 cell.Persistent.Add(new PlacedObject(mod) { EditorID = "kept" });
                 cell.Temporary.Add(new PlacedArrow(mod) { EditorID = "arrow" });
+                cell.Landscape = new Landscape(mod);
+                cell.NavigationMeshes.Add(new NavigationMesh(mod));
                 var subBlock = new WorldspaceSubBlock { BlockNumberX = 1, BlockNumberY = 2 };
                 subBlock.Items.Add(cell);
                 var block = new WorldspaceBlock { BlockNumberX = 3, BlockNumberY = 4 };

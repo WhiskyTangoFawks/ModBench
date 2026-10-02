@@ -11,9 +11,9 @@ public readonly record struct CellStructure(
     public static CellStructure Interior(int? block, int? subBlock) => new(null, block, null, subBlock, null, IsInterior: true);
 }
 
-/// <summary>One placed record a cell's GRUP holds, and which of its two groups (ADR-0005). The
-/// parentage no placed record's own document carries.</summary>
-public readonly record struct PlacedInCell(string FormKey, string PlacementGroup);
+/// <summary>One child record a cell's GRUP holds, the member Mutagen reads it into, and its index
+/// there (ADR-0005). The parentage no child record's own document carries.</summary>
+public readonly record struct CellChild(string FormKey, string Slot, int SlotIndex);
 
 /// <summary>Which container's document carries a record inline, and the slot it sits in: a placed
 /// reference in its cell, a response in its topic, a topic in its quest.</summary>
@@ -27,7 +27,7 @@ public sealed record PluginDocument(
     string Text,
     string? ParseDiagnosis = null,
     CellStructure? Cell = null,
-    IReadOnlyList<PlacedInCell>? Contents = null);
+    IReadOnlyList<CellChild>? Contents = null);
 
 /// <summary>A record type whose enumeration could not be finished, so the plugin's rows for it are
 /// whatever was reachable before the throw.</summary>

@@ -237,42 +237,35 @@ internal sealed class PluginIngest
         // ADR-0005: where a cell sits and what it holds come from the GRUP hierarchy, so a cell whose
         // document the codec refused still lists, still holds its contents, and only loses its grid.
         JsonElement? carried = document.ParseDiagnosis is null ? root : null;
-        var placements = Placements(document, carried);
+        var containerType = _containers.ContainerTypeOf(document.RecordType);
+        var placements = Placements(document, containerType, carried);
         CellLocationRow? cellLocation = document.Cell is { } structure
             ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
             : null;
 
-        // The graph the codec never read answers nothing about references or containment.
-        if (document.ParseDiagnosis is not null)
-        {
-            return new PreparedRecord(
-                document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), [], [],
-                placements, cellLocation, editorId, document.ParseDiagnosis);
-        }
-
         // References are read off the document, never a live object: the document is the model, and
-        // what Referenced-By answers is what the source file holds.
-        var refs = Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
+        // what Referenced-By answers is what the source file holds. A refused document holds none.
+        List<FormReferenceRow> refs = carried is null
+            ? []
+            : Rows(_containers, root, schema, document.FormKey, editorId, document.RecordType);
 
-        var childRows = new List<ContainerChildRow>();
-        var containerType = _containers.ContainerTypeOf(document.RecordType);
-        foreach (var child in _containers.ChildrenOf(document.RecordType, root))
-        {
-            // What placement and cell_location already carry stays out of container_child.
-            if (CoveredByPlacementTables.Contains((containerType, child.SlotName))) continue;
-
-            childRows.Add(new ContainerChildRow(
-                child.FormKey, document.FormKey, document.RecordType, child.SlotName, child.SlotIndex));
-        }
+        // A refused document holds no children either, so the GRUP answers for it. What placement and
+        // cell_location already carry stays out of container_child.
+        var children = carried is null
+            ? (document.Contents ?? []).Select(c => (c.FormKey, c.Slot, c.SlotIndex))
+            : _containers.ChildrenOf(document.RecordType, root).Select(c => (c.FormKey, Slot: c.SlotName, c.SlotIndex));
+        List<ContainerChildRow> childRows = [.. children
+            .Where(c => !CoveredByPlacementTables.Contains((containerType, c.Slot)))
+            .Select(c => new ContainerChildRow(c.FormKey, document.FormKey, document.RecordType, c.Slot, c.SlotIndex))];
 
         return new PreparedRecord(
             document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), refs, childRows,
-            placements, cellLocation, editorId, ParseDiagnosis: null);
+            placements, cellLocation, editorId, document.ParseDiagnosis);
     }
 
     // One row per placed record the cell's groups hold, parentage from beside the document and
     // position from the child node the document carries — null where it carries none.
-    private List<PlacementRow> Placements(PluginDocument document, JsonElement? root)
+    private List<PlacementRow> Placements(PluginDocument document, string containerType, JsonElement? root)
     {
         if (document.Contents is not { Count: > 0 } contents) return [];
 
@@ -282,11 +275,13 @@ internal sealed class PluginIngest
                 .ToDictionary(g => g.Key, g => g.First().Node, StringComparer.Ordinal)
             : [];
 
-        return [.. contents.Select(placed => PlacementWalker.Placement(
-            placed.FormKey,
-            nodes.TryGetValue(placed.FormKey, out var node) ? node : null,
-            document.FormKey,
-            placed.PlacementGroup))];
+        return [.. contents
+            .Where(placed => CoveredByPlacementTables.Contains((containerType, placed.Slot)))
+            .Select(placed => PlacementWalker.Placement(
+                placed.FormKey,
+                nodes.TryGetValue(placed.FormKey, out var node) ? node : null,
+                document.FormKey,
+                placed.Slot.ToLowerInvariant()))];
     }
 
     private static void AppendPrepared(
