@@ -33,7 +33,7 @@ internal static class ModHeaderSchema
         var headerGetterType = modHeaderProp.PropertyType;
         var pathPrefix = $"{modHeaderProp.Name}.";
         var columns = new List<ColumnSpec>();
-        foreach (var (typeName, member, headerLabel, readOnlyReason) in game.Annotations.PluginHeaderMembers)
+        foreach (var (typeName, member, headerLabel, readOnlyReason, isRecordFormKey) in game.Annotations.PluginHeaderMembers)
         {
             if (headerGetterType.Name != typeName || headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance) is not { } prop)
             {
@@ -50,6 +50,7 @@ internal static class ModHeaderSchema
                     DisplayLabel = headerLabel ?? column.Field.DisplayLabel,
                     IsRecordHeaderMember = headerLabel != null,
                     ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason,
+                    IsRecordFormKey = isRecordFormKey,
                 },
             });
         }

@@ -28,7 +28,9 @@ public sealed record SubFieldSpec(
     // See FieldMetadata.ReadOnlyReason.
     string? ReadOnlyReason = null,
     // See FieldMetadata.IsRecordHeaderMember.
-    bool IsRecordHeaderMember = false)
+    bool IsRecordHeaderMember = false,
+    // See FieldMetadata.IsRecordFormKey.
+    bool IsRecordFormKey = false)
 {
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
     public bool IsArray => ApiType == "array";
@@ -50,6 +52,7 @@ public sealed record SubFieldSpec(
             Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(reason), StringComparer.Ordinal),
             Default: Default,
             ReadOnlyReason: reason,
-            IsRecordHeaderMember: IsRecordHeaderMember);
+            IsRecordHeaderMember: IsRecordHeaderMember,
+            IsRecordFormKey: IsRecordFormKey);
     }
 }

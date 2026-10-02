@@ -7,14 +7,11 @@ import { toStr, type Column } from './recordUtils';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import type { FocusedCell } from './DiffRow';
-import type { ColumnKey, FieldMetadata, PathHop } from './types';
+import type { ColumnKey, PathHop } from './types';
 import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
-// xEdit's label for the row that shows and takes the FormKey (xedit.md, divergence 16).
-const FORM_ID_LABEL = 'FormID';
-export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.${FORM_ID_LABEL}`;
-export const isFormIdRow = (meta: FieldMetadata) => meta.displayLabel === FORM_ID_LABEL;
+export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
 // The document member a record's FormID is (editor.md, The record header, story 2).
 export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
 const INDENT = 24;
@@ -118,6 +115,7 @@ export function RecordHeaderRow({
 }
 
 interface FormIdRowProps {
+  label: string;
   readOnlyReason: string | null | undefined;
   columns: Column[];
   collapsedColumns: Set<ColumnKey>;
@@ -131,15 +129,15 @@ interface FormIdRowProps {
 
 /** editor.md, The record header, story 2: each column reads its own copy's FormKey. */
 export function FormIdRow({
-  readOnlyReason, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
+  label, readOnlyReason, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
 }: Readonly<FormIdRowProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties => ({ ...baseCell, ...columnStyle(key) });
   return (
     <tr style={rowStyle(focusedCell, FORM_ID_ROW)}>
       <DiskCell
         style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
-        onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText={FORM_ID_LABEL}
-      >{FORM_ID_LABEL}</DiskCell>
+        onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText={label}
+      >{label}</DiskCell>
       {columns.map(({ key, override }) => collapsedColumns.has(key)
         ? <td key={key} style={cellStyle(key)} />
         : (

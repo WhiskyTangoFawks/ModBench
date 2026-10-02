@@ -25,7 +25,15 @@ internal static class RecordHeaderColumns
             var prop = ReflectedTypes.MostDerived(declared);
             if (ColumnReflection.BuildColumn(prop, prop.Name, game, logger) is not { } column) continue;
 
-            var header = column with { Field = column.Field with { DisplayLabel = label, IsRecordHeaderMember = true } };
+            var header = column with
+            {
+                Field = column.Field with
+                {
+                    DisplayLabel = label,
+                    IsRecordHeaderMember = true,
+                    IsRecordFormKey = ReflectedTypes.IsFormKey(prop.PropertyType),
+                },
+            };
             columns.Add(member == FlagsMember ? WithFlagViews(header, getterType, declarations, game) : header);
         }
         return columns;

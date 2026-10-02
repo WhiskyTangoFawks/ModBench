@@ -59,4 +59,8 @@ public record FieldMetadata(
     string? ReadOnlyReason = null,
 
     // One of the record header's members, which xEdit gathers under its Record Header row.
-    bool IsRecordHeaderMember = false);
+    bool IsRecordHeaderMember = false,
+
+    // The header member that shows and takes the record's FormKey: xEdit's FormID (xedit.md,
+    // divergence 16).
+    bool IsRecordFormKey = false);

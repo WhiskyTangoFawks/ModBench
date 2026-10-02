@@ -14,7 +14,7 @@ import type { CompareResult, PluginLoadFailure } from './types';
 const FORM_KEY = '000001:Fallout4.esm';
 const TOOLTIP = 'Written; waiting for the disk to confirm';
 const nameMeta = fieldMeta({ name: 'Name', type: 'string' });
-const formIdMeta = fieldMeta({ name: 'FormKey', type: 'string', displayLabel: 'FormID', isRecordHeaderMember: true });
+const formIdMeta = fieldMeta({ name: 'FormKey', type: 'string', displayLabel: 'FormID', isRecordHeaderMember: true, isRecordFormKey: true });
 const formId = { metadata: formIdMeta, value: FORM_KEY };
 
 function recordNamed(name: string): CompareResult {

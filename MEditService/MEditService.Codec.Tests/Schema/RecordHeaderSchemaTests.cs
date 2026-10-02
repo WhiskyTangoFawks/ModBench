@@ -89,6 +89,14 @@ public sealed class RecordHeaderSchemaTests
         Assert.Equal("FormKey", formId.PropertyName);
     }
 
+    [Theory]
+    [InlineData("npc_", "FormKey")]
+    [InlineData("header", "FormID")]
+    public void TheOneMemberReadAsTheRecordsFormKey_IsItsFormID(string table, string member)
+    {
+        Assert.Equal([member], Schema(table).RecordColumns.Where(c => c.Field.IsRecordFormKey).Select(c => c.Name));
+    }
+
     [Fact]
     public void VersionControlInfo1_IsAColumnWideEnoughForAllThirtyTwoBits()
     {

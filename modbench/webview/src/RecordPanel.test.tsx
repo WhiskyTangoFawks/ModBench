@@ -2061,14 +2061,14 @@ describe('RecordPanel — the Record Header', () => {
     name: 'MajorRecordFlagsRaw', type: 'int', displayLabel: 'Record Flags',
     enumMembers: [{ value: 'Deleted', bitValue: '32' }, { value: 'Persistent', bitValue: '1024' }],
   });
-  const formKeyMeta = header({ name: 'FormKey', type: 'string', displayLabel: 'FormID' });
+  const formKeyMeta = (displayLabel = 'FormID') => header({ name: 'FormKey', type: 'string', displayLabel, isRecordFormKey: true });
   const vciMeta = header({ name: 'VersionControl', type: 'int', displayLabel: 'Version Control Info 1' });
-  const native = (formKey: string, editorId: string | null): CompareResult => compareResultFixture({
+  const native = (formKey: string, editorId: string | null, formIdLabel?: string): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
         formKey, plugin: 'MyMod.esp', isWinner: true, editorId,
         fields: [
-          { metadata: flagsMeta, value: 1024 }, { metadata: formKeyMeta, value: formKey },
+          { metadata: flagsMeta, value: 1024 }, { metadata: formKeyMeta(formIdLabel), value: formKey },
           { metadata: vciMeta, value: 5 }, { metadata: nameMeta, value: 'A Name' },
         ],
       }),
@@ -2080,7 +2080,9 @@ describe('RecordPanel — the Record Header', () => {
       diffNode({ fieldName: 'Name', values: { 'MyMod.esp': 'A Name' }, winnerColumn: 'MyMod.esp' }),
     ],
   });
-  const pluginHeaderFormId = header({ name: 'FormID', type: 'int', displayLabel: 'FormID', readOnlyReason: 'names the plugin itself' });
+  const pluginHeaderFormId = header({
+    name: 'FormID', type: 'int', displayLabel: 'FormID', readOnlyReason: 'names the plugin itself', isRecordFormKey: true,
+  });
   const pluginHeader = (): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({
@@ -2112,6 +2114,14 @@ describe('RecordPanel — the Record Header', () => {
 
     expect(rowLabels(container)).toEqual(['Record Header', 'Record Flags', 'FormID', 'Version Control Info 1', 'Name']);
     expect(formIdCell(container).textContent).toBe('MovedNpc [000800:MyMod.esp]');
+  });
+
+  it('reads the FormKey in the row the metadata marks as the record\'s FormKey, under the label it gives', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc', 'Form Key'), { plugins: tracked });
+    await waitFor(() => screen.getByText('A Name'));
+
+    expect(cellOf(container, 'Form Key').textContent).toBe('MovedNpc [000800:MyMod.esp]');
   });
 
   it('collapses to its own row, hiding the header members', async () => {

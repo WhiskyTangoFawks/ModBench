@@ -656,6 +656,7 @@ export interface components {
             default?: unknown;
             readOnlyReason?: string | null;
             isRecordHeaderMember: boolean;
+            isRecordFormKey: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

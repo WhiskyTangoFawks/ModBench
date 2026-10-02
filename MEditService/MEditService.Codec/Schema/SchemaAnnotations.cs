@@ -14,6 +14,12 @@ public enum KnownDefectEffect
     MemberReadOnly,
 }
 
+/// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
+/// record header member, why a write reaching it is refused, and whether it reads as the header's
+/// FormKey.</summary>
+internal sealed record PluginHeaderMember(
+    string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false);
+
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
@@ -67,9 +73,8 @@ internal sealed record SchemaAnnotations(
     // interface it has.
     IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers,
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
-    // header under xEdit's labels, then the rest, with why a write reaching one is refused. No
-    // interface over every game's ModHeader names them.
-    IReadOnlyList<(string TypeName, string MemberName, string? HeaderLabel, string? ReadOnlyReason)> PluginHeaderMembers)
+    // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
+    IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -111,16 +116,16 @@ internal sealed record SchemaAnnotations(
 
     // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
     // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
-    private static (string, string, string?, string?)[] PluginHeaderMembersOf(string modHeaderGetter) =>
+    private static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
     [
-        (modHeaderGetter, "Flags", "Record Flags", null),
-        (modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly),
-        (modHeaderGetter, "Version", "Version Control Info 1", null),
-        (modHeaderGetter, "FormVersion", "Form Version", null),
-        (modHeaderGetter, "Version2", "Version Control Info 2", null),
-        (modHeaderGetter, "Author", null, null),
+        new(modHeaderGetter, "Flags", "Record Flags"),
+        new(modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
+        new(modHeaderGetter, "Version", "Version Control Info 1"),
+        new(modHeaderGetter, "FormVersion", "Form Version"),
+        new(modHeaderGetter, "Version2", "Version Control Info 2"),
+        new(modHeaderGetter, "Author"),
         // Content-derived at compile time (ADR-0008).
-        (modHeaderGetter, PluginHeader.MastersFieldName, null, "masters are wholly content-derived at compile time"),
+        new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
@@ -250,9 +255,8 @@ internal sealed record SchemaAnnotations(
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // This repo builds no Skyrim schema, so a label, defect, condition or keyed-array row
-            // written here could not be validated against the assembly it describes. Empty until one
-            // can be built.
+            // This build references no Skyrim assembly, so Validate checks these rows only once one
+            // loads. A label, defect, condition or keyed-array row is found from a built schema.
             EnumMemberLabels: [],
             KnownDefects: [],
             SiblingsInUse: [],
