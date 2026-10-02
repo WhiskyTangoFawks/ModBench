@@ -1,0 +1,24 @@
+# Open a mod's conflict table, and follow the disk while it is open.
+...@../styles
+shape: sequence_diagram
+instanceloader: @../target-architecture.modbench_driven.instanceloader
+instanceloader.label: Instance loader
+mods: @../target-architecture.modbench_driving.mods
+mods.label: Mods
+instanceadapter: @../target-architecture.modbench_driven.instanceadapter
+instanceadapter.label: Instance adapter
+
+instanceloader -> mods: "value: mod order, each path's providers, Overwrite's files" {class: loadorder}
+mods."the rows and the columns"
+mods -> instanceloader: "which copies are the same: the files in the mod's file order conflicts" {class: loadorder}
+instanceloader."sizes first; an answer it remembers is not read again"
+instanceloader -> instanceadapter: "get: the content digest of each copy whose size matches another's" {class: loadorder}
+instanceadapter -> instanceloader: "a content digest for each copy, or the reason it could not be read" {class: loadorder}
+instanceloader -> mods: "for each file, which copies are the same, or the reason a copy could not be read" {class: loadorder}
+mods."each cell's state and value"
+
+changed: "the disk changed" {
+  instanceloader -> mods: "load-instance: value" {class: loadorder}
+  mods -> instanceloader: "which copies are the same: the files in the mod's file order conflicts" {class: loadorder}
+  instanceloader -> mods: "for each file, which copies are the same, or the reason a copy could not be read" {class: loadorder}
+}
