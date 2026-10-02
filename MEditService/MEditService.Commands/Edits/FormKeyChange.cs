@@ -59,33 +59,17 @@ internal sealed class FormKeyChange(
         if (targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget with { Path = Member };
 
-        // A tree not as this gesture needs it is a refusal (ADR-0014 invariant 4); a filesystem fault is a
-        // write failure; anything else is a bug. Only the transaction writes.
         var transaction = new SourceRepository.SourceTransaction();
-        try
-        {
-            if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
-                is { } refusedSelf) return refusedSelf;
-            WriteTargetRewrite(
-                transaction, plugin,
-                targetRewrite ?? throw new UnreachableException("ComputeTargetRewrite neither refused nor computed a target."),
-                targetFormKey);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
-        {
-            return RecordEditResult.Refused(
-                ex is AmbiguousSourceUnitException ? RecordEditRefusal.AmbiguousSourceUnit : RecordEditRefusal.SourceUnitNotFound,
-                RollBackFailedChange(transaction, repository, formKey, targetFormKey, ex));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new IOException(RollBackFailedChange(transaction, repository, formKey, targetFormKey, ex), ex);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            logger.LogError(ex, "{Report}", RollBackFailedChange(transaction, repository, formKey, targetFormKey, ex));
-            throw;
-        }
+        if (SourceCommit.Write(transaction, repository, logger, $"Changing the FormID of {formKey} to {targetFormKey} failed.", () =>
+            {
+                if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
+                    is { } refusedSelf) return refusedSelf;
+                WriteTargetRewrite(
+                    transaction, plugin,
+                    targetRewrite ?? throw new UnreachableException("ComputeTargetRewrite neither refused nor computed a target."),
+                    targetFormKey);
+                return null;
+            }) is { } refused) return refused;
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -94,51 +78,6 @@ internal sealed class FormKeyChange(
                 formKey, targetFormKey, plugin.Name, plugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
-    }
-
-    // Only the tree is put back; the next snapshot lands the restored files. Paths are relative to
-    // the mod folder, the form the Source Control panel lists.
-    private string RollBackFailedChange(
-        SourceRepository.SourceTransaction transaction, SourceRepository repository,
-        string oldFormKey, string newFormKey, Exception cause)
-    {
-        var (unrestored, relativeError) = transaction.Rollback(cause, repository);
-        if (unrestored.Count > 0)
-        {
-            logger.LogWarning(
-                "Rolling back the failed FormID change of {OldFormKey} left {Count} path(s) as they stood: {Paths}",
-                oldFormKey, unrestored.Count,
-                string.Join("; ", unrestored.Select(u => $"{u.FullPath} [{u.Reason}{(u.Error is null ? "" : $": {u.Error}")}]")));
-        }
-
-        var sentences = new List<string>
-        {
-            $"Changing the FormID of {oldFormKey} to {newFormKey} failed.",
-            unrestored.Count == 0
-                ? "Every source tree it had written is back as it was — nothing to review or revert."
-                : "Every source tree it had written is back as it was, except:",
-        };
-
-        sentences.AddRange(new[]
-        {
-            (UnrestoredReason.ChangedByAnother,
-                "changed by something else after this FormID change wrote them, so their current content was kept"),
-            (UnrestoredReason.RemovedByAnother,
-                "removed by something else after this FormID change wrote them, so they were not put back"),
-            (UnrestoredReason.OccupiedByAnother,
-                "occupied by something else, so what this FormID change moved away was not moved back"),
-            (UnrestoredReason.RestoreFailed, "could not be restored"),
-        }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
-
-        sentences.Add($"Underlying error: {relativeError}");
-        return string.Join(" ", sentences);
-    }
-
-    private static string? NamedPaths(
-        IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
-    {
-        var named = unrestored.Where(u => u.Reason == reason).Select(u => u.RelativePath).ToList();
-        return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
     }
 
     // Text is the target's own document under its new FormKey — the owner's whole text when

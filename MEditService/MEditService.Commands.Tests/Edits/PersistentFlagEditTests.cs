@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
@@ -13,7 +14,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class PersistentFlagEditTests : IDisposable
 {
-    private const int Persistent = 0x0400, InitiallyDisabled = 0x0800;
+    private const int Deleted = 0x0020, Persistent = 0x0400, InitiallyDisabled = 0x0800;
     private const float CellWidth = 4096f;
 
     private readonly SourceModFixture _mod;
@@ -28,14 +29,19 @@ public sealed class PersistentFlagEditTests : IDisposable
             inside.Persistent.Add(Placed(plugin, "InsidePersist", Persistent, 1f, 2f));
             var unmarked = NewCell(plugin, "Unmarked", 0);
             unmarked.Temporary.Add(Placed(plugin, "UnmarkedTemp", 0, 1f, 2f));
+            var ruin = NewCell(plugin, "Ruin", Cell.Flag.IsInteriorCell);
+            ruin.Temporary.Add(Placed(plugin, "RuinDeleted", Deleted, 1f, 2f));
+            ruin.Persistent.Add(Placed(plugin, "RuinDeletedPersistent", Deleted | Persistent, 1f, 2f));
             var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
             subBlock.Cells.Add(inside);
+            subBlock.Cells.Add(ruin);
             subBlock.Cells.Add(unmarked);
             var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
             block.SubBlocks.Add(subBlock);
             plugin.Cells.Records.Add(block);
 
             var world = new Worldspace(plugin) { EditorID = "World" };
+            _keys["World"] = world.FormKey;
             plugin.Worldspaces.Add(world);
             var topCell = NewCell(plugin, "WorldPersistentCell", 0);
             topCell.MajorRecordFlagsRaw = Persistent;
@@ -50,7 +56,7 @@ public sealed class PersistentFlagEditTests : IDisposable
             var holding = NewCell(plugin, "Holding", 0);
             holding.Grid = new CellGrid { Point = new P2Int(2, -1) };
             holding.Persistent.Add(Placed(plugin, "HoldingWithin", Persistent, 2.5f * CellWidth, -0.5f * CellWidth));
-            holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 2.5f * CellWidth, 0.5f * CellWidth));
+            holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 1.5f * CellWidth, 1.5f * CellWidth));
             world.SubCells.Add(BlockHolding(outside, 0));
             world.SubCells.Add(BlockHolding(holding, -1));
         });
@@ -150,19 +156,42 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_IsRefused()
+    public void ClearingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_MovesItIntoTheCellAtItsPosition()
     {
-        var before = Document("WorldPersistentCell");
+        var before = Document("TopPersist");
 
-        AssertRefusedUnchanged(SetFlags("TopPersist", 0), RecordEditRefusal.PersistentMoveIntoAnotherCell, "WorldPersistentCell", before);
+        var result = SetFlags("TopPersist", 0);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["OutsideTemp", "OutsideStale", "TopPersist"], Group("Outside", "Temporary"));
+        Assert.Empty(Group("WorldPersistentCell", "Persistent"));
+        AssertOnlyFlagsChanged(before, "TopPersist", 0);
     }
 
     [Fact]
-    public void SettingPersistent_OnAPlacedRecordInAnExteriorCell_IsRefused()
+    public void SettingPersistent_OnAPlacedRecordInAnExteriorCell_MovesItIntoItsWorldspacesPersistentCell()
     {
-        var before = Document("Outside");
+        var before = Document("OutsideTemp");
 
-        AssertRefusedUnchanged(SetFlags("OutsideTemp", Persistent), RecordEditRefusal.PersistentMoveIntoAnotherCell, "Outside", before);
+        var result = SetFlags("OutsideTemp", Persistent);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["TopPersist", "OutsideTemp"], Group("WorldPersistentCell", "Persistent"));
+        Assert.Equal(["OutsideStale"], Group("Outside", "Temporary"));
+        AssertOnlyFlagsChanged(before, "OutsideTemp", Persistent);
+    }
+
+    [Fact]
+    public void AMoveIntoAnotherCellWhoseDocumentCannotBeWritten_LeavesTheSourceTreeUnchanged()
+    {
+        var worldspace = SourceDocumentPath.Of(_mod.ModFolder, _mod.Plugin.Name, "wrld", _keys["World"].ToString(), "World", GameRelease.Fallout4);
+        Directory.CreateDirectory(worldspace + ".tmp");
+        var before = TreeSnapshot.Of(_mod.ModFolder);
+
+        var thrown = Assert.Throws<IOException>(() => SetFlags("OutsideTemp", Persistent));
+
+        Assert.Equal(before, TreeSnapshot.Of(_mod.ModFolder));
+        Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -180,11 +209,13 @@ public sealed class PersistentFlagEditTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPersistent_OnAPlacedRecordOutsideItsExteriorCellsGrid_IsRefused()
+    public void ClearingPersistent_OnAPlacedRecordOutsideItsExteriorCellsGrid_MovesItIntoTheCellAtItsPosition()
     {
-        var before = Document("Holding");
+        var result = SetFlags("HoldingBeyond", 0);
 
-        AssertRefusedUnchanged(SetFlags("HoldingBeyond", 0), RecordEditRefusal.PersistentMoveIntoAnotherCell, "Holding", before);
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["OutsideTemp", "OutsideStale", "HoldingBeyond"], Group("Outside", "Temporary"));
+        Assert.Equal(["HoldingWithin"], Group("Holding", "Persistent"));
     }
 
     [Fact]
@@ -193,6 +224,33 @@ public sealed class PersistentFlagEditTests : IDisposable
         var before = Document("Unmarked");
 
         AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), RecordEditRefusal.PersistentMoveDestinationUnknown, "Unmarked", before);
+    }
+
+    [Fact]
+    public void SettingPersistent_OnADeletedPlacedRecord_IsRefused_NamingDeleted()
+    {
+        var before = Document("Ruin");
+
+        var result = SetFlags("RuinDeleted", Deleted | Persistent);
+
+        AssertRefusedUnchanged(result, RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
+        Assert.Contains("Deleted", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClearingPersistent_OnADeletedPlacedRecord_IsRefused()
+    {
+        var before = Document("Ruin");
+
+        AssertRefusedUnchanged(SetFlags("RuinDeletedPersistent", Deleted), RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
+    }
+
+    [Fact]
+    public void SettingPersistentAndDeleted_InOneWrite_IsRefused()
+    {
+        var before = Document("Inside");
+
+        AssertRefusedUnchanged(SetFlags("InsideTemp", Deleted | Persistent), RecordEditRefusal.PersistentOnDeletedRecord, "Inside", before);
     }
 
     [Fact]

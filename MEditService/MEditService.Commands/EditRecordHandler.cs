@@ -19,6 +19,7 @@ public sealed class EditRecordHandler
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly FormKeyChange _formKeyChange;
+    private readonly CellLanding _cellLanding;
     private readonly ILogger<EditRecordHandler> _logger;
 
     // Internal because the shared module is, which is why this assembly registers its own handlers
@@ -33,6 +34,7 @@ public sealed class EditRecordHandler
         (_targets, _loadOrder, _codec, _schemaReflector, _logger) =
             (targets, loadOrder, codec, schemaReflector, logger);
         _formKeyChange = new FormKeyChange(targets, codec, schemaReflector, logger);
+        _cellLanding = new CellLanding(targets, codec, schemaReflector, logger);
     }
 
     /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
@@ -108,10 +110,11 @@ public sealed class EditRecordHandler
             text, prefix, schema, envelope, release, roundTrip, cellCopyOnTheLeft, refillCopyOnTheLeft);
 
         string newText;
+        CellCrossing? crossing;
         RecordEditResult? refused;
         try
         {
-            refused = DocumentEdit.Patch(request, out newText);
+            refused = DocumentEdit.Patch(request, out newText, out crossing);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -124,6 +127,7 @@ public sealed class EditRecordHandler
         if (refused is { Refusal: RecordEditRefusal.CodecRejected } && Unreadable(roundTrip, text) is { } why)
             return WriteTargets.RefuseUnreadable(formKey, why, spelled);
         if (refused is { } rejected) return rejected;
+        if (crossing is { } leaving) return _cellLanding.Land(plugin, editTarget, target, newText, leaving, spelled);
 
         // The document already said this (a value set to itself): nothing to commit, so no dirty file
         // or history entry.

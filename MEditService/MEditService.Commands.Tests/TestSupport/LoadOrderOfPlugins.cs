@@ -74,5 +74,5 @@ internal sealed class LoadOrderOfPlugins : IDisposable
 
     private static string Origin(IModGetter mod) => mod.ModKey.Name + "Mod";
 
-    private string FolderOf(IModGetter mod) => Path.Combine(_root, "mods", Origin(mod));
+    internal string FolderOf(IModGetter mod) => Path.Combine(_root, "mods", Origin(mod));
 }

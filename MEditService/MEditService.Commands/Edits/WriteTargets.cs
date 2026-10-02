@@ -365,7 +365,24 @@ internal sealed class WriteTargets(
     /// <summary>The nearest copy left of <paramref name="plugin"/> that <paramref name="says"/> accepts,
     /// passing over by its header one holding a flag of <paramref name="passOver"/>. An unreadable copy
     /// ends the walk.</summary>
-    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0)
+    internal LeftCopy NearestCopyToTheLeft(PluginAddress plugin, string formKey, Func<JsonObject, bool> says, long passOver = 0) =>
+        NearestToTheLeft(plugin, formKey, source =>
+        {
+            if (IdentityIn(source, formKey) is not { } identity) return null;
+            if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) return null;
+            var body = source.Body(identity);
+            return JsonNode.Parse(body) is JsonObject copy && says(copy) ? body : null;
+        });
+
+    /// <summary>The nearest copy left of <paramref name="plugin"/> of the exterior cell at grid
+    /// (<paramref name="x"/>, <paramref name="y"/>) of <paramref name="worldspace"/>.</summary>
+    internal LeftCopy NearestCellToTheLeft(PluginAddress plugin, string worldspace, int x, int y) =>
+        NearestToTheLeft(plugin, worldspace, source =>
+            source.CellAt(worldspace, x, y) is { } cell && IdentityIn(source, cell) is { } identity ? source.Body(identity) : null);
+
+    // The plugins left of this one, nearest first, until one answers a text. An unreadable one ends the
+    // walk, named by what it was asked about.
+    private LeftCopy NearestToTheLeft(PluginAddress plugin, string askedAbout, Func<CopySource, string?> answer)
     {
         var current = loadOrder.Current;
         var index = current.LoadOrderIndex(plugin) ?? current.Active.Count;
@@ -374,14 +391,11 @@ internal sealed class WriteTargets(
             using var source = new CopySource(left, current, adapter, codec, schemaReflector);
             try
             {
-                if (IdentityIn(source, formKey) is not { } identity) continue;
-                if (passOver != 0 && (source.RecordFlags(identity) & passOver) != 0) continue;
-                var body = source.Body(identity);
-                if (JsonNode.Parse(body) is JsonObject copy && says(copy)) return new LeftCopy.Found(body);
+                if (answer(source) is { } text) return new LeftCopy.Found(text);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                return new LeftCopy.Unreadable(left.Name, formKey, source.Diagnose(ex));
+                return new LeftCopy.Unreadable(left.Name, askedAbout, source.Diagnose(ex));
             }
         }
         return new LeftCopy.None();
