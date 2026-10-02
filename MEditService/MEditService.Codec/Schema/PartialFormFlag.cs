@@ -26,7 +26,7 @@ public static class PartialFormFlag
     /// <c>MajorRecordFlagsRaw</c> (omitted when zero).</summary>
     public static bool IsSet(JsonElement document, Type recordType) =>
         IsPartialFormable(recordType)
-        && document.TryGetProperty(nameof(IMajorRecordGetter.MajorRecordFlagsRaw), out var flags)
+        && document.TryGetProperty(RecordHeaderFlags.Member, out var flags)
         && flags.ValueKind == JsonValueKind.Number
         && (flags.GetInt32() & Bit) != 0;
 }

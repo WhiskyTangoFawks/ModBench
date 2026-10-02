@@ -14,70 +14,85 @@ namespace MEditService.Commands.Tests.Edits;
 public sealed class PersistentFlagEditTests : IDisposable
 {
     private const int Persistent = 0x0400, InitiallyDisabled = 0x0800;
+    private const float CellWidth = 4096f;
 
     private readonly SourceModFixture _mod;
-    private readonly FormKey _interior, _interiorTemporary, _interiorPersistent;
-    private readonly FormKey _topCell, _topCellTemporary, _topCellPersistent;
-    private readonly FormKey _exterior, _exteriorTemporary, _exteriorPersistentInTemporary;
+    private readonly Dictionary<string, FormKey> _keys = [];
 
     public PersistentFlagEditTests()
     {
-        var keys = new FormKey[9];
         _mod = SourceModFixture.Tracked("Persistence.esp", "PersistenceMod", plugin =>
         {
-            var cell = new Cell(plugin) { EditorID = "Inside" };
-            var temporary = new PlacedObject(plugin) { EditorID = "InsideTemp", Scale = 2f, Position = new P3Float(1f, 2f, 3f) };
-            var persistent = new PlacedObject(plugin) { EditorID = "InsidePersist", MajorRecordFlagsRaw = Persistent };
-            cell.Temporary.Add(temporary);
-            cell.Persistent.Add(persistent);
+            var inside = NewCell(plugin, "Inside", Cell.Flag.IsInteriorCell);
+            inside.Temporary.Add(Placed(plugin, "InsideTemp", 0, 1f, 2f));
+            inside.Persistent.Add(Placed(plugin, "InsidePersist", Persistent, 1f, 2f));
+            var unmarked = NewCell(plugin, "Unmarked", 0);
+            unmarked.Temporary.Add(Placed(plugin, "UnmarkedTemp", 0, 1f, 2f));
             var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-            subBlock.Cells.Add(cell);
+            subBlock.Cells.Add(inside);
+            subBlock.Cells.Add(unmarked);
             var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
             block.SubBlocks.Add(subBlock);
             plugin.Cells.Records.Add(block);
-            (keys[0], keys[1], keys[2]) = (cell.FormKey, temporary.FormKey, persistent.FormKey);
 
             var world = new Worldspace(plugin) { EditorID = "World" };
             plugin.Worldspaces.Add(world);
-            var topCell = new Cell(plugin) { EditorID = "WorldPersistentCell", MajorRecordFlagsRaw = Persistent };
-            var topTemporary = new PlacedObject(plugin) { EditorID = "TopTemp", Position = new P3Float(5000f, 5000f, 0f) };
-            var topPersistent = new PlacedObject(plugin) { EditorID = "TopPersist", MajorRecordFlagsRaw = Persistent, Position = new P3Float(5000f, 5000f, 0f) };
-            topCell.Temporary.Add(topTemporary);
-            topCell.Persistent.Add(topPersistent);
+            var topCell = NewCell(plugin, "WorldPersistentCell", 0);
+            topCell.MajorRecordFlagsRaw = Persistent;
+            topCell.Temporary.Add(Placed(plugin, "TopTemp", 0, CellWidth, CellWidth));
+            topCell.Persistent.Add(Placed(plugin, "TopPersist", Persistent, CellWidth, CellWidth));
             world.TopCell = topCell;
-            var exterior = new Cell(plugin) { EditorID = "Outside", Grid = new CellGrid { Point = new P2Int(1, 1) } };
-            var exteriorTemporary = new PlacedObject(plugin) { EditorID = "OutsideTemp", Position = new P3Float(5000f, 5000f, 0f) };
-            var persistentInTemporary = new PlacedObject(plugin) { EditorID = "OutsideStale", MajorRecordFlagsRaw = Persistent, Position = new P3Float(5000f, 5000f, 0f) };
-            exterior.Temporary.Add(exteriorTemporary);
-            exterior.Temporary.Add(persistentInTemporary);
-            var worldSubBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-            worldSubBlock.Items.Add(exterior);
-            var worldBlock = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-            worldBlock.Items.Add(worldSubBlock);
-            world.SubCells.Add(worldBlock);
-            (keys[3], keys[4], keys[5]) = (topCell.FormKey, topTemporary.FormKey, topPersistent.FormKey);
-            (keys[6], keys[7], keys[8]) = (exterior.FormKey, exteriorTemporary.FormKey, persistentInTemporary.FormKey);
+
+            var outside = NewCell(plugin, "Outside", 0);
+            outside.Grid = new CellGrid { Point = new P2Int(1, 1) };
+            outside.Temporary.Add(Placed(plugin, "OutsideTemp", 0, 1.5f * CellWidth, 1.5f * CellWidth));
+            outside.Temporary.Add(Placed(plugin, "OutsideStale", Persistent, 1.5f * CellWidth, 1.5f * CellWidth));
+            var holding = NewCell(plugin, "Holding", 0);
+            holding.Grid = new CellGrid { Point = new P2Int(2, -1) };
+            holding.Persistent.Add(Placed(plugin, "HoldingWithin", Persistent, 2.5f * CellWidth, -0.5f * CellWidth));
+            holding.Persistent.Add(Placed(plugin, "HoldingBeyond", Persistent, 2.5f * CellWidth, 0.5f * CellWidth));
+            world.SubCells.Add(BlockHolding(outside, 0));
+            world.SubCells.Add(BlockHolding(holding, -1));
         });
-        (_interior, _interiorTemporary, _interiorPersistent) = (keys[0], keys[1], keys[2]);
-        (_topCell, _topCellTemporary, _topCellPersistent) = (keys[3], keys[4], keys[5]);
-        (_exterior, _exteriorTemporary, _exteriorPersistentInTemporary) = (keys[6], keys[7], keys[8]);
     }
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditResult SetFlags(FormKey placed, int raw) =>
+    private Cell NewCell(Fallout4Mod plugin, string editorId, Cell.Flag flags)
+    {
+        var cell = new Cell(plugin) { EditorID = editorId, Flags = flags };
+        _keys[editorId] = cell.FormKey;
+        return cell;
+    }
+
+    private static WorldspaceBlock BlockHolding(Cell cell, short y)
+    {
+        var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = y };
+        subBlock.Items.Add(cell);
+        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = y };
+        block.Items.Add(subBlock);
+        return block;
+    }
+
+    private PlacedObject Placed(Fallout4Mod plugin, string editorId, int flags, float x, float y)
+    {
+        var placed = new PlacedObject(plugin) { EditorID = editorId, MajorRecordFlagsRaw = flags, Scale = 2f, Position = new P3Float(x, y, 0f) };
+        _keys[editorId] = placed.FormKey;
+        return placed;
+    }
+
+    private RecordEditResult SetFlags(string placed, int raw) =>
         _mod.EditHandler.Edit(
-            _mod.Plugin, placed.ToString(),
+            _mod.Plugin, _keys[placed].ToString(),
             SetAt(JsonDocument.Parse(raw.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
 
-    private JsonObject Document(FormKey formKey) =>
-        JsonNode.Parse(TrackedTree.Document(_mod.ModFolder, _mod.Plugin, formKey.ToString()).Require().Body).Require().AsObject();
+    private JsonObject Document(string editorId) =>
+        JsonNode.Parse(TrackedTree.Document(_mod.ModFolder, _mod.Plugin, _keys[editorId].ToString()).Require().Body).Require().AsObject();
 
-    private List<string> Group(FormKey cell, string group) =>
-        [.. (Document(cell)[group] as JsonArray ?? []).Select(placed => placed.Require()["FormKey"].Require().GetValue<string>())];
+    private List<string> Group(string cell, string group) =>
+        [.. (Document(cell)[group] as JsonArray ?? []).Select(placed => placed.Require()["EditorID"].Require().GetValue<string>())];
 
-    // The record arrives with every field it had, and only its flags changed.
-    private void AssertMovedWhole(JsonObject before, FormKey placed, int flags)
+    private void AssertOnlyFlagsChanged(JsonObject before, string placed, int flags)
     {
         var after = Document(placed);
         Assert.Equal(flags, after["MajorRecordFlagsRaw"]?.GetValue<int>() ?? 0);
@@ -89,74 +104,104 @@ public sealed class PersistentFlagEditTests : IDisposable
         Assert.True(JsonNode.DeepEquals(before, after), after.ToJsonString());
     }
 
+    private void AssertRefusedUnchanged(RecordEditResult result, string cell, JsonObject before)
+    {
+        Assert.Equal(RecordEditRefusal.PersistentMoveIntoAnotherCell, result.Refusal);
+        Assert.True(JsonNode.DeepEquals(before, Document(cell)), Document(cell).ToJsonString());
+    }
+
     [Fact]
     public void SettingPersistent_OnAPlacedRecordInAnInteriorCell_MovesItIntoTheCellsPersistentGroup()
     {
-        var before = Document(_interiorTemporary);
+        var before = Document("InsideTemp");
 
-        var result = SetFlags(_interiorTemporary, Persistent);
+        var result = SetFlags("InsideTemp", Persistent);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal([_interiorPersistent.ToString(), _interiorTemporary.ToString()], Group(_interior, "Persistent"));
-        Assert.Empty(Group(_interior, "Temporary"));
-        AssertMovedWhole(before, _interiorTemporary, Persistent);
+        Assert.Equal(["InsidePersist", "InsideTemp"], Group("Inside", "Persistent"));
+        Assert.Empty(Group("Inside", "Temporary"));
+        AssertOnlyFlagsChanged(before, "InsideTemp", Persistent);
     }
 
     [Fact]
     public void ClearingPersistent_OnAPlacedRecordInAnInteriorCell_MovesItIntoTheCellsTemporaryGroup()
     {
-        var before = Document(_interiorPersistent);
+        var before = Document("InsidePersist");
 
-        var result = SetFlags(_interiorPersistent, 0);
+        var result = SetFlags("InsidePersist", 0);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal([_interiorTemporary.ToString(), _interiorPersistent.ToString()], Group(_interior, "Temporary"));
-        Assert.Empty(Group(_interior, "Persistent"));
-        AssertMovedWhole(before, _interiorPersistent, 0);
+        Assert.Equal(["InsideTemp", "InsidePersist"], Group("Inside", "Temporary"));
+        Assert.Empty(Group("Inside", "Persistent"));
+        AssertOnlyFlagsChanged(before, "InsidePersist", 0);
     }
 
     [Fact]
     public void SettingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_MovesItIntoThatCellsPersistentGroup()
     {
-        var before = Document(_topCellTemporary);
+        var before = Document("TopTemp");
 
-        var result = SetFlags(_topCellTemporary, Persistent);
+        var result = SetFlags("TopTemp", Persistent);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal([_topCellPersistent.ToString(), _topCellTemporary.ToString()], Group(_topCell, "Persistent"));
-        Assert.Empty(Group(_topCell, "Temporary"));
-        AssertMovedWhole(before, _topCellTemporary, Persistent);
-    }
-
-    [Fact]
-    public void SettingPersistent_OnAPlacedRecordInAnExteriorCell_IsRefused()
-    {
-        var before = Document(_exterior);
-
-        var result = SetFlags(_exteriorTemporary, Persistent);
-
-        Assert.Equal(RecordEditRefusal.PersistentMoveIntoAnotherCell, result.Refusal);
-        Assert.True(JsonNode.DeepEquals(before, Document(_exterior)), Document(_exterior).ToJsonString());
+        Assert.Equal(["TopPersist", "TopTemp"], Group("WorldPersistentCell", "Persistent"));
+        Assert.Empty(Group("WorldPersistentCell", "Temporary"));
+        AssertOnlyFlagsChanged(before, "TopTemp", Persistent);
     }
 
     [Fact]
     public void ClearingPersistent_OnAPlacedRecordInAWorldspacesPersistentCell_IsRefused()
     {
-        var before = Document(_topCell);
+        var before = Document("WorldPersistentCell");
 
-        var result = SetFlags(_topCellPersistent, 0);
+        AssertRefusedUnchanged(SetFlags("TopPersist", 0), "WorldPersistentCell", before);
+    }
 
-        Assert.Equal(RecordEditRefusal.PersistentMoveIntoAnotherCell, result.Refusal);
-        Assert.True(JsonNode.DeepEquals(before, Document(_topCell)), Document(_topCell).ToJsonString());
+    [Fact]
+    public void SettingPersistent_OnAPlacedRecordInAnExteriorCell_IsRefused()
+    {
+        var before = Document("Outside");
+
+        AssertRefusedUnchanged(SetFlags("OutsideTemp", Persistent), "Outside", before);
+    }
+
+    [Fact]
+    public void ClearingPersistent_OnAPlacedRecordInsideItsExteriorCellsGrid_MovesItIntoAGroupTheCellLacked()
+    {
+        var before = Document("HoldingWithin");
+        Assert.Empty(Group("Holding", "Temporary"));
+
+        var result = SetFlags("HoldingWithin", 0);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(["HoldingWithin"], Group("Holding", "Temporary"));
+        Assert.Equal(["HoldingBeyond"], Group("Holding", "Persistent"));
+        AssertOnlyFlagsChanged(before, "HoldingWithin", 0);
+    }
+
+    [Fact]
+    public void ClearingPersistent_OnAPlacedRecordOutsideItsExteriorCellsGrid_IsRefused()
+    {
+        var before = Document("Holding");
+
+        AssertRefusedUnchanged(SetFlags("HoldingBeyond", 0), "Holding", before);
+    }
+
+    [Fact]
+    public void SettingPersistent_InACellWhoseCopySaysNeitherInteriorNorWhereItSits_IsRefused()
+    {
+        var before = Document("Unmarked");
+
+        AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), "Unmarked", before);
     }
 
     [Fact]
     public void AnotherFlag_OnAPlacedRecordAlreadyPersistentInATemporaryGroup_LeavesItWhereItIs()
     {
-        var result = SetFlags(_exteriorPersistentInTemporary, Persistent | InitiallyDisabled);
+        var result = SetFlags("OutsideStale", Persistent | InitiallyDisabled);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal([_exteriorTemporary.ToString(), _exteriorPersistentInTemporary.ToString()], Group(_exterior, "Temporary"));
-        Assert.Equal(Persistent | InitiallyDisabled, Document(_exteriorPersistentInTemporary)["MajorRecordFlagsRaw"].Require().GetValue<int>());
+        Assert.Equal(["OutsideTemp", "OutsideStale"], Group("Outside", "Temporary"));
+        Assert.Equal(Persistent | InitiallyDisabled, Document("OutsideStale")["MajorRecordFlagsRaw"].Require().GetValue<int>());
     }
 }

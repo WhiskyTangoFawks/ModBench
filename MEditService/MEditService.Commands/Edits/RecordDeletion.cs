@@ -14,13 +14,9 @@ internal sealed record RecordDeletion(JsonElement Flags, bool ClearsPartialForm)
     /// newly set Deleted.</summary>
     internal static RecordDeletion? Of(JsonObject record, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
-        if (schema.IsHeader || column.Name != DeletedFlag.FlagsMember || value is not { ValueKind: JsonValueKind.Number } requested)
-            return null;
-        var held = record[DeletedFlag.FlagsMember] is JsonValue raw && raw.TryGetValue<long>(out var flags) ? flags : 0;
-        var next = requested.GetInt64();
-        if ((next & DeletedFlag.Bit) == 0 || (held & DeletedFlag.Bit) != 0) return null;
+        if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write || !write.Sets(DeletedFlag.Bit)) return null;
         var clearsPartialForm = PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType);
-        return new(JsonSerializer.SerializeToElement(clearsPartialForm ? next & ~PartialFormFlag.Bit : next), clearsPartialForm);
+        return new(JsonSerializer.SerializeToElement(clearsPartialForm ? write.Next & ~PartialFormFlag.Bit : write.Next), clearsPartialForm);
     }
 
     /// <summary>Whether this deletion, rather than the value written, changes <paramref name="bit"/>.</summary>

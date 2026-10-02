@@ -95,11 +95,7 @@ public sealed class EditRecordHandler
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
-        var request = new DocumentEditRequest(
-            text, prefix, schema, envelope, release, roundTrip,
-            cellFormKey => repository.IdentityOf(plugin, cellFormKey, schemas) is { } cell
-                ? repository.CellPlacementOf(plugin, cell)
-                : null);
+        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip);
 
         string newText;
         RecordEditResult? refused;
