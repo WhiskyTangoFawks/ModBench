@@ -3,12 +3,12 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-// ADR-0005: a read resolves its documents' links in one query, never one per FormKey. Every lookup
-// joins `winners`, which no index serves, so each query scans it whatever it asks.
+// Every form_lookup query joins `winners`, which no index serves, so each one scans it however few
+// FormKeys it asks.
 internal static class LinkResolution
 {
     // DuckDB narrows a short IN list of constants to its rows before the winners join, and plans a
-    // long one slower than the whole join runs: on the vanilla FO4 masters, 6 keys 37 ms against 225.
+    // long one slower than the whole join runs.
     private const int ConstantListLimit = 200;
 
     /// <summary>Resolves every link form_references lists for <paramref name="formKey"/>, in any
