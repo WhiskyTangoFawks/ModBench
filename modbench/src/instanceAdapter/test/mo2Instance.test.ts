@@ -67,8 +67,8 @@ describe('the MO2 Instance adapter', () => {
   let root: string;
   let adapter: InstanceAdapter;
 
-  beforeEach(async () => {
-    root = await cloneCorpusFixture();
+  beforeEach(() => {
+    root = cloneCorpusFixture();
     adapter = adapterAt(root);
   });
   afterEach(async () => {

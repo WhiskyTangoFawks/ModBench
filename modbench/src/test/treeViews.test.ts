@@ -126,7 +126,7 @@ beforeEach(() => {
 
 describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     await provider.getChildren();
@@ -153,7 +153,7 @@ describe('the Mods filter follows a row change with no keystroke', () => {
 
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     const { modListView, modListFilter } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
@@ -165,7 +165,7 @@ describe('the Mods view\'s description counts the mods', () => {
   });
 
   it('follows a new instance value, with nothing pushed', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
@@ -186,7 +186,7 @@ describe('the Mods view tells its keys what the selection holds', () => {
   };
 
   it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
@@ -211,7 +211,7 @@ describe('the Mods view tells its keys what the selection holds', () => {
   });
 
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
@@ -229,7 +229,7 @@ describe('the Mods view tells its keys what the selection holds', () => {
 // collapsible state, so the filter's expansion is a reveal.
 describe('the Mods view expands a separator a filter shows for its matching mods', () => {
   const mountFiltered = async (term: string, log: (line: string) => void = () => { /* no-op */ }) => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     createModListView(own, provider, log, syncMessageDouble()).modListFilter.open();
@@ -324,7 +324,7 @@ describe('the Mods view says when the list is empty', () => {
 
 describe('the Downloads filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
 
     const { downloadsFilter } = registerDownloadsView(downloadsViewDeps(root, instance));
@@ -350,7 +350,7 @@ describe('the Downloads filter follows a row change with no keystroke', () => {
 
 describe('the Downloads filter follows a toggle with no new instance value', () => {
   it('recomputes the no-match message off Show excluded, in both directions', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const archivePath = join(root, 'downloads', 'zzznomatch.7z');
     await writeFile(archivePath, '');
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
@@ -381,7 +381,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
   const contextValue = () => h.state.contextKeys.get(KEY);
 
   it('is true once the corpus\'s one download is excluded, and follows Show excluded both ways', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const metaPath = join(root, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
     await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
     const instance = await makeInstance(root);
@@ -398,7 +398,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
   });
 
   it('stays false while at least one download is not excluded', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
 
     registerDownloadsView(downloadsViewDeps(root, instance));
@@ -412,7 +412,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
 // re-queries a FileDecorationProvider on its own.
 describe('the Downloads decoration provider follows a rows change', () => {
   it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
 
     registerDownloadsView(downloadsViewDeps(root, instance));
@@ -439,7 +439,7 @@ describe('the Downloads view tells its palette entries what the selection holds'
   };
 
   it('sets each key off the selection as it changes', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     const instance = await makeInstance(root);
     const { downloadsView } = registerDownloadsView(downloadsViewDeps(root, instance));
 

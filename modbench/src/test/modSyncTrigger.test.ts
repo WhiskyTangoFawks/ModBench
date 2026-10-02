@@ -59,7 +59,7 @@ async function wiredInstance(): Promise<{
   syncs: Promise<ModSyncResult>[];
   handed: (readonly ModFolder[] | undefined)[];
 }> {
-  const root = await cloneCorpusFixture();
+  const root = cloneCorpusFixture();
   roots.push(root);
   const instance = new Instance({
     window: STEADY_WINDOW,

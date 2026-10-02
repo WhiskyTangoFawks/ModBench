@@ -15,8 +15,8 @@ const INI = 'ModOrganizer.ini';
 describe('profile corpus', () => {
   let dir: string;
 
-  beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 

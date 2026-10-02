@@ -21,7 +21,7 @@ describe('installed mark corpus', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+    dir = cloneCorpusFixture();
     await writeFile(join(dir, MANUAL_ARCHIVE), 'archive bytes');
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));

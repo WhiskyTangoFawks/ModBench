@@ -33,8 +33,8 @@ const separatorNames = async (dir: string): Promise<string[]> =>
 describe('modlist.txt corpus — every entry mutation touches the files it names and nothing else', () => {
   let dir: string;
 
-  beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 

@@ -52,8 +52,8 @@ function channelWrites(channel: FakeLogOutputChannel): unknown[][] {
 }
 
 // The four views over the one Instance, wired to the Output as the composition root wires them.
-async function fourViewsOverOneInstance() {
-  const root = await cloneCorpusFixture();
+function fourViewsOverOneInstance() {
+  const root = cloneCorpusFixture();
   roots.push(root);
   const channel = new FakeLogOutputChannel();
   const log = (msg: string) => { channel.info(msg); };
@@ -78,7 +78,7 @@ async function fourViewsOverOneInstance() {
 
 describe('a failed first read across the Toolbox, Mods, Plugins and Downloads views', () => {
   it('shows each view the one error row, writes one Output line, raises no notification, and the next good read brings rows', async () => {
-    const { root, channel, instance, render, toolbox } = await fourViewsOverOneInstance();
+    const { root, channel, instance, render, toolbox } = fourViewsOverOneInstance();
     const ini = join(root, 'ModOrganizer.ini');
     const complete = await readFile(ini, 'utf8');
     await writeFile(ini, '');
