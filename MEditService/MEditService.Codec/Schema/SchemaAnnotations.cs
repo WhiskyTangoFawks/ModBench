@@ -209,11 +209,14 @@ internal sealed record SchemaAnnotations(
     // PlacedObject.cs's per-base-type enums in every game, as wbREFRRecordFlagsDecider chooses them.
     private static readonly (string, string)[] PlacedObjectRecordFlagEnums =
     [
-        .. new[]
-        {
-            "DefaultMajorFlag", "StaticMajorFlag", "ContainerMajorFlag", "DoorMajorFlag", "LightMajorFlag",
-            "MoveableStaticMajorFlag", "AddonNodeMajorFlag", "ItemMajorFlag",
-        }.Select(e => ("IPlacedObjectGetter", e)),
+        ("IPlacedObjectGetter", "DefaultMajorFlag"),
+        ("IPlacedObjectGetter", "StaticMajorFlag"),
+        ("IPlacedObjectGetter", "ContainerMajorFlag"),
+        ("IPlacedObjectGetter", "DoorMajorFlag"),
+        ("IPlacedObjectGetter", "LightMajorFlag"),
+        ("IPlacedObjectGetter", "MoveableStaticMajorFlag"),
+        ("IPlacedObjectGetter", "AddonNodeMajorFlag"),
+        ("IPlacedObjectGetter", "ItemMajorFlag"),
     ];
 
     private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
@@ -353,8 +356,17 @@ internal sealed record SchemaAnnotations(
             ],
             // Mutagen names it on Starfield's Cell, DialogTopic and Quest; wbDefinitionsSF1.pas gives WRLD bit 14 too.
             RecordFlagNames: [("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName)],
-            // Static.xml spells its majorFlag attribute majorFlags here too.
-            RecordFlagEnums: [.. PlacedObjectRecordFlagEnums, ("IStaticGetter", "MajorFlag")],
+            // Static.xml and StaticCollection.xml spell their majorFlag attribute majorFlags; Key.xml,
+            // Region.xml and LeveledBaseForm.xml declare none.
+            RecordFlagEnums:
+            [
+                .. PlacedObjectRecordFlagEnums,
+                ("IStaticGetter", "MajorFlag"),
+                ("IStaticCollectionGetter", "MajorFlag"),
+                ("IKeyGetter", "MajorFlag"),
+                ("IRegionGetter", "MajorFlag"),
+                ("ILeveledBaseFormGetter", "MajorFlag"),
+            ],
             ExteriorCellWidth: null,
             PartialFormCellsDefinedIn: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
@@ -507,9 +519,10 @@ internal sealed record SchemaAnnotations(
     {
         foreach (var (typeName, enumName) in RecordFlagEnums)
         {
-            if (typesByName[typeName].Select(ReflectedTypes.GetSetterType).OfType<Type>().FirstOrDefault() is not { } recordClass) continue;
             var label = $"{nameof(RecordFlagEnums)}: {typeName} {enumName}";
-            if (NestedEnum(recordClass, enumName) is not { } flags)
+            if (typesByName[typeName].Select(ReflectedTypes.GetSetterType).OfType<Type>().FirstOrDefault() is not { } recordClass)
+                yield return $"{label} names no type with a record class";
+            else if (NestedEnum(recordClass, enumName) is not { } flags)
                 yield return $"{label} is no enum {recordClass.Name} nests";
             else if (flags.GetCustomAttribute<FlagsAttribute>() == null)
                 yield return $"{label} is no flags enum";
@@ -670,7 +683,6 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(RecordFlagNames), RecordFlagNames.Select(r => r.TypeName)),
             .. RecordFlagNames.Where(r => r.Bit <= 0 || (r.Bit & (r.Bit - 1)) != 0)
                 .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} names 0x{r.Bit:X}, which is no single bit"),
-            .. UnresolvedTypes(nameof(RecordFlagEnums), RecordFlagEnums.Select(r => r.TypeName)),
             .. UnresolvedRecordFlagEnums(typesByName),
             .. new[] { PartialFormCellsDefinedIn }.OfType<string>()
                 .Where(p => !Implicits.Get(category.DefaultRelease()).BaseMasters.Contains(ModKey.FromFileName(p)))

@@ -84,7 +84,7 @@ public sealed class RecordHeaderSchemaTests
     [InlineData("16")]
     [InlineData("256")]
     [InlineData("1073741824")]
-    public void APlacedObjectsBitNamedOnlyForSomeBaseTypes_OrDifferentlyByThem_IsUnnamed(string bit)
+    public void APlacedObjectsBitNoGameFlagNames_AndNotEveryBaseTypeNamesAlike_IsUnnamed(string bit)
     {
         Assert.DoesNotContain(RecordFlags("refr").Field.EnumMembers, m => m.BitValue == bit);
     }
