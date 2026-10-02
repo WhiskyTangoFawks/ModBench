@@ -30,8 +30,7 @@ As a user, I want:
 1. One row for each file the mod has that another enabled mod or Overwrite also has, as a folder tree: folders first, then files, each by name.
 2. An excluded file to take no part, in the mod that excluded it. *MO2*
 3. Every folder expanded when the table opens, and to collapse and expand a folder by a click on it. *xEdit opens every row*
-4. A click on a file's name to open the opened mod's copy as a preview editor. *VS Code*
-5. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down, and Right and Left to expand and collapse a folder. *VS Code's trees*
+4. The keys that move through a VS Code tree to move through the rows: Up, Down, Home, End, Page Up and Page Down, and Right and Left to expand and collapse a folder. *VS Code's trees*
 
 ## Cells
 
@@ -69,6 +68,7 @@ As a user, I want:
 3. A mod that is disabled to show "Disabled: its files take no part in mod order." in place of the table. *MO2*
 4. A mod that is gone from the mod list to show that it is gone, naming it, in place of the table.
 5. The table to follow the disk: a change to any copy, or to mod order, shows with no action of mine. The folders I collapsed and the scroll stay. *common, A view, story 2; ADR-0015*
+6. A copy that cannot be read to show no state and no value, and its tooltip to say why. Its row shows no colour, since its state is not known. One line in the Output. *Never silently wrong; ADR-0019, invariant 2*
 
 ## Menus and keys
 
@@ -76,7 +76,7 @@ As a user, I want:
 |---|---|
 | Cell | compare file (a copy that is not the winning copy) |
 | Column header | open conflicts (a mod) |
-| Keys | the tree keys of Rows, story 5 |
+| Keys | the tree keys of Rows, story 4 |
 
 As a user, I want:
 
@@ -85,6 +85,6 @@ As a user, I want:
 
 ## Test seam
 
-- **The table, given the instance value and each copy's content digest:** the columns and their order, the rows and their nesting, each cell's state and value, each row's state, each folder's worst state, and the states.
+- **The table, given the instance value and which copies of each file are the same:** the columns and their order, the rows and their nesting, each cell's state and value, each row's state, each folder's worst state, and the states.
 - **A gesture's entry:** given a cell or a column header and a menu item, the command and Argument it fires, or nothing.
 - **Menus:** the placement above, checked against the extension manifest.

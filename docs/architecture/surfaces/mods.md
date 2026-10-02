@@ -74,7 +74,6 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Where | Items, in order |
 |---|---|
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. Overflow: install… · create empty mod. Collapse All last. |
-| Mod row, on hover | open conflicts (the mod has a file order conflict) |
 | Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
