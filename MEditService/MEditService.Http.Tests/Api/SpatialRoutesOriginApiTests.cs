@@ -135,28 +135,28 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     }
 
     [Fact]
-    public async Task GetCellReferences_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs()
+    public async Task GetCellChildRecords_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs()
     {
         var (fx, _, cellFk) = BuildTwoPlugins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(cellFk);
 
-        var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModB");
+        var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/children?origin=ModB");
         Assert.Equal("RefModB", modB.GetProperty("persistent")[0].GetProperty("editorId").GetString());
-        var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModA");
+        var modA = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/children?origin=ModA");
         Assert.Empty(modA.GetProperty("persistent").EnumerateArray());
     }
 
     [Fact]
-    public async Task GetCellReferences_OmittedOrigin_ReturnsBadRequest()
+    public async Task GetCellChildRecords_OmittedOrigin_ReturnsBadRequest()
     {
         var (fx, _, cellFk) = BuildTwoPlugins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(cellFk);
 
-        var omitted = await _client.GetAsync($"/plugins/Shared.esp/cells/{encodedFk}/references");
+        var omitted = await _client.GetAsync($"/plugins/Shared.esp/cells/{encodedFk}/children");
         await AssertOriginRequiredProblem(omitted);
     }
 

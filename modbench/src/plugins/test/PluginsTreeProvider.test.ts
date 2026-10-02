@@ -7,8 +7,8 @@ import type { LoadOrderPlugin, LoadOrderPluginLine, PluginAddress } from '../../
 import type { InstanceValue } from '../../instanceLoader/instance';
 import {
   InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
-  type WorldspaceSummary, type WorldspaceBlocks, type InteriorCellBlock, type RecordSummary, type CellReferences,
-  type ContainerChildSummary, type CellSummary, type PlacedSummary,
+  type WorldspaceSummary, type WorldspaceBlocks, type InteriorCellBlock, type RecordSummary, type CellChildRecords,
+  type ContainerChildSummary, type CellSummary, type ChildRecordSummary,
 } from '../../client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
@@ -137,7 +137,7 @@ function makeClient(overrides: Partial<{
   worldspaces: WorldspaceSummary[];
   worldspaceBlocks: WorldspaceBlocks;
   interiorCells: InteriorCellBlock[];
-  cellReferences: CellReferences;
+  cellChildRecords: CellChildRecords;
   containerChildren: ContainerChildSummary[];
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -150,7 +150,7 @@ function makeClient(overrides: Partial<{
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
   client.setQueryAnswer('getWorldspaces', overrides.worldspaces ?? []);
   client.setQueryAnswer('getWorldspaceBlocks', overrides.worldspaceBlocks ?? { blocks: [], topCells: [] });
-  client.setQueryAnswer('getCellReferences', overrides.cellReferences ?? { persistent: [], temporary: [] });
+  client.setQueryAnswer('getCellChildRecords', overrides.cellChildRecords ?? { persistent: [], temporary: [] });
   client.setQueryAnswer('getContainerChildren', overrides.containerChildren ?? []);
   client.setQueryAnswer('getInteriorCells', overrides.interiorCells ?? []);
   return client;
@@ -2345,7 +2345,7 @@ describe('PluginsTreeProvider — a record row is identified by its kind, its pl
       topCells: [{ formKey: '000802:Fallout4.esm', isPersistentWorldspaceCell: true, hasChildren: true, hasParseFailure: false }],
       blocks: [],
     },
-    cellReferences: {
+    cellChildRecords: {
       persistent: [{ formKey: '000803:Fallout4.esm', editorId: 'DoorRef', recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     },
@@ -2504,7 +2504,7 @@ describe('PluginsTreeProvider — groups and records are named and described as 
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
       worldspaces: [{ formKey: '000100:A.esp', editorId: 'Commonwealth', fullName: 'Commonwealth Wasteland', hasChildren: true, ...unreadable }],
       worldspaceBlocks: { topCells: [cell({ formKey: '000101:A.esp', editorId: 'TopCell', ...unreadable })], blocks: [] },
-      cellReferences: {
+      cellChildRecords: {
         persistent: [{ formKey: '000301:A.esp', editorId: 'DoorRef', recordType: 'refr', ...unreadable }],
         temporary: [],
       },
@@ -2587,13 +2587,13 @@ describe('PluginsTreeProvider — groups and records are named and described as 
   });
 
   it('labels a placed reference without an EditorID by its base record\'s EditorID', async () => {
-    const placed = (overrides: Partial<PlacedSummary>): PlacedSummary => ({
+    const placed = (overrides: Partial<ChildRecordSummary>): ChildRecordSummary => ({
       formKey: 'p:A.esp', recordType: 'refr', hasParseFailure: false, ...overrides,
     });
     const { h, groups } = await expandedRow(makeClient({
       recordTypes: [{ type: 'cell', count: 1, displayName: 'Cell' }],
       interiorCells: inOneSubBlock([cell({ formKey: '000201:A.esp', editorId: 'Vault111', hasChildren: true })]),
-      cellReferences: {
+      cellChildRecords: {
         persistent: [
           placed({ formKey: '000301:A.esp', editorId: 'DoorRef', baseEditorId: 'VaultDoor', fullName: 'Vault Door' }),
           placed({ formKey: '000302:A.esp', baseEditorId: 'Barrel01', baseFormKey: '000400:A.esp' }),

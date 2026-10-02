@@ -31,7 +31,7 @@ import {
   pluginsCopyValueText, registerCreatePluginCommand, registerPluginSortCommands, registerRevealInExplorerCommand,
 } from '../pluginListCommands';
 import { PLUGINS_KEY_ARGS } from '../gestureEntry';
-import { CellNode, PlacedNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
+import { CellNode, ChildRecordNode, RecordNode, RecordTypeNode, WorldspaceNode } from '../PluginTreeProvider';
 import { recordSummaryFixture, recordTypeCountFixture } from '../../client/test/fixtures';
 import { ImplicitMasterNode, PluginNode, PluginsTreeProvider, pluginFileOf, type PluginsTreeNode } from '../PluginsTreeProvider';
 import { InMemoryMEditClient } from '../../client';
@@ -435,7 +435,7 @@ describe('pluginsCopyValueText', () => {
   const cell = new CellNode('Alpha.esp', {
     formKey: '000803:Alpha.esp', editorId: 'Room', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasChildren: false, fullName: 'A Room', hasParseFailure: false,
   }, 'ModA');
-  const placedRef = new PlacedNode('Alpha.esp', {
+  const placedRef = new ChildRecordNode('Alpha.esp', {
     formKey: '000804:Alpha.esp', editorId: null, baseFormKey: '000800:Alpha.esp', recordType: 'refr', hasParseFailure: false,
   }, 'ModA');
   const group = new RecordTypeNode('Alpha.esp', recordTypeCountFixture({ type: 'weap', count: 2, displayName: 'Weapon' }), 'ModA');

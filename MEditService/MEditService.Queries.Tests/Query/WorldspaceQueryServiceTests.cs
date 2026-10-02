@@ -12,7 +12,7 @@ public class WorldspaceQueryServiceTests
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
-        CellReferences? cellRefs = null) : IRecordReads
+        CellChildRecords? cellRefs = null) : IRecordReads
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey)
         {
@@ -26,7 +26,7 @@ public class WorldspaceQueryServiceTests
         public string? LastSearchOrigin { get; private set; }
         public string? LastGetWorldspaceCellsOrigin { get; private set; }
         public string? LastGetInteriorCellsOrigin { get; private set; }
-        public string? LastGetCellReferencesOrigin { get; private set; }
+        public string? LastGetCellChildRecordsOrigin { get; private set; }
 
         public PagedResult<RecordSummary> Search(RecordQuery query)
         {
@@ -53,9 +53,9 @@ public class WorldspaceQueryServiceTests
             return cells;
         }
         public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public CellReferences GetCellReferences(PluginAddress plugin, string fk)
+        public CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk)
         {
-            LastGetCellReferencesOrigin = plugin.Origin;
+            LastGetCellChildRecordsOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
         }
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;

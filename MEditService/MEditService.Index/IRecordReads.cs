@@ -70,7 +70,7 @@ public interface IRecordReads
     // order xEdit's navigator lists them.
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey);
     IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin);
-    CellReferences GetCellReferences(PluginAddress plugin, string cellFormKey);
+    CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey);
     IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin);
 
     /// <summary>A placed ref's structural parentage (cell, persistent/temporary, position). Null

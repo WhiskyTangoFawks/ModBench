@@ -4,8 +4,8 @@ export type {
   PluginRecordTypeCount, CreatableRecordType, PluginCreatedResponse, PluginAddress, RecordCreateResponse, RecordAddress,
   CopyMode, CopyItem, ReferenceResult, RecordFilter,
   TrackStatus, UpstreamVersionByOrigin, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, RecordSummary,
-  WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
-  PlacedSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
+  WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords, CellSummary,
+  ChildRecordSummary, ContainerChildSummary, CompiledPlugin, CompileDiagnostic, CompileOutcome,
   LoadOrderStatus,
   LoadOrderRefusal, PluginLoadFailure, CompareResult,
 } from './MEditClient';

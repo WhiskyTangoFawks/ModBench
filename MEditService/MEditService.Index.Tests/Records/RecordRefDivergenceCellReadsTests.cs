@@ -53,7 +53,7 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
         var temporaryRef = _fixture.TemporaryRef;
         RenameInTheWorkingTree(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
 
-        var effective = _fixture.Reads.GetCellReferences(_fixture.Plugin, _fixture.EmbedCell)
+        var effective = _fixture.Reads.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
             .Temporary.Single(p => p.FormKey == temporaryRef);
         var head = _fixture.Reads.HeadDocument(temporaryRef, _fixture.Plugin);
 

@@ -22,7 +22,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Reads.GetCellReferences(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
         var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
 
         Assert.True(placed.Persistent.Single().HasParseFailure);
@@ -58,7 +58,7 @@ public sealed class SpatialParseFailurePrefixTests
         using var world = new SpatialWorld();
         world.MarkUnreadable(world.PlacedFormKey);
 
-        var placed = world.Reads.GetCellReferences(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
         var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
 
         Assert.Equal("could not be read", placed.Persistent.Single().ParseDiagnosis);
@@ -81,7 +81,7 @@ public sealed class SpatialParseFailurePrefixTests
     {
         using var world = new SpatialWorld();
 
-        var placed = world.Reads.GetCellReferences(SpatialWorld.Plugin, world.CellFormKey);
+        var placed = world.Reads.GetCellChildRecords(SpatialWorld.Plugin, world.CellFormKey);
         var cells = world.Reads.GetWorldspaceCells(SpatialWorld.Plugin, world.WorldspaceFormKey);
 
         Assert.False(placed.Persistent.Single().HasParseFailure);

@@ -61,7 +61,7 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
     [Fact]
     public void ACellsTemporaryChildrenHoldItsLandscapeAndNavmeshesWithItsPlacedObjects()
     {
-        var references = _index.RequireReads().GetCellReferences(Key, _landed);
+        var references = _index.RequireReads().GetCellChildRecords(Key, _landed);
 
         Assert.Empty(references.Persistent);
         Assert.Equal(
@@ -94,11 +94,11 @@ public sealed class CellLandscapeAndNavmeshChildrenTests : IDisposable
         Assert.Equal(
             ["land"],
             index.ReadsWithWinner(holder, plugins.GameDirectory, plugins.Plugins, first.Origin)
-                .GetCellReferences(first, cellKey).Temporary.Select(t => t.RecordType));
+                .GetCellChildRecords(first, cellKey).Temporary.Select(t => t.RecordType));
         Assert.Equal(
             ["land", "navm"],
             index.ReadsWithWinner(holder, plugins.GameDirectory, plugins.Plugins, second.Origin)
-                .GetCellReferences(second, cellKey).Temporary.Select(t => t.RecordType));
+                .GetCellChildRecords(second, cellKey).Temporary.Select(t => t.RecordType));
     }
 
     private static string TwinCell(Fallout4Mod mod, bool withNavmesh)

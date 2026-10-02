@@ -51,7 +51,7 @@ public class ContainerChildQueryServiceTests
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey) => [];
         public IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin) => [];
         public IReadOnlySet<string> GetWorldspacesHoldingCells(PluginAddress plugin) => new HashSet<string>();
-        public CellReferences GetCellReferences(PluginAddress plugin, string fk) => new([], []);
+        public CellChildRecords GetCellChildRecords(PluginAddress plugin, string fk) => new([], []);
         public PlacementRow? GetPlacement(string formKey, PluginAddress plugin) => null;
         public CellLocationRow? GetCellLocation(PluginAddress plugin, string cellFormKey) => null;
         public ContainerChildRow? GetContainerParent(PluginAddress plugin, string childFormKey) => null;

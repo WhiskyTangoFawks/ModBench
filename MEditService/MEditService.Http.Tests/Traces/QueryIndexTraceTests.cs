@@ -251,7 +251,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         var cellFk = Uri.EscapeDataString(
             blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require());
 
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/cells/{cellFk}/references?origin={UserMod}");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{UserPlugin}/cells/{cellFk}/children?origin={UserMod}");
 
         var placed = references.GetProperty("temporary")[0];
         Assert.Equal(JsonValueKind.Null, placed.GetProperty("editorId").ValueKind);
@@ -263,7 +263,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         var interiors = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/interior-cells?origin={origin}");
         var cellFk = Uri.EscapeDataString(
             interiors[0].GetProperty("subBlocks")[0].GetProperty("cells")[0].GetProperty("formKey").GetString().Require());
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/cells/{cellFk}/references?origin={origin}");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{plugin}/cells/{cellFk}/children?origin={origin}");
         return references.GetProperty("temporary")[0];
     }
 
@@ -510,7 +510,7 @@ public sealed class QueryIndexTraceTests : HostedTests
         var room = (await InteriorBlocks())[1].GetProperty("subBlocks")[0].GetProperty("cells")[0];
         var roomFk = Uri.EscapeDataString(room.GetProperty("formKey").GetString().Require());
 
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references?origin=ListedMod");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin=ListedMod");
 
         Assert.Equal(["ZuluRef", "AlphaRef"], EditorIds(references.GetProperty("temporary")));
     }
@@ -604,7 +604,7 @@ public sealed class QueryIndexTraceTests : HostedTests
             .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
             .SelectMany(s => s.GetProperty("cells").EnumerateArray()).ToList();
         var roomFk = Uri.EscapeDataString(rooms[0].GetProperty("formKey").GetString().Require());
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/references?origin=ListedMod");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin=ListedMod");
 
         Assert.Equal(["Cell"], GroupNames(types));
         Assert.Equal(["ZuluRoom"], rooms.Select(r => r.GetProperty("editorId").GetString()));

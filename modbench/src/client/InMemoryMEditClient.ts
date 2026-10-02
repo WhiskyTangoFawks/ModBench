@@ -6,7 +6,7 @@ type QueryMethod =
   | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getCreatableRecordTypes' | 'getLightPluginsSupported'
   | 'getRecords' | 'searchRecords'
   | 'getRecordOwner' | 'getRecordHolders' | 'getComparison' | 'getReferences'
-  | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells'
+  | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords' | 'getInteriorCells'
   | 'getContainerChildren' | 'setFilter' | 'clearFilter' | 'getActiveFilter';
 
 type CommandMethod =
@@ -259,10 +259,10 @@ export class InMemoryMEditClient implements MEditClient {
   ): ReturnType<MEditClient['getWorldspaceBlocks']> {
     return this.query('getWorldspaceBlocks', args);
   }
-  getCellReferences(
-    ...args: Parameters<MEditClient['getCellReferences']>
-  ): ReturnType<MEditClient['getCellReferences']> {
-    return this.query('getCellReferences', args);
+  getCellChildRecords(
+    ...args: Parameters<MEditClient['getCellChildRecords']>
+  ): ReturnType<MEditClient['getCellChildRecords']> {
+    return this.query('getCellChildRecords', args);
   }
   getInteriorCells(...args: Parameters<MEditClient['getInteriorCells']>): ReturnType<MEditClient['getInteriorCells']> {
     return this.query('getInteriorCells', args);

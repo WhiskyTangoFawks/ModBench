@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ErrorNode } from './errorNode';
 import type {
   RecordSummary,
-  WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
+  WorldspaceSummary, CellSummary, ChildRecordSummary, WorldspaceBlock, WorldspaceSubBlock, CellChildRecords,
   ContainerChildSummary, MEditClient, PluginRecordTypeCount, InteriorCellBlock, InteriorCellSubBlock,
 } from '../client';
 import { parseRecordResourceUri, recordResourceUri } from './recordResourceUri';
@@ -114,7 +114,7 @@ export class RecordNode extends vscode.TreeItem {
   }
 }
 
-// ── Worldspace / cell / placed-object nodes ─────────────────────────
+// ── Worldspace / cell / child-record nodes ─────────────────────────
 
 // ADR-0012: every node in the spatial chain carries its plugin's `origin` and conditions down to
 // its leaves: each hop's repository call needs the one, each record row beneath the other.
@@ -218,42 +218,42 @@ export class CellNode extends vscode.TreeItem {
   }
 }
 
-export class PlacedGroupNode extends vscode.TreeItem {
+export class ChildRecordGroupNode extends vscode.TreeItem {
   readonly kind = 'placedGroup' as const;
   constructor(
     public readonly plugin: string,
     public readonly cellFormKey: string,
     public readonly group: 'persistent' | 'temporary',
-    public readonly placed: PlacedSummary[],
+    public readonly children: ChildRecordSummary[],
     public readonly origin: string,
     public readonly conditions: PluginConditions = NOT_EDITABLE,
   ) {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = placed.length.toLocaleString();
+    this.description = children.length.toLocaleString();
     this.contextValue = `placedGroup-${group}`;
     // A group node has no record of its own, so its fact is exactly its rows', read from the
     // listing this node was built from.
-    if (placed.some(p => p.hasParseFailure)) markFailure(this, failureNote('This group', null));
+    if (children.some(p => p.hasParseFailure)) markFailure(this, failureNote('This group', null));
   }
 }
 
-export class PlacedNode extends vscode.TreeItem {
+export class ChildRecordNode extends vscode.TreeItem {
   readonly kind = 'placed' as const;
   readonly formKey: string;
   readonly editorId?: string;
   constructor(
     public readonly plugin: string,
-    public readonly placed: PlacedSummary,
+    public readonly child: ChildRecordSummary,
     public readonly origin: string,
     conditions: PluginConditions = NOT_EDITABLE,
   ) {
-    const label = placed.editorId ?? placed.baseEditorId ?? placed.formKey;
+    const label = child.editorId ?? child.baseEditorId ?? child.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.formKey = placed.formKey;
-    this.editorId = placed.editorId ?? undefined;
+    this.formKey = child.formKey;
+    this.editorId = child.editorId ?? undefined;
     this.contextValue = conditionedContextValue('placed', conditions);
-    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: placed.formKey }] };
-    describeRecordRow(this, placed);
+    this.command = { command: 'modbench.record.open', title: 'Open Record', arguments: [{ formKey: child.formKey }] };
+    describeRecordRow(this, child);
   }
 }
 
@@ -284,7 +284,7 @@ export class IndexingNode extends vscode.TreeItem {
 export type PluginTreeNode =
   | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
-  | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorBlockNode | InteriorSubBlockNode
+  | ChildRecordGroupNode | ChildRecordNode | InteriorCellsNode | InteriorBlockNode | InteriorSubBlockNode
   | ErrorNode | IndexingNode;
 
 const SPATIAL_GROUP_FACTORIES: Record<
@@ -309,7 +309,7 @@ type PageCache = Map<string, RecordPage>;
 
 type RecordBrowserClient = Pick<
   MEditClient,
-  'getRecordTypes' | 'getRecords' | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences'
+  'getRecordTypes' | 'getRecords' | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellChildRecords'
   | 'getInteriorCells' | 'getContainerChildren'
 >;
 
@@ -324,7 +324,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // Bumped by each refresh, so a read answered before mEdit's rows changed caches nothing.
   private generation = 0;
   private readonly interiorCache = new Map<string, InteriorCellBlock[]>();
-  private readonly refCache = new Map<string, CellReferences>();
+  private readonly refCache = new Map<string, CellChildRecords>();
   private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
   private readonly log: (msg: string) => void;
 
@@ -387,9 +387,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin, element.conditions));
     }
     if (element instanceof CellNode) return this.fetchCellGroups(element);
-    if (element instanceof PlacedGroupNode) {
-      return element.placed.map(p =>
-        new PlacedNode(element.plugin, p, element.origin, element.conditions));
+    if (element instanceof ChildRecordGroupNode) {
+      return element.children.map(p =>
+        new ChildRecordNode(element.plugin, p, element.origin, element.conditions));
     }
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
     if (element instanceof InteriorBlockNode) {
@@ -463,10 +463,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return this.orErrorNode(`fetchCellGroups(${node.cell.formKey})`, async () => {
       const cacheKey = `${pluginAddressKey(node.plugin, node.origin)}::${node.cell.formKey}`;
       const refs = await this.getOrLoad(this.refCache, cacheKey,
-        () => this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin));
-      const groups: PlacedGroupNode[] = [];
-      if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions));
-      if (refs.temporary.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions));
+        () => this.repository.getCellChildRecords(node.plugin, node.cell.formKey, node.origin));
+      const groups: ChildRecordGroupNode[] = [];
+      if (refs.persistent.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin, node.conditions));
+      if (refs.temporary.length) groups.push(new ChildRecordGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin, node.conditions));
       return groups;
     });
   }

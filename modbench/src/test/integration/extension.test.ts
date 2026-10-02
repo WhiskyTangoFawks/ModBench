@@ -602,12 +602,12 @@ describe('modbench.record.open', () => {
     await waitFor('the RecordNode\'s tab', () => titled('Fallout4.esm:000030') || undefined);
   });
 
-  it('reads a Plugins-tree PlacedNode-shaped row from a menu to its own record', async () => {
+  it('reads a Plugins-tree ChildRecordNode-shaped row from a menu to its own record', async () => {
     const row = { kind: 'placed', formKey: 'Fallout4.esm:000040', origin: 'Data' };
 
     await vscode.commands.executeCommand('modbench.record.openToSide', row, [row]);
 
-    await waitFor('the PlacedNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
+    await waitFor('the ChildRecordNode\'s tab', () => titled('Fallout4.esm:000040') || undefined);
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {

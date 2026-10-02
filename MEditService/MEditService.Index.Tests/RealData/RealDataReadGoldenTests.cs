@@ -91,10 +91,10 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                     .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList()),
             InteriorCells = _repo.GetInteriorCells(new PluginAddress(TestPluginName, Origin))
                 .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
-            CellReferences = cells.ToDictionary(
+            CellChildRecords = cells.ToDictionary(
                 fk => fk, fk =>
                 {
-                    var refs = _repo.GetCellReferences(new PluginAddress(TestPluginName, Origin), fk);
+                    var refs = _repo.GetCellChildRecords(new PluginAddress(TestPluginName, Origin), fk);
                     return new
                     {
                         Persistent = refs.Persistent.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),

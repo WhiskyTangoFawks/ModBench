@@ -42,18 +42,18 @@ public static class WorldspaceEndpoints
         .ProducesProblem(400)
         .ProducesProblem(500);
 
-        app.MapGet("/plugins/{plugin}/cells/{formKey}/references", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/cells/{formKey}/children", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
+                logger.LogInformation("Received GetCellChildRecords for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             }
             if (QueryEndpointMapping.MissingOrigin(origin, out var refused)) return refused;
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetCellReferences(decodedPlugin, decodedFk, origin));
+                return Results.Ok(svc.GetCellChildRecords(decodedPlugin, decodedFk, origin));
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -61,9 +61,9 @@ public static class WorldspaceEndpoints
                 return Results.Problem(ex.Message);
             }
         })
-        .WithName("GetCellReferences")
+        .WithName("GetCellChildRecords")
         .WithTags("Worldspaces")
-        .Produces<CellReferences>()
+        .Produces<CellChildRecords>()
         .ProducesProblem(400)
         .ProducesProblem(500);
 
