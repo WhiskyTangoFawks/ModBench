@@ -16,7 +16,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
 {
-    private const int Deleted = 0x0020, Persistent = 0x0400, PartialForm = 0x4000;
+    private const int Deleted = 0x0020, Persistent = 0x0400, PartialForm = 0x4000, Compressed = 0x40000;
 
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
     private static readonly ModKey Fallout4Esm = ModKey.FromFileName("Fallout4.esm");
@@ -77,6 +77,18 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         Assert.True(
             JsonNode.DeepEquals(Parse(Codec.SerializeToText(headerAlone, GameRelease.Fallout4)), deleted),
             deleted.ToJsonString());
+    }
+
+    [Fact]
+    public void SettingDeleted_ClearsCompressed()
+    {
+        var npc = _mod.Npcs.AddNew("Guy");
+        npc.MajorRecordFlagsRaw = Compressed;
+        var formKey = _fixture.Seed(npc, "npc_");
+
+        var deleted = SetFlags(formKey, Compressed | Deleted);
+
+        Assert.Equal(Deleted, FlagsOf(deleted));
     }
 
     [Fact]
@@ -178,6 +190,18 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
         Assert.True(
             JsonNode.DeepEquals(Parse(Codec.SerializeToText(headerAndEditorId, GameRelease.Fallout4)), partial),
             partial.ToJsonString());
+    }
+
+    [Fact]
+    public void SettingPartialForm_ClearsCompressed()
+    {
+        var cell = InteriorCellOfFallout4Esm();
+        cell.MajorRecordFlagsRaw = Compressed;
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var partial = SetFlags(formKey, Compressed | PartialForm);
+
+        Assert.Equal(PartialForm, FlagsOf(partial));
     }
 
     [Fact]

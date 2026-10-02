@@ -249,6 +249,18 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void SettingPartialForm_OnADeletedCopy_ClearsCompressed_WhichItsCopyToTheLeftHolds()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(Compressed, "Inside")), false),
+            (Plugin("Override.esp", CellCopy(Deleted)), true));
+
+        var partial = Written(TheCell, PartialForm);
+
+        Assert.Equal(PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
+    }
+
+    [Fact]
     public void ClearingDeleted_WhenTheNearestCopyToItsLeftCannotBeRead_IsRefusedNamingItsPlugin_AndWritesNothing()
     {
         var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f));

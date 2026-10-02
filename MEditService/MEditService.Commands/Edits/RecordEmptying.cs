@@ -23,6 +23,7 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
         var flags = write.Next;
         if (makesPartialForm) flags &= ~DeletedFlag.Bit;
         else if (deletes && partialFormable) flags &= ~PartialFormFlag.Bit;
+        if (deletes || makesPartialForm) flags &= ~CompressedBit;
         var clears = !deletes && (write.Held & ~flags & EmptyingBits(schema)) != 0;
         var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
         var refills = clears || deletesBeforeMakingPartialForm;
@@ -97,8 +98,8 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     internal JsonElement FlagsWith(LeftCopy? copyOnTheLeft)
     {
         if (Left(copyOnTheLeft) is not { } left) return JsonSerializer.SerializeToElement(Flags);
-        var partialForm = MakesPartialForm ? PartialFormFlag.Bit : 0L;
-        return JsonSerializer.SerializeToElement(RecordFlagsWrite.HeldBy(left) | partialForm);
+        var held = RecordFlagsWrite.HeldBy(left);
+        return JsonSerializer.SerializeToElement(MakesPartialForm ? (held | PartialFormFlag.Bit) & ~CompressedBit : held);
     }
 
     internal void Apply(JsonObject record, RecordTableSchema schema, LeftCopy? copyOnTheLeft)
@@ -115,6 +116,8 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     }
 
     private const string FormVersion = "FormVersion";
+
+    private const long CompressedBit = 0x0004_0000;
 
     private JsonObject? Left(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
