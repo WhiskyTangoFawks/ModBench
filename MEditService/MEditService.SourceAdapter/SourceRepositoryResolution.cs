@@ -107,7 +107,7 @@ public sealed partial class SourceRepository
         }
 
         // Nothing of its own, so it is inlined in another record's document, which the owner map names.
-        if (ScanFor(sourceRoot, identity.FormKey).DocumentHolding(identity.FormKey) is not { } owner) return null;
+        if (DocumentHolding(sourceRoot, identity.FormKey) is not { } owner) return null;
 
         return Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true);
     }
@@ -138,7 +138,7 @@ public sealed partial class SourceRepository
 
         // Nothing of its own, so another record's document carries it inline, and the codec reads its
         // type and name off that document's text.
-        if (ScanFor(sourceRoot, spelled).DocumentHolding(spelled) is not { } owner) return null;
+        if (DocumentHolding(sourceRoot, spelled) is not { } owner) return null;
         if (BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
         if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
             is not { } child)
@@ -204,7 +204,7 @@ public sealed partial class SourceRepository
         if (identified.Count == 0)
         {
             identified = IdentitiesIn(
-                ScanFor(sourceRoot, spelled).DocumentsDeclaring(spelled), pluginFileName, formKey, spelled, schemas);
+                DocumentsDeclaring(sourceRoot, spelled), pluginFileName, formKey, spelled, schemas);
             RememberFoundByText(pluginFileName, spelled, [.. identified.Select(i => i.Path)]);
         }
 
@@ -267,8 +267,7 @@ public sealed partial class SourceRepository
             documents = [found];
         if (documents.Count == 0 && byText)
         {
-            documents = [.. ScanFor(Path.Combine(_modFolder, RootFor(pluginFileName)), formKey)
-                .DocumentsDeclaring(formKey)
+            documents = [.. DocumentsDeclaring(Path.Combine(_modFolder, RootFor(pluginFileName)), formKey)
                 .Where(document => roots.Exists(root => IsUnder(root, document)))];
             RememberFoundByText(pluginFileName, formKey, documents);
         }
@@ -298,8 +297,7 @@ public sealed partial class SourceRepository
     /// <paramref name="formKey"/>. The cheap half of <see cref="IdentityOf"/>, for a caller that
     /// needs no name and will not pay the codec read one costs.</summary>
     internal bool CarriesEmbedded(PluginAddress plugin, string formKey) =>
-        ScanFor(Path.Combine(_modFolder, RootFor(plugin.Name)), formKey)
-            .DocumentHolding(formKey) is not null;
+        DocumentHolding(Path.Combine(_modFolder, RootFor(plugin.Name)), formKey) is not null;
 
     /// <summary>True when this plugin's tree holds <paramref name="formKey"/> at the working tree or
     /// at HEAD. Both, because a working-tree deletion does not free the ID until the next
@@ -322,7 +320,7 @@ public sealed partial class SourceRepository
 
         var spelled = parsed.ToString();
         return DocumentsNaming(sourceRoot, spelled).Any(document => Declares(document, parsed))
-               || RememberFoundByText(plugin.Name, spelled, ScanFor(sourceRoot, spelled).DocumentsDeclaring(spelled)).Count > 0
+               || RememberFoundByText(plugin.Name, spelled, DocumentsDeclaring(sourceRoot, spelled)).Count > 0
                || CarriesEmbedded(plugin, spelled);
     }
 
@@ -417,8 +415,7 @@ public sealed partial class SourceRepository
                 .Select(groupFolder => Path.Combine(sourceRoot, groupFolder))],
             pluginFileName, formKey, byText);
 
-    // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree), and a root
-    // under one already listed is read off that listing rather than the disk.
+    // One listing per scan root turns a whole-mod pass from O(records × tree) into O(tree).
     private string[] EntriesUnder(string scanRoot)
     {
         if (_entriesByScanRoot.TryGetValue(scanRoot, out var cached)) return cached;
@@ -441,9 +438,14 @@ public sealed partial class SourceRepository
         _filesByPlugin.Clear();
     }
 
-    // A scan for one key tokenizes only the documents whose bytes may spell it. Past a few keys, one
-    // whole scan costs less than the next keys' scans would.
+    // Past a few keys, one whole scan costs less than the next keys' scans would.
     private const int KeyScansBeforeAWholeScan = 3;
+
+    private TreeScan.OwnerDocument? DocumentHolding(string sourceRoot, string formKey) =>
+        ScanFor(sourceRoot, formKey).DocumentHolding(formKey);
+
+    private List<string> DocumentsDeclaring(string sourceRoot, string formKey) =>
+        ScanFor(sourceRoot, formKey).DocumentsDeclaring(formKey);
 
     private TreeScan ScanFor(string sourceRoot, string formKey)
     {
@@ -489,7 +491,6 @@ public sealed partial class SourceRepository
         private bool _rescanned;
         private readonly Dictionary<string, DocumentKeys> _keysByDocument = new(StringComparer.Ordinal);
 
-        // Read first from the operation's own listing of the root, and from the disk when read again.
         internal TreeScan(string sourceRoot, GameRelease release, string? onlyKey, IEnumerable<string> listed)
         {
             (_sourceRoot, _release) = (sourceRoot, release);
@@ -508,8 +509,7 @@ public sealed partial class SourceRepository
         internal List<string> DocumentsDeclaring(string formKey) => HoldersOf(formKey).Declaring;
 
         // Every answer is checked against the document's current text, so a stale entry reads as
-        // absence. A key no document bears out, at its root or inline, is read again once per scan
-        // (ADR-0009).
+        // absence. A key no document bears out, at its root or inline, is read again once per scan.
         private Holders HoldersOf(string formKey)
         {
             var holders = BorneOut(formKey);
@@ -525,8 +525,8 @@ public sealed partial class SourceRepository
 
         private string ModFolder => PathShape.DirectoryOf(PathShape.DirectoryOf(_sourceRoot));
 
-        // A document's keys are read off its current bytes, and tokenized again only when those bytes
-        // differ from the ones last tokenized: one owner verified for each of its many children.
+        // One owner is verified for each of its many children, so its tokens are reused while its
+        // bytes are unchanged.
         private DocumentKeys? KeysOf(string documentPath)
         {
             if (DocumentBytes(documentPath) is not { } bytes) return null;

@@ -111,6 +111,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
     private string FullPath(string relativePath) => Path.Combine(_modFolder, relativePath);
 
+    private void MoveTemporaryRef(Cell from, Cell to)
+    {
+        from.Temporary.Remove(_temporaryRef);
+        to.Temporary.Add(_temporaryRef);
+        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
+        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+    }
+
     // The root FormKey tells a child's own text from its owner's document, which carries the child's
     // key further down.
     private static string? RootFormKeyOf(string body)
@@ -239,10 +247,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         // Asked once first, so the answer below can only come from a map that noticed the move.
         Assert.NotNull(repository.Get(Plugin, Identity(_temporaryRef, "refr")));
 
-        _interiorCell.Temporary.Remove(_temporaryRef);
-        _exteriorCell.Temporary.Add(_temporaryRef);
-        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
-        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+        MoveTemporaryRef(_interiorCell, _exteriorCell);
 
         var found = repository.Get(Plugin, Identity(_temporaryRef, "refr"));
         Assert.NotNull(found);
@@ -253,17 +258,14 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_AChildMovedAgainAfterItsOneRebuild_IsAbsentRatherThanTheOwnerTheMapStillLists()
+    public void UnitHolding_AChildMovedTwiceWithinOneOperation_IsAbsentNeverTheOwnerThatLostIt()
     {
         var repository = Repository;
         Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
-        MoveTemporaryRefToTheExteriorCell();
+        MoveTemporaryRef(_interiorCell, _exteriorCell);
         Assert.NotNull(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
 
-        _exteriorCell.Temporary.Remove(_temporaryRef);
-        _interiorCell.Temporary.Add(_temporaryRef);
-        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
-        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
+        MoveTemporaryRef(_exteriorCell, _interiorCell);
 
         Assert.Null(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
     }
@@ -394,20 +396,12 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.Contains(_response2.FormKey.ToString(), held);
     }
 
-    private void MoveTemporaryRefToTheExteriorCell()
-    {
-        _interiorCell.Temporary.Remove(_temporaryRef);
-        _exteriorCell.Temporary.Add(_temporaryRef);
-        File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
-        File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
-    }
-
     [Fact]
     public void UnitHolding_OfAChildAnotherToolMovedBetweenTwoOperations_IsItsNewOwner()
     {
         Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
 
-        MoveTemporaryRefToTheExteriorCell();
+        MoveTemporaryRef(_interiorCell, _exteriorCell);
 
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
@@ -460,6 +454,30 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(InteriorCellPath), Serialize(_interiorCell));
 
         Assert.Equal("RewrittenRef", IdentityOf(_temporaryRef)?.EditorId);
+    }
+
+    [Fact]
+    public void IdentityOf_AChildWhoseOwnerAnotherToolDeletedBetweenTwoOperations_IsNothing()
+    {
+        Assert.NotNull(IdentityOf(_response));
+
+        File.Delete(FullPath(QuestPath));
+
+        Assert.Null(IdentityOf(_response));
+    }
+
+    [Fact]
+    public void UnitHolding_OfAChildWhoseOwnerAnotherToolMovedToAnotherFolderBetweenTwoOperations_IsTheMovedDocument()
+    {
+        Assert.NotNull(Repository.UnitHolding(Plugin, Identity(_persistentRef, "refr")));
+
+        var moved = Path.Combine(Root, "Cells", "1", "1", Leaf(_interiorCell));
+        Directory.CreateDirectory(Path.GetDirectoryName(FullPath(moved)) ?? throw new InvalidOperationException($"Expected '{moved}' to have a parent directory."));
+        Directory.Move(Path.GetDirectoryName(FullPath(InteriorCellPath)) ?? throw new InvalidOperationException("Expected the interior cell's document to sit in its own directory."), FullPath(moved));
+
+        Assert.Equal(
+            Path.Combine(moved, "RecordData.json"),
+            Repository.UnitHolding(Plugin, Identity(_persistentRef, "refr"))?.RelativePath);
     }
 
     [Fact]
