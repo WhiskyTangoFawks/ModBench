@@ -10,12 +10,12 @@ instanceadapter.label: Instance adapter
 
 instanceloader -> mods: "value: mod order, each path's providers, Overwrite's files" {class: loadorder}
 mods."the rows and the columns"
-mods -> instanceadapter: "get: each copy of the mod's contested files" {class: loadorder}
+mods -> instanceadapter: "get: each copy of the files in the mod's file order conflicts" {class: loadorder}
 instanceadapter -> mods: "a content digest for each copy, or the reason it could not be read" {class: loadorder}
 mods."each cell's state and value"
 
 changed: "the disk changed" {
   instanceloader -> mods: "load-instance: value" {class: loadorder}
-  mods -> instanceadapter: "get: each copy of the mod's contested files" {class: loadorder}
-  instanceadapter -> mods: "a content digest for each copy" {class: loadorder}
+  mods -> instanceadapter: "get: each copy of the files in the mod's file order conflicts" {class: loadorder}
+  instanceadapter -> mods: "a content digest for each copy, or the reason it could not be read" {class: loadorder}
 }
