@@ -17,10 +17,6 @@ internal sealed class WorkingTreeOverlay
 {
     private const string HeadRelation = TableDdlBuilder.HeadRowsRelation;
 
-    // The one covered slot that is a cell rather than a placed object, so the row it derives is a
-    // cell_location rather than a placement.
-    private const string TopCellSlot = "TopCell";
-
     // The columns `records` and `records_committed` share, in declaration order. Every read, copy
     // and insert here names it, so no column is silently dropped from a row.
     internal const string RecordColumnList =
@@ -475,7 +471,7 @@ internal sealed class WorkingTreeOverlay
         PluginAddress key, string formKey, string recordType, string containerType,
         IReadOnlyList<ContainerDocuments.ChildDocument> children)
     {
-        // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and the
+        // Two spellings of the type: the CLR name (Cell) is what PlacementWalker.TableFor and the
         // slot table key off; the schema table name (cell) is what a stored
         // ContainerChildRow.ParentRecordType carries, matching ingest and downstream readers.
         var containerChildRows = new List<ContainerChildRow>();
@@ -484,25 +480,24 @@ internal sealed class WorkingTreeOverlay
 
         foreach (var child in children)
         {
-            if (!PluginIngest.CoveredByPlacementTables.Contains((containerType, child.SlotName)))
+            switch (PlacementWalker.TableFor(containerType, child.SlotName))
             {
-                containerChildRows.Add(new ContainerChildRow(
-                    child.FormKey, formKey, recordType, child.SlotName, child.SlotIndex));
-                continue;
+                case ParentageTable.ContainerChild:
+                    containerChildRows.Add(new ContainerChildRow(
+                        child.FormKey, formKey, recordType, child.SlotName, child.SlotIndex));
+                    break;
+                case ParentageTable.CellLocation:
+                    // No block/sub and never interior, by construction — a worldspace's top cell is
+                    // not part of any exterior grid.
+                    topCellRow = PlacementWalker.CellLocation(
+                        child.FormKey, child.Node,
+                        new CellStructure(formKey, null, null, null, null, IsInterior: false));
+                    break;
+                case ParentageTable.Placement:
+                    placementRows.Add(PlacementWalker.Placement(
+                        child.FormKey, child.Node, formKey, PlacementWalker.PlacementGroupOf(child.SlotName)));
+                    break;
             }
-
-            if (child.SlotName.Equals(TopCellSlot, StringComparison.Ordinal))
-            {
-                // No block/sub and never interior, by construction — a worldspace's top cell is not
-                // part of any exterior grid.
-                topCellRow = PlacementWalker.CellLocation(
-                    child.FormKey, child.Node,
-                    new CellStructure(formKey, null, null, null, null, IsInterior: false));
-                continue;
-            }
-
-            placementRows.Add(PlacementWalker.Placement(
-                child.FormKey, child.Node, formKey, child.SlotName.ToLowerInvariant()));
         }
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",

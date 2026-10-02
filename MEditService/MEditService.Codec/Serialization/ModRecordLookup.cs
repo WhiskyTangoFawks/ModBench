@@ -18,7 +18,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Lazy<ILinkCache> _cache;
     private readonly Lazy<Dictionary<string, DocumentContainment>> _containments;
-    private readonly Lazy<Dictionary<string, MutagenModDocuments.CellRecord>> _cells;
+    private readonly Lazy<Dictionary<string, CellStructure>> _cells;
 
     internal ModRecordLookup(
         IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open)
@@ -28,7 +28,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _open = open;
         _cache = new Lazy<ILinkCache>(() => mod.ToUntypedImmutableLinkCache());
         _containments = new Lazy<Dictionary<string, DocumentContainment>>(BuildContainments);
-        _cells = new Lazy<Dictionary<string, MutagenModDocuments.CellRecord>>(() => MutagenModDocuments.CellsIn(mod));
+        _cells = new Lazy<Dictionary<string, CellStructure>>(() => MutagenModDocuments.CellsIn(mod));
     }
 
     public RecordIdentity? IdentityOf(string formKey) =>
@@ -43,7 +43,7 @@ internal sealed class ModRecordLookup : IPluginRecordLookup
         _containments.Value.TryGetValue(formKey, out var found) ? found : null;
 
     public CellStructure? CellStructureOf(string formKey) =>
-        _cells.Value.TryGetValue(formKey, out var cell) ? cell.Structure : null;
+        _cells.Value.TryGetValue(formKey, out var cell) ? cell : null;
 
     public void Dispose()
     {

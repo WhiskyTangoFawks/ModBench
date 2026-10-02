@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -184,14 +185,8 @@ public static class ContainerChildFields
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {
-        if (EnumerateChildFieldsFor(record.GetType()) is not { } fields) yield break;
-
-        foreach (var fieldName in fields)
+        foreach (var (fieldName, property) in ChildProperties.GetOrAdd(record.GetType(), ChildPropertiesOf))
         {
-            var property = record.GetType().GetProperty(fieldName)
-                ?? throw new InvalidOperationException(
-                    $"{record.GetType().Name} has no property '{fieldName}' to read children from — its child members are the assembly's own.");
-
             switch (property.GetValue(record))
             {
                 case IMajorRecordGetter single:
@@ -209,4 +204,13 @@ public static class ContainerChildFields
             }
         }
     }
+
+    private static readonly ConcurrentDictionary<Type, IReadOnlyList<(string FieldName, PropertyInfo Property)>> ChildProperties = new();
+
+    private static IReadOnlyList<(string FieldName, PropertyInfo Property)> ChildPropertiesOf(Type recordType) =>
+        EnumerateChildFieldsFor(recordType) is { } fields
+            ? [.. fields.Select(fieldName => (fieldName, recordType.GetProperty(fieldName)
+                ?? throw new InvalidOperationException(
+                    $"{recordType.Name} has no property '{fieldName}' to read children from — its child members are the assembly's own.")))]
+            : [];
 }
