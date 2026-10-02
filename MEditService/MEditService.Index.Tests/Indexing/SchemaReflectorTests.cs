@@ -459,20 +459,6 @@ public class SchemaReflectorTests
         Assert.Contains("1", bits);                   // Playable (low-bit sanity check)
     }
 
-    [Fact]
-    public void GetSchemas_Misc_CompositeFlagsEnum_IsStillAFlagsLeaf_WithNoBitPerMember()
-    {
-        // MiscItem.MajorFlag has [Flags] but CalcFromComponents=11 and PackInUseOnly=13 —
-        // both non-power-of-two: the codec still writes it as a name array, and GetEnumMembers
-        // keeps every member with no bit.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.True(schemas.ContainsKey("misc"), "misc schema must be present");
-        var col = schemas["misc"].RecordColumns.FirstOrDefault(c => c.Name == "MajorFlags");
-        Assert.NotNull(col);
-        Assert.Equal("flags", col.ApiType);
-        Assert.All(col.Field.EnumMembers, m => Assert.Null(m.BitValue));
-    }
-
     // ── Plugin header as a first-class record ─────────────────────────────────
     // ModHeader is not a major record in Mutagen (no FormKey or EditorID), so it cannot be discovered
     // by the major-record-getter scan and gets one hand-assembled schema entry instead.

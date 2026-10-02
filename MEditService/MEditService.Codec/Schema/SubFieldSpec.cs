@@ -26,7 +26,11 @@ public sealed record SubFieldSpec(
     // See FieldMetadata.Default.
     object? Default = null,
     // See FieldMetadata.ReadOnlyReason.
-    string? ReadOnlyReason = null)
+    string? ReadOnlyReason = null,
+    // See FieldMetadata.IsRecordHeaderMember.
+    bool IsRecordHeaderMember = false,
+    // See FieldMetadata.IsRecordFormKey.
+    bool IsRecordFormKey = false)
 {
     /// <summary>Derived from ApiType rather than carried, so the two can never disagree.</summary>
     public bool IsArray => ApiType == "array";
@@ -47,6 +51,8 @@ public sealed record SubFieldSpec(
             LeafTypeName: LeafTypeName,
             Variants: Variants?.ToDictionary(v => v.Key, v => v.Value.ToFieldMetadata(reason), StringComparer.Ordinal),
             Default: Default,
-            ReadOnlyReason: reason);
+            ReadOnlyReason: reason,
+            IsRecordHeaderMember: IsRecordHeaderMember,
+            IsRecordFormKey: IsRecordFormKey);
     }
 }

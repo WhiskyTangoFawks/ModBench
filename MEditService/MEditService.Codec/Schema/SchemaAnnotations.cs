@@ -14,6 +14,12 @@ public enum KnownDefectEffect
     MemberReadOnly,
 }
 
+/// <summary>One member of the plugin header the editor presents: its xEdit label where it is a
+/// record header member, why a write reaching it is refused, and whether it reads as the header's
+/// FormKey.</summary>
+internal sealed record PluginHeaderMember(
+    string TypeName, string MemberName, string? HeaderLabel = null, string? ReadOnlyReason = null, bool IsRecordFormKey = false);
+
 /// <summary>Hand-written per-game facts overlaid on reflection, keyed by Mutagen type and member
 /// name. <see cref="Validate"/> fails schema generation naming any row the assembly does not bear
 /// out.</summary>
@@ -61,7 +67,14 @@ internal sealed record SchemaAnnotations(
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
     // Members the document never spells but one bit of a flags member says: the ESL flag, the
     // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
-    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers)
+    Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
+    // The record header's members in xEdit's order, under xEdit's labels (wbRecordHeader in
+    // wbDefinitionsCommon.pas), keyed by the declaring interface: a type carries the rows whose
+    // interface it has.
+    IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers,
+    // The plugin header's presented members, keyed by the game's ModHeader interface: its record
+    // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
+    IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
 {
     // Rows every game shares are named once here; a row true of only some games is written inline
     // in each table that has it, so each table still states that game's complete facts.
@@ -89,6 +102,30 @@ internal sealed record SchemaAnnotations(
         ("ILinkIdentifier", "Type"),                         // a System.Type, not a record field
         ("IFormKeyGetter", "FormKey"),                       // record identity, the header's own column
         ("IAMagicEffectArchetypeGetter", "AssociationKey"),  // IFormLinkIdentifier alias of Association
+    ];
+
+    // The header members Mutagen.Bethesda.Core declares on every game's major records, leading
+    // xEdit's order; each game's base adds the rest.
+    private static readonly (string, string, string)[] RecordHeaderMembersInEveryGame =
+    [
+        ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
+        ("IFormKeyGetter", "FormKey", "FormID"),
+        ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
+        ("IMajorRecordGetter", "FormVersion", "Form Version"),
+    ];
+
+    // Each game's ModHeader declares these (its *ModHeader.xml in Mutagen), the TES4 record's header
+    // first, in wbRecordHeader's order (wbDefinitionsCommon.pas).
+    private static PluginHeaderMember[] PluginHeaderMembersOf(string modHeaderGetter) =>
+    [
+        new(modHeaderGetter, "Flags", "Record Flags"),
+        new(modHeaderGetter, "FormID", "FormID", PluginHeader.FormIdReadOnly, IsRecordFormKey: true),
+        new(modHeaderGetter, "Version", "Version Control Info 1"),
+        new(modHeaderGetter, "FormVersion", "Form Version"),
+        new(modHeaderGetter, "Version2", "Version Control Info 2"),
+        new(modHeaderGetter, "Author"),
+        // Content-derived at compile time (ADR-0008).
+        new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
@@ -201,7 +238,13 @@ internal sealed record SchemaAnnotations(
                 [("IWorldspaceGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
                 [("IQuestGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
                 [("IDialogTopicGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
-            }),
+            },
+            RecordHeaderMembers:
+            [
+                .. RecordHeaderMembersInEveryGame,
+                ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
         [GameCategory.Skyrim] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -212,16 +255,21 @@ internal sealed record SchemaAnnotations(
             EmptySubSchemaTypes: [.. EmptySubSchemaTypesInEveryGame],
             VectorStructTypes: [.. VectorStructTypesInEveryGame],
             RefusedShapes: new(RefusedShapesInEveryGame, StringComparer.Ordinal),
-            // This repo builds no Skyrim schema, so a label, defect, condition or keyed-array row
-            // written here could not be validated against the assembly it describes. Empty until one
-            // can be built.
+            // This build references no Skyrim assembly, so Validate checks these rows only once one
+            // loads. A label, defect, condition or keyed-array row is found from a built schema.
             EnumMemberLabels: [],
             KnownDefects: [],
             SiblingsInUse: [],
             KeyedArrays: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
-            SyntheticFlagMembers: []),
+            SyntheticFlagMembers: [],
+            RecordHeaderMembers:
+            [
+                .. RecordHeaderMembersInEveryGame,
+                ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -247,7 +295,13 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
-            SyntheticFlagMembers: []),
+            SyntheticFlagMembers: [],
+            RecordHeaderMembers:
+            [
+                .. RecordHeaderMembersInEveryGame,
+                ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
+            ],
+            PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>
@@ -546,6 +600,8 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedKeyMembers(typesByName),
             .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
             .. UnresolvedSyntheticFlags(typesByName),
+            .. UnresolvedMembers(typesByName, nameof(RecordHeaderMembers), RecordHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
+            .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
         ];
 
         if (missing.Length > 0)

@@ -174,56 +174,40 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(beforeOthers, afterOthers);
     }
 
-    // Two reflected columns alias the int bit 14 lives in, and is_partial_form is the one sanctioned
-    // door. Both start from an unflagged record: while flagged, PartialFormFieldReadOnly already
-    // blocks every non-exempt field, so neither column would reach this guard.
+    // Record Flags is the int bit 14 lives in, and is_partial_form is the one sanctioned door. Each
+    // starts from an unflagged record: while flagged, PartialFormFieldReadOnly already blocks every
+    // non-exempt field, so the write would never reach this guard.
     [Fact]
-    public void EditField_MajorFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
+    public void EditField_RecordFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
     {
         Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
         var path = SourcePath();
         var before = File.ReadAllText(path);
 
-        // MajorFlags is Cell.MajorFlags's own reflected flags column, an array of names that the
-        // codec reads back over MajorRecordFlagsRaw wholesale, so a bit no name spells rides in as
-        // its number and sets bit 14 as a side effect.
         var result = Service().Set(
-            Plugin, PartialCell.ToString(), "MajorFlags",
-            Json($"[\"Persistent\", \"{PartialFormBit.ToString(CultureInfo.InvariantCulture)}\"]"));
+            Plugin, PartialCell.ToString(), "MajorRecordFlagsRaw",
+            Json((PersistentBit | PartialFormBit).ToString(CultureInfo.InvariantCulture)));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
         Assert.Equal(before, File.ReadAllText(path));
     }
 
-    // Mutagen spells the same flags again under Fallout4MajorRecordFlags, ahead of MajorFlags, and
-    // its reader takes the last spelling: a write to the earlier one cannot land and is refused,
-    // never silently overridden.
     [Fact]
-    public void EditField_FallOut4MajorRecordFlags_OverriddenByTheLaterAlias_IsRefusedNotSilentlyLost()
+    public void EditField_TheCodecsViewsOfRecordFlags_AreNoDoorToThem()
     {
-        Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
-        var path = SourcePath();
-        var before = File.ReadAllText(path);
-
-        var result = Service().Set(
-            Plugin, PartialCell.ToString(), "Fallout4MajorRecordFlags",
-            Json($"[\"{PartialFormBit.ToString(CultureInfo.InvariantCulture)}\"]"));
+        var result = Service().Set(Plugin, PartialCell.ToString(), "Fallout4MajorRecordFlags", Json("[\"Deleted\"]"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
-        Assert.Equal("Fallout4MajorRecordFlags", result.Path);
-        Assert.Equal(before, File.ReadAllText(path));
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
-    // The guard is bit-14-specific, not a blanket lockout: a write through either column that leaves
-    // bit 14 untouched still succeeds. Unflagged for the same reason as the tests above.
     [Fact]
-    public void EditField_MajorFlags_NotTouchingBit14_Succeeds()
+    public void EditField_RecordFlags_NotTouchingBit14_Succeeds()
     {
         Assert.True(Service().Set(Plugin, PartialCell.ToString(), "IsPartialForm", Json("false")).Applied);
 
-        var result = Service().Set(Plugin, PartialCell.ToString(), "MajorFlags", Json("[\"Persistent\"]"));
+        var result = Service().Set(Plugin, PartialCell.ToString(), "MajorRecordFlagsRaw", Json("0"));
 
         Assert.True(result.Applied);
     }

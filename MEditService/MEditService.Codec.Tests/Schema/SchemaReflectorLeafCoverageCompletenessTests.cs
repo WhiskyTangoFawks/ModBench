@@ -16,12 +16,11 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
     private const GameCategory Category = GameCategory.Fallout4;
 
-    // Record-header metadata and Loqui's Registration handle, never per-record data at any depth. A
-    // hand-kept copy by name rather than a reference, so a drift fails as a loud false-positive gap.
+    // The EditorID the write path owns, and the GRUP timestamps, never per-record data at any depth.
+    // A hand-kept copy by name rather than a reference, so a drift fails as a loud false-positive gap.
     private static readonly HashSet<string> BaseSkip = new(StringComparer.Ordinal)
     {
-        "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl", "MajorRecordFlagsRaw",
-        "Timestamp", "TemporaryTimestamp", "PersistentTimestamp",
+        "EditorID", "Timestamp", "TemporaryTimestamp", "PersistentTimestamp",
     };
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
@@ -127,7 +126,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             {
                 foreach (var prop in DirectDataProperties(owner, BaseSkip))
                 {
-                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name)) continue;
+                    if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || c.Aliases.Contains(prop.Name))) continue;
                     gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
                 }
             }

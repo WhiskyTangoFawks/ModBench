@@ -14,14 +14,19 @@ import type { CompareResult, PluginLoadFailure } from './types';
 const FORM_KEY = '000001:Fallout4.esm';
 const TOOLTIP = 'Written; waiting for the disk to confirm';
 const nameMeta = fieldMeta({ name: 'Name', type: 'string' });
+const formIdMeta = fieldMeta({ name: 'FormKey', type: 'string', displayLabel: 'FormID', isRecordHeaderMember: true, isRecordFormKey: true });
+const formId = { metadata: formIdMeta, value: FORM_KEY };
 
 function recordNamed(name: string): CompareResult {
   return compareResultFixture({
     overrides: [
-      compareOverride({ formKey: FORM_KEY, plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: nameMeta, value: 'Original' }] }),
-      compareOverride({ formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC', fields: [{ metadata: nameMeta, value: name }] }),
+      compareOverride({ formKey: FORM_KEY, plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [formId, { metadata: nameMeta, value: 'Original' }] }),
+      compareOverride({ formKey: FORM_KEY, plugin: 'MyMod.esp', origin: 'ModA', isWinner: true, editorId: 'TestNPC', fields: [formId, { metadata: nameMeta, value: name }] }),
     ],
-    diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Original', 'MyMod.esp|ModA': name } })],
+    diffs: [
+      diffNode({ fieldName: 'FormKey', values: { 'Fallout4.esm': FORM_KEY, 'MyMod.esp|ModA': FORM_KEY } }),
+      diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Original', 'MyMod.esp|ModA': name } }),
+    ],
   });
 }
 

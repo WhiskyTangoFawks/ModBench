@@ -56,4 +56,11 @@ public record FieldMetadata(
 
     // Why this member is never written: a known upstream defect, or a member the header has no
     // write path for. Null for an ordinary member, which the write path patches.
-    string? ReadOnlyReason = null);
+    string? ReadOnlyReason = null,
+
+    // One of the record header's members, which xEdit gathers under its Record Header row.
+    bool IsRecordHeaderMember = false,
+
+    // The header member that shows and takes the record's FormKey: xEdit's FormID (xedit.md,
+    // divergence 16).
+    bool IsRecordFormKey = false);

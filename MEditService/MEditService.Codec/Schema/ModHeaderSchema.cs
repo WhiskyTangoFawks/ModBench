@@ -16,16 +16,6 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The members of the header the editor presents, and why a write reaching one is refused, if it
-    // is. A mod header is not a major record, so the table names them.
-    private static readonly (string Member, string? ReadOnlyReason)[] PresentedMembers =
-    [
-        ("Author", null),
-        ("Flags", null),
-        // Content-derived at compile time (ADR-0008).
-        (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
-    ];
-
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
     // root RecordData.json.
     private static RecordTableSchema? BuildHeaderSchema(
@@ -41,26 +31,34 @@ internal static class ModHeaderSchema
         }
 
         var headerGetterType = modHeaderProp.PropertyType;
+        var pathPrefix = $"{modHeaderProp.Name}.";
         var columns = new List<ColumnSpec>();
-
-        foreach (var (member, readOnlyReason) in PresentedMembers)
+        foreach (var (typeName, member, headerLabel, readOnlyReason, isRecordFormKey) in game.Annotations.PluginHeaderMembers)
         {
-            var prop = headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
-            if (prop == null)
+            if (headerGetterType.Name != typeName || headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance) is not { } prop)
             {
-                logger.LogWarning("No {Member} found on {HeaderType}; that header column is omitted", member, headerGetterType);
-                continue;
+                throw new InvalidOperationException(
+                    $"{nameof(SchemaAnnotations.PluginHeaderMembers)}: {typeName}.{member} is no member of {headerGetterType.Name}, the plugin header's type");
             }
 
             // A member the builder declines has already said so through SchemaRefusals.
-            if (ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is { } column)
-                columns.Add(column with { Field = column.Field with { ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason } });
+            if (ColumnReflection.BuildColumn(prop, pathPrefix + prop.Name, game, logger) is not { } column) continue;
+            columns.Add(column with
+            {
+                Field = column.Field with
+                {
+                    DisplayLabel = headerLabel ?? column.Field.DisplayLabel,
+                    IsRecordHeaderMember = headerLabel != null,
+                    ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason,
+                    IsRecordFormKey = isRecordFormKey,
+                },
+            });
         }
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
         // column's own member names.
         columns.AddRange(SyntheticColumns.For(
-            headerGetterType, game, backingPathPrefix: modHeaderProp.Name + ".",
+            headerGetterType, game, backingPathPrefix: pathPrefix,
             backingNames: member => columns.FirstOrDefault(c => c.Name == member)?.Field.EnumMembers ?? LeafSpec.NoEnumMembers));
 
         return new RecordTableSchema

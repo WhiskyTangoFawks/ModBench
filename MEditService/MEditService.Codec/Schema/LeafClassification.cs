@@ -27,7 +27,7 @@ internal static class LeafClassification
         [typeof(short)] = ("INTEGER", "int"),
         [typeof(ushort)] = ("INTEGER", "int"),
         [typeof(int)] = ("INTEGER", "int"),
-        [typeof(uint)] = ("INTEGER", "int"),
+        [typeof(uint)] = ("BIGINT", "int"),
         [typeof(long)] = ("BIGINT", "int"),
         [typeof(ulong)] = ("BIGINT", "int"),
         [typeof(float)] = ("FLOAT", "float"),
@@ -47,7 +47,7 @@ internal static class LeafClassification
 
     // A CLR enum's members: a flags enum keeps only the atomic members, each with its bit, and any
     // other keeps every member with no bit.
-    private static EnumMember[] GetEnumMembers(Type enumType)
+    internal static EnumMember[] GetEnumMembers(Type enumType)
     {
         var allNames = Enum.GetNames(enumType);
         if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
@@ -101,7 +101,7 @@ internal static class LeafClassification
         if (game.Annotations.IsVectorStructType(core))
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
 
-        if (ReflectedTypes.IsModKey(core))
+        if (ReflectedTypes.IsModKey(core) || ReflectedTypes.IsFormKey(core))
             return new("string", "VARCHAR", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers);
 
         if (core.IsEnum)

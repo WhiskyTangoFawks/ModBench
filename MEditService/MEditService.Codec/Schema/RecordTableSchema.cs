@@ -2,9 +2,8 @@
 namespace MEditService.Codec.Schema;
 
 /// <summary>A member the document never spells: one bit of the flags member at BackingPath.
-/// FlagName is the bit's name where that member is an array of names; Aliases are the codec's other
-/// spellings of the bits.</summary>
-public sealed record SyntheticBit(string BackingPath, long Bit, string? FlagName, IReadOnlyList<string> Aliases);
+/// FlagName is the bit's name where that member is an array of names.</summary>
+public sealed record SyntheticBit(string BackingPath, long Bit, string? FlagName);
 
 /// <summary>One column of a record table: the member's own spec, plus the database facts a
 /// generated view (ADR-0007) needs on top of it. A column refuses writes only by naming
@@ -20,6 +19,10 @@ public sealed record ColumnSpec(
     string? ViewDefaultLiteral = null,
     SyntheticBit? Synthetic = null)
 {
+    /// <summary>The document's other spellings of this column's value, which the reader takes over
+    /// it, so a write clears them.</summary>
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+
     /// <summary>The document's own member name, which is the wire name and the view column name.</summary>
     public string Name => Field.Name;
 

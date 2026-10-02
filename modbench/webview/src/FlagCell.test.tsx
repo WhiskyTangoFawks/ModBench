@@ -113,3 +113,36 @@ describe('FlagCell — editing', () => {
     expect(onCommit).toHaveBeenCalledWith(['AB', 'C', 'D']);
   });
 });
+
+const recordFlagsMeta = fieldMeta({
+  name: 'MajorRecordFlagsRaw',
+  type: 'int',
+  enumMembers: [{ value: 'Deleted', bitValue: '32' }, { value: 'Persistent', bitValue: '1024' },
+    { value: 'Top', bitValue: '2147483648' }],
+});
+
+describe('FlagCell — an integer whose bits the schema names', () => {
+  it('checks each name whose bit is set', () => {
+    render(<FlagCell value={1024 | 32} meta={recordFlagsMeta} editable onCommit={vi.fn()} />);
+    expect(screen.getAllByRole('checkbox').map(b => b.matches(':checked'))).toEqual([true, true, false]);
+  });
+
+  it('collapsed, reads the names set and an unnamed bit in hex', () => {
+    render(<FlagCell value={1024 | 0x4000} meta={recordFlagsMeta} editable onCommit={vi.fn()} collapsed />);
+    expect(screen.getByText('Persistent, 0x4000')).toBeInTheDocument();
+  });
+
+  it('a toggle commits the integer with that bit flipped and every other bit kept', () => {
+    const onCommit = vi.fn();
+    render(<FlagCell value={1024 | 0x4000} meta={recordFlagsMeta} editable onCommit={onCommit} />);
+    fireEvent.click(checkboxAt(0));
+    expect(onCommit).toHaveBeenCalledWith(1024 | 0x4000 | 32);
+  });
+
+  it('the thirty-second bit commits as the signed integer the member holds', () => {
+    const onCommit = vi.fn();
+    render(<FlagCell value={null} meta={recordFlagsMeta} editable onCommit={onCommit} />);
+    fireEvent.click(checkboxAt(2));
+    expect(onCommit).toHaveBeenCalledWith(-2147483648);
+  });
+});

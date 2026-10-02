@@ -24,13 +24,11 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "0x400"
-        ],
         "FavorCost": null,
+        "FormKey": "1A6C6F:Fallout4.esm",
+        "FormVersion": 130,
         "HeadTrackingWeight": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsIgnoredBySandbox2": null,
         "IsLinkedRefTransient": null,
@@ -48,9 +46,7 @@
         ],
         "LocationRefTypes": null,
         "LocationReference": null,
-        "MajorFlags": [
-          "Persistent"
-        ],
+        "MajorRecordFlagsRaw": 1024,
         "MaterialSwap": null,
         "MultiBoundReference": null,
         "Ownership": null,
@@ -65,6 +61,7 @@
         "Scale": null,
         "SplineConnections": null,
         "Version2": 3,
+        "VersionControl": 3743411,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -112,13 +109,11 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "0x400"
-        ],
         "FavorCost": null,
+        "FormKey": "1A6C71:Fallout4.esm",
+        "FormVersion": 130,
         "HeadTrackingWeight": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsIgnoredBySandbox2": null,
         "IsLinkedRefTransient": null,
@@ -139,9 +134,7 @@
         ],
         "LocationRefTypes": null,
         "LocationReference": null,
-        "MajorFlags": [
-          "Persistent"
-        ],
+        "MajorRecordFlagsRaw": 1024,
         "MaterialSwap": null,
         "MultiBoundReference": null,
         "Ownership": null,
@@ -156,6 +149,7 @@
         "Scale": null,
         "SplineConnections": null,
         "Version2": 2,
+        "VersionControl": 3743339,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -202,13 +196,11 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "0x400"
-        ],
         "FavorCost": null,
+        "FormKey": "1A6C7B:Fallout4.esm",
+        "FormVersion": 130,
         "HeadTrackingWeight": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsIgnoredBySandbox2": null,
         "IsLinkedRefTransient": null,
@@ -226,9 +218,7 @@
         ],
         "LocationRefTypes": null,
         "LocationReference": null,
-        "MajorFlags": [
-          "Persistent"
-        ],
+        "MajorRecordFlagsRaw": 1024,
         "MaterialSwap": null,
         "MultiBoundReference": null,
         "Ownership": null,
@@ -243,6 +233,7 @@
         "Scale": null,
         "SplineConnections": null,
         "Version2": 1,
+        "VersionControl": 3743339,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -281,21 +272,17 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "0x8000000"
-        ],
         "Flags": [],
         "ForcedLocRefType": null,
+        "FormKey": "24A313:Fallout4.esm",
+        "FormVersion": null,
         "InteractionKeyword": null,
-        "IsDeleted": null,
         "Keywords": [
           "24A350:Fallout4.esm",
           "1CD02B:Fallout4.esm"
         ],
         "LoopingSound": null,
-        "MajorFlags": [
-          "NavMeshGenerationBoundingBox"
-        ],
+        "MajorRecordFlagsRaw": 134217728,
         "MarkerColor": "#00CC4C33",
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
@@ -315,6 +302,7 @@
         "Properties": null,
         "RadioReceiver": null,
         "Version2": 2,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -369,21 +357,17 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "0x8000000"
-        ],
         "Flags": [],
         "ForcedLocRefType": null,
+        "FormKey": "24A314:Fallout4.esm",
+        "FormVersion": null,
         "InteractionKeyword": null,
-        "IsDeleted": null,
         "Keywords": [
           "24A350:Fallout4.esm",
           "1CD02B:Fallout4.esm"
         ],
         "LoopingSound": null,
-        "MajorFlags": [
-          "NavMeshGenerationBoundingBox"
-        ],
+        "MajorRecordFlagsRaw": 134217728,
         "MarkerColor": "#00CC4C33",
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
@@ -403,6 +387,7 @@
         "Properties": null,
         "RadioReceiver": null,
         "Version2": 2,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -457,21 +442,17 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "0x8000000"
-        ],
         "Flags": [],
         "ForcedLocRefType": null,
+        "FormKey": "24A315:Fallout4.esm",
+        "FormVersion": null,
         "InteractionKeyword": null,
-        "IsDeleted": null,
         "Keywords": [
           "24A350:Fallout4.esm",
           "1CD02B:Fallout4.esm"
         ],
         "LoopingSound": null,
-        "MajorFlags": [
-          "NavMeshGenerationBoundingBox"
-        ],
+        "MajorRecordFlagsRaw": 134217728,
         "MarkerColor": "#00CC4C33",
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
@@ -491,6 +472,7 @@
         "Properties": null,
         "RadioReceiver": null,
         "Version2": 2,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -580,10 +562,10 @@
         },
         "Destructible": null,
         "EquipmentType": null,
-        "Fallout4MajorRecordFlags": null,
+        "FormKey": "24A3FE:Fallout4.esm",
+        "FormVersion": null,
         "Health": 140,
         "InstanceNaming": "188160:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "04D8A1:Fallout4.esm",
           "183194:Fallout4.esm",
@@ -597,7 +579,7 @@
           "07820B:Fallout4.esm",
           "1CC46A:Fallout4.esm"
         ],
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": {
           "TargetLanguage": "English",
           "Value": ""
@@ -803,6 +785,7 @@
         "Unused": "0x000000",
         "Value": 140,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 12.0
       },
@@ -851,10 +834,10 @@
         },
         "Destructible": null,
         "EquipmentType": null,
-        "Fallout4MajorRecordFlags": null,
+        "FormKey": "24A3FF:Fallout4.esm",
+        "FormVersion": null,
         "Health": 140,
         "InstanceNaming": "188160:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "04D8A1:Fallout4.esm",
           "183196:Fallout4.esm",
@@ -868,7 +851,7 @@
           "07820B:Fallout4.esm",
           "1CC46A:Fallout4.esm"
         ],
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": {
           "TargetLanguage": "English",
           "Value": ""
@@ -1050,6 +1033,7 @@
         "Unused": "0x000000",
         "Value": 200,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 15.0
       },
@@ -1098,10 +1082,10 @@
         },
         "Destructible": null,
         "EquipmentType": null,
-        "Fallout4MajorRecordFlags": null,
+        "FormKey": "24A400:Fallout4.esm",
+        "FormVersion": null,
         "Health": 140,
         "InstanceNaming": "188160:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "04D8A1:Fallout4.esm",
           "183198:Fallout4.esm",
@@ -1115,7 +1099,7 @@
           "07820B:Fallout4.esm",
           "1CC46A:Fallout4.esm"
         ],
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": {
           "TargetLanguage": "English",
           "Value": ""
@@ -1297,6 +1281,7 @@
         "Unused": "0x000000",
         "Value": 200,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 15.0
       },
@@ -1779,12 +1764,11 @@
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "Flags": [
           "HasWater"
         ],
+        "FormKey": "00DB41:Fallout4.esm",
+        "FormVersion": null,
         "GodRays": null,
         "Grid": {
           "Flags": "-1654112256",
@@ -1792,7 +1776,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsDeleted": null,
         "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
@@ -4305,9 +4288,7 @@
         "LightingTemplate": null,
         "Location": null,
         "LockList": null,
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "MaxHeightData": {
           "HeightMap": [
             [
@@ -11546,6 +11527,7 @@
         "TemporaryUnknownGroupData": 1,
         "UnknownGroupData": null,
         "Version2": 11,
+        "VersionControl": 2760484,
         "Water": null,
         "WaterEnvironmentMap": null,
         "WaterHeight": 3.4028235E+38,
@@ -12214,12 +12196,11 @@
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "Flags": [
           "HasWater"
         ],
+        "FormKey": "00DB42:Fallout4.esm",
+        "FormVersion": null,
         "GodRays": null,
         "Grid": {
           "Flags": "-1654112256",
@@ -12227,7 +12208,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsDeleted": null,
         "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
@@ -14771,9 +14751,7 @@
         "LightingTemplate": null,
         "Location": null,
         "LockList": null,
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "MaxHeightData": {
           "HeightMap": [
             [
@@ -25651,6 +25629,7 @@
         "TemporaryUnknownGroupData": 1,
         "UnknownGroupData": null,
         "Version2": 11,
+        "VersionControl": 2760484,
         "Water": null,
         "WaterEnvironmentMap": null,
         "WaterHeight": 3.4028235E+38,
@@ -26274,12 +26253,11 @@
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "Flags": [
           "HasWater"
         ],
+        "FormKey": "00DB43:Fallout4.esm",
+        "FormVersion": null,
         "GodRays": null,
         "Grid": {
           "Flags": "-1654112256",
@@ -26287,7 +26265,6 @@
         },
         "ImageSpace": null,
         "InPreVisFileOf": "00DB61:Fallout4.esm",
-        "IsDeleted": null,
         "IsPartialForm": false,
         "Landscape": {
           "DATA": "0x1D000000",
@@ -28852,9 +28829,7 @@
         "LightingTemplate": null,
         "Location": null,
         "LockList": null,
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "MaxHeightData": {
           "HeightMap": [
             [
@@ -40900,6 +40875,7 @@
         "TemporaryUnknownGroupData": null,
         "UnknownGroupData": null,
         "Version2": 11,
+        "VersionControl": 2760484,
         "Water": null,
         "WaterEnvironmentMap": null,
         "WaterHeight": 3.4028235E+38,
@@ -40923,10 +40899,11 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
+        "FormKey": "0048EB:Fallout4.esm",
+        "FormVersion": 76,
         "IsPartialForm": false,
         "Keyword": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Priority": null,
         "Quest": "003648:Fallout4.esm",
@@ -50801,7 +50778,8 @@
         "Subtype": "RechargeExit",
         "TopicFlags": null,
         "Unknown": null,
-        "Version2": 7
+        "Version2": 7,
+        "VersionControl": 269069
       },
       "FormKey": "0048EB:Fallout4.esm",
       "IsWinner": true,
@@ -50818,10 +50796,11 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
+        "FormKey": "0057DD:Fallout4.esm",
+        "FormVersion": 42,
         "IsPartialForm": false,
         "Keyword": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Priority": null,
         "Quest": "003648:Fallout4.esm",
@@ -53794,7 +53773,8 @@
         "Subtype": "Hello",
         "TopicFlags": null,
         "Unknown": null,
-        "Version2": 1
+        "Version2": 1,
+        "VersionControl": 268450
       },
       "FormKey": "0057DD:Fallout4.esm",
       "IsWinner": true,
@@ -53811,10 +53791,11 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
+        "FormKey": "00581D:Fallout4.esm",
+        "FormVersion": 128,
         "IsPartialForm": false,
         "Keyword": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Priority": null,
         "Quest": "003648:Fallout4.esm",
@@ -55199,7 +55180,8 @@
         "Subtype": "SharedInfo",
         "TopicFlags": null,
         "Unknown": null,
-        "Version2": 9
+        "Version2": 9,
+        "VersionControl": 270006
       },
       "FormKey": "00581D:Fallout4.esm",
       "IsWinner": true,
@@ -55215,14 +55197,16 @@
       "EditorId": "DialogueDiamondCitySharedBranch",
       "Fields": {
         "Category": "Player",
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "TopLevel"
         ],
-        "IsDeleted": null,
+        "FormKey": "01DADA:Fallout4.esm",
+        "FormVersion": 59,
+        "MajorRecordFlagsRaw": null,
         "Quest": "003648:Fallout4.esm",
         "StartingTopic": "01DAD7:Fallout4.esm",
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 6167126
       },
       "FormKey": "01DADA:Fallout4.esm",
       "IsWinner": true,
@@ -55236,14 +55220,16 @@
       "EditorId": "DialogueGenericPlayerSharedQuestion",
       "Fields": {
         "Category": "Player",
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "TopLevel"
         ],
-        "IsDeleted": null,
+        "FormKey": "0267FA:Fallout4.esm",
+        "FormVersion": 59,
+        "MajorRecordFlagsRaw": null,
         "Quest": "0179EF:Fallout4.esm",
         "StartingTopic": "02650D:Fallout4.esm",
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 268900
       },
       "FormKey": "0267FA:Fallout4.esm",
       "IsWinner": true,
@@ -55257,14 +55243,16 @@
       "EditorId": "DialogueConcordAreaSharedBranch",
       "Fields": {
         "Category": "Player",
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "TopLevel"
         ],
-        "IsDeleted": null,
+        "FormKey": "0CA9D0:Fallout4.esm",
+        "FormVersion": 90,
+        "MajorRecordFlagsRaw": null,
         "Quest": "0179F3:Fallout4.esm",
         "StartingTopic": "0CA9C8:Fallout4.esm",
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 6167427
       },
       "FormKey": "0CA9D0:Fallout4.esm",
       "IsWinner": true,
@@ -55285,13 +55273,14 @@
           "AttackOnSight": true
         },
         "ExteriorJailMarker": null,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "HiddenFromPC"
         ],
         "FollowerWaitMarker": null,
-        "IsDeleted": null,
+        "FormKey": "249D44:Fallout4.esm",
+        "FormVersion": null,
         "JailOutfit": null,
+        "MajorRecordFlagsRaw": null,
         "MerchantContainer": null,
         "Name": {
           "TargetLanguage": "English",
@@ -55309,7 +55298,8 @@
           "BuysStolenItems": true,
           "EndHour": 24
         },
-        "Version2": 2
+        "Version2": 2,
+        "VersionControl": 78993
       },
       "FormKey": "249D44:Fallout4.esm",
       "IsWinner": true,
@@ -55328,11 +55318,12 @@
           "AttackOnSight": true
         },
         "ExteriorJailMarker": null,
-        "Fallout4MajorRecordFlags": null,
         "Flags": null,
         "FollowerWaitMarker": null,
-        "IsDeleted": null,
+        "FormKey": "249E8F:Fallout4.esm",
+        "FormVersion": null,
         "JailOutfit": null,
+        "MajorRecordFlagsRaw": null,
         "MerchantContainer": null,
         "Name": null,
         "PlayerInventoryContainer": null,
@@ -55343,7 +55334,8 @@
         "VendorBuySellList": null,
         "VendorLocation": null,
         "VendorValues": {},
-        "Version2": 1
+        "Version2": 1,
+        "VersionControl": 6168622
       },
       "FormKey": "249E8F:Fallout4.esm",
       "IsWinner": true,
@@ -55362,11 +55354,12 @@
           "AttackOnSight": true
         },
         "ExteriorJailMarker": null,
-        "Fallout4MajorRecordFlags": null,
         "Flags": null,
         "FollowerWaitMarker": null,
-        "IsDeleted": null,
+        "FormKey": "24A157:Fallout4.esm",
+        "FormVersion": null,
         "JailOutfit": null,
+        "MajorRecordFlagsRaw": null,
         "MerchantContainer": null,
         "Name": null,
         "PlayerInventoryContainer": null,
@@ -55381,7 +55374,8 @@
           "BuysStolenItems": true,
           "EndHour": 24
         },
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 1647695
       },
       "FormKey": "24A157:Fallout4.esm",
       "IsWinner": true,
@@ -55397,12 +55391,13 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
       "Fields": {
         "Data": 0.0,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A340:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "MutagenObjectType": "GlobalFloat",
         "OutputChar": null,
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 1648426
       },
       "FormKey": "24A340:Fallout4.esm",
       "IsWinner": true,
@@ -55416,12 +55411,13 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
       "Fields": {
         "Data": 0.0,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A341:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "MutagenObjectType": "GlobalFloat",
         "OutputChar": null,
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 1648426
       },
       "FormKey": "24A341:Fallout4.esm",
       "IsWinner": true,
@@ -55435,12 +55431,13 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
       "Fields": {
         "Data": 0.0,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A342:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "MutagenObjectType": "GlobalFloat",
         "OutputChar": null,
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 1648426
       },
       "FormKey": "24A342:Fallout4.esm",
       "IsWinner": true,
@@ -55461,17 +55458,17 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
-        "Fallout4MajorRecordFlags": null,
         "Flags": {
           "Flags": [
             "Random"
           ]
         },
         "ForcedAlias": null,
+        "FormKey": "0057DE:Fallout4.esm",
+        "FormVersion": null,
         "GreetDistance": null,
         "INTV": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "OverrideFileName": null,
         "PreviousDialog": null,
         "Prompt": null,
@@ -55501,6 +55498,7 @@
         "SubtitlePriority": "Low",
         "Topic": null,
         "Version2": null,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null
       },
       "FormKey": "0057DE:Fallout4.esm",
@@ -55520,17 +55518,17 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
-        "Fallout4MajorRecordFlags": null,
         "Flags": {
           "Flags": [
             "Random"
           ]
         },
         "ForcedAlias": null,
+        "FormKey": "0057DF:Fallout4.esm",
+        "FormVersion": null,
         "GreetDistance": null,
         "INTV": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "OverrideFileName": null,
         "PreviousDialog": null,
         "Prompt": null,
@@ -55560,6 +55558,7 @@
         "SubtitlePriority": "Low",
         "Topic": null,
         "Version2": 12,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null
       },
       "FormKey": "0057DF:Fallout4.esm",
@@ -55579,17 +55578,17 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
-        "Fallout4MajorRecordFlags": null,
         "Flags": {
           "Flags": [
             "Random"
           ]
         },
         "ForcedAlias": null,
+        "FormKey": "0057E0:Fallout4.esm",
+        "FormVersion": null,
         "GreetDistance": null,
         "INTV": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "OverrideFileName": null,
         "PreviousDialog": null,
         "Prompt": null,
@@ -55619,6 +55618,7 @@
         "SubtitlePriority": "Low",
         "Topic": null,
         "Version2": 13,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null
       },
       "FormKey": "0057E0:Fallout4.esm",
@@ -55637,13 +55637,14 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A403:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Notes": null,
         "Type": "None",
-        "Version2": null
+        "Version2": null,
+        "VersionControl": 5450067
       },
       "FormKey": "24A403:Fallout4.esm",
       "IsWinner": true,
@@ -55659,16 +55660,17 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A405:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "Name": {
           "TargetLanguage": "English",
           "Value": ""
         },
         "Notes": null,
         "Type": "RecipeFilter",
-        "Version2": 2
+        "Version2": 2,
+        "VersionControl": 78993
       },
       "FormKey": "24A405:Fallout4.esm",
       "IsWinner": true,
@@ -55684,16 +55686,17 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
-        "Fallout4MajorRecordFlags": null,
-        "IsDeleted": null,
-        "MajorFlags": null,
+        "FormKey": "24A406:Fallout4.esm",
+        "FormVersion": null,
+        "MajorRecordFlagsRaw": null,
         "Name": {
           "TargetLanguage": "English",
           "Value": ""
         },
         "Notes": null,
         "Type": "RecipeFilter",
-        "Version2": 2
+        "Version2": 2,
+        "VersionControl": 78993
       },
       "FormKey": "24A406:Fallout4.esm",
       "IsWinner": true,
@@ -55720,16 +55723,12 @@
           }
         ],
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "InitiallyDisabled"
-        ],
         "FeaturedItemMessage": null,
+        "FormKey": "24A068:Fallout4.esm",
+        "FormVersion": null,
         "Icons": null,
-        "IsDeleted": null,
         "Keywords": null,
-        "MajorFlags": [
-          "0x800"
-        ],
+        "MajorRecordFlagsRaw": 2048,
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
           "File": "Props\\Note_LowPoly.nif"
@@ -55747,6 +55746,7 @@
         "PutDownSound": null,
         "Value": 500,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -55801,16 +55801,12 @@
           }
         ],
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "InitiallyDisabled"
-        ],
         "FeaturedItemMessage": null,
+        "FormKey": "24A069:Fallout4.esm",
+        "FormVersion": null,
         "Icons": null,
-        "IsDeleted": null,
         "Keywords": null,
-        "MajorFlags": [
-          "0x800"
-        ],
+        "MajorRecordFlagsRaw": 2048,
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
           "File": "Props\\Note_LowPoly.nif"
@@ -55828,6 +55824,7 @@
         "PutDownSound": null,
         "Value": 1000,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -55882,16 +55879,12 @@
           }
         ],
         "Destructible": null,
-        "Fallout4MajorRecordFlags": [
-          "InitiallyDisabled"
-        ],
         "FeaturedItemMessage": null,
+        "FormKey": "24A06B:Fallout4.esm",
+        "FormVersion": null,
         "Icons": null,
-        "IsDeleted": null,
         "Keywords": null,
-        "MajorFlags": [
-          "0x800"
-        ],
+        "MajorRecordFlagsRaw": 2048,
         "Model": {
           "Data": "0x0400000000000000000000000000000000000000",
           "File": "Props\\Note_LowPoly.nif"
@@ -55909,6 +55902,7 @@
         "PutDownSound": null,
         "Value": 350,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -56017,9 +56011,6 @@
             "Faction": "0EDCE1:Fallout4.esm"
           }
         ],
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "FarAwayModel": null,
         "FarAwayModelDistance": null,
         "Flags": [
@@ -56028,6 +56019,8 @@
         "FollowerCommandPackageList": null,
         "FollowerElevatorPackageList": null,
         "ForcedLocRefType": null,
+        "FormKey": "2499C4:Fallout4.esm",
+        "FormVersion": null,
         "GearedUpWeapons": 1,
         "GiftFilter": null,
         "GuardWarnOverridePackageList": null,
@@ -56037,7 +56030,6 @@
         "HeightMax": 2.0,
         "HeightMin": 0.5,
         "InheritsSoundsFrom": null,
-        "IsDeleted": null,
         "Items": null,
         "Keywords": [
           "013795:Fallout4.esm",
@@ -56049,9 +56041,7 @@
           "Level": 10,
           "MutagenObjectType": "NpcLevel"
         },
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "Mood": null,
         "Morphs": null,
         "NAM5": "0xFF00",
@@ -56163,6 +56153,7 @@
         "Unused": null,
         "UseTemplateActors": null,
         "Version2": 2,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -56287,9 +56278,6 @@
             "Faction": "0948B4:Fallout4.esm"
           }
         ],
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "FarAwayModel": null,
         "FarAwayModelDistance": null,
         "Flags": [
@@ -56298,6 +56286,8 @@
         "FollowerCommandPackageList": null,
         "FollowerElevatorPackageList": null,
         "ForcedLocRefType": null,
+        "FormKey": "2499C8:Fallout4.esm",
+        "FormVersion": null,
         "GearedUpWeapons": 1,
         "GiftFilter": null,
         "GuardWarnOverridePackageList": null,
@@ -56307,7 +56297,6 @@
         "HeightMax": 1.1,
         "HeightMin": 0.85,
         "InheritsSoundsFrom": "0B3432:Fallout4.esm",
-        "IsDeleted": null,
         "Items": null,
         "Keywords": [
           "1CF26C:Fallout4.esm"
@@ -56318,9 +56307,7 @@
           "Level": 8,
           "MutagenObjectType": "NpcLevel"
         },
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "Mood": null,
         "Morphs": null,
         "NAM5": "0xFF00",
@@ -56416,6 +56403,7 @@
         "Unused": null,
         "UseTemplateActors": "3511",
         "Version2": null,
+        "VersionControl": 6233867,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -56491,15 +56479,14 @@
         "FacialHairColor": null,
         "FacialMorphIntensity": null,
         "Factions": null,
-        "Fallout4MajorRecordFlags": [
-          "Compressed"
-        ],
         "FarAwayModel": null,
         "FarAwayModelDistance": null,
         "Flags": null,
         "FollowerCommandPackageList": null,
         "FollowerElevatorPackageList": null,
         "ForcedLocRefType": null,
+        "FormKey": "24A37F:Fallout4.esm",
+        "FormVersion": null,
         "GearedUpWeapons": 1,
         "GiftFilter": null,
         "GuardWarnOverridePackageList": null,
@@ -56509,7 +56496,6 @@
         "HeightMax": 1.0,
         "HeightMin": 1.0,
         "InheritsSoundsFrom": null,
-        "IsDeleted": null,
         "Items": [
           {
             "Item": {
@@ -56537,9 +56523,7 @@
           "Level": 1,
           "MutagenObjectType": "NpcLevel"
         },
-        "MajorFlags": [
-          "0x40000"
-        ],
+        "MajorRecordFlagsRaw": 262144,
         "Mood": null,
         "Morphs": null,
         "NAM5": "0xFF00",
@@ -56673,6 +56657,7 @@
         "Unused": null,
         "UseTemplateActors": "7351",
         "Version2": 2,
+        "VersionControl": 1648505,
         "VirtualMachineAdapter": {
           "Scripts": [
             {
@@ -134918,12 +134903,12 @@
             "VersionControl": 270025
           }
         ],
-        "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Diamond City\\",
-        "IsDeleted": null,
+        "FormKey": "003648:Fallout4.esm",
+        "FormVersion": null,
         "IsPartialForm": false,
         "Location": "002CEF:Fallout4.esm",
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Objectives": null,
         "QuestCompletionXp": null,
@@ -140099,6 +140084,7 @@
         "Unknown": null,
         "UnusedConditions": [],
         "Version2": 1,
+        "VersionControl": 270092,
         "VirtualMachineAdapter": {
           "Aliases": [
             {
@@ -157829,12 +157815,12 @@
             "VersionControl": 270078
           }
         ],
-        "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Generic\\",
-        "IsDeleted": null,
+        "FormKey": "0179EF:Fallout4.esm",
+        "FormVersion": 122,
         "IsPartialForm": false,
         "Location": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Objectives": null,
         "QuestCompletionXp": null,
@@ -158070,6 +158056,7 @@
         "Unknown": null,
         "UnusedConditions": [],
         "Version2": 5,
+        "VersionControl": 269950,
         "VirtualMachineAdapter": {
           "Aliases": [
             {
@@ -179683,12 +179670,12 @@
             "VersionControl": 6168310
           }
         ],
-        "Fallout4MajorRecordFlags": null,
         "Filter": "Dialogue\\Concord\\",
-        "IsDeleted": null,
+        "FormKey": "0179F3:Fallout4.esm",
+        "FormVersion": 130,
         "IsPartialForm": false,
         "Location": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "Name": null,
         "Objectives": null,
         "QuestCompletionXp": null,
@@ -183990,6 +183977,7 @@
         "Unknown": null,
         "UnusedConditions": [],
         "Version2": 11,
+        "VersionControl": 270050,
         "VirtualMachineAdapter": {
           "Aliases": [
             {
@@ -184502,7 +184490,6 @@
         },
         "FacegenFaceClamp": 3.0,
         "FacegenMainClamp": 5.0,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "Playable",
           "Walks",
@@ -184518,6 +184505,8 @@
           "CannotUsePlayableItems"
         ],
         "FlightRadius": 1.0,
+        "FormKey": "0A96BF:Fallout4.esm",
+        "FormVersion": null,
         "HairColorExtendedLookupTexture": null,
         "HairColorLookupTexture": null,
         "IdleChatterTimeMax": 8.0,
@@ -184525,12 +184514,12 @@
         "ImpactDataSet": null,
         "ImpactMaterialType": "1C756F:Fallout4.esm",
         "InjuredHealthPercent": null,
-        "IsDeleted": null,
         "Keywords": [
           "013795:Fallout4.esm",
           "06B4F2:Fallout4.esm",
           "23954F:Fallout4.esm"
         ],
+        "MajorRecordFlagsRaw": null,
         "MeatCapTextureSet": "0A96C1:Fallout4.esm",
         "MorphRace": null,
         "MorphValues": null,
@@ -184603,6 +184592,7 @@
         "Unknown": "0xFFFFFFFFFFFFFFFF",
         "Unknown2": "0x0000803E0000A04021010000000000000000000000000000000000000000000000000000",
         "Version2": 9,
+        "VersionControl": 78993,
         "XPValue": null
       },
       "FormKey": "0A96BF:Fallout4.esm",
@@ -184862,9 +184852,6 @@
         },
         "FacegenFaceClamp": 3.0,
         "FacegenMainClamp": 5.0,
-        "Fallout4MajorRecordFlags": [
-          "CantWait"
-        ],
         "Flags": [
           "TiltFrontBack",
           "TiltLeftRight",
@@ -184882,6 +184869,8 @@
           "CannotUsePlayableItems"
         ],
         "FlightRadius": null,
+        "FormKey": "187AF9:Fallout4.esm",
+        "FormVersion": null,
         "HairColorExtendedLookupTexture": null,
         "HairColorLookupTexture": null,
         "IdleChatterTimeMax": 6.0,
@@ -184889,13 +184878,13 @@
         "ImpactDataSet": null,
         "ImpactMaterialType": "022954:Fallout4.esm",
         "InjuredHealthPercent": null,
-        "IsDeleted": null,
         "Keywords": [
           "021AD0:Fallout4.esm",
           "013795:Fallout4.esm",
           "013798:Fallout4.esm",
           "160493:Fallout4.esm"
         ],
+        "MajorRecordFlagsRaw": 524288,
         "MeatCapTextureSet": "064110:Fallout4.esm",
         "MorphRace": null,
         "MorphValues": null,
@@ -184988,6 +184977,7 @@
         "Unknown": "0x0000000001000000",
         "Unknown2": "0x00000000000000000000000000000000000000000000000000000000000096C300000000",
         "Version2": 2,
+        "VersionControl": 78993,
         "XPValue": null
       },
       "FormKey": "187AF9:Fallout4.esm",
@@ -185136,7 +185126,6 @@
         },
         "FacegenFaceClamp": 3.0,
         "FacegenMainClamp": 5.0,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "Immobile",
           "CantOpenDoors",
@@ -185147,6 +185136,8 @@
           "CannotUsePlayableItems"
         ],
         "FlightRadius": null,
+        "FormKey": "1A6D64:Fallout4.esm",
+        "FormVersion": null,
         "HairColorExtendedLookupTexture": null,
         "HairColorLookupTexture": null,
         "IdleChatterTimeMax": null,
@@ -185154,11 +185145,11 @@
         "ImpactDataSet": null,
         "ImpactMaterialType": "022955:Fallout4.esm",
         "InjuredHealthPercent": null,
-        "IsDeleted": null,
         "Keywords": [
           "0F23C5:Fallout4.esm",
           "0B2BF3:Fallout4.esm"
         ],
+        "MajorRecordFlagsRaw": null,
         "MeatCapTextureSet": null,
         "MorphRace": null,
         "MorphValues": null,
@@ -185272,6 +185263,7 @@
         "Unknown": "0xFFFFFFFFFFFFFFFF",
         "Unknown2": "0x00000000000000000000000000000000000000000000000000000000000096C300000000",
         "Version2": null,
+        "VersionControl": 78993,
         "XPValue": 10
       },
       "FormKey": "1A6D64:Fallout4.esm",
@@ -185306,12 +185298,12 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": null,
         "FavorCost": null,
+        "FormKey": "0782AA:Fallout4.esm",
+        "FormVersion": 109,
         "HeadTrackingWeight": null,
         "ImageSpace": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsLinkedRefTransient": null,
         "IsMultiBoundPrimitive": null,
@@ -185328,6 +185320,7 @@
         "LocationRefTypes": null,
         "LocationReference": null,
         "Lock": null,
+        "MajorRecordFlagsRaw": null,
         "MapMarker": null,
         "MaterialSwap": null,
         "MultiBoundReference": null,
@@ -185357,6 +185350,7 @@
         "TeleportLocName": null,
         "Unknown": null,
         "Version2": 1,
+        "VersionControl": 466130,
         "VirtualMachineAdapter": null,
         "WaterVelocity": null,
         "XCVL": null,
@@ -185395,14 +185389,12 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "0x100"
-        ],
         "FavorCost": null,
+        "FormKey": "0782B7:Fallout4.esm",
+        "FormVersion": 67,
         "HeadTrackingWeight": null,
         "ImageSpace": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsLinkedRefTransient": null,
         "IsMultiBoundPrimitive": null,
@@ -185419,6 +185411,7 @@
         "LocationRefTypes": null,
         "LocationReference": null,
         "Lock": null,
+        "MajorRecordFlagsRaw": 256,
         "MapMarker": null,
         "MaterialSwap": null,
         "MultiBoundReference": null,
@@ -185448,6 +185441,7 @@
         "TeleportLocName": null,
         "Unknown": null,
         "Version2": null,
+        "VersionControl": 2890438,
         "VirtualMachineAdapter": null,
         "WaterVelocity": null,
         "XCVL": null,
@@ -185484,14 +185478,12 @@
         "EnableParent": null,
         "EncounterZone": null,
         "FactionRank": null,
-        "Fallout4MajorRecordFlags": [
-          "0x400"
-        ],
         "FavorCost": null,
+        "FormKey": "0782B8:Fallout4.esm",
+        "FormVersion": 67,
         "HeadTrackingWeight": null,
         "ImageSpace": null,
         "IsActivationPoint": null,
-        "IsDeleted": null,
         "IsIgnoredBySandbox": null,
         "IsLinkedRefTransient": null,
         "IsMultiBoundPrimitive": null,
@@ -185508,6 +185500,7 @@
         "LocationRefTypes": null,
         "LocationReference": null,
         "Lock": null,
+        "MajorRecordFlagsRaw": 1024,
         "MapMarker": null,
         "MaterialSwap": null,
         "MultiBoundReference": null,
@@ -185537,6 +185530,7 @@
         "TeleportLocName": null,
         "Unknown": null,
         "Version2": 1,
+        "VersionControl": 2890438,
         "VirtualMachineAdapter": null,
         "WaterVelocity": null,
         "XCVL": null,
@@ -185641,17 +185635,18 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": 650.0,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "ShowAllText",
           "0x20",
           "NoFollowerIdleChatter"
         ],
+        "FormKey": "004E1E:Fallout4.esm",
+        "FormVersion": 112,
         "FovOverride": null,
         "Index": 0,
-        "IsDeleted": null,
         "Keywords": null,
         "LastActionIndex": 20,
+        "MajorRecordFlagsRaw": null,
         "Notes": null,
         "Phases": [
           {
@@ -185674,6 +185669,7 @@
         "Unused2": null,
         "VNAM": "0x03000000030000000300000003000000",
         "Version2": 6,
+        "VersionControl": 269653,
         "VirtualMachineAdapter": null
       },
       "FormKey": "004E1E:Fallout4.esm",
@@ -185794,17 +185790,18 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": null,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "ShowAllText",
           "0x20",
           "NoFollowerIdleChatter"
         ],
+        "FormKey": "00583D:Fallout4.esm",
+        "FormVersion": 109,
         "FovOverride": null,
         "Index": 0,
-        "IsDeleted": null,
         "Keywords": null,
         "LastActionIndex": 22,
+        "MajorRecordFlagsRaw": null,
         "Notes": null,
         "Phases": [
           {
@@ -185831,6 +185828,7 @@
         "Unused2": null,
         "VNAM": "0x03000000030000000300000003000000",
         "Version2": 6,
+        "VersionControl": 269530,
         "VirtualMachineAdapter": null
       },
       "FormKey": "00583D:Fallout4.esm",
@@ -185944,17 +185942,18 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": null,
-        "Fallout4MajorRecordFlags": null,
         "Flags": [
           "ShowAllText",
           "0x20",
           "NoFollowerIdleChatter"
         ],
+        "FormKey": "017B27:Fallout4.esm",
+        "FormVersion": 119,
         "FovOverride": null,
         "Index": 0,
-        "IsDeleted": null,
         "Keywords": null,
         "LastActionIndex": 23,
+        "MajorRecordFlagsRaw": null,
         "Notes": null,
         "Phases": [
           {
@@ -185977,6 +185976,7 @@
         "Unused2": null,
         "VNAM": "0x03000000030000000300000003000000",
         "Version2": 7,
+        "VersionControl": 466519,
         "VirtualMachineAdapter": {
           "ScriptFragments": {
             "OnEnd": {
@@ -186060,9 +186060,6 @@
         "EquipSound": "2498AE:Fallout4.esm",
         "EquipmentType": "013F42:Fallout4.esm",
         "ExtraData": null,
-        "Fallout4MajorRecordFlags": [
-          "0x40000000"
-        ],
         "FastEquipSound": null,
         "Filter": null,
         "FirstPersonModel": {
@@ -186072,12 +186069,13 @@
         "Flags": [
           "CritEffectOnDeath"
         ],
+        "FormKey": "24A3AF:Fallout4.esm",
+        "FormVersion": null,
         "FullPowerSeconds": null,
         "Icons": null,
         "IdleSound": "245C2E:Fallout4.esm",
         "ImpactDataSet": "2313F4:Fallout4.esm",
         "InstanceNaming": "0B9738:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "0EB4A2:Fallout4.esm",
           "04A0A5:Fallout4.esm",
@@ -186087,9 +186085,7 @@
           "24A34B:Fallout4.esm"
         ],
         "MO4F": null,
-        "MajorFlags": [
-          "0x40000000"
-        ],
+        "MajorRecordFlagsRaw": 1073741824,
         "MaxRange": 10.0,
         "MeleeSpeed": "Slow",
         "MinPowerPerShot": null,
@@ -186203,6 +186199,7 @@
         "Unknown3": 2139095039,
         "Value": 1180,
         "Version2": 7,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 20.0,
         "Zoom": null
@@ -186299,10 +186296,6 @@
           "RumbleRightMotorStrength": 0.8,
           "SightedTransitionSeconds": 0.15
         },
-        "Fallout4MajorRecordFlags": [
-          "NotPlayable",
-          "0x40000000"
-        ],
         "FastEquipSound": null,
         "Filter": null,
         "FirstPersonModel": {
@@ -186314,12 +186307,13 @@
           "CannotDrop",
           "NotPlayable"
         ],
+        "FormKey": "24A3B0:Fallout4.esm",
+        "FormVersion": null,
         "FullPowerSeconds": null,
         "Icons": null,
         "IdleSound": null,
         "ImpactDataSet": "171856:Fallout4.esm",
         "InstanceNaming": "2377CF:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "01F948:Fallout4.esm",
           "03ADB3:Fallout4.esm",
@@ -186335,10 +186329,7 @@
           "24A34B:Fallout4.esm"
         ],
         "MO4F": null,
-        "MajorFlags": [
-          "NonPlayable",
-          "0x40000000"
-        ],
+        "MajorRecordFlagsRaw": 1073741828,
         "MaxRange": 256.0,
         "MeleeSpeed": null,
         "MinPowerPerShot": null,
@@ -186410,6 +186401,7 @@
         "Unknown3": 2139095039,
         "Value": 2500,
         "Version2": 3,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 2.0,
         "Zoom": null
@@ -186500,7 +186492,6 @@
           "RumbleRightMotorStrength": 0.8,
           "SightedTransitionSeconds": 0.2
         },
-        "Fallout4MajorRecordFlags": null,
         "FastEquipSound": null,
         "Filter": null,
         "FirstPersonModel": {
@@ -186511,12 +186502,13 @@
           "CritEffectOnDeath",
           "HoldInputToPower"
         ],
+        "FormKey": "24A3B1:Fallout4.esm",
+        "FormVersion": null,
         "FullPowerSeconds": 1.0,
         "Icons": null,
         "IdleSound": null,
         "ImpactDataSet": "239BA3:Fallout4.esm",
         "InstanceNaming": "2377CF:Fallout4.esm",
-        "IsDeleted": null,
         "Keywords": [
           "0D1EB1:Fallout4.esm",
           "092A86:Fallout4.esm",
@@ -186532,7 +186524,7 @@
           "24A34B:Fallout4.esm"
         ],
         "MO4F": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "MaxRange": 256.0,
         "MeleeSpeed": null,
         "MinPowerPerShot": 0.5,
@@ -186727,6 +186719,7 @@
         "Unknown3": 2139095039,
         "Value": 2500,
         "Version2": 6,
+        "VersionControl": 78993,
         "VirtualMachineAdapter": null,
         "Weight": 8.0,
         "Zoom": null
@@ -186753,20 +186746,20 @@
         "DefaultLevelData": null,
         "DistantLodMultiplier": null,
         "EncounterZone": null,
-        "Fallout4MajorRecordFlags": null,
         "FixedDimensionsCenterCell": null,
         "Flags": null,
+        "FormKey": "000800:mEditTestSubset.esm",
+        "FormVersion": null,
         "HdLodDiffuseTexture": null,
         "HdLodNormalTexture": null,
         "InteriorLighting": null,
-        "IsDeleted": null,
         "IsPartialForm": false,
         "LandDefaults": null,
         "LargeReferences": null,
         "Location": null,
         "LodWater": null,
         "LodWaterHeight": null,
-        "MajorFlags": null,
+        "MajorRecordFlagsRaw": null,
         "MapData": null,
         "MapImage": null,
         "MaxHeight": null,
@@ -187015,6 +187008,7 @@
           "WaterHeight": 3.4028235E+38
         },
         "Version2": null,
+        "VersionControl": null,
         "Water": null,
         "WaterEnvironmentMap": null,
         "WorldMapCellOffset": null,

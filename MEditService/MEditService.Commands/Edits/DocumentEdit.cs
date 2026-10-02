@@ -57,6 +57,7 @@ internal static class DocumentEdit
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
+        ClearAliases(record, cursor.Column);
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
@@ -284,7 +285,7 @@ internal static class DocumentEdit
             : null;
     }
 
-    private static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
+    internal static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
     private static RecordEditResult NoElement(string spelled, int count) =>
@@ -604,7 +605,6 @@ internal static class DocumentEdit
             var raw = owner[member] is JsonValue held && held.TryGetValue<long>(out var flags) ? flags : 0;
             var next = set ? raw | bit.Bit : raw & ~bit.Bit;
             if (next == 0) owner.Remove(member); else owner[member] = next;
-            foreach (var alias in bit.Aliases) owner.Remove(alias);
         }
         else
         {
@@ -617,6 +617,15 @@ internal static class DocumentEdit
         }
         edited = owner;
         return null;
+    }
+
+    // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
+    private static void ClearAliases(JsonObject record, ColumnSpec column)
+    {
+        JsonNode? owner = record;
+        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
+        if (owner is not JsonObject members) return;
+        foreach (var alias in column.Aliases) members.Remove(alias);
     }
 
     // ── walking ─────────────────────────────────────────────────────────────

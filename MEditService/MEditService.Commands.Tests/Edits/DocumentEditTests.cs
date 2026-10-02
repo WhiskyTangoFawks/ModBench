@@ -422,6 +422,32 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Contains("content-derived", result.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Header_FormID_IsRefusedWithItsReason()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
+
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("2048"), Member("FormID")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Equal("'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
+    }
+
+    [Fact]
+    public void Header_VersionControlInfo1_IsWrittenAsAnyFieldIs()
+    {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, before);
+
+        var after = Applied(headerFormKey, SetAt(Json("7"), Member("Version")));
+
+        Assert.Equal(7, Node(after, "ModHeader.Version").GetValue<int>());
+        AssertOnlyChanged(before, after, "ModHeader.Version");
+    }
+
     [Theory]
     [InlineData("""{"CompareOperator": "EqualTo"}""")]
     [InlineData("""{"CompareOperator": "EqualTo", "MutagenObjectType": "ConditionFloat"}""")]
@@ -608,6 +634,32 @@ public sealed class DocumentEditTests : IDisposable
 
         var cleared = Applied(formKey, SetAt(Json("false"), Member("IsPartialForm")));
         Assert.Equal(before, cleared);
+    }
+
+    [Fact]
+    public void RecordFlags_WritesTheRawInteger_AndTheCodecsViewsOfItFollow()
+    {
+        const int persistent = 0x0400, cantWait = 0x0008_0000;
+        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = persistent };
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
+
+        var set = Applied(formKey, SetAt(Json($"{persistent | cantWait}"), Member("MajorRecordFlagsRaw")));
+
+        Assert.Equal(persistent | cantWait, Node(set, "MajorRecordFlagsRaw").GetValue<int>());
+        Assert.Equal(["CantWait", "Persistent"], Node(set, "MajorFlags").AsArray().Select(n => n.Require().GetValue<string>()).Order(StringComparer.Ordinal));
+        AssertOnlyChanged(before, set, "MajorRecordFlagsRaw", "Fallout4MajorRecordFlags", "MajorFlags");
+    }
+
+    [Fact]
+    public void RecordFlags_ClearedToNone_LeavesNoSpellingOfThemBehind()
+    {
+        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0420 };
+        var formKey = _fixture.Seed(cell, "cell");
+
+        var cleared = JsonNode.Parse(Applied(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw")))).Require().AsObject();
+
+        Assert.DoesNotContain(cleared, p => p.Key is "MajorRecordFlagsRaw" or "IsDeleted" or "Fallout4MajorRecordFlags" or "MajorFlags");
     }
 
     [Fact]
