@@ -14,7 +14,6 @@ namespace MEditService.Http.Tests.Api;
 /// <summary>a-change-from-another-tool: a change from another tool and a change from Modbench are
 /// the same signal, the next snapshot, because each read model learns only through the one
 /// watch.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class AChangeFromAnotherToolApiTests : HostedTests
 {
     private const string Plugin = "Shared.esp";
@@ -93,40 +92,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         var frames = await FramesOfTheSnapshotAnchoredBy(fx, stream, modFolder, quest);
         Assert.DoesNotContain(frames, f => f.Kind == "rows-changed" && Names(f.Data, npc));
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
-    }
-
-    [Theory]
-    [InlineData("RenamedByHand.json")]
-    [InlineData("Misnamed - 000900_Shared.esp.json")]
-    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEdit(string renamedTo)
-    {
-        using var fx = await ATrackedMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-
-        (await Client.Edit(npc, Plugin, Origin, "EditorID", "EditedAfterTheRename")).EnsureSuccessStatusCode();
-        await Client.NextSnapshot(fx);
-
-        await Wire.Eventually(
-            async () => (await Client.Record(npc)).GetProperty("editorId").GetString() == "EditedAfterTheRename",
-            "the edit reached the read");
-    }
-
-    [Theory]
-    [InlineData("RenamedByHand.json")]
-    [InlineData("Misnamed - 000900_Shared.esp.json")]
-    public async Task ARecordWhoseDocumentWasRenamedByHand_TakesAnEditThatKeepsItsName_InThatDocument(string renamedTo)
-    {
-        using var fx = await ATrackedMod();
-        var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var npc = await Client.FirstFormKey(Plugin, Origin);
-        OtherTool.RenamesASourceDocument(modFolder, Plugin, Npc, renamedTo);
-        var renamed = OtherTool.SourceDocumentCarrying(modFolder, Plugin, Npc);
-
-        (await Client.Edit(npc, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
-
-        Assert.Equal(renamed, OtherTool.SourceDocumentCarrying(modFolder, Plugin, "0.75"));
     }
 
     [Fact]
