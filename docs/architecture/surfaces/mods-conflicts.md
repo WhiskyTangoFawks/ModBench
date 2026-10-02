@@ -21,12 +21,13 @@ As a user, I want:
 1. One column for each enabled mod that has a copy of a row's file, in mod order: losing on the left, winning on the right. *MO2; the record panel's columns*
 2. The opened mod's column outlined, so I find it among the others.
 3. Each column's header to show the mod's name, coloured with the column's worst cell colour. *[editor-conflicts.md](editor-conflicts.md), Cells, story 2*
+4. Overwrite as the rightmost column when it has a copy of a row's file, since it wins over every mod. *MO2*
 
 ## Rows
 
 As a user, I want:
 
-1. One row for each file the mod has that another enabled mod also has, as a folder tree: folders first, then files, each by name. *MO2's Conflicts tab*
+1. One row for each file the mod has that another enabled mod or Overwrite also has, as a folder tree: folders first, then files, each by name. *MO2's Conflicts tab*
 2. An excluded file to take no part, in the mod that excluded it. *MO2*
 3. Every folder expanded when the table opens, and to collapse and expand a folder by a click on it. *xEdit opens every row*
 4. A click on a file's name to open the opened mod's copy as a preview editor. *VS Code*
