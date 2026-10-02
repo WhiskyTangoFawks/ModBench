@@ -25,8 +25,8 @@ function assertRefusal(result: DownloadsCommandResult, expectedSubstring: string
 let root: string;
 let access: DownloadsAccess;
 
-beforeEach(async () => {
-  root = await cloneCorpusFixture();
+beforeEach(() => {
+  root = cloneCorpusFixture();
   access = accessTo(root);
 });
 afterEach(() => rm(root, { recursive: true, force: true }));

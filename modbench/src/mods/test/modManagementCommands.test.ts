@@ -117,7 +117,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
   });
 
   it('the prompt\'s validateInput refuses a taken name, in the words install refuses it with', async () => {
-    const root = await cloneCorpusFixture();
+    const root = cloneCorpusFixture();
     try {
       registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter(), shapeMarks);
       await invoke('modbench.mod.createEmpty');

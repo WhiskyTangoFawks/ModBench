@@ -19,8 +19,8 @@ function assertRefusal(result: InstalledMarkResult, expectedSubstring: string): 
 let root: string;
 let adapter: InstanceAdapter;
 
-beforeEach(async () => {
-  root = await cloneCorpusFixture();
+beforeEach(() => {
+  root = cloneCorpusFixture();
   adapter = adapterOver(root);
 });
 afterEach(() => rm(root, { recursive: true, force: true }));

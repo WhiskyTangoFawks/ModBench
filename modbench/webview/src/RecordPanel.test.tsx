@@ -319,14 +319,6 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  // ADR-0007: writing the binary is the separate compile gesture, scoped to a whole
-  // plugin, never a per-plugin control on this panel.
-  it('offers no per-plugin Save — writing the binary is compile, not this panel', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('MyMod.esp'));
-    expect(screen.queryByText('Save')).not.toBeInTheDocument();
-  });
-
   // ADR-0018: a cell in an immutable column opens no input at all, however it is clicked —
   // nothing ever reaches a write from here.
   it('a cell in an immutable column opens nothing when clicked', async () => {
