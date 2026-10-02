@@ -33,6 +33,9 @@ Gestures Modbench does differently.
 | 7 | Downloads selection | Several rows selected at once; delete, exclude and include act on the whole selection | One row at a time, plus bulk items: hide or delete all, installed or uninstalled, and query info for every incomplete file | Ruling: selecting several is VS Code's native way to act on many. |
 | 8 | Drag indicator | VS Code's tree indicator: onto a row, or between rows | An insertion line | Limitation: a tree view cannot style it. |
 | 9 | Conflicts | One table: a row for each file the mod shares, a column for each mod with a copy, coloured as the record panel colours a record order conflict ([mods-conflicts.md](../architecture/surfaces/mods-conflicts.md)) | The Information dialog's Conflicts tab: lists of winning, losing and non-conflicting files, and an Advanced list of each file's other mods | Ruling: every copy of a file in one view, read the same way as a record. |
+| 10 | Data tab | The Mods tree: each mod opens into its files, and the name filter finds a file at every level ([mods.md](../architecture/surfaces/mods.md)) | The Data tab (not audited): the game's Data folder as one merged tree, each path once | Ruling: one tree shows each mod's files; a second tree of the same files is not offered. |
+| 11 | Restore hidden files | Select the excluded files in the Mods tree, then include | Restore hidden files, on the mod | Ruling: an *all* variant is select all, then the gesture (commands.md, Principles). |
+| 12 | Conflicts and Flags columns | A badge at the mod row's right edge and a colour on its name, each switched in settings ([mods.md](../architecture/surfaces/mods.md), Indicators) | Icons in the Conflicts and Flags columns, shown or hidden from the header menu | Limitation: a tree view has no columns. |
 
 ## Omissions by object
 

@@ -25,7 +25,7 @@ medit_driving: "MEDIT · Driving adapters — the API" {
 modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
   toolbox: "Toolbox\ninterface: game, profile, refresh, settings\nhides: nothing" {class: driving}
-  mods: "Mods\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, install, open folder, view on Nexus,\nopen conflicts, compare file\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges; the conflict table: its states and cell values" {class: driving}
+  mods: "Mods\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, install, open folder, view on Nexus,\nopen conflicts, compare file, go to mod, exclude, include\nhides: the tree: separators, sort direction, the overwrite row,\neach mod's files, indicators; the conflict table: its states\nand cell values" {class: driving}
   plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of the instance value and the client by (origin,\nfilename); the external-change notice" {class: driving}
   downloads: "Downloads\ninterface: install, upgrade, exclude, include, delete\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
   editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
@@ -40,7 +40,7 @@ medit_core: "MEDIT · Core — the write side and the read side; each references
 }
 modbench_core: "MODBENCH · Core — one command per gesture; each writes through the Instance adapter and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, mod sync\nhides: an uninstall's mark on its downloaded file" {class: core}
+  modlist: "modlist commands\ninterface: enable, disable, move, separators, uninstall,\ncreate empty mod, exclude, include, mod sync\nhides: an uninstall's mark on its downloaded file" {class: core}
   pluginscommands: "plugins commands\ninterface: enable, disable, move, plugin sync\nhides: the plugin-order rules: masters above dependants,\nblueprint plugins last" {class: core}
   instancecommands: "instance commands\ninterface: switch profile · put load order · refresh: rebuild the\nindex\nhides: nothing; the Instance adapter writes the profile" {class: core}
   downloadscommands: "downloads commands\ninterface: exclude, include, delete\nhides: nothing; the Instance adapter writes a downloaded\nfile's metadata" {class: core}

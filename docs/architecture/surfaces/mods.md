@@ -1,12 +1,12 @@
 # Mods
 
-The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
+The Mods surface shows the active profile's mod order: its mods, grouped by separators, and the Overwrite folder. Each mod and Overwrite opens into its files, and each file shows whether the game gets it. Its template is MO2's mod list ([ADR-0017](../../adr/0017-mo2-is-the-reference-for-mod-management.md)); where it departs, [mo2.md](../../out-of-scope/mo2.md) says why. Its gestures are in [commands.md](../commands.md) under Mod and Separator. What every view shares is in [common.md](common.md). [mods-conflicts.md](mods-conflicts.md) holds the conflict table, which opens from a mod's row in an editor tab.
 
 Each story cites its source. A story with no source is owned here.
 
 ## The view
 
-A native tree view, `modbench.modList`, second in the `modbench` container and open by default (commands.md, Where surfaces live). Separators are its parents and the mods they group are their children, so it has Collapse All (Chrome).
+A native tree view, `modbench.modList`, second in the `modbench` container and open by default (commands.md, Where surfaces live). Separators hold the mods they group, and a mod or Overwrite holds its files, so it has Collapse All (Chrome).
 
 The view's description shows how many mods are enabled out of how many are listed, counting the whole list even while a filter is active, then the filter's term: `12 / 30 · "arm"`. *MO2's active-mod counter*
 
@@ -18,8 +18,13 @@ As a user, I want:
 2. Each separator to hold the mods between it and the next separator toward the winning end, whichever way the list is sorted. *CONTEXT.md, Mod separator; MO2*
 3. The mods on the losing side of the first separator to be ungrouped: top-level rows at the losing end of the view. *MO2*
 4. The Overwrite row pinned at the winning end, outside every separator: last when losing is at the top, first when winning is. *MO2: Overwrite wins over every mod*
-5. Separators collapsed each time the extension activates, so the view opens clean. What I expand stays expanded until then.
+5. Separators and mods collapsed each time the extension activates, so the view opens clean. What I expand stays expanded until then.
 6. A separator with no mods to show no expander. *VS Code*
+7. A mod or Overwrite to open into its files as a folder tree: folders first, then files, each by name. A disabled mod opens too. A mod with no files shows no expander. *VS Code's Explorer*
+8. Each file to be active or inactive. A file is inactive when the game does not get it: another copy wins its path, it is excluded, or its mod is disabled. An inactive file's name is greyed. *MO2*
+9. Only the files a mod gives the game to show: not `meta.ini`, the repository or plugin source. An excluded file shows under its own name, with its `.mohidden` suffix. *MO2*
+10. An inactive file's tooltip to say why: the mod whose copy wins, excluded, or the mod is disabled.
+11. The same marks on the same files in VS Code's Explorer. *VS Code*
 
 ## A row
 
@@ -31,6 +36,7 @@ As a user, I want:
 | Check box | checked when the mod is enabled | MO2 |
 | Description | the `meta.ini` version | MO2 |
 | Icon | `$(package)` | |
+| Indicators | a badge at the right edge, and a colour on the label, for each indicator that holds ([Indicators](#indicators)) | MO2's Conflicts and Flags columns |
 | Tooltip | name, version, Nexus mod ID and installation file, each only when known | MO2's columns |
 | Identity | the row's kind and the mod's name, so selection and expansion survive a change on disk. A mod and a separator can share a name. | |
 
@@ -53,12 +59,36 @@ As a user, I want:
 
 Overwrite is always a row, even when it holds nothing. It is not a mod: it has no check box and cannot be dragged. *MO2*
 
+### File and folder
+
+| Part | What it shows | Source |
+|---|---|---|
+| Label | the file's or folder's name | VS Code's Explorer |
+| Icon | the file icon theme's icon | VS Code's Explorer |
+| Colour | greyed when the file is inactive (The tree, story 8) | |
+| Tooltip | the path in its mod, and why the file is inactive, when it is | |
+| Identity | the mod or Overwrite, and the path in it | |
+
+## Indicators
+
+A mod row carries an indicator for each status that holds. Each indicator has a badge and a colour, and my settings switch each on or off. Each colour is a theme colour Modbench contributes. *MO2's Conflicts and Flags columns; editor-conflicts, The colours, story 1*
+
+| Indicator | Holds when | Badge | Colour |
+|---|---|---|---|
+| Overwrites loose files | a file of the mod wins over another mod's copy | off | off |
+| Overwritten loose files | a file of the mod loses to another mod's copy | on | off |
+| Redundant | every file the mod gives the game loses to another copy | on | off |
+| Overwritten by Overwrite | a file of the mod loses to Overwrite's copy | on | off |
+| Contains hidden files | the mod has an excluded file | off | off |
+
+The Badge and Colour columns are the defaults. The inactive file's grey is a setting too, on by default. Each indicator's tooltip uses its name in this table. *MO2*
+
 ## Order and view state
 
 As a user, I want:
 
 1. Losing at the top until I choose otherwise, and a title-bar toggle that flips the whole tree, separators and the mods inside them. *MO2's priority sort; common, A view, story 7*
-2. The name filter to match mod and separator names. A separator whose name matches shows all its mods; otherwise a separator shows only its matching mods, expanded, and one with none is not shown. Overwrite stays, and does not count as a match. *common, The name filter*
+2. The name filter to match the name of any row: a separator, a mod, a folder or a file. A row whose name matches shows all its children; otherwise it shows only its matching children, expanded, and one with none is not shown. Overwrite stays, and does not count as a match; its files follow the same rule. *common, The name filter*
 3. A toggle in the filter box to show the matches as a flat list, with no separators. It returns to grouped whenever the filter clears.
 
 ## States
@@ -77,6 +107,8 @@ The row menus follow VS Code's groups: open, change, create, source control, cop
 | Mod menu | open folder · open conflicts (the mod has a file order conflict) · view on Nexus (the mod has a Nexus mod ID) · enable or disable · move… · add separator · create empty mod · install… · track (the mod has no repository and holds a plugin) · copy value · uninstall |
 | Separator menu | move… · add separator · rename… · copy value · delete |
 | Overwrite menu | open folder |
+| File menu | open folder · compare file (a file in a file order conflict, not the winning copy) · go to mod (a file in a file order conflict) · exclude or include · copy value |
+| Folder menu | open folder · copy value |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Delete: uninstall, or delete a separator. F2: rename a separator. Ctrl+C: copy value. |
 
@@ -85,8 +117,11 @@ As a user, I want:
 1. Each menu item to act on the row I right-clicked, or on the whole selection, as the gesture's Argument in the catalog says. *catalog Argument*
 2. Enable or disable, over a selection that mixes enabled and disabled mods, to apply the right-clicked row's direction to every mod. Space takes the focused row's direction. A mod already in that state is left alone. *MO2; Doing nothing is not an error*
 3. Delete to act on the selected rows of the focused row's kind: uninstall for mods, delete for separators.
-4. A click or double click on a row to do nothing but select it.
-5. Copy value to copy each selected mod's or separator's name. *catalog `copy value`*
+4. A click or double click on a separator, a mod, Overwrite or a folder to do nothing but select it; its expander opens it. A click on a file opens it as a preview editor. *VS Code's Explorer*
+5. Copy value to copy each selected mod's or separator's name, and each selected file's or folder's path in its mod. *catalog `copy value`*
+6. Go to mod to select, in this tree, the mod whose copy wins the file. On a file that wins, it asks which of the mods it wins over. *catalog `go to mod`; MO2's Go to...*
+7. Exclude or include, over a selection that mixes both, to apply the right-clicked row's direction to every file, as enable or disable does. *story 2*
+8. Space, Delete and F2 to do nothing on a file or folder: the tree shows files, and the Explorer manages them.
 
 ## Drag and drop
 
@@ -98,6 +133,7 @@ As a user, I want:
 4. A drop below the last row to place what I dragged at the bottom of the view, as shown, above Overwrite when Overwrite is last.
 5. A drop where what I dragged cannot go to change nothing and say nothing: on Overwrite, on a row I am dragging, inside a separator I am dragging, or a separator on a mod. *MO2 refuses a separator on a mod; Doing nothing is not an error*
 6. Nothing from outside the view to drop here: no archive, folder, file or downloaded file. *mo2.md*
+7. Files and folders not to drag, and nothing to drop on them.
 
 ## Pickers, prompts and confirmations
 
@@ -161,5 +197,6 @@ By [common.md](common.md#reporting). As a user, I want:
 - **A gesture's entry:** given the right-clicked row, the focused row and the selection, the Argument the command receives.
 - **A drop:** given what is dragged, the target and the direction, the move's Argument and target.
 - **The pickers and prompts:** their items, prefill, refusals, and what Esc yields.
+- **The files, given an instance value and the settings:** each mod's and Overwrite's files, each one active or inactive and why, the indicators each mod carries, and the filter at every level.
 - **Menus and keys:** the placement above, checked against the extension manifest.
 
