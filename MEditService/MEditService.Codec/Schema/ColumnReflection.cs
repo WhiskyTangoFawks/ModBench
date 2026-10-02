@@ -17,7 +17,7 @@ internal static class ColumnReflection
         Type getterType, GameReflection game, ILogger logger)
     {
         var declarations = ReflectedTypes.GetAllInterfaceProperties(getterType).ToLookup(p => p.Name, StringComparer.Ordinal);
-        var columns = RecordHeaderColumns.For(getterType, declarations, pathPrefix: "", game, logger);
+        var columns = RecordHeaderColumns.For(getterType, declarations, game, logger);
         var headerOrAlias = columns.Select(c => c.Name).Concat(columns.SelectMany(c => c.Aliases)).Append(EditorIdMember)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

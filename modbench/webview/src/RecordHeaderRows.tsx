@@ -7,14 +7,16 @@ import { toStr, type Column } from './recordUtils';
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import type { FocusedCell } from './DiffRow';
-import type { ColumnKey, PathHop } from './types';
+import type { ColumnKey, FieldMetadata, PathHop } from './types';
 import { LABEL_COLUMN } from './columnKey';
 
 export const RECORD_HEADER_ROW = 'Record Header';
-export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.FormID`;
+// xEdit's label for the row that shows and takes the FormKey (xedit.md, divergence 16).
+const FORM_ID_LABEL = 'FormID';
+export const FORM_ID_ROW = `${RECORD_HEADER_ROW}.${FORM_ID_LABEL}`;
+export const isFormIdRow = (meta: FieldMetadata) => meta.displayLabel === FORM_ID_LABEL;
 // The document member a record's FormID is (editor.md, The record header, story 2).
-export const FORM_KEY_MEMBER = 'FormKey';
-export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: FORM_KEY_MEMBER }];
+export const FORM_ID_PATH: PathHop[] = [{ kind: 'member', name: 'FormKey' }];
 const INDENT = 24;
 
 interface FormIdCellProps {
@@ -116,7 +118,7 @@ export function RecordHeaderRow({
 }
 
 interface FormIdRowProps {
-  label: string;
+  readOnlyReason: string | null | undefined;
   columns: Column[];
   collapsedColumns: Set<ColumnKey>;
   columnStyle: (column: ColumnKey | typeof LABEL_COLUMN) => React.CSSProperties;
@@ -129,21 +131,22 @@ interface FormIdRowProps {
 
 /** editor.md, The record header, story 2: each column reads its own copy's FormKey. */
 export function FormIdRow({
-  label, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
+  readOnlyReason, columns, collapsedColumns, columnStyle, editableColumns, focusedCell, onFocusCell, onCommitFormId, writeAt,
 }: Readonly<FormIdRowProps>) {
   const cellStyle = (key: ColumnKey): React.CSSProperties => ({ ...baseCell, ...columnStyle(key) });
   return (
     <tr style={rowStyle(focusedCell, FORM_ID_ROW)}>
       <DiskCell
         style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: INDENT }} isFocused={isFocused(focusedCell, FORM_ID_ROW, null)}
-        onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText={label}
-      >{label}</DiskCell>
+        onFocusCell={() => onFocusCell(FORM_ID_ROW, null)} copyText={FORM_ID_LABEL}
+      >{FORM_ID_LABEL}</DiskCell>
       {columns.map(({ key, override }) => collapsedColumns.has(key)
         ? <td key={key} style={cellStyle(key)} />
         : (
           <DiskCell
             key={key} style={cellStyle(key)} isFocused={isFocused(focusedCell, FORM_ID_ROW, key)}
             onFocusCell={() => onFocusCell(FORM_ID_ROW, key)}
+            title={readOnlyReason ?? undefined}
             copyText={formKeyLabel(override.formKey, override)}
           >
             <WrittenValue write={writeAt(key, FORM_ID_PATH)} disk={override.formKey}>
@@ -152,7 +155,7 @@ export function FormIdRow({
                   formKey={toStr(value)}
                   // A FormKey the disk does not hold yet names no record.
                   label={value === override.formKey ? formKeyLabel(override.formKey, override) : toStr(value)}
-                  editable={editableColumns.has(key)}
+                  editable={editableColumns.has(key) && readOnlyReason == null}
                   onCommit={formKey => onCommitFormId(key, formKey)}
                 />
               )}

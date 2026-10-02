@@ -102,6 +102,7 @@ internal sealed record SchemaAnnotations(
         ("IMajorRecordGetter", "MajorRecordFlagsRaw", "Record Flags"),
         ("IFormKeyGetter", "FormKey", "FormID"),
         ("IMajorRecordGetter", "VersionControl", "Version Control Info 1"),
+        ("IMajorRecordGetter", "FormVersion", "Form Version"),
     ];
 
     private static readonly string[] EmptySubSchemaTypesInEveryGame =
@@ -218,14 +219,7 @@ internal sealed record SchemaAnnotations(
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
-                ("IFallout4MajorRecordGetter", "FormVersion", "Form Version"),
                 ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
-                // The TES4 record's own header (wbRecord(TES4) in wbDefinitionsFO4.pas), in the same order.
-                ("IFallout4ModHeaderGetter", "Flags", "Record Flags"),
-                ("IFallout4ModHeaderGetter", "FormID", "FormID"),
-                ("IFallout4ModHeaderGetter", "Version", "Version Control Info 1"),
-                ("IFallout4ModHeaderGetter", "FormVersion", "Form Version"),
-                ("IFallout4ModHeaderGetter", "Version2", "Version Control Info 2"),
             ]),
 
         [GameCategory.Skyrim] = new(
@@ -247,7 +241,11 @@ internal sealed record SchemaAnnotations(
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
-            RecordHeaderMembers: [.. RecordHeaderMembersInEveryGame]),
+            RecordHeaderMembers:
+            [
+                .. RecordHeaderMembersInEveryGame,
+                ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
+            ]),
 
         [GameCategory.Starfield] = new(
             ExcludedSignatures: new(ExcludedSignaturesInEveryGame, StringComparer.OrdinalIgnoreCase),
@@ -274,7 +272,11 @@ internal sealed record SchemaAnnotations(
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
-            RecordHeaderMembers: [.. RecordHeaderMembersInEveryGame]),
+            RecordHeaderMembers:
+            [
+                .. RecordHeaderMembersInEveryGame,
+                ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
+            ]),
     };
 
     /// <summary>A game with no table is a game nobody has written the facts for — loud, not empty.</summary>

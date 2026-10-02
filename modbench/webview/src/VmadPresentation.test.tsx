@@ -496,7 +496,6 @@ describe('Add Script is the generic array gesture', () => {
     await waitFor(() => fieldCell('Guard'));
 
     reloadWith(oneColumn([script('Guard'), script('')]));
-    // The Record Header, then Scripts and its two script rows.
     await waitFor(() => expect(screen.getAllByText('Name')).toHaveLength(2));
 
     const added = document.querySelectorAll('tbody tr')[2];

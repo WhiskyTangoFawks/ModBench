@@ -21,7 +21,7 @@ import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { recordPanelLoadFailureMessage } from './recordPanelLoadFailureMessage';
-import { RecordHeaderRow, FormIdRow, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH, FORM_KEY_MEMBER } from './RecordHeaderRows';
+import { RecordHeaderRow, FormIdRow, RECORD_HEADER_ROW, FORM_ID_ROW, FORM_ID_PATH, isFormIdRow } from './RecordHeaderRows';
 import { navigate, type NavRow } from './gridNavigation';
 import { useCellWrites } from './unconfirmedWrites';
 
@@ -411,12 +411,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }
 
   // The FormID reads each copy's own FormKey, and edits as the FormKey typed.
-  function formIdRow(label: string) {
+  function formIdRow(readOnlyReason: string | null | undefined) {
     navRows.push({ key: FORM_ID_ROW, parent: RECORD_HEADER_ROW, expandable: false, expanded: false });
     return (
       <FormIdRow
         key={FORM_ID_ROW}
-        label={label}
+        readOnlyReason={readOnlyReason}
         columns={columns}
         collapsedColumns={collapsedColumns}
         columnStyle={columnStyle}
@@ -433,8 +433,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const headerDiffs = diffs.filter(isHeaderMember);
   const headerMemberRows = (diff: FieldDiff): React.ReactNode[] => {
     const meta = fieldMetaMap[diff.fieldName];
-    return diff.fieldName === FORM_KEY_MEMBER
-      ? [formIdRow(meta?.displayLabel ?? diff.fieldName)]
+    return meta && isFormIdRow(meta)
+      ? [formIdRow(meta.readOnlyReason)]
       : buildRows(diff, meta, [], diff.fieldName, `${RECORD_HEADER_ROW}.${diff.fieldName}`, RECORD_HEADER_ROW, () => true, 1);
   };
   const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];

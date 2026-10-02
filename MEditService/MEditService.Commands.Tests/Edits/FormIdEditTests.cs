@@ -71,7 +71,7 @@ public sealed class FormIdEditTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Equal("FormKey", result.Path);
-        Assert.Equal(PluginHeader.FormIdReadOnlyReason(headerFormKey, mod.Plugin.Name), result.Message);
+        Assert.Equal("'FormKey' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
         Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
     }
 

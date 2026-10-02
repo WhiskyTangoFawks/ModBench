@@ -432,7 +432,7 @@ public sealed class DocumentEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("names the plugin itself", result.Message, StringComparison.Ordinal);
+        Assert.Equal("'FormID' is read-only: a plugin header's FormID names the plugin itself, not a record in it.", result.Message);
     }
 
     [Fact]

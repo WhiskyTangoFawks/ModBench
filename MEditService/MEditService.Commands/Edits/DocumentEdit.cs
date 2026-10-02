@@ -57,7 +57,7 @@ internal static class DocumentEdit
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
-        foreach (var alias in cursor.Column.Aliases) record.Remove(alias);
+        ClearAliases(record, cursor.Column);
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
         {
@@ -285,7 +285,7 @@ internal static class DocumentEdit
             : null;
     }
 
-    private static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
+    internal static RecordEditResult ReadOnlyRefusal(string path, string name, string reason) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.FieldReadOnly, path, $"'{name}' is read-only: {reason}.");
 
     private static RecordEditResult NoElement(string spelled, int count) =>
@@ -617,6 +617,15 @@ internal static class DocumentEdit
         }
         edited = owner;
         return null;
+    }
+
+    // A column's aliases sit beside the member they spell again, so they clear in that member's owner.
+    private static void ClearAliases(JsonObject record, ColumnSpec column)
+    {
+        JsonNode? owner = record;
+        foreach (var segment in (column.Synthetic?.BackingPath ?? column.PropertyName).Split('.')[..^1]) owner = owner?[segment];
+        if (owner is not JsonObject members) return;
+        foreach (var alias in column.Aliases) members.Remove(alias);
     }
 
     // ── walking ─────────────────────────────────────────────────────────────

@@ -16,16 +16,20 @@ internal static class ModHeaderSchema
             schemas[PluginHeader.RecordType] = headerSchema;
     }
 
-    // The members of the header the editor presents beside its record header, and why a write
-    // reaching one is refused, if it is. A mod header is not a major record, so the table names them.
-    private static readonly (string Member, string? ReadOnlyReason)[] PresentedMembers =
+    // The members of the header the editor presents: first the TES4 record's header (wbRecordHeader
+    // in wbDefinitionsCommon.pas) under xEdit's labels, in its order, then the rest. A mod header is
+    // not a major record, so the table names them, with why a write reaching one is refused.
+    private static readonly (string Member, string? HeaderLabel, string? ReadOnlyReason)[] PresentedMembers =
     [
-        ("Author", null),
+        ("Flags", "Record Flags", null),
+        ("FormID", "FormID", PluginHeader.FormIdReadOnly),
+        ("Version", "Version Control Info 1", null),
+        ("FormVersion", "Form Version", null),
+        ("Version2", "Version Control Info 2", null),
+        ("Author", null, null),
         // Content-derived at compile time (ADR-0008).
-        (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
+        (PluginHeader.MastersFieldName, null, "masters are wholly content-derived at compile time"),
     ];
-
-    private const string FormIdMember = "FormID";
 
     // PropertyName carries the "ModHeader." prefix because the header's document is the whole mod's
     // root RecordData.json.
@@ -42,11 +46,9 @@ internal static class ModHeaderSchema
         }
 
         var headerGetterType = modHeaderProp.PropertyType;
-        var declarations = ReflectedTypes.GetAllInterfaceProperties(headerGetterType).ToLookup(p => p.Name, StringComparer.Ordinal);
-        var columns = RecordHeaderColumns.For(headerGetterType, declarations, $"{modHeaderProp.Name}.", game, logger)
-            .ConvertAll(c => c.Name == FormIdMember ? c with { Field = c.Field with { ReadOnlyReason = PluginHeader.FormIdReadOnly } } : c);
-
-        foreach (var (member, readOnlyReason) in PresentedMembers)
+        var pathPrefix = $"{modHeaderProp.Name}.";
+        var columns = new List<ColumnSpec>();
+        foreach (var (member, headerLabel, readOnlyReason) in PresentedMembers)
         {
             var prop = headerGetterType.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
             if (prop == null)
@@ -56,14 +58,22 @@ internal static class ModHeaderSchema
             }
 
             // A member the builder declines has already said so through SchemaRefusals.
-            if (ColumnReflection.BuildColumn(prop, $"{modHeaderProp.Name}.{prop.Name}", game, logger) is { } column)
-                columns.Add(column with { Field = column.Field with { ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason } });
+            if (ColumnReflection.BuildColumn(prop, pathPrefix + prop.Name, game, logger) is not { } column) continue;
+            columns.Add(column with
+            {
+                Field = column.Field with
+                {
+                    DisplayLabel = headerLabel ?? column.Field.DisplayLabel,
+                    IsRecordHeaderMember = headerLabel != null,
+                    ReadOnlyReason = readOnlyReason ?? column.Field.ReadOnlyReason,
+                },
+            });
         }
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
         // column's own member names.
         columns.AddRange(SyntheticColumns.For(
-            headerGetterType, game, backingPathPrefix: modHeaderProp.Name + ".",
+            headerGetterType, game, backingPathPrefix: pathPrefix,
             backingNames: member => columns.FirstOrDefault(c => c.Name == member)?.Field.EnumMembers ?? LeafSpec.NoEnumMembers));
 
         return new RecordTableSchema

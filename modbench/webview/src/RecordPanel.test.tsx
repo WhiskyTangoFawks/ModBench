@@ -2170,13 +2170,13 @@ describe('RecordPanel — the Record Header', () => {
     });
   });
 
-  it('reads a plugin header\'s FormID as its own header member, opening no editor and giving the reason', async () => {
+  it('reads a plugin header\'s FormID as its FormKey, opening no editor and giving the reason', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
     const { container } = renderPanel(pluginHeader(), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
 
     expect(rowLabels(container)).toEqual(['Record Header', 'FormID', 'Name']);
-    fireEvent.doubleClick(within(formIdCell(container)).getByText('0'));
+    fireEvent.doubleClick(within(formIdCell(container)).getByText('000000:MyMod.esp'));
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(formIdCell(container)).toHaveAttribute('title', expect.stringContaining('names the plugin itself'));

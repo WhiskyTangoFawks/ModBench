@@ -30,9 +30,7 @@ internal sealed class FormKeyChange(
         var (release, identity, unit, repository) = editTarget;
         if (identity.RecordType == PluginHeader.RecordType)
         {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.FieldReadOnly, Member,
-                PluginHeader.FormIdReadOnlyReason(formKey, plugin.Name));
+            return DocumentEdit.ReadOnlyRefusal(Member, Member, PluginHeader.FormIdReadOnly);
         }
 
         if (value is not { ValueKind: JsonValueKind.String } text
