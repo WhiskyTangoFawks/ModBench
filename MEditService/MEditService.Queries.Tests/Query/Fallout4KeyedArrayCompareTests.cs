@@ -18,7 +18,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static readonly FormKey NpcKey = new(Base, 0x800);
     private static readonly FormKey FactionKey = new(Base, 0x801);
     private static readonly FormKey LeveledItemKey = new(Base, 0x802);
-    private static readonly FormKey ObjectModKey = new(Base, 0x803);
+    private static readonly FormKey MiscItemKey = new(Base, 0x803);
     private static readonly FormKey PerkKey = new(Base, 0x804);
     private static readonly FormKey QuestKey = new(Base, 0x805);
     private static readonly FormKey LocationKey = new(Base, 0x806);
@@ -26,25 +26,31 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static readonly FormKey MagicEffectKey = new(Base, 0x808);
     private static readonly FormKey PlacedNpcKey = new(Base, 0x809);
     private static readonly FormKey PlacedObjectKey = new(Base, 0x80A);
+    private static readonly FormKey NavmeshKey = new(Base, 0x80B);
+    private static readonly FormKey InfoMapKey = new(Base, 0x80C);
+    private static readonly FormKey LandscapeKey = new(Base, 0x80D);
     private static readonly FormKey A = new(Base, 0x900);
     private static readonly FormKey B = new(Base, 0x901);
+    private static readonly FormKey Cell = new(Base, 0x902);
 
     private static readonly (FormKey Key, string RecordType, string[] Fields, Func<bool, IMajorRecordGetter> Build)[] Records =
     [
         (NpcKey, "npc_", ["Factions", "Perks", "Items", "Attacks", "Sounds", "FaceMorphs", "FaceTintingLayers", "Properties"], Npc),
         (FactionKey, "fact", ["Relations", "Ranks"], Faction),
-        (LeveledItemKey, "lvli", ["Entries", "FilterKeywordChances"], LeveledItem),
-        (ObjectModKey, "omod", ["Properties"], WeaponModification),
+        (LeveledItemKey, "lvli", ["FilterKeywordChances"], LeveledItem),
+        (MiscItemKey, "misc", ["Components"], MiscItem),
         (PerkKey, "perk", ["Effects"], Perk),
         (QuestKey, "qust", ["Stages"], Quest),
         (LocationKey, "lctn", [
             "PersistentActorReferencesAdded", "PersistentActorReferencesStatic", "UniqueActorReferencesAdded",
-            "UniqueActorReferencesStatic", "LocationRefTypeReferencesAdded", "LocationRefTypeReferencesStatic",
-            "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
+            "UniqueActorReferencesStatic", "WorldspaceCellsAdded", "WorldspaceCellsStatic", "WorldspaceCellsRemoved"], Location),
         (TerminalKey, "term", ["VirtualMachineAdapter", "Properties"], Terminal),
         (MagicEffectKey, "mgef", ["Sounds"], MagicEffect),
         (PlacedNpcKey, "achr", ["LinkedReferences", "ActivateParents"], PlacedNpc),
         (PlacedObjectKey, "refr", ["LinkedReferences"], PlacedObject),
+        (NavmeshKey, "navm", ["NavmeshGeometry", "PreCutMapEntries"], Navmesh),
+        (InfoMapKey, "navi", ["MapInfos", "PreferredPathing"], InfoMap),
+        (LandscapeKey, "land", ["Layers"], Landscape),
     ];
 
     private readonly RecordQueryService _service;
@@ -72,6 +78,14 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static IEnumerable<T> InOrder<T>(bool reversed, params T[] items) => reversed ? items.Reverse() : items;
 
+    private static IEnumerable<ObjectProperty> ObjectProperties(bool reversed) => InOrder(reversed,
+        new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(A), Value = 1 },
+        new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(B), Value = 2 });
+
+    private static IEnumerable<LinkedReferences> LinkedReferencePair(bool reversed) => InOrder(reversed,
+        new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(A), Reference = new FormLink<IPlacedGetter>(A) },
+        new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(B), Reference = new FormLink<IPlacedGetter>(B) });
+
     private static Npc Npc(bool reversed) => new(NpcKey, Fallout4Release.Fallout4)
     {
         Factions = [.. InOrder(reversed,
@@ -95,9 +109,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         FaceTintingLayers = [.. InOrder(reversed,
             new NpcFaceTintingLayer { Index = 1, Value = 1 },
             new NpcFaceTintingLayer { Index = 2, Value = 2 })],
-        Properties = [.. InOrder(reversed,
-            new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(A), Value = 1 },
-            new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(B), Value = 2 })],
+        Properties = [.. ObjectProperties(reversed)],
     };
 
     private static Faction Faction(bool reversed) => new(FactionKey, Fallout4Release.Fallout4)
@@ -110,19 +122,17 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static LeveledItem LeveledItem(bool reversed) => new(LeveledItemKey, Fallout4Release.Fallout4)
     {
-        Entries = [.. InOrder(reversed,
-            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 1 } },
-            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(B), Count = 2 } })],
         FilterKeywordChances = [.. InOrder(reversed,
             new FilterKeywordChance { FilterKeyword = new FormLink<IKeywordGetter>(A) },
             new FilterKeywordChance { FilterKeyword = new FormLink<IKeywordGetter>(B) })],
     };
 
-    private static WeaponModification WeaponModification(bool reversed) => new(ObjectModKey, Fallout4Release.Fallout4)
+    private static MiscItem MiscItem(bool reversed) => new(MiscItemKey, Fallout4Release.Fallout4)
     {
-        Properties = [.. InOrder<AObjectModProperty<Weapon.Property>>(reversed,
-            new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Value = 1 },
-            new ObjectModFloatProperty<Weapon.Property> { Property = Weapon.Property.Speed, Value = 2 })],
+        Components = [.. InOrder(reversed,
+            new MiscItemComponent { Component = new FormLink<IComponentGetter>(A), Count = 1 },
+            new MiscItemComponent { Component = new FormLink<IComponentGetter>(B), Count = 2 })],
+        ComponentDisplayIndices = [0, 1],
     };
 
     private static Perk Perk(bool reversed) => new(PerkKey, Fallout4Release.Fallout4)
@@ -150,8 +160,6 @@ public sealed class Fallout4KeyedArrayCompareTests
         PersistentActorReferencesStatic = [.. PersistentActors(reversed)],
         UniqueActorReferencesAdded = [.. UniqueActorsPlacedTwice(reversed)],
         UniqueActorReferencesStatic = [.. UniqueActorsPlacedTwice(reversed)],
-        LocationRefTypeReferencesAdded = [.. LocationRefTypes(reversed)],
-        LocationRefTypeReferencesStatic = [.. LocationRefTypes(reversed)],
         WorldspaceCellsAdded = [.. WorldspaceCells(reversed)],
         WorldspaceCellsStatic = [.. WorldspaceCells(reversed)],
         WorldspaceCellsRemoved = [.. WorldspaceCells(reversed)],
@@ -164,10 +172,6 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static IEnumerable<UniqueActorReference> UniqueActorsPlacedTwice(bool reversed) => InOrder(reversed,
         new UniqueActorReference { Actor = new FormLink<INpcGetter>(A), Ref = new FormLink<IPlacedNpcGetter>(A) },
         new UniqueActorReference { Actor = new FormLink<INpcGetter>(A), Ref = new FormLink<IPlacedNpcGetter>(B) });
-
-    private static IEnumerable<LocationRefTypeReference> LocationRefTypes(bool reversed) => InOrder(reversed,
-        new LocationRefTypeReference { LocationRefType = new FormLink<ILocationReferenceTypeGetter>(A), Ref = new FormLink<IPlacedGetter>(A) },
-        new LocationRefTypeReference { LocationRefType = new FormLink<ILocationReferenceTypeGetter>(A), Ref = new FormLink<IPlacedGetter>(B) });
 
     private static IEnumerable<LocationCoordinate> WorldspaceCells(bool reversed) => InOrder(reversed,
         new LocationCoordinate { Location = new FormLink<IComplexLocationGetter>(A) },
@@ -185,9 +189,7 @@ public sealed class Fallout4KeyedArrayCompareTests
                     new ScriptFragmentIndexed { FragmentIndex = 2, ScriptName = "TerminalScript", FragmentName = "Fragment_2" })],
             },
         },
-        Properties = [.. InOrder(reversed,
-            new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(A), Value = 1 },
-            new ObjectProperty { ActorValue = new FormLink<IActorValueInformationGetter>(B), Value = 2 })],
+        Properties = [.. ObjectProperties(reversed)],
     };
 
     private static MagicEffect MagicEffect(bool reversed) => new(MagicEffectKey, Fallout4Release.Fallout4)
@@ -200,9 +202,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static PlacedNpc PlacedNpc(bool reversed) => new(PlacedNpcKey, Fallout4Release.Fallout4)
     {
         Base = new FormLinkNullable<INpcGetter>(NpcKey),
-        LinkedReferences = [.. InOrder(reversed,
-            new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(A), Reference = new FormLink<IPlacedGetter>(A) },
-            new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(B), Reference = new FormLink<IPlacedGetter>(B) })],
+        LinkedReferences = [.. LinkedReferencePair(reversed)],
         ActivateParents = new ActivateParents
         {
             Parents = [.. InOrder(reversed,
@@ -213,10 +213,57 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static PlacedObject PlacedObject(bool reversed) => new(PlacedObjectKey, Fallout4Release.Fallout4)
     {
-        LinkedReferences = [.. InOrder(reversed,
-            new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(A), Reference = new FormLink<IPlacedGetter>(A) },
-            new LinkedReferences { KeywordOrReference = new FormLink<IKeywordLinkedReferenceGetter>(B), Reference = new FormLink<IPlacedGetter>(B) })],
+        LinkedReferences = [.. LinkedReferencePair(reversed)],
     };
+
+    private static NavigationMesh Navmesh(bool reversed) => new(NavmeshKey, Fallout4Release.Fallout4)
+    {
+        NavmeshGeometry = new NavmeshGeometry
+        {
+            Parent = new CellNavmeshParent { Parent = new FormLink<ICellGetter>(Cell) },
+            DoorTriangles = [.. InOrder(reversed,
+                new DoorTriangle { TriangleBeforeDoor = 1, Door = new FormLink<IPlacedObjectGetter>(A) },
+                new DoorTriangle { TriangleBeforeDoor = 2, Door = new FormLink<IPlacedObjectGetter>(B) })],
+        },
+        PreCutMapEntries = [.. InOrder(reversed,
+            new PreCutMapEntry { Reference = new FormLink<IPreCutMapEntryReferenceGetter>(A) },
+            new PreCutMapEntry { Reference = new FormLink<IPreCutMapEntryReferenceGetter>(B) })],
+    };
+
+    private static NavigationMeshInfoMap InfoMap(bool reversed) => new(InfoMapKey, Fallout4Release.Fallout4)
+    {
+        MapInfos = [.. InOrder(reversed,
+            new NavigationMapInfo
+            {
+                NavigationMesh = new FormLink<INavigationMeshGetter>(A),
+                LinkedDoors = [.. InOrder(reversed,
+                    new LinkedDoor { Door = new FormLink<IPlacedObjectGetter>(A) },
+                    new LinkedDoor { Door = new FormLink<IPlacedObjectGetter>(B) })],
+                Parent = new NavigationMapInfoCellParent { Cell = new FormLink<ICellGetter>(Cell) },
+            },
+            new NavigationMapInfo
+            {
+                NavigationMesh = new FormLink<INavigationMeshGetter>(B),
+                Parent = new NavigationMapInfoCellParent { Cell = new FormLink<ICellGetter>(Cell) },
+            })],
+        PreferredPathing = new PreferredPathing
+        {
+            NavmeshTree = [.. InOrder(reversed,
+                new NavmeshNode { NavMesh = new FormLink<INavigationMeshGetter>(A), NodeIndex = 1 },
+                new NavmeshNode { NavMesh = new FormLink<INavigationMeshGetter>(B), NodeIndex = 2 })],
+        },
+    };
+
+    private static Landscape Landscape(bool reversed) => new(LandscapeKey, Fallout4Release.Fallout4)
+    {
+        Layers = [.. InOrder<BaseLayer>(reversed,
+            new BaseLayer { Header = Layer(Quadrant.BottomLeft, 0) },
+            new AlphaLayer { Header = Layer(Quadrant.BottomLeft, 1) },
+            new AlphaLayer { Header = Layer(Quadrant.TopRight, 0) })],
+    };
+
+    private static LayerHeader Layer(Quadrant quadrant, ushort number) =>
+        new() { Texture = new FormLink<ILandscapeTextureGetter>(A), Quadrant = quadrant, LayerNumber = number };
 
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType, string[] fields) =>
         new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, fields));
@@ -242,12 +289,12 @@ public sealed class Fallout4KeyedArrayCompareTests
         AssertTopCopyIsIdenticalToMaster(FactionKey);
 
     [Fact]
-    public void ALeveledItemCopyHoldingEntriesOfOneLevelInAnotherOrder_IsIdenticalToMaster() =>
+    public void ALeveledItemCopyHoldingItsFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(LeveledItemKey);
 
     [Fact]
-    public void AnObjectModCopyHoldingPropertiesOfTwoKindsInAnotherOrder_IsIdenticalToMaster() =>
-        AssertTopCopyIsIdenticalToMaster(ObjectModKey);
+    public void AMiscItemCopyHoldingItsComponentsInAnotherOrder_OverridesTheMaster_AsTheirDisplayIndicesPairByPosition() =>
+        AssertTopCopyIs(ConflictThis.Override, MiscItemKey);
 
     [Fact]
     public void APerkCopyHoldingAnEffectsConditionsInAnotherOrder_IsIdenticalToMaster() =>
@@ -276,4 +323,16 @@ public sealed class Fallout4KeyedArrayCompareTests
     [Fact]
     public void APlacedObjectCopyHoldingItsLinkedReferencesInAnotherOrder_OverridesTheMaster_AsXEditsUnsortedArrayDoes() =>
         AssertTopCopyIs(ConflictThis.Override, PlacedObjectKey);
+
+    [Fact]
+    public void ANavmeshCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(NavmeshKey);
+
+    [Fact]
+    public void AnInfoMapCopyHoldingEveryKeyedArrayInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(InfoMapKey);
+
+    [Fact]
+    public void ALandscapeCopyHoldingItsLayersInAnotherOrder_IsIdenticalToMaster() =>
+        AssertTopCopyIsIdenticalToMaster(LandscapeKey);
 }
