@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -88,19 +87,6 @@ public sealed class DeletedFlagEditTests : IDisposable
         var deleted = SetFlags(formKey, PartialForm | Deleted);
 
         Assert.True(JsonNode.DeepEquals(landscape, deleted["Landscape"]), deleted.ToJsonString());
-    }
-
-    [Fact]
-    public void SettingDeletedAndPartialFormTogether_OnACopyHoldingNeither_IsRefused()
-    {
-        var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f };
-        var formKey = _fixture.Seed(cell, "cell");
-        var before = _fixture.Document(formKey);
-
-        var (result, _) = _fixture.Apply(formKey, SetAt(Flags(PartialForm | Deleted), Member("MajorRecordFlagsRaw")));
-
-        Assert.Equal(RecordEditRefusal.SyntheticMemberIndirectWrite, result.Refusal);
-        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]

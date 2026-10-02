@@ -9,11 +9,7 @@ namespace MEditService.Codec.Schema;
 /// xEdit gates on the record definition declaring it.</summary>
 public static class PartialFormFlag
 {
-    /// <summary>Internal so the write-surface guard in Edits can compare the bit without redeclaring it.</summary>
     public const int Bit = 0x0000_4000;
-
-    /// <summary>The same bit as the annotation tables spell it.</summary>
-    internal static readonly string BitHex = $"0x{Bit:X}";
 
     /// <summary>The container-record gate both IsSet overloads read the bit through.</summary>
     public static bool IsPartialFormable(Type recordType) =>

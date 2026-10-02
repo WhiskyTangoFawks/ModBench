@@ -65,13 +65,16 @@ internal sealed record SchemaAnnotations(
     // The Color fields xEdit renders with an Alpha leaf (wbByteRGBA). A property of the field, not
     // the type, and every row is one Mutagen also writes the alpha byte for, so no alpha edit is lost.
     HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
-    // Members the document never spells but one bit of a flags member says: the ESL flag, the
-    // Partial Form bit. Flag names the backing enum's member, or the bit in hex for a raw integer.
+    // Plugin header members the document never spells but one flag of a flags member says: the ESL
+    // flag. Flag names the backing enum's member.
     Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
     // The record header's members in xEdit's order, under xEdit's labels (wbRecordHeader in
     // wbDefinitionsCommon.pas), keyed by the declaring interface: a type carries the rows whose
     // interface it has.
     IReadOnlyList<(string TypeName, string MemberName, string Label)> RecordHeaderMembers,
+    // Record Flags bits no flag view of the type names, under the name Mutagen gives the same bit on
+    // another type, keyed by the type's getter interface.
+    IReadOnlyList<(string TypeName, long Bit, string Name)> RecordFlagNames,
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
     // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
     IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
@@ -185,6 +188,8 @@ internal sealed record SchemaAnnotations(
         ["Small"] = "ESL",
     };
 
+    private const string PartialFormName = "PartialForm";
+
     private static readonly Dictionary<GameCategory, SchemaAnnotations> Tables = new()
     {
         [GameCategory.Fallout4] = new(
@@ -234,15 +239,18 @@ internal sealed record SchemaAnnotations(
             SyntheticFlagMembers: new()
             {
                 [("IFallout4ModHeaderGetter", "IsSmallMaster")] = ("Flags", "Small"),
-                [("ICellGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
-                [("IWorldspaceGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
-                [("IQuestGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
-                [("IDialogTopicGetter", "IsPartialForm")] = ("MajorRecordFlagsRaw", PartialFormFlag.BitHex),
             },
             RecordHeaderMembers:
             [
                 .. RecordHeaderMembersInEveryGame,
                 ("IFallout4MajorRecordGetter", "Version2", "Version Control Info 2"),
+            ],
+            // Quest's MajorFlag names it; wbDefinitionsFO4.pas gives CELL, DIAL and WRLD bit 14 too.
+            RecordFlagNames:
+            [
+                ("ICellGetter", PartialFormFlag.Bit, PartialFormName),
+                ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
+                ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
             ],
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
@@ -269,6 +277,7 @@ internal sealed record SchemaAnnotations(
                 .. RecordHeaderMembersInEveryGame,
                 ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
+            RecordFlagNames: [],
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
@@ -301,6 +310,7 @@ internal sealed record SchemaAnnotations(
                 .. RecordHeaderMembersInEveryGame,
                 ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
+            RecordFlagNames: [],
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
     };
 
@@ -338,16 +348,8 @@ internal sealed record SchemaAnnotations(
     public string? ReadOnlyReasonFor(PropertyInfo prop) =>
         DefectFor(prop) is { Effect: KnownDefectEffect.MemberReadOnly } defect ? defect.Reason : null;
 
-    /// <summary>The bit a synthetic member's row spells in hex, for a backing member no enum names.</summary>
-    internal static long ParseBit(string flag) =>
-        TryParseBit(flag, out var bit) ? bit : throw new ArgumentException($"'{flag}' is not a hex bit.", nameof(flag));
-
-    internal static bool TryParseBit(string flag, out long bit)
-    {
-        bit = 0;
-        return flag.StartsWith("0x", StringComparison.Ordinal)
-            && long.TryParse(flag.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out bit);
-    }
+    public IEnumerable<(long Bit, string Name)> RecordFlagNamesFor(Type getterType) =>
+        RecordFlagNames.Where(r => r.TypeName == getterType.Name).Select(r => (r.Bit, r.Name));
 
     public IEnumerable<(string Name, string BackingMember, string Flag)> SyntheticFlagMembersFor(Type getterType) =>
         SyntheticFlagMembers
@@ -446,8 +448,7 @@ internal sealed record SchemaAnnotations(
         return null;
     }
 
-    // A row backs onto a member the type reaches, and its flag is a name that enum defines or a hex
-    // bit where the member is a raw integer.
+    // A row backs onto a flags member the type reaches, and its flag is a name that enum defines.
     private IEnumerable<string> UnresolvedSyntheticFlags(ILookup<string, Type> typesByName)
     {
         foreach (var (entry, (backingMember, flag)) in SyntheticFlagMembers)
@@ -459,15 +460,10 @@ internal sealed record SchemaAnnotations(
                 continue;
             }
             var core = Nullable.GetUnderlyingType(backing.PropertyType) ?? backing.PropertyType;
-            if (core.IsEnum)
-            {
-                if (!Enum.GetNames(core).Contains(flag, StringComparer.Ordinal))
-                    yield return $"{label} names flag {flag}, which {core.Name} does not define";
-            }
-            else if (!ReflectedTypes.IntegerTypes.Contains(core) || !TryParseBit(flag, out _))
-            {
-                yield return $"{label} backs onto {backingMember}, which is neither an enum nor an integer bit {flag} could name";
-            }
+            if (!core.IsEnum)
+                yield return $"{label} backs onto {backingMember}, which is no enum";
+            else if (!Enum.GetNames(core).Contains(flag, StringComparer.Ordinal))
+                yield return $"{label} names flag {flag}, which {core.Name} does not define";
         }
     }
 
@@ -601,6 +597,9 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedTypes(nameof(SyntheticFlagMembers), SyntheticFlagMembers.Keys.Select(k => k.TypeName)),
             .. UnresolvedSyntheticFlags(typesByName),
             .. UnresolvedMembers(typesByName, nameof(RecordHeaderMembers), RecordHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
+            .. UnresolvedTypes(nameof(RecordFlagNames), RecordFlagNames.Select(r => r.TypeName)),
+            .. RecordFlagNames.Where(r => r.Bit <= 0 || (r.Bit & (r.Bit - 1)) != 0)
+                .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} names 0x{r.Bit:X}, which is no single bit"),
             .. UnresolvedMembers(typesByName, nameof(PluginHeaderMembers), PluginHeaderMembers.Select(r => (r.TypeName, r.MemberName))),
         ];
 
@@ -622,6 +621,8 @@ internal sealed record SchemaAnnotations(
                 .Select(t => $"{nameof(CycleTruncations)}: {t} never stops the walk or lets a loop through"),
             .. EmptySubSchemaTypes.Where(t => !observed.EmptySubSchemas.Contains(t)).Order(StringComparer.Ordinal)
                 .Select(t => $"{nameof(EmptySubSchemaTypes)}: {t} never comes out empty in the walk"),
+            .. RecordFlagNames.Where(r => !observed.NamedFlags.Contains((r.TypeName, r.Bit)))
+                .Select(r => $"{nameof(RecordFlagNames)}: {r.TypeName} 0x{r.Bit:X} names no record table's unnamed bit"),
         ];
 
         if (idle.Length > 0)
@@ -639,11 +640,14 @@ internal sealed class WalkObservations
 {
     private readonly HashSet<string> _appliedTruncations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _emptySubSchemas = new(StringComparer.Ordinal);
+    private readonly HashSet<(string TypeName, long Bit)> _namedFlags = [];
 
     internal IReadOnlySet<string> AppliedTruncations => _appliedTruncations;
     internal IReadOnlySet<string> EmptySubSchemas => _emptySubSchemas;
+    internal IReadOnlySet<(string TypeName, long Bit)> NamedFlags => _namedFlags;
 
     /// <summary>The walk stopped at this truncation, or let a loop through because of it.</summary>
     internal void AppliedTruncation(string getterInterfaceName) => _appliedTruncations.Add(getterInterfaceName);
     internal void CameOutEmpty(string getterInterfaceName) => _emptySubSchemas.Add(getterInterfaceName);
+    internal void NamedFlag(string getterInterfaceName, long bit) => _namedFlags.Add((getterInterfaceName, bit));
 }

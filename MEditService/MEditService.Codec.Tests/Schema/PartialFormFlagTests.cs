@@ -3,7 +3,6 @@ using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog;
 
 namespace MEditService.Codec.Tests.Schema;
 
@@ -55,23 +54,16 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsPartialFormable(typeof(Npc)));
     }
 
-    // The write door and the read gate name the same types: a container type IsPartialFormable
-    // admits carries the annotated IsPartialForm member, and no other type does.
     [Fact]
-    public void TheAnnotatedPartialFormMembers_AreExactlyThePartialFormableTypes()
+    public void EveryPartialFormableType_NamesBit14OfItsRecordFlags()
     {
-        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-
-        var annotated = schemas.Values
-            .Where(s => s.RecordColumns.Any(c => c.Synthetic is { Bit: PartialFormFlag.Bit }))
-            .Select(s => s.TableName)
-            .Order(StringComparer.Ordinal);
-        var partialFormable = schemas.Values
+        var partialFormable = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Values
             .Where(s => !s.IsHeader && PartialFormFlag.IsPartialFormable(s.RecordType))
-            .Select(s => s.TableName)
-            .Order(StringComparer.Ordinal);
+            .ToList();
 
-        Assert.Equal(partialFormable, annotated);
-        Assert.NotEmpty(annotated);
+        Assert.NotEmpty(partialFormable);
+        Assert.All(partialFormable, s => Assert.Contains(
+            new EnumMember("PartialForm", "16384"),
+            s.RecordColumns.Single(c => c.Name == "MajorRecordFlagsRaw").Field.EnumMembers));
     }
 }
