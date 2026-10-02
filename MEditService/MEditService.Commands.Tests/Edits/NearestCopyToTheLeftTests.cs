@@ -96,6 +96,21 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_DropsItsFormVersion_WhenTheCopyToItsLeftSpellsNone()
+    {
+        var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", formVersion: 120));
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
+            (middle, true),
+            (Plugin("Override.esp", NpcCopy(Deleted, formVersion: 131)), true));
+        _plugins.Respell(middle, TheNpc, "npc_", "\"FormVersion\": 120,", "");
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.DoesNotContain(undeleted, p => p.Key == "FormVersion");
+    }
+
+    [Fact]
     public void ClearingDeleted_PassesOverADeletedCopyToItsLeft()
     {
         Load(
@@ -196,6 +211,19 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingPartialForm_TakesTheRecordFlagsAndFormVersionOfTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(OffLimits, "Inside", also: cell => cell.FormVersion = 120)), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => cell.FormVersion = 131)), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.Equal(OffLimits, whole["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(120, whole["FormVersion"]?.GetValue<int>());
+    }
+
+    [Fact]
     public void ClearingPartialForm_RemovesAFieldTheCopyToItsLeftLacks()
     {
         Load(
@@ -268,7 +296,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (middle, true),
             (Plugin("Override.esp", NpcCopy(Deleted)), true));
-        _plugins.MakeUnreadable(middle, TheNpc, "npc_", "0.9", "\"tall\"");
+        _plugins.Respell(middle, TheNpc, "npc_", "0.9", "\"tall\"");
         var before = _plugins.Text(Edited, TheNpc);
 
         var result = WriteFlags(TheNpc, 0);
@@ -287,7 +315,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (middle, true),
             (Plugin("Override.esp", NpcCopy(Deleted)), true));
-        _plugins.MakeUnreadable(middle, TheNpc, "npc_", "{", "[");
+        _plugins.Respell(middle, TheNpc, "npc_", "{", "[");
 
         var result = WriteFlags(TheNpc, 0);
 
@@ -303,7 +331,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
             (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
-        _plugins.MakeUnreadable(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
+        _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(TheCell, PartialForm);
 
@@ -322,7 +350,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
             (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(placing))), true));
-        _plugins.MakeUnreadable(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
+        _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(rock.FormKey, Persistent);
 
