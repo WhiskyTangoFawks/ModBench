@@ -75,6 +75,9 @@ internal sealed record SchemaAnnotations(
     // Record Flags bits no flag view of the type names, under the name Mutagen gives the same bit on
     // another type, keyed by the type's getter interface.
     IReadOnlyList<(string TypeName, long Bit, string Name)> RecordFlagNames,
+    // An exterior cell's width in world units, or null where the game places no record in a grid
+    // cell. Unchecked: Mutagen divides by it as a literal and exposes no member that holds it.
+    float? ExteriorCellWidth,
     // The plugin header's presented members, keyed by the game's ModHeader interface: its record
     // header under xEdit's labels, then the rest. No interface over every game's ModHeader names them.
     IReadOnlyList<PluginHeaderMember> PluginHeaderMembers)
@@ -252,6 +255,8 @@ internal sealed record SchemaAnnotations(
                 ("IDialogTopicGetter", PartialFormFlag.Bit, PartialFormName),
                 ("IWorldspaceGetter", PartialFormFlag.Bit, PartialFormName),
             ],
+            // Mutagen's Fallout 4 worldspace bounds divide by it.
+            ExteriorCellWidth: 4096f,
             PluginHeaderMembers: PluginHeaderMembersOf("IFallout4ModHeaderGetter")),
 
         [GameCategory.Skyrim] = new(
@@ -278,6 +283,8 @@ internal sealed record SchemaAnnotations(
                 ("ISkyrimMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
             RecordFlagNames: [],
+            // Mutagen's Skyrim containing-cell lookup divides by it.
+            ExteriorCellWidth: 4096f,
             PluginHeaderMembers: PluginHeaderMembersOf("ISkyrimModHeaderGetter")),
 
         [GameCategory.Starfield] = new(
@@ -311,6 +318,7 @@ internal sealed record SchemaAnnotations(
                 ("IStarfieldMajorRecordGetter", "Version2", "Version Control Info 2"),
             ],
             RecordFlagNames: [],
+            ExteriorCellWidth: null,
             PluginHeaderMembers: PluginHeaderMembersOf("IStarfieldModHeaderGetter")),
     };
 
