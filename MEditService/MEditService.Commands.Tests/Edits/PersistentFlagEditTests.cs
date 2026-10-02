@@ -104,9 +104,9 @@ public sealed class PersistentFlagEditTests : IDisposable
         Assert.True(JsonNode.DeepEquals(before, after), after.ToJsonString());
     }
 
-    private void AssertRefusedUnchanged(RecordEditResult result, string cell, JsonObject before)
+    private void AssertRefusedUnchanged(RecordEditResult result, RecordEditRefusal refusal, string cell, JsonObject before)
     {
-        Assert.Equal(RecordEditRefusal.PersistentMoveIntoAnotherCell, result.Refusal);
+        Assert.Equal(refusal, result.Refusal);
         Assert.True(JsonNode.DeepEquals(before, Document(cell)), Document(cell).ToJsonString());
     }
 
@@ -154,7 +154,7 @@ public sealed class PersistentFlagEditTests : IDisposable
     {
         var before = Document("WorldPersistentCell");
 
-        AssertRefusedUnchanged(SetFlags("TopPersist", 0), "WorldPersistentCell", before);
+        AssertRefusedUnchanged(SetFlags("TopPersist", 0), RecordEditRefusal.PersistentMoveIntoAnotherCell, "WorldPersistentCell", before);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class PersistentFlagEditTests : IDisposable
     {
         var before = Document("Outside");
 
-        AssertRefusedUnchanged(SetFlags("OutsideTemp", Persistent), "Outside", before);
+        AssertRefusedUnchanged(SetFlags("OutsideTemp", Persistent), RecordEditRefusal.PersistentMoveIntoAnotherCell, "Outside", before);
     }
 
     [Fact]
@@ -184,15 +184,15 @@ public sealed class PersistentFlagEditTests : IDisposable
     {
         var before = Document("Holding");
 
-        AssertRefusedUnchanged(SetFlags("HoldingBeyond", 0), "Holding", before);
+        AssertRefusedUnchanged(SetFlags("HoldingBeyond", 0), RecordEditRefusal.PersistentMoveIntoAnotherCell, "Holding", before);
     }
 
     [Fact]
-    public void SettingPersistent_InACellWhoseCopySaysNeitherInteriorNorWhereItSits_IsRefused()
+    public void SettingPersistent_InACellNoCopyOfWhichSaysWhereItSits_IsRefused()
     {
         var before = Document("Unmarked");
 
-        AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), "Unmarked", before);
+        AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), RecordEditRefusal.PersistentMoveDestinationUnknown, "Unmarked", before);
     }
 
     [Fact]

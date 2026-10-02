@@ -26,27 +26,47 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
 
     private bool IntoPersistent => Destination == PersistentFlag.PersistentGroup;
 
+    /// <summary>A cell whose own copy says nothing of where it sits, on a Record Flags write: its nearest
+    /// copy to the left decides, as xEdit reads the highest override visible to the file.</summary>
+    internal static string? CellToLookUp(JsonObject root, IReadOnlyList<PathHop> prefix, RecordEditEnvelope envelope)
+    {
+        if (envelope.Path is not [{ Name: RecordHeaderFlags.Member }]) return null;
+        if (prefix is not [.., { Name: PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup }, _]) return null;
+        var cellPrefix = prefix.Take(prefix.Count - 2).ToList();
+        if (cellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }]) return null;
+        return EmbeddedChildPath.Walk(root, cellPrefix) is JsonObject cell && !PlacedCell.Says(cell)
+            ? cell[RecordMembers.FormKey]?.GetValue<string>()
+            : null;
+    }
+
     /// <summary>xEdit keeps the record in its cell when that cell is interior, is a worldspace's
     /// persistent cell taking it in, or is the exterior cell its position falls in.</summary>
-    internal RecordEditResult? RefuseLeavingTheCell(JsonObject root, GameRelease release, string spelled)
+    internal RecordEditResult? RefuseLeavingTheCell(JsonObject root, GameRelease release, string? cellCopyOnTheLeft, string spelled)
     {
         var cell = Cell(root);
         var record = EmbeddedChildPath.Walk(root, Prefix) as JsonObject
             ?? throw new InvalidOperationException($"The document has no record at {RecordEditEnvelope.Spell(Prefix)}.");
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        if (PlacedCell.IsInterior(cell)) return null;
         if (CellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
             return IntoPersistent ? null : IntoAnotherCell(spelled, formKey);
-        if (PlacedCell.Grid(cell) is not { } grid)
+        if (Said(cell, cellCopyOnTheLeft) is not { } said)
         {
             return Unknown(
                 spelled, formKey,
-                $"its cell {cell[RecordMembers.FormKey]?.GetValue<string>()} says neither that it is interior nor where it sits in its worldspace");
+                $"its cell {cell[RecordMembers.FormKey]?.GetValue<string>()} says neither that it is interior nor where it " +
+                "sits in its worldspace, and no copy of it to its left that mEdit can read says either");
         }
+        if (PlacedCell.IsInterior(said)) return null;
         if (IntoPersistent) return IntoAnotherCell(spelled, formKey);
         if (PlacedCell.GridHolding(record, release) is not { } holding)
             return Unknown(spelled, formKey, "it has no position mEdit can place in a grid cell");
-        return holding == grid ? null : IntoAnotherCell(spelled, formKey);
+        return holding == PlacedCell.Grid(said) ? null : IntoAnotherCell(spelled, formKey);
+    }
+
+    private static JsonObject? Said(JsonObject cell, string? cellCopyOnTheLeft)
+    {
+        if (PlacedCell.Says(cell)) return cell;
+        return cellCopyOnTheLeft is { } text ? JsonNode.Parse(text) as JsonObject : null;
     }
 
     private RecordEditResult IntoAnotherCell(string spelled, string? formKey) =>
@@ -59,7 +79,7 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
 
     private static RecordEditResult Unknown(string spelled, string? formKey, string why) =>
         RecordEditResult.RefusedAt(
-            RecordEditRefusal.PersistentMoveIntoAnotherCell, spelled,
+            RecordEditRefusal.PersistentMoveDestinationUnknown, spelled,
             $"Which cell xEdit would move {formKey} into is unknown: {why}. Nothing was written.");
 
     /// <summary>Moves the record to the end of its cell's destination group; returns its new prefix.</summary>

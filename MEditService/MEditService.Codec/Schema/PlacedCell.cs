@@ -25,6 +25,10 @@ public static class PlacedCell
         [GameCategory.Skyrim] = 4096f,
     };
 
+    /// <summary>Whether the cell's document says where it sits: interior, or at a grid. A Partial Form
+    /// copy says neither.</summary>
+    public static bool Says(JsonObject cell) => IsInterior(cell) || Grid(cell) != null;
+
     public static bool IsInterior(JsonObject cell) =>
         cell[FlagsMember] is JsonArray flags && flags.Any(flag => flag?.GetValue<string>() == InteriorFlag);
 

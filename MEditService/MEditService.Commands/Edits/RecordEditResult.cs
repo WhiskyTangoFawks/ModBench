@@ -74,6 +74,10 @@ public enum RecordEditRefusal
     /// documents that nothing here makes.</summary>
     PersistentMoveIntoAnotherCell,
 
+    /// <summary>Neither the placed record's cell nor any copy of it to its left says whether it is
+    /// interior or where it sits, or the record has no position to place, so xEdit's destination is unknown.</summary>
+    PersistentMoveDestinationUnknown,
+
     /// <summary>The missing ancestor is exterior with no spatial placement to mint from (a TopCell, or no
     /// parent worldspace); an interior Cell auto-creates instead, since its placement carries no meaning.</summary>
     ContainerParentMissingInDestination,

@@ -7,14 +7,16 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Everything a document edit needs and nothing it may touch: the text, where the edited
-/// record sits in it, its schema, the envelope, and the codec round trip as a function.</summary>
+/// record sits in it, its schema, the envelope, the codec round trip as a function, and the nearest
+/// copy to its left of a cell that says nothing of where it sits (<see cref="CellGroupMove.CellToLookUp"/>).</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
     RecordTableSchema Schema,
     RecordEditEnvelope Envelope,
     GameRelease Release,
-    Func<string, string> RoundTrip);
+    Func<string, string> RoundTrip,
+    string? CellCopyOnTheLeft);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
 /// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
@@ -46,7 +48,7 @@ internal static class DocumentEdit
         var deletion = RecordDeletion.Of(record, request.Schema, cursor.Column, envelope.Value);
         if (deletion != null) envelope = envelope with { Value = deletion.Flags };
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
-        if (move?.RefuseLeavingTheCell(root, request.Release, spelled) is { } leavesCell) return leavesCell;
+        if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
 
         JsonNode? edited;
         FieldMetadata editedMeta;
