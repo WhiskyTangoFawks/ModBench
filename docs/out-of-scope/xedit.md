@@ -29,7 +29,7 @@ Gestures Modbench does differently.
 | 4 | Row painting | NoConflict, OnlyOne and expanded struct rows are unpainted, so a background colour means "something here needs attention" | Tints every row | Ruling. |
 | 5 | Flags row | Expands into an in-cell checkbox list, collapsed to xEdit's compact name summary | Opens a transient check-combo | Ruling. |
 | 6 | Left click and the extended editor | No left click leaves the record panel. The extended editor opens only from the right-click menu. A string cell's second click, F2 and double click open the inline editor, like every other scalar. | Double click opens the extended editor, which is modeless | Ruling: a tab relocates the user where xEdit's modeless editor did not. |
-| 7 | ConflictPriority table | None. Mutagen abstracts away the raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
+| 7 | ConflictPriority table | None, but for the version stamps: Version Control Info 1, Form Version and Version Control Info 2 show, and take part in no conflict. Mutagen abstracts away the other raw-binary fields the priorities paper over. | A priority table | Ruling. Closed, not deferred. |
 | 8 | Following a reference | A Go to Record item in the right-click menu | Ctrl + click | Limitation: a webview has no supported way to bind a modifier click. The menu item is the VS Code way. |
 | 9 | Change FormID | Editing the FormID field changes the record's FormKey only. A script updates the records that reference it. | Change FormID also updates every loaded record that references it | Ruling: updating the references is a compound action, so it is a script. |
 | 10 | Reference text | `EditorID [FormKey]` | `EditorID "Full Name" [SIG:FormID]` | Ruling: the FormKey is the record's identity, and a FormID changes with the load order. |
@@ -45,6 +45,9 @@ Gestures Modbench does differently.
 | 20 | Alias numbers | The number | The alias's name, from the field's quest | Ruling: Mutagen types an alias as an integer, and each field finds its quest in its own way, so a reading is a port per definition and per game (divergence 17). |
 | 21 | Field order | The order the record holds them in its file, as Mutagen groups them into fields | The order of its definition | Mutagen decides the data: where Mutagen groups subrecords into fields differently, its grouping decides the order. |
 | 22 | Navigator conflict state | None on the Plugins tree. The record filter finds conflicts, and the record panel shows them. | Colours each record node by ConflictAll and ConflictThis | Limitation: a VS Code tree row has no background, and its label colour holds git's badge. |
+| 23 | A deleted reference | Keeps only its record header | Keeps its base record from FO4 on | Mutagen decides the data: Mutagen writes a deleted record as its header alone. |
+| 24 | Persistent on a deleted record | Refused, naming the reason | Reverts the change in silence | Principle: Never silently wrong. |
+| 25 | Two flag changes in one write | Clearing Partial Form and setting Deleted on a Partial Form copy leaves it Deleted | Reverts it to Partial Form, by the order it applies the two changes | Ruling: a write ends as it asks. |
 
 ## Omissions by object
 

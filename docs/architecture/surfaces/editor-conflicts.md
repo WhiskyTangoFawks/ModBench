@@ -9,7 +9,7 @@ Each story cites its source. A story with no source is owned here.
 - **ConflictAll**, one for each row: the state of that field across every copy.
 - **ConflictThis**, one for each cell: this plugin's copy of the field against the others.
 
-The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have (xedit.md, divergence 7).
+The axes are independent. A Conflict row can hold a Master cell and a ConflictWins cell. xEdit's benign and ignored states come from its priority table, which Modbench does not have, but for the version stamps (xedit.md, divergence 7).
 
 ## Rows
 
@@ -25,6 +25,7 @@ As a user, I want:
 
 1. Each row painted from its own field, so one changed field tints its own row and no other.
 2. A collapsed struct or array row to show the worst state beneath it, so collapsing hides nothing, and an expanded one to show no background, since its rows show their own. *xedit.md, divergence 4*
+3. Version Control Info 1, Form Version and Version Control Info 2 to show no conflict colour: the game ignores them. *xEdit; xedit.md, divergence 7*
 
 ## Cells
 
