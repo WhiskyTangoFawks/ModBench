@@ -10,7 +10,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>xEdit's Delete, MakePartialForm and their undoing, which refills the copy from the nearest
 /// copy to its left that is neither. TwbRecordHeaderStruct.ElementChanged applies Partial Form last, so
 /// making one of a deleted copy refills it first.</summary>
-internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
+internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
 {
     /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
     /// clears neither flag.</summary>
@@ -23,12 +23,13 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
         var flags = write.Next;
         if (makesPartialForm) flags &= ~DeletedFlag.Bit;
         else if (deletes && partialFormable) flags &= ~PartialFormFlag.Bit;
+        if (deletes || makesPartialForm) flags &= ~CompressedBit;
         var clears = !deletes && (write.Held & ~flags & EmptyingBits(schema)) != 0;
         var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
         var refills = clears || deletesBeforeMakingPartialForm;
         if (!deletes && !makesPartialForm && !refills) return null;
         var heldPersistent = (write.Held & PersistentFlag.Bit) != 0;
-        return new(JsonSerializer.SerializeToElement(flags), deletes, makesPartialForm, refills, heldPersistent);
+        return new(flags, deletes, makesPartialForm, refills, heldPersistent);
     }
 
     /// <summary>Whether a write of <paramref name="envelope"/> refills the record at
@@ -93,16 +94,33 @@ internal sealed record RecordEmptying(JsonElement Flags, bool Deletes, bool Make
     private static RecordEditResult Cannot(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.CannotBePartialForm, spelled, $"'{spelled}': {why}. Nothing was written.");
 
+    /// <summary>The Record Flags the write leaves: a refill's are its copy to the left's.</summary>
+    internal JsonElement FlagsWith(LeftCopy? copyOnTheLeft)
+    {
+        if (Left(copyOnTheLeft) is not { } left) return JsonSerializer.SerializeToElement(Flags);
+        var held = RecordFlagsWrite.HeldBy(left);
+        return JsonSerializer.SerializeToElement(MakesPartialForm ? (held | PartialFormFlag.Bit) & ~CompressedBit : held);
+    }
+
     internal void Apply(JsonObject record, RecordTableSchema schema, LeftCopy? copyOnTheLeft)
     {
-        var left = Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
+        var left = Left(copyOnTheLeft);
         foreach (var member in OwnFields(schema))
         {
             var fromTheLeft = Refills && (!MakesPartialForm || member == RecordMembers.EditorId);
             if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
             else if (fromTheLeft || Deletes || member != RecordMembers.EditorId) record.Remove(member);
         }
+        if (left?[FormVersion] is { } formVersion) record[FormVersion] = formVersion.DeepClone();
+        else if (left != null) record.Remove(FormVersion);
     }
+
+    private const string FormVersion = "FormVersion";
+
+    private const long CompressedBit = 0x0004_0000;
+
+    private JsonObject? Left(LeftCopy? copyOnTheLeft) =>
+        Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
 
     private static IEnumerable<string> OwnFields(RecordTableSchema schema)
     {

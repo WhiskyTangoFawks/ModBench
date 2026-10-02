@@ -51,7 +51,7 @@ internal static class DocumentEdit
             return cannot;
         if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
             return unreadable;
-        if (emptying != null) envelope = envelope with { Value = emptying.Flags };
+        if (emptying != null) envelope = envelope with { Value = emptying.FlagsWith(request.RefillCopyOnTheLeft) };
         if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         AnotherCell? into = null;
