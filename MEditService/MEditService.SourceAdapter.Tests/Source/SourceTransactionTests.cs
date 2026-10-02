@@ -109,6 +109,22 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
+    public void Rollback_TakesBackANewExteriorCell_AndTheBlockLevelsItsPutMinted()
+    {
+        Seed(Fk("000900"), "wrld", "Home");
+        var before = TreeSnapshot.Of(_root);
+
+        var transaction = new SourceRepository.SourceTransaction();
+        var placement = CellPlacement.AtGrid(Fk("000900"), 9, -9);
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000910"), "cell", "Out", Body(Fk("000910"), "Out")), placement);
+
+        var cell = new RecordIdentity(Fk("000910"), "cell", "Out");
+        Assert.Equal(new CellPlacement(Fk("000900"), 0, -1, 1, -2, IsInterior: false), Repo.CellPlacementOf(Plugin, cell));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_root));
+    }
+
+    [Fact]
     public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
     {
         var transaction = new SourceRepository.SourceTransaction();

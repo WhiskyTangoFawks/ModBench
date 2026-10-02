@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
@@ -32,7 +33,22 @@ public sealed record HoldingUnit(
 /// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
 /// worldspace and no block.</summary>
 public readonly record struct CellPlacement(
-    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
+    string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior)
+{
+    // Every game's GRUP layout: a sub-block spans 8 cells a side, and a block 4 sub-blocks.
+    private const int CellsPerSubBlock = 8;
+    private const int SubBlocksPerBlock = 4;
+
+    /// <summary>Where the exterior cell at grid (<paramref name="x"/>, <paramref name="y"/>) of
+    /// <paramref name="worldspace"/> sits.</summary>
+    public static CellPlacement AtGrid(string worldspace, int x, int y)
+    {
+        var (subX, subY) = (FloorDiv(x, CellsPerSubBlock), FloorDiv(y, CellsPerSubBlock));
+        return new(worldspace, FloorDiv(subX, SubBlocksPerBlock), FloorDiv(subY, SubBlocksPerBlock), subX, subY, IsInterior: false);
+    }
+
+    private static int FloorDiv(int value, int by) => (int)Math.Floor(value / (double)by);
+}
 
 /// <summary>Resolution: which document in the tree holds a record. The listing memo and the
 /// embedded-owner map are the repository's own per-operation state, and nothing outside it holds
@@ -346,6 +362,35 @@ public sealed partial class SourceRepository
         var (blockX, blockY) = Coordinates(path.BlockFolderName);
         var (subX, subY) = Coordinates(path.SubBlockFolderName);
         return new CellPlacement(worldspace, blockX, blockY, subX, subY, IsInterior: false);
+    }
+
+    /// <summary>The FormKey of the exterior cell this plugin's tree holds at grid (<paramref name="x"/>,
+    /// <paramref name="y"/>) of <paramref name="worldspace"/>, or null when it holds none there.</summary>
+    public string? CellAt(PluginAddress plugin, string worldspace, int x, int y)
+    {
+        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), plugin.Name, worldspace) is not { } worldspaceDocument)
+            return null;
+        var placement = CellPlacement.AtGrid(worldspace, x, y);
+        var subBlock = Path.Combine(
+            PathShape.DirectoryOf(worldspaceDocument),
+            BlockLevelName(placement.BlockX, placement.BlockY), BlockLevelName(placement.SubX, placement.SubY));
+        if (!Directory.Exists(subBlock)) return null;
+        foreach (var document in Directory.EnumerateDirectories(subBlock).Select(cell => Path.Combine(cell, RecordDataFileName)))
+        {
+            if (!File.Exists(document)) continue;
+            var text = File.ReadAllText(document);
+            JsonNode? cell;
+            try
+            {
+                cell = JsonNode.Parse(text);
+            }
+            catch (JsonException ex)
+            {
+                throw new UnreadableSourceDocumentException(document, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
+            }
+            if (cell is JsonObject held && PlacedCell.Grid(held) == (x, y)) return FormKeyDeclaredIn(text, document, plugin.Name);
+        }
+        return null;
     }
 
     // "<x>, <y>", as the whole-mod serializer names a block level's directory. Null coordinates for

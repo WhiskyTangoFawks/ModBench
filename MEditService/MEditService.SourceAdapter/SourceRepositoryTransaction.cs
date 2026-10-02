@@ -66,6 +66,38 @@ public sealed partial class SourceRepository
             }
         }
 
+        /// <summary>The put of an exterior cell at <paramref name="placement"/>, holding the bytes of every file
+        /// it may write and the directories it mints, so the rollback takes a new cell's document away again.</summary>
+        public void Put(SourceRepository repository, PluginAddress plugin, SourceDocument document, CellPlacement placement)
+        {
+            var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
+            if (repository.LocateToPlace(plugin, identity) is not null)
+            {
+                Put(repository, plugin, document);
+                return;
+            }
+
+            var (block, subBlock, cell) = repository.ExteriorCellLevels(plugin, identity, placement);
+            string[] files =
+            [
+                Path.Combine(block, GroupRecordDataFileName),
+                Path.Combine(subBlock, GroupRecordDataFileName),
+                Path.Combine(cell, RecordDataFileName),
+            ];
+            var before = files.Select(Snapshot).ToList();
+            var minted = LevelsMintedBy(cell);
+            try
+            {
+                repository.Put(plugin, document, placement);
+            }
+            finally
+            {
+                RecordMint(repository.ModFolder, minted);
+                for (var i = 0; i < files.Length; i++)
+                    _log.Add(new FileState(repository.ModFolder, files[i], before[i], Snapshot(files[i])));
+            }
+        }
+
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>
@@ -179,7 +211,7 @@ public sealed partial class SourceRepository
             if (ReferenceEquals(file.Before, Unreadable) || ReferenceEquals(file.After, Unreadable))
             {
                 unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                    "its content could not be read while the FormID change wrote it, so there is nothing to compare against"));
+                    "its content could not be read while this change wrote it, so there is nothing to compare against"));
                 return;
             }
 
@@ -192,7 +224,7 @@ public sealed partial class SourceRepository
             {
                 // By reference: Unreadable is a zero-length array and would compare equal to a legitimately empty file.
                 unrestored.Add(Named(file.ModFolder, file.Path, UnrestoredReason.RestoreFailed,
-                    "it could not be read, so there is no way to tell whether it still holds what this FormID change wrote"));
+                    "it could not be read, so there is no way to tell whether it still holds what this change wrote"));
                 return;
             }
 

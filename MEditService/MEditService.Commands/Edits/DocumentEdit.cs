@@ -26,11 +26,12 @@ internal static class DocumentEdit
     private const string EditorIdMember = RecordMembers.EditorId;
     private const string FormKeyMember = RecordMembers.FormKey;
 
-    /// <summary>The new document text in <paramref name="text"/> on success (a null return); a
-    /// refusal otherwise, with nothing written anywhere.</summary>
-    internal static RecordEditResult? Patch(DocumentEditRequest request, out string text)
+    /// <summary>The new document text in <paramref name="text"/> on success (a null return), and the cell
+    /// the record leaves this document's for; a refusal otherwise, with nothing written anywhere.</summary>
+    internal static RecordEditResult? Patch(DocumentEditRequest request, out string text, out CellCrossing? crossing)
     {
         text = request.Text;
+        crossing = null;
         var envelope = request.Envelope;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
         if (ValidateEnvelope(envelope, spelled) is { } malformed) return malformed;
@@ -53,7 +54,8 @@ internal static class DocumentEdit
         if (emptying != null) envelope = envelope with { Value = emptying.Flags };
         if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
-        if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
+        AnotherCell? into = null;
+        if (move?.RefuseUnknownCell(root, request.Release, request.CellCopyOnTheLeft, spelled, out into) is { } unknown) return unknown;
 
         JsonNode? edited;
         FieldMetadata editedMeta;
@@ -71,7 +73,7 @@ internal static class DocumentEdit
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
         emptying?.Apply(record, request.Schema, request.RefillCopyOnTheLeft);
-        var prefix = move?.Apply(root) ?? request.Prefix;
+        var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
 
         var started = envelope is { Op: RecordEditEnvelope.Add, Value: null or { ValueKind: JsonValueKind.Null } } && edited is JsonArray grown
             ? grown[^1]
@@ -120,6 +122,7 @@ internal static class DocumentEdit
         }
 
         text = written;
+        if (into != null) crossing = new CellCrossing(prefix, into);
         return null;
     }
 

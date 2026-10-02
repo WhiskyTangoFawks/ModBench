@@ -74,10 +74,6 @@ public enum RecordEditRefusal
     /// as a side effect; the synthetic member is the one door onto it, so nothing is written.</summary>
     SyntheticMemberIndirectWrite,
 
-    /// <summary>xEdit moves a placed record whose Persistent changes into another cell, a move between
-    /// documents that nothing here makes.</summary>
-    PersistentMoveIntoAnotherCell,
-
     /// <summary>The write leaves the record Deleted, where xEdit reverts a change to Persistent in silence
     /// (xedit.md, divergence 24).</summary>
     PersistentOnDeletedRecord,
