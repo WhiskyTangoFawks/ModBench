@@ -63,4 +63,8 @@ public record FieldMetadata(
 
     // The header member that shows and takes the record's FormKey: xEdit's FormID (xedit.md,
     // divergence 16).
-    bool IsRecordFormKey = false);
+    bool IsRecordFormKey = false,
+
+    // A header member the game ignores: it shows and takes part in no conflict (editor-conflicts.md,
+    // Rows story 3).
+    bool IgnoredInConflicts = false);
