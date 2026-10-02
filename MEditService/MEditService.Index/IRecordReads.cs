@@ -38,6 +38,10 @@ public interface IRecordReads
     /// backed by <c>form_lookup</c> (ADR-0005).</summary>
     RecordLookupEntry? Resolve(string formKey);
 
+    /// <summary>One response's <see cref="Resolve"/> about <paramref name="formKey"/>: the links its
+    /// copies carry resolve in one query up front, any other FormKey alone (ADR-0005).</summary>
+    Func<string, RecordLookupEntry?> LinkResolver(string formKey) => FormKeyResolutionCache.Memoize(Resolve);
+
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
 
     /// <summary>Every plugin at least one filtered record matches, restricted to
