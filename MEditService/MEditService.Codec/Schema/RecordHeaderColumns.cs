@@ -51,7 +51,7 @@ internal static class RecordHeaderColumns
     }
 
     // A bit two views name takes the name of the view declared on the narrower type, and otherwise
-    // of the view first by member name. A name the type's annotated enums agree on is the narrowest.
+    // of the view first by member name. Annotated enums are narrowest.
     // A bit no view names takes its annotation row's name.
     private static List<EnumMember> BitNames(
         IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations, Type getterType, GameReflection game)
