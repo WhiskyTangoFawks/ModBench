@@ -6,9 +6,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Everything a document edit needs and nothing it may touch: the text, where the edited
-/// record sits in it, its schema, the envelope, the codec round trip as a function, and
-/// <see cref="CellGroupMove.CellToLookUp"/>'s nearest copy.</summary>
+/// <summary>Everything a document edit needs and nothing it may touch, with the nearest copy to the
+/// left of a cell whose own copy does not say where it sits.</summary>
 internal sealed record DocumentEditRequest(
     string Text,
     IReadOnlyList<PathHop> Prefix,
@@ -45,8 +44,10 @@ internal static class DocumentEdit
 
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
-        var deletion = RecordDeletion.Of(record, request.Schema, cursor.Column, envelope.Value);
-        if (deletion != null) envelope = envelope with { Value = deletion.Flags };
+        var emptying = RecordEmptying.Of(record, request.Schema, cursor.Column, envelope.Value);
+        if (emptying?.RefuseCell(record, request.Prefix, request.Schema, request.Release, request.CellCopyOnTheLeft, spelled) is { } cannot)
+            return cannot;
+        if (emptying != null) envelope = envelope with { Value = emptying.Flags };
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
 
@@ -65,7 +66,7 @@ internal static class DocumentEdit
             };
         if (patched is { } refused) return refused;
         ClearAliases(record, cursor.Column);
-        if (deletion != null) RecordDeletion.EmptyFields(record, request.Schema);
+        emptying?.EmptyFields(record, request.Schema);
         var prefix = move?.Apply(root) ?? request.Prefix;
 
         if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema)) is { } duplicate)
@@ -101,7 +102,7 @@ internal static class DocumentEdit
         var was = JsonSerializer.SerializeToElement(before);
         foreach (var column in request.Schema.RecordColumns)
         {
-            if (column.Synthetic is not { } synthetic || column == cursor.Column || deletion?.Changes(synthetic) == true) continue;
+            if (column.Synthetic is not { } synthetic || column == cursor.Column) continue;
             if (SyntheticBits.IsSet(was, synthetic) != SyntheticBits.IsSet(after, synthetic))
             {
                 return RecordEditResult.RefusedAt(
@@ -321,11 +322,7 @@ internal static class DocumentEdit
     private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
     {
         if (schema.IsHeader || !PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType)) return null;
-        if (cursor.Column.Name == EditorIdMember || cursor.Column.Field.IsRecordHeaderMember
-            || cursor.Column.Synthetic is { Bit: PartialFormFlag.Bit })
-        {
-            return null;
-        }
+        if (cursor.Column.Name == EditorIdMember || cursor.Column.Field.IsRecordHeaderMember) return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PartialFormFieldReadOnly, spelled,
             $"{record[FormKeyMember]} is a Partial Form override — its own fields are ignored for conflict " +
@@ -613,21 +610,12 @@ internal static class DocumentEdit
             owner = inner;
         }
         var member = segments[^1];
-        if (bit.FlagName is not { } flagName)
-        {
-            var raw = owner[member] is JsonValue held && held.TryGetValue<long>(out var flags) ? flags : 0;
-            var next = set ? raw | bit.Bit : raw & ~bit.Bit;
-            if (next == 0) owner.Remove(member); else owner[member] = next;
-        }
-        else
-        {
-            var names = (owner[member] as JsonArray)?
-                .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))
-                    .GetValue<string>())
-                .Where(n => n != flagName).ToList() ?? [];
-            if (set) names.Add(flagName);
-            if (names.Count == 0) owner.Remove(member); else owner[member] = new JsonArray([.. names.Select(n => (JsonNode)n)]);
-        }
+        var names = (owner[member] as JsonArray)?
+            .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))
+                .GetValue<string>())
+            .Where(n => n != bit.FlagName).ToList() ?? [];
+        if (set) names.Add(bit.FlagName);
+        if (names.Count == 0) owner.Remove(member); else owner[member] = new JsonArray([.. names.Select(n => (JsonNode)n)]);
         edited = owner;
         return null;
     }

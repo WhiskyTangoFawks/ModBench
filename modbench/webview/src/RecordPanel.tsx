@@ -31,6 +31,20 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const headerBg = (c: ConflictThis | null | undefined): string | undefined => getCellStyle(c ?? undefined).backgroundColor;
 
+// Where a row sits in the grid: `present` says which columns carry the object it is a member of, and
+// `editable` which columns can write it.
+interface RowAt {
+  path: PathSegment[];
+  rootField: string;
+  rowKey: string;
+  parent: string | null;
+  present: (column: ColumnKey) => boolean;
+  editable: Set<ColumnKey>;
+  depth: number;
+  collapsedSummary?: Record<string, string>;
+  cellMetas?: Partial<Record<string, FieldMetadata>>;
+}
+
 // ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
 function columnKeysWhere(
@@ -136,16 +150,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
-    !immutableSet.has(key) && trackedSet?.has(key) === true && !o.isPartialForm && o.parseDiagnosis == null),
+    !immutableSet.has(key) && trackedSet?.has(key) === true && o.parseDiagnosis == null),
     [result, immutableSet, trackedSet]);
 
   // editor.md, A column's header: a Partial Form column is dimmed, header and cells alike. One
   // definition of a column's look, so the header and the cells cannot disagree.
-  const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
+  const partialFormColumns = useMemo(() => columnKeysWhere(result?.overrides, o => o.isPartialForm), [result]);
+  // editor-fields.md, Partial Form: a Partial Form copy's own fields are read-only.
+  const ownFieldEditableColumns = useMemo(
+    () => new Set([...editableColumns].filter(key => !partialFormColumns.has(key))), [editableColumns, partialFormColumns]);
   const columnStyle = useCallback((key: ColumnKey | typeof LABEL_COLUMN): React.CSSProperties => ({
-    ...(key !== LABEL_COLUMN && dimmedColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
+    ...(key !== LABEL_COLUMN && partialFormColumns.has(key) ? { opacity: DIMMED_OPACITY } : {}),
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
-  }), [dimmedColumns, collapsedColumns, columnWidths]);
+  }), [partialFormColumns, collapsedColumns, columnWidths]);
 
   // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
@@ -328,16 +345,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   }
 
   // One recursive builder for every nesting depth — including the recursion a script property's
-  // struct members need. `meta` is undefined only for a malformed diff tree; `present` says which
-  // columns carry the object this row is a member of.
-  function buildRows(
-    diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rowKey: string, parent: string | null, present: (column: ColumnKey) => boolean, depth = 0,
-    collapsedSummary?: Record<string, string>, cellMetas?: Partial<Record<string, FieldMetadata>>,
-  ): React.ReactNode[] {
+  // struct members need. `meta` is undefined only for a malformed diff tree.
+  function buildRows(diff: FieldDiff, meta: FieldMetadata | undefined, at: RowAt): React.ReactNode[] {
     // A diff node naming a member no override's schema declares has no shape to render against, so
     // it and its subtree are dropped rather than rendered against a guessed one.
     if (!meta) return [];
+    const { path, rootField, rowKey, parent, present, editable, depth, collapsedSummary, cellMetas } = at;
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = !collapsedRows.has(rowKey);
     navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
@@ -349,7 +362,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         meta={meta}
         columns={columns}
         columnStyle={columnStyle}
-        editableColumns={editableColumns}
+        editableColumns={editable}
         onEditCell={(plugin: ColumnKey, value: unknown) => {
           const hops = wirePath(rootField, path, plugin);
           if (hops) handleCellCommit(plugin, hops, value);
@@ -387,9 +400,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         const collapsedSummary = collapsedSummaries(child, meta.elementType, column =>
           children.filter(c => c.values[column] != null).at(-1) === child);
         // An element is spelled in full, so a column has it exactly where its value is.
-        rows.push(...buildRows(
-          child, meta.elementType, [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
-          rootField, childRowKey, rowKey, column => child.values[column] != null, depth + 1, collapsedSummary));
+        rows.push(...buildRows(child, meta.elementType, {
+          ...at,
+          path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
+          rowKey: childRowKey, parent: rowKey, present: column => child.values[column] != null, depth: depth + 1,
+          collapsedSummary, cellMetas: undefined,
+        }));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first
         // column's leaf for its structure, and each cell the shape its own column's leaf gives it.
@@ -399,12 +415,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         const cellMetas = member?.variants
           ? Object.fromEntries(columns.map(c => [c.key, variantFor(member, diff.values[c.key], meta)]))
           : undefined;
-        rows.push(...buildRows(
-          child, memberMeta, [...path, { kind: 'member', name: child.fieldName }],
-          rootField, childRowKey, rowKey,
-          column => present(column) && columnHasNode(meta, diff.values[column])
+        rows.push(...buildRows(child, memberMeta, {
+          ...at,
+          path: [...path, { kind: 'member', name: child.fieldName }],
+          rowKey: childRowKey, parent: rowKey,
+          present: column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
-          depth + 1, undefined, cellMetas));
+          depth: depth + 1, collapsedSummary: undefined, cellMetas,
+        }));
       }
     }
     return rows;
@@ -436,15 +454,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     const meta = fieldMetaMap[diff.fieldName];
     return meta?.isRecordFormKey
       ? [formIdRow(meta)]
-      : buildRows(diff, meta, [], diff.fieldName, `${RECORD_HEADER_ROW}.${diff.fieldName}`, RECORD_HEADER_ROW, () => true, 1);
+      : buildRows(diff, meta, {
+        path: [], rootField: diff.fieldName, rowKey: `${RECORD_HEADER_ROW}.${diff.fieldName}`, parent: RECORD_HEADER_ROW,
+        present: () => true, editable: editableColumns, depth: 1,
+      });
   };
   const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];
   // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
   // since the record's own fields are not there to be members of.
   const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(
-    diff => buildRows(
-      diff, fieldMetaMap[diff.fieldName], [], diff.fieldName, diff.fieldName, null,
-      column => !overrideFor(column)?.isPartialForm),
+    diff => buildRows(diff, fieldMetaMap[diff.fieldName], {
+      path: [], rootField: diff.fieldName, rowKey: diff.fieldName, parent: null,
+      present: column => !partialFormColumns.has(column), editable: ownFieldEditableColumns, depth: 0,
+    }),
   );
 
   return (

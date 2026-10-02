@@ -1,9 +1,8 @@
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>A member the document never spells: one bit of the flags member at BackingPath.
-/// FlagName is the bit's name where that member is an array of names.</summary>
-public sealed record SyntheticBit(string BackingPath, long Bit, string? FlagName);
+/// <summary>A member the document never spells: the flag FlagName of the flags member at BackingPath.</summary>
+public sealed record SyntheticBit(string BackingPath, string FlagName);
 
 /// <summary>One column of a record table: the member's own spec, plus the database facts a
 /// generated view (ADR-0007) needs on top of it. A column refuses writes only by naming

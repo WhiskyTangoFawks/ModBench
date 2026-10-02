@@ -33,7 +33,6 @@ internal static class ColumnReflection
             if (BuildColumn(prop, prop.Name, game, logger) is { } column) columns.Add(column);
         }
 
-        columns.AddRange(SyntheticColumns.For(getterType, game, backingPathPrefix: "", backingNames: _ => LeafSpec.NoEnumMembers));
         return columns;
     }
 

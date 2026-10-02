@@ -44,12 +44,14 @@ internal static class RecordHeaderColumns
         ColumnSpec flags, Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game)
     {
         var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, AllBits);
-        return flags with { Field = flags.Field with { EnumMembers = BitNames(aliases, declarations) }, Aliases = aliases };
+        var names = BitNames(aliases, declarations, getterType, game);
+        return flags with { Field = flags.Field with { EnumMembers = names }, Aliases = aliases };
     }
 
     // A bit two views name takes the name of the view declared on the narrower type, and otherwise
-    // of the view first by member name.
-    private static List<EnumMember> BitNames(IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations)
+    // of the view first by member name. A bit no view names takes its annotation row's name.
+    private static List<EnumMember> BitNames(
+        IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations, Type getterType, GameReflection game)
     {
         var byBit = new SortedDictionary<long, (EnumMember Member, Type Declaring)>();
         var views = aliases.Where(declarations.Contains).Order(StringComparer.Ordinal)
@@ -66,6 +68,11 @@ internal static class RecordHeaderColumns
                 if (!byBit.TryGetValue(bit, out var held) || (held.Declaring != declaring && held.Declaring.IsAssignableFrom(declaring)))
                     byBit[bit] = (member, declaring);
             }
+        }
+        foreach (var (bit, name) in game.Annotations.RecordFlagNamesFor(getterType))
+        {
+            if (!byBit.TryAdd(bit, (new EnumMember(name, bit.ToString(CultureInfo.InvariantCulture)), getterType))) continue;
+            game.Observed.NamedFlag(getterType.Name, bit);
         }
         return [.. byBit.Values.Select(v => v.Member)];
     }

@@ -57,9 +57,7 @@ internal static class ModHeaderSchema
 
         // The ESL flag's door: a synthetic bit of the flags column, spelled in the document as that
         // column's own member names.
-        columns.AddRange(SyntheticColumns.For(
-            headerGetterType, game, backingPathPrefix: pathPrefix,
-            backingNames: member => columns.FirstOrDefault(c => c.Name == member)?.Field.EnumMembers ?? LeafSpec.NoEnumMembers));
+        columns.AddRange(SyntheticColumns.For(headerGetterType, game, backingPathPrefix: pathPrefix));
 
         return new RecordTableSchema
         {
