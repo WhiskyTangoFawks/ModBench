@@ -13,7 +13,7 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class PersistentFlagEditTests : IDisposable
 {
-    private const int Persistent = 0x0400, InitiallyDisabled = 0x0800;
+    private const int Deleted = 0x0020, Persistent = 0x0400, InitiallyDisabled = 0x0800;
     private const float CellWidth = 4096f;
 
     private readonly SourceModFixture _mod;
@@ -28,8 +28,11 @@ public sealed class PersistentFlagEditTests : IDisposable
             inside.Persistent.Add(Placed(plugin, "InsidePersist", Persistent, 1f, 2f));
             var unmarked = NewCell(plugin, "Unmarked", 0);
             unmarked.Temporary.Add(Placed(plugin, "UnmarkedTemp", 0, 1f, 2f));
+            var ruin = NewCell(plugin, "Ruin", Cell.Flag.IsInteriorCell);
+            ruin.Temporary.Add(Placed(plugin, "RuinDeleted", Deleted, 1f, 2f));
             var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
             subBlock.Cells.Add(inside);
+            subBlock.Cells.Add(ruin);
             subBlock.Cells.Add(unmarked);
             var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
             block.SubBlocks.Add(subBlock);
@@ -193,6 +196,25 @@ public sealed class PersistentFlagEditTests : IDisposable
         var before = Document("Unmarked");
 
         AssertRefusedUnchanged(SetFlags("UnmarkedTemp", Persistent), RecordEditRefusal.PersistentMoveDestinationUnknown, "Unmarked", before);
+    }
+
+    [Fact]
+    public void SettingPersistent_OnADeletedPlacedRecord_IsRefused_NamingDeleted()
+    {
+        var before = Document("Ruin");
+
+        var result = SetFlags("RuinDeleted", Deleted | Persistent);
+
+        AssertRefusedUnchanged(result, RecordEditRefusal.PersistentOnDeletedRecord, "Ruin", before);
+        Assert.Contains("Deleted", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingPersistentAndDeleted_InOneWrite_IsRefused()
+    {
+        var before = Document("Inside");
+
+        AssertRefusedUnchanged(SetFlags("InsideTemp", Deleted | Persistent), RecordEditRefusal.PersistentOnDeletedRecord, "Inside", before);
     }
 
     [Fact]

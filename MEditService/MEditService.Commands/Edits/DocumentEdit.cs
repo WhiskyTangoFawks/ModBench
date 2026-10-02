@@ -51,6 +51,7 @@ internal static class DocumentEdit
         if (emptying?.RefuseRefill(request.RefillCopyOnTheLeft, request.Schema, record[FormKeyMember]?.GetValue<string>(), spelled) is { } unreadable)
             return unreadable;
         if (emptying != null) envelope = envelope with { Value = emptying.Flags };
+        if (RefusePersistentOnDeleted(record, request, cursor.Column, envelope.Value, spelled) is { } deleted) return deleted;
         var move = CellGroupMove.Of(record, request.Prefix, request.Schema, cursor.Column, envelope.Value);
         if (move?.RefuseLeavingTheCell(root, request.Release, request.CellCopyOnTheLeft, spelled) is { } leavesCell) return leavesCell;
 
@@ -335,6 +336,29 @@ internal static class DocumentEdit
             "resolution and read-only here. Editing this record requires clearing the Partial " +
             "Form flag on its header first.");
     }
+
+    // xEdit applies a write's Deleted before its Persistent, and reverts Persistent on a record that
+    // then reads Deleted (xedit.md, divergence 24).
+    private static RecordEditResult? RefusePersistentOnDeleted(
+        JsonObject record, DocumentEditRequest request, ColumnSpec column, JsonElement? value, string spelled)
+    {
+        if (RecordFlagsWrite.Of(record, request.Schema, column, value) is not { } write
+            || (write.Next & DeletedFlag.Bit) == 0 || !write.Changes(PersistentFlag.Bit)
+            || !(CellGroupMove.IsPlaced(request.Prefix) || column.Field.EnumMembers.Any(NamesPersistent)))
+            return null;
+        return RecordEditResult.RefusedAt(
+            RecordEditRefusal.PersistentOnDeletedRecord, spelled,
+            $"{record[FormKeyMember]} is Deleted once this write lands, and a Deleted record's Persistent " +
+            "does not change. Nothing was written.");
+    }
+
+    // A placed record's bit 10 is always Persistent, which its type's flag enums may leave unnamed. Elsewhere
+    // the bit is Persistent only where Mutagen names it so: other types give it other meanings.
+    private const string PersistentName = "Persistent";
+
+    private static bool NamesPersistent(EnumMember flag) =>
+        flag.Value == PersistentName
+        && flag.BitValue == PersistentFlag.Bit.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // ── the operations ──────────────────────────────────────────────────────
 

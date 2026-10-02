@@ -146,6 +146,20 @@ public sealed class DeletedAndPartialFormFlagEditTests : IDisposable
     }
 
     [Fact]
+    public void SettingPersistent_OnADeletedCell_IsRefused_AndWritesNothing()
+    {
+        var cell = InteriorCellOfFallout4Esm();
+        cell.MajorRecordFlagsRaw = Deleted;
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
+
+        var (result, _) = WriteFlags(formKey, Deleted | Persistent);
+
+        Assert.Equal(RecordEditRefusal.PersistentOnDeletedRecord, result.Refusal);
+        Assert.Equal(before, _fixture.Document(formKey));
+    }
+
+    [Fact]
     public void SettingPartialForm_LeavesTheCopyItsHeaderAndItsEditorIdAlone()
     {
         var cell = InteriorCellOfFallout4Esm();

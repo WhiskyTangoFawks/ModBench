@@ -78,6 +78,10 @@ public enum RecordEditRefusal
     /// documents that nothing here makes.</summary>
     PersistentMoveIntoAnotherCell,
 
+    /// <summary>The write leaves the record Deleted, where xEdit reverts a change to Persistent in silence
+    /// (xedit.md, divergence 24).</summary>
+    PersistentOnDeletedRecord,
+
     /// <summary>Neither the placed record's cell nor any copy of it to its left says whether it is
     /// interior or where it sits, or the record has no position to place, so xEdit's destination is unknown.</summary>
     PersistentMoveDestinationUnknown,

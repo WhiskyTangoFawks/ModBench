@@ -15,12 +15,16 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
     internal static CellGroupMove? Of(
         JsonObject record, IReadOnlyList<PathHop> prefix, RecordTableSchema schema, ColumnSpec column, JsonElement? value)
     {
-        if (prefix is not [.., { Kind: PathHop.MemberKind, Name: PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup } group, _])
-            return null;
+        if (!IsPlaced(prefix)) return null;
+        var group = prefix[^2];
         if (RecordFlagsWrite.Of(record, schema, column, value) is not { } write || !write.Changes(PersistentFlag.Bit)) return null;
         var destination = (write.Next & PersistentFlag.Bit) != 0 ? PersistentFlag.PersistentGroup : PersistentFlag.TemporaryGroup;
         return destination == group.Name ? null : new(prefix, destination);
     }
+
+    /// <summary>Whether the record at <paramref name="prefix"/> sits in one of its cell's groups.</summary>
+    internal static bool IsPlaced(IReadOnlyList<PathHop> prefix) =>
+        prefix is [.., { Kind: PathHop.MemberKind, Name: PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup }, _];
 
     private IReadOnlyList<PathHop> CellPrefix => [.. Prefix.Take(Prefix.Count - 2)];
 
@@ -31,7 +35,7 @@ internal sealed record CellGroupMove(IReadOnlyList<PathHop> Prefix, string Desti
     internal static string? CellToLookUp(JsonObject root, IReadOnlyList<PathHop> prefix, RecordEditEnvelope envelope)
     {
         if (envelope.Path is not [{ Name: RecordHeaderFlags.Member }]) return null;
-        if (prefix is not [.., { Name: PersistentFlag.PersistentGroup or PersistentFlag.TemporaryGroup }, _]) return null;
+        if (!IsPlaced(prefix)) return null;
         var cellPrefix = prefix.Take(prefix.Count - 2).ToList();
         if (cellPrefix is [.., { Name: PlacedCell.WorldspacePersistentCellMember }]) return null;
         return EmbeddedChildPath.Walk(root, cellPrefix) is JsonObject cell && !PlacedCell.Says(cell)
