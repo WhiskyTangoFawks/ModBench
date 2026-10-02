@@ -82,8 +82,6 @@ public sealed class CommandsAndEditsPathScanTests
         }
     }
 
-    // A count, not a line number: an operation is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))

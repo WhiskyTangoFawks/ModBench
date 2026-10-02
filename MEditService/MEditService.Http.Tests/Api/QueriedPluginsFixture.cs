@@ -14,12 +14,14 @@ public sealed class QueriedPluginsFixture : IApiPluginFixture<QueriedPluginsFixt
     public const string UserPlugin = "UserMod.esp";
     public const string UserMod = "UserModFolder";
     public const string ListedPlugin = "Listed.esp";
+    public const string ListedMod = "ListedMod";
     public const string HeldPlugin = "Held.esp";
+    public const string HeldMod = "HeldMod";
 
     public ScatteredFixtureData Data { get; } = new PluginFixtureBuilder("query-index")
         .WithPlugin(UserPlugin, OneOfEveryKind, origin: UserMod)
-        .WithPlugin(ListedPlugin, OutOfEditorIdOrder, origin: "ListedMod")
-        .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: "HeldMod")
+        .WithPlugin(ListedPlugin, OutOfEditorIdOrder, origin: ListedMod)
+        .WithPlugin(HeldPlugin, HeldByAnotherRecord, origin: HeldMod)
         .BuildScattered();
 
     public string DataFolder => Data.GameDirectory;

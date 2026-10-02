@@ -79,7 +79,6 @@ public sealed class GameNamespaceScanTests
         }
     }
 
-    // A site carries no line number: that would fail the gate for any unrelated edit above one.
     private static List<string> Sites(string root, string[] scannedRoots, string[] exemptFolders) =>
         [.. scannedRoots
             .SelectMany(scanned => SourceTree.CSharpFiles(Path.Combine(root, scanned)))

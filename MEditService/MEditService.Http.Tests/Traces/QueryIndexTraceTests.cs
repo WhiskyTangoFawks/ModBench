@@ -192,12 +192,12 @@ public sealed class QueryIndexTraceTests : HostedTests
         await LoadedQueriedPlugins();
         await Filtered("ZuluRef");
 
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/record-types?origin=ListedMod");
-        var rooms = (await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin=ListedMod")).EnumerateArray()
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/record-types?origin={ListedMod}");
+        var rooms = (await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin={ListedMod}")).EnumerateArray()
             .SelectMany(b => b.GetProperty("subBlocks").EnumerateArray())
             .SelectMany(s => s.GetProperty("cells").EnumerateArray()).ToList();
         var roomFk = Uri.EscapeDataString(rooms[0].GetProperty("formKey").GetString().Require());
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin=ListedMod");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin={ListedMod}");
 
         Assert.Equal(["Cell"], GroupNames(types));
         Assert.Equal(["ZuluRoom"], rooms.Select(r => r.GetProperty("editorId").GetString()));

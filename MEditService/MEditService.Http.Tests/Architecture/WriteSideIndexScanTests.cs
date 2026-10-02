@@ -176,8 +176,6 @@ public sealed class WriteSideIndexScanTests
             + string.Join("\n", named));
     }
 
-    // A count, not a line number: a reference is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Counts(
         string root, string[] scannedRoots, string[] excludedRoots, string[] symbols) =>
         [.. ScannedFiles(root, scannedRoots, excludedRoots)

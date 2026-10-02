@@ -88,8 +88,6 @@ public sealed class SourceCodecReadScanTests
         }
     }
 
-    // A count, not a line number: a touch is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. ScannedFiles(root, scannedRoots)
             .SelectMany(file => Occurrences(File.ReadAllText(file))

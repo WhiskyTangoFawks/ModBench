@@ -15,13 +15,13 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     private HttpClient Client => loaded.Client;
 
     private async Task<JsonElement> InteriorBlocks() =>
-        await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin=ListedMod");
+        await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/interior-cells?origin={ListedMod}");
 
     private async Task<JsonElement> ExteriorSubBlockCells()
     {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
         var worldFk = Uri.EscapeDataString(worldspaces[0].GetProperty("formKey").GetString().Require());
-        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces/{worldFk}/blocks?origin=ListedMod");
+        var blocks = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces/{worldFk}/blocks?origin={ListedMod}");
         return blocks.GetProperty("blocks")[0].GetProperty("subBlocks")[0].GetProperty("cells");
     }
 
@@ -163,7 +163,7 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     [Fact]
     public async Task APluginsWorldspaces_ListInFormIdOrder()
     {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
 
         Assert.Equal(["ZuluWorld", "AlphaWorld"], EditorIds(worldspaces));
     }
@@ -180,7 +180,7 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
         var room = (await InteriorBlocks())[1].GetProperty("subBlocks")[0].GetProperty("cells")[0];
         var roomFk = Uri.EscapeDataString(room.GetProperty("formKey").GetString().Require());
 
-        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin=ListedMod");
+        var references = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/cells/{roomFk}/children?origin={ListedMod}");
 
         Assert.Equal(["ZuluRef", "AlphaRef"], EditorIds(references.GetProperty("temporary")));
     }
@@ -188,10 +188,10 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     [Fact]
     public async Task AQuestsChildren_ListInFormIdOrder_WhateverTheirType()
     {
-        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&origin=ListedMod&type=qust&limit=10");
+        var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={ListedPlugin}&origin={ListedMod}&type=qust&limit=10");
         var questFk = Uri.EscapeDataString(quests.GetProperty("items")[0].GetProperty("formKey").GetString().Require());
 
-        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/records/{questFk}/children?origin=ListedMod");
+        var children = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/records/{questFk}/children?origin={ListedMod}");
 
         Assert.Equal(["ZuluScene", "AlphaTopic"], EditorIds(children));
     }
@@ -199,7 +199,7 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     [Fact]
     public async Task AWorldspace_SaysWhetherAnythingIsBeneathIt()
     {
-        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin=ListedMod");
+        var worldspaces = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{ListedPlugin}/worldspaces?origin={ListedMod}");
 
         Assert.Equal([true, false], worldspaces.EnumerateArray().Select(w => w.GetProperty("hasChildren").GetBoolean()));
     }
@@ -221,9 +221,9 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     [InlineData("scen")]
     public async Task ARecordAnotherRecordHolds_HasNoGroupOfItsOwn(string type)
     {
-        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types?origin=HeldMod");
-        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin=HeldMod&type={type}&limit=10");
-        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin=HeldMod&type={type}&search=Held&limit=10");
+        var types = await Client.GetFromJsonAsync<JsonElement>($"/plugins/{HeldPlugin}/record-types?origin={HeldMod}");
+        var group = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin={HeldMod}&type={type}&limit=10");
+        var held = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={HeldPlugin}&origin={HeldMod}&type={type}&search=Held&limit=10");
 
         Assert.Equal(1, held.GetProperty("total").GetInt32());
         Assert.Equal(0, group.GetProperty("total").GetInt32());

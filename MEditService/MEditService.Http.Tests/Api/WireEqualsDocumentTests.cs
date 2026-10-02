@@ -9,7 +9,6 @@ namespace MEditService.Http.Tests.Api;
 /// <summary>Every value <c>/compare</c> shows for a field is the same node the independent
 /// <c>GET /records/{formKey}</c> read already carries for it — the compare tree invents no second
 /// value.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFixture> loaded)
     : IClassFixture<LoadedApiFixture<CutDownPluginApiFixture>>
 {

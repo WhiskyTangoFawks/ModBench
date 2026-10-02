@@ -128,7 +128,7 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // Every production project: the doors the whitelists name now sit in three of them, and a scan
+    // Every production project: the doors the whitelists name sit in three of them, and a scan
     // scoped to one would stop seeing the other two.
     private static readonly string[] ProductionProjects =
     [
