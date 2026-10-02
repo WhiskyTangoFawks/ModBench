@@ -2202,6 +2202,44 @@ describe('RecordPanel — the Record Header', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
+  // editor-fields.md, Partial Form: the classifier sends a Partial Form copy's header members and
+  // none of its own fields.
+  const partialForm = (): CompareResult => {
+    const record = native('000800:MyMod.esp', 'Inside');
+    return {
+      ...record,
+      overrides: record.overrides.map(o => ({ ...o, isPartialForm: true })),
+      diffs: record.diffs.map(d => d.fieldName === 'Name' ? { ...d, values: { 'MyMod.esp': null } } : d),
+    };
+  };
+
+  it('edits a Partial Form copy\'s header member', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(partialForm(), { plugins: tracked });
+    await waitFor(() => screen.getByText('(Partial Form)'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const cell = cellOf(container, 'Version Control Info 1');
+    fireEvent.doubleClick(within(cell).getByText('5'));
+    const input = required(cell.querySelector('input'), 'the cell\'s input');
+    fireEvent.change(input, { target: { value: '7' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('VersionControl')], value: 7 });
+  });
+
+  it('reads a Partial Form copy\'s own field empty, opening no editor', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const { container } = renderPanel(partialForm(), { plugins: tracked });
+    await waitFor(() => screen.getByText('(Partial Form)'));
+
+    const cell = cellOf(container, 'Name');
+    fireEvent.doubleClick(cell);
+
+    expect(cell.textContent).toBe('');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
   // editor.md, Menus and keys: open field value is a text field's; the FormID reads as a reference.
   it('offers the FormID no open-field-value menu, where a text field offers one', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');

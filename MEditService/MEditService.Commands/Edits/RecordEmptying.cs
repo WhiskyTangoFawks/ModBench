@@ -26,7 +26,7 @@ internal sealed record RecordEmptying(JsonElement Flags, bool KeepsEditorId)
         var children = ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) ?? [];
         foreach (var column in schema.RecordColumns)
         {
-            if (column.Field.IsRecordHeaderMember || column.Field.IsDiscriminator || column.Name == RecordMembers.EditorId) continue;
+            if (column.Field.IsRecordHeaderMember || column.Field.IsDiscriminator) continue;
             if (!children.Contains(column.PropertyName, StringComparer.Ordinal)) record.Remove(column.PropertyName);
         }
         if (!KeepsEditorId) record.Remove(RecordMembers.EditorId);
