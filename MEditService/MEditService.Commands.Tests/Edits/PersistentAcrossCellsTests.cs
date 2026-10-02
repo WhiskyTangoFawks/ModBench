@@ -152,6 +152,18 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     }
 
     [Fact]
+    public void ClearingPersistent_WhereThePluginLacksTheCellAtItsPosition_CopiesItInFromAnUntrackedPluginToTheLeft()
+    {
+        Load(masterTracked: false);
+
+        SetFlags("Leaver", 0);
+
+        var copied = Document(MasterGridCell);
+        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
+        Assert.Equal(["Leaver"], Group(copied, "Temporary"));
+    }
+
+    [Fact]
     public void ClearingPersistent_WithNoCellAtItsPositionToTheLeft_CreatesOneAtItsGrid()
     {
         Load(masterTracked: true);
