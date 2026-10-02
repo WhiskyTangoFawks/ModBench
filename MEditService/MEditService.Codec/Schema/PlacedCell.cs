@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
-using Noggog;
 
 namespace MEditService.Codec.Schema;
 
@@ -44,7 +43,7 @@ public static class PlacedCell
     /// <summary>A cell's grid member at (<paramref name="x"/>, <paramref name="y"/>), as the codec writes
     /// it: the inverse of <see cref="Grid"/>.</summary>
     public static JsonObject GridAt(int x, int y) =>
-        (x, y) == (0, 0) ? [] : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new P2Int(x, y)) };
+        (x, y) == (0, 0) ? [] : new JsonObject { [GridPointMember] = ReflectedTypes.VectorText(new { X = x, Y = y }) };
 
     /// <summary>The grid cell a placed record's position falls in, or null when it has no position or
     /// the game has no cell width here.</summary>
