@@ -68,7 +68,9 @@ public sealed class PersistentAcrossCellsTests : IDisposable
     {
         var placed = new PlacedObject(mod)
         {
-            EditorID = editorId, MajorRecordFlagsRaw = flags, Position = new P3Float(cells * CellWidth, cells * CellWidth, 0f),
+            EditorID = editorId,
+            MajorRecordFlagsRaw = flags,
+            Position = new P3Float(cells * CellWidth, cells * CellWidth, 0f),
         };
         _keys[editorId] = placed.FormKey;
         return placed;
