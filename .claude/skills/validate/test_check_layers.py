@@ -87,6 +87,16 @@ class ReferenceViewAgainstLayers(unittest.TestCase):
             )
             self.assertEqual(cl.run(root), [])
 
+    def test_reference_into_its_own_bands_lib_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_fixture(pathlib.Path(tmp), "fx_driving.mods -> fx_driving.lib {class: ref}\n", {})
+            self.assertEqual(cl.run(root), [])
+
+    def test_reference_into_another_columns_lib_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_fixture(pathlib.Path(tmp), "fx_driving.mods -> gx_driving.lib {class: ref}\n", {})
+            self.assertEqual(len(cl.run(root)), 1)
+
     def test_reference_pointing_up_fails_naming_the_file_and_the_arrow(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_fixture(
@@ -198,6 +208,18 @@ class TraceMessagesAgainstReferenceView(unittest.TestCase):
                 + "\n"
                 + self.actor_block("codec", "fx_kernel.codec")
                 + "\ncommands -> codec: schema {class: query}\n"
+            )
+            root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
+            self.assertEqual(cl.run(root), [])
+
+    def test_a_box_and_its_bands_lib_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = (
+                "...@../styles\nshape: sequence_diagram\n"
+                + self.actor_block("mods", "fx_driving.mods")
+                + "\n"
+                + self.actor_block("lib", "fx_driving.lib")
+                + "\nmods -> lib: rows {class: query}\n"
             )
             root = make_fixture(pathlib.Path(tmp), "", {"one": trace})
             self.assertEqual(cl.run(root), [])
