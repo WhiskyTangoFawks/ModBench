@@ -20,14 +20,10 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "HoldsMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-holds-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-holds-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);

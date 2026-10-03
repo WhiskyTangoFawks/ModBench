@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -15,13 +16,9 @@ public sealed class SourceRepositoryUnitHoldingTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly string HeaderPath = Path.Combine("plugin-source", PluginName, "RecordData.json");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-unitholding-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-unitholding-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository Tracked()
     {

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,7 +24,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
 
     public static TheoryData<string> EmbeddedLists => [QuestTopics, TopicResponses];
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-hand-edited-list-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-hand-edited-list-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
     private readonly Quest _quest;
@@ -54,11 +55,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             ]);
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string SourceRoot => Path.Combine(_modFolder, SourceRepository.RootFor(PluginName));
 

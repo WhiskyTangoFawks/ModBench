@@ -77,9 +77,9 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private const string DestinationPluginName = "Destination.esp";
         private const string DestinationOrigin = "DestinationMod";
 
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-copyfail-game-").FullName;
-        private readonly string _sourceModFolder = Directory.CreateTempSubdirectory("medit-copyfail-source-").FullName;
-        private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copyfail-dest-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-copyfail-game-");
+        private readonly ScratchDirectory _sourceModFolder = new("medit-copyfail-source-");
+        private readonly ScratchDirectory _destinationModFolder = new("medit-copyfail-dest-");
         private readonly string _sourcePath;
 
         public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
@@ -148,19 +148,13 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_sourceModFolder);
-            TryDelete(_destinationModFolder);
-            TryDelete(_gameDirectory);
+            _sourceModFolder.Dispose();
+            _destinationModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
 
         // A tracked mod folder's .git objects are read-only on some filesystems, and a test failing
         // on cleanup would mask the assertion that already ran.
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
     }
 }
 

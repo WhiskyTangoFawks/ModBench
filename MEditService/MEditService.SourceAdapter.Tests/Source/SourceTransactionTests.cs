@@ -15,19 +15,13 @@ public sealed class SourceTransactionTests : IDisposable
     private const string PluginName = "Fixture.esp";
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
 
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-swt-").FullName;
+    private readonly ScratchDirectory _root = new("medit-swt-");
 
     // Constructed fresh per call rather than held: several tests delete and recreate _root at the
     // same path, and a held instance would answer from a listing cache the recreate invalidated.
     private SourceRepository Repo => SourceRepository.Over(_root, Release);
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_root, recursive: true); }
-        catch (DirectoryNotFoundException) { /* the sweep tears its own tree down */ }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _root.Dispose();
 
     private static string Fk(string hex) => $"{hex}:{PluginName}";
 
