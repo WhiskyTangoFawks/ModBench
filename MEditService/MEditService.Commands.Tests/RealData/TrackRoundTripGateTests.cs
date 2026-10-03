@@ -13,14 +13,17 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
     private static JsonNode RequireNode(JsonNode? node, string what) =>
         node ?? throw new InvalidOperationException($"Expected {what} to be present.");
 
+    private const string CellRecordPathByPatternNotByBlockNumber =
+        @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$";
+
+    private const string WorldspaceRecordPathByPatternNotByBlockNumber =
+        @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$";
+
     private static string FormKeyOf(JsonNode? recordNode) =>
         RequireNode(recordNode, "a record node")[nameof(IMajorRecordGetter.FormKey)] is { } formKeyNode
             ? formKeyNode.GetValue<string>()
             : throw new InvalidOperationException("Expected a FormKey member.");
 
-    // This class's fixture is the only one with real populated cells and worldspaces; the flat two-NPC
-    // fixture structurally cannot exercise this. Key paths by pattern rather than a hardcoded block
-    // number this test cannot verify independently.
     [Fact]
     public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
     {
@@ -29,19 +32,10 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             .ToList();
         Assert.NotEmpty(allFiles);
 
-        // Block and sub-block GRUP directories are the library's own directory layout too, so each
-        // numeric segment carries an optional "[N] " prefix ahead of the block number. That prefix is
-        // what the pattern allows for, not a coordinate.
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
-
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, CellRecordPathByPatternNotByBlockNumber));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, WorldspaceRecordPathByPatternNotByBlockNumber));
     }
 
-    // Order is the document's list order, transitively: a quest's document holds its topics, branches
-    // and scenes in the binary's order, each topic its responses, and none has a file or a directory
-    // anywhere.
     [Fact]
     public void Track_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
     {
@@ -64,7 +58,7 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
 
         foreach (var quest in quests)
         {
-            var parsed = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))
+            var parsed = JsonNode.Parse(File.ReadAllText(TheSingleDocumentCarrying(documents, quest.FormKey.ToString())))
                 ?? throw new InvalidOperationException($"Expected {quest.FormKey}'s document to parse as JSON.");
             var root = parsed.AsObject();
 
@@ -105,8 +99,6 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
         }
     }
 
-    // GroupRecordData.json is the library's own metadata file for a group or block level, written
-    // only for non-default metadata. None is minted for a flat group to carry its order.
     [Fact]
     public void Track_OfTheRealFixture_WritesOnlyTheGroupDocumentsTheLibraryWrites()
     {
@@ -125,16 +117,12 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
     }
 
-    // The layout is the repository's, so which file holds a record is asked of it rather than
-    // spelled here. Asked one path at a time, so Single still fails a tree holding two.
-    internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
+    internal static string TheSingleDocumentCarrying(IReadOnlyList<string> documents, string formKey) =>
         documents.Single(
             f => SourceRepository.PathCarrying([f], CutDownPluginFixture.PluginFileName, formKey) != null);
 
-    // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
-    // would pass whether or not the field was suppressed.
     [Fact]
-    public void Track_OfTheRealFixture_WritesCellTimestampData()
+    public void Track_OfTheRealFixture_WritesTheNonZeroTimestampsOfCell03C0F0()
     {
         var cellFile = Directory.EnumerateFiles(fixture.SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => f.Contains("03C0F0", StringComparison.Ordinal));
@@ -144,15 +132,12 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
         Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
     }
 
-    // This response because its condition Unknown1 is a real non-default pad from Fallout4.esm, so a
-    // missing-field bug cannot pass by writing a coincidental zero.
     [Fact]
-    public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
+    public void Track_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponseAndHeaderStats()
     {
-        // Inline in its topic's document, so the topic's text is where the pad has to appear.
-        var topicText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
+        var topicDocumentText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)));
-        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicText, StringComparison.Ordinal);
+        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicDocumentText, StringComparison.Ordinal);
 
         var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
         Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);

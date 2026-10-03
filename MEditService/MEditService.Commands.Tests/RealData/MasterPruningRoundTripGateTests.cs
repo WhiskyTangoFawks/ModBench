@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>Real plugins whose bytes trip the walker's master-pruning false positive must Track (ADR-0008);
-/// SpaDia_AMR is refused, since Mutagen-#688 hides its real use of a master.</summary>
 public sealed class MasterPruningRoundTripGateTests
 {
     private const string FaceGenFixtureFileName = "FaceGen Output.esp";
@@ -57,16 +55,14 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    // Empty master stubs satisfy Track's read; which of them survive the write back out is what these
-    // fixtures test.
     private sealed class PrunedMasterScratch : IDisposable
     {
         private readonly string _fixtureFileName;
         private readonly string _origin;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masterprune-game-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-masterprune-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
-        public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-masterprune-").FullName;
+        public ScratchDirectory ModFolder { get; } = new("medit-masterprune-");
 
         public PrunedMasterScratch(string fixtureFileName, string origin)
         {
@@ -82,9 +78,9 @@ public sealed class MasterPruningRoundTripGateTests
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
+                    var emptyMasterStubPath = Path.Combine(_gameDirectory, master.Master.FileName);
+                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
             inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
@@ -98,8 +94,8 @@ public sealed class MasterPruningRoundTripGateTests
 
         public void Dispose()
         {
-            try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
-            try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+            ModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

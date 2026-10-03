@@ -7,8 +7,7 @@ namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
 public sealed class PluginFlagPredicatesTests
 {
-    // TES5Edit's wbDefinitionsSF1.pas: {0x800} 'Blueprint' in Starfield's TES4 header flags.
-    private const int BlueprintBit = 0x800;
+    private const int BlueprintBitOfStarfieldsTes4HeaderFlags = 0x800;
 
     [Theory]
     [InlineData(GameRelease.Starfield, true)]
@@ -17,15 +16,13 @@ public sealed class PluginFlagPredicatesTests
     public void HasBlueprintPlugins_OnlyForStarfield(GameRelease release, bool expected) =>
         Assert.Equal(expected, PluginFlagPredicates.HasBlueprintPlugins(release));
 
-    // MO2's pluginlist.cpp counts a blueprint flag only on a master-flagged plugin, or one named
-    // .esm or .esl.
     [Theory]
-    [InlineData(true, BlueprintBit, "Ships.esp", true)]
-    [InlineData(false, BlueprintBit, "Ships.esm", true)]
-    [InlineData(false, BlueprintBit, "Ships.esl", true)]
-    [InlineData(false, BlueprintBit, "Ships.esp", false)]
+    [InlineData(true, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esp", true)]
+    [InlineData(false, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esm", true)]
+    [InlineData(false, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esl", true)]
+    [InlineData(false, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esp", false)]
     [InlineData(true, 0, "Ships.esm", false)]
-    public void IsBlueprint_IsTheBlueprintBitOnAMaster(bool masterFlagged, int headerFlags, string fileName, bool expected)
+    public void IsBlueprint_IsTheBlueprintBitOnAMasterFlaggedOrEsmOrEslNamedPlugin(bool masterFlagged, int headerFlags, string fileName, bool expected)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         if (masterFlagged) mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Master;

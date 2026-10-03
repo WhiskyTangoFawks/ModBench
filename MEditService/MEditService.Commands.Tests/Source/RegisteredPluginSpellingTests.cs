@@ -12,54 +12,49 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>A source tree's root is the plugin's name as the load order spells it: a ModKey renders
-/// the extension lowercase, so <c>Mixed.ESP</c> would be written under one root and read from
-/// another.</summary>
 public sealed class RegisteredPluginSpellingTests
 {
     private const string Origin = "SpellingMod";
     private const string PluginName = "Mixed.ESP";
+    private const string RootAModKeyWouldSpellWithALowercaseExtension = "plugin-source/Mixed.esp/";
     private const GameRelease Release = GameRelease.Fallout4;
 
     [Fact]
     public async Task Track_OfAPluginWithAMixedCaseExtension_CommitsItsSourceRootAsRegistered()
     {
-        using var scratch = new ModFolderScratch();
+        using var scratch = new ModFolderUnderAnInstanceRootScratch();
 
         var result = await new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
             .TrackModAsync(scratch.LoadOrder, Origin, SourcePreset.Edits);
 
         Assert.Empty(result.Refused);
-        // git's index is case-sensitive on every platform, so the committed paths are the portable
-        // statement of where a reader finds the tree.
-        var committed = GitProbe.Run(scratch.GitDirectory, scratch.ModFolder, "ls-files").Split('\n');
-        Assert.Contains("plugin-source/Mixed.ESP/RecordData.json", committed);
+        var pathsInGitsCaseSensitiveIndex = GitProbe.Run(scratch.GitDirectory, scratch.ModFolder, "ls-files").Split('\n');
+        Assert.Contains("plugin-source/Mixed.ESP/RecordData.json", pathsInGitsCaseSensitiveIndex);
         Assert.DoesNotContain(
-            committed, path => path.StartsWith("plugin-source/Mixed.esp/", StringComparison.Ordinal));
+            pathsInGitsCaseSensitiveIndex, path => path.StartsWith(RootAModKeyWouldSpellWithALowercaseExtension, StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task Compile_OfAPluginWithAMixedCaseExtension_ReadsTheSourceRootAsRegistered()
     {
-        using var scratch = new ModFolderScratch();
-        scratch.TrackFromPristineFiles();
+        using var scratch = new ModFolderUnderAnInstanceRootScratch();
+        scratch.TrackWithoutTheTrackDoor();
 
         var result = await CompileServices.Over(scratch.LoadOrder).CompileAsync(scratch.Plugin);
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }
 
-    // The mod folder under an instance root, as MO2 lays it out, holding one mixed-case plugin.
-    private sealed class ModFolderScratch : IDisposable
+    private sealed class ModFolderUnderAnInstanceRootScratch : IDisposable
     {
-        private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-spelling-instance-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-spelling-game-").FullName;
+        private readonly ScratchDirectory _instanceRoot = new("medit-spelling-instance-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-spelling-game-");
 
         public string ModFolder { get; }
         internal PluginAddress Plugin { get; } = new(PluginName, Origin);
         internal LoadOrderSnapshot LoadOrder { get; }
 
-        internal ModFolderScratch()
+        internal ModFolderUnderAnInstanceRootScratch()
         {
             ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -75,9 +70,7 @@ public sealed class RegisteredPluginSpellingTests
 
         private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-        // Tracked without Track, so the compile door is read on a tree whose root is spelled as
-        // registered whatever the Track door does with the name.
-        internal void TrackFromPristineFiles()
+        internal void TrackWithoutTheTrackDoor()
         {
             var (treeFiles, _) = TestAdapters.Mutagen().ReadSourceAsync(
                 new ModPath(ModKey.FromFileName(PluginName), PluginPath), PluginName, Release,
@@ -90,15 +83,8 @@ public sealed class RegisteredPluginSpellingTests
 
         public void Dispose()
         {
-            SafeDelete(_instanceRoot);
-            SafeDelete(_gameDirectory);
-        }
-
-        private static void SafeDelete(string folder)
-        {
-            try { Directory.Delete(folder, recursive: true); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            _instanceRoot.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

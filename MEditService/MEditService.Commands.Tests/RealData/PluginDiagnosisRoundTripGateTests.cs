@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>Two real survey fixtures: one whose malformed PERK carries full identity at the top level, and
-/// a Kind A defect (ADR-0006) carrying none, proving no identity is fabricated.</summary>
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
@@ -60,15 +58,13 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
-    // Stub masters come from the fixture's own declared list: Track's round-trip write needs the
-    // names present, not their content.
     private sealed class RealFixtureScratch : IDisposable
     {
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
         private readonly LoadOrderSnapshot _loadOrder;
         private const string Origin = "DiagnosisFixtureMod";
 
-        public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-diagnosis-mod-").FullName;
+        public ScratchDirectory ModFolder { get; } = new("medit-diagnosis-mod-");
 
         public RealFixtureScratch(string fixtureFileName)
         {
@@ -82,9 +78,9 @@ public sealed class PluginDiagnosisRoundTripGateTests
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
+                    var emptyMasterStubPath = Path.Combine(_gameDirectory, master.Master.FileName);
+                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyMasterStubPath);
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyMasterStubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
@@ -98,8 +94,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public void Dispose()
         {
-            try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
-            try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+            ModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

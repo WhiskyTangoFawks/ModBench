@@ -8,59 +8,40 @@ using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-/// <summary>Every compile reads its source tree through a scratch folder of the door's own, which never
-/// outlives the read, however the read ends.</summary>
 public sealed class PluginTreeReadTests
 {
     private static readonly IPluginAdapter Adapter = TestAdapters.Mutagen();
 
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // The adapter's own scratch prefix, spelled here as a leak watcher sees it on disk.
-    private const string ScratchPrefix = "medit-readtree-";
+    private const string TheAdaptersOwnScratchPrefix = "medit-readtree-";
 
     [Fact]
     public async Task ReadTree_OfAFileItCannotWrite_Throws_AndLeavesNoScratchFolderBehind()
     {
-        var scratchRoot = Directory.CreateTempSubdirectory("readtree-scratch-root-").FullName;
-        try
-        {
-            var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
+        using var scratchRoot = new ScratchDirectory("readtree-scratch-root-");
+        var unwritable = new TreeFile(Path.Combine("Tree.esp", new string('n', 300) + ".json"), "{}"u8.ToArray());
 
-            await Assert.ThrowsAnyAsync<IOException>(
-                () => MutagenPluginAdapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4, scratchRoot));
+        await Assert.ThrowsAnyAsync<IOException>(
+            () => MutagenPluginAdapter.ReadTreeAsync([unwritable], Codec, GameRelease.Fallout4, scratchRoot));
 
-            Assert.Empty(Directory.GetDirectories(scratchRoot));
-        }
-        finally
-        {
-            Directory.Delete(scratchRoot, recursive: true);
-        }
+        Assert.Empty(Directory.GetDirectories(scratchRoot));
     }
 
     [Fact]
     public async Task ReadTree_OfASourceItCannotRead_AnswersTheDiagnosis_AndLeavesNoScratchFolderBehind()
     {
-        var scratchRoot = Directory.CreateTempSubdirectory("readtree-scratch-root-").FullName;
-        try
-        {
-            var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
+        using var scratchRoot = new ScratchDirectory("readtree-scratch-root-");
+        var unreadable = new TreeFile(Path.Combine("Tree.esp", "RecordData.json"), "{ not json"u8.ToArray());
 
-            var (tree, diagnosis, _) =
-                await MutagenPluginAdapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4, scratchRoot);
+        var (tree, diagnosis, _) =
+            await MutagenPluginAdapter.ReadTreeAsync([unreadable], Codec, GameRelease.Fallout4, scratchRoot);
 
-            Assert.Null(tree);
-            Assert.NotNull(diagnosis);
-            Assert.Empty(Directory.GetDirectories(scratchRoot));
-        }
-        finally
-        {
-            Directory.Delete(scratchRoot, recursive: true);
-        }
+        Assert.Null(tree);
+        Assert.NotNull(diagnosis);
+        Assert.Empty(Directory.GetDirectories(scratchRoot));
     }
 
-    // A malformed FormKey names its file by the absolute path it was read from, which shows the
-    // scratch folder the read used.
     [Fact]
     public async Task ReadTree_OfAMalformedFormKey_ReadsInAScratchFolder_AndRemovesIt()
     {
@@ -81,9 +62,9 @@ public sealed class PluginTreeReadTests
 
         var (_, _, error) = await Adapter.ReadTreeAsync([.. corrupt], Codec, GameRelease.Fallout4);
 
-        var readPath = Assert.IsType<FilePathedException>(error).Path;
-        var scratch = Path.GetRelativePath(Path.GetTempPath(), readPath).Split(Path.DirectorySeparatorChar)[0];
-        Assert.StartsWith(ScratchPrefix, scratch, StringComparison.Ordinal);
+        var absolutePathTheErrorNamesItsFileBy = Assert.IsType<FilePathedException>(error).Path;
+        var scratch = Path.GetRelativePath(Path.GetTempPath(), absolutePathTheErrorNamesItsFileBy).Split(Path.DirectorySeparatorChar)[0];
+        Assert.StartsWith(TheAdaptersOwnScratchPrefix, scratch, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(Path.GetTempPath(), scratch)));
     }
 }
