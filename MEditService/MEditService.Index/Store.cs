@@ -198,8 +198,7 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009. Registrations are not cleared (ADR-0013, Derived tactical
-    /// observations).</summary>
+    /// <summary>ADR-0009. Registrations are not cleared (ADR-0013).</summary>
     public List<PluginAddress> ValidateAgainstDisk()
     {
         var stale = new List<PluginAddress>();

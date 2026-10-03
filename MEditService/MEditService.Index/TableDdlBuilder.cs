@@ -53,7 +53,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     internal const string WinnersRelation = "winners";
 
     /// <summary>One row per plugin file the load order holds, carrying its load index (ADR-0013).
-    /// Registration is visibility (ADR-0009): every registered view joins it.</summary>
+    /// Every public view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
 
     /// <summary>The active plugins with their load index (ADR-0013), which the sweep
@@ -115,8 +115,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
-    /// <summary>ADR-0009: registration is visibility, so a plugin's own facts answer while the
-    /// snapshot names it.</summary>
+    /// <summary>A plugin's own facts answer while the snapshot names it.</summary>
     internal static string RegisteredJoin(string alias, string pluginColumn, string originColumn) => $"""
         JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
         """;
@@ -245,7 +244,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // ADR-0009: winning is a function of registration alone. No PRIMARY KEY on any appended table:
+    // Only the active plugins compete for winners (ADR-0012). No PRIMARY KEY on any appended table:
     // re-index is delete-then-append, and the ART index across the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
