@@ -401,30 +401,11 @@ internal static class DocumentEdit
 
     // A colour holding no alpha lands as Mutagen's binary read spells it, so a value pasted back as its
     // cell copies it writes the document a fresh read gives (editor-fields.md, Every field, story 4).
-    private static JsonNode? AsRead(JsonNode? value, FieldMetadata meta)
-    {
-        switch (value)
-        {
-            case JsonValue leaf when meta.Type == ColorReading.ApiType && !meta.HoldsAlpha && leaf.TryGetValue<string>(out var text):
-                return JsonValue.Create(ColorReading.AsReadWithoutAlpha(text));
-            case JsonObject obj when meta.Fields is { } fields:
-                foreach (var field in fields)
-                {
-                    if (obj[field.Name] is { } child && AsRead(child, DocumentNodes.VariantFor(field, obj)) is var read && read != child)
-                        obj[field.Name] = read;
-                }
-                return obj;
-            case JsonArray array when meta.ElementType is { } elementMeta:
-                for (var i = 0; i < array.Count; i++)
-                {
-                    if (array[i] is { } element && AsRead(element, elementMeta) is var read && read != element)
-                        array[i] = read;
-                }
-                return array;
-            default:
-                return value;
-        }
-    }
+    private static JsonNode? AsRead(JsonNode? value, FieldMetadata meta) =>
+        DocumentNodes.Rewrite(value, meta, (node, at) =>
+            node is JsonValue leaf && at.Type == ColorReading.ApiType && !at.HoldsAlpha && leaf.TryGetValue<string>(out var text)
+                ? JsonValue.Create(ColorReading.AsReadWithoutAlpha(text))
+                : node);
 
     // The cascade over a whole value: wherever it changes a governing member from what the document
     // holds, only the slots the new value uses stay, so a stale slot cannot ride in beside it. An
