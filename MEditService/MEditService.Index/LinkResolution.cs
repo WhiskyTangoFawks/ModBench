@@ -11,8 +11,21 @@ internal static class LinkResolution
     // long one slower than the whole join runs.
     private const int ConstantListLimit = 200;
 
-    /// <summary>Resolves every link form_references lists for <paramref name="formKey"/>, in any
-    /// plugin, up front; a FormKey it did not list still resolves alone.</summary>
+    // form_references lists an inline child's links under the child's own FormKey. A worldspace's
+    // top cell is held through cell_location, beside every other cell, so its links resolve alone.
+    private static readonly string CarriedBy = $"""
+        source_form_key IN (
+            WITH RECURSIVE carried(form_key) AS (
+                SELECT $1
+                UNION
+                SELECT child_form_key FROM {TableDdlBuilder.MirrorSchema}.container_child
+                JOIN carried ON parent_form_key = carried.form_key)
+            SELECT form_key FROM carried)
+        """;
+
+    /// <summary>Resolves every link form_references lists for <paramref name="formKey"/> and the
+    /// children its document carries, in any plugin, up front; a FormKey it did not list still
+    /// resolves alone.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(DuckDBConnection connection, string formKey) =>
         ForLinksOf(connection, formKey, alone => Resolve(connection, alone));
 
@@ -20,7 +33,7 @@ internal static class LinkResolution
     /// a resolver that outlives <paramref name="connection"/>.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(
         DuckDBConnection connection, string formKey, Func<string, RecordLookupEntry?> resolveAlone) =>
-        Prefetched(connection, resolveAlone, "source_form_key = $1", formKey);
+        Prefetched(connection, resolveAlone, CarriedBy, formKey);
 
     /// <summary>The same, for every link <paramref name="plugin"/>'s records carry.</summary>
     internal static Func<string, RecordLookupEntry?> ForLinksOf(DuckDBConnection connection, PluginAddress plugin) =>
