@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { Mod, Separator, ModlistEntry } from '../instance';
-import { buildFileConflictIndex, rootLevelWinners, foldPath } from '../fileConflictIndex';
+import { buildFileConflictIndex, modOrigin, rootLevelWinners, foldPath } from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
 import type { InstanceAdapter, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { OVERWRITE_ORIGIN } from '../loadOrderSnapshot';
@@ -29,21 +29,21 @@ describe('buildFileConflictIndex', () => {
     const index = await buildFileConflictIndex(entries, fixture, () => {}, []);
 
     const entry = index.files.get('textures/shared/foo.dds');
-    expect(entry?.winnerMod).toBe('ModA');
+    expect(entry?.winnerOrigin).toEqual(modOrigin('ModA'));
     expect(entry?.winner).toBe(join(fixtureRoot, 'mods', 'ModA', 'textures', 'shared', 'foo.dds'));
-    expect(entry?.providers.sort()).toEqual(['ModA', 'ModB']);
+    expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
   });
 
   it('flips the winner when the mods are reordered', async () => {
     const index = await buildFileConflictIndex([mod('ModB'), mod('ModA')], fixture, () => {}, []);
-    expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModB');
+    expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
   it('excludes disabled mods from conflict resolution', async () => {
     const index = await buildFileConflictIndex([mod('ModA', false), mod('ModB')], fixture, () => {}, []);
     const entry = index.files.get('textures/shared/foo.dds');
-    expect(entry?.providers).toEqual(['ModB']);
-    expect(entry?.winnerMod).toBe('ModB');
+    expect(entry?.providers).toEqual([modOrigin('ModB')]);
+    expect(entry?.winnerOrigin).toEqual(modOrigin('ModB'));
     expect(index.filesByMod.has('ModA')).toBe(false);
   });
 
@@ -57,8 +57,8 @@ describe('buildFileConflictIndex', () => {
   it('records a single-provider file with providers.length === 1', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], fixture, () => {}, []);
     const entry = index.files.get('meshes/onlyB.nif');
-    expect(entry?.providers).toEqual(['ModB']);
-    expect(entry?.winnerMod).toBe('ModB');
+    expect(entry?.providers).toEqual([modOrigin('ModB')]);
+    expect(entry?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
   it('lists nested subdirectory relative paths through the index\'s iteration surface', async () => {
@@ -77,7 +77,7 @@ describe('buildFileConflictIndex', () => {
   it('excludes an enabled separator from the index — a separator is not a mod, even though it also carries `enabled`', async () => {
     const index = await buildFileConflictIndex([separator('Unassigned'), mod('ModA'), mod('ModB')], fixture, () => {}, []);
     expect(index.filesByMod.has('Unassigned')).toBe(false);
-    expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModA');
+    expect(index.files.get('textures/shared/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));
   });
 });
 
@@ -89,13 +89,13 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
 
     const entry = index.files.get('textures/shared/foo.dds');
     expect(entry?.winner).toBe(overwriteCopy.path);
-    expect(entry?.winnerMod).toBe(OVERWRITE_ORIGIN);
-    expect(entry?.providers).toEqual([OVERWRITE_ORIGIN, 'ModA', 'ModB']);
+    expect(entry?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
+    expect(entry?.providers).toEqual([{ kind: 'runtimeOutput' }, modOrigin('ModA'), modOrigin('ModB')]);
   });
 
   it('is the sole provider of a path no mod ships', async () => {
     const index = await buildFileConflictIndex([mod('ModA')], fixture, () => {}, [{ relativePath: 'only.txt', path: '/o/only.txt' }]);
-    expect(index.files.get('only.txt')).toMatchObject({ winnerMod: OVERWRITE_ORIGIN, providers: [OVERWRITE_ORIGIN] });
+    expect(index.files.get('only.txt')).toMatchObject({ winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }] });
   });
 
   it('keeps Overwrite out of every mod\'s own files', async () => {
@@ -116,6 +116,8 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
       entries, answering({ folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds' }], notes: [] }), () => {}, [sharing],
     );
     expect(index.files.get('a.dds')?.winner).toBe(sharing.path);
+    expect(index.files.get('a.dds')?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
+    expect(index.files.get('a.dds')?.providers).toEqual([{ kind: 'runtimeOutput' }, modOrigin(OVERWRITE_ORIGIN)]);
     expect(computeModStatuses(entries, index).get(OVERWRITE_ORIGIN)?.status).toEqual({ kind: 'conflicts', count: 1 });
   });
 });
@@ -126,17 +128,17 @@ describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine 
 
     expect(index.files.size).toBe(1);
     const entry = index.files.get('Textures/Foo.dds');
-    expect(entry?.providers.sort()).toEqual(['ModA', 'ModB']);
+    expect(entry?.providers).toEqual([modOrigin('ModA'), modOrigin('ModB')]);
     const entryOtherCasing = index.files.get('textures/foo.dds');
     expect(entryOtherCasing).toBe(entry);
   });
 
   it('picks the same winner by priority whether casing matches or varies', async () => {
     const top = await buildFileConflictIndex([mod('ModA'), mod('ModB')], caseFixture, () => {}, []);
-    expect(top.files.get('textures/foo.dds')?.winnerMod).toBe('ModA');
+    expect(top.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModA'));
 
     const flipped = await buildFileConflictIndex([mod('ModB'), mod('ModA')], caseFixture, () => {}, []);
-    expect(flipped.files.get('textures/foo.dds')?.winnerMod).toBe('ModB');
+    expect(flipped.files.get('textures/foo.dds')?.winnerOrigin).toEqual(modOrigin('ModB'));
   });
 
   it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', async () => {
@@ -204,8 +206,8 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
     const index = await buildFileConflictIndex(entries, litr, () => {}, []);
     for (const relativePath of contested) {
       const entry = index.files.get(relativePath);
-      expect(entry?.providers.sort()).toEqual([baseName, fixName].sort());
-      expect(entry?.winnerMod).toBe(fixName);
+      expect(entry?.providers).toEqual([modOrigin(fixName), modOrigin(baseName)]);
+      expect(entry?.winnerOrigin).toEqual(modOrigin(fixName));
     }
 
     const statuses = computeModStatuses([fixEntry, baseEntry], index);

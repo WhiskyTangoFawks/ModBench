@@ -2,7 +2,7 @@
 // ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
 // opened (ADR-0016).
 
-import type { ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN, type FileOrigin, type ModlistEntry } from '../instanceAdapter/instanceAdapter';
 import type { FileConflictIndex } from './fileConflictIndex';
 
 export type ModStatus =
@@ -16,6 +16,8 @@ export interface ModStatusResult {
   conflictLines: string[];
 }
 
+const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
+
 type ModFile = { relativePath: string; absolutePath: string };
 
 export function computeModStatuses(entries: ModlistEntry[], index: FileConflictIndex): Map<string, ModStatusResult> {
@@ -27,7 +29,7 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
   if (!entry.enabled) return { status: { kind: 'ok' }, conflictLines: [] };
 
   const modFiles = index.filesByMod.get(entry.name) ?? [];
-  const { conflictLines, conflicts, overrides } = countConflicts(modFiles, index);
+  const { conflictLines, conflicts, overrides } = countConflicts(modFiles, index, entry.name);
   return { status: classifyStatus(conflicts, overrides), conflictLines };
 }
 
@@ -35,6 +37,7 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
 function countConflicts(
   modFiles: ModFile[],
   index: FileConflictIndex,
+  modName: string,
 ): { conflictLines: string[]; conflicts: number; overrides: number } {
   const conflictLines: string[] = [];
   let conflicts = 0;
@@ -42,8 +45,8 @@ function countConflicts(
   for (const file of modFiles) {
     const conflict = index.files.get(file.relativePath);
     if (!conflict || conflict.providers.length < 2) continue;
-    conflictLines.push(`${file.relativePath} → winner: ${conflict.winnerMod}`);
-    if (conflict.winner === file.absolutePath) overrides++;
+    conflictLines.push(`${file.relativePath} → winner: ${winnerLabel(conflict.winnerOrigin)}`);
+    if (conflict.winnerOrigin.kind === 'mod' && conflict.winnerOrigin.name === modName) overrides++;
     else conflicts++;
   }
   return { conflictLines, conflicts, overrides };
