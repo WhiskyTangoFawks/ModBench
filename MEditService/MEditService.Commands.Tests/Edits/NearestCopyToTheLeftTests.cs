@@ -288,7 +288,6 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
         var whole = Written(TheCell, 0);
 
-        Assert.Fail(whole.ToJsonString());
         Assert.Equal(0, whole["VersionControl"]?.GetValue<int>() ?? 0);
         Assert.Equal(0, whole["Version2"]?.GetValue<int>() ?? 0);
     }
