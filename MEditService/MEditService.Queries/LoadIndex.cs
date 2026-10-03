@@ -5,8 +5,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Queries;
 
 /// <summary>editor.md, A column's header: xEdit's load index, in hex. A plugin counts among the
-/// active plugins of its own kind (full, medium or light), and its kind's marker leads its FormID.
-/// This is the one owner of a plugin's place and of the FormID that place makes.</summary>
+/// active plugins of its own kind (full, medium or light). The one owner of that place and its FormID.</summary>
 internal static class LoadIndex
 {
     private static MasterStyle StyleOf(PluginAddress key, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
@@ -43,9 +42,8 @@ internal static class LoadIndex
         };
     }
 
-    /// <summary>xEdit's load-order FormID of a FormKey's text, by which it sorts a keyed array
-    /// (TwbFormIDDefFormater.ToSortKey). Null where no active plugin has the FormKey's filename, and
-    /// where the ID does not fit its plugin's space: Mutagen would mask it into another record's FormID.</summary>
+    /// <summary>xEdit's load-order FormID of a FormKey's text (TwbFormIDDefFormater.ToSortKey). Null for
+    /// an unloaded plugin, and for an ID beyond its plugin's space, which Mutagen would mask onto another record.</summary>
     internal static Func<string, uint?> FormIdsOf(
         LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
