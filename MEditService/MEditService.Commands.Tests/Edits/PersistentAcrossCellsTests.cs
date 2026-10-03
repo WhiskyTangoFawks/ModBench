@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -61,6 +62,9 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         here.Persistent.Add(Placed(mod, "Leaver", Persistent, 3.5f));
         here.Persistent.Add(Placed(mod, "Wanderer", Persistent, 9.5f));
         _keys["Here"] = here.FormKey;
+        var bystander = new Static(mod) { EditorID = "Bystander" };
+        _keys["Bystander"] = bystander.FormKey;
+        mod.Statics.Add(bystander);
         world.SubCells.Add(BlockHolding(here));
         mod.Worldspaces.Add(world);
     });
@@ -254,5 +258,39 @@ public sealed class PersistentAcrossCellsTests : IDisposable
         var created = Tree.CellAt(Address(Override), World.ToString(), 9, 9).Require();
         Assert.Equal(Override.ModKey, FormKey.Factory(created).ModKey);
         Assert.Equal(["Wanderer"], Group(Document(FormKey.Factory(created)), "Temporary"));
+    }
+
+    [Fact]
+    public void ClearingPersistent_WhereAMasterHoldsTheCellAndAPluginThatIsNoMasterOverridesIt_CopiesTheMastersCell()
+    {
+        Load(masterTracked: false, middle: Middle((_, world) => world.SubCells.Add(BlockHolding(
+            new Cell(MasterGridCell, Fallout4Release.Fallout4)
+            {
+                EditorID = "MiddlesGrid",
+                WaterHeight = 9f,
+                Grid = new CellGrid { Point = new P2Int(3, 3) },
+            }))));
+
+        SetFlags("Leaver", 0);
+
+        var copied = Document(MasterGridCell);
+        Assert.Equal("MasterGrid", copied["EditorID"].Require().GetValue<string>());
+        Assert.Equal(7f, copied["WaterHeight"].Require().GetValue<float>());
+    }
+
+    [Fact]
+    public void SettingPersistent_WhenADocumentInThePluginsTreeIsNoJson_IsRefusedNamingIt_AndWritesNothing()
+    {
+        Load(masterTracked: true);
+        _plugins.Respell(Override, _keys["Bystander"], "stat", "{", "[");
+        var before = _plugins.Text(Override, _keys["Here"]);
+
+        var result = _plugins.EditHandler.Edit(
+            Address(Override), _keys["Mover"].ToString(),
+            SetAt(JsonDocument.Parse(Persistent.ToString(CultureInfo.InvariantCulture)).RootElement, Member("MajorRecordFlagsRaw")));
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Contains("Statics", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _plugins.Text(Override, _keys["Here"]));
     }
 }

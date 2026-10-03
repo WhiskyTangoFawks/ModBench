@@ -322,12 +322,12 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     public void SettingDeletedAndPartialFormTogether_WithACopyToItsLeft_EndsAPartialFormThatIsNotDeleted()
     {
         Load(
-            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Fallout4.esm", CellCopy(OffLimits, "Inside")), false),
             (Plugin("Override.esp", CellCopy(0, "Mine")), true));
 
         var partial = Written(TheCell, Deleted | PartialForm);
 
-        Assert.Equal(PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(OffLimits | PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
     }
 
     [Fact]
