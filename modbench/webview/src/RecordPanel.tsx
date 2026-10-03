@@ -42,6 +42,7 @@ interface RowAt {
   editable: Set<ColumnKey>;
   depth: number;
   isLastElement?: (column: ColumnKey) => boolean;
+  keyMembers?: readonly string[] | null;
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 }
 
@@ -347,7 +348,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // A diff node naming a member no override's schema declares has no shape to render against, so
     // it and its subtree are dropped rather than rendered against a guessed one.
     if (!meta) return [];
-    const { path, rootField, rowKey, parent, present, editable, depth, isLastElement, cellMetas } = at;
+    const { path, rootField, rowKey, parent, present, editable, depth, isLastElement, keyMembers, cellMetas } = at;
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = !collapsedRows.has(rowKey);
     navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
@@ -375,6 +376,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         onFocusCell={handleFocusCell}
         isExpanded={isExpanded}
         isLastElement={isLastElement}
+        keyMembers={keyMembers}
         ownerPresent={present}
         cellMetas={cellMetas}
         onToggle={() => toggleRow(rowKey)}
@@ -397,6 +399,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
           rowKey: childRowKey, parent: rowKey, present: column => child.values[column] != null, depth: depth + 1,
           isLastElement: column => elementsIn(diff, column).at(-1) === child,
+          keyMembers: meta.keyMembers,
           cellMetas: undefined,
         }));
       } else if (meta.type === 'struct') {
@@ -414,7 +417,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           rowKey: childRowKey, parent: rowKey,
           present: column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
-          depth: depth + 1, isLastElement: undefined, cellMetas,
+          depth: depth + 1, isLastElement: undefined, keyMembers: undefined, cellMetas,
         }));
       }
     }

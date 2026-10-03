@@ -562,19 +562,19 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
       ],
     });
 
-  function renderScripts(master: { name: string; flags: string }[], override: { name: string; flags: string }[], rows: ReturnType<typeof scriptRow>[]) {
+  function renderScripts(master: { name: string; flags: string }[], override: { name: string; flags: string }[], rows: ReturnType<typeof scriptRow>[], meta = scriptMeta) {
     const client = panelClient(() => compareResultFixture({
       conflictAll: 'Override',
       overrides: [
         compareOverride({
           formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data',
           isWinner: false, editorId: 'TestNPC',
-          fields: [{ metadata: scriptMeta, value: master }], conflictThis: 'Master',
+          fields: [{ metadata: meta, value: master }], conflictThis: 'Master',
         }),
         compareOverride({
           formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
           isWinner: true, editorId: 'TestNPC',
-          fields: [{ metadata: scriptMeta, value: override }], conflictThis: 'Override',
+          fields: [{ metadata: meta, value: override }], conflictThis: 'Override',
         }),
       ],
       diffs: [diffNode({
@@ -645,6 +645,21 @@ describe('RecordPanel — a keyed array\'s element is addressed at its position 
       expect(JSON.parse(myCell(rowLabelled(label)).getAttribute('data-vscode-context') ?? '{}'))
         .toMatchObject({ webviewSection: 'cell arrayElement editableCell', canMoveUp: false, canMoveDown: false });
     }
+  });
+
+  it('a collapsed keyed element reads as its key', async () => {
+    await renderGuardAfterAmbush();
+    fireEvent.click(required(rowLabelled('Ambush').querySelector('button'), "Ambush's toggle"));
+
+    expect(myCell(rowLabelled('Ambush')).textContent).toBe('Ambush');
+  });
+
+  it('a collapsed element of a multi-member key reads the members in key order, joined by a comma', async () => {
+    renderScripts([], [guard], [scriptRow('Guard', { 'MyMod.esp': guard }, { 'MyMod.esp': 0 })], { ...scriptMeta, keyMembers: ['flags', 'name'] });
+    await waitFor(() => screen.getAllByText('flags'));
+    fireEvent.click(required(rowLabelled('Guard').querySelector('button'), "Guard's toggle"));
+
+    expect(myCell(rowLabelled('Guard')).textContent).toBe('g, Guard');
   });
 
   it('the second of two elements sharing a key tells the host its own index', async () => {
