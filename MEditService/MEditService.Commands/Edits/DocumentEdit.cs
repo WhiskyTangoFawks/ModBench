@@ -19,7 +19,7 @@ internal sealed record DocumentEditRequest(
     LeftCopy? RefillCopyOnTheLeft);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
-/// duplicate keys, codec round trip, compare what came back with what was asked. Pure: text and metadata
+/// codec round trip, compare what came back with what was asked. Pure: text and metadata
 /// in, text or one refusal out.</summary>
 internal static class DocumentEdit
 {
@@ -75,17 +75,6 @@ internal static class DocumentEdit
         ClearAliases(record, cursor.Column);
         emptying?.Apply(record, request.Schema, left);
         var prefix = into == null ? move?.Apply(root) ?? request.Prefix : request.Prefix;
-
-        var started = envelope is { Op: RecordEditEnvelope.Add, Value: null or { ValueKind: JsonValueKind.Null } } && edited is JsonArray grown
-            ? grown[^1]
-            : null;
-        if (DuplicateKeys.MadeBy(before, record, RootMetadata(request.Schema), started) is { } duplicate)
-        {
-            return RecordEditResult.RefusedAt(
-                RecordEditRefusal.DuplicateKeyInKeyedArray, duplicate.Path,
-                $"'{duplicate.Path}' has two entries keyed '{duplicate.Key}'. Entries there are " +
-                "identified by that key rather than by position, so rename or remove one of the two.");
-        }
 
         var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
         string written;

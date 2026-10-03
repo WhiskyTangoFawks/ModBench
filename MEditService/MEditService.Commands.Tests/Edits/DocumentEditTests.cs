@@ -467,19 +467,13 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
-    public void DuplicateKey_IsRefusedNamingTheKeyAndTheArray()
+    public void AnElementAddedAtAKeyAnotherHolds_IsWritten()
     {
         var formKey = SeedNpc();
-        var before = _fixture.Document(formKey);
 
-        var (result, after) = _fixture.Apply(formKey, AddAt(Json("""{"Name": "Alpha"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
+        var after = Applied(formKey, AddAt(Json("""{"Name": "Alpha"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
-        Assert.Equal("VirtualMachineAdapter.Scripts", result.Path);
-        Assert.Contains("'Alpha'", result.Message, StringComparison.Ordinal);
-        Assert.Null(after);
-        Assert.Equal(before, _fixture.Document(formKey));
+        Assert.Equal(["Alpha", "Beta", "Alpha"], ScriptNames(after));
     }
 
     [Fact]

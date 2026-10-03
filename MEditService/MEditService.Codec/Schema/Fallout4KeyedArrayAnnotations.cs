@@ -34,6 +34,19 @@ internal static class Fallout4KeyedArrayAnnotations
         ("IStaticGetter", "Properties", ["ActorValue"]),
         ("ITerminalGetter", "Properties", ["ActorValue"]),
 
+        ("IArmorModificationGetter", "Properties", ["Property"]),
+        ("INpcModificationGetter", "Properties", ["Property"]),
+        ("IObjectModificationGetter", "Properties", ["Property"]),
+        ("IUnknownObjectModificationGetter", "Properties", ["Property"]),
+        ("IWeaponModificationGetter", "Properties", ["Property"]),
+        ("IObjectTemplateGetter`1", "Properties", ["Property"]),
+
+        ("IContainerGetter", "Items", ["Item.Item"]),
+        ("IFurnitureGetter", "Items", ["Item.Item"]),
+        ("INpcGetter", "Items", ["Item.Item"]),
+        ("IQuestReferenceAliasGetter", "Items", ["Item.Item"]),
+        ("ILeveledItemGetter", "Entries", ["Data.Level", "Data.Reference"]),
+        ("ILeveledNpcGetter", "Entries", ["Data.Level", "Data.Reference"]),
         ("ILeveledItemGetter", "FilterKeywordChances", ["FilterKeyword"]),
         ("ILeveledNpcGetter", "FilterKeywordChances", ["FilterKeyword"]),
         ("IConstructibleObjectGetter", "Components", ["Component"]),
@@ -62,6 +75,8 @@ internal static class Fallout4KeyedArrayAnnotations
         ("ILocationGetter", "PersistentActorReferencesStatic", ["Actor"]),
         ("ILocationGetter", "UniqueActorReferencesAdded", ["Ref"]),
         ("ILocationGetter", "UniqueActorReferencesStatic", ["Ref"]),
+        ("ILocationGetter", "LocationRefTypeReferencesAdded", ["Ref"]),
+        ("ILocationGetter", "LocationRefTypeReferencesStatic", ["Ref"]),
         ("ILocationGetter", "WorldspaceCellsAdded", ["Location"]),
         ("ILocationGetter", "WorldspaceCellsStatic", ["Location"]),
         ("ILocationGetter", "WorldspaceCellsRemoved", ["Location"]),
@@ -69,10 +84,25 @@ internal static class Fallout4KeyedArrayAnnotations
         ("IClimateGetter", "Weathers", ["Weather"]),
         ("IRegionWeatherGetter", "Weathers", ["Weather"]),
         ("IRegionGrassesGetter", "Grasses", ["Grass"]),
+        ("IRegionSoundsGetter", "Sounds", ["Sound"]),
         ("IImpactDataSetGetter", "Impacts", ["Material"]),
         ("IMagicEffectGetter", "Sounds", ["Type"]),
         ("ISoundDescriptorGetter", "RatesOfFire", ["RotationsPerMinute"]),
         ("ISoundKeywordMappingGetter", "Sounds", ["ReverbClass"]),
+        ("ILensFlareGetter", "Sprites", ["LensFlareSpriteId"]),
+        ("IMaterialSwapGetter", "Substitutions", ["OriginalMaterial"]),
         ("IStaticCollectionGetter", "Parts", ["Static"]),
+    ];
+
+    /// <summary>What a wbStructExSK adds to its key, which orders the elements sharing a key before
+    /// xEdit pairs the nth across plugins. COED's owner with its global or rank is one Mutagen union.</summary>
+    public static readonly (string TypeName, string MemberName, string[] ExtendedKeyMembers)[] ExtendedKeys =
+    [
+        ("IContainerGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("IFurnitureGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("INpcGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("IQuestReferenceAliasGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("ILeveledItemGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
+        ("ILeveledNpcGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
     ];
 }

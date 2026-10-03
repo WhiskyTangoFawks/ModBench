@@ -54,14 +54,12 @@ public class ElementKeyTextTests
     }
 
     [Fact]
-    public void AnAbsentNullableKeyMember_IsUnset_NotZero()
+    public void AnAbsentNullableKeyMember_KeysApartFromZero()
     {
         var element = new FieldMetadata("", "struct", false, [], [], Fields: [new("Number", "int", false, [], [], AllowsNull: true)]);
         var unset = ElementKey.Of(JsonDocument.Parse("{}").RootElement, ["Number"], element);
         var zero = ElementKey.Of(JsonDocument.Parse("""{"Number":0}""").RootElement, ["Number"], element);
 
-        Assert.True(unset.IsUnset);
-        Assert.False(zero.IsUnset);
         Assert.NotEqual(0, unset.CompareTo(zero));
     }
 
