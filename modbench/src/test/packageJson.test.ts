@@ -351,7 +351,7 @@ describe('package.json New Plugin / record filter reachable from the merged tree
     }
   });
 
-  it('gates create plugin\'s palette entry to an instance, as its title-bar icon is', () => {
+  it('gates create plugin\'s palette entry to an instance', () => {
     const palette = present(pkg.contributes.menus.commandPalette, "contributes.menus['commandPalette']");
     const entry = present(
       palette.find((e) => e.command === 'modbench.plugin.create'),
@@ -461,7 +461,7 @@ describe('package.json title-bar rubric', () => {
     }
   });
 
-  it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
+  it('the Mods tree and the merged Plugins tree are in the Modbench sidebar', () => {
     const sidebarIds = present(pkg.contributes.views.modbench, "contributes.views['modbench']");
     const sidebar = sidebarIds.map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');

@@ -10,7 +10,7 @@ import { tsFiles } from './tsFiles';
 const SRC = join(__dirname, '..');
 const WEBVIEW_SRC = join(__dirname, '..', '..', 'webview', 'src');
 const SRC_ROOTS = [SRC, WEBVIEW_SRC];
-const SELF = 'gameNameScan.test.ts';
+const THIS_FILE_QUOTING_THE_LITERALS = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [join('tables', 'gamePaths.ts')];
 
@@ -18,7 +18,11 @@ const ALLOWLIST = [join('install', 'detectRoot.ts')];
 
 const SCRIPT_EXTENDER_TOKENS = ['f4se', 'skse', 'obse', 'fnvse', 'nvse'];
 
-const KNOWN_RELEASES = ['Fallout4', 'Fallout4VR', 'Fallout3', 'FalloutNV', 'SkyrimLE', 'SkyrimSE', 'SkyrimVR', 'EnderalLE', 'Oblivion'];
+const releasesOfTable = (): string[] => {
+  const table = /const GAME_PATHS[^=]*= \{\n([\s\S]*?)\n\};/.exec(readFileSync(join(SRC, 'tables', 'gamePaths.ts'), 'utf8'));
+  return [...present(table, 'the GAME_PATHS table in gamePaths.ts')[1].matchAll(/^ {2}(\w+): \{/gm)].map((m) => present(m[1], 'a release key'));
+};
+const KNOWN_RELEASES = releasesOfTable();
 
 function knownGameNameLiterals(): string[] {
   const literals = new Set<string>(SCRIPT_EXTENDER_TOKENS);
@@ -54,7 +58,7 @@ function isTestSupport(path: string): boolean {
 function findOffenders(roots: readonly string[], tableFiles: string[], allowlist: string[]): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
   for (const root of roots) {
-    for (const path of tsFiles(root, { exclude: ['generated'] }).filter((p) => !p.endsWith(SELF))) {
+    for (const path of tsFiles(root, { exclude: ['generated'] }).filter((p) => !p.endsWith(THIS_FILE_QUOTING_THE_LITERALS))) {
       const relPath = relative(root, path);
       if (tableFiles.includes(relPath) || allowlist.includes(relPath) || isTestSupport(relPath)) continue;
       const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
@@ -67,9 +71,14 @@ function findOffenders(roots: readonly string[], tableFiles: string[], allowlist
 const allFiles = (roots: readonly string[]): string[] =>
   roots.flatMap((root) => tsFiles(root, { exclude: ['generated'] }));
 
-describe('no extension file names a game outside the table', () => {
+describe('no extension file names a game outside the table, in a literal a static scan reads', () => {
+  it('knows every release the table holds', () => {
+    expect(KNOWN_RELEASES.length).toBeGreaterThan(8);
+    expect(KNOWN_RELEASES.filter((release) => gamePathInfoForRelease(release) === undefined)).toEqual([]);
+  });
+
   it('covers the whole extension source tree', () => {
-    expect(allFiles(SRC_ROOTS).filter((path) => !path.endsWith(SELF)).length).toBeGreaterThan(100);
+    expect(allFiles(SRC_ROOTS).filter((path) => !path.endsWith(THIS_FILE_QUOTING_THE_LITERALS)).length).toBeGreaterThan(100);
   });
 
   it('reaches the webview tree too, not only the extension host’s', () => {

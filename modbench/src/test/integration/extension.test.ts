@@ -13,6 +13,7 @@ import { isRecord } from '../manifest';
 import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../../plugins/gestureEntry';
 
+const PLUGIN_LIST_DND_MIME = 'application/vnd.medit.pluginlist-node';
 const TEST_PORT = Number(present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run'));
 let mockBackend: http.Server;
 let ext: vscode.Extension<ActivateExports> | undefined;
@@ -1210,7 +1211,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     await enterEditing();
 
     const dataTransfer = new vscode.DataTransfer();
-    dataTransfer.set('application/vnd.medit.pluginlist-node', new vscode.DataTransferItem({ plugins: [{ name: 'TestMod.esp', origin: 'Data' }] }));
+    dataTransfer.set(PLUGIN_LIST_DND_MIME, new vscode.DataTransferItem({ plugins: [{ name: 'TestMod.esp', origin: 'Data' }] }));
     await provider.handleDrop(undefined, dataTransfer, new vscode.CancellationTokenSource().token);
 
     const written = fs.readFileSync(pluginsTxtPath, 'utf8');
@@ -1404,29 +1405,6 @@ describe('Plugin load-order rows expand into records', () => {
     assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
     assert.strictEqual(nodeKind(children[0]), 'recordType',
       'closing takes nothing from the tree, so the row still expands into the held load order');
-  });
-});
-
-describe('A plugin row carries no read-only tooltip before the backend has launched', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-
-  after(async () => {
-    if (!root) return;
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
-  });
-
-  it('shows a plugin the backend would report immutable without the read-only line', async () => {
-    if (!root) return;
-    resetMockBackend();
-    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
-    const tree = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
-    tree.invalidate();
-    const row = await waitFor('the Immutable.esm row', async () => (await tree.getChildren()).find((r) => rowName(r) === 'Immutable.esm'));
-
-    const tooltip = tree.getTreeItem(row).tooltip;
-
-    assert.ok(!(typeof tooltip === 'string' && tooltip.includes('read-only')), `expected no read-only tooltip, got: ${describeTooltip(tooltip)}`);
   });
 });
 

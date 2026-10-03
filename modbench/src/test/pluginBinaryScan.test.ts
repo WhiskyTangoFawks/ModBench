@@ -13,7 +13,7 @@ const DECODING_READS = new Set(['readFile', 'readFileSync']);
 
 const TEXT_ENCODINGS = new Set(['utf8', 'utf-8']);
 
-const SELF = 'pluginBinaryScan.test.ts';
+const THIS_FILE_QUOTING_THE_PATTERNS = 'pluginBinaryScan.test.ts';
 
 interface Offences {
   byteReads: string[];
@@ -180,7 +180,7 @@ export function isTestSupport(path: string): boolean {
 
 const SRC = join(__dirname, '..');
 
-describe('the extension opens no plugin file for reading', () => {
+describe('the extension opens no plugin file for reading, through the bindings a static scan follows', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC, { exclude: ['generated'] }).length).toBeGreaterThan(100);
   });
@@ -188,7 +188,7 @@ describe('the extension opens no plugin file for reading', () => {
   it('reaches no byte-level fs read anywhere in src', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
-      if (basename(path) === SELF) continue;
+      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS) continue;
       const { byteReads } = scan(readFileSync(path, 'utf8'), path);
       if (byteReads.length > 0) offenders[path] = byteReads;
     }
@@ -198,7 +198,7 @@ describe('the extension opens no plugin file for reading', () => {
   it('decodes every file it reads, so no production read can yield a plugin\'s bytes', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of tsFiles(SRC, { exclude: ['generated'] })) {
-      if (basename(path) === SELF || isTestSupport(path)) continue;
+      if (basename(path) === THIS_FILE_QUOTING_THE_PATTERNS || isTestSupport(path)) continue;
       const { undecodedReads } = scan(readFileSync(path, 'utf8'), path);
       if (undecodedReads.length > 0) offenders[path] = undecodedReads;
     }

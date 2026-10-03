@@ -107,6 +107,23 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(WIRE_DIR, 'messages.ts'))).toBe(true);
   });
 
+  it('the client box is excluded because it is the seam Editing speaks through, in the backend\'s own vocabulary', () => {
+    expect(isExcluded(join(CLIENT_DIR, 'MEditClient.ts'))).toBe(true);
+  });
+
+  it('Editing\'s folder is excluded because it is its own context, not the MO2 side', () => {
+    expect(isExcluded(join(EDITING_DIR, 'editing.ts'))).toBe(true);
+  });
+
+  it('test files and test folders are excluded because their names and fixtures are prose and corpus data', () => {
+    expect(isExcluded(join('mods', 'modList.test.ts'))).toBe(true);
+    expect(isExcluded(join('mods', 'test', 'fixture.ts'))).toBe(true);
+  });
+
+  it('a file of the MO2 side is not excluded', () => {
+    expect(isExcluded(join('mods', 'modList.ts'))).toBe(false);
+  });
+
   it('the composition-root allowlist is exactly these six files', () => {
     expect(COMPOSITION_ROOT.sort()).toEqual(
       ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts']);

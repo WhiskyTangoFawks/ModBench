@@ -12,7 +12,7 @@ import {
 import { accessTo, providedPluginsIn, readPluginLines } from './adapterOver';
 
 const PROFILE = 'Default';
-const CREATION_CLUB_DATA_FOLDER: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
+const GAME_DATA_FOLDER: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
 
 const pluginOrder = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).map((p) => p.name);
@@ -65,7 +65,7 @@ describe('plugins.txt corpus', () => {
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await syncPlugins(
-      accessTo(dir), PROFILE, await providedPluginsIn(dir), CREATION_CLUB_DATA_FOLDER, []);
+      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA_FOLDER, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

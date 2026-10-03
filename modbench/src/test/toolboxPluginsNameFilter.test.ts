@@ -262,10 +262,10 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     return { client, provider, view, pluginSync, filter };
   }
 
-  const SYNC_MESSAGE_THAT_ENDS_THE_LINE = 'sentinel.';
+  const LAST_SYNC_MESSAGE = 'sentinel.';
   async function lineOnceRendersHaveLanded(view: { message?: string }, pluginSync: ReturnType<typeof syncMessageDouble>) {
-    pluginSync.say(SYNC_MESSAGE_THAT_ENDS_THE_LINE);
-    await waitForMessage(view, (m) => m?.endsWith(SYNC_MESSAGE_THAT_ENDS_THE_LINE) === true, 'the sync message reaching the line');
+    pluginSync.say(LAST_SYNC_MESSAGE);
+    await waitForMessage(view, (m) => m?.endsWith(LAST_SYNC_MESSAGE) === true, 'the sync message reaching the line');
     return view.message;
   }
 
@@ -279,13 +279,13 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
   it('says nothing while the filter matches a record in any plugin', async () => {
     const { view, pluginSync } = await filteredView(true);
 
-    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(SYNC_MESSAGE_THAT_ENDS_THE_LINE);
+    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(LAST_SYNC_MESSAGE);
   });
 
   it('says nothing while no record filter is in force, whatever the facts say', async () => {
     const { view, pluginSync } = await filteredView(false, null);
 
-    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(SYNC_MESSAGE_THAT_ENDS_THE_LINE);
+    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(LAST_SYNC_MESSAGE);
   });
 
   it('takes the message back once the filter clears', async () => {

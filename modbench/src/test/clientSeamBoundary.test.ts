@@ -113,7 +113,7 @@ describe('the port has exactly two adapters', () => {
     return /\bimplements MEditClient\b/.test(text);
   }
 
-  const THIS_FILE_QUOTING_THE_PATTERN =join('test', 'clientSeamBoundary.test.ts');
+  const THIS_FILE_QUOTING_THE_PATTERN = join('test', 'clientSeamBoundary.test.ts');
 
   function classDeclarers(root: string): string[] {
     return tsFiles(root)

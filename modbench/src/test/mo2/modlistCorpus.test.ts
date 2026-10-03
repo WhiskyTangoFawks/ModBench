@@ -44,7 +44,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
   });
 
-  it('setModsEnabled flips only the mods asked for that are not already in that state, refuses a mod not in the modlist by name, and touches only modlist.txt, in one write',async () => {
+  it('setModsEnabled flips only the mods asked for that are not already in that state, refuses a mod not in the modlist by name, and touches only modlist.txt, in one write', async () => {
     const before = await snapshotTree(dir);
     const outcome = await setModsEnabled(accessTo(dir), PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
     const after = await snapshotTree(dir);
