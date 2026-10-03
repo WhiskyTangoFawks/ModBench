@@ -8,6 +8,7 @@ comment across two edits is never blocked; the validate gate covers the whole fi
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -49,6 +50,8 @@ def gate_lints(path):
     return ignored.returncode == 1
 
 
+SELF_EXPLAINED = re.compile("Ticket number|Cite the ADR")
+
 data = json.load(sys.stdin)
 tool_input = data.get("tool_input", {})
 path = tool_input.get("file_path", "")
@@ -60,7 +63,7 @@ test_hits = comment_shape.comments_in_test(path, text)
 shape_hits = comment_shape.check(path, text) + test_hits
 hits = [h.replace(path + ":", "line ") for h in shape_hits] + vale_hits(path, text)
 if hits:
-    if not path.endswith(".md") and not test_hits and not all("Ticket number" in h for h in hits):
+    if not path.endswith(".md") and not test_hits and not all(SELF_EXPLAINED.search(h) for h in hits):
         print("A comment states a constraint from outside the code; a string states the current "
               "state.", file=sys.stderr)
         print("Delete it, or cut it to one present-tense sentence.", file=sys.stderr)

@@ -15,7 +15,7 @@ namespace MEditService.Codec.Serialization;
 /// <summary>A cell the mod holds, where its GRUP hierarchy puts it.</summary>
 internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 
-/// <summary>A live mod read as the documents its source tree would hold (ADR-0007 invariant 3). The
+/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The
 /// one place a getter becomes text, so every caller downstream of it holds documents.</summary>
 public static class ModDocuments
 {
@@ -121,7 +121,7 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // Attached whether or not the codec read the record (ADR-0005 invariant 5).
+    // Attached whether or not the codec read the record (ADR-0005).
     private PluginDocument WithGrupFacts(PluginDocument document, IMajorRecordGetter record) =>
         document with
         {

@@ -8,7 +8,7 @@ namespace MEditService.Commands.Edits;
 internal static class SourceCommit
 {
     /// <summary>Runs <paramref name="write"/> and answers its refusal, or null once it lands. A tree not as
-    /// the gesture needs it is a refusal (ADR-0014 invariant 4), a filesystem fault a write failure, anything
+    /// the gesture needs it is a refusal (ADR-0014), a filesystem fault a write failure, anything
     /// else a bug.</summary>
     internal static RecordEditResult? Write(
         SourceRepository.SourceTransaction transaction, SourceRepository repository, ILogger logger, string failed,

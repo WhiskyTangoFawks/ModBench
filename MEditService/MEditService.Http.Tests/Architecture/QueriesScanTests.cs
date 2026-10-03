@@ -30,7 +30,7 @@ public sealed class QueriesScanTests
         Assert.True(
             named.Count == 0,
             "A query reads the disk. Queries hide the Index's reads and reach no system of record "
-            + "(ADR-0014 invariant 1), so the answer comes from a row:\n"
+            + "(ADR-0014), so the answer comes from a row:\n"
             + string.Join("\n", named));
     }
 

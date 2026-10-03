@@ -37,7 +37,7 @@ public static class PluginAdapters
 
     /// <summary>The source-tree door for a caller holding the load order's record of the plugin.
     /// Building the mod path is building a Mutagen value, and this is the box that owns those
-    /// (ADR-0005 invariant 2).</summary>
+    /// (ADR-0005).</summary>
     public static Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
         this IPluginAdapter adapter, RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>

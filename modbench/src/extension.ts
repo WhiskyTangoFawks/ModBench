@@ -101,7 +101,7 @@ export function activate(context: vscode.ExtensionContext) {
   const filterScripts = setupScriptsFolder(meditConfig());
   const filterProvider = new FilterCodeLensProvider();
 
-  // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
+  // ADR-0014: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
   context.subscriptions.push(
     { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },

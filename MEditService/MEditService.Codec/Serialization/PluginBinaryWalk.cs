@@ -6,7 +6,7 @@ using MEditService.Codec.Schema;
 namespace MEditService.Codec.Serialization;
 
 /// <summary>Mutagen-free byte-level walker over a plugin's record/GRUP/subrecord structure, shared by
-/// Track's tripwire and the Repair surface (ADR-0006 invariant 7).</summary>
+/// Track's tripwire and the Repair surface (ADR-0006).</summary>
 public static class PluginBinaryWalk
 {
     /// <summary>One top-level record or GRUP header. For a GRUP only <c>Start</c>/<c>DataStart</c> are
@@ -105,7 +105,7 @@ public static class PluginBinaryWalk
 
     /// <summary>The first record whose subrecord inventory shows a drop, or null. Paired by type and
     /// FormID, never by position: a rewrite carries no group order. TES4's MAST/DATA are exempt
-    /// (ADR-0008 invariant 2).</summary>
+    /// (ADR-0008).</summary>
     public static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
     {
         var rewrittenByIdentity = new Dictionary<(string Type, uint FormId), RecordSpan>();

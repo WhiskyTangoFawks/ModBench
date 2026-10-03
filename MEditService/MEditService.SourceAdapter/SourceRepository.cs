@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Documents by identity over one tracked mod folder (ADR-0014 invariant 5), and ADR-0007's
+/// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
 public sealed partial class SourceRepository
@@ -389,8 +389,7 @@ public sealed partial class SourceRepository
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
     }
 
-    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003,
-    /// invariant 3).</summary>
+    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003).</summary>
     public static void NarrowCompileSnapshot(string modFolder, string plugin)
     {
         var gitDir = Path.Combine(modFolder, ".git");

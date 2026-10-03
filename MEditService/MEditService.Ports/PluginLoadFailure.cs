@@ -1,6 +1,6 @@
 namespace MEditService.Ports;
 
-/// <summary>A plugin that could not be opened (ADR-0013 invariant 4), its reason reported here
+/// <summary>A plugin that could not be opened (ADR-0013), its reason reported here
 /// rather than as a failed reconcile.</summary>
 public record PluginLoadFailure(string Name, string Origin, string Reason)
 {

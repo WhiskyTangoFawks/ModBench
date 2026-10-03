@@ -34,7 +34,7 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
-/** A plugin in the snapshot: the file, and the origin that provides it (ADR-0013 invariant 2). */
+/** A plugin in the snapshot: the file, and the origin that provides it (ADR-0013). */
 export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
 /** ADR-0013's snapshot: every plugin in the instance, the active plugins in load order, and the
@@ -101,10 +101,10 @@ export function providedPluginsOf(
   return provided;
 }
 
-/** A plugin as (origin, filename) (ADR-0012 invariant 1). */
+/** A plugin as (origin, filename) (ADR-0012). */
 export type PluginAddress = Pick<LoadOrderPlugin, 'name' | 'origin'>;
 
-/** The plugins the game loads with no line, in load order (ADR-0013 invariant 3): its masters,
+/** The plugins the game loads with no line, in load order (ADR-0013): its masters,
  *  then its Creation Club plugins, each from the mod providing it, else the game folder. */
 export function pluginsLoadedWithNoLineOf(
   gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,

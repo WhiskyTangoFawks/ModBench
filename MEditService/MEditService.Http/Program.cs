@@ -68,7 +68,7 @@ try
     builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    // ADR-0014 invariant 5: one Index for the whole process, so the two sides never project into
+    // ADR-0014: one Index for the whole process, so the two sides never project into
     // two stores. ADR-0009: which file it opens comes from the load request, not from here.
     builder.Services.AddSingleton(sp => new Indexer(
         sp.GetRequiredService<LoadOrderHolder>(),
@@ -84,7 +84,7 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
-    // ADR-0014 invariant 3: one handler per gesture, registered where the module they share is
+    // ADR-0014: one handler per gesture, registered where the module they share is
     // visible, and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
@@ -92,7 +92,7 @@ try
 
     var app = builder.Build();
 
-    // ADR-0013 invariant 1: the record index reconciles every arrival of the load order.
+    // ADR-0013: the record index reconciles every arrival of the load order.
     app.Services.GetRequiredService<Indexer>().Subscribe();
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure

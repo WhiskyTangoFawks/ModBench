@@ -13,7 +13,7 @@ An item you would send to the maintainer carries its resolution: the texts in th
 Report, in this order:
 
 1. Verdict: MERGE or HOLD.
-2. Blocking findings, each with file, line and the one-sentence defect. A blocking finding is a correctness bug, a violated ADR invariant, a spec item claimed but not built, a test that asserts nothing, a break the report does not name, or a change to a maintainer's document (the list in `.claude/skills/git-conventions/SKILL.md`, Merging, step 2).
+2. Blocking findings, each with file, line and the one-sentence defect. A blocking finding is a correctness bug, work against an ADR's decision, a spec item claimed but not built, a test that asserts nothing, a break the report does not name, or a change to a maintainer's document (the list in `.claude/skills/git-conventions/SKILL.md`, Merging, step 2).
 3. Non-blocking findings, one line each.
 4. Anything the ticket asked for that the branch does not deliver, quoting the ticket line.
 

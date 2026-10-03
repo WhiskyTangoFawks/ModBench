@@ -10,14 +10,14 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Index;
 
 /// <summary>The plugins the Index has open, keyed by identity: what the adapter read out of each
-/// file. Not a load order (ADR-0013 invariant 4). Reconcile mutates it in place.</summary>
+/// file. Not a load order (ADR-0013). Reconcile mutates it in place.</summary>
 internal sealed class HeldPlugins
 {
     private readonly List<PluginMetadata> _plugins = [];
     private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
-    // ADR-0012 invariant 1.
+    // ADR-0012.
     private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
@@ -31,7 +31,7 @@ internal sealed class HeldPlugins
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009 invariant 3. Null asks for an in-memory index.</summary>
+    /// <summary>One index file per instance, inside the instance root (ADR-0009). Null asks for an in-memory index.</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }
@@ -77,7 +77,7 @@ internal sealed class HeldPlugins
 
         try
         {
-            // The binary path (ADR-0007 invariant 3) needs the same explicit strings parameters
+            // The binary path (ADR-0007) needs the same explicit strings parameters
             // Track does, or a Localized untracked plugin throws instead of opening.
             var readTimer = Stopwatch.StartNew();
             var (content, unreachable) = _adapter.ReadContent(

@@ -88,7 +88,7 @@ export type RecordEditOutcome =
   | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
-/** `rebuildIndex`'s own outcome (ADR-0009 invariant 5): a 423 — this instance's index held by
+/** `rebuildIndex`'s own outcome (ADR-0009): a 423 — this instance's index held by
  *  another window — is told apart from every other failure, which carries its own detail. */
 export type RebuildIndexOutcome =
   | { rebuilt: true }
@@ -108,7 +108,7 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
-/** A plugin named by filename and origin (ADR-0012 invariant 1): one filename can be in two mods. */
+/** A plugin named by filename and origin (ADR-0012): one filename can be in two mods. */
 export type PluginAddress = components['schemas']['PluginAddress'];
 export type UpstreamVersionByOrigin = components['schemas']['TrackRequest']['upstreamVersionByOrigin'];
 
@@ -119,7 +119,7 @@ export interface CompileOutcome {
 }
 
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
-/** A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1): one
+/** A record and the plugin holding it, named by filename and origin (ADR-0012): one
  *  filename can be in two mods, each holding the record. */
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
@@ -145,8 +145,7 @@ export interface MEditClient {
     options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
-  // The whole selection is one call; each record lands or is refused on its own (ADR-0019
-  // invariant 4). A WriteRefused is the call itself failing, with nothing deleted.
+  // The whole selection is one call; each record lands or is refused on its own (ADR-0019). A WriteRefused is the call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
   // Each record into each destination is one item, landed or refused on its own. `replace` lets an
   // override copy over the one a destination already holds.
@@ -156,8 +155,7 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019
-  // invariant 4). A WriteRefused is the call itself refused, with nothing written.
+  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019). A WriteRefused is the call itself refused, with nothing written.
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
@@ -194,7 +192,7 @@ export interface MEditClient {
   clearFilter(): Promise<string | null>;
   getActiveFilter(): Promise<RecordFilter | null>;
 
-  // Subscribe by kind (ADR-0014 invariant 2) — today's signature, unchanged.
+  // Subscribe by kind (ADR-0014) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
   // The load-order snapshot (ADR-0013): every plugin in the instance, the active plugins in load

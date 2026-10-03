@@ -7,14 +7,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The masters a plugin's content requires (ADR-0008 invariant 1), gathered one document at a
+/// <summary>The masters a plugin's content requires (ADR-0008), gathered one document at a
 /// time, with the links that require them.</summary>
 internal sealed class RequiredMasters(PluginAddress plugin)
 {
     private readonly HashSet<string> _masters = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _links = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008 invariant 2).</summary>
+    /// <summary>The masters <paramref name="plugin"/>'s working tree requires (ADR-0008).</summary>
     internal static IReadOnlySet<string> InTheTree(
         SourceRepository repository, PluginAddress plugin, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {

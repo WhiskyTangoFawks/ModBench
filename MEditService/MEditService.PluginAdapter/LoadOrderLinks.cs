@@ -21,7 +21,7 @@ public sealed record LinkAnswers(
 }
 
 /// <summary>One link cache over a whole load order, asked a set of FormKeys and answering names
-/// (ADR-0005 invariant 2): the cache and the records it holds never leave this file.</summary>
+/// (ADR-0005): the cache and the records it holds never leave this file.</summary>
 internal static class LoadOrderLinks
 {
     internal static LinkAnswers Targets(

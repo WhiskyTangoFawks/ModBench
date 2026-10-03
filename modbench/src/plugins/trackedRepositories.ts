@@ -33,7 +33,7 @@ export async function registerTrackedRepositories<T>(
   return repositories;
 }
 
-/** ADR-0012 invariant 1: a plugin is `(origin, filename)` on every map key. */
+/** ADR-0012: a plugin is `(origin, filename)` on every map key. */
 export function pluginAddressKey(name: string, origin: string): string {
   return `${origin.toLowerCase()}|${name.toLowerCase()}`;
 }

@@ -21,12 +21,12 @@ public record PluginDiagnosisReport(
 /// told the Index, and what a filter, a parse failure and the rows' own derivation add.</summary>
 public sealed record PluginRow(
     RegisteredPlugin Plugin,
-    // LoadOrderIndex (ADR-0013 invariant 3): the plugin's place among the active plugins, null when
+    // LoadOrderIndex (ADR-0013): the plugin's place among the active plugins, null when
     // it is not active.
     int? LoadOrderIndex,
     bool IsImmutable,
     PluginContent Content,
-    // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
+    // MasterIssues (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
@@ -35,8 +35,8 @@ public sealed record PluginRow(
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure,
-    // IsTracked (ADR-0007 invariant 3): this plugin's rows came from its source tree, as the Index
-    // holds it. Whether a .git is on disk now is the Source repository's (ADR-0007 invariant 2).
+    // IsTracked (ADR-0007): this plugin's rows came from its source tree, as the Index
+    // holds it. Whether a .git is on disk now is the Source repository's (ADR-0007).
     bool IsTracked);
 
 public record RecordDetail(
@@ -75,7 +75,7 @@ public record CompareOverride(
     string RecordType = "",
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,
-    // ADR-0012 invariant 2: Overwrite is an origin, not a mod. Computed here (PluginOrigin.
+    // ADR-0012: Overwrite is an origin, not a mod. Computed here (PluginOrigin.
     // IsOverwrite) so the webview never interprets Origin itself.
     bool IsInOverwrite = false)
     : RecordDetail(
@@ -111,7 +111,7 @@ public record CompareResult(
     ConflictAll ConflictAll,
     string RecordTypeName);
 
-// ADR-0012 invariant 1: a plugin is (origin, filename) on every payload.
+// ADR-0012: a plugin is (origin, filename) on every payload.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);
 
@@ -121,7 +121,7 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName, 
 
 public record CreatableRecordType(string Type, string DisplayName);
 
-/// <summary>ADR-0015 invariant 3: the answer to "did the projection reach at least N?" — Sequence
+/// <summary>ADR-0015: the answer to "did the projection reach at least N?" — Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);

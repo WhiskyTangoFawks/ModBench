@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands;
 
 /// <summary>Validates the game release, applies the snapshot to Load order state as Mod Management
-/// sent it (ADR-0013 invariant 3) and checks it for external changes (ADR-0003 invariant 3). The
+/// sent it (ADR-0013) and checks it for external changes (ADR-0003). The
 /// Index reconciles on its own subscription.</summary>
 public sealed class PutLoadOrderHandler
 {

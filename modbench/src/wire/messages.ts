@@ -9,7 +9,7 @@ export const EXTENSION_TO_WEBVIEW = {
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
-  // winner sweep has run, posted untransformed (ADR-0002 invariant 2 — the webview names no port).
+  // winner sweep has run, posted untransformed (ADR-0002 — the webview names no port).
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
   // Every record edit, broadcast as it is sent, and again if mEdit answers with a refusal: the
   // panel showing the record marks the edit until the disk confirms it (common.md, Unconfirmed
@@ -171,7 +171,7 @@ export interface StringValueContext {
 }
 
 /** RecordPanelClient's own read, carried untransformed — the webview still derives its own column
- *  sets from `plugins` (ADR-0005 invariant 6). `plugins` is null exactly when that one read
+ *  sets from `plugins` (ADR-0005). `plugins` is null exactly when that one read
  *  failed, degrading only that slice. */
 export type RecordLoadAnswer =
   | {

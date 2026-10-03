@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What a copy reads of the record it is copying (ADR-0015 invariant 5): a tracked source
+/// <summary>What a copy reads of the record it is copying (ADR-0015): a tracked source
 /// answers from its working tree, an untracked one from the loaded plugin through the codec. One
 /// per gesture, not thread-safe.</summary>
 internal sealed class CopySource(

@@ -20,10 +20,10 @@ public enum TrackRefusal
     DataDirectoryOrigin,
 
     /// <summary>The origin is Overwrite, not a mod; the way out is moving the plugin into one
-    /// (ADR-0012 invariant 2).</summary>
+    /// (ADR-0012).</summary>
     OverwriteOrigin,
 
-    /// <summary>ADR-0006 decision 2's gate: the plugin does not survive its own source, or cannot be
+    /// <summary>ADR-0006's gate: the plugin does not survive its own source, or cannot be
     /// read or deep-parsed at all. A data problem in the plugin, not a state conflict.</summary>
     RoundTripFailed,
 
@@ -38,7 +38,7 @@ public enum TrackRefusal
 }
 
 /// <summary>One plugin's Track outcome, or a whole selection's refusal: applied-or-refusal, never an
-/// exception (ADR-0014 invariant 4). The message names the way out.</summary>
+/// exception (ADR-0014). The message names the way out.</summary>
 public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Message)
 {
     public static TrackResult Success() => new(true, TrackRefusal.None, "");
@@ -50,7 +50,7 @@ public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Mess
 /// message naming the way out.</summary>
 public sealed record TrackRefused(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
-/// <summary>Track over a selection answers per plugin (ADR-0019 invariant 4), except for a cause no
+/// <summary>Track over a selection answers per plugin (ADR-0019), except for a cause no
 /// plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
 public sealed class TrackSelectionResult
 {

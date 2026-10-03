@@ -121,7 +121,7 @@ public sealed class TrackService(
         }
     }
 
-    // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006 decision 2).
+    // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006).
     private async Task<Verification> VerifyAsync(
         LoadOrderSnapshot loadOrder, PluginAddress key, string? upstreamVersion, Action onParsed, CancellationToken cancel)
     {
@@ -144,7 +144,7 @@ public sealed class TrackService(
                     "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
-        // ADR-0007 invariant 2: Track takes a mod with no repository.
+        // ADR-0007: Track takes a mod with no repository.
         if (SourceRepository.IsTracked(modFolder))
         {
             return Refuse(TrackRefusal.AlreadyTracked,

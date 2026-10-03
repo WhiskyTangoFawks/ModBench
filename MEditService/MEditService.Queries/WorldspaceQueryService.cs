@@ -7,7 +7,7 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // ADR-0012 invariant 1: a plugin is (origin, filename) together — the caller that names
+    // ADR-0012: a plugin is (origin, filename) together — the caller that names
     // `plugin` (a tree row built from one) always knows which origin it means.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);

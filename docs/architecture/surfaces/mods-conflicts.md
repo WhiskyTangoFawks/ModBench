@@ -68,7 +68,7 @@ As a user, I want:
 3. A mod that is disabled to show "Disabled: its files take no part in mod order." in place of the table. *MO2*
 4. A mod that is gone from the mod list to show that it is gone, naming it, in place of the table.
 5. The table to follow the disk: a change to any copy, or to mod order, shows with no action of mine. The folders I collapsed and the scroll stay. *common, A view, story 2; ADR-0015*
-6. A copy that cannot be read to show no state and no value, and its tooltip to say why. Its row shows no colour, since its state is not known. One line in the Output. *Never silently wrong; ADR-0019, invariant 2*
+6. A copy that cannot be read to show no state and no value, and its tooltip to say why. Its row shows no colour, since its state is not known. One line in the Output. *Never silently wrong; ADR-0019*
 
 ## Menus and keys
 

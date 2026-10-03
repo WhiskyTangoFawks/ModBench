@@ -11,7 +11,7 @@ A review checks these rules against every hunk of the diff. No gate holds them. 
 
 ## Failures
 
-A failure is data (ADR-0019) and a command returns its refusal (ADR-0014 invariant 4). These hold the seam between an exception and a result.
+A failure is data (ADR-0019) and a command returns its refusal (ADR-0014). These hold the seam between an exception and a result.
 
 - A `throw` that a caller could catch and act on. → It is a refusal or a failure. Return it in the gesture's own carrier.
 - A `throw` that stays. → It is an invariant violation, and its message names the invariant.
@@ -29,7 +29,7 @@ Development is /tdd: a failing test, then the code that passes it, one slice at 
 - A test repeats another test's assertions under a different name. → Keep one.
 - A test name says which method runs. → Rename it to say which behaviour holds.
 - A test contains a loop or a conditional. → Split it into one test per path.
-- A port's test double is a mock that asserts calls or their order. → Replace it with a fake that honours the port's contract. Tests share the fake. The fake is the port's second adapter (ADR-0014 invariant 2). A test asserts a call only when the call is the contract.
+- A port's test double is a mock that asserts calls or their order. → Replace it with a fake that honours the port's contract. Tests share the fake. The fake is the port's second adapter (ADR-0014). A test asserts a call only when the call is the contract.
 
 ## Naming
 

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The decompile gesture's handler (ADR-0007 invariant 2): each plugin's bytes read into its
+/// <summary>The decompile gesture's handler (ADR-0007): each plugin's bytes read into its
 /// plugin source, in the working tree of its tracked mod. It commits nothing.</summary>
 public sealed class DecompilePluginHandler
 {

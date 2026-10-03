@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>The container counterpart to SourceEditFixture, which holds only flat records. No
-/// index anywhere in it (ADR-0015 invariant 1); the handlers below still need Commands, unlike
+/// index anywhere in it (ADR-0015); the handlers below still need Commands, unlike
 /// the shared container shape.</summary>
 public sealed class ContainerModFixture : IDisposable
 {

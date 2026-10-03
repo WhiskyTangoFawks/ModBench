@@ -53,7 +53,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 
 1. With no record open, the message "Open a record to see what references it."
 2. With a record nothing references, the message "No references found."
-3. While mEdit is still indexing plugins, a message that the list may not be complete. *ADR-0019, invariant 1*
+3. While mEdit is still indexing plugins, a message that the list may not be complete. *ADR-0019*
 
 ## Menus and keys
 

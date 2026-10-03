@@ -15,6 +15,7 @@ VALE = subprocess.run(["bash", ROOT / ".claude/skills/validate/install-vale.sh"]
 HISTORY = "previ" "ously"
 TICKET = "#" "742"
 DATE = "2026" "-09-01"
+ADR = "ADR" "-0012"
 
 
 def vale(text, ext, config=".vale.ini"):
@@ -159,6 +160,33 @@ class ValeRules(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertNotIn("Repo.Ticket", vale(f"// {text}\n", ".ts"))
 
+    def test_an_adr_line_cited_in_a_code_comment(self):
+        self.assertIn("Repo.AdrLine", vale(f"// keyed by both ({ADR} invariant 1)\nint a;\n", ".cs"))
+
+    def test_an_adr_line_cited_in_a_string_literal_via_the_raw_pass(self):
+        code = f"const m = 'Surfacing goes through a reporter ({ADR}, invariant 3).';\n"
+        self.assertIn("Repo.AdrLine", vale(code, ".ts", config=".vale-raw.ini"))
+
+    def test_an_adr_line_cited_through_a_markdown_link(self):
+        self.assertIn("Repo.AdrLine", vale(f"As [{ADR}](0012-x.md), invariant 4 says.\n", ".md"))
+
+    def test_every_part_under_the_decision_is_a_line(self):
+        for cite in (", invariants 2 and 6", " inv. 6", " inv 6", ".5", " §5", " decision 3", ", point 5",
+                     " rule 2", ", consequence 3", " (invariant 1", ": invariant 1", "; invariant 2",
+                     "’s invariant 2", ", Derived tactical observations", ", Strategic invariants"):
+            with self.subTest(cite=cite):
+                self.assertIn("Repo.AdrLine", vale(f"The grid renders it ({ADR}{cite}).\n", ".md"))
+
+    def test_a_line_named_before_its_adr(self):
+        self.assertIn("Repo.AdrLine", vale(f"The grid renders it (invariant 1 of {ADR}).\n", ".md"))
+
+    def test_an_adr_cited_by_its_decision_is_allowed(self):
+        for text in (f"The grid renders it ({ADR}).", f"The {ADR} decision holds.",
+                     f"{ADR}'s rule, applied the same way.",
+                     f"As {ADR}'s consequences show, it holds."):
+            with self.subTest(text=text):
+                self.assertNotIn("Repo.AdrLine", vale(text + "\n", ".md"))
+
     def test_filler_gets_a_quick_fix(self):
         self.assertIn("Repo.Filler", vale("// in order to load the plugin\n", ".ts"))
 
@@ -208,6 +236,16 @@ class WriteHook(unittest.TestCase):
     def test_accepts_a_ticket_number_in_a_document(self):
         run = hook("a.md", f"The command catalog review is {TICKET}.\n")
         self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_refuses_an_adr_line_in_a_document(self):
+        run = hook("a.md", f"The grid renders it ({ADR}, invariant 1).\n")
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertIn("Cite the ADR", run.stderr)
+
+    def test_an_adr_line_is_told_to_cite_the_adr_not_to_cut_the_comment(self):
+        run = hook("a.ts", f"// keyed by both ({ADR} invariant 1)\nexport const a = 1;\n")
+        self.assertIn("Cite the ADR", run.stderr)
+        self.assertNotIn("Delete it", run.stderr)
 
     def test_a_warning_does_not_block_the_write(self):
         run = hook("a.ts", "// sorted in order to match the file\nexport const a = 1;\n")

@@ -12,14 +12,14 @@ public record FilterResponse(string? Sql, string? Source);
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
 // ADR-0013: Mod Management's snapshot: every plugin, the active ones in load order and those loaded
-// with no line. InstanceRoot: ADR-0009 invariant 3.
+// with no line. InstanceRoot: one index file per instance, inside the instance root (ADR-0009).
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
     string GameRelease = "Fallout4");
 public record LoadOrderPlugin(string Name, string Path, string Origin);
 
-// ADR-0009 invariant 5: the Refresh rebuild's own request, keyed on the instance as
+// ADR-0009: the Refresh rebuild's own request, keyed on the instance as
 // LoadOrderRequest is.
 public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
 
@@ -49,7 +49,7 @@ public record RecordCreateRequest(string Origin, string RecordType, string? Edit
 
 public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
 
-/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012 invariant 1):
+/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012):
 /// one filename can be in two mods, each holding the record.</summary>
 public record RecordAddress(string FormKey, string Plugin, string Origin);
 
@@ -59,7 +59,7 @@ public record RecordAddressRefusal(RecordAddress Record, RecordEditRefusal Refus
 
 public record RecordDeleteRequest(IReadOnlyList<RecordAddress> Records);
 
-/// <summary>Applied or refusal, per record (ADR-0019 invariant 4): a refusal is an item of the
+/// <summary>Applied or refusal, per record (ADR-0019): a refusal is an item of the
 /// answer, never the status of the call.</summary>
 public record RecordDeleteResponse(IReadOnlyList<RecordAddress> Applied, IReadOnlyList<RecordAddressRefusal> Refused);
 
@@ -73,5 +73,5 @@ public record RecordCopyLanded(RecordAddress Record, PluginAddress Destination, 
 
 public record RecordCopyRefusal(RecordAddress Record, PluginAddress Destination, RecordEditRefusal Refusal, string Message);
 
-/// <summary>Applied or refusal, per record and destination (ADR-0019 invariant 4).</summary>
+/// <summary>Applied or refusal, per record and destination (ADR-0019).</summary>
 public record RecordCopyResponse(IReadOnlyList<RecordCopyLanded> Applied, IReadOnlyList<RecordCopyRefusal> Refused);

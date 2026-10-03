@@ -3,8 +3,7 @@ using Mutagen.Bethesda.Serialization.Customizations;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>The embed list, in Mutagen's list order with no SortList (ADR-0006 invariants 3 and
-/// 4).</summary>
+/// <summary>The embed list, in Mutagen's list order with no SortList (ADR-0006).</summary>
 internal sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<ICellGetter> builder)

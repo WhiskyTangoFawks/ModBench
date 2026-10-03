@@ -6,7 +6,7 @@ import type { Reporter } from './ports/reporter';
 
 /** Every toggled box, however many and whichever state each asks for, is one call to
  *  `setPluginsParticipation`'s core: one splice, one report. The rows change when the Instance
- *  loader reads plugins.txt back (ADR-0015 invariant 2). */
+ *  loader reads plugins.txt back (ADR-0015). */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
   access: PluginsAccess, profile: () => string, reporter: Reporter,

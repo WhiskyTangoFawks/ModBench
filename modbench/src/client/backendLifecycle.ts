@@ -24,7 +24,7 @@ export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess
 
 export interface BackendLifecycleOptions {
   /** A developer-launched backend to attach to, spawning nothing and never falling back to a
-   *  spawn. Omitted, this window spawns its own on a free port (ADR-0009 invariant 5). */
+   *  spawn. Omitted, this window spawns its own on a free port (ADR-0009). */
   attachPort?: number;
   /** Claims the port the spawned backend listens on; defaults to an OS-assigned free one. */
   freePort?: () => Promise<number>;

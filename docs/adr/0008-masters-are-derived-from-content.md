@@ -6,7 +6,7 @@ A recorded divergence from [ADR-0018](0018-xedit-is-the-reference-for-record-edi
 
 1. **A plugin's masters are wholly derived from its content and never directly editable.** Nothing, not a command and not a script, declares a master ahead of the content that requires it, and nothing removes, reorders or cleans one directly. A copy or edit that references another plugin's record makes that plugin a master at the next compile.
 2. **`masters` is read-only on the header record and shows the masters the working tree's content requires.** Compile writes exactly that set; deriving it is one of the two things the format forces compile to derive ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
-3. **An active plugin whose master is not active is flagged, never deactivated** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md), invariant 4).
+3. **An active plugin whose master is not active is flagged, never deactivated** ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)).
 
 ## Alternatives rejected
 

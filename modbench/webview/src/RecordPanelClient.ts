@@ -22,7 +22,7 @@ export type LoadResult =
     }
   | { ok: false; error: string };
 
-// The host's mEdit client answers this read (ADR-0002 invariant 2). Reads only — a refusal has to
+// The host's mEdit client answers this read (ADR-0002). Reads only — a refusal has to
 // become a native notification, and only the extension host can show one.
 export interface RecordPanelClient {
   // An arrow-typed property, not a method: `load` never needs its own `this`, and this shape

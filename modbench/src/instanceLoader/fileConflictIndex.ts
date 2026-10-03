@@ -59,7 +59,7 @@ export interface FileConflictIndex {
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
   /** Each disabled mod's own files, read in the same walk, outside conflict resolution
-   *  (ADR-0013, invariant 2). */
+   *  (ADR-0013). */
   disabledModFiles: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
 

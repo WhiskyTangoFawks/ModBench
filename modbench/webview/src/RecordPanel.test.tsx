@@ -1792,7 +1792,6 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
   });
 });
 
-
 describe('RecordPanel — a column whose record failed to parse stays in the grid rather than vanishing, showing what was stored and offering nothing that writes; both columns are tracked and mutable, so only the diagnosis can explain a read-only cell', () => {
   const PARSE_DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 

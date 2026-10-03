@@ -26,7 +26,7 @@
          this repo cannot take (see the 0.53.1 pin comment above). Serialization 1.37.1 depends on
          Mutagen.Bethesda.Core >= 0.51.3 (a floor, not Spriggit's exact pin), so it is compatible
          with 0.53.1, confirmed via the nuspec; restores with zero NuGet warnings.
-         The JSON kernel (ADR-0005 invariant 1) is the Newtonsoft
+         The JSON kernel (ADR-0005) is the Newtonsoft
          translation package, not a package literally named ".Json" — confirmed on nuget.org; it
          exists at this exact 1.37.1 version, matching the other two pins here. -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
