@@ -13,8 +13,6 @@ using static MEditService.Http.Tests.Api.QueriedPluginsFixture;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>query-index: a question and its answer are two arrows, and the Store is all the Queries
-/// read, so every answer here is one the client asked for and got back.</summary>
 public sealed class QueryIndexTraceTests : HostedTests
 {
     private async Task LoadedQueriedPlugins() =>

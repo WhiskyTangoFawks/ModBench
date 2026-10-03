@@ -3,8 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>ADR-0005 invariant 2 in both directions: a plugin's bytes are opened only inside the Plugin
-/// adapter, and the adapter answers from bytes, never from a source tree (ADR-0015 invariant 5).</summary>
 public sealed class PluginBytesScanTests
 {
     private static readonly string[] ProductionRoots =
@@ -14,18 +12,12 @@ public sealed class PluginBytesScanTests
 
     private const string AdapterRoot = "MEditService.PluginAdapter";
 
-    // The repository itself, not just its doors: the tree door answers in documents, so where a tree
-    // sits and how it is read are the repository's alone (ADR-0007).
     private static readonly string[] RepositoryNames = ["SourceRepository"];
 
     private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
 
-    // The tree door's implementation and the seam its write takes: both are entered through the
-    // port, so a caller naming either has reached past it.
     private static readonly string[] TreeDoorInternals = ["PluginTrees", "TreeDeserializer"];
 
-    // The composition root names the implementation it builds, and nothing else does
-    // (docs/architecture/target-architecture.md, "The pictures are the reference lists").
     private const string CompositionRoot = "MEditService.Http/Program.cs";
 
     [Fact]

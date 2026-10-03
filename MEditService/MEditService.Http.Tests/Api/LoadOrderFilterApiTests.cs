@@ -12,8 +12,6 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
     private Task ClearFilterAsync() => _client.DeleteAsync("/load-order/filter");
 
-    // --- POST /load-order/filter ---
-
     [Fact]
     public async Task PostFilter_ValidSql_Returns200WithSql()
     {
@@ -29,8 +27,6 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         var resp = await _client.PostAsJsonAsync("/load-order/filter", new { sql = "SELECT editor_id FROM \"NPC_\"", source = "editor-ids.sql" });
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
-
-    // --- GET /load-order/filter ---
 
     [Fact]
     public async Task GetFilter_BeforeAnyFilter_ReturnsSqlNull()
@@ -61,9 +57,6 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
-    // --- DELETE /load-order/filter ---
-
-    // plugins.md, Order and view state, story 3: the filter clears on purpose, whatever is held.
     [Fact]
     public async Task DeleteFilter_WithNoLoadOrder_Returns204()
     {

@@ -5,9 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>detect-external-change: another tool rewrites a tracked plugin, the next snapshot
-/// arrives, and the notification stream names the mod and the plugin that changed outside
-/// Modbench.</summary>
 public sealed class DetectExternalChangeTraceTests : HostedTests
 {
     private const string Plugin = "Watched.esp";

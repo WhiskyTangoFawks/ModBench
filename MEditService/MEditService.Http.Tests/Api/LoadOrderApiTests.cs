@@ -34,7 +34,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(2, plugins.Count);
     }
 
-    // ADR-0013 invariant 3: which plugins are active is Mod Management's to state.
     [Fact]
     public async Task PutLoadOrder_WithNoActiveField_Returns400()
     {
@@ -64,7 +63,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ADR-0012: the game loads one file per name.
     [Fact]
     public async Task PutLoadOrder_TwoActivePluginsOfOneFilename_Returns400()
     {
@@ -97,9 +95,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ADR-0009: the instance root is what the index file is keyed on, so a load that cannot
-    // name a real one has nowhere to keep its rows — a bad request, not a load that degrades to
-    // some other home.
     [Fact]
     public async Task PutLoadOrder_MissingInstanceRoot_Returns400()
     {

@@ -4,15 +4,9 @@ using Microsoft.CodeAnalysis;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>RS0030 is error everywhere. BannedSymbols.txt (time, blocking waits) binds
-/// unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 invariant 2) binds by name the seven production
-/// boxes that must never hold a live Mutagen object.</summary>
 public sealed class BannedApiScopeTests
 {
-    // Directory.Build.props sets MutagenBanIncluded for exactly these seven projects — Codec and
-    // PluginAdapter are production too, excluded because their game assembly reference already
-    // holds ADR-0005 invariant 2 for them.
-    private static readonly string[] MutagenBanProductionProjects =
+    private static readonly string[] MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule =
     [
         "MEditService.Commands",
         "MEditService.Http",
@@ -32,8 +26,6 @@ public sealed class BannedApiScopeTests
         Assert.Equal(("*.cs", "error"), declaration);
     }
 
-    // A global config outranking .editorconfig would leave RS0030 advisory everywhere, so the
-    // severity is read back through Roslyn's own config reader, not just grepped.
     [Fact]
     public void TheSeverityRoslynComputes_IsErrorForEveryProject()
     {
@@ -45,8 +37,6 @@ public sealed class BannedApiScopeTests
             project => Assert.Equal(ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
     }
 
-    // The one thing the global config is for: no .editorconfig section reaches a source
-    // generator's output, and the Mutagen serialization generator emits the codec's serializers.
     [Fact]
     public void TheGlobalConfig_SilencesRS0030_ForTheOutputNoEditorConfigSectionReaches()
     {
@@ -82,7 +72,7 @@ public sealed class BannedApiScopeTests
             .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
             .Order(StringComparer.Ordinal)
             .ToList();
-        Assert.Equal(MutagenBanProductionProjects, namedProjects);
+        Assert.Equal(MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule, namedProjects);
 
         var mutagenFile = Assert.Single(
             props.Descendants("AdditionalFiles"),
@@ -90,7 +80,6 @@ public sealed class BannedApiScopeTests
         Assert.Equal("'$(MutagenBanIncluded)' == 'true'", (string?)mutagenFile.Parent?.Attribute("Condition"));
     }
 
-    // 'MSBuildProjectName' == 'MEditService.Codec' split on the quotes it is built from.
     private static string ProjectNamedBy(string condition)
     {
         var parts = condition.Split('\'');
@@ -98,8 +87,6 @@ public sealed class BannedApiScopeTests
         return parts[3];
     }
 
-    // A test fixture may block on the tree it builds, so the file binds by the same naming rule the
-    // gates read the solution with: every box, no .Tests project, not the fixture library.
     [Fact]
     public void TheSyncOverAsyncFile_BindsEveryProductionBox_AndNoTestProject()
     {
@@ -117,46 +104,39 @@ public sealed class BannedApiScopeTests
         Assert.Contains("'$(MSBuildProjectName)' != 'MEditService.TestSupport'", condition, StringComparison.Ordinal);
     }
 
-    // Read off disk rather than listed: a box added tomorrow is banned the moment its project file
-    // exists. Keyed on the project file, so a leftover obj folder is not a box.
-    private static IReadOnlyList<string> ProductionProjects() =>
+    private static IReadOnlyList<string> ProductionProjectsByProjectFile() =>
         [.. Directory.EnumerateFiles(
                 ArchitectureTests.SolutionDirectory(), "MEditService.*.csproj", SearchOption.AllDirectories)
             .Select(project => Path.GetFileNameWithoutExtension(project))
             .Where(name => !IsATestProject(name))
             .Order(StringComparer.Ordinal)];
 
-    // Every box's own test project (MEditService.<Box>.Tests) and the shared fixture library —
-    // neither a box the target architecture draws.
     private static bool IsATestProject(string name) =>
         name.EndsWith(".Tests", StringComparison.Ordinal)
         || string.Equals(name, "MEditService.TestSupport", StringComparison.Ordinal);
 
-    // A game assembly is Mutagen's per-release package. Core carries identity alone and is ambient
-    // in Directory.Build.props; the serialization packages are the codec's JSON kernel (ADR-0007),
-    // not a game.
     private static bool HoldsAGameAssembly(string project) =>
         XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), project, project + ".csproj"))
             .Descendants("PackageReference")
             .Select(e => (string?)e.Attribute("Include") ?? "")
-            .Any(id => id.StartsWith("Mutagen.Bethesda.", StringComparison.Ordinal)
-                && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
-                && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
+            .Any(IsAPerGameMutagenPackage);
 
-    // ADR-0005 invariant 2: only these two boxes call the codec's whole-mod doors, and the package
-    // edge holds the rule for them — neither belongs among the banned-file seven.
+    private static bool IsAPerGameMutagenPackage(string id) =>
+        id.StartsWith("Mutagen.Bethesda.", StringComparison.Ordinal)
+        && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
+        && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal);
+
     [Fact]
     public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
     {
-        var projects = ProductionProjects();
+        var projects = ProductionProjectsByProjectFile();
 
-        // Zero projects and a correct answer read the same; this tells them apart.
         Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
 
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
-        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProductionProjects));
+        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProjectsExcludingCodecAndPluginAdapterWhoseGameAssemblyHoldsTheRule));
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
