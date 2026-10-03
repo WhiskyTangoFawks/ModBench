@@ -1,5 +1,5 @@
-"""Observes the two seams the comment discipline exposes: Vale over a text fragment, and the
-write hook's stdin-JSON contract. Forbidden tokens are spelled as split literals so this file
+"""Observes the comment discipline's three seams: Vale over a text fragment, comment-shape.py over
+files, and the write hook's stdin-JSON contract. Forbidden tokens are split literals so this file
 passes the gate it tests."""
 import json
 import pathlib
@@ -28,6 +28,72 @@ def hook(path, text, tool="Write"):
     payload = {"tool_name": tool, "tool_input": {"file_path": path, key: text}}
     return subprocess.run(["python3", HOOKS / "comment-write.py"], input=json.dumps(payload),
                           capture_output=True, text=True)
+
+
+def shape(name, text):
+    with tempfile.TemporaryDirectory() as directory:
+        path = pathlib.Path(directory) / name
+        path.write_text(text)
+        return subprocess.run(["python3", HOOKS / "comment-shape.py", path], capture_output=True, text=True)
+
+
+class CommentsInTestFiles(unittest.TestCase):
+    def assert_text(self, name, line):
+        run = shape(name, line + "\n")
+        self.assertEqual(run.returncode, 0, run.stdout)
+
+    def assert_comment(self, name, line):
+        run = shape(name, line + "\n")
+        self.assertEqual(run.returncode, 1, run.stdout)
+        self.assertIn(f"{name}:1: a comment in a test", run.stdout)
+
+    def test_a_marker_in_a_csharp_string_is_text(self):
+        self.assert_text("ATests.cs", 'Write(p, "var release = GameRelease.Fallout4; // Fallout4.esm");')
+
+    def test_a_verbatim_string_ends_at_the_quote_after_a_backslash(self):
+        self.assert_text("ATests.cs", 'var p = @"C:\\dir\\" + " // x";')
+
+    def test_a_raw_string_holds_a_lone_quote(self):
+        self.assert_text("ATests.cs", 'var s = """a " // b""";')
+
+    def test_a_marker_in_an_interpolated_string_is_text(self):
+        self.assert_text("ATests.cs", 'var s = $"{name} // b";')
+
+    def test_a_quote_in_a_char_literal_opens_no_string(self):
+        self.assert_text("ATests.cs", 'var q = \'"\'; var s = " // b";')
+
+    def test_an_escaped_quote_does_not_end_a_csharp_string(self):
+        self.assert_text("ATests.cs", r'var s = "a \" // b";')
+
+    def test_a_marker_in_a_single_quoted_string_is_text(self):
+        self.assert_text("a.test.ts", r"const s = '{\n  // a comment\n}';")
+
+    def test_a_marker_in_a_double_quoted_string_is_text(self):
+        self.assert_text("a.test.ts", 'const s = "a // b";')
+
+    def test_a_marker_in_a_template_literal_is_text(self):
+        self.assert_text("a.test.ts", "const s = `a // ${b}`;")
+
+    def test_a_url_in_a_string_is_text(self):
+        self.assert_text("a.test.ts", "const url = 'http://example.com';")
+
+    def test_slashes_in_a_regex_literal_with_a_quote_are_text(self):
+        self.assert_text("a.test.ts", r"const quoted = /^\s*'\/\//;")
+
+    def test_an_escaped_quote_does_not_end_a_typescript_string(self):
+        self.assert_text("a.test.ts", r"const s = 'it\'s // b';")
+
+    def test_a_comment_after_code_is_flagged(self):
+        self.assert_comment("ATests.cs", "var x = 1; // note")
+
+    def test_a_comment_after_a_string_is_flagged(self):
+        self.assert_comment("ATests.cs", 'Foo("a"); // note')
+
+    def test_a_block_comment_after_a_string_is_flagged(self):
+        self.assert_comment("a.test.ts", "foo('a'); /* x */")
+
+    def test_a_comment_at_line_start_is_flagged(self):
+        self.assert_comment("a.test.ts", "// note")
 
 
 class ValeRules(unittest.TestCase):
