@@ -16,7 +16,7 @@ As a user, I want:
 
 1. One row for each line of the active profile's `plugins.txt`, in its order. *MO2*
 2. The plugins the game loads with no line at the losing end, before every line. *MO2; ADR-0013*
-3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. *ADR-0012*
+3. An overridden plugin, and a plugin in a disabled mod, not to be a row. Each stays indexed. *MO2; ADR-0012*
 4. A disabled plugin to show no expander, because it is not active. *ADR-0012*
 5. Beneath a plugin, one group for each record type it holds, named as xEdit names it ("Activator"), sorted by name, the worldspaces and cells among the rest. *xEdit sorts its navigator by name*
 6. Beneath a group, its records, in FormID order. A container record holds its children directly, as xEdit folds a record's child group into the record: a worldspace holds its persistent cell and its blocks, a block its sub-blocks, a sub-block its cells, a cell its persistent and temporary child records, its landscape and navmeshes among the temporary ones, a quest its dialog topics, dialog branches and scenes, and a dialog topic its responses. Interior cells sit in blocks and sub-blocks as exterior ones do. *xEdit*
@@ -34,7 +34,7 @@ As a user, I want:
 | Check box | checked when its line is enabled | MO2 |
 | Description | the status words below, left out when the plugin has none | common, A view, story 3 |
 | Icon | the status below; none when the plugin has no status | common, A view, story 3 |
-| Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, and a line for each status | ADR-0012 |
+| Tooltip | the file name, its origin (the mod, Overwrite or the game folder), "read-only" when its records cannot be edited, and a line for each status | ruling |
 | Identity | the row's kind and the plugin, as (origin, filename) | ADR-0012 |
 
 A plugin's statuses follow. The first that holds, in this order, sets the icon:
@@ -42,12 +42,12 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Status | When | Icon | Words |
 |---|---|---|---|
 | Failed to read | mEdit could not read it | `$(error)` red | failed to read |
-| Master issues | it is active, and a master in its header is not (ADR-0012); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
+| Master issues | it is active, and a master in its header is not (xedit.md, divergence 28); once the snapshot is indexed | `$(error)` red | 1 master issue, N master issues |
 | Unreadable records | a record could not be read into its document | `$(error)` red | unreadable records |
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
-- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. *ADR-0012*
+- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. *xedit.md, divergence 28*
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.
 - A later snapshot keeps the last statuses until the new ones land.
 - A plugin that failed to read stays failed until its bytes change or I refresh.
@@ -141,7 +141,7 @@ As a user, I want:
 
 1. To drag plugin rows, one or several. They move as one block in their `plugins.txt` order.
 2. A drop on a plugin row to place the block directly above it, as shown; on a plugin the game loads with no line, at the losing end of `plugins.txt`; below the last row, at the bottom of the view, as shown.
-3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a plugin that is not one, refused, naming the plugin and the master. A drop whose masters mEdit cannot say yet lands; the Master issues row flags it once mEdit reads the plugin. *ADR-0012*
+3. A drop that would put a master after a plugin that depends on it, or a blueprint plugin before a plugin that is not one, refused, naming the plugin and the master. A drop whose masters mEdit cannot say yet lands; the Master issues row flags it once mEdit reads the plugin. *xedit.md, divergence 28*
 4. A drop where the block cannot go to change nothing and say nothing: on a record, a group, or a row being dragged. *mods.md, Drag and drop, story 5*
 5. Records, groups and the rows of plugins the game loads with no line not to drag, and nothing from outside the view to drop here. *xedit.md: Drag a record onto a reference field*
 

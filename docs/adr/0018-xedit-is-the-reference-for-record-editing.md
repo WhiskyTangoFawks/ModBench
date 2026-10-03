@@ -9,10 +9,6 @@ xEdit has 25 years of refinement against this exact problem domain, and essentia
 3. **Adopted, as xEdit's source has them:** the gesture model, where click focuses, the keyboard acts on the focused cell's model value and double click edits; the compare grid as one tree with a slot per plugin at every depth, keyed arrays aligned by key, a complex field edited as one value; and the two-axis record order conflict model, ConflictAll per record and per node, ConflictThis per plugin. [The Editor surface spec](../architecture/surfaces/editor.md) states each surface.
 4. **Cite xEdit's definitions; rule the composition yourself.** The TES5Edit clone under `references/` carries definitions whose consuming machinery is absent from the clone. A definition is a fact about the format. Absent machinery never means it is meaningless, and a ruling about how definitions compose is never presented as an xEdit fact. A document says which of the two it did.
 
-## Divergence register
-
-[xedit.md](../out-of-scope/xedit.md) lists every divergence and every omission, with the reason for each. A divergence outside this surface is its own ADR: [ADR-0008](0008-masters-are-derived-from-content.md).
-
 ## Alternatives rejected
 
 - **Left-click is edit.** It left nothing for selection, so a read-only surface had to exist to select from; drag consumed the mousedown; bounded-list types were copyable only in immutable columns. Every problem was downstream of the anchor, and every one is absent in xEdit.
