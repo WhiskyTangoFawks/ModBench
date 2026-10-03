@@ -168,7 +168,7 @@ describe('pickRecord', () => {
     createQuickPick.mockReturnValue(qp);
 
     const dispatchPromise = openPicker('', [], deps);
-    searchRecords.mockClear(); // drop the (no-op, empty-seed) call above
+    searchRecords.mockClear();
 
     typeValue('sw');
     await vi.advanceTimersByTimeAsync(100);

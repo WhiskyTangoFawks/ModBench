@@ -5,8 +5,7 @@ import { extendedFieldFile } from '../extendedFieldFiles';
 const DEACON = { recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data' };
 
 describe('extendedFieldFile', () => {
-  it('sanitizes reserved/colon characters and composes dir/origin/file from record, field, plugin', () => {
-    // Brackets are valid on every filesystem; only the FormKey's colon is Windows-reserved.
+  it('sanitizes the FormKey\'s Windows-reserved colon, keeps the brackets (valid in a filename on any filesystem), and composes dir/origin/file from record, field, plugin', () => {
     expect(extendedFieldFile('/tmp/root', DEACON)).toEqual({
       folder: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data'),
       file: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm]'),
@@ -32,8 +31,7 @@ describe('extendedFieldFile', () => {
       .not.toBe(extendedFieldFile('/tmp/root', { ...column, origin: 'ModB' }).file);
   });
 
-  // Origin is read off disk, so it is user-controlled input, not a trusted literal.
-  it('strips path separators from a hostile origin, so it cannot escape the temp root', () => {
+  it('strips path separators from a hostile origin read off disk, so it cannot escape the temp root', () => {
     const { file } = extendedFieldFile('/tmp/root', { ...DEACON, recordLabel: 'Deacon', origin: '../../../etc/passwd' });
     expect(file).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm]'));
   });

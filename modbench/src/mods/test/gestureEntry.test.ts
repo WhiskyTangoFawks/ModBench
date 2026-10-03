@@ -18,10 +18,7 @@ import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModL
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
 
-// VS Code's own calling convention: a context menu passes the right-clicked row, and the
-// selection only when several rows are selected and the right-clicked row is among them. A key
-// and the palette pass nothing.
-function entryWhenInvoked(viewSelection: readonly ModlistNode[], ...args: unknown[]): GestureEntry {
+function entryWhenVsCodeInvokes(viewSelection: readonly ModlistNode[], ...args: unknown[]): GestureEntry {
   let received: GestureEntry | undefined;
   const disposable = registerModsGesture('modbench.test.gesture', () => viewSelection, (entry) => { received = entry; });
   const call = registerCommand.mock.calls.at(-1);
@@ -38,48 +35,47 @@ describe('what VS Code hands a Mods gesture becomes its entry', () => {
   const gamma = modRow('Gamma');
 
   it('a right-click inside a multi-selection gives a plural gesture the selection', () => {
-    const entry = entryWhenInvoked([alpha, beta], beta, [alpha, beta]);
+    const entry = entryWhenVsCodeInvokes([alpha, beta], beta, [alpha, beta]);
     expect(pluralArgument(entry, 'mod')).toEqual([alpha, beta]);
   });
 
   it('a right-click outside the selection gives a plural gesture the right-clicked row alone', () => {
-    const entry = entryWhenInvoked([alpha, beta], gamma, undefined);
+    const entry = entryWhenVsCodeInvokes([alpha, beta], gamma, undefined);
     expect(pluralArgument(entry, 'mod')).toEqual([gamma]);
   });
 
   it('a right-click gives a singular gesture the right-clicked row', () => {
-    const entry = entryWhenInvoked([alpha, beta], beta, [alpha, beta]);
+    const entry = entryWhenVsCodeInvokes([alpha, beta], beta, [alpha, beta]);
     expect(singularArgument(entry, 'mod')).toBe(beta);
   });
 
   it('the palette gives a plural gesture the view\'s selection', () => {
-    const entry = entryWhenInvoked([alpha, gamma]);
+    const entry = entryWhenVsCodeInvokes([alpha, gamma]);
     expect(pluralArgument(entry, 'mod')).toEqual([alpha, gamma]);
   });
 
-  // A keybinding with no args of its own is invoked with null (VS Code 1.24 release notes).
-  it('a key gives a plural gesture the view\'s selection', () => {
-    const entry = entryWhenInvoked([beta, gamma], null);
+  it('a key gives a plural gesture the view\'s selection, VS Code invoking a keybinding with no args of its own with null', () => {
+    const entry = entryWhenVsCodeInvokes([beta, gamma], null);
     expect(pluralArgument(entry, 'mod')).toEqual([beta, gamma]);
   });
 
   it('the palette gives a singular gesture the one selected row', () => {
-    const entry = entryWhenInvoked([alpha]);
+    const entry = entryWhenVsCodeInvokes([alpha]);
     expect(singularArgument(entry, 'mod')).toBe(alpha);
   });
 
   it('the palette gives a singular gesture nothing while several rows are selected', () => {
-    const entry = entryWhenInvoked([alpha, beta]);
+    const entry = entryWhenVsCodeInvokes([alpha, beta]);
     expect(singularArgument(entry, 'mod')).toBeUndefined();
   });
 
   it('a key\'s own args give a plural gesture the view\'s selection, not the args', () => {
-    const entry = entryWhenInvoked([beta, gamma], MODS_KEY_ARGS);
+    const entry = entryWhenVsCodeInvokes([beta, gamma], MODS_KEY_ARGS);
     expect(pluralArgument(entry, 'mod')).toEqual([beta, gamma]);
   });
 
   it('a key\'s own args give a singular gesture the one selected row', () => {
-    const entry = entryWhenInvoked([gamma], MODS_KEY_ARGS);
+    const entry = entryWhenVsCodeInvokes([gamma], MODS_KEY_ARGS);
     expect(singularArgument(entry, 'mod')).toBe(gamma);
   });
 });

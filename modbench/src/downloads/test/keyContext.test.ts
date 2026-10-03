@@ -13,10 +13,7 @@ import { ErrorNode } from '../errorNode';
 import { DOWNLOADS_KEY_ARGS, downloadsCopyValueText, downloadsKeyContext } from '../keyContext';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 
-// commands.md, The surface supplies the Argument; No dead entries: a palette entry is handed no
-// row, so its `when` reads what the selection holds, and the gesture is absent where it would have
-// nothing to act on.
-describe('what the Downloads palette entries read off the selection', () => {
+describe('what the Downloads palette entries, handed no row, read off the selection', () => {
   const plain = new DownloadNode(downloadRowFixture('plain.7z'));
   const withMeta = new DownloadNode(downloadRowFixture('meta.7z', { hasMeta: true }));
   const excluded = new DownloadNode(downloadRowFixture('excluded.7z', { hasMeta: true, excluded: true }));
@@ -46,7 +43,6 @@ describe('what the Downloads palette entries read off the selection', () => {
   });
 });
 
-// downloads.md, Menus and keys, story 3: copy value copies each selected file's file name.
 describe('Downloads\' own text for the catalog\'s copy value', () => {
   const alpha = new DownloadNode(downloadRowFixture('alpha.7z', { displayName: 'Alpha Mod' }));
   const beta = new DownloadNode(downloadRowFixture('beta.7z'));

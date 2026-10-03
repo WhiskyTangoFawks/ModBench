@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
-// Narrow enough for what these tests read back off a call: the prompt text and its own
-// validateInput, the one seam a prompt-refusal test can reach without a real VS Code window.
-interface InputBoxOptionsDouble {
+interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   prompt?: string;
   value?: string;
   placeHolder?: string;
@@ -14,7 +12,7 @@ const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuick
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
-  showInputBox: vi.fn<(options?: InputBoxOptionsDouble) => Promise<string | undefined>>(),
+  showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
   showQuickPick: vi.fn(),
   openExternal: vi.fn(),
 }));
@@ -42,6 +40,7 @@ import { ARCHIVE_EXTENSIONS } from '../../install/install';
 import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
+import { present } from '../../ports/present';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -49,15 +48,13 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(call[1](...args));
 }
 
-// Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
-// against Fallout 4 and reach meta.ini wrong for every other install.
-const GAME_NAME = 'Skyrim Special Edition';
+const GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE ='Skyrim Special Edition';
 const ACCESS = accessTo('/instance');
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     access: ACCESS,
-    instance: { value: instanceValueFixture({ gameName: GAME_NAME }) },
+    instance: { value: instanceValueFixture({ gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     installDownloaded: vi.fn(),
@@ -90,11 +87,8 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
       [expect.objectContaining({ sourceKind: 'archive' }), expect.objectContaining({ sourceKind: 'folder' })],
       expect.anything(),
     );
-    const [quickPickOrder] = showQuickPick.mock.invocationCallOrder;
-    const [openDialogOrder] = showOpenDialog.mock.invocationCallOrder;
-    if (quickPickOrder === undefined || openDialogOrder === undefined) {
-      throw new Error('expected both showQuickPick and showOpenDialog to have been called');
-    }
+    const quickPickOrder = present(showQuickPick.mock.invocationCallOrder[0], 'the showQuickPick call order');
+    const openDialogOrder = present(showOpenDialog.mock.invocationCallOrder[0], 'the showOpenDialog call order');
     expect(quickPickOrder).toBeLessThan(openDialogOrder);
   });
 
@@ -109,9 +103,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     expect(succeeded).toEqual({ installed: false });
   });
 
-  // The picker's filters name install's own extension list, never a copy of it: a rival that
-  // hardcodes its own array here would drift silently the day install's list changes.
-  it('archive: the OS picker offers install\'s own archive extensions', async () => {
+  it('archive: the OS picker offers install\'s own archive extensions rather than a list of its own that would drift', async () => {
     const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
     showQuickPick.mockResolvedValueOnce({ sourceKind: 'archive' });
     showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/foo.zip' }]);
@@ -136,7 +128,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/archive/foo.7z', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
     expect(succeeded).toEqual({ installed: true });
   });
@@ -178,7 +170,7 @@ describe('modbench.mod.install: archive or folder, asked first', () => {
     }));
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
-      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME },
+      ACCESS, { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_NAME_OTHER_THAN_THE_FIXTURES_USUAL_ONE },
     );
     expect(succeeded).toEqual({ installed: true });
   });

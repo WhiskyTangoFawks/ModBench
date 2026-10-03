@@ -27,9 +27,7 @@ function narrated(settle: (status: LoadOrderProgress) => Promise<void> = () => P
 
 const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-// plugins.md, States 2: the view's progress and each row's indexed state follow the index status,
-// whoever started the reconcile — a put, a rebuild's refill or the watcher.
-describe('the reconcile narrator', () => {
+describe('the reconcile narrator, the view\'s progress and each row\'s indexed state following the index status whoever started the reconcile', () => {
   it('shows a rebuild-started refill: rows reset to still indexing, progress while it runs, cleared on Ready', async () => {
     const { deps, progress, narrator } = narrated();
     narrator.hear(ready());
@@ -73,9 +71,7 @@ describe('the reconcile narrator', () => {
     expect(deps.settle).toHaveBeenCalledTimes(2);
   });
 
-  // A put's own answer is a status too, heard beside the stream's: a Ready heard from both while the
-  // first hand-off still runs is handed over once.
-  it('hands over a Ready heard twice while its hand-off runs, once', async () => {
+  it('hands over a Ready heard twice, as a put\'s own answer is heard beside the stream\'s, while its hand-off runs, once', async () => {
     let handedOver!: () => void;
     const { deps, narrator } = narrated(() => new Promise<void>((resolve) => { handedOver = resolve; }));
 
@@ -111,8 +107,6 @@ describe('the reconcile narrator', () => {
     expect(deps.settle).not.toHaveBeenCalled();
   });
 
-  // plugins.md, States 4: the refusal reaches the Plugins tree too, not only the status bar — a
-  // row must name it, never keep promising "Still indexing…" for a load that cannot land here.
   it('hands the refusal to the tree as well as the status bar', async () => {
     const { deps, narrator } = narrated();
     const refusal = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
@@ -123,8 +117,6 @@ describe('the reconcile narrator', () => {
     expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
-  // The two refusal kinds carry different row-level scope (ADR-0009 point 5) — the narrator
-  // passes the kind through untouched rather than collapsing both into one shape.
   it('hands a Failed refusal to the tree with its own kind, not relabeled as heldElsewhere', async () => {
     const { deps, narrator } = narrated();
     const refusal = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };
@@ -135,9 +127,7 @@ describe('the reconcile narrator', () => {
     expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
-  // plugins.md, States 6: a failed index is one line in the Output, however often its status is
-  // heard again.
-  it('writes a failed index to the Output once', async () => {
+  it('writes a failed index to the Output once, however often its status is heard again', async () => {
     const { deps, narrator } = narrated();
     const failed = tick({ refusal: { kind: 'failed', message: 'the reconcile threw something unexpected' } });
 
@@ -173,9 +163,7 @@ describe('the reconcile narrator', () => {
   });
 });
 
-// toolbox.md, Refresh: the view's progress while it runs, and the rebuild's 204 answers before the
-// refill has read anything.
-describe('the reconcile narrator: the refill a rebuild starts', () => {
+describe('the reconcile narrator: the refill a rebuild starts, which the rebuild\'s 204 answers before it has read anything', () => {
   it('ends the wait at the refill\'s Ready, not before it', async () => {
     const { narrator } = narrated();
     narrator.hear(ready());

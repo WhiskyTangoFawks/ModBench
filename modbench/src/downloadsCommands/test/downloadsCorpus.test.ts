@@ -1,9 +1,6 @@
-// Runs against the committed corpus fixture, because these verbs mutate MO2-owned state: the
-// `.meta` sidecar, the archive beside it, and nothing else in the instance.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
-// The adapter's watch is built on VS Code's file watcher, which these tests never start.
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { rm, writeFile } from 'node:fs/promises';
@@ -19,8 +16,6 @@ const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
 const ARCHIVE = `downloads/${NAME}`;
 const META = `${ARCHIVE}.meta`;
 
-// A metaless archive, as a manual drop into downloads/ is: the verbs that create a sidecar are
-// the ones whose touch-set is easiest to read wrong.
 const MANUAL = 'Manually Dropped Archive.7z';
 const MANUAL_ARCHIVE = `downloads/${MANUAL}`;
 const MANUAL_META = `${MANUAL_ARCHIVE}.meta`;
@@ -28,7 +23,7 @@ const MANUAL_META = `${MANUAL_ARCHIVE}.meta`;
 const LOCKED = 'Locked Archive.7z';
 const LOCKED_ARCHIVE = `downloads/${LOCKED}`;
 
-describe('downloads commands corpus', () => {
+describe('downloads commands over the committed corpus fixture, since these verbs mutate MO2-owned state', () => {
   let dir: string;
   let access: DownloadsAccess;
 
@@ -39,8 +34,7 @@ describe('downloads commands corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // A file with no metadata is not excluded.
-  const excludedOf = async (name: string): Promise<boolean> => (await readDownloadedFileMeta(dir, name))?.excluded ?? false;
+  const excludedOrFalseWithNoMetadata =async (name: string): Promise<boolean> => (await readDownloadedFileMeta(dir, name))?.excluded ?? false;
 
   const fileOf = (name: string) => ({ name, path: join(dir, 'downloads', name) });
 
@@ -50,7 +44,7 @@ describe('downloads commands corpus', () => {
     expect(await excludeDownload(access, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await excludedOf(NAME))).toBe(true);
+    expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(true);
   });
 
   it('excluding a metaless archive creates its sidecar and nothing else', async () => {
@@ -59,7 +53,7 @@ describe('downloads commands corpus', () => {
     expect(await excludeDownload(access, MANUAL)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
-    expect((await excludedOf(MANUAL))).toBe(true);
+    expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(true);
   });
 
   it('include writes one sidecar and nothing else, and the row reads back visible', async () => {
@@ -69,7 +63,7 @@ describe('downloads commands corpus', () => {
     expect(await includeDownload(access, NAME)).toEqual({ applied: true, wrote: true });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
-    expect((await excludedOf(NAME))).toBe(false);
+    expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(false);
   });
 
   it('including a metaless archive touches nothing — visible is already its default', async () => {
@@ -78,7 +72,7 @@ describe('downloads commands corpus', () => {
     expect(await includeDownload(access, MANUAL)).toEqual({ applied: true, wrote: false });
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set());
-    expect((await excludedOf(MANUAL))).toBe(false);
+    expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(false);
   });
 
   it('excluding an already excluded download touches nothing', async () => {
@@ -91,8 +85,8 @@ describe('downloads commands corpus', () => {
   });
 
   it('including an already included download touches nothing, with a real removed=false key on disk', async () => {
-    await excludeDownload(access, NAME); // removed=true, a real change
-    await includeDownload(access, NAME); // removed=false, a real change — the key now exists on disk
+    await excludeDownload(access, NAME);
+    await includeDownload(access, NAME);
     const before = await snapshotTree(dir);
 
     expect(await includeDownload(access, NAME)).toEqual({ applied: true, wrote: false });
@@ -110,8 +104,8 @@ describe('downloads commands corpus', () => {
       refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
     });
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
-    expect((await excludedOf(NAME))).toBe(true);
-    expect((await excludedOf(MANUAL))).toBe(true);
+    expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(true);
+    expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(true);
   });
 
   it('includeDownloads includes every landing name and refuses the one gone from disk, by name', async () => {
@@ -126,15 +120,14 @@ describe('downloads commands corpus', () => {
       refused: [{ item: 'Gone Archive.7z', reasonContains: 'Gone Archive.7z' }],
     });
     assertOnlyChanged(before, await snapshotTree(dir), new Set([META, MANUAL_META]));
-    expect((await excludedOf(NAME))).toBe(false);
-    expect((await excludedOf(MANUAL))).toBe(false);
+    expect((await excludedOrFalseWithNoMetadata(NAME))).toBe(false);
+    expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(false);
   });
 
-  // The other direction of the same key: MO2 hides a download, Modbench shows it excluded.
   it('a sidecar hidden by MO2 itself reads back excluded', async () => {
     await writeFile(join(dir, MANUAL_META), '[General]\r\nremoved=true\r\n');
 
-    expect((await excludedOf(MANUAL))).toBe(true);
+    expect((await excludedOrFalseWithNoMetadata(MANUAL))).toBe(true);
   });
 
   it('delete trashes the archive and then the sidecar, and nothing else', async () => {
@@ -169,9 +162,7 @@ describe('downloads commands corpus', () => {
     expect(after.has(META)).toBe(true);
   });
 
-  // The archive is already gone by the time the sidecar's trash runs, so this is not a refusal —
-  // the Output line naming it is the view's job (downloads.md, Reporting story 2).
-  it('a trash failure on the sidecar after the archive landed reports the delete as done', async () => {
+  it('a trash failure on the sidecar after the archive landed reports the delete as done, not a refusal', async () => {
     const before = await snapshotTree(dir);
 
     const outcome = await deleteDownloads(access, [fileOf(NAME)], async (path) => {

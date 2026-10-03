@@ -27,7 +27,7 @@ describe('groupModlist', () => {
     expect(tree.groups).toEqual([]);
   });
 
-  it('assigns each separator the mods that precede it, back to the previous separator', () => {
+  it('assigns each separator the mods that precede it, back to the previous separator: the first separator an empty group, a trailing mod ungrouped', () => {
     const entries: ModlistEntry[] = [
       sep('S1'),
       mod('A'),
@@ -37,18 +37,14 @@ describe('groupModlist', () => {
     ];
     const tree = groupModlist(entries);
     expect(tree.groups.map((g) => g.separator.name)).toEqual(['S1', 'S2']);
-    // Nothing precedes S1 (it's the first entry) → empty group.
     expect(present(tree.groups[0], "S1's group").mods).toEqual([]);
-    // A and B precede S2, back to S1 → S2's members.
     expect(present(tree.groups[1], "S2's group").mods.map((m) => m.name)).toEqual(['A', 'B']);
-    // C trails the last separator → ungrouped.
     expect(tree.ungrouped.map((m) => m.name)).toEqual(['C']);
   });
 
   it('keeps an empty separator (nothing preceding it back to the prior separator) as a group with no mods', () => {
     const tree = groupModlist([sep('Empty'), sep('S2'), mod('A')]);
     expect(tree.groups[0]).toEqual({ separator: sep('Empty'), mods: [] });
-    // Nothing sits between Empty and S2 either.
     expect(tree.groups[1]).toEqual({ separator: sep('S2'), mods: [] });
     expect(tree.ungrouped.map((m) => m.name)).toEqual(['A']);
   });
@@ -65,10 +61,7 @@ describe('groupModlist', () => {
     expect(tree.installedCount).toBe(3);
   });
 
-  // LitR shape: 5 ENB mods precede ENB_separator, 2
-  // Radfall mods precede Radfall-AIO separator — each separator must claim the
-  // mods that precede it, never the mods that follow it.
-  it('LitR shape: each separator claims the run of mods immediately preceding it', () => {
+  it('LitR shape: each separator claims the run of mods immediately preceding it, never the mods that follow it', () => {
     const radfallMod1 = mod('RadfallMod1');
     const radfallMod2 = mod('RadfallMod2');
     const enBoost16k = mod('ENBoost16k');

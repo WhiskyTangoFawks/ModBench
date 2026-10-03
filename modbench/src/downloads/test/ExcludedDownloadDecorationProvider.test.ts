@@ -2,15 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import { EventEmitter } from '../../test/vscodeMock';
 
-// Real `Uri.file` forward-slashes a backslash path only on Windows; this always does, so a
-// Windows-style fixture below exercises that conversion on any host.
 vi.mock('vscode', () => ({
   ThemeColor: class { constructor(public id: string) {} },
   EventEmitter,
   Uri: {
     file: (p: string) => {
-      const path = p.replaceAll('\\', '/');
-      return { fsPath: p, path, toString: () => `file://${path}` };
+      const pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly = p.replaceAll('\\', '/');
+      return {
+        fsPath: p,
+        path: pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly,
+        toString: () => `file://${pathForwardSlashedOnEveryHostWhereTheRealOneIsOnWindowsOnly}`,
+      };
     },
   },
 }));
@@ -43,9 +45,7 @@ describe('ExcludedDownloadDecorationProvider', () => {
     expect(provider.provideFileDecoration(fakeUri(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
   });
 
-  // A sibling path that merely shares the "downloads" string prefix must not read as inside
-  // downloads/, even when slicing it reproduces a real excluded download's name.
-  it('returns undefined for a sibling path that only shares the downloads/ string prefix', () => {
+  it('returns undefined for a sibling path that only shares the downloads/ string prefix, even when slicing it reproduces an excluded download\'s name', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
     const provider = new ExcludedDownloadDecorationProvider(() => downloadsDir, () => new Set(['evil.zip']));
     const uri = fakeUri(`${downloadsDir}Xevil.zip`);
@@ -53,9 +53,7 @@ describe('ExcludedDownloadDecorationProvider', () => {
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
-  // Rival this rules out: comparing by `.fsPath` with a hardcoded `/` join, which never matches a
-  // real Windows `fsPath` (backslash-separated) against a POSIX-style literal.
-  it('dims a download row given a Windows-style downloads dir and file path', () => {
+  it('dims a download row given a backslash-separated Windows fsPath, which a hardcoded / join would not match', () => {
     const winDownloadsDir = String.raw`C:\Instance\downloads`;
     const provider = new ExcludedDownloadDecorationProvider(() => winDownloadsDir, () => new Set(['excluded.zip']));
     const uri = vscode.Uri.file(String.raw`C:\Instance\downloads\excluded.zip`);
@@ -65,18 +63,13 @@ describe('ExcludedDownloadDecorationProvider', () => {
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
   });
 
-  // Rival: falling back to a default downloads/ prefix. An unresolved folder decorates nothing,
-  // not even a row that would have matched that default.
-  it('decorates nothing while the downloads folder is unresolved', () => {
+  it('decorates nothing while the downloads folder is unresolved, not even a row under the default downloads/', () => {
     const provider = new ExcludedDownloadDecorationProvider(() => undefined, () => new Set(['excluded.zip']));
 
     expect(provider.provideFileDecoration(downloadUri('excluded.zip'))).toBeUndefined();
   });
 
-  // Rival: capturing the folder once at construction, as a fixed instance-root join always
-  // could — `download_directory` can move while Modbench runs, and a stale prefix would silently
-  // stop matching every row after that.
-  it('follows the downloads folder when it moves, reading it fresh rather than once at construction', () => {
+  it('follows the downloads folder when download_directory moves while Modbench runs, reading it fresh rather than once at construction', () => {
     let dir = downloadsDir;
     const provider = new ExcludedDownloadDecorationProvider(() => dir, () => new Set(['excluded.zip']));
     const moved = join(instanceRoot, 'MovedDownloads');

@@ -15,8 +15,7 @@ const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
 
-// expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
-function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {
+function assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {
   if (result.applied) throw new Error('expected a refusal, got applied:true');
   expect(result.refusal).toContain(expectedSubstring);
 }
@@ -42,16 +41,14 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
-  // A drop names its target before the block leaves the order; the splice counts after.
-  it('reorderPlugins lands a block dragged down directly above the row it was dropped on', async () => {
+  it('reorderPlugins lands a block dragged down directly above the row it was dropped on, the splice counting after the block leaves the order', async () => {
     await writeFile(pluginsPath(), '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n');
     expect(await reorderPlugins(accessTo(dir), PROFILE, ['A.esp'], { kind: 'before', name: 'D.esp' }))
       .toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('*B.esp\r\n*C.esp\r\n*A.esp\r\n*D.esp\r\n*E.esp\r\n');
   });
 
-  // ADR-0012: the tree may hold a name in another case than plugins.txt writes it.
-  it('reorderPlugins counts a moved row named in another case, landing the block above the target', async () => {
+  it('reorderPlugins counts a moved row named in another case than plugins.txt writes it, landing the block above the target', async () => {
     await writeFile(pluginsPath(), '*A.esp\r\n*B.esp\r\n*C.esp\r\n*D.esp\r\n*E.esp\r\n');
     expect(await reorderPlugins(accessTo(dir), PROFILE, ['a.esp'], { kind: 'before', name: 'D.esp' }))
       .toEqual({ applied: true, wrote: true });
@@ -67,14 +64,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('reorderPlugins refuses a name with no line, naming it, and writes nothing', async () => {
-    assertRefusal(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
-  // Rival: settling a drop on a row that has gone at the winning end, a place the user never chose.
-  it('reorderPlugins refuses a drop on a row plugins.txt does not list, naming it, and writes nothing', async () => {
-    assertRefusal(
+  it('reorderPlugins refuses a drop on a row plugins.txt does not list, naming it, and writes nothing rather than settling it at the winning end', async () => {
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(
       await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'before', name: 'Gone.esp' }),
       'Plugin not found in plugins.txt: Gone.esp');
     expect(await plugins()).toBe(INITIAL);
@@ -83,11 +79,9 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
 
   it('a profile with no plugins.txt refuses rather than creating one', async () => {
     const result = await reorderPlugins(accessTo(dir), 'NoSuchProfile', ['Base.esp'], { kind: 'winningEnd' });
-    assertRefusal(result, 'ENOENT');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(result, 'ENOENT');
   });
 
-  // Rival this catches: a plain read-then-write per command. Both read the same text, and the
-  // second write lands on top of the first, losing it.
   it('two gestures fired without awaiting the first both survive: neither read-modify-write is lost', async () => {
     const [first, second] = await Promise.all([
       setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp'], false),
@@ -100,7 +94,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('a refusal does not block the next command: the write chain survives it', async () => {
-    assertRefusal(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await reorderPlugins(accessTo(dir), PROFILE, ['No Such.esp'], { kind: 'losingEnd' }), 'No Such.esp');
     expect(await reorderPlugins(accessTo(dir), PROFILE, ['Other.esp'], { kind: 'losingEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
@@ -111,16 +105,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     expect(await plugins()).toBe('# header\r\nBase.esp\r\nOther.esp\r\n');
   });
 
-  // The check box's own shape: several rows, each its own target state, in the one splice.
-  it('setPluginsParticipation flips each named line to its own state, in one splice', async () => {
+  it('setPluginsParticipation, the check box\'s shape, flips each named line to its own state, in one splice', async () => {
     expect(await setPluginsParticipation(accessTo(dir), PROFILE, [{ name: 'Base.esp', enabled: false }, { name: 'Other.esp', enabled: true }]))
       .toEqual({ applied: true, outcome: { landed: ['Base.esp', 'Other.esp'], refused: [] } });
     expect(await plugins()).toBe('# header\r\nBase.esp\r\n*Other.esp\r\n');
   });
 
-  // commands.md, "A selection is one gesture": each item lands or is refused on its own, in the
-  // one splice — a gone plugin never blocks the rest.
-  it('setPluginsEnabled refuses a gone plugin by name, and the rest still land', async () => {
+  it('setPluginsEnabled refuses a gone plugin by name, and the rest still land in the one splice', async () => {
     const result = await setPluginsEnabled(accessTo(dir), PROFILE, ['Base.esp', 'No Such.esp'], false);
     expect(result).toEqual({
       applied: true,
@@ -138,7 +129,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('setPluginsEnabled refuses the whole selection once when the profile has no plugins.txt', async () => {
-    assertRefusal(await setPluginsEnabled(accessTo(dir), 'NoSuchProfile', ['Base.esp'], false), 'ENOENT');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await setPluginsEnabled(accessTo(dir), 'NoSuchProfile', ['Base.esp'], false), 'ENOENT');
   });
 });
 
@@ -149,24 +140,20 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   const mtime = async () => (await stat(pluginsPath())).mtime;
   const dataFolder = () => join(dir, 'Game', 'Data');
 
-  // What the value carries when the folder resolved and the listing threw: the read's own reason,
-  // which is the refusal the Output channel shows.
-  const UNREADABLE: DataFolderPlugins = {
+  const UNREADABLE_WITH_THE_READS_OWN_REASON: DataFolderPlugins = {
     kind: 'unreadable',
     reason: "ENOENT: no such file or directory, scandir '/game/Data'",
   };
 
-  // The Instance's `dataFolderPlugins` field, doubled: presence at the Data folder's root,
-  // case-folded, which is the argument the sync takes.
-  const inDataOnDisk = async (): Promise<DataFolderPlugins> => {
+  const inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot = async (): Promise<DataFolderPlugins> => {
     const dirents = await readdir(dataFolder(), { withFileTypes: true });
     const names = dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => d.name.toLowerCase());
     return { kind: 'listed', names: new Set(names) };
   };
 
-  // `undefined` selects what the folder on disk holds.
-  const run = async (inData?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => syncPlugins(
-    accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE), inData ?? await inDataOnDisk(), loadedWithNoLine);
+  const run = async (inDataOrTheFolderOnDiskWhenUndefined?: DataFolderPlugins, loadedWithNoLine: readonly string[] = []) => syncPlugins(
+    accessTo(dir), PROFILE, await providedPluginsIn(dir, PROFILE),
+    inDataOrTheFolderOnDiskWhenUndefined ?? await inDataOnDiskAsCaseFoldedNamesAtTheDataFoldersRoot(), loadedWithNoLine);
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugins-sync-'));
@@ -237,9 +224,7 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
   });
 
-  // The rival this forbids: ignoring the plugins the game loads with no line. Then the mod's plugin
-  // is an ordinary unlisted plugin and earns a line.
-  it('appends a mod-shipped vanilla plugin the game does not load with no line', async () => {
+  it('appends a mod-shipped vanilla plugin the game does not load with no line, as an ordinary unlisted plugin that earns a line', async () => {
     await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
     await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s plugin');
 
@@ -254,19 +239,15 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
     expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, added: [], dropped: [] });
   });
 
-  // A resolved folder nobody could read is not "nothing is there": appending against half an
-  // answer would list a plugin the game already loads, so the run refuses with the read's reason.
-  it('refuses when the Data folder resolved and could not be read, writing nothing', async () => {
+  it('refuses when the Data folder resolved and could not be read, writing nothing, since appending against half an answer would list a plugin the game already loads', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
 
-    assertRefusal(await run(UNREADABLE), 'ENOENT');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await run(UNREADABLE_WITH_THE_READS_OWN_REASON), 'ENOENT');
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
   });
 
-  // Rivals: appending against an unknown game folder, which lists a plugin the game already loads
-  // from Data; and a refusal of its own, a second telling beside the instance's state.
-  it('writes nothing when the game folder is not found, and leaves the telling to the instance\'s state', async () => {
+  it('writes nothing when the game folder is not found, and leaves the telling to the instance\'s state rather than a refusal of its own', async () => {
     await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
     await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
     const old = new Date('2020-01-01T00:00:00Z');
@@ -288,8 +269,6 @@ describe('syncPlugins — plugins.txt converges on what disk provides', () => {
   });
 });
 
-// target-architecture.md, Rules the Modbench column draws: a command hands the Instance adapter the
-// change, and the adapter splices and writes it.
 describe('plugins commands hand the Instance adapter the change, decided on the order it holds', () => {
   const ORDER = [{ name: 'Base.esp', enabled: true }, { name: 'Gone.esp', enabled: false }];
 
