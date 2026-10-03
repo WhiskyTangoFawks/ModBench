@@ -10,4 +10,6 @@ internal sealed record GameReflection(
 {
     // Read once the whole schema is built, by the annotations that claim something about the walk.
     internal WalkObservations Observed { get; } = new();
+
+    internal int TableCount { get; } = GetterTypeToTable.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count();
 }

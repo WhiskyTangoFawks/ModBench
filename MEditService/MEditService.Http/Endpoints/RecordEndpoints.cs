@@ -15,7 +15,7 @@ public static class RecordEndpoints
         app.MapGet("/records", (
             IRecordQueryService svc,
             string? plugin,
-            string? type,
+            string[]? type,
             string? search,
             string? origin = null,
             int limit = 50,
@@ -24,11 +24,11 @@ public static class RecordEndpoints
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
+                logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Types} {Search}", plugin, origin, type, search);
             }
             if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
                 return Results.Problem("Name a plugin with both plugin and origin, or neither to browse every plugin.", statusCode: 400);
-            var result = svc.GetRecords(type, plugin, search, limit, offset, origin, unfiltered);
+            var result = svc.GetRecords(type is { Length: > 0 } ? type : null, plugin, search, limit, offset, origin, unfiltered);
             return Results.Ok(result);
         })
         .WithName("GetRecords")

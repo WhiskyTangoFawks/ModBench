@@ -586,6 +586,18 @@ describe('HttpMEditClient — a group\'s records', () => {
   });
 });
 
+describe('HttpMEditClient — searchRecords', () => {
+  it('searches among every record type the field allows', async () => {
+    const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
+    const client = makeClient(fetch);
+
+    await client.searchRecords('Lever', ['acti', 'furn']);
+
+    const [request] = fetch.mock.calls.map((call) => call[0]);
+    expect(new URL(request?.url ?? '').searchParams.getAll('type')).toEqual(['acti', 'furn']);
+  });
+});
+
 describe('HttpMEditClient — putLoadOrder', () => {
   const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' }];
   const active = [{ name: 'Foo.esp', origin: 'A' }];

@@ -168,7 +168,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_KnownType_ForwardsSearchLimitOffsetUntouchedIntoTheQuery()
     {
-        _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 7, offset: 3);
+        _svc.GetRecords(types: ["npc_"], plugin: null, search: "TestNPC01", limit: 7, offset: 3);
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
@@ -192,7 +192,7 @@ public sealed class RecordQueryServiceTests
             .Build();
         var (manager, svc) = Build(fixture);
 
-        svc.GetRecords(type: null, plugin: null, search: formId, limit: 20, offset: 0);
+        svc.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0);
 
         var query = ((FakeReads)manager.RequireReads()).LastSearch;
         Assert.Equal($"000800:{plugin}", query?.SearchFormKey);
@@ -208,7 +208,7 @@ public sealed class RecordQueryServiceTests
     {
         var (manager, svc) = Roster(("F0.esm", false, true), ("L0.esp", true, true), ("F1.esp", false, true), ("L1.esp", true, true));
 
-        svc.GetRecords(type: null, plugin: null, search: formId, limit: 20, offset: 0);
+        svc.GetRecords(types: null, plugin: null, search: formId, limit: 20, offset: 0);
 
         Assert.Equal(formKey, ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
     }
@@ -218,7 +218,7 @@ public sealed class RecordQueryServiceTests
     {
         var (manager, svc) = Roster(("F0.esm", false, true), ("Off.esp", false, false), ("F1.esp", false, true));
 
-        svc.GetRecords(type: null, plugin: null, search: "01000800", limit: 20, offset: 0);
+        svc.GetRecords(types: null, plugin: null, search: "01000800", limit: 20, offset: 0);
 
         Assert.Equal("000800:F1.esp", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
     }
@@ -228,7 +228,7 @@ public sealed class RecordQueryServiceTests
     {
         var (manager, svc) = Roster([.. Enumerable.Range(0, 255).Select(i => ($"P{i:D3}.esp", false, true))]);
 
-        svc.GetRecords(type: null, plugin: null, search: "FE000800", limit: 20, offset: 0);
+        svc.GetRecords(types: null, plugin: null, search: "FE000800", limit: 20, offset: 0);
 
         Assert.Equal("000800:P254.esp", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
     }
@@ -242,7 +242,7 @@ public sealed class RecordQueryServiceTests
             name => new PluginAddress(name, "Data"), name => new PluginContent(false, false, false, [], 0, IsMedium: name == "Mid.esm"));
         var (manager, svc) = Build(new FakeFixtureData(Release, entries, opened, []));
 
-        svc.GetRecords(type: null, plugin: null, search: "FD001234", limit: 20, offset: 0);
+        svc.GetRecords(types: null, plugin: null, search: "FD001234", limit: 20, offset: 0);
 
         Assert.Equal("001234:Mid.esm", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
     }
@@ -250,7 +250,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_AFormIdNoActivePluginHoldsSearchesAsTyped()
     {
-        _svc.GetRecords(type: null, plugin: null, search: "7F000800", limit: 20, offset: 0);
+        _svc.GetRecords(types: null, plugin: null, search: "7F000800", limit: 20, offset: 0);
 
         Assert.Equal("7F000800", _reads.LastSearch?.Search);
         Assert.Null(_reads.LastSearch?.SearchFormKey);
@@ -267,7 +267,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_NoType_QueriesEveryNonHeaderSchemaType()
     {
-        _svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
+        _svc.GetRecords(types: null, plugin: null, search: null, limit: 10, offset: 0);
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
@@ -282,20 +282,20 @@ public sealed class RecordQueryServiceTests
     public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException_ForAPluginFilterWithNoOriginWouldMatchEveryPluginSharingTheFilename()
     {
         Assert.Throws<ArgumentException>(
-            () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
+            () => _svc.GetRecords(types: ["npc_"], plugin: PluginName, search: null, limit: 10, offset: 0));
     }
 
     [Fact]
     public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException_ForAnOriginNamesHalfAnIdentityAsMuchAsABareFilenameDoes()
     {
         Assert.Throws<ArgumentException>(
-            () => _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0, origin: "Data"));
+            () => _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0, origin: "Data"));
     }
 
     [Fact]
     public void GetRecords_EmptyPluginAndNoOrigin_BrowsesEveryPluginRatherThanThrowing_ForTheEndpointTreatsABlankPluginAsAbsent()
     {
-        _svc.GetRecords(type: "npc_", plugin: "", search: null, limit: 10, offset: 0);
+        _svc.GetRecords(types: ["npc_"], plugin: "", search: null, limit: 10, offset: 0);
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
@@ -305,7 +305,7 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetRecords_WithPluginAndOrigin_ForwardsBothUntouchedIntoTheQuery()
     {
-        _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0, origin: "OtherOrigin");
+        _svc.GetRecords(types: ["npc_"], plugin: PluginName, search: null, limit: 10, offset: 0, origin: "OtherOrigin");
 
         var query = _reads.LastSearch;
         Assert.NotNull(query);
@@ -319,7 +319,7 @@ public sealed class RecordQueryServiceTests
         _reads.SearchResult = new PagedResult<RecordSummary>(
             [new RecordSummary("000800:Test.esp", PluginName, 0, IsWinner: true, "FromFake", "Data")], 1);
 
-        var result = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0);
+        var result = _svc.GetRecords(types: ["npc_"], plugin: null, search: null, limit: 10, offset: 0);
 
         Assert.Same(_reads.SearchResult, result);
     }
@@ -939,9 +939,25 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
+    public void GetRecords_SeveralTypes_SearchesExactlyThose()
+    {
+        _svc.GetRecords(types: ["npc_", "kywd"], plugin: null, search: "x", limit: 10, offset: 0);
+
+        Assert.Equal(["npc_", "kywd"], _reads.LastSearch?.RecordTypes);
+    }
+
+    [Fact]
+    public void GetRecords_AnUnknownTypeAmongKnownOnes_IsDropped()
+    {
+        _svc.GetRecords(types: ["npc_", "xxxx"], plugin: null, search: "x", limit: 10, offset: 0);
+
+        Assert.Equal(["npc_"], _reads.LastSearch?.RecordTypes);
+    }
+
+    [Fact]
     public void GetRecords_UnknownType_ReturnsEmptyPagedResult()
     {
-        var result = _svc.GetRecords(type: "xxxx", plugin: null, search: null, limit: 10, offset: 0);
+        var result = _svc.GetRecords(types: ["xxxx"], plugin: null, search: null, limit: 10, offset: 0);
 
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
@@ -959,7 +975,7 @@ public sealed class RecordQueryServiceTests
     public void GetRecords_NoLoadOrder_ThrowsNoLoadOrderException()
     {
         var unloaded = new RecordQueryService(_manager, new LoadOrderHolder(), SharedSchemaReflector.Instance, new ConflictClassifier());
-        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords(["npc_"], null, null, 10, 0));
         Assert.Contains("No load order", ex.Message);
     }
 

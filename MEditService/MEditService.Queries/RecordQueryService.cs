@@ -49,15 +49,16 @@ public sealed class RecordQueryService(
     // GetCompare resolve it by FormKey, but both browse paths below exclude it.
 
     public PagedResult<RecordSummary> GetRecords(
-        string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false)
+        IReadOnlyList<string>? types, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false)
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
 
-        if (type != null && !schemas.ContainsKey(type))
+        IReadOnlyList<string> recordTypes = types is null
+            ? [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)]
+            : [.. types.Where(schemas.ContainsKey)];
+        if (recordTypes.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
-
-        IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
         // ADR-0012.
         if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
             throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");

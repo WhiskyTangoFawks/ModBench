@@ -128,9 +128,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = Assert.Single(
-            result.Diagnostics, d => d.Message.Contains("race reference", StringComparison.Ordinal));
+            result.Diagnostics, d => d.Message.Contains("RACE reference", StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
-        Assert.Equal("Keywords: [2]: Found a race reference, expected: kywd", diagnostic.Message);
+        Assert.Equal("Keywords: [2]: Found a RACE reference, expected: KYWD", diagnostic.Message);
     }
 
     [Fact]
