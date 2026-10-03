@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Schema;
@@ -30,7 +31,7 @@ public static class CheckErrorBuilder
         Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
-            return allowsNull ? null : $"Found a NULL reference, expected: {string.Join(", ", validTypes)}";
+            return allowsNull ? null : $"Found a NULL reference, expected: {Signatures(validTypes)}";
 
         // Asked only of a miss: a key the lookup answers is answered, and the hardcoded-range
         // exemption stands whether or not that master's file could be read.
@@ -41,8 +42,11 @@ public static class CheckErrorBuilder
                 => $"[{value}] <Error: {why}>",
             FormKeyResolutionState.Unresolved => $"[{value}] <Error: Could not be resolved>",
             FormKeyResolutionState.ResolvedWrongType
-                => $"Found a {resolution.RecordType} reference, expected: {string.Join(", ", validTypes)}",
+                => $"Found a {RecordTableName.SignatureOf(resolution.RecordType ?? "")} reference, expected: {Signatures(validTypes)}",
             _ => null,
         };
     }
+
+    private static string Signatures(IReadOnlyList<string> tables) =>
+        string.Join(", ", tables.Select(RecordTableName.SignatureOf).Order(StringComparer.Ordinal));
 }

@@ -130,7 +130,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         var diagnostic = Assert.Single(
             result.Diagnostics, d => d.Message.Contains("race reference", StringComparison.Ordinal));
         Assert.Equal(_npc.ToString(), diagnostic.FormKey);
-        Assert.Equal("Keywords: [2]: Found a race reference, expected: kywd", diagnostic.Message);
+        Assert.Equal("Keywords: [2]: Found a RACE reference, expected: KYWD", diagnostic.Message);
     }
 
     [Fact]

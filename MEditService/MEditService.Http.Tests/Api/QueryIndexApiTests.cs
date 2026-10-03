@@ -60,6 +60,19 @@ public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> l
     }
 
     [Fact]
+    public async Task ARecordSearch_NamingSeveralTypes_ReturnsTheRecordsOfEachOfThem()
+    {
+        var query = $"/records?plugin={UserPlugin}&origin={UserMod}&limit=10";
+        var activators = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=acti");
+        var keywords = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=kywd");
+        var both = await Client.GetFromJsonAsync<JsonElement>($"{query}&type=acti&type=kywd");
+
+        Assert.Equal(
+            activators.GetProperty("total").GetInt32() + keywords.GetProperty("total").GetInt32(),
+            both.GetProperty("total").GetInt32());
+    }
+
+    [Fact]
     public async Task AContainersChildren_CarryTheirName()
     {
         var quests = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={UserPlugin}&origin={UserMod}&type=qust&limit=10");

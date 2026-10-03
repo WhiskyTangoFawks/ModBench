@@ -9,8 +9,6 @@ namespace MEditService.Codec.Schema;
 /// member and an array element all ask, so the three never disagree.</summary>
 internal static class LeafClassification
 {
-    // A link typed by a Mutagen link interface names every table whose getter implements it. A link
-    // that closes over every table names none, which already means any.
     internal static string[] GetFormLinkValidTypes(
         Type core, GameReflection game)
     {
@@ -20,9 +18,9 @@ internal static class LeafClassification
             .Where(entry => linked.IsAssignableFrom(entry.Key))
             .Select(entry => entry.Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.Ordinal)
             .ToArray();
-        return tables.Length == game.GetterTypeToTable.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count()
-            ? LeafSpec.NoFormKeyTypes : tables;
+        return tables.Length == game.TableCount ? LeafSpec.NoFormKeyTypes : tables;
     }
 
     // A 64-bit width presents as "int" like every other integer: the wire vocabulary has no wider

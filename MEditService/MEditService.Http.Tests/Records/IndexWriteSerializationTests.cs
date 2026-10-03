@@ -24,7 +24,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
         PagedResult<RecordSummary>? listing = null;
         using var _ = new GateHeldElsewhere(Index.WriteGate);
 
-        var read = Task.Run(() => listing = Reads().GetRecords(type: null, plugin: null, search: null, limit: 500, offset: 0));
+        var read = Task.Run(() => listing = Reads().GetRecords(types: null, plugin: null, search: null, limit: 500, offset: 0));
 
         await read.WaitAsync(SlowCiMachineTolerance);
         Assert.NotNull(listing);

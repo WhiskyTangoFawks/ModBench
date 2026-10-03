@@ -1750,7 +1750,7 @@ export interface operations {
         parameters: {
             query?: {
                 plugin?: string;
-                type?: string;
+                type?: string[];
                 search?: string;
                 origin?: string;
                 limit?: number;

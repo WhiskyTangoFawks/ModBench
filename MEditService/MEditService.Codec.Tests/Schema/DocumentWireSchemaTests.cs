@@ -66,6 +66,7 @@ public sealed class DocumentWireSchemaTests
         var offenders = AllFields().Where(f => f.Meta.ValidFormKeyTypes.Count >= tables).Select(f => f.Path).ToList();
 
         Assert.Empty(offenders);
+        Assert.Empty(AllFields().First(f => f.Path.EndsWith("Properties[].Object", StringComparison.Ordinal)).Meta.ValidFormKeyTypes);
     }
 
     [Fact]

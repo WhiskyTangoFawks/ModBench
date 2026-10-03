@@ -24,7 +24,7 @@ public class CheckErrorBuilderTests
     public void Build_NullScalarReference_NonNullableField_ReturnsNullNotAllowedMessage()
     {
         var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"), GameRelease.Fallout4);
-        Assert.Equal("Found a NULL reference, expected: race", err);
+        Assert.Equal("Found a NULL reference, expected: RACE", err);
     }
 
     [Fact]
@@ -43,10 +43,18 @@ public class CheckErrorBuilderTests
     }
 
     [Fact]
+    public void Build_TypeMismatchedReference_NamesTheAllowedSignaturesInOrder()
+    {
+        var meta = FormKeyMeta with { ValidFormKeyTypes = ["npc_", "lvln", "kywd"] };
+        var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("race"), GameRelease.Fallout4);
+        Assert.Equal("Found a RACE reference, expected: KYWD, LVLN, NPC_", err);
+    }
+
+    [Fact]
     public void Build_TypeMismatchedScalarReference_ReturnsMismatchMessage()
     {
         var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4);
-        Assert.Equal("Found a npc_ reference, expected: race", err);
+        Assert.Equal("Found a NPC_ reference, expected: RACE", err);
     }
 
     [Fact]
@@ -71,7 +79,7 @@ public class CheckErrorBuilderTests
 
         var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
 
-        Assert.Equal("[0].Faction: Found a NULL reference, expected: fact", err);
+        Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT", err);
     }
 
     [Fact]
@@ -82,7 +90,7 @@ public class CheckErrorBuilderTests
             ElementType: new FieldMetadata("", "struct", false, [], [], Fields: [factionField]));
         var value = J("""[{"Rank": 0}]""");
 
-        Assert.Equal("[0].Faction: Found a NULL reference, expected: fact",
+        Assert.Equal("[0].Faction: Found a NULL reference, expected: FACT",
             CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4));
     }
 
@@ -125,7 +133,7 @@ public class CheckErrorBuilderTests
 
         var err = CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4);
 
-        Assert.Equal("[0].inner.Target: Found a NULL reference, expected: kywd", err);
+        Assert.Equal("[0].inner.Target: Found a NULL reference, expected: KYWD", err);
     }
 
     [Fact]
