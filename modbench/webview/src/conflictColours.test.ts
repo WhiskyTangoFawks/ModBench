@@ -31,7 +31,7 @@ describe('conflict theme colours', () => {
   });
 
   it('the panel paints each contributed colour under the variable VS Code names it', () => {
-    const vscodeVariables = contributedColours().map(c => `var(--vscode-${c.id.replace('.', '-')})`);
+    const vscodeVariables = contributedColours().map(c => `var(--vscode-${c.id.replace('.', String.fromCharCode(0x2d))})`);
     expect([...CONFLICT_VARIABLES].sort()).toEqual(vscodeVariables.sort());
   });
 
