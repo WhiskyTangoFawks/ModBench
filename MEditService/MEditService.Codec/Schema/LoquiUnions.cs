@@ -101,9 +101,10 @@ public static class LoquiUnions
         {
             var leafPath = getterType == getterInterface ? path : SubFieldReflection.Enter(path, getterType, game);
             if (leafPath == null) continue;
-            var members = ReflectedTypes.GetAllInterfaceProperties(getterType)
-                .Where(p => !game.Annotations.IsExcludedMember(p) && !baseMemberNames.Contains(p.Name))
-                .GroupBy(p => p.Name, StringComparer.Ordinal)
+            var members = ReflectedTypes.Members(getterType)
+                .Where(member => !baseMemberNames.Contains(member.Key))
+                .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p)).ToList())
+                .Where(declarations => declarations.Count > 0)
                 .Select(ReflectedTypes.MostDerived)
                 .Select(p => SubFieldReflection.GetSubFieldInfo(p, game, leafPath, logger))
                 .OfType<SubFieldSpec>()

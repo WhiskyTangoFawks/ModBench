@@ -27,7 +27,7 @@ internal static class RecordViewBuilder
         sb.Append(CultureInfo.InvariantCulture, $"CREATE OR REPLACE VIEW \"{tableName}\" AS SELECT ");
         sb.Append("form_key, plugin, origin, load_order_idx, is_winner, editor_id");
 
-        foreach (var col in schema.RecordColumns.Where(c => c.IsViewable))
+        foreach (var col in schema.RecordColumns.Where(c => c.IsViewable && !c.Field.IsEditorId))
             sb.Append(CultureInfo.InvariantCulture, $", {Projection(col)} AS \"{col.Name}\"");
 
         sb.Append(CultureInfo.InvariantCulture, $" FROM records WHERE record_type = '{tableName}'");

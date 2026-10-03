@@ -105,11 +105,13 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
 
     internal void Apply(JsonObject record, RecordTableSchema schema, JsonObject? left)
     {
-        foreach (var member in OwnFields(schema))
+        foreach (var field in OwnFields(schema))
         {
-            var fromTheLeft = Refills && (!MakesPartialForm || member == RecordMembers.EditorId);
+            var member = field.PropertyName;
+            var isEditorId = field.Field.IsEditorId;
+            var fromTheLeft = Refills && (!MakesPartialForm || isEditorId);
             if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
-            else if (fromTheLeft || Deletes || member != RecordMembers.EditorId) record.Remove(member);
+            else if (fromTheLeft || Deletes || !isEditorId) record.Remove(member);
         }
         if (left == null) return;
         if (left[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
@@ -126,13 +128,11 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
     internal JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
 
-    private static IEnumerable<string> OwnFields(RecordTableSchema schema)
+    private static IEnumerable<ColumnSpec> OwnFields(RecordTableSchema schema)
     {
         var children = ContainerChildFields.EnumerateChildFieldsFor(schema.RecordType) ?? [];
         return schema.RecordColumns
             .Where(c => !c.Field.IsRecordHeaderMember && !c.Field.IsDiscriminator)
-            .Select(c => c.PropertyName)
-            .Where(name => !children.Contains(name, StringComparer.Ordinal))
-            .Append(RecordMembers.EditorId);
+            .Where(c => !children.Contains(c.PropertyName, StringComparer.Ordinal));
     }
 }

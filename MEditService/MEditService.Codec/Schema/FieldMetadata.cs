@@ -75,6 +75,9 @@ public record FieldMetadata(
     // Version: xEdit's Version Control Info 1 (wbRecordHeader).
     bool IsVersionControlInfo1 = false,
 
+    // The record's EditorID, which a Partial Form copy keeps (editor-fields.md, Partial Form).
+    bool IsEditorId = false,
+
     // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null);

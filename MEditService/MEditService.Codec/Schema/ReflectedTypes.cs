@@ -15,6 +15,19 @@ internal static class ReflectedTypes
             .Append(type)
             .SelectMany(i => i.GetProperties(BindingFlags.Public | BindingFlags.Instance));
 
+    /// <summary>Each member along the interface chain with every declaration of it, in the order the
+    /// file holds them: a Loqui getter declares its fields in that order, after its base's.</summary>
+    internal static IReadOnlyList<IGrouping<string, PropertyInfo>> Members(Type type) =>
+    [
+        .. GetAllInterfaceProperties(type)
+            .GroupBy(p => p.Name, StringComparer.Ordinal)
+            .Select(declarations => (Declarations: declarations, Nearest: MostDerived(declarations)))
+            // A base interface inherits fewer interfaces than any interface extending it.
+            .OrderBy(member => DeclaringTypeOf(member.Nearest).GetInterfaces().Length)
+            .ThenBy(member => member.Nearest.MetadataToken)
+            .Select(member => member.Declarations),
+    ];
+
     /// <summary>Of one member declared along an interface chain, the declaration nearest the leaf.</summary>
     internal static PropertyInfo MostDerived(IEnumerable<PropertyInfo> declarations) =>
         declarations.Aggregate((best, candidate) =>

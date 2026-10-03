@@ -669,6 +669,7 @@ export interface components {
             isRecordFormKey: boolean;
             ignoredInConflicts: boolean;
             isVersionControlInfo1: boolean;
+            isEditorId: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];
@@ -1749,7 +1750,7 @@ export interface operations {
         parameters: {
             query?: {
                 plugin?: string;
-                type?: string;
+                type?: string[];
                 search?: string;
                 origin?: string;
                 limit?: number;

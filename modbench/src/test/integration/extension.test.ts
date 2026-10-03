@@ -479,20 +479,16 @@ describe('modbench.record.open', () => {
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
-    await vscode.commands.executeCommand('workbench.action.focusLastEditorGroup');
-    await waitFor('the last group to be active', () =>
-      vscode.window.tabGroups.activeTabGroup === vscode.window.tabGroups.all.at(-1) || undefined);
-    const groupsBefore = vscode.window.tabGroups.all.length;
-    const tabsBefore = openTabs().length;
+    await vscode.commands.executeCommand('workbench.action.closeAllGroups');
     const selection = [
       { formKey: 'Fallout4.esm:000060' }, { formKey: 'Fallout4.esm:000061' }, { formKey: 'Fallout4.esm:000062' },
     ];
 
     await vscode.commands.executeCommand('modbench.record.openToSide', selection[0], selection);
-    await waitFor('every selected tab in one new group', () =>
-      (selection.every((s) => titled(s.formKey)) && vscode.window.tabGroups.all.length === groupsBefore + 1) || undefined);
+    await waitFor('every selected tab', () => selection.every((s) => titled(s.formKey)) || undefined);
 
-    assert.strictEqual(openTabs().length, tabsBefore + 3);
+    const tabsByGroup = vscode.window.tabGroups.all.map((g) => g.tabs.map((t) => t.label));
+    assert.deepStrictEqual(tabsByGroup, [[], selection.map((s) => s.formKey)]);
   });
 });
 
