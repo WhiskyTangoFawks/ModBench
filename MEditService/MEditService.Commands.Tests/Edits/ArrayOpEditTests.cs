@@ -6,9 +6,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>An array op is computed server-side from the record's current value, never
-/// round-tripped as a client-computed whole array; the envelope is <c>value</c> itself, told apart
-/// by shape.</summary>
 public sealed class ArrayOpEditTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -56,13 +53,9 @@ public sealed class ArrayOpEditTests
         Assert.Equal(10, stages[1].GetProperty("HealthPercent").GetByte());
     }
 
-    // ── An array op reuses ColumnSpec.Apply unchanged, so it inherits
-    // the nested write path exactly as any other whole-value write does ────────────────────────
-
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithUnsetReadOnlyNestedField_StillApplies()
     {
-        // Seeds [QuestLocationAlias, QuestReferenceAlias(Location: null)].
         using var fixture = QuestMod(withLocation: false, out var quest);
 
         var result = fixture.EditHandler.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
@@ -78,7 +71,6 @@ public sealed class ArrayOpEditTests
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithSetNestedStructField_AppliesAndPreservesIt()
     {
-        // Location: { AliasID: 9 }.
         using var fixture = QuestMod(withLocation: true, out var quest);
 
         var result = fixture.EditHandler.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));

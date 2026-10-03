@@ -7,9 +7,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Asserted against the record reparsed from the compiled binary, never the source
-/// document: Color was always safe in the document; the editor surface is what reaches the
-/// binary.</summary>
 public sealed class ColorCompileRoundTripTests : IDisposable
 {
     private readonly ColorCompileFixture _fixture = new();
@@ -37,8 +34,6 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.True(result.Applied, result.Message);
     }
 
-    // ── AC #4: a second common Color carrier, on the 3-leaf (wbByteColors) shape ───────────────
-
     [Fact]
     public async Task Light_ColorEdit_CompilesAndReparsesTheNewRgb()
     {
@@ -50,7 +45,6 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.Equal(50, light.Color.B);
     }
 
-    // The document spells a color with its alpha byte, and an edit in that spelling keeps it.
     [Fact]
     public async Task Light_ColorEdit_InTheDocumentsOwnSpelling_KeepsTheAlphaByteItNames()
     {
@@ -60,8 +54,6 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.Equal(ColorCompileFixture.SeededLightAlpha, light.Color.A);
         Assert.Equal((200, 100, 50), (light.Color.R, light.Color.G, light.Color.B));
     }
-
-    // ── Coordinator's addition: one compile proof per allowlist row ────────────────────────────
 
     [Theory]
     [InlineData("kywd")]
@@ -94,8 +86,6 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.NotNull(actual);
         Assert.Equal((40, 80, 120, 160), (actual.Value.R, actual.Value.G, actual.Value.B, actual.Value.A));
     }
-
-    // ── The float-encoded storage, against a real compile ──────────────────────────────────────
 
     [Fact]
     public async Task FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()

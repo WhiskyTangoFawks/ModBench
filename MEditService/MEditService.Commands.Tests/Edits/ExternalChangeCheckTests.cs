@@ -10,9 +10,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Each time the snapshot arrives (ADR-0003 invariant 3): each tracked plugin's bytes against
-/// what Modbench last wrote, and the mod's untracked plugins, told through the port and kept
-/// nowhere.</summary>
 public sealed class ExternalChangeCheckTests : IDisposable
 {
     private const string PluginName = "Test.esp";
@@ -26,7 +23,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
     public ExternalChangeCheckTests() =>
         _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
 
-    // The snapshot arriving, as the put-load-order door takes it.
     private void Put(LoadOrderSnapshot snapshot) =>
         Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
             snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
@@ -45,10 +41,8 @@ public sealed class ExternalChangeCheckTests : IDisposable
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    // The commit trailers spell a hash upper-cased.
     private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
-    // Track as the Source adapter records it: a baseline whose trailer names the bytes it was taken from.
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile($"plugin-source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
@@ -101,8 +95,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal([new ChangedPlugin(PluginName, null)], TheExternalChange().Plugins);
     }
 
-    // ADR-0003, Derived tactical observations: a missing ref counts as a change, and Modbench never
-    // guesses.
     [Fact]
     public void ASnapshot_NamesATrackedPlugin_WhoseLastWriteIsGone()
     {
@@ -131,7 +123,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(["Untracked.esp"], untracked.Plugins);
     }
 
-    // Git shows every tracked file but the binary, so a snapshot compares the binaries alone.
     [Fact]
     public void ASnapshot_NamesNoPlugin_ForAChangedTrackedFileOrMetaIni()
     {
@@ -158,8 +149,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so a mod whose
-    // repository went clears what the last snapshot named.
     [Fact]
     public void ASnapshot_NamesNoPlugin_OfAModWhoseRepositoryWent()
     {
@@ -211,7 +200,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal([PluginName], notice.Plugins.Select(p => p.Name));
     }
 
-    // The game's own Data folder is no mod, so a repository there tracks nothing.
     [Fact]
     public void ASnapshot_TellsNothing_OfARepositoryInTheDataFolder()
     {
@@ -226,7 +214,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // ADR-0003 invariant 3: Modbench keeps nothing about the change.
     [Fact]
     public void ASnapshot_WritesNothing_IntoTheMod()
     {
@@ -242,8 +229,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(before, FilesUnder(ModFolder));
     }
 
-    // ADR-0015 invariant 2: a restart and a live change are one call, so over the same bytes they
-    // tell the same.
     [Fact]
     public void ASecondSnapshot_OverTheSameBytes_TellsTheSame()
     {
@@ -261,7 +246,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(notices[0].Plugins, notices[1].Plugins);
     }
 
-    // plugins.md, Compile, story 5: a compile records what it writes before it writes it.
     [Fact]
     public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {
@@ -304,7 +288,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(TheExternalChange().Plugins);
     }
 
-    // ADR-0003 invariant 3: once the new binary has landed, it alone is what Modbench last wrote.
     [Fact]
     public async Task ASnapshot_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
     {

@@ -4,8 +4,6 @@ using MEditService.Commands.Tests.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>ADR-0003 invariant 3: a tracked plugin that changed outside Modbench is told, and every
-/// gesture on its mod goes on as it would; the user owns what follows.</summary>
 public sealed class AnExternalChangeRefusesNothingTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();

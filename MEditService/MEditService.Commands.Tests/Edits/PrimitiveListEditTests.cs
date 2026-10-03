@@ -117,8 +117,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Equal(before, _fixture.MiscItemBody());
     }
 
-    // The refusal names the path that was edited and quotes the codec: no translation table sits
-    // over Mutagen's own message.
     [Fact]
     public void TopLevelIntListColumn_OutOfRangeElement_NamesThePathAndQuotesTheCodec()
     {
@@ -202,8 +200,6 @@ public sealed class PrimitiveListEditTests : IDisposable
         Assert.Contains("\"0x0102\",\n    \"[]\"", _fixture.MaterialObjectBody(), StringComparison.Ordinal);
     }
 
-    // ── AC 4: the ordinary array-op envelope, on a nested primitive list ──────────────────────
-
     [Fact]
     public void ArrayAdd_NestedPrimitiveList_AppendsADefaultElement()
     {
@@ -252,8 +248,6 @@ public sealed class PrimitiveListEditTests : IDisposable
             body);
     }
 
-    // Two subgraphs so "the edited element changed and its sibling did not" is answerable; SCCO is
-    // Fallout 4's only list of long.
     private sealed class Fixture : IDisposable
     {
         private const string PluginName = "Primitive699.esp";

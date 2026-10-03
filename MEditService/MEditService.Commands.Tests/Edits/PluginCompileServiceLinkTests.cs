@@ -13,9 +13,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Link validation is compile's, against the plugin files the game loads and the plugin
-/// just compiled (ADR-0007 invariant 4): the binary is written either way and a broken link is a
-/// diagnostic.</summary>
 public sealed class PluginCompileServiceLinkTests : IDisposable
 {
     private const string HostName = "LinkHost.esp";
@@ -120,8 +117,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
-    // The target is tracked, so it has a working tree to disagree with its file. The file is what
-    // the game loads, and it is what answers the link.
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
@@ -135,8 +130,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
-    // ADR-0019: a file that could not be read is a fact the author is told, not one the records are
-    // blamed for. Both halves: the file is named, and the link into it says why it is unchecked.
     [Fact]
     public async Task Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
     {
@@ -155,8 +148,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
         Assert.DoesNotContain("Could not be resolved", aboutTheLink.Message, StringComparison.Ordinal);
     }
 
-    // The plugin is written and parked before the links are read, so a fault in the check is the
-    // report's failure, never the compile's.
     [Fact]
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
@@ -182,8 +173,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             throw new InvalidOperationException(Fault);
     }
 
-    // A record this compile's own source holds resolves through the file this compile just wrote,
-    // which is why the write comes first.
     [Fact]
     public async Task Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
     {

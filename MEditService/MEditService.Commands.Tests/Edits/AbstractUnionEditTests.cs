@@ -10,8 +10,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Verified against the written document's own text, since the document's serializer
-/// shape has no per-column correspondence to the reflected schema's json_extract shape.</summary>
 public sealed class AbstractUnionEditTests : IDisposable
 {
     private readonly AbstractUnionFixture _fixture = new();
@@ -19,8 +17,6 @@ public sealed class AbstractUnionEditTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
-    // ── Npc.Level ────────────────────────────────────────────────────────────
 
     [Fact]
     public void Level_EditingWithinSameConcreteType_RoundTrips()
@@ -38,8 +34,6 @@ public sealed class AbstractUnionEditTests : IDisposable
     [Fact]
     public void Level_SwitchingConcreteType_NpcLevelToPcLevelMult_RoundTrips()
     {
-        // The fixture NPC starts as a NpcLevel(5) — this switches its Level to the other leaf
-        // entirely, which cannot reuse the old NpcLevel instance.
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "Level",
             Json("""{"MutagenObjectType": "PcLevelMult", "LevelMult": 1.5}"""));
@@ -61,8 +55,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.NpcBody());
     }
-
-    // ── Quest.Aliases ────────────────────────────────────────────────────────
 
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_RoundTrips()
@@ -137,7 +129,6 @@ public sealed class AbstractUnionEditTests : IDisposable
         Assert.True(setUp.Applied, setUp.Message);
         var before = _fixture.QuestBody();
 
-        // One gesture: the element's discriminator. The writer's cascade decides what travels.
         var result = _fixture.Service().Edit(
             _fixture.Plugin, _fixture.Quest.ToString(),
             SetAt(Json("\"QuestReferenceAlias\""), Member("Aliases"), At(0), Member("MutagenObjectType")));
@@ -146,20 +137,13 @@ public sealed class AbstractUnionEditTests : IDisposable
         var after = _fixture.QuestBody();
 
         var switched = Written(after)[0];
-        // Mutagen's own document spelling of which concrete class it wrote.
         Assert.Equal("QuestReferenceAlias", switched.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", switched.GetProperty("Name").GetString());
         Assert.Equal(7, switched.GetProperty("ClosestToAlias").GetInt32());
         Assert.Equal(1, switched.GetProperty("ID").GetInt32());
-        // The outgoing leaf's own member is not on the incoming one at all: the cascade drops it
-        // rather than carrying it over onto some same-named member.
         Assert.False(switched.TryGetProperty("ReferenceAliasLocation", out _));
-        // A member only the incoming leaf declares stays at the fresh instance's own default —
-        // no value survives from the element that was there before.
         Assert.False(switched.TryGetProperty("Location", out _));
 
-        // Raw text slices, never a re-serialization of both sides, which would normalize away
-        // exactly the differences being looked for.
         Assert.Equal(Written(before)[1].GetRawText(), Written(after)[1].GetRawText());
         foreach (var property in JsonDocument.Parse(before).RootElement.EnumerateObject())
         {
@@ -180,7 +164,6 @@ public sealed class AbstractUnionEditTests : IDisposable
 
         var written = Written(_fixture.QuestBody());
         Assert.Equal(2, written.Count);
-        // The element that was already there is untouched.
         Assert.Equal("OriginalLoc", written[0].GetProperty("Name").GetString());
         Assert.Equal(
             SharedSchemaReflector.FirstArrayElementLeaf("qust", "Aliases", "MutagenObjectType"),

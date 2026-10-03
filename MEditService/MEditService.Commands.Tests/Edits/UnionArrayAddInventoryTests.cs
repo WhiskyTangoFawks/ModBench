@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The document-edit seam on an in-memory record's document, no plugin on disk: whether
-/// the default element names a leaf the codec builds is settled before anything is written.</summary>
 public class UnionArrayAddInventoryTests
 {
     private static readonly ModKey Key = ModKey.FromFileName("UnionArrayAdd710.esp");
@@ -28,25 +26,18 @@ public class UnionArrayAddInventoryTests
         Assert.Equal(ExercisedShapes, found);
     }
 
-    // Written out so a Mutagen change to any leaf set is a visible edit here.
     private static readonly string[] ExercisedShapes =
     [
-        // land.layers
         "AlphaLayer|BaseLayer",
-        // cobj.conditions and every other condition-bearing column
         "ConditionFloat|ConditionGlobal",
-        // omod.properties
         "ObjectModIntProperty<Armor+Property>|ObjectModFloatProperty<Armor+Property>|ObjectModBoolProperty<Armor+Property>|"
         + "ObjectModStringProperty<Armor+Property>|ObjectModFormLinkIntProperty<Armor+Property>|"
         + "ObjectModFormLinkFloatProperty<Armor+Property>|ObjectModEnumProperty<Armor+Property>",
-        // perk.effects
         "PerkEntryPointModifyActorValue|PerkEntryPointModifyValue|PerkQuestEffect|PerkAbilityEffect|" +
         "PerkEntryPointAddRangeToValue|PerkEntryPointAbsoluteValue|PerkEntryPointAddLeveledItem|" +
         "PerkEntryPointAddActivateChoice|PerkEntryPointSelectSpell|PerkEntryPointSelectText|" +
         "PerkEntryPointSetText|PerkEntryPointModifyValues",
-        // qust.aliases
         "QuestReferenceAlias|QuestLocationAlias|QuestCollectionAlias",
-        // aech.effects
         "StateVariableFilterAudioEffect|OverdriveAudioEffect|DelayAudioEffect",
     ];
 

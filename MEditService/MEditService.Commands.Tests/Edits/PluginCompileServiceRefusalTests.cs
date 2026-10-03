@@ -4,8 +4,6 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A state compile structurally cannot emit is a typed refusal naming the reason, never an
-/// exception and never a silently corrupted binary.</summary>
 public sealed class PluginCompileServiceRefusalTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
@@ -15,8 +13,6 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     private PluginCompileService CompileService() =>
         _mod.CompileService();
 
-    // Two different states with two different remedies: wait for Mod Management's snapshot, or add
-    // the plugin to a load order that has already arrived.
     [Fact]
     public async Task Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
     {
@@ -40,9 +36,6 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        // Two distinct source files, same FormKey — nothing the edit path can produce (a
-        // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
-        // records without changing one's FormKey.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
@@ -59,17 +52,11 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public async Task Compile_WithTwoFilesInOneGroupFolderClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        // Asked of the tree, not the compiled mod: the whole-mod read ends each group with a
-        // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        // The name still has to round-trip to the NPC's own FormKey — only the EditorID half differs —
-        // or compile would refuse the mismatch before it ever reaches the duplicate check under test.
         var npcSourceFile = _mod.NpcSourceFile;
         var duplicatePath = Path.Combine(
             Path.GetDirectoryName(npcSourceFile) ?? throw new InvalidOperationException($"Expected '{npcSourceFile}' to have a parent directory."),
             $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
-        // Guards the arrangement itself: a leaf this close to the real one must still land beside it,
-        // never overwrite it, or the "two files" premise below is false.
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
@@ -79,8 +66,6 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
     }
 
-    // Never exclusive owners of the tree (ADR-0003): a document another program is holding open is
-    // content this compile does not have, and omitting it would write a binary missing that record.
     [Fact]
     public async Task Compile_WithASourceFileItCannotRead_RefusesNamingTheFile()
     {
@@ -106,8 +91,6 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Empty(result.Masters);
     }
 
-    // The generated deserializer is lenient both ways — an unrecognized property is skipped, a
-    // missing one left at its default — so a renamed key reproduces a breaking codec change exactly.
     [Fact]
     public async Task Compile_WithSourceFieldRenamedToOneTheCodecDoesNotRead_RefusesNamingTheFile()
     {

@@ -11,9 +11,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A quest's children live inline in its document, transitively, so every gesture on one
-/// patches the quest's document at the edited path only, and compile keeps the document's
-/// order.</summary>
 public sealed class QuestChildWriteApiTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -47,8 +44,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.EndsWith(Path.GetFileName(QuestFile), changed, StringComparison.Ordinal);
     }
 
-    // A child slot as the quest's own document spells it, in document order — the only order a
-    // child has.
     private IReadOnlyList<string> QuestSlot(string slotName) => SlotOf(_fixture.Quest, slotName);
 
     private IReadOnlyList<string> SlotOf(FormKey owner, string slotName)
@@ -57,8 +52,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         return [.. document.RootElement.GetProperty(slotName).EnumerateArray()
             .Select(child => child.GetProperty("FormKey").GetString().Require())];
     }
-
-    // ---- set ----
 
     public static TheoryData<string> QuestChildKinds => ["topic", "branch", "scene"];
 
@@ -96,7 +89,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         }
     }
 
-    // The nesting's deepest level: a response inside a topic inside the quest.
     [Fact]
     public async Task RenamingANestedResponse_ChangesTheQuestDocumentAtTheResponsesElementOnly_AndCompilesInOrder()
     {
@@ -116,8 +108,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
             ["RenamedResponse", ContainerModFixture.Response2EditorId],
             (await CompiledQuest()).DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID.Require()));
     }
-
-    // ---- the generic array ops, on an embedded child's own array field ----
 
     [Fact]
     public async Task AddingMovingAndRemoving_OnANestedResponsesOwnArray_PatchTheQuestDocumentAtThatArray_AndCompileInOrder()
@@ -139,7 +129,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Equal([3, 2], LineNumbersInDocument());
 
         AssertOnlyTheQuestFileChanged();
-        // The sibling response and the other children are untouched by the three edits.
         Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", File.ReadAllText(QuestFile), StringComparison.Ordinal);
         Assert.Equal(
             [3, 2],
@@ -155,8 +144,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
             .Single(r => r.Require()[nameof(IMajorRecordGetter.FormKey)].Require().GetValue<string>() == _fixture.Response.ToString()).Require();
         return [.. response[nameof(DialogResponses.Responses)].Require().AsArray().Select(l => l.Require()[nameof(DialogResponse.ResponseNumber)].Require().GetValue<int>())];
     }
-
-    // ---- delete ----
 
     [Fact]
     public async Task DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
@@ -188,8 +175,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID.Require()));
     }
 
-    // ---- FormID ----
-
     [Fact]
     public async Task EditingTheFormIdOfAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
     {
@@ -211,8 +196,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
             (await CompiledQuest()).DialogTopics.Select(t => t.EditorID.Require()));
     }
 
-    // ---- refusal ----
-
     [Fact]
     public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
     {
@@ -226,8 +209,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Empty(_fixture.GitStatus());
         Assert.Equal(sceneBefore, _fixture.Document(_fixture.Scene.ToString()).Require().Body);
     }
-
-    // ---- copy as override: the container rule's mint, one and two levels up ----
 
     [Fact]
     public async Task CopyingASceneAsOverride_IntoAPluginLackingItsQuest_MintsABarePartialFormQuestWithTheSceneInline()
@@ -256,7 +237,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Empty(compiled.DialogTopics);
     }
 
-    // Own fields only, like every plain copy: the topic lands with no responses.
     [Fact]
     public async Task CopyingATopicAsOverride_IntoAPluginLackingItsQuest_MintsTheQuest_AndLandsTheTopicWithEmptyResponses()
     {
@@ -278,7 +258,6 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Empty(compiledTopic.Responses);
     }
 
-    // A response into a plugin holding neither its topic nor its quest: both minted, one document.
     [Fact]
     public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopicAndQuest_MintsBoth_InOneQuestDocument()
     {

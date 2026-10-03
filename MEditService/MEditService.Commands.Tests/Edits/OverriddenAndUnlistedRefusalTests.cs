@@ -8,8 +8,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A plugin that is not active is read-only (ADR-0012 invariant 5), refused before any
-/// source write. The same write against the active plugin of the same name lands.</summary>
 public sealed class OverriddenAndUnlistedRefusalTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;

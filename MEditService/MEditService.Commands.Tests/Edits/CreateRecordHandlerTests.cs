@@ -32,7 +32,6 @@ public sealed class CreateRecordHandlerTests
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
     }
 
-    // The type pick offers these, so each one it offers must land.
     [Fact]
     public void CreateRecord_LandsEveryTypeTheCreatableListNames()
     {
@@ -50,8 +49,6 @@ public sealed class CreateRecordHandlerTests
     [Theory]
     [InlineData("cell")]
     [InlineData("refr")]
-    // A quest is stored flat (its topics, branches and scenes embed in its own document), but it
-    // still owns them as children — plugins.md, Create record, story 4.
     [InlineData("qust")]
     public void CreateRecord_RefusesATypeTheCreatableListLeavesOut(string recordType)
     {
@@ -101,8 +98,6 @@ public sealed class CreateRecordHandlerTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        // Neither file is renamed by the other's arrival or departure, and the create did not renumber
-        // past a gap, because there are no numbers in these names to leave a gap in.
         Assert.Equal(2, names.Count);
         Assert.Contains(names, n => n.StartsWith("UntouchedNpc", StringComparison.Ordinal));
         Assert.Contains(names, n => n.StartsWith("AfterTheGap", StringComparison.Ordinal));
@@ -119,8 +114,6 @@ public sealed class CreateRecordHandlerTests
         Assert.Null(mod.CommittedDocument(result.NewFormKey, "npc_", "BrandNewNpc"));
     }
 
-    // A native record committed once and then deleted in the working tree: the shape an allocator
-    // scanning only the working tree would miss, and whose ID the game would then see twice.
     [Fact]
     public void CreateRecord_AllocatesAboveAnIdOnlyTheCommittedTreeStillHolds()
     {
@@ -209,9 +202,6 @@ public sealed class CreateRecordHandlerTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
-    // The auto-allocator's own exhaustion (every local ID up to 0xFFFFFF taken)
-    // must be a typed refusal, not an InvalidOperationException an endpoint's generic load order-missing
-    // catch would misreport as "no usable load order".
     [Fact]
     public void CreateRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
@@ -228,8 +218,6 @@ public sealed class CreateRecordHandlerTests
 
     private const string BothRemedies = "Clear the light flag in the header, or change a record's FormID.";
 
-    // An ESL-flagged plugin's local FormID range is 12 bits: the game engine cannot address a higher
-    // local ID from a light plugin's slot, so the allocator must refuse rather than continue.
     [Fact]
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
@@ -268,8 +256,6 @@ public sealed class CreateRecordHandlerTests
         Assert.Equal("000FFF:Fixture.esp", result.NewFormKey);
     }
 
-    // Same two directions, plain-.esl-extension shape (PluginFlagPredicates.IsLight's
-    // extension-fallback branch) rather than the header-flagged-.esp shape above.
     [Fact]
     public void CreateRecord_OnAPlainEslPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
@@ -296,9 +282,6 @@ public sealed class CreateRecordHandlerTests
         Assert.Equal("000FFF:Fixture.esl", result.NewFormKey);
     }
 
-    // The typed-FormID path must refuse the same range a light plugin's auto-allocator does. The
-    // record would exist in ordinary FormKey space, so this is its own refusal, not
-    // FormKeySpaceExhausted.
     [Fact]
     public void CreateRecord_TypedTarget_OnALightPlugin_Refuses_AboveTheEslCap()
     {

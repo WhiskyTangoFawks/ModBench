@@ -2,9 +2,6 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Assertions walk the real tree, never git: git tracks files, not directories, so an
-/// empty directory produces no porcelain line. The failing write is an EditorID no filesystem
-/// accepts in a name.</summary>
 public sealed class FailedWriteDirectoryCleanupTests
 {
     private const string UnwritableEditorId = "Bad\0Name";
@@ -29,10 +26,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "weap", UnwritableEditorId));
 
         Assert.Equal(before, EntriesUnderSource(mod));
-
-        // The git-based assertion this suite must not rely on: it is just as empty when the stray
-        // Weapons/ folder *is* there, because git has no way to report an empty directory.
-        Assert.Empty(mod.GitStatus());
     }
 
     [Fact]
@@ -62,7 +55,4 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.True(result.Applied, result.Message);
         Assert.Contains(EntriesUnderSource(mod), e => e.EndsWith("Weapons", StringComparison.Ordinal));
     }
-
-    // The copy gestures' ancestor chains are covered here rather than end to end: every EditorID
-    // they name comes from the record being copied, so no path can be handed an over-long name.
 }
