@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../client';
 import type { Instance } from '../instanceLoader/instance';
 import {
-  ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode, type SortDirection,
+  ImplicitMasterNode, PluginNode, PluginsTreeProvider, type PluginListNode, type PluginsTreeNode,
 } from './PluginsTreeProvider';
 import {
   PLUGIN_ROW_KINDS, RECORD_ROW_KINDS, isPluginsKeyArgs, onlySelected, pluginsGestureEntry, selectionArgument, type GestureEntry,
@@ -10,21 +10,11 @@ import {
 import { CellNode, ChildRecordNode, RecordNode, WorldspaceNode } from './PluginTreeProvider';
 import { placeFolder, pluginPlaces } from './pluginPlaces';
 import type { Reporter } from '../ports/reporter';
+import { registerSortDirectionToggle } from '../drivingLib/sortDirectionToggle';
 import { errorMessage } from '../ports/errorMessage';
 
-/** The Plugins view's direction writes no file, so it lives with the view it flips. It starts
- *  losing at the top on each activation, and the context key, which outlives an extension host
- *  restart, is told so. */
 export function registerPluginSortCommands(pluginsTree: Pick<PluginsTreeProvider, 'setViewDirection'>): vscode.Disposable[] {
-  const show = (direction: SortDirection) => {
-    pluginsTree.setViewDirection(direction);
-    void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', direction === 'winningAtTop');
-  };
-  void vscode.commands.executeCommand('setContext', 'modbench.plugin.winningAtTop', false);
-  return [
-    vscode.commands.registerCommand('modbench.plugin.sortWinningAtTop', () => show('winningAtTop')),
-    vscode.commands.registerCommand('modbench.plugin.sortLosingAtTop', () => show('losingAtTop')),
-  ];
+  return registerSortDirectionToggle('plugin', pluginsTree);
 }
 
 // The row's own reveal-in-Explorer gesture — an instance-scoped fact (which plugin
