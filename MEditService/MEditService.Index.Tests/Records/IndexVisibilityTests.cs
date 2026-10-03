@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -14,6 +13,7 @@ public sealed class IndexVisibilityTests
     // Ingest reads no live object per column any more, so the window a read can land in is the
     // codec serialize alone; enough records keep it long enough to sample.
     private const int NpcCount = 4000;
+    private const int ConcurrentRequests = 4;
 
     [Fact]
     public async Task AReadDuringIndexing_NeverSeesAPartiallyIndexedPlugin()
@@ -28,39 +28,43 @@ public sealed class IndexVisibilityTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
 
-        var counts = new ConcurrentBag<int>();
-        var sequences = new ConcurrentQueue<long>();
         using var indexing = new CancellationTokenSource();
 
-        // Several readers, because production is several concurrent HTTP requests, not one.
-        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        var readers = Enumerable.Range(0, ConcurrentRequests).Select(_ => Task.Run(() =>
         {
+            var tally = new ReadTally();
             while (!indexing.IsCancellationRequested)
-            {
-                counts.Add(CountOrNone(index, key));
-                sequences.Enqueue(index.Sequence);
-            }
+                tally.Add(CountOrNone(index, key), index.Sequence);
+            return tally;
         })).ToArray();
 
         index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         await indexing.CancelAsync();
-        await Task.WhenAll(readers);
+        var tallies = await Task.WhenAll(readers);
 
-        // If reads ever block behind the Indexer's transaction the sample count collapses and the assertion
-        // below starts passing for the wrong reason. It also is the "reads are served throughout the load"
-        // property, measured where it originates.
-        Assert.True(counts.Count > 50, $"only {counts.Count} reads completed during indexing — reads are being blocked by it");
-
-        // Sound in one direction only: an intermediate count can be missed, but one that is seen is always
-        // a real defect. This can fail to catch a regression; it cannot report one that is not there.
-        Assert.All(counts, count => Assert.True(
-            count is 0 or NpcCount,
-            $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
+        var reads = tallies.Sum(t => t.Reads);
+        Assert.True(reads > 50, $"only {reads} reads completed during indexing — reads are being blocked by it");
+        var partialCounts = tallies.SelectMany(t => t.PartialCounts).ToList();
+        Assert.True(partialCounts.Count == 0,
+            $"reads observed {string.Join(", ", partialCounts)} of {NpcCount} records — a partially-indexed plugin was visible");
         Assert.Equal(NpcCount, index.RequireReads().CountOf(key, "npc_"));
+        var highestSequenceRead = tallies.Max(t => t.HighestSequence);
+        Assert.True(highestSequenceRead <= index.Sequence,
+            $"a read saw sequence {highestSequenceRead}, past the committed {index.Sequence}");
+    }
 
-        // The sequence answers from the committed index too: before or after the ingest, never a
-        // value of its own.
-        Assert.All(sequences, sequence => Assert.True(sequence <= index.Sequence));
+    private sealed class ReadTally
+    {
+        public int Reads { get; private set; }
+        public List<int> PartialCounts { get; } = [];
+        public long HighestSequence { get; private set; }
+
+        public void Add(int count, long sequence)
+        {
+            Reads++;
+            if (count is not (0 or NpcCount)) PartialCounts.Add(count);
+            HighestSequence = Math.Max(HighestSequence, sequence);
+        }
     }
 
     // No store yet is a count of nothing, which is what a reader before the reconcile sees.
