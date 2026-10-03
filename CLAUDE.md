@@ -39,6 +39,7 @@ principle > ADR > spec (`docs/architecture/`) > code. The higher level wins. An 
   - It adds or changes a gesture, an entry point, or a state, row or status that a view shows and no spec draws.
   - It needs a module, arrow or port that `docs/architecture/` does not draw, or an interface item that a box's caption does not list.
   - It meets two documents at one level that disagree.
+- A copy of another box's code is never the way around a stop; ADR-0014 rejects it.
 - Report every break: two documents in the chain that disagree about the work. Build to the higher one. A break report and a stop quote the texts at stake, name their levels and say what you built; the maintainer decides every change to their documents.
 - CONTEXT.md is the maintainer's modding vocabulary, outside the chain. Spec prose, code and identifiers use its words. A label the user sees uses the reference tool's word. A divergence can make that word mislead, such as "top" in a view whose sort the user can reverse. The label then uses another word, and the register records that divergence. A concept with no word in either is described, never named. When it needs a name, ask the maintainer.
 

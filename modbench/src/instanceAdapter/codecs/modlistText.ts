@@ -3,7 +3,7 @@
 // The top of the file is the winning end. Mutations splice the raw string.
 
 import type { EntryRef, ModlistEntry, MovePlace, OrderEnd, SeparatorsPlace } from '../instanceAdapter';
-import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+import { detectEol, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from '../../loadOrderFileCodec/lineScan';
 
 /** The per-profile mod list, one line per mod in Mod override order. */
 export const MODLIST_FILE_NAME = 'modlist.txt';
