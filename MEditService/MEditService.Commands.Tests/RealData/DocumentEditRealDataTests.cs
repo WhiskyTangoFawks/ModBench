@@ -22,8 +22,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private readonly ITestOutputHelper _output;
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-docedit-real-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-docedit-real-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-docedit-real-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-docedit-real-game-");
     private readonly PluginAddress _plugin;
     private readonly EditRecordHandler _editHandler;
 
@@ -42,8 +42,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
-        try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     public static TheoryData<string> RecordTypesOfferingGestures()
@@ -95,7 +95,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield break;
         }
         yield return new(record, SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
-        foreach (var (envelope, path) in Gestures(schema, JsonDocument.Parse(record.Text).RootElement))
+        foreach (var (envelope, path) in EveryGestureWithThePathItMayChange(schema, JsonDocument.Parse(record.Text).RootElement))
             yield return new(record, envelope, path);
     }
 
@@ -132,10 +132,7 @@ public sealed class DocumentEditRealDataTests : IDisposable
     private SourceRepository TrackedTree() => SourceRepository.Open(_modFolder, GameRelease.Fallout4)
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    // Every gesture the record's shape offers, named by the path it may change: a remove, an add,
-    // a move, a leaf switch on the first union element, and a function
-    // change (the cascade).
-    private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> Gestures(RecordTableSchema schema, JsonElement root)
+    private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> EveryGestureWithThePathItMayChange(RecordTableSchema schema, JsonElement root)
     {
         foreach (var (column, columnMeta) in GesturableColumns.GetOrAdd(schema.TableName, _ => GesturableColumnsOf(schema)))
         {
