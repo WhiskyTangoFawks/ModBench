@@ -1,11 +1,7 @@
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
@@ -25,7 +21,8 @@ public class IndexAtomicityTests
             })
             .Build();
         var key = new PluginAddress("Atomic.esp", "Data");
-        using var index = Indexes.Reconciled(fixture, adapter: new ThrowingPartwayAdapter(afterRecords: 2));
+        using var index = Indexes.Reconciled(fixture, adapter: new PartwayAdapter(
+            afterRecords: 2, () => throw new InvalidOperationException("injected mid-plugin read failure")));
         var reads = index.RequireReads();
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Atomic.esp");
@@ -33,35 +30,5 @@ public class IndexAtomicityTests
         Assert.Equal(0, reads.CountOf(key, "npc_"));
         Assert.Empty(reads.GetDocuments(key));
         Assert.Empty(reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items);
-    }
-
-    // Real documents up to a point, then the throw an unreadable record would raise mid-plugin.
-    private sealed class ThrowingPartwayAdapter(int afterRecords) : DelegatingPluginAdapter(TestAdapters.Mutagen())
-    {
-        public override IPluginDocuments OpenDocuments(
-            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-            PluginStrings? strings = null) =>
-            new ThrowingPartway(base.OpenDocuments(modPath, gameRelease, schemas, strings), afterRecords);
-    }
-
-    private sealed class ThrowingPartway(IPluginDocuments inner, int afterRecords) : IPluginDocuments
-    {
-        public PluginDocument Header => inner.Header;
-        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
-
-        public IEnumerable<PluginDocument> Records
-        {
-            get
-            {
-                var yielded = 0;
-                foreach (var record in inner.Records)
-                {
-                    if (yielded++ == afterRecords) throw new InvalidOperationException("injected mid-plugin read failure");
-                    yield return record;
-                }
-            }
-        }
-
-        public void Dispose() => inner.Dispose();
     }
 }
