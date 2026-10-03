@@ -12,25 +12,30 @@ namespace MEditService.Codec.Schema;
 /// metadata reflection reads.</summary>
 internal sealed class HeldAlpha(ILogger logger)
 {
-    internal const string RefusalPrefix = "SchemaReflector: a colour's alpha unavailable";
+    internal const string WarningPrefix = "SchemaReflector: a colour's alpha unavailable";
 
     private const string OverlaySuffix = "BinaryOverlay";
 
     private readonly ConcurrentDictionary<PropertyInfo, bool> _held = new();
 
-    /// <summary>A member whose overlay names no binary type reads as holding one, so a cell shows
-    /// every component the document carries rather than hiding one.</summary>
-    internal bool By(PropertyInfo prop) => _held.GetOrAdd(prop, Ask);
+    /// <summary>A member whose overlay names no binary type, and an array element, which has no member
+    /// to ask, read as holding one, so a cell shows every component the document carries rather than
+    /// hiding one.</summary>
+    internal bool By(PropertyInfo? prop)
+    {
+        if (prop != null) return _held.GetOrAdd(prop, Ask);
+        logger.LogWarning("{Prefix}: an array element has no member whose overlay names its binary type", WarningPrefix);
+        return true;
+    }
 
     private bool Ask(PropertyInfo prop)
     {
         if (OverlayGetter(prop) is { } getter && BinaryTypeReadIn(getter) is { } binaryType)
             return binaryType is ColorBinaryType.Alpha or ColorBinaryType.AlphaFloat;
-        logger.LogWarning("{Prefix}: no binary overlay of {Owner} names the binary type of {Member}", RefusalPrefix, prop.DeclaringType?.FullName, prop.Name);
+        logger.LogWarning("{Prefix}: no binary overlay of {Owner} names the binary type of {Member}", WarningPrefix, prop.DeclaringType?.FullName, prop.Name);
         return true;
     }
 
-    // The overlay of the class that declares the member, else of the concrete class under it.
     private static MethodInfo? OverlayGetter(PropertyInfo prop)
     {
         if (ReflectedTypes.GetSetterType(ReflectedTypes.DeclaringTypeOf(prop)) is not { } setter) return null;
@@ -43,7 +48,6 @@ internal sealed class HeldAlpha(ILogger logger)
             .FirstOrDefault(getter => getter != null);
     }
 
-    // The integer constant pushed last before a call whose last parameter is a ColorBinaryType.
     private static ColorBinaryType? BinaryTypeReadIn(MethodInfo getter)
     {
         if (getter.GetMethodBody()?.GetILAsByteArray() is not { } il) return null;
@@ -54,9 +58,9 @@ internal sealed class HeldAlpha(ILogger logger)
             var code = il[at] == 0xFE ? TwoByte[il[at + 1]] : OneByte[il[at]];
             if (code.Size == 0) return null;
             var operand = at + code.Size;
-            pushed = Pushed(code, il, operand) ?? (code.OperandType == OperandType.InlineMethod ? pushed : null);
             if ((code == OpCodes.Call || code == OpCodes.Callvirt) && pushed is { } value && TakesBinaryType(getter, BitConverter.ToInt32(il, operand)))
                 return (ColorBinaryType)value;
+            pushed = Pushed(code, il, operand);
             at = operand + OperandSize(code, il, operand);
         }
         return null;

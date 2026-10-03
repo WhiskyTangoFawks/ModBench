@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Globalization;
 using Noggog;
 
@@ -19,16 +20,25 @@ public static class ColorReading
             && alpha != 0;
     }
 
-    /// <summary>Text with no colour reading is its own.</summary>
     public static string Of(string text, bool holdsAlpha)
+    {
+        var alpha = holdsAlpha ? ColorExt.IncludeAlpha.Always : ColorExt.IncludeAlpha.Never;
+        return Parsed(text) is { } color ? color.ToHexString(alpha) : text;
+    }
+
+    /// <summary>A colour that holds no alpha as Mutagen's binary read spells it: alpha 00.</summary>
+    public static string AsReadWithoutAlpha(string text) =>
+        Parsed(text) is { } color ? Color.FromArgb(0, color).ToHexString(ColorExt.IncludeAlpha.Always) : text;
+
+    private static Color? Parsed(string text)
     {
         try
         {
-            return ColorExt.FromHexString(text).ToHexString(holdsAlpha ? ColorExt.IncludeAlpha.Always : ColorExt.IncludeAlpha.Never);
+            return ColorExt.FromHexString(text);
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException)
         {
-            return text;
+            return null;
         }
     }
 }

@@ -69,7 +69,7 @@ public class SchemaReflectorAtomicValueTests
         Assert.False(Column("kywd", "EditorID").ToFieldMetadata().HoldsAlpha);
     }
 
-    private const string HeldAlphaRefusalPrefix = "SchemaReflector: a colour's alpha unavailable";
+    private const string HeldAlphaWarningPrefix = "SchemaReflector: a colour's alpha unavailable";
 
     [Fact]
     public void MutagensBinaryTranslationAnswersForEveryColorTheWalkReaches()
@@ -79,7 +79,7 @@ public class SchemaReflectorAtomicValueTests
         new SchemaReflector(factory.CreateLogger<SchemaReflector>()).GetSchemas(GameRelease.Fallout4);
         Assert.True(entries.Count > 0, "Expected the collector to receive the walk's own trace; a collector wired to nothing would find zero refusals too.");
 
-        var unanswered = entries.Where(e => e.Message.StartsWith(HeldAlphaRefusalPrefix, StringComparison.Ordinal)).Select(e => e.Message).Distinct().ToList();
+        var unanswered = entries.Where(e => e.Message.StartsWith(HeldAlphaWarningPrefix, StringComparison.Ordinal)).Select(e => e.Message).Distinct().ToList();
         Assert.True(unanswered.Count == 0, string.Join("\n", unanswered));
     }
 }

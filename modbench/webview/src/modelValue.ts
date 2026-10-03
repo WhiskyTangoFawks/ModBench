@@ -45,7 +45,7 @@ function colorReading(text: string, holdsAlpha: boolean): string {
   return `#${holdsAlpha ? argb : argb.slice(2)}`;
 }
 
-const memberOf =(value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
+const memberOf = (value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
 
 // Differs from the edit value only for an enum: a wire-token member shows its label, and a value
 // the enum does not name reads `<Unknown: n>`.

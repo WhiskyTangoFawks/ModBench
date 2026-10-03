@@ -579,11 +579,28 @@ public sealed class DocumentEditTests : IDisposable
     [Theory]
     [InlineData("\"#102030\"")]
     [InlineData("\"#00102030\"")]
-    public void AColorHoldingNoAlpha_TakesItsRgb_AndItsOwnDocumentsAlphaOfNone(string color)
+    public void AColorHoldingNoAlpha_TakesItsRgb_InMutagensOwnSpellingOfNoAlpha(string color)
     {
         var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+        var before = _fixture.Document(formKey);
 
-        Applied(formKey, SetAt(Json(color), Member("LightningColor")));
+        var after = Applied(formKey, SetAt(Json(color), Member("LightningColor")));
+
+        Assert.Equal(["LightningColor: <absent> -> \"#00102030\""], ConditionEditTests.DocumentDiff(before, after));
+    }
+
+    [Fact]
+    public void AColorHoldingNoAlpha_PastedBackAsItsCellCopiesIt_ChangesNothing()
+    {
+        var weather = _mod.Weather.AddNew("Wt");
+        weather.LightningColor = System.Drawing.Color.FromArgb(0, 0x10, 0x20, 0x30);
+        var formKey = _fixture.Seed(weather, "wthr");
+        var before = _fixture.Document(formKey);
+        Assert.Equal("#00102030", Node(before, "LightningColor").GetValue<string>());
+
+        var after = Applied(formKey, SetAt(Json("\"#102030\""), Member("LightningColor")));
+
+        Assert.Equal(before, after);
     }
 
     [Fact]
@@ -598,12 +615,16 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal("Sprites[0].Data.Tint", result.Path);
     }
 
-    [Fact]
-    public void AnElementPasted_AsItsDocumentSpellsAColorHoldingNoAlpha_IsTaken()
+    [Theory]
+    [InlineData("#102030")]
+    [InlineData("#00102030")]
+    public void AnElementPasted_WithAColorHoldingNoAlpha_HoldsItInMutagensOwnSpellingOfNoAlpha(string tint)
     {
         var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
 
-        Applied(formKey, AddAt(Json("""{"Data": {"Tint": "#00102030"}}"""), Member("Sprites")));
+        var after = Applied(formKey, AddAt(Json($$$"""{"Data": {"Tint": "{{{tint}}}"}}"""), Member("Sprites")));
+
+        Assert.Equal("#00102030", Node(after, "Sprites").AsArray()[0].Require()["Data"].Require()["Tint"].Require().GetValue<string>());
     }
 
     [Fact]

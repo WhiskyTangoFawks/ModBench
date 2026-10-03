@@ -102,7 +102,7 @@ internal static class LeafClassification
             return TextLeaf(ByteSliceHex.HexApiType, declared is ReadOnlyMemorySlice<byte> s ? ByteSliceHex.ToHex(s.Span) : null);
 
         if (ReflectedTypes.IsAtomicValueType(core))
-            return TextLeaf(ColorReading.ApiType, declared is Color c ? c.ToHexString() : null) with { HoldsAlpha = prop == null || game.Alpha.By(prop) };
+            return TextLeaf(ColorReading.ApiType, declared is Color c ? c.ToHexString() : null) with { HoldsAlpha = game.Alpha.By(prop) };
 
         if (game.Annotations.IsVectorStructType(core))
             return TextLeaf("vector", declared == null ? null : ReflectedTypes.VectorText(declared));
