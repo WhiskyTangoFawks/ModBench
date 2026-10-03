@@ -1,8 +1,8 @@
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>Where a cell sits in the GRUP hierarchy (ADR-0005): the placement fact no document
-/// carries, since a worldspace's document omits its blocks. Null blocks beside a worldspace mean
+/// <summary>Where a cell sits in the GRUP hierarchy (plugins.md, The tree, story 6): the placement
+/// fact no document carries, since a worldspace's document omits its blocks. Null blocks beside a worldspace mean
 /// its top cell.</summary>
 public readonly record struct CellStructure(
     string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior)
@@ -12,14 +12,14 @@ public readonly record struct CellStructure(
 }
 
 /// <summary>One child record a container's GRUP holds, the member Mutagen reads it into, and its
-/// index there (ADR-0005): the parentage that outlives a document the codec refused.</summary>
+/// index there (ADR-0005 invariant 5): the parentage that outlives a document the codec refused.</summary>
 public readonly record struct ChildRecord(string FormKey, string SlotName, int SlotIndex);
 
 /// <summary>Which container's document carries a record inline, and the slot it sits in: a placed
 /// reference in its cell, a response in its topic, a topic in its quest.</summary>
 public readonly record struct DocumentContainment(string ParentFormKey, string ParentRecordType, string SlotName);
 
-/// <summary>One record as the text its source file holds (ADR-0007), under the schema table name
+/// <summary>One record as the text its source file holds (ADR-0011), under the schema table name
 /// the index keys it by. A diagnosis makes the text an identity-only stub (ADR-0005 invariant 5).</summary>
 public sealed record PluginDocument(
     string RecordType,
@@ -53,8 +53,7 @@ public interface IPluginRecordLookup : IDisposable
     /// slot it sits in; null when the record has a document of its own.</summary>
     DocumentContainment? ContainmentOf(string formKey);
 
-    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="formKey"/> names (ADR-0005),
-    /// or null when the plugin holds no cell under that key.</summary>
+    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="formKey"/> names, or null when the plugin holds no cell under that key.</summary>
     CellStructure? CellStructureOf(string formKey);
 
     /// <summary>The FormKey of the exterior cell the plugin holds at grid (<paramref name="x"/>,

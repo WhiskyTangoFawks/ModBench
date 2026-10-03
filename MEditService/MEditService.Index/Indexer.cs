@@ -12,9 +12,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
-/// validation of every plugin, deciding nothing — the load order value answers which plugins are
-/// active, the schema where a field goes.</summary>
+/// <summary>ADR-0014 invariant 5: the Index's other half (target-architecture.d2
+/// medit_driven.index.indexer). Ingest, the registration sweep and the validation of every
+/// plugin.</summary>
 public sealed class Indexer : IQueryIndex, IDisposable
 {
     private readonly Lock _lock = new();
@@ -27,8 +27,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly TimeProvider _timeProvider;
     // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
     private readonly TaskScheduler _refillScheduler;
-    // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for which plugins
-    // are active and for a plugin's mod folder; it never writes it and keeps no view of its own.
+    // ADR-0013 invariant 4. The Indexer keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
@@ -50,8 +49,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
     // since that one returns before reaching its own update.
     private long _version;
 
-    /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
-    /// project names the store, its factory or how a file is opened (ADR-0014 invariant 5).</summary>
+    /// <summary>The composition root's door: the Index opens its own store (ADR-0014 invariant
+    /// 5).</summary>
     public Indexer(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
@@ -75,12 +74,12 @@ public sealed class Indexer : IQueryIndex, IDisposable
             loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
     }
 
-    // ADR-0013 invariant 4: a plugin that failed to read stays a row in an error state until what it
-    // reads from changes. The state recorded alongside it is what changing detects.
+    // A plugin that failed to read stays in its error state (ADR-0013 invariant 4) until what it
+    // reads from changes, which the state recorded beside it detects.
     private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
 
     // What a failed read read from: the binary's hash, and for a plugin with a tree, what git named
-    // at its HEAD then. Only the files git names are read (ADR-0009).
+    // at its HEAD then (ADR-0009, Derived tactical observations).
     private sealed record FailedRead(string? Binary, TreeChanges? Tree)
     {
         public bool Holds(FailedRead now) =>
@@ -465,9 +464,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
         foreach (var key in moved)
         {
-            // ADR-0009 invariant 1: a reorder, an enable, a change of which plugin wins — all the
-            // same SQL-only move: no re-read, no re-index, so it is safe to apply live and
-            // unprompted.
+            // ADR-0009 invariant 1.
             var metadata = held.Update(open[key], snapshot.RegistrationOf(key));
             index.Register(metadata.Key, metadata.Registration);
         }
@@ -666,8 +663,6 @@ public sealed class Indexer : IQueryIndex, IDisposable
         var indexTimer = Stopwatch.StartNew();
         try
         {
-            // ADR-0012: threads the origin into the index, so the DuckDB row is identified
-            // by (origin, plugin) together, not filename alone.
             IndexOnePlugin(held, index, plugin, holdsTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -697,12 +692,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         PublishStatus();
     }
 
-    // Where a plugin's records come from (ADR-0007 invariant 3): a tracked plugin's source tree,
-    // the binary for everything else. Both branches end in the same Index call, keeping the read
-    // model free of a dialect.
-
-    // The binary is still read for a tracked plugin — HeldPlugins asks the adapter for its metadata.
-    // What this establishes is only "never consult the binary for a tracked plugin's content".
+    // ADR-0007 invariant 3; HeldPlugins still reads a tracked plugin's metadata off its binary.
 
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
@@ -774,7 +764,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _schemaReflector.GetSchemas(gameRelease),
             new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), dataFolderPath));
 
-    // ADR-0015 invariant 4: validates every plugin held, by content, and repairs what differs.
+    // ADR-0015 invariant 4.
     private void ValidateIndex(CancellationToken token)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
@@ -908,13 +898,10 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0013 invariant 3: the sweep is handed who competes, the active plugins the kernel's load
-    // order holds. Read whole, not per plugin.
+    // ADR-0013 invariant 3, read whole rather than per plugin.
     private IReadOnlyList<RegisteredPlugin> Active() => _holder.Current.Active;
 
-    // Which truth it reads is the plugin's: an untracked plugin from its binary, a tracked plugin
-    // from its source tree (ADR-0007 invariant 3), because reading a tracked plugin's binary would
-    // discard uncommitted edits.
+    // ADR-0007 invariant 3.
     private void ReindexHeldPlugin(PluginAddress key)
     {
         // Taken before anything reaches _lock. IndexWriteGate is a Lock, thread-affine, so nothing

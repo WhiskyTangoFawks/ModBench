@@ -5,9 +5,9 @@ using Mutagen.Bethesda.Plugins.Meta;
 
 namespace MEditService.Codec.Schema;
 
-// Shared with FieldDiff so a resolvable-but-wrong-type reference stays distinguishable from a
-// dangling one (ADR-0005). [JsonConverter] on the enum itself is what Swashbuckle honors; without
-// it the OpenAPI schema describes the enum as an int.
+// Shared with FieldDiff so a wrong-type reference stays distinguishable from a dangling one
+// (editor-fields.md, References, stories 5 and 7). Swashbuckle honors [JsonConverter] only on the
+// enum itself, and describes the enum as an int without it.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum FormKeyResolutionState
 {

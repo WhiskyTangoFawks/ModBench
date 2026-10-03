@@ -9,9 +9,9 @@ using Noggog;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>ADR-0006 decision 2's amendment: the round-trip verdict is model identity via Mutagen's
-/// generated equality mask, walked by reflection rather than its ToString(), which omits inherited
-/// members. Bare Equals has false negatives.</summary>
+/// <summary>ADR-0006 invariant 2's round-trip verdict. Mutagen's equality mask is walked by
+/// reflection rather than its ToString(), which omits inherited members; bare Equals has false
+/// negatives.</summary>
 public static class ModelIdentity
 {
     /// <summary>One record that failed the model-identity verdict, or the whole-mod fallback when
@@ -93,7 +93,7 @@ public static class ModelIdentity
 
     /// <summary>The <c>Fallout4ModHeader.Mask</c> fields Mutagen carries as opaque data, so a corruption is
     /// a real defect. An allow-list, not every field: masters, stats and overridden forms have
-    /// legitimate divergence paths (ADR-0006 amendment).</summary>
+    /// legitimate divergence paths (ADR-0006 invariant 2).</summary>
     internal static readonly HashSet<string> OpaqueHeaderFields =
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
@@ -242,8 +242,7 @@ public static class ModelIdentity
         new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
 
     // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
-    // zeroed, and a worldspace's block levels in one canonical order, since the tree carries none
-    // (ADR-0006 decision 4).
+    // zeroed, and a worldspace's block levels in one canonical order (ADR-0006 invariant 4).
     private static IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
     {
         switch (record)

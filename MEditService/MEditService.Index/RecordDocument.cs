@@ -2,8 +2,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>One plugin's copy of one record (ADR-0007). <see cref="Body"/> is exactly the bytes the
-/// record's source file holds — for the header, the root <c>RecordData.json</c>.</summary>
+/// <summary>One plugin's copy of one record. <see cref="Body"/> is the document ADR-0011 stores:
+/// for the header, the root <c>RecordData.json</c>.</summary>
 public record RecordDocument(
     string FormKey,
     PluginAddress Plugin,

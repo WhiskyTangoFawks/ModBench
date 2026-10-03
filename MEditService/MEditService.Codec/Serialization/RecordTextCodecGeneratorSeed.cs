@@ -7,7 +7,7 @@ namespace MEditService.Codec.Serialization;
 
 /// <summary>The one compile-time seed the Mutagen serialization source generator needs to emit
 /// &lt;Type&gt;_Serialization classes; delete it and RecordTextCodec's generated calls stop
-/// resolving. Whole-mod callers go through here only (ADR-0007).</summary>
+/// resolving. Whole-mod callers go through here only.</summary>
 public static class RecordTextCodecGeneratorSeed
 {
     // The generator seeds from the compile-time type of argument 0 of a MutagenJsonConverter.Instance
