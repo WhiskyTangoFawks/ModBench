@@ -20,6 +20,30 @@ internal static class LoadIndex
         return light ? $"{FormID.SmallMasterMarker:X2}:{place:X3}" : $"{place:X2}";
     }
 
+    /// <summary>xEdit's load-order FormID of a FormKey's text, by which it sorts a keyed array
+    /// (TwbFormIDDefFormater.ToSortKey); null where no active plugin has the FormKey's filename.</summary>
+    internal static Func<string, uint?> FormIdsOf(
+        LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
+    {
+        // A FormKey names its plugin by filename alone; the snapshot holds one active plugin per name.
+        var slots = new Dictionary<string, (MasterStyle Style, uint Place)>(StringComparer.OrdinalIgnoreCase);
+        var places = new Dictionary<MasterStyle, uint>();
+        foreach (var active in snapshot.Active)
+        {
+            var style = IsLight(active.Key, opened) ? MasterStyle.Small : MasterStyle.Full;
+            var place = places.GetValueOrDefault(style);
+            places[style] = place + 1;
+            slots[active.Name] = (style, place);
+        }
+        uint? FormIdOf(string text)
+        {
+            if (!FormKey.TryFactory(text, out var key)) return null;
+            if (key.IsNull) return FormID.Null.Raw;
+            return slots.TryGetValue(key.ModKey.FileName.String, out var slot) ? FormID.Factory(slot.Style, slot.Place, key.ID).Raw : null;
+        }
+        return FormIdOf;
+    }
+
     /// <summary>The FormKey a FormID names: the inverse of <see cref="Of"/>, read from the active
     /// plugins. Null when the text is no FormID or no active plugin holds that index.</summary>
     internal static FormKey? FormKeyOf(

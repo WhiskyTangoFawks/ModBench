@@ -9,12 +9,17 @@ namespace MEditService.Codec.Schema;
 /// freshly added element carries.</summary>
 public readonly record struct ElementKey(IReadOnlyList<(double? Number, string Text)> Segments)
 {
+    // After every load-order FormID: a FormKey of a plugin the game does not load.
+    private const double Unloaded = 1L << 32;
+
     public string Text => string.Join(" / ", Segments.Select(s => s.Text));
 
-    /// <summary><paramref name="elementMeta"/> lets a flags member order by its bits, as xEdit's
-    /// wbStructSK does, rather than by the names the document spells it with.</summary>
-    public static ElementKey Of(JsonElement element, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
-        new([.. keyMembers.Select(path => ReadElement(element, path, MemberAt(elementMeta, path)))]);
+    /// <summary>As xEdit's wbStructSK orders them: a flags member by its bits, read off
+    /// <paramref name="elementMeta"/>, and a FormKey by its <paramref name="loadOrderFormIds"/>.</summary>
+    public static ElementKey Of(
+        JsonElement element, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null,
+        Func<string, uint?>? loadOrderFormIds = null) =>
+        new([.. keyMembers.SelectMany(path => ReadElement(element, path, MemberAt(elementMeta, path), loadOrderFormIds))]);
 
     /// <summary>The write path holds a mutable JsonNode tree; one re-serialize reaches the same
     /// reader rather than a second copy of what a key reads as.</summary>
@@ -22,8 +27,8 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
         Of(JsonSerializer.SerializeToElement(node), keyMembers, elementMeta);
 
     /// <summary>xEdit's extended sort key: the key, then what a wbStructExSK adds to it.</summary>
-    public static ElementKey SortKeyOf(JsonElement element, FieldMetadata array) =>
-        Of(element, SortMembers(array), array.ElementType);
+    public static ElementKey SortKeyOf(JsonElement element, FieldMetadata array, Func<string, uint?>? loadOrderFormIds = null) =>
+        Of(element, SortMembers(array), array.ElementType, loadOrderFormIds);
 
     public static ElementKey SortKeyOf(JsonNode? node, FieldMetadata array) =>
         Of(node, SortMembers(array), array.ElementType);
@@ -44,38 +49,52 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
 
     public int CompareTo(ElementKey other)
     {
-        for (var i = 0; i < Segments.Count; i++)
+        for (var i = 0; i < Math.Min(Segments.Count, other.Segments.Count); i++)
         {
             var (mine, theirs) = (Segments[i], other.Segments[i]);
-            var order = mine.Number is { } a && theirs.Number is { } b
-                ? a.CompareTo(b)
-                : string.CompareOrdinal(mine.Text, theirs.Text);
+            var order = mine.Number is { } a && theirs.Number is { } b ? a.CompareTo(b) : 0;
+            if (order == 0) order = string.CompareOrdinal(mine.Text, theirs.Text);
             if (order != 0) return order;
         }
-        return 0;
+        return Segments.Count.CompareTo(other.Segments.Count);
     }
 
-    private static (double?, string) ReadElement(JsonElement element, string keyPath, FieldMetadata? member)
+    private static IEnumerable<(double?, string)> ReadElement(
+        JsonElement element, string keyPath, FieldMetadata? member, Func<string, uint?>? loadOrderFormIds)
     {
         var current = element;
         foreach (var hop in keyPath.Split('.'))
         {
             if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(hop, out current))
-                return DefaultOf(member);
+                return [DefaultOf(member)];
         }
-        return Read(current, member);
+        return current.ValueKind == JsonValueKind.Object && member?.Fields is { } fields
+            ? MembersOf(current, fields, loadOrderFormIds)
+            : [Read(current, member, loadOrderFormIds)];
     }
 
-    private static (double?, string) Read(JsonElement current, FieldMetadata? member) =>
+    // An object reads as its members in turn, as xEdit's struct sort key joins its members', and a
+    // union as its leaf's: COED's owner is one Mutagen union of its leaves' members.
+    private static IEnumerable<(double?, string)> MembersOf(
+        JsonElement obj, IReadOnlyList<FieldMetadata> fields, Func<string, uint?>? loadOrderFormIds)
+    {
+        var leaf = obj.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) ? named.GetString() : null;
+        return fields
+            .Where(f => !f.IsDiscriminator && (f.Variants is not { } variants || (leaf != null && variants.ContainsKey(leaf))))
+            .SelectMany(f => ReadElement(obj, f.Name, DocumentNodes.Variant(f, leaf), loadOrderFormIds));
+    }
+
+    private static (double?, string) Read(JsonElement current, FieldMetadata? member, Func<string, uint?>? loadOrderFormIds = null) =>
         current.ValueKind switch
         {
             JsonValueKind.Number => (current.GetDouble(), current.GetDouble().ToString(CultureInfo.InvariantCulture)),
+            JsonValueKind.String when member?.Type == "formKey" && loadOrderFormIds != null =>
+                (loadOrderFormIds(DocumentNodes.StringValueOf(current)) ?? Unloaded, DocumentNodes.StringValueOf(current)),
             JsonValueKind.String => (null, DocumentNodes.StringValueOf(current)),
             JsonValueKind.True or JsonValueKind.False => (null, current.GetRawText()),
             // A flags member is an array of names (ScenePhaseFragment.Flags keys a fragment); its
             // order is its bits', read off the members the schema declares.
             JsonValueKind.Array => (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
-            // A union extends a key whole: COED's owner is one Mutagen union of its leaves' members.
             JsonValueKind.Object => (null, current.GetRawText()),
             _ => Absent,
         };
