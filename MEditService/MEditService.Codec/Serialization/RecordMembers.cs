@@ -8,7 +8,7 @@ public static class RecordMembers
 {
     public const string FormKey = "FormKey";
 
-    public const string EditorId = "EditorID";
+    public const string EditorId = nameof(IMajorRecordGetter.EditorID);
 
     public const string FormVersion = nameof(IMajorRecordGetter.FormVersion);
 

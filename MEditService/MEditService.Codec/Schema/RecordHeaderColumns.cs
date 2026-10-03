@@ -14,13 +14,13 @@ internal static class RecordHeaderColumns
     private const long AllBits = -1;
 
     internal static List<ColumnSpec> For(
-        Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game, ILogger logger)
+        Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game, ILogger logger)
     {
         var columns = new List<ColumnSpec>();
         foreach (var (typeName, member, label, ignoredInConflicts, isVersionControlInfo1) in game.Annotations.RecordHeaderMembers)
         {
-            var declared = declarations[member].ToList();
-            if (!declared.Exists(p => ReflectedTypes.DeclaringTypeOf(p).Name == typeName)) continue;
+            if (!declarations.TryGetValue(member, out var declared)
+                || !declared.Any(p => ReflectedTypes.DeclaringTypeOf(p).Name == typeName)) continue;
             var prop = ReflectedTypes.MostDerived(declared);
             if (ColumnReflection.BuildColumn(prop, prop.Name, game, logger) is not { } column) continue;
 
@@ -43,7 +43,7 @@ internal static class RecordHeaderColumns
     // Record Flags names the bits of every flag view Mutagen spells over the raw integer, and those
     // views are its aliases.
     private static ColumnSpec WithFlagViews(
-        ColumnSpec flags, Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game)
+        ColumnSpec flags, Type getterType, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, GameReflection game)
     {
         var aliases = game.Defaults.MembersAliasing(getterType, FlagsMember, AllBits);
         var names = BitNames(aliases, declarations, getterType, game);
@@ -53,10 +53,10 @@ internal static class RecordHeaderColumns
     // A bit two views name takes the name of the view declared on the narrower type, and otherwise
     // of the view first by member name. A bit no view names takes its annotation row's name.
     private static List<EnumMember> BitNames(
-        IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations, Type getterType, GameReflection game)
+        IReadOnlyList<string> aliases, IReadOnlyDictionary<string, IGrouping<string, PropertyInfo>> declarations, Type getterType, GameReflection game)
     {
         var byBit = new SortedDictionary<long, (EnumMember Member, Type Declaring)>();
-        var views = aliases.Where(declarations.Contains).Order(StringComparer.Ordinal)
+        var views = aliases.Where(declarations.ContainsKey).Order(StringComparer.Ordinal)
             .Select(a => ReflectedTypes.MostDerived(declarations[a]));
         foreach (var view in views)
         {

@@ -107,7 +107,7 @@ public sealed class PartialFormCompareTests
     }
 
     [Fact]
-    public void GetCompare_PartialFormOverride_KeepsItsEditorIDInTheComparison_AsItsOwnFieldsAreNot()
+    public void APartialFormCopysEditorID_TakesPartInTheComparison_AsItsOwnFieldsDoNot()
     {
         var compare = _service.GetCompare(_cellKey.ToString());
         Assert.NotNull(compare);

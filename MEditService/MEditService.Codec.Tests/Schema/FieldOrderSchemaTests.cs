@@ -12,18 +12,27 @@ public sealed class FieldOrderSchemaTests
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    private static Dictionary<string, int>? MutagensFieldIndexEnum(Type? loquiClass) =>
-        loquiClass?.Assembly.GetType($"{loquiClass.FullName}_FieldIndex") is { IsEnum: true } index
-            ? Enum.GetNames(index).ToDictionary(n => n, n => Convert.ToInt32(Enum.Parse(index, n), CultureInfo.InvariantCulture), StringComparer.Ordinal)
-            : null;
-
-    private static IEnumerable<string> OutOfOrder(string where, IEnumerable<string> names, Dictionary<string, int> fieldIndex)
+    private static Dictionary<string, int> MutagensFieldIndex(Type loquiClass)
     {
+        var index = loquiClass.Assembly.GetType($"{loquiClass.FullName}_FieldIndex")
+            ?? throw new InvalidOperationException($"Expected Mutagen to generate {loquiClass.Name}_FieldIndex.");
+        return Enum.GetNames(index).ToDictionary(n => n, n => Convert.ToInt32(Enum.Parse(index, n), CultureInfo.InvariantCulture), StringComparer.Ordinal);
+    }
+
+    private static IEnumerable<string> OutOfOrder(string where, IEnumerable<string> names, Type loquiClass)
+    {
+        var fieldIndex = MutagensFieldIndex(loquiClass);
         var placed = names.Where(fieldIndex.ContainsKey).ToList();
         return placed.Zip(placed.Skip(1))
             .Where(pair => fieldIndex[pair.First] > fieldIndex[pair.Second])
             .Select(pair => $"{where}: {pair.First} before {pair.Second}");
     }
+
+    private static IEnumerable<SubFieldSpec> Walk(SubFieldSpec spec) =>
+        new[] { spec }
+            .Concat((spec.SubFields ?? []).SelectMany(Walk))
+            .Concat(new[] { spec.ElementSpec }.OfType<SubFieldSpec>().SelectMany(Walk))
+            .Concat((spec.Variants?.Values ?? []).SelectMany(Walk));
 
     [Theory]
     [InlineData("weap")]
@@ -39,33 +48,33 @@ public sealed class FieldOrderSchemaTests
     public void EveryRecordsFields_AreInTheOrderItsFileHoldsThem_AsMutagensFieldIndexNumbersThem()
     {
         var offenders = Schemas.Values
-            .SelectMany(schema => MutagensFieldIndexEnum(LoquiRegistration.GetRegister(schema.RecordType).ClassType) is { } fieldIndex
-                ? OutOfOrder(schema.TableName, schema.RecordColumns.Where(c => !c.Field.IsRecordHeaderMember).Select(c => c.Name), fieldIndex)
-                : [])
+            .SelectMany(schema => OutOfOrder(
+                schema.TableName,
+                schema.RecordColumns.Where(c => !c.Field.IsRecordHeaderMember).Select(c => c.Name),
+                LoquiRegistration.GetRegister(schema.RecordType).ClassType))
             .ToList();
 
+        Assert.NotEmpty(Schemas);
         Assert.Empty(offenders);
     }
 
     [Fact]
-    public void EveryStructsMembers_AreInTheOrderItsFileHoldsThem_AsMutagensFieldIndexNumbersThem()
+    public void EveryStructOfTheGamesOwnClasses_HoldsItsMembersInTheOrderItsFileHoldsThem_AsMutagensFieldIndexNumbersThem()
     {
         var module = typeof(Weapon).Assembly;
-        static IEnumerable<SubFieldSpec> Walk(SubFieldSpec spec) =>
-            new[] { spec }
-                .Concat((spec.SubFields ?? []).SelectMany(Walk))
-                .Concat(spec.ElementSpec is { } element ? Walk(element) : [])
-                .Concat((spec.Variants?.Values ?? []).SelectMany(Walk));
+        var structs = Schemas.Values
+            .SelectMany(schema => schema.RecordColumns.SelectMany(c => Walk(c.Field)).Select(spec => (schema.TableName, Spec: spec)))
+            .Where(x => x.Spec.SubFields is { Count: > 1 })
+            .SelectMany(x => new[] { module.GetType($"{typeof(Weapon).Namespace}.{x.Spec.LeafTypeName}") }.OfType<Type>()
+                .Select(loquiClass => (Where: $"{x.TableName} {loquiClass.Name}", Members: x.Spec.SubFields ?? [], Class: loquiClass)))
+            .ToList();
 
-        var offenders = Schemas.Values
-            .SelectMany(schema => schema.RecordColumns.SelectMany(c => Walk(c.Field)).Select(s => (schema.TableName, Spec: s)))
-            .SelectMany(x => x.Spec is { SubFields: { Count: > 1 } members, LeafTypeName: { } leaf }
-                && MutagensFieldIndexEnum(module.GetType($"{typeof(Weapon).Namespace}.{leaf}")) is { } fieldIndex
-                    ? OutOfOrder($"{x.TableName} {leaf}", members.Select(f => f.Name), fieldIndex)
-                    : [])
+        var offenders = structs
+            .SelectMany(x => OutOfOrder(x.Where, x.Members.Select(f => f.Name), x.Class))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+        Assert.NotEmpty(structs);
         Assert.Empty(offenders);
     }
 }
