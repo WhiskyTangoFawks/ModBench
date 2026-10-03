@@ -194,7 +194,7 @@ public sealed class EditRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldReadOnly,
                 $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
-                "source tree's own structure rather than by a field (ADR-0007). Adding, removing or " +
+                "source tree's own structure rather than by a field (ADR-0006 invariant 4). Adding, removing or " +
                 "reordering a container's children is a structural gesture, not a field edit.");
         }
 

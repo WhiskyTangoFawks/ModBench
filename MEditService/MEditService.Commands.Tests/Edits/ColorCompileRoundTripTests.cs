@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Text.Json;
 using MEditService.Commands.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -55,37 +56,36 @@ public sealed class ColorCompileRoundTripTests : IDisposable
         Assert.Equal((200, 100, 50), (light.Color.R, light.Color.G, light.Color.B));
     }
 
-    [Theory]
-    [InlineData("kywd")]
-    [InlineData("lcrt")]
-    [InlineData("aact")]
-    [InlineData("lctn")]
-    public async Task ByteRgbaColor_AlphaEdit_CompilesAndReparsesAllFourComponents(string table)
+    private async Task AssertAlphaEditCompilesAndReparsesAllFourComponents(
+        FormKey record, Func<IFallout4ModGetter, FormKey, Color?> colorOf)
     {
-        var record = table switch
-        {
-            "kywd" => _fixture.Keyword,
-            "lcrt" => _fixture.LocationReferenceType,
-            "aact" => _fixture.ActionRecord,
-            "lctn" => _fixture.Location,
-            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "unknown table"),
-        };
-
         Edit(record, "Color", "\"#A0285078\"");
 
-        var mod = await CompileAndReparse();
-        var actual = table switch
-        {
-            "kywd" => mod.Keywords.Single(r => r.FormKey == record).Color,
-            "lcrt" => mod.LocationReferenceTypes.Single(r => r.FormKey == record).Color,
-            "aact" => mod.Actions.Single(r => r.FormKey == record).Color,
-            "lctn" => mod.Locations.Single(r => r.FormKey == record).Color,
-            _ => null,
-        };
+        var actual = colorOf(await CompileAndReparse(), record);
 
         Assert.NotNull(actual);
         Assert.Equal((40, 80, 120, 160), (actual.Value.R, actual.Value.G, actual.Value.B, actual.Value.A));
     }
+
+    [Fact]
+    public Task Keyword_ByteRgbaAlphaEdit_CompilesAndReparsesAllFourComponents() =>
+        AssertAlphaEditCompilesAndReparsesAllFourComponents(
+            _fixture.Keyword, (mod, key) => mod.Keywords.Single(r => r.FormKey == key).Color);
+
+    [Fact]
+    public Task LocationReferenceType_ByteRgbaAlphaEdit_CompilesAndReparsesAllFourComponents() =>
+        AssertAlphaEditCompilesAndReparsesAllFourComponents(
+            _fixture.LocationReferenceType, (mod, key) => mod.LocationReferenceTypes.Single(r => r.FormKey == key).Color);
+
+    [Fact]
+    public Task Action_ByteRgbaAlphaEdit_CompilesAndReparsesAllFourComponents() =>
+        AssertAlphaEditCompilesAndReparsesAllFourComponents(
+            _fixture.ActionRecord, (mod, key) => mod.Actions.Single(r => r.FormKey == key).Color);
+
+    [Fact]
+    public Task Location_ByteRgbaAlphaEdit_CompilesAndReparsesAllFourComponents() =>
+        AssertAlphaEditCompilesAndReparsesAllFourComponents(
+            _fixture.Location, (mod, key) => mod.Locations.Single(r => r.FormKey == key).Color);
 
     [Fact]
     public async Task FloatEncodedColor_Edit_CompilesAndReparsesTheExactBytes()

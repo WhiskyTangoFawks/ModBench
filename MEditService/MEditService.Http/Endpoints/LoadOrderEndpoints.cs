@@ -14,7 +14,7 @@ public static class LoadOrderEndpoints
             .WithName("PutLoadOrder")
             .WithTags(Tag)
             .WithDescription(
-                "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
+                "Reconciles the load order against this snapshot (ADR-0013 invariant 1): every plugin file in " +
                 "the instance, each with its origin and path, the active plugins in load order, and " +
                 "the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +

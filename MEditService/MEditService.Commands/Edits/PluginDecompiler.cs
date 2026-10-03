@@ -119,7 +119,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         {
             logger.LogInformation(
                 "{Plugin} is model-identical to its own source but not byte-identical — " +
-                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 decision 2).",
+                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 invariant 2).",
                 pluginName);
         }
 

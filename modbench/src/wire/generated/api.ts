@@ -28,7 +28,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every plugin file in the instance, each with its origin and path, the active plugins in load order, and the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013 invariant 1): every plugin file in the instance, each with its origin and path, the active plugins in load order, and the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and registered (indexed only if never seen), plugins absent from it are unregistered, plugins whose load index moved are re-registered SQL-only; then one winner sweep. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -389,7 +389,7 @@ export interface paths {
         put?: never;
         /**
          * Delete records as working-tree changes, each on its own.
-         * @description Deletes each record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. Each record is deleted or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
+         * @description Deletes each record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. Each record is deleted or refused on its own, and the answer names both. No reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007 invariant 4), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
         delete?: never;
@@ -409,7 +409,7 @@ export interface paths {
         put?: never;
         /**
          * Copy records into destination plugins, each record into each destination on its own.
-         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey; the master dependency is derived at compile (ADR-0008). A destination that already holds the record is refused unless replace is given, and a replacement changes its own fields only, keeping the children the destination's copy carries. New: a duplicate under the destination's next free FormID, with an EditorID derived from the source's; a container's embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each record and destination is applied or refused on its own, and the answer names both.
+         * @description Override: the source record's own text lands verbatim in the destination under the same FormKey; the master dependency is derived at compile (ADR-0008 invariant 1). A destination that already holds the record is refused unless replace is given, and a replacement changes its own fields only, keeping the children the destination's copy carries. New: a duplicate under the destination's next free FormID, with an EditorID derived from the source's; a container's embedded children copy under fresh FormKeys, and a self-reference follows the copy. Each record and destination is applied or refused on its own, and the answer names both.
          */
         post: operations["CopyRecord"];
         delete?: never;
