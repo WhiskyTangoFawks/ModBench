@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Pinned at the listing seam: <c>Search</c>, not <c>GetOverrideStack</c>, is what the
-/// Plugins tree calls, and it is the only real producer of a non-None value.</summary>
 public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -59,8 +57,6 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     public void Search_NewlyCreatedRecord_ReportsAdded()
     {
         using var index = Indexes.Reconciled(_fixture);
-        // A created record is one no committed ref holds: a document the working tree gains and the
-        // tree is re-read for.
         var template = index.RequireReads().DocumentOf(_untouchedFormKey.ToString(), _baseKey);
         var created = new FormKey(_untouchedFormKey.ModKey, _untouchedFormKey.ID + 1).ToString();
         var body = template.BodyOf()

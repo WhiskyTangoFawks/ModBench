@@ -7,16 +7,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// The malformed-plugin diagnosis is a row: projected in the pass that hashes the binary, read
-// through the reads, validated by that hash, re-derived with the plugin and gone with its rows.
 public sealed class PluginDiagnosisRowTests : IDisposable
 {
     private const string MalformedFixture = "LitR - TrueStorms.esp";
     private const string Origin = "TrueStormsMod";
     private static readonly PluginAddress Key = new(MalformedFixture, Origin);
 
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-diagnosis-instance-").FullName;
+    private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
+    private readonly ScratchDirectory _instanceRoot = new("medit-diagnosis-instance-");
     private readonly string _pluginPath;
 
     public PluginDiagnosisRowTests()
@@ -28,8 +26,8 @@ public sealed class PluginDiagnosisRowTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_gameDirectory, recursive: true);
-        Directory.Delete(_instanceRoot, recursive: true);
+        _gameDirectory.Dispose();
+        _instanceRoot.Dispose();
     }
 
     private LoadOrderEntry Entry => new(MalformedFixture, _pluginPath, Origin, 0, Enabled: true, Winning: true);
@@ -41,16 +39,13 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         return index;
     }
 
-    // Repaired by another tool: the same name, clean bytes.
-    private void RepairOnDisk()
+    private void RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes()
     {
         var clean = new Fallout4Mod(ModKey.FromFileName(MalformedFixture), Fallout4Release.Fallout4);
         clean.Npcs.AddNew("RepairedNpc");
         clean.WriteToBinary(_pluginPath);
     }
 
-    // plugins.md, A row: a malformed plugin is one whose bytes depart from what the Creation Kit
-    // writes, active or not.
     [Fact]
     public void AMalformedPluginThatIsNotActive_StillReadsAsItsDiagnosisRows()
     {
@@ -83,14 +78,12 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         using var index = Reconciled(new LoadOrderHolder());
         Assert.Single(index.RequireReads().GetPluginDiagnoses());
 
-        RepairOnDisk();
+        RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
         Assert.True(index.Revalidate());
 
         Assert.Empty(index.RequireReads().GetPluginDiagnoses());
     }
 
-    // Validated by hash like every row: kept across launches while the bytes match, re-derived
-    // at open once they do not.
     [Fact]
     public void ADiagnosisRow_PersistsAcrossLaunches_AndIsReDerivedWhenTheBinaryChangedUnderneath()
     {
@@ -103,13 +96,11 @@ public sealed class PluginDiagnosisRowTests : IDisposable
             Assert.Single(warm.RequireReads().GetPluginDiagnoses());
         }
 
-        RepairOnDisk();
+        RepairOnDiskAsAnotherToolWouldWithTheSameNameAndCleanBytes();
         using var reopened = Reconciled(new LoadOrderHolder());
         Assert.Empty(reopened.RequireReads().GetPluginDiagnoses());
     }
 
-    // Registered answers, unregistered answers nothing (ADR-0009 invariant 1): the row is scoped
-    // like every other.
     [Fact]
     public void ADiagnosisRow_OfAPluginTheSnapshotStoppedNaming_AnswersNothing()
     {

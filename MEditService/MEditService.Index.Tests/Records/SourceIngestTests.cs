@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A tracked plugin's truth is its tree: what the Index answers after an ingest is what the
-/// working tree holds, what HEAD holds, and what it says when the tree cannot be read.</summary>
 public sealed class SourceIngestTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -54,9 +52,7 @@ public sealed class SourceIngestTests : IDisposable
 
     private string ModFolder => _entry.ModFolderOf();
 
-    // A fresh Index over the same tracked tree: the launch that has to read whatever the tree now
-    // holds, having been told nothing.
-    private Indexer Opened() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
+    private Indexer LaunchedFreshOverTheSameTrackedTreeAndToldNothing() => Indexes.Reconciled(_fixture.GameDirectory, _fixture.Plugins);
 
     private string NpcSourceFile(Indexer index) =>
         _entry.SourceFileOf(index.RequireReads().DocumentOf(_npc, Plugin));
@@ -66,75 +62,71 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
     {
-        // A hand edit outside Modbench — the user's own editor, an agent's script, a git checkout.
-        // Nothing tells the backend it happened; the next reconcile is simply expected to read it.
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
-    // The edit rides along so that only a read of the tree, never the binary, answers with it.
     [Fact]
     public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
     {
-        using (var live = Opened())
+        const string editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName = "SortedByHandNpc";
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
         {
             var document = NpcSourceFile(live);
             var sorted = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "SortedByHand"));
             File.WriteAllText(
                 Path.Combine(sorted.FullName, Path.GetFileName(document)),
-                File.ReadAllText(document).Replace(NpcEditorId, "SortedByHandNpc", StringComparison.Ordinal));
+                File.ReadAllText(document).Replace(NpcEditorId, editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, StringComparison.Ordinal));
             File.Delete(document);
         }
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("SortedByHandNpc", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
     {
-        using (var live = Opened()) File.Delete(NpcSourceFile(live));
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing()) File.Delete(NpcSourceFile(live));
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Null(reloaded.RequireReads().GetDocument(_npc, Plugin));
-        // Positive control: the load really happened and really indexed this plugin, or "absent"
-        // would be true of a load that did nothing at all.
-        Assert.NotNull(reloaded.RequireReads().GetDocument(_otherNpc, Plugin));
+        var siblingProvingTheLoadReallyIndexedThePlugin = reloaded.RequireReads().GetDocument(_otherNpc, Plugin);
+        Assert.NotNull(siblingProvingTheLoadReallyIndexedThePlugin);
     }
 
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_ServedAsGitShowServesThem()
     {
         string relativePath;
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
         {
             var document = live.RequireReads().DocumentOf(_npc, Plugin);
             relativePath = Path.GetRelativePath(ModFolder, _entry.SourceFileOf(document));
             _entry.HandEdit(document, NpcEditorId, "ExternallyRenamed");
         }
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
         Assert.NotNull(head);
         Assert.Equal(NpcEditorId, head.EditorId);
-        // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
         Assert.Equal(_entry.Git("show", $"HEAD:{relativePath.Replace('\\', '/')}"), head.Body);
     }
 
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
         var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
@@ -147,14 +139,11 @@ public sealed class SourceIngestTests : IDisposable
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
-        // Rebuilt through the same door the production path uses, never a hand-spliced JSON string: the
-        // whole-mod door's reader is not a generic JSON parser, so a raw text edit cannot promise a
-        // byte-for-byte round trip.
-        var edited = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-        edited.ModHeader.Author = "RenamedByHand";
-        File.WriteAllBytes(RootDocument, HeaderDocument.Write(edited));
+        var editedThroughTheWholeModDoorBecauseItsReaderIsNotAGenericJsonParser = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        editedThroughTheWholeModDoorBecauseItsReaderIsNotAGenericJsonParser.ModHeader.Author = "RenamedByHand";
+        File.WriteAllBytes(RootDocument, HeaderDocument.Write(editedThroughTheWholeModDoorBecauseItsReaderIsNotAGenericJsonParser));
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var effective = reloaded.RequireReads().GetDocument(headerFormKey, Plugin);
         var head = reloaded.RequireReads().HeadDocument(headerFormKey, Plugin);
@@ -170,28 +159,27 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public void AnEditCommittedOutsideModbench_LeavesBothRefsOnTheNewBytes_NotPermanentlyDirty()
     {
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "CommittedRename");
         _entry.Git("add", "-A");
         _entry.Git("commit", "-q", "-m", "external rename");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        // HEAD moved with the working tree, so the record is clean against its *new* baseline —
-        // not dirty against a baseline no ref holds any more.
         Assert.Equal("CommittedRename", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
         var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
         Assert.NotNull(head);
         Assert.Equal("CommittedRename", head.EditorId);
+        Assert.False(reloaded.RequireReads().StackEntry(_npc, Plugin).Require().HasWorkingTreeChange);
     }
 
     [Fact]
     public void ReconcilingOneEditedRecord_LeavesItsUntouchedSiblingClean()
     {
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             _entry.HandEdit(live.RequireReads().DocumentOf(_npc, Plugin), NpcEditorId, "ExternallyRenamed");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var byFormKey = reloaded.RequireReads().Search(new RecordQuery(Plugin: PluginName, Limit: 100))
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
@@ -204,7 +192,7 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public async Task ABinaryChangeOnATrackedPlugin_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
-        using var index = Opened();
+        using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var before = index.Projected().DocumentOf(_npc, Plugin);
         Assert.Equal(NpcEditorId, before.EditorId);
@@ -220,17 +208,13 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
     {
-        // Never-assume-exclusive-ownership: MO2, a git operation, or the user can leave this tree
-        // half-written at any moment. The root header is what the whole-mod door reads first.
-        File.WriteAllText(RootDocument, "{ this is not json");
+        const string halfWrittenRootHeaderTheWholeModDoorReadsFirst = "{ this is not json";
+        File.WriteAllText(RootDocument, halfWrittenRootHeaderTheWholeModDoorReadsFirst);
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        // Degraded, not dropped — the plugin's records are still queryable from the binary.
         Assert.NotNull(reloaded.RequireReads().GetDocument(_npc, Plugin));
 
-        // ...and the degradation is *visible*, which is the whole mitigation: a user reading
-        // pre-Track binary content while believing they are reading their tracked source is the hazard.
         var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
@@ -239,18 +223,17 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public void AnUnreadableSourceDocument_AtValidation_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
     {
-        using var index = Opened();
+        using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
         var document = index.RequireReads().DocumentOf(_npc, Plugin);
         index.Edit(_entry, document, document.BodyOf().Replace("\"HeightMax\": 0.5", "\"HeightMax\": 0.75", StringComparison.Ordinal));
-        Assert.Equal(0.75f, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        const float editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt = 0.75f;
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
         index.NextSnapshot();
 
-        // The binary was never consulted: it holds the fixture's untouched height_max, and what
-        // still answers is the edited 0.75 the source-derived rows already carried.
-        Assert.Equal(0.75f, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
+        Assert.Equal(editedHeightMaxTheBinaryNeverHeldSoOnlySourceDerivedRowsCanAnswerIt, HeightMaxOf(index.Projected().DocumentOf(_npc, Plugin)));
 
         var failure = Assert.Single(index.Status.Failures);
         Assert.Equal(PluginName, failure.Name);
@@ -260,15 +243,13 @@ public sealed class SourceIngestTests : IDisposable
     private static float HeightMaxOf(RecordDocument document) =>
         Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle();
 
-    // Never-assume-exclusive-ownership: a file another tool leaves half-written declares no FormKey,
-    // and a record going missing from the read model without a word is the hazard.
     [Fact]
     public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_AndSaysSoInTheFailures()
     {
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             File.WriteAllText(NpcSourceFile(live), """{"EditorID": "HalfWritten"}""");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(PluginName, failure.Name);
@@ -279,11 +260,11 @@ public sealed class SourceIngestTests : IDisposable
     public void ABackupCopyDeclaringTheSameRecord_DegradesToTheBinary_AndNamesBothDocuments()
     {
         string document;
-        using (var live = Opened()) document = NpcSourceFile(live);
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing()) document = NpcSourceFile(live);
         var backup = Path.Combine(Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "Backup")).FullName, Path.GetFileName(document));
         File.WriteAllText(backup, File.ReadAllText(document).Replace(NpcEditorId, "BackupNpc", StringComparison.Ordinal));
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         Assert.Equal(NpcEditorId, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
         var failure = Assert.Single(reloaded.Status.Failures);
@@ -295,7 +276,7 @@ public sealed class SourceIngestTests : IDisposable
     public void APluginWhoseBinaryCannotBeOpened_TakesARefreshOfItsSourceWithoutThrowing()
     {
         File.WriteAllText(_entry.Path, "this is not a plugin");
-        using var index = Opened();
+        using var index = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
 
         index.NextSnapshot();
@@ -306,24 +287,20 @@ public sealed class SourceIngestTests : IDisposable
     {
         var sourceRoot = Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
         string keywordFile;
-        using (var live = Opened())
+        using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
             keywordFile = _entry.SourceFileOf(live.RequireReads().DocumentOf(_keyword, Plugin));
 
-        // A committed file the per-record codec cannot read back. "Npcs" sorts after "Keywords" and git
-        // orders porcelain output by path, so the good deletion below is processed first.
-        var poison = Path.Combine(sourceRoot, "Npcs", "zzbroken.json");
-        File.WriteAllText(poison, "{ not a record");
+        var committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst =
+            Path.Combine(sourceRoot, "Npcs", "zzbroken.json");
+        File.WriteAllText(committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst, "{ not a record");
         _entry.Git("add", "-A");
         _entry.Git("commit", "-q", "-m", "commit an unreadable record");
 
-        // Two working-tree deletions. The first re-seeds Head and commits; the second throws when its
-        // HEAD blob is parsed, aborting the ingest partway through the dirty set.
         File.Delete(keywordFile);
-        File.Delete(poison);
+        File.Delete(committedFileTheCodecCannotReadBackUnderNpcsWhichSortsAfterKeywordsSoGitPorcelainProcessesTheGoodDeletionFirst);
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
         Assert.NotEmpty(reloaded.Status.Failures);
 
         var stack = reloaded.RequireReads().GetOverrideStack(_keyword);
@@ -336,14 +313,10 @@ public sealed class SourceIngestTests : IDisposable
     {
         RenameTheNpc("RenamedAcrossReload");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        // Effective is the working tree: the new name.
         Assert.Equal("RenamedAcrossReload", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
 
-        // Head is HEAD: the old name, served from the blob at the record's former path. Without the pairing
-        // this is null, the new path marking the record working-tree-only while the old path seeds it as
-        // committed-only.
         var head = reloaded.RequireReads().HeadDocument(_npc, Plugin);
         Assert.NotNull(head);
         Assert.Equal(NpcEditorId, head.EditorId);
@@ -354,7 +327,7 @@ public sealed class SourceIngestTests : IDisposable
     {
         RenameTheNpc("RenamedOnce");
 
-        using var reloaded = Opened();
+        using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
         var stack = reloaded.RequireReads().GetOverrideStack(_npc);
         Assert.NotNull(stack);
@@ -364,7 +337,7 @@ public sealed class SourceIngestTests : IDisposable
 
     private void RenameTheNpc(string newEditorId)
     {
-        using var live = Opened();
+        using var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
         var document = live.RequireReads().DocumentOf(_npc, Plugin);
         live.Rename(
             _entry, document, newEditorId,

@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// End to end: the reconcile's GameRelease has to reach FormKeyResolution.From through BuildFields and
-// CheckErrorBuilder.Build for the exemption to take effect on a real read.
 public class HardcodedFormKeyResolutionTests
 {
     [Fact]
@@ -18,8 +16,8 @@ public class HardcodedFormKeyResolutionTests
             .WithPlugin("Hardcoded.esp", mod =>
             {
                 var npc = mod.Npcs.AddNew("PlayerReferencer");
-                // 00000007:Fallout4.esm — the Player, engine-hardcoded, never present in form_lookup.
-                npc.Race.SetTo(new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x000007));
+                var playerHardcodedByTheEngineAndAbsentFromFormLookup = new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x000007);
+                npc.Race.SetTo(playerHardcodedByTheEngineAndAbsentFromFormLookup);
                 npcKey = npc.FormKey;
             }, origin: "ModA")
             .BuildScattered();

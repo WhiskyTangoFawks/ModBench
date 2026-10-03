@@ -3,8 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Container Head reconciliation, against <see cref="ContainerMod"/>, whose records nest: a
-/// flat fixture exercises no container at all.</summary>
 public sealed class SourceIngestContainerTests : IDisposable
 {
     private readonly ContainerMod _fixture = new();
@@ -35,13 +33,11 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         using var reloaded = Reloaded();
 
-        // The load completed and the edit is visible — no throw, no dropped plugin, no fallback.
         Assert.Empty(reloaded.Status.Failures);
         var effective = reloaded.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedCell", effective.EditorId);
 
-        // Head now holds the true, pre-edit baseline — not Effective's own value.
         var head = reloaded.RequireReads().HeadDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(head);
         Assert.Equal(ContainerModPlugin.EmbedCellEditorId, head.EditorId);
@@ -92,14 +88,14 @@ public sealed class SourceIngestContainerTests : IDisposable
         var newFormKey = $"000900:{ContainerMod.PluginName}";
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var original = File.ReadAllText(file);
-        var temporaryChild = ChildObject(original, ContainerModPlugin.TemporaryRefEditorId);
+        var temporaryChild = ObjectEnclosingTheLineNaming(original, ContainerModPlugin.TemporaryRefEditorId);
         var withNewChild = original.Replace(
             temporaryChild,
             temporaryChild + ",\n" + temporaryChild
                 .Replace(_fixture.TemporaryRef.ToString(), newFormKey, StringComparison.Ordinal)
                 .Replace(ContainerModPlugin.TemporaryRefEditorId, "BrandNewRef", StringComparison.Ordinal),
             StringComparison.Ordinal);
-        Assert.NotEqual(original, withNewChild); // the replace actually matched — a guard against a silent no-op
+        Assert.NotEqual(original, withNewChild);
         File.WriteAllText(file, withNewChild);
 
         using var reloaded = Reloaded();
@@ -116,9 +112,9 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var original = File.ReadAllText(file);
-        var persistentChild = ChildObject(original, ContainerModPlugin.PersistentRefEditorId);
+        var persistentChild = ObjectEnclosingTheLineNaming(original, ContainerModPlugin.PersistentRefEditorId);
         var withoutPersistentChild = original.Replace(persistentChild, string.Empty, StringComparison.Ordinal);
-        Assert.NotEqual(original, withoutPersistentChild); // the replace actually matched
+        Assert.NotEqual(original, withoutPersistentChild);
         File.WriteAllText(file, withoutPersistentChild);
 
         using var reloaded = Reloaded();
@@ -128,9 +124,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotNull(reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
     }
 
-    // The inlined child's own braces inside its owner's document, found by the line that names it and
-    // walked out to the enclosing object, so the fixture's exact indentation is never spelled here.
-    private static string ChildObject(string document, string editorId)
+    private static string ObjectEnclosingTheLineNaming(string document, string editorId)
     {
         var at = document.IndexOf($"\"{editorId}\"", StringComparison.Ordinal);
         Assert.True(at >= 0, $"The container's document holds no child named '{editorId}'.");

@@ -9,13 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary><c>SKI_PlasmaAutocannon.esp</c> carries exactly one record Mutagen cannot read: a PERK
-/// whose entry-point parameter flags it refuses.</summary>
 public sealed class ParseFailedRecordTests
 {
     private const string Fixture = "SKI_PlasmaAutocannon.esp";
     private const string Origin = "ParseFailedFixtureMod";
-    private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
+    private const string PerkWhoseEntryPointParameterFlagsMutagenRefuses = "0000EF:SKI_PlasmaAutocannon.esp";
     private const string Diagnosis = "did not have expected parameter type flag";
     private const string DeletedNpcPluginName = "DeletedNpc.esp";
     private const string DeletedNpc = "000800:DeletedNpc.esp";
@@ -25,7 +23,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var perk = Perks(scratch).Single(r => r.FormKey == UnreadablePerk);
+        var perk = Perks(scratch).Single(r => r.FormKey == PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
         Assert.NotNull(perk.ParseDiagnosis);
         Assert.Contains(Diagnosis, perk.ParseDiagnosis);
@@ -47,7 +45,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var readable = Perks(scratch).Where(r => r.FormKey != UnreadablePerk).ToList();
+        var readable = Perks(scratch).Where(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses).ToList();
 
         Assert.NotEmpty(readable);
         Assert.All(readable, r => Assert.Null(r.ParseDiagnosis));
@@ -89,11 +87,10 @@ public sealed class ParseFailedRecordTests
         var flagged = scratch.Reads.GetPluginsWithParseFailures();
 
         Assert.Equal([ColumnKey.Of(Fixture, Origin)], flagged.Order(StringComparer.Ordinal));
-        // The stub masters really are indexed beside it, so "only" has something to exclude.
-        Assert.True(scratch.Reads.OpenedPlugins.Count > 1);
+        var stubMastersIndexedBesideItSoOnlyHasSomethingToExclude = scratch.Reads.OpenedPlugins.Count;
+        Assert.True(stubMastersIndexedBesideItSoOnlyHasSomethingToExclude > 1);
     }
 
-    // plugins.md, A row: Unreadable records is the row's status whether the plugin is active or not.
     [Fact]
     public void GetPluginsWithParseFailures_NamesAPluginThatIsNotActive()
     {
@@ -107,22 +104,20 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var stack = scratch.Reads.GetOverrideStack(UnreadablePerk);
+        var stack = scratch.Reads.GetOverrideStack(PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
         Assert.NotNull(stack);
         var document = Assert.Single(stack.Entries).Effective;
-        Assert.Equal(UnreadablePerk, document.FormKey);
+        Assert.Equal(PerkWhoseEntryPointParameterFlagsMutagenRefuses, document.FormKey);
         Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
     }
 
-    // The record editor renders the column read-only from this member alone, so the document a
-    // caller reads has to carry the diagnosis rather than only the tree's listings.
     [Fact]
     public void GetOverrideStack_CarriesTheDiagnosisOnTheUnreadableRecordsDocument()
     {
         using var scratch = new Scratch(Fixture);
 
-        var document = Assert.Single(scratch.Reads.GetOverrideStack(UnreadablePerk).Require().Entries).Effective;
+        var document = Assert.Single(scratch.Reads.GetOverrideStack(PerkWhoseEntryPointParameterFlagsMutagenRefuses).Require().Entries).Effective;
 
         Assert.NotNull(document.ParseDiagnosis);
         Assert.Contains(Diagnosis, document.ParseDiagnosis);
@@ -132,19 +127,18 @@ public sealed class ParseFailedRecordTests
     public void GetOverrideStack_LeavesAReadableRecordsDocumentWithoutADiagnosis()
     {
         using var scratch = new Scratch(Fixture);
-        var readable = Perks(scratch).First(r => r.FormKey != UnreadablePerk);
+        var readable = Perks(scratch).First(r => r.FormKey != PerkWhoseEntryPointParameterFlagsMutagenRefuses);
 
         var document = Assert.Single(scratch.Reads.GetOverrideStack(readable.FormKey).Require().Entries).Effective;
 
         Assert.Null(document.ParseDiagnosis);
     }
 
-    // Corrupting a major record's signature inside its GRUP makes Mutagen's location scan throw
-    // before it yields anything of that type, so nothing of that type is reachable.
     [Fact]
     public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_KeepsItsOtherRecordTypes()
     {
-        using var scratch = new Scratch(CorruptGroupFixture.Build(), CorruptGroupFixture.PluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
         var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
 
@@ -155,7 +149,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_OfAPluginWhoseGroupCannotBeEnumerated_MarksThatRecordTypeAndItsPlugin()
     {
-        using var scratch = new Scratch(CorruptGroupFixture.Build(), CorruptGroupFixture.PluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(CorruptGroupFixture.BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(sources), CorruptGroupFixture.PluginName);
 
         var counts = scratch.Reads.GetRecordTypeCounts(scratch.Plugin);
 
@@ -168,7 +163,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_IndexesADeletedRecordWhoseFieldsAreAbsent_AsDeleted_NotParseFailed()
     {
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteEmpty(path, npc)), DeletedNpcPluginName);
 
         var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
 
@@ -179,7 +175,8 @@ public sealed class ParseFailedRecordTests
     [Fact]
     public void Reconcile_KeepsADeletedRecordThatStillHoldsFieldsItCannotRead_WithItsDiagnosis()
     {
-        using var scratch = new Scratch(Scratch.DeletedNpcPlugin((path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
+        using var sources = new ScratchDirectory("medit-parsefail-source-");
+        using var scratch = new Scratch(Scratch.DeletedNpcPlugin(sources, (path, npc) => DeletedNpcPlugin.WriteHoldingFields(path, npc)), DeletedNpcPluginName);
 
         var document = Assert.Single(scratch.Reads.GetOverrideStack(DeletedNpc).Require().Entries).Effective;
 
@@ -199,48 +196,42 @@ public sealed class ParseFailedRecordTests
             RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin,
             Search: null, Limit: 1000, Offset: 0)).Items;
 
-    // One NPC whose signature inside the NPC_ GRUP is mangled, plus one readable WEAP, so
-    // "the rest of the plugin still indexes" has something to be true of.
     private static class CorruptGroupFixture
     {
         internal const string PluginName = "CorruptGroup.esp";
 
-        internal static string Build()
+        internal static string BuildWithANpcSignatureMangledSoMutagensLocationScanThrowsBeforeYieldingAnyNpc(ScratchDirectory directory)
         {
-            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-corruptgroup-").FullName, PluginName);
+            var path = Path.Combine(directory.Path, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
             mod.Npcs.AddNew("TheNpc");
             mod.Weapons.AddNew("TheWeapon");
             mod.WriteToBinary(path);
 
             var bytes = File.ReadAllBytes(path);
-            // The first occurrence is the GRUP header's contained-type field; the second is the
-            // record itself, and only that one is mangled.
-            var occurrences = new List<int>();
+            var npcSignatureOffsetsTheFirstBeingTheGroupHeadersContainedTypeAndTheSecondTheRecordItself = new List<int>();
             for (var i = 0; i + 4 <= bytes.Length; i++)
             {
                 if (bytes[i] == 'N' && bytes[i + 1] == 'P' && bytes[i + 2] == 'C' && bytes[i + 3] == '_')
-                    occurrences.Add(i);
+                    npcSignatureOffsetsTheFirstBeingTheGroupHeadersContainedTypeAndTheSecondTheRecordItself.Add(i);
             }
-            bytes[occurrences[1]] = (byte)'X';
+            bytes[npcSignatureOffsetsTheFirstBeingTheGroupHeadersContainedTypeAndTheSecondTheRecordItself[1]] = (byte)'X';
             File.WriteAllBytes(path, bytes);
             return path;
         }
     }
 
-    // Stub masters come from the fixture's own declared list: the Index needs the names present,
-    // not their content.
     private sealed class Scratch : IDisposable
     {
-        internal static string DeletedNpcPlugin(Action<string, FormKey> write)
+        internal static string DeletedNpcPlugin(ScratchDirectory directory, Action<string, FormKey> write)
         {
-            var path = Path.Combine(Directory.CreateTempSubdirectory("medit-deletednpc-").FullName, DeletedNpcPluginName);
+            var path = Path.Combine(directory.Path, DeletedNpcPluginName);
             write(path, FormKey.Factory(DeletedNpc));
             return path;
         }
 
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-parsefail-game-");
+        private readonly ScratchDirectory _modFolder = new("medit-parsefail-mod-");
 
         public Indexer Index { get; }
         public IRecordReads Reads => Index.Projected();
@@ -264,15 +255,15 @@ public sealed class ParseFailedRecordTests
             {
                 foreach (var master in overlay.ModHeader.MasterReferences)
                 {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", inputs.Count, Enabled: true, Winning: true));
+                    var emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent = Path.Combine(_gameDirectory, master.Master.FileName);
+                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent);
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, emptyStubOfADeclaredMasterBecauseTheIndexNeedsTheNamePresentNotTheContent, "Stubs", inputs.Count, Enabled: true, Winning: true));
                 }
             }
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, inputs.Count, Enabled: active, Winning: true));
 
-            // Truncated below a TES4 header: no record identity exists to hang a status on.
-            if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);
+            byte[] truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn = [0x54, 0x45, 0x53, 0x34, 0xFF];
+            if (corruptWholeFile) File.WriteAllBytes(pluginPath, truncatedBelowATes4HeaderSoNoRecordIdentityExistsToHangAStatusOn);
 
             Index = Indexes.Reconciled(_gameDirectory, inputs);
         }
@@ -280,8 +271,8 @@ public sealed class ParseFailedRecordTests
         public void Dispose()
         {
             Index.Dispose();
-            try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
-            try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

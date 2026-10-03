@@ -23,8 +23,6 @@ public sealed class IndexFileLocationTests : IDisposable
         Assert.Equal(Path.Combine(instance, "modbench", "index.duckdb"), IndexFiles.In(instance));
     }
 
-    // Profiles within one instance share the file — that is what keeps a profile switch cheap — so
-    // trailing separators and relative segments must not mint a second file for one instance.
     [Fact]
     public void TheSameInstanceSpeltDifferently_FindsTheOneFile()
     {
@@ -40,8 +38,6 @@ public sealed class IndexFileLocationTests : IDisposable
         Assert.Single(Directory.GetFiles(instance, "*.duckdb", SearchOption.AllDirectories));
     }
 
-    // Two instances on one game have their own same-named mod folders holding different bytes, so
-    // they must never share a store.
     [Fact]
     public void ADifferentInstance_GetsItsOwnFile()
     {
