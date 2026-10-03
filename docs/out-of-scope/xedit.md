@@ -50,7 +50,7 @@ Gestures Modbench does differently.
 | 25 | Two flag changes in one write | Clearing Partial Form and setting Deleted on a Partial Form copy leaves it Deleted | Reverts it to Partial Form, by the order it applies the two changes | Ruling: a write ends as it asks. |
 | 26 | Deep copy as override into a plugin that holds some of the child records | One confirmation for the selection | Two items: one keeps each record the destination holds; one, with overwriting, asks for each | Principle, Minimal by default: one gesture asks once. |
 | 27 | Create a cell at a grid position the worldspace already has | Refused, naming the cell. The refusal for a master's cell points at copy as override. | Returns the plugin's cell, or makes an override of the master's | Ruling: create never turns into an override (commands.md, Principles). |
-| 28 | A plugin whose master is not active | Stays active and indexed, its row flagged with a master issue; its dependants are untouched | Deactivates it and every plugin that depends on it | xEdit cannot load a plugin without its master; Mutagen can. The picture then shows the load order the user has, as MO2's does. |
+| 28 | A plugin whose master is not active | Stays active and indexed, its row flagged with a master issue; its dependants are untouched | Deactivates it and every plugin that depends on it | Mutagen decides the data: xEdit cannot load a plugin without its master; Mutagen can. The picture then shows the load order the user has, as MO2's does. |
 
 ## Omissions by object
 
