@@ -98,9 +98,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
         // Resolved first on both branches so an unsupported type fails with this class's named exception.
         var generated = FindGeneratedSerializationType(record.GetType());
-        // ADR-0007's discriminator policy: a path-ambiguous record dispatches through the game's
-        // abstract serializer, whose SerializeWithCheck writes MutagenObjectType ahead of the
-        // fields, and every other record carries none.
+        // A path-ambiguous record dispatches through the game's abstract serializer, whose
+        // SerializeWithCheck writes MutagenObjectType ahead of the fields, and every other record
+        // carries none.
         var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
             ? ResolveCheckedSerializeMethod(gameRelease)
             : ResolveConcreteSerializeMethod(generated);

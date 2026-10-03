@@ -1424,7 +1424,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
     // from rows materialized before reading any. The fields are the document's own nodes at each
-    // column's path (ADR-0005 invariant 1): nothing is reconstituted.
+    // column's path (ADR-0005): nothing is reconstituted.
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,
