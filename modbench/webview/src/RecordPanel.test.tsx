@@ -1380,7 +1380,7 @@ const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole(
 const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
 const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
-describe('RecordPanel — union element rows:two plugins can disagree on which leaf of an abstract union an element is, so the rows are both leaves\' members, which a member\'s `variants`, read through the element\'s discriminator, name', () => {
+describe('RecordPanel — union element rows: two plugins can disagree on which leaf of an abstract union an element is, so the rows are both leaves\' members, which a member\'s `variants`, read through the element\'s discriminator, name', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -1574,7 +1574,6 @@ describe('RecordPanel — an absent member reads as its default, the document om
     })],
   });
 
-
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
@@ -1653,7 +1652,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
       }),
     ],
   });
-
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1738,7 +1736,6 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
       })),
     })],
   });
-
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
