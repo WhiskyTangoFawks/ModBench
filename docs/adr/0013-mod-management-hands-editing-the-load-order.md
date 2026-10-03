@@ -2,6 +2,10 @@
 
 Modbench's data is two layers. The file layer is the mods and their files, resolved by mod order. The record layer is the plugins and their records, resolved by plugin order. Mod Management owns the file layer and every file of the mod manager, and Editing reads none of them. So Mod Management alone decides which plugins are active, and hands Editing the load order as state, which Editing reconciles and never re-derives ([ADR-0002](0002-mod-management-and-editing-are-one-tool.md)).
 
+## Consequences
+
+- **Mod Management reads no plugin binary and writes no record.** A plugin's masters come from Editing, so two views never disagree over them.
+
 ## Alternatives rejected
 
 - **A bulk load verb plus a verb per loadout gesture:** reread for a mod-order change, participation for enable and disable, load and unload for unlisted plugins. Every future gesture would need its own endpoint and its own drift story.
