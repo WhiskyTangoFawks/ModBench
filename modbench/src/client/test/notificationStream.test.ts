@@ -15,7 +15,7 @@ function commentFrame(): Uint8Array {
   return new TextEncoder().encode(': connected\n\n');
 }
 
-function wellFormedFrameFailingParseNotificationEventNotJsonParse(): Uint8Array {
+function frameOfValidJsonMissingTheFieldsAnEventRequires(): Uint8Array {
   return new TextEncoder().encode('event: rows-changed\ndata: {"kind":"rows-changed"}\n\n');
 }
 
@@ -72,7 +72,7 @@ describe('SseNotificationSubscriber', () => {
   it('reconnects after a malformed frame, without dispatching it', async () => {
     const goodEvent = rowsChanged(['000002:Other.esp']);
     const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([wellFormedFrameFailingParseNotificationEventNotJsonParse()]))
+      .mockResolvedValueOnce(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))
       .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
     const received: NotificationEvent[] = [];

@@ -442,7 +442,8 @@ describe('the MO2 Instance adapter', () => {
         'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
         'mods/Harder VATS/Textures/a.dds', 'overwrite/F4SE/Plugins/x.ini',
       ];
-      expect(watchedPaths.map((relative) => fire(root, relative))).toEqual(watchedPaths.map(() => true));
+      const pathsHeardByNoWatcher = watchedPaths.filter((relative) => !fire(root, relative));
+      expect(pathsHeardByNoWatcher).toEqual([]);
       expect(fire(root, 'profiles/Default/other.txt')).toBe(false);
       expect(signals).toBe(5);
     });
@@ -503,7 +504,8 @@ describe('the MO2 Instance adapter', () => {
 
         await (await watched.settings()).gameFolder();
 
-        expect(['Fallout4.esm', 'Patch.ESP', 'cc.Esl'].map((name) => fire(join(game, 'Data'), name))).toEqual([true, true, true]);
+        const pluginsHeardByNoWatcher = ['Fallout4.esm', 'Patch.ESP', 'cc.Esl'].filter((name) => !fire(join(game, 'Data'), name));
+        expect(pluginsHeardByNoWatcher).toEqual([]);
         expect(fire(join(game, 'Data'), 'readme.txt')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
@@ -1341,7 +1343,7 @@ describe('the MO2 Instance adapter', () => {
       });
 
       it.each(['.git', '.gitignore', 'plugin-source', 'Plugin-Source', '.GITIGNORE'])(
-        'refuses a release holding %s, naming it, before anything is removed, matched case-insensitively as on Windows Plugin-Source is the kept plugin-source and the move onto it would fail part way',
+        'refuses a release holding %s, naming it, before anything is removed, matched case-insensitively as on Windows Plugin-Source is the kept plugin-source and the move onto it would fail part way while elsewhere it lands beside it and drops out of the mod\'s files',
         async (entry) => {
           await mkdir(join(extraction.path, entry));
 

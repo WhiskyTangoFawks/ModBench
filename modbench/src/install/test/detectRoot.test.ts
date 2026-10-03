@@ -28,7 +28,7 @@ async function scaffold(...paths: string[]): Promise<void> {
   }
 }
 
-const detectRoot =(extracted: string) => detectRootWith(adapterOver(dir), extracted);
+const detectRoot = (extracted: string) => detectRootWith(adapterOver(dir), extracted);
 
 describe('detectRoot', () => {
   it('points at the Data subfolder when the archive has a Data root', async () => {
@@ -69,11 +69,11 @@ describe('detectRoot', () => {
     expect(await detectRoot(dir)).toEqual({ sourceDir: join(dir, 'MyMod'), isFomod: true });
   });
 
-  it('holds no empty DATA_DIRS entry, which would collapse join(sub, name) into sub itself', () => {
+  it('holds no empty DATA_DIRS entry, which would make a scaffolded data folder collapse into the extraction root itself', () => {
     expect(DATA_DIRS.has('')).toBe(false);
   });
 
-  it.each([...DATA_DIRS])('does not peel the lone top-level DATA_DIRS entry %s', async (name) => {
+  it.each([...DATA_DIRS].filter((name) => name !== 'meshes'))('does not peel the lone top-level data folder %s, as it does not for meshes above', async (name) => {
     await scaffold(`${name}/x.dat`);
     expect(await detectRoot(dir)).toEqual({ sourceDir: dir, isFomod: false });
   });

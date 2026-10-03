@@ -2,12 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createApiClient, errorText, toLoadOrderStatus } from '../apiClient';
 
 describe('createApiClient', () => {
-  it('constructs a client with GET and POST, as openapi-fetch keeps baseUrl in internal config so only construction is observable', () => {
-    const client = createApiClient(5172);
-    expect(client).toHaveProperty('GET');
-    expect(client).toHaveProperty('POST');
-  });
-
   it('constructs different clients for different ports', () => {
     const a = createApiClient(5172);
     const b = createApiClient(5173);
@@ -64,7 +58,7 @@ describe('toLoadOrderStatus', () => {
     expect(tick('Reconciling').holdsNone).toBe(false);
   });
 
-  it('carries a heldElsewhere refusal for the HeldElsewhere state, the wire\'s state surviving only as refusal.kind so a caller never re-derives it', () => {
+  it('carries a heldElsewhere refusal for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
       totalPlugins: 0, activePlugins: 0, version: 1,

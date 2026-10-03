@@ -41,7 +41,7 @@ function loadOrderStatusTick(loadOrderStatus: {
   return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
 }
 
-const readyTickThatSettlesPutLoadOrder =() => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
+const readyTickThatSettlesPutLoadOrder = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
 
 function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
   return vi.fn((req: Request) => {
@@ -500,7 +500,7 @@ describe('HttpMEditClient — rebuildIndex', () => {
     expect(await request?.json()).toEqual({ instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
-  it('answers a 423 as heldElsewhere, apart from the generic-failure shape every other non-ok response gets', async () => {
+  it('answers a 423 as heldElsewhere, not in the generic-failure shape a non-ok response otherwise gets', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(423, {
       detail: 'This instance\'s index is open in another Modbench window (/instance/modbench/index.duckdb). '
         + 'Close mEdit there first, or open a different instance here.',

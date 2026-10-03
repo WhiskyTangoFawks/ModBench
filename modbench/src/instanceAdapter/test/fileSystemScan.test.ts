@@ -105,11 +105,12 @@ describe('no file outside the Instance adapter imports the file system to read t
     }
   });
 
-  it('the allowlist is exactly the two files that open storage of the extension’s own, the scripts folder under its storage path and the temp file an external editor opens, each really opening a file', () => {
+  it('the allowlist is exactly the two files that open storage of the extension’s own, the scripts folder under its storage path and the temp file an external editor opens, each importing the file system', () => {
     expect(NOT_THE_INSTANCE).toEqual([
       'extension.ts', join('editor', 'extendedFieldEditor.ts'),
     ]);
-    expect(NOT_THE_INSTANCE.map((rel) => fsImportsIn(join(SRC, rel)).length > 0)).toEqual([true, true]);
+    const listedFilesImportingNoFileSystem = NOT_THE_INSTANCE.filter((rel) => fsImportsIn(join(SRC, rel)).length === 0);
+    expect(listedFilesImportingNoFileSystem).toEqual([]);
   });
 });
 

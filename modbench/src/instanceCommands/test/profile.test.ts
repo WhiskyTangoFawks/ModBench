@@ -11,7 +11,7 @@ import { accessTo } from '../../test/mo2/adapterOver';
 
 const INI = 'ModOrganizer.ini';
 
-const PROFILES = ['Default', 'Secondary'];
+const CORPUS_FIXTURE_PROFILE_DIRECTORIES = ['Default', 'Secondary'];
 
 const iniText = (root: string): Promise<string> => readFile(join(root, INI), 'utf8');
 
@@ -24,7 +24,7 @@ describe('switchProfile', () => {
   it('repoints ModOrganizer.ini and nothing else', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(accessTo(root), 'Secondary', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await iniText(root)).toContain('Secondary');
@@ -34,7 +34,7 @@ describe('switchProfile', () => {
   it('writes nothing when the profile is already the selected one, so the ModOrganizer.ini watcher does not fire on a gesture that changed no byte', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await switchProfile(accessTo(root), 'Default', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: true, wrote: false });
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -43,7 +43,7 @@ describe('switchProfile', () => {
   it('refuses a name the value does not list, leaving the selection where it was, as a later read under a missing directory looks like a corrupt ini', async () => {
     const before = await iniText(root);
 
-    const outcome = await switchProfile(accessTo(root), 'No Such Profile', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'No Such Profile', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toEqual({ applied: false, refusal: 'No such profile: No Such Profile' });
     expect(await iniText(root)).toBe(before);
@@ -61,7 +61,7 @@ describe('switchProfile', () => {
   it('refuses rather than throwing when ModOrganizer.ini cannot be read', async () => {
     await rm(join(root, INI));
 
-    const outcome = await switchProfile(accessTo(root), 'Secondary', PROFILES);
+    const outcome = await switchProfile(accessTo(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/ENOENT/);
@@ -69,8 +69,8 @@ describe('switchProfile', () => {
 
   it('serializes concurrent switches — the last one issued is the selected one', async () => {
     const [first, second] = await Promise.all([
-      switchProfile(accessTo(root), 'Secondary', PROFILES),
-      switchProfile(accessTo(root), 'Default', PROFILES),
+      switchProfile(accessTo(root), 'Secondary', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
+      switchProfile(accessTo(root), 'Default', CORPUS_FIXTURE_PROFILE_DIRECTORIES),
     ]);
 
     expect(first).toEqual({ applied: true, wrote: true });

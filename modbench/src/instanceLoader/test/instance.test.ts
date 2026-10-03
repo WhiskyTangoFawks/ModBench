@@ -138,7 +138,7 @@ async function readUntilNoArmedReadIsLeft(instance: Instance): Promise<void> {
   await instance.refresh();
 }
 
-const fakeSettleClockLeavingSetImmediateReal =(): void => {
+const fakeSettleClockLeavingSetImmediateReal = (): void => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 };
 
@@ -178,7 +178,7 @@ const enableHarderVatsOutsideModbench = (root: string): Promise<void> =>
 
 const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
 
-const listedDownloadsOf =(value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
+const listedDownloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
 
 describe('Instance — the value', () => {
   it('starts empty at sequence 0, before anything has been read', () => {
@@ -445,7 +445,7 @@ describe('Instance — built by watching', () => {
     }
   });
 
-  it('recomputes nothing while the window keeps its focus', async () => {
+  it('recomputes nothing while the window keeps its focus, `active` moving as VS Code reports a focused window going idle or coming back from idle', async () => {
     const { instance, windowState } = signalledInstance();
     await instance.refresh();
     const before = instance.sequence;
@@ -463,18 +463,19 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(before + 1);
   });
 
-  it('settles the window regaining focus with the adapter\'s signals, into one recompute', async () => {
+  it('settles the window regaining focus with the adapter\'s signals, into one recompute, the focus restarting the settle the signal began', async () => {
     const { instance, signal, windowState } = signalledInstance();
     await instance.refresh();
     windowState({ focused: false, active: false });
     const before = instance.sequence;
 
+    const msWhereTheSignalsOwnSettleHasRunOut = 150;
     fakeSettleClockLeavingSetImmediateReal();
     try {
       signal();
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
       windowState({ focused: true, active: true });
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
       await instance.refresh();
     } finally {
       vi.useRealTimers();
@@ -488,11 +489,12 @@ describe('Instance — built by watching', () => {
     await instance.refresh();
     const before = instance.sequence;
 
+    const msWhereAWaitLeftArmedWouldFire = 1000;
     vi.useFakeTimers();
     try {
       signal();
       await instance.refresh();
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(msWhereAWaitLeftArmedWouldFire);
     } finally {
       vi.useRealTimers();
     }
@@ -968,7 +970,8 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(paths.downloadsDir).toBe(join(root, 'downloads'));
     const first = present(mods.find((m) => m.kind === 'mod'), 'the fixture\'s first mod');
     expect(paths.modDirs.get(first.name)).toBe(join(root, 'mods', first.name));
-    expect(paths.modDirs.has('[NODELETE] Radfall')).toBe(false);
+    const modListedWithNoFolderUnderMods = '[NODELETE] Radfall';
+    expect(paths.modDirs.has(modListedWithNoFolderUnderMods)).toBe(false);
     expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
   });
 

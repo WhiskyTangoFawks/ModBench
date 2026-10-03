@@ -235,7 +235,7 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
     child.stderr.write('Unhandled exception. boom\n');
-    await pollForLines(lines,2);
+    await pollForLines(lines, 2);
 
     expect(lines).toEqual([
       '[08:30:45 INF] Indexed 500 records stdout',
@@ -248,7 +248,7 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
-    await pollForLines(lines,1);
+    await pollForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']);
   });
@@ -387,7 +387,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await restarted;
 
     present(children[1], 'the second (restarted) child').stdout.write('[08:30:50 INF] back up\n');
-    await pollForLines(lines,1);
+    await pollForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
@@ -443,7 +443,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
   });
 });
 
-describe('BackendLifecycle (no checkHealth injected — the real GET /health adapter, checkHealthOverHttp, over a real local server as every other suite injects checkHealth)', () => {
+describe('BackendLifecycle with no health check injected, asking a real local server over GET /health as every other suite injects its check', () => {
   let server: Server | undefined;
 
   afterEach(async () => {

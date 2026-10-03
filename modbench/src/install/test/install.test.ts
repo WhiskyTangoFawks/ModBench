@@ -18,7 +18,7 @@ import type { Runner } from '../extractArchive';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { present } from '../../ports/present';
 
-const GAME_NAME = 'Fallout 4';
+const CORPUS_INI_GAME_NAME = 'Fallout 4';
 
 const MOD = 'Freshly Installed Mod';
 
@@ -146,8 +146,8 @@ describe('install commands', () => {
     };
 
     const outcomes = [
-      await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: slowly }),
-      await installFromFolder(access, { kind: 'new', name: FOLDER_MOD }, sourceFolder, { gameName: GAME_NAME }),
+      await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: slowly }),
+      await installFromFolder(access, { kind: 'new', name: FOLDER_MOD }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME }),
     ];
     observing = false;
     await observer;
@@ -161,7 +161,7 @@ describe('install commands', () => {
   it('writes the mod folder and nothing else — no modlist line, no download bookkeeping', async () => {
     const before = await snapshotTree(root);
 
-    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
 
     const after = await snapshotTree(root);
     assertOnlyChanged(before, after, new Set(COMPLETE.map((p) => `mods/${MOD}/${p}`)));
@@ -174,7 +174,7 @@ describe('install commands', () => {
       await writePayload(join(dest, 'Wrapper'));
     };
 
-    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: CORPUS_INI_GAME_NAME, run });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
@@ -187,7 +187,7 @@ describe('install commands', () => {
   it('marks the downloaded file it landed from installed', async () => {
     const file = await downloadedFile('Freshly-1-0.7z');
 
-    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toEqual({ applied: true, wrote: true, isFomod: false });
     expect(await downloadMetaOf(file.name)).toMatchObject({ status: 'Installed' });
@@ -197,7 +197,7 @@ describe('install commands', () => {
     const file = await downloadedFile('Freshly-1-0.7z');
     const archive = join(sourceFolder, file.name);
 
-    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run: runnerFor() });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(await downloadMetaOf(file.name)).toBeUndefined();
   });
@@ -206,7 +206,7 @@ describe('install commands', () => {
     const file = await downloadedFile('Freshly-1-0.7z');
     await mkdir(`${file.path}.meta`);
 
-    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true, wrote: true });
     expect(outcome.applied && outcome.downloadRefusal).toMatch(/EISDIR/);
@@ -216,7 +216,7 @@ describe('install commands', () => {
   it('reports a downloaded file gone before its mark beside the landed mod, naming it', async () => {
     const file = { name: 'Freshly-1-0.7z', path: join(root, 'downloads', 'Freshly-1-0.7z') };
 
-    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, file.path, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true, wrote: true });
     expect(outcome.applied && outcome.downloadRefusal).toContain('"Freshly-1-0.7z" is gone from disk');
@@ -225,7 +225,7 @@ describe('install commands', () => {
   it('a new install writes the sidecar\'s version, same as it writes modid and installedFiles', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
 
-    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
+    await installFromArchive(access, { kind: 'new', name: MOD }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=3.0.0');
@@ -234,8 +234,8 @@ describe('install commands', () => {
   it('leaves nothing beside mods/ behind, on success or on refusal', async () => {
     const before = await readdir(root);
 
-    await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
-    await installFromFolder(access, { kind: 'new', name: 'Folder Installed Mod' }, sourceFolder, { gameName: GAME_NAME });
+    await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
+    await installFromFolder(access, { kind: 'new', name: 'Folder Installed Mod' }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
 
     expect((await readdir(root)).sort()).toEqual(before.sort());
   });
@@ -245,7 +245,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const before = await treeOf(modDir);
 
-    const outcome = await installFromFolder(access, { kind: 'new', name }, sourceFolder, { gameName: GAME_NAME });
+    const outcome = await installFromFolder(access, { kind: 'new', name }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/already exists/);
@@ -255,7 +255,7 @@ describe('install commands', () => {
   it('refuses an upgrade of a folder that is not under mods/, writing nothing', async () => {
     const before = await snapshotTree(root);
 
-    const outcome = await installFromFolder(access, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder, { gameName: GAME_NAME });
+    const outcome = await installFromFolder(access, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/no folder by that name/);
@@ -269,7 +269,7 @@ describe('install commands', () => {
     const oldGitHead = await readFile(join(modDir, '.git', 'HEAD'));
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), modID: '111', fileID: '222' });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
@@ -288,7 +288,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(COMPLETE);
@@ -301,7 +301,7 @@ describe('install commands', () => {
     await mkdir(join(modDir, 'plugin-source', 'Tracked.esp'), { recursive: true });
     await writeFile(join(modDir, 'plugin-source', 'Tracked.esp', 'RecordData.json'), '{}');
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(
@@ -327,7 +327,7 @@ describe('install commands', () => {
     git(modDir, ['commit', '-am', 'Edit a field']);
     git(modDir, ['checkout', 'main']);
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     git(modDir, ['add', '-A']);
@@ -350,14 +350,14 @@ describe('install commands', () => {
       await writeFile(join(dest, 'Wrapper', 'Source', 'Script.psc'), '');
     };
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsSource });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: shipsSource });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toContain('Source/Script.psc');
   });
 
   it.each(['.GITIGNORE', 'Plugin-Source'])(
-    'refuses, before any write, a release that ships %s in another case than the kept entry, naming it, as Windows would otherwise move it onto the kept entry part way',
+    'refuses, before any write, a release that ships %s in another case than the kept entry, naming it, as Windows would otherwise move it onto the kept entry part way and elsewhere it would land beside it and drop out of the mod\'s files',
     async (entry) => {
       const name = 'Untracked Target';
       const modDir = await makeExistingMod(root, name, false);
@@ -368,7 +368,7 @@ describe('install commands', () => {
         await mkdir(join(dest, 'Wrapper', entry));
       };
 
-      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: shipsRepositoryOrPluginSource });
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: shipsRepositoryOrPluginSource });
 
       expect(outcome).toEqual({
         applied: false,
@@ -388,7 +388,7 @@ describe('install commands', () => {
       }),
     });
 
-    const outcome = await installFromArchive(failing, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: runnerFor() });
+    const outcome = await installFromArchive(failing, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     expect(outcome).toEqual({
       applied: false,
@@ -401,7 +401,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor(), version: '2.0.0' });
+    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor(), version: '2.0.0' });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=2.0.0');
@@ -413,7 +413,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
+    await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=1.0.0');
@@ -427,7 +427,7 @@ describe('install commands', () => {
     const watcher = watch(modDir, () => { fired = true; });
 
     try {
-      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: GAME_NAME, run: runnerFor() });
+      const outcome = await installFromArchive(access, { kind: 'upgrade', name }, archive, { gameName: CORPUS_INI_GAME_NAME, run: runnerFor() });
       expect(outcome).toMatchObject({ applied: true });
 
       fired = false;
@@ -440,8 +440,8 @@ describe('install commands', () => {
 
   it('serializes two new installs of one name — exactly one lands, the loser refuses as a collision rather than failing with a raw ENOTEMPTY', async () => {
     const outcomes = await Promise.all([
-      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
-      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
+      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME }),
+      installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME }),
     ]);
 
     expect(outcomes.filter((o) => o.applied)).toHaveLength(1);
@@ -451,7 +451,7 @@ describe('install commands', () => {
   });
 
   it('leaves the source folder where the user put it', async () => {
-    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME });
+    await installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: CORPUS_INI_GAME_NAME });
 
     expect(await treeOf(sourceFolder)).toEqual(PAYLOAD.map((p) => p.split(sep).join('/')).sort());
   });
@@ -463,7 +463,7 @@ describe('install commands', () => {
       throw new Error('archive is truncated');
     };
 
-    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: dies });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: dies });
 
     expect(!outcome.applied && outcome.refusal).toMatch(/truncated/);
     expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
@@ -481,7 +481,7 @@ describe('install commands', () => {
       throw new Error('archive is truncated');
     };
 
-    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: GAME_NAME, run: dies });
+    const outcome = await installFromArchive(access, { kind: 'upgrade', name }, join(sourceFolder, 'a.7z'), { gameName: CORPUS_INI_GAME_NAME, run: dies });
 
     expect(!outcome.applied && outcome.refusal).toMatch(/truncated/);
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -490,7 +490,7 @@ describe('install commands', () => {
   it('reports a failed extraction as a refusal, not a throw', async () => {
     const run: Runner = () => Promise.reject(new Error('archive is corrupt'));
 
-    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), { gameName: GAME_NAME, run });
+    const outcome = await installFromArchive(access, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), { gameName: CORPUS_INI_GAME_NAME, run });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(!outcome.applied && outcome.refusal).toMatch(/corrupt/);

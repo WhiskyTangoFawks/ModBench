@@ -10,7 +10,7 @@ import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
-function assertRefusal(result: InstalledMarkResult, expectedSubstring: string): void {
+function assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(result: InstalledMarkResult, expectedSubstring: string): void {
   if (result.applied) throw new Error('expected a refusal, got applied:true');
   expect(result.refusal).toContain(expectedSubstring);
 }
@@ -38,7 +38,7 @@ describe('markDownloadInstalled', () => {
   });
 
   it('refuses, naming it, a downloaded file gone from disk, and writes it no metadata', async () => {
-    assertRefusal(await markDownloadInstalled(adapter, 'gone.7z'), '"gone.7z" is gone from disk');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await markDownloadInstalled(adapter, 'gone.7z'), '"gone.7z" is gone from disk');
 
     await expect(readFile(`${archivePath('gone.7z')}.meta`, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -47,6 +47,6 @@ describe('markDownloadInstalled', () => {
     await writeFile(archivePath('foo.7z'), 'archive bytes');
     await mkdir(`${archivePath('foo.7z')}.meta`);
 
-    assertRefusal(await markDownloadInstalled(adapter, 'foo.7z'), 'EISDIR');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await markDownloadInstalled(adapter, 'foo.7z'), 'EISDIR');
   });
 });

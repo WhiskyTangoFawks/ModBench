@@ -33,7 +33,7 @@ describe('the Instance imports no reporter, leaving a read failure in its value 
     expect(reporterImportsIn(INSTANCE_PATH)).toEqual([]);
   });
 
-  it('flags a reporter import planted in a real file, so gutting reporterImportsIn cannot leave the scan passing', async () => {
+  it('flags a reporter import planted in a real file, so a scan that finds nothing in any file cannot leave the check passing', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-instance-reporter-scan-'));
     try {
       const planted = join(dir, 'planted.ts');
