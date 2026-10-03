@@ -26,7 +26,7 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
     private static readonly string TwinRelativePath =
         Path.Combine("plugin-source", PluginName, "Npcs", $"Twin - 000800_{PluginName}.json");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-changes-since-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-changes-since-");
     private readonly SourceRepository _repository;
     private readonly string _validatedHead;
 
@@ -40,11 +40,7 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         _validatedHead = _repository.ChangesSince(Plugin, validatedHead: null).Head.Require();
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 

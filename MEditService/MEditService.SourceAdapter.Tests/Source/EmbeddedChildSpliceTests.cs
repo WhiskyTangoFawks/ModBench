@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -21,7 +22,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "SpliceMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-splice-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-splice-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -55,12 +56,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
             _modFolder, SourcePreset.Edits, PristineFiles());
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private TreeFile[] PristineFiles() =>
     [

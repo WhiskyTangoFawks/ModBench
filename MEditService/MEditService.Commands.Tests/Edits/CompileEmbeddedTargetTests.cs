@@ -22,8 +22,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private const string ReferrerName = "EmbeddedReferrer.esp";
     private const string ReferrerOrigin = "EmbeddedReferrerMod";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-embedded-target-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-embedded-target-game-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-embedded-target-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-embedded-target-game-");
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
@@ -90,15 +90,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_instanceRoot);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        _instanceRoot.Dispose();
+        _gameDirectory.Dispose();
     }
 
     // The target's own file carries the record and the link cache names it from there, so a

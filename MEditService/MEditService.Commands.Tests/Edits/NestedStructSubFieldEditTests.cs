@@ -87,8 +87,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         private const string PluginName = "Faction642.esp";
         private const string Origin = "Faction642Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-642-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-642-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-642-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-642-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -130,15 +130,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

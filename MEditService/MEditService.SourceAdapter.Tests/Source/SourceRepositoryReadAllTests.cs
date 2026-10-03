@@ -3,6 +3,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -23,13 +24,9 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-readall-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-readall-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     // The NPC's own relative path, spelled from the fixture's own constants rather than asked of the
     // repository: Track needs it to seed the pristine commit before any repository exists to ask.
