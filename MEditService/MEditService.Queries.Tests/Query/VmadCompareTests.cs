@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Queries.Tests.Query;
 
-/// <summary>Scripts, properties and alias scripts are keyed arrays aligned by key, so a plugin
-/// carrying fewer scripts reads as absences at those keys rather than shifting rows.</summary>
 public sealed class VmadCompareTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
@@ -35,22 +33,20 @@ public sealed class VmadCompareTests
         baseQuest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 1);
         _scriptedQuest = baseQuest.FormKey;
 
-        // Only Guard survives here — the master's Ambush is absent, not renamed.
-        var topNpc = baseNpc.DeepCopy();
+        var topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed = baseNpc.DeepCopy();
         var topAdapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
         topAdapter.Scripts.Add(NamedScript("Guard", "Radius", 20));
-        topNpc.VirtualMachineAdapter = topAdapter;
+        topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed.VirtualMachineAdapter = topAdapter;
 
-        // The one disagreement, confined to a member of an alias script's own property.
-        var topQuest = baseQuest.DeepCopy();
-        topQuest.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
+        var topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty = baseQuest.DeepCopy();
+        topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty.VirtualMachineAdapter = QuestAdapterWith(aliasLevel: 2);
 
         var rows = new[]
         {
             Row(baseNpc, BasePlugin, 0, isWinner: false, "npc_"),
-            Row(topNpc, TopPlugin, 1, isWinner: true, "npc_"),
+            Row(topNpcKeepingOnlyGuardMastersAmbushAbsentNotRenamed, TopPlugin, 1, isWinner: true, "npc_"),
             Row(baseQuest, BasePlugin, 0, isWinner: false, "qust"),
-            Row(topQuest, TopPlugin, 1, isWinner: true, "qust"),
+            Row(topQuestDisagreeingOnlyInAnAliasScriptsOwnProperty, TopPlugin, 1, isWinner: true, "qust"),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
@@ -100,12 +96,10 @@ public sealed class VmadCompareTests
     }
 
     [Fact]
-    public void ScriptsPresentInOneOverrideOnly_AlignByName()
+    public void ScriptsPresentInOneOverrideOnly_AlignByName_NotPositionallyAgainstTheOtherOverridesFirstScript()
     {
         var scripts = Child(Adapter(_scriptedNpc), "Scripts");
 
-        // Both keys are rows, in key order, and the master's own holds nothing on the override's side. A
-        // positional reading would line the master's Ambush up against the override's Guard.
         Assert.Equal(["Ambush", "Guard"], Children(scripts).Select(c => c.FieldName));
         var ambush = Child(scripts, "Ambush");
         Assert.NotNull(ambush.Values["Base.esm"]);
@@ -119,20 +113,21 @@ public sealed class VmadCompareTests
     }
 
     [Fact]
-    public void AConflictConfinedToAnAliasScript_IsReportedAtThatMember()
+    public void AConflictConfinedToAnAliasScript_IsReportedAtThatMember_UnderTheAliasNumberScriptNameAndPropertyNameKeys()
     {
         var adapter = Adapter(_scriptedQuest);
 
-        // The alias array is keyed by the alias number its binding names; the scripts under it by
-        // script name; the properties under those by property name.
         var properties = Child(Child(Child(Child(Child(adapter, "Aliases"), "0"), "Scripts"), "AliasScript"), "Properties");
         var row = Child(Child(properties, "Level"), "Data");
         Assert.Equal(ConflictThis.Override, row.CellStates["Top.esp"]);
         Assert.Equal("Top.esp", row.WinnerColumn);
+    }
 
-        // Confined: the adapter's own sibling members agree — the quest's own script binding is
-        // identical in both, and the empty script and fragment lists, which both documents omit,
-        // are not rows at all.
+    [Fact]
+    public void AConflictConfinedToAnAliasScript_LeavesTheAdaptersSiblingMembersIdenticalAndTheEmptyListsBothDocumentsOmitAsNoRows()
+    {
+        var adapter = Adapter(_scriptedQuest);
+
         Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Script").CellStates["Top.esp"]);
         Assert.DoesNotContain(Children(adapter), c => c.FieldName is "Scripts" or "Fragments");
     }

@@ -11,9 +11,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>"Does this plugin's tree hold that FormKey at either ref" — the collision check every
-/// allocation runs. Its working-tree arm answers the same questions the identity read does: the
-/// header, and any spelling that parses.</summary>
 public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
 {
     private const string PluginName = "HoldsAtEitherRef.esp";
@@ -43,10 +40,9 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
 
-        // The shape a plugin minted since the last commit has: its header document is on disk and at
-        // no ref at all. git always speaks forward slashes, on every platform.
-        Git("rm", "--cached", "-q", "--", headerPath.Replace('\\', '/'));
-        Git("commit", "-q", "-m", "uncommit the header");
+        var headerPathInGitsForwardSlashes = headerPath.Replace('\\', '/');
+        Git("rm", "--cached", "-q", "--", headerPathInGitsForwardSlashes);
+        Git("commit", "-q", "-m", "leave the header at no ref, as a plugin minted since the last commit has it");
 
         Assert.DoesNotContain(repository.ReadAll(Plugin, "HEAD"), d => d.FormKey == headerFormKey);
         Assert.True(repository.HoldsAtEitherRef(Plugin, headerFormKey));
@@ -80,15 +76,13 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
         var repository = Tracked(
             new TreeFile(worldspacePath, _codec.SerializeToBytes(worldspace, Release)));
 
-        // Its FormID changed in the working tree alone: at HEAD the child still sits under its old key, so
-        // only the working tree can answer, and only through the document that inlines it.
-        var moved = $"00080A:{PluginName}";
+        var movedInTheWorkingTreeAlone = $"00080A:{PluginName}";
         var file = Path.Combine(_modFolder, worldspacePath);
         File.WriteAllText(
             file,
-            File.ReadAllText(file).Replace(child.FormKey.ToString(), moved, StringComparison.Ordinal));
+            File.ReadAllText(file).Replace(child.FormKey.ToString(), movedInTheWorkingTreeAlone, StringComparison.Ordinal));
 
-        Assert.True(repository.HoldsAtEitherRef(Plugin, moved));
+        Assert.True(repository.HoldsAtEitherRef(Plugin, movedInTheWorkingTreeAlone));
         Assert.True(repository.HoldsAtEitherRef(Plugin, $"00080a:{PluginName}"));
         Assert.False(repository.HoldsAtEitherRef(Plugin, $"00099F:{PluginName}"));
     }

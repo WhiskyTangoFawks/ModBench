@@ -9,8 +9,6 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ContainerChildQueryServiceTests
 {
-    // A repository stub returning fixed container_child rows plus a per-record-type Search
-    // fixture — exercises the service's re-ordering and hydration logic without DuckDB.
     private sealed class StubReader(
         IReadOnlyList<ContainerChildRow> containerChildren,
         IReadOnlyDictionary<string, IReadOnlyList<RecordSummary>>? searchByType = null) : IRecordReads
@@ -87,11 +85,8 @@ public class ContainerChildQueryServiceTests
         Assert.Equal(["dlbr", "dial", "scen", "dial"], result.Select(r => r.RecordType).ToArray());
     }
 
-    // A returned "dial" child is itself a container the Plugins tree can expand, so its
-    // HasContainerChildren flag must survive the flattening this service does. A constructor call
-    // dropping it would pass every other assertion here, since none look at it.
     [Fact]
-    public void GetChildren_HydratesHasContainerChildren_FromRecordSummary()
+    public void GetChildren_HydratesHasContainerChildren_FromRecordSummary_ForADialChildIsItselfAContainerThePluginsTreeExpands()
     {
         var reader = new StubReader(
             [
@@ -149,11 +144,8 @@ public class ContainerChildQueryServiceTests
         Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
     }
 
-    // A container_child row naming a child Search does not return is an index inconsistency between
-    // two tables written from one ingest pass. GetChildren degrades by omission rather than throwing;
-    // an unconditional dictionary index would throw KeyNotFoundException here.
     [Fact]
-    public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsIt_ReturnsSurvivors_LogsWarning()
+    public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsItInsteadOfThrowingKeyNotFound_ReturnsSurvivors_LogsWarning()
     {
         var reader = new StubReader(
             [
@@ -162,7 +154,6 @@ public class ContainerChildQueryServiceTests
             ],
             new Dictionary<string, IReadOnlyList<RecordSummary>>
             {
-                // Search("dial") never returns dial-missing:M.esp — the index-inconsistency case.
                 ["dial"] = [new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data")],
             });
         var entries = new List<LogEntry>();
@@ -180,8 +171,6 @@ public class ContainerChildQueryServiceTests
             warning.Message);
     }
 
-    // No rows at all (a Quest with no topics/branches/scenes) is an empty list, not an
-    // error, and issues no Search calls.
     [Fact]
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {

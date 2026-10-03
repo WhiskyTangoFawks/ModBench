@@ -5,21 +5,16 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Decompile's write: one plugin's source in the working tree replaced whole, or left as it
-/// was (commands.md, A failed gesture writes nothing).</summary>
 public sealed class SourceRepositoryReplaceSourceTests : IDisposable
 {
     private const string Plugin = "A.esp";
     private const string Sha = "ABCDEF0123";
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-replace-source-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-replace-source-");
 
     public SourceRepositoryReplaceSourceTests() =>
         PluginBaselines.Track(_modFolder, SourcePreset.Edits, [File("npc_/A.esp/000001.json", "{\"was\":1}")]);
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_modFolder)) Directory.Delete(_modFolder, recursive: true);
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     [Fact]
     public void ReplaceSourceFrom_LeavesExactlyTheNewFiles_AndParksTheBinaryAlone()
@@ -36,19 +31,18 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     {
         var refBefore = Git("rev-parse", SourceRepository.LastCompileRef(Plugin));
 
-        // The first file lands where the second needs a directory.
+        TreeFile[] secondFileNeedsADirectoryTheFirstOccupies = [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")];
+
         Assert.ThrowsAny<IOException>(() => Repository.ReplaceSourceFrom(
-            Plugin, [File("npc_", "{}"), File("npc_/A.esp/000002.json", "{}")], Sha));
+            Plugin, secondFileNeedsADirectoryTheFirstOccupies, Sha));
 
         Assert.Equal(["npc_/A.esp/000001.json"], FilesUnderRoot());
         Assert.Equal("{\"was\":1}", System.IO.File.ReadAllText(Path.Combine(Root, "npc_", "A.esp", "000001.json")));
         Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
     }
 
-    // The parked snapshot is what the working tree holds now, the plugin's untracked source included,
-    // under the gesture that made it.
     [Fact]
-    public void ReplaceSourceFrom_ParksASnapshotHoldingTheSourceItWrote_NamedForDecompile()
+    public void ReplaceSourceFrom_ParksASnapshotOfWhatTheWorkingTreeHoldsNow_UntrackedSourceIncluded_NamedForDecompile()
     {
         Repository.ReplaceSourceFrom(Plugin, [File("npc_/A.esp/000002.json", "{\"now\":2}")], Sha);
 
@@ -60,10 +54,8 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal("Decompile: A.esp", Git("log", "-1", "--format=%s", parked).Trim());
     }
 
-    // A branch checked out with no commit yet has no HEAD to park on, so git refuses after every file
-    // is written.
     [Fact]
-    public void ReplaceSourceFrom_WhoseGitStepFailsAfterTheFilesAreWritten_LeavesTheSourceAndTheRefAsTheyWere()
+    public void ReplaceSourceFrom_OnABranchWithNoCommitYetWhereGitRefusesToParkAfterEveryFileIsWritten_LeavesTheSourceAndTheRefAsTheyWere()
     {
         var refBefore = Git("rev-parse", SourceRepository.LastCompileRef(Plugin));
         Git("checkout", "-q", "--orphan", "unborn");
@@ -76,8 +68,6 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.Equal(refBefore, Git("rev-parse", SourceRepository.LastCompileRef(Plugin)));
     }
 
-    // Another tool removed the mod folder while its plugin was being decompiled: the refusal names that
-    // cause, and no folder is written back into being.
     [Fact]
     public void ReplaceSourceFrom_IntoAModFolderAnotherToolRemoved_NamesTheMissingRepository_AndRecreatesNothing()
     {
@@ -91,8 +81,6 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
         Assert.False(Directory.Exists(_modFolder));
     }
 
-    // A git step whose working folder another tool removed fails with the OS's own reason, which names
-    // the folder, never as git missing from PATH.
     [Fact]
     public void AGitStep_InAModFolderAnotherToolRemoved_FailsNamingTheFolder_NotGit()
     {
@@ -120,21 +108,19 @@ public sealed class SourceRepositoryReplaceSourceTests : IDisposable
     private string Git(params string[] args) => GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
 }
 
-/// <summary>git gone from PATH after the up-front check: the write's git step fails with the OS's own
-/// reason, and the source is put back.</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryReplaceSourceWithoutGitTests : IDisposable
 {
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-replace-source-nogit-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-replace-source-nogit-");
 
     public SourceRepositoryReplaceSourceWithoutGitTests() =>
         PluginBaselines.Track(_modFolder, SourcePreset.Edits,
             [new TreeFile("plugin-source/A.esp/npc_/A.esp/000001.json", "{\"was\":1}"u8.ToArray())]);
 
-    public void Dispose() => Directory.Delete(_modFolder, recursive: true);
+    public void Dispose() => _modFolder.Dispose();
 
     [Fact]
-    public void ReplaceSourceFrom_WithGitGoneFromPath_ThrowsTheOsReason_AndLeavesTheSourceAsItWas()
+    public void ReplaceSourceFrom_WithGitGoneFromPathAfterTheUpFrontCheck_ThrowsTheOsReason_AndLeavesTheSourceAsItWas()
     {
         var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4) ?? throw new InvalidOperationException("Expected the fixture tracked.");
         var path = Environment.GetEnvironmentVariable("PATH");
