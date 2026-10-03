@@ -6,7 +6,7 @@ const SCHEME = 'modbench-record';
 const SUFFIX = '.modbench-record';
 
 /** `origin` is held by a plugin header alone, whose FormKey names its plugin's file name and so
- *  does not tell two plugins of one file name apart (ADR-0012, invariant 1). */
+ *  does not tell two plugins of one file name apart (ADR-0012). */
 export interface RecordAddress { formKey: string; origin?: string }
 
 export function recordUri({ formKey, origin }: RecordAddress): vscode.Uri {

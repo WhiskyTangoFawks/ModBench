@@ -1,4 +1,4 @@
-// A free function per gesture, applied or a refusal (ADR-0015 invariant 2). Each hands the
+// A free function per gesture, applied or a refusal (ADR-0015). Each hands the
 // Instance adapter its change and returns — the adapter's signal is how it comes back.
 
 import { refuse } from '../ports/refuse';
@@ -12,7 +12,7 @@ export interface DownloadsAccess {
   readonly adapter: InstanceAdapter;
 }
 
-/** `wrote` is false when the gesture already held, so no watcher fires (ADR-0014 invariant 4).
+/** `wrote` is false when the gesture already held, so no watcher fires (ADR-0014).
  *  `metaLeftBehind` is delete's own: the file trashed but its `.meta` didn't. */
 export type DownloadsCommandResult =
   | { applied: true; wrote: boolean; metaLeftBehind?: string }

@@ -2,13 +2,13 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One plugin file in the instance (ADR-0013 invariant 2).</summary>
+/// <summary>One plugin file in the instance (ADR-0013).</summary>
 public sealed record RegisteredPlugin(string Name, string Origin, string Path)
 {
     public PluginAddress Key => new(Name, Origin);
 }
 
-/// <summary>ADR-0013 invariant 4's snapshot. Immutable: nothing here opens, holds or disposes a
+/// <summary>ADR-0013's snapshot. Immutable: nothing here opens, holds or disposes a
 /// plugin file.</summary>
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
@@ -20,7 +20,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0009 invariant 3.</summary>
+    /// <summary>One index file per instance, inside the instance root (ADR-0009).</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }
@@ -28,7 +28,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>Every plugin file in the instance, in the order it was given.</summary>
     public IReadOnlyList<RegisteredPlugin> Plugins { get; }
 
-    /// <summary>ADR-0013 invariant 3's active plugins.</summary>
+    /// <summary>The active plugins, in load order (ADR-0013).</summary>
     public IReadOnlyList<RegisteredPlugin> Active { get; }
 
     /// <summary>The plugins Mod Management loads with no line: the game's own, a DLC's or a Creation
@@ -84,12 +84,12 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     public Registration RegistrationOf(PluginAddress address) => new(LoadOrderIndex(address));
 
-    /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012 invariant 5)
+    /// <summary>Records that cannot be edited: a plugin the game does not load (ADR-0012)
     /// and one loaded with no line, the game's own (editor.md's read-only status).</summary>
     public bool IsImmutable(PluginAddress address) => !IsActive(address) || _loadedWithNoLine.Contains(address);
 
     /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
-    /// Overwrite (ADR-0012 invariant 2), or a plugin none registered here names.</summary>
+    /// Overwrite (ADR-0012), or a plugin none registered here names.</summary>
     public string? ModFolderOf(PluginAddress plugin) =>
         Plugin(plugin) is { } registered ? ModFolderOf(registered.Origin, registered.Path) : null;
 
@@ -103,7 +103,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// and Overwrite answer their own folder rather than null.</summary>
     public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
-    /// <summary>ADR-0012 invariant 1.</summary>
+    /// <summary>By identity, origin and filename together (ADR-0012).</summary>
     public RegisteredPlugin? Plugin(PluginAddress address) =>
         Plugins.FirstOrDefault(c => PluginAddress.Comparer.Equals(c.Key, address));
 

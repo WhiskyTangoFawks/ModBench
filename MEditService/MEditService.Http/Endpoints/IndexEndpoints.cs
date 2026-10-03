@@ -6,7 +6,7 @@ using MEditService.Queries;
 namespace MEditService.Http.Endpoints;
 
 /// <summary>The load order's status, sequence and record filter, and the index's rebuild, each one
-/// Queries call and the wire translation of its answer (ADR-0014 invariant 3).</summary>
+/// Queries call and the wire translation of its answer (ADR-0014).</summary>
 public static class IndexEndpoints
 {
     private const string LoadOrderTag = "LoadOrder";
@@ -14,7 +14,7 @@ public static class IndexEndpoints
     public static IEndpointRouteBuilder MapIndexEndpoints(this IEndpointRouteBuilder app)
     {
         // Polled alongside an in-flight PUT, so it answers 200 in every state including "no load
-        // order yet" (ADR-0013 invariant 4). Reporting that absence is this route's job, not a failure.
+        // order yet" (ADR-0013). Reporting that absence is this route's job, not a failure.
         app.MapGet("/load-order/status", GetStatus)
             .WithName("GetLoadOrderStatus")
             .WithTags(LoadOrderTag)
@@ -40,7 +40,7 @@ public static class IndexEndpoints
             .Produces<FilterResponse>()
             .ProducesProblem(503);
 
-        // ADR-0015 invariant 3's sequence. 0 with no index held, the same "absence is a state" answer
+        // The read side's sequence (ADR-0015). 0 with no index held, the same "absence is a state" answer
         // GetLoadOrderStatus gives.
         app.MapGet("/load-order/sequence", GetSequence)
             .WithName("GetSequence")
@@ -53,7 +53,7 @@ public static class IndexEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
-        // Refresh's own first step (ADR-0009 invariant 5). The PUT /load-order that follows is then an
+        // Refresh's own first step (ADR-0009). The PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds the
         // file.
         app.MapPost("/index/rebuild", PostRebuildIndex)
@@ -170,7 +170,7 @@ public static class IndexEndpoints
         }
         catch (IndexHeldElsewhereException ex)
         {
-            // 423 Locked (ADR-0009 invariant 5), beside a failed reconcile's 500 and a superseded
+            // 423 Locked (ADR-0009), beside a failed reconcile's 500 and a superseded
             // snapshot's 409.
             logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
             return Results.Problem(ex.Message, statusCode: 423);

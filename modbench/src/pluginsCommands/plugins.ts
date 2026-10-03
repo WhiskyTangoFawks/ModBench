@@ -125,7 +125,7 @@ export async function syncPlugins(
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
   // The tree gives a plugin the game loads with no line a row of its own, so a mod's plugin of
-  // that name must not earn a line (ADR-0013, invariant 3).
+  // that name must not earn a line (ADR-0013).
   const noLine = new Set((loadedWithNoLine ?? []).map(foldPath));
   const addable = new Map([...provided].filter(([folded]) => !noLine.has(folded)));
   const inDataNames = inData.names;

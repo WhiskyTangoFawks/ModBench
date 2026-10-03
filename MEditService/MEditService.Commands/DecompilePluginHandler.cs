@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The decompile gesture's handler (ADR-0007 invariant 2).</summary>
+/// <summary>The decompile gesture's handler (ADR-0007).</summary>
 public sealed class DecompilePluginHandler
 {
     private readonly LoadOrderHolder _loadOrder;

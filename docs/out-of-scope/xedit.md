@@ -8,7 +8,7 @@ What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [th
 
 | Reason | Why | Gestures | Examples |
 |---|---|---|---|
-| VS Code provides it | VS Code already supplies settings, editor history and pinning, the Output and Problems panels, and themes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md), invariant 1). | 15 | Change options; Switch the strings language; Sort files: as selected, by load order, by name |
+| VS Code provides it | VS Code already supplies settings, editor history and pinning, the Output and Problems panels, and themes ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). | 15 | Change options; Switch the strings language; Sort files: as selected, by load order, by name |
 | Standalone application | xEdit loads a fixed plugin set and saves on demand. Modbench indexes every plugin in the instance and writes edits to a working tree ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). | 4 | Select game mode; Choose plugins to load; Choose plugins to save, with a backup toggle |
 | An ADR decides it | A decision covers the gesture. Masters are derived ([ADR-0008](../adr/0008-masters-are-derived-from-content.md)). Edits are git changes ([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)). The index is always current ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md), [ADR-0012](../adr/0012-every-plugin-in-the-instance-is-indexed.md)). | 7 | Compare to another plugin file; Add masters; Sort masters |
 | Platform | The gesture relies on something Modbench lacks, such as dragging from a tree into a webview. | 1 | Drag a record onto a reference field |

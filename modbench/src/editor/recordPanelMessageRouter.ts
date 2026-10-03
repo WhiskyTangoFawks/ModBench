@@ -127,8 +127,7 @@ async function editField(
   );
 }
 
-// A failed comparison fails the whole load; a failed plugin list degrades to null (ADR-0002
-// invariant 2 — the webview asks the mEdit client through the host, never the port itself).
+// A failed comparison fails the whole load; a failed plugin list degrades to null (ADR-0002 — the webview asks the mEdit client through the host, never the port itself).
 async function answerRecordLoad(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD }>,

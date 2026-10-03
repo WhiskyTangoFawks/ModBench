@@ -23,14 +23,14 @@ internal sealed class WriteTargets(
 {
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
     /// naming a command the user cannot find is worse than none.</summary>
-    internal const string TrackCommandTitle = "Modbench: Track\u2026";
+    internal const string TrackCommandTitle = "Modbench: Track Mod\u2026";
 
     // The unit is read before anything is written, so a rename or a delete this gesture performs
     // cannot change the document its messages and logs name.
     internal readonly record struct EditTarget(
         GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, SourceRepository Repository);
 
-    // The working tree is the only thing asked (ADR-0015 invariant 5), so a second edit builds on
+    // The working tree is the only thing asked (ADR-0015), so a second edit builds on
     // the first. The copy gestures read the source instead.
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target)
     {
@@ -200,7 +200,7 @@ internal sealed class WriteTargets(
         internal IEnumerable<string> Taken => Effective.Concat(Head);
     }
 
-    // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
+    // Both refs from the tree alone (ADR-0015): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
     internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
         AllocatorOver(
@@ -265,7 +265,7 @@ internal sealed class WriteTargets(
             FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, freeAboveTheLightCap));
     }
 
-    // The working tree's header document decides (ADR-0007 invariant 3), so a flag flipped this
+    // The working tree's header document decides (ADR-0007), so a flag flipped this
     // session caps minting immediately.
     private static bool IsLightByRemovableFlag(SourceRepository repository, PluginAddress plugin)
     {
@@ -347,7 +347,7 @@ internal sealed class WriteTargets(
             : null;
     }
 
-    // The codec's own words are the reason (ADR-0015 invariant 5).
+    // The codec's own words are the reason (ADR-0015).
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);

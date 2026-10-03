@@ -73,7 +73,7 @@ export interface ToolboxDeps {
    *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
   /** The one status bar item, written from the reconcile's own outcome — never by the
-   *  controller, a lower layer that presents nothing (ADR-0014 invariant 1). */
+   *  controller, a lower layer that presents nothing (ADR-0014). */
   setStatusText: (text: string) => void;
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */

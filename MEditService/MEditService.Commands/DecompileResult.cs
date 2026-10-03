@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>Why decompile refused a plugin (ADR-0019 invariant 4): each value is a different way
+/// <summary>Why decompile refused a plugin (ADR-0019): each value is a different way
 /// out.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DecompileRefusal
@@ -17,7 +17,7 @@ public enum DecompileRefusal
     /// way out is Track.</summary>
     NotInTrackedMod,
 
-    /// <summary>ADR-0006 invariant 2's gate refused it, or the plugin cannot be read or deep-parsed
+    /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all.</summary>
     RoundTripFailed,
 
@@ -28,7 +28,7 @@ public enum DecompileRefusal
     /// as it was.</summary>
     WriteFailed,
 
-    /// <summary>git is not on PATH (ADR-0007 invariant 5).</summary>
+    /// <summary>git is not on PATH (ADR-0007).</summary>
     GitUnavailable,
 }
 

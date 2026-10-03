@@ -7,9 +7,9 @@ import { noGestureResultUse } from './eslint-rules/noGestureResultUse.mjs';
 import { noLeadingMEdit } from './eslint-rules/noLeadingMEdit.mjs';
 import { noRereadAfterWrite } from './eslint-rules/noRereadAfterWrite.mjs';
 
-// ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
+// The message states ADR-0019's rule in full, because a developer who breaks it meets the rule only there.
 const SURFACING_GOES_THROUGH_THE_REPORTER =
-    'Surfacing goes through an injected reporter, never raw window calls in business logic (ADR-0019 invariant 3).';
+    'Surfacing goes through an injected reporter, never raw window calls in business logic (ADR-0019).';
 
 // One object for every block that enables a rule from it: ESLint refuses a plugin name
 // redefined by a second, different object.
@@ -144,7 +144,7 @@ export default defineConfig(
         },
     },
 
-    // ADR-0015 invariant 2: a write returns, and the watch brings its change back. Tests are
+    // ADR-0015: a write returns, and the watch brings its change back. Tests are
     // out of scope: a test drives a write and then the watch's own re-read.
     {
         files: ['src/**/*.ts'],

@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What a copy reads of the record it is copying (ADR-0015 invariant 5). One per gesture,
+/// <summary>What a copy reads of the record it is copying (ADR-0015). One per gesture,
 /// not thread-safe.</summary>
 internal sealed class CopySource(
     PluginAddress plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)

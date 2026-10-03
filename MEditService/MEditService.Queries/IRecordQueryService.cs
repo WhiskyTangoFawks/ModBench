@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries;
 
-/// <summary>ADR-0012 invariant 1's guard, shared so no caller's own copy of this check can drift
+/// <summary>ADR-0012's guard, shared so no caller's own copy of this check can drift
 /// from another's.</summary>
 public static class RecordFilterGuard
 {
@@ -15,7 +15,7 @@ public static class RecordFilterGuard
 public interface IRecordQueryService
 {
     IReadOnlyList<PluginRow> GetPlugins();
-    // plugin/origin (ADR-0012 invariant 1): both null browses every plugin; naming one names the
+    // plugin/origin (ADR-0012): both null browses every plugin; naming one names the
     // other too.
     PagedResult<RecordSummary> GetRecords(
         string? type, string? plugin, string? search, int limit, int offset, string? origin = null, bool unfiltered = false);
@@ -28,7 +28,7 @@ public interface IRecordQueryService
     bool GetLightPluginsSupported();
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
-    // Answered in every state, "no load order yet" included (ADR-0013 invariant 4).
+    // Answered in every state, "no load order yet" included (ADR-0013).
     LoadOrderStatus GetStatus();
     long GetSequence();
     Task<SequenceAwaitResponse> AwaitSequence(long atLeast, TimeSpan timeout);

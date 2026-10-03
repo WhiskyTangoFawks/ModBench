@@ -58,7 +58,7 @@ public sealed class RecordQueryService(
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
-        // ADR-0012 invariant 1.
+        // ADR-0012.
         if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
             throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
 
@@ -84,7 +84,7 @@ public sealed class RecordQueryService(
     public CompareResult? GetCompare(string formKey)
     {
         var reads = RequireReads();
-        // One memoizing cache per response (ADR-0005 invariant 6): a FormKey repeated across sibling
+        // One memoizing cache per response (ADR-0005): a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
         var resolveFormKey = reads.LinkResolver(formKey);
 
@@ -96,7 +96,7 @@ public sealed class RecordQueryService(
         var snapshot = _loadOrder.Require();
         var (classification, conflictAll) = ClassifyStack(
             committedOverrides, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
-        // PluginStates is keyed by ColumnKey.Of (ADR-0012 invariant 1), so a bare-plugin lookup
+        // PluginStates is keyed by ColumnKey.Of (ADR-0012), so a bare-plugin lookup
         // would miss for any non-Data-origin column and silently drop its ConflictThis.
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(

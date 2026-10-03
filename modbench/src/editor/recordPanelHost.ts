@@ -61,7 +61,7 @@ export interface EditorCommandDeps {
   fieldFile: ExtendedFieldEditorDeps['fieldFile'];
 }
 // ADR-0007: the single write path. A panel showing this record re-reads only on rows-changed from
-// the notification stream (ADR-0015 invariant 3).
+// the notification stream (ADR-0015).
 function recordPanelWriteDeps(deps: EditorCommandDeps): RecordWriteDeps {
   return {
     meditClient: deps.meditClient,

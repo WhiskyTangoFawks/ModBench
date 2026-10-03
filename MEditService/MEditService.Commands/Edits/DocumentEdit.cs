@@ -18,7 +18,7 @@ internal sealed record DocumentEditRequest(
     LeftCopy? CellCopyOnTheLeft,
     LeftCopy? RefillCopyOnTheLeft);
 
-/// <summary>A write is a patch on the document (ADR-0005 invariant 1). Pure: text and metadata in,
+/// <summary>A write is a patch on the document (ADR-0005). Pure: text and metadata in,
 /// text or one refusal out.</summary>
 internal static class DocumentEdit
 {

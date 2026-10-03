@@ -9,7 +9,7 @@ namespace MEditService.Codec.Serialization;
 public readonly record struct NamedDocument(string Text, string? EditorId);
 
 /// <summary>A record's own identity and links changed as documents: the codec reads the text, edits
-/// the graph it built, and writes the text back (ADR-0005 invariant 2).</summary>
+/// the graph it built, and writes the text back (ADR-0005).</summary>
 public static class RecordDocumentEdits
 {
     /// <summary>The record under <paramref name="newFormKey"/> with every child slot cleared and its

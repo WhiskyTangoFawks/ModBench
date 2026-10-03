@@ -9,12 +9,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 
-    // ADR-0009 invariant 1: `mirror` holds every indexed plugin; `main` holds views of the active
+    // ADR-0009: `mirror` holds every indexed plugin; `main` holds views of the active
     // plugins. Every writer and every projection read names `mirror.`, and a write against a view
     // fails loudly.
     internal const string MirrorSchema = "mirror";
 
-    // ADR-0012 invariant 1, and Mutagen's ModKey: a FormKey names its plugin by filename, so it
+    // ADR-0012, and Mutagen's ModKey: a FormKey names its plugin by filename, so it
     // compares ignoring case too.
     internal const string FilenameIdentity = "COLLATE NOCASE";
 
@@ -24,7 +24,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private readonly record struct PublicView(
         string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner);
 
-    // ADR-0009 invariant 2: the views derive `load_order_idx` and `is_winner` by joining
+    // ADR-0009: the views derive `load_order_idx` and `is_winner` by joining
     // `registrations` and `winners`, at Effective. `records_head` joins at Head.
     private static readonly PublicView[] PublicViews =
     [
@@ -56,7 +56,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// Registration is visibility (ADR-0009): every registered view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>The active plugins with their load index (ADR-0013 invariant 3), which the sweep
+    /// <summary>The active plugins with their load index (ADR-0013), which the sweep
     /// orders by. Load-order-owned state, so it lives in <c>main</c>.</summary>
     internal const string ActiveRelation = "active_plugins";
 
@@ -95,7 +95,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateHeadView(connection);
     }
 
-    // ADR-0015 invariant 3: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
+    // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
     // and this count must roll back with the rows it describes. The seed is a no-op past the first
     // open.
     private static void CreateSequenceTable(DuckDBConnection connection)
@@ -111,7 +111,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0011 invariant 1, header included.
+    // ADR-0011, header included.
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
@@ -121,7 +121,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
         """;
 
-    // ADR-0009 invariant 1, through this one predicate. A registration's load index is null when
+    // ADR-0009, through this one predicate. A registration's load index is null when
     // the plugin is not active (ADR-0013).
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
@@ -233,7 +233,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // Replaced whole by each sweep, never diffed (ADR-0013 invariants 1 and 3), and remembered for
+    // Replaced whole by each sweep, never diffed (ADR-0013), and remembered for
     // the re-sweeps a working-tree write triggers.
     private static void CreateActiveTable(DuckDBConnection connection) =>
         Execute(connection, $"""
@@ -260,7 +260,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     }
 
     // ADR-0013: one row per plugin file, carrying its load index, null when it is not active.
-    // Not cleared at open (ADR-0013, Derived tactical observations).
+    // Not cleared at open (ADR-0013).
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
@@ -272,7 +272,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    /// <summary>ADR-0009 invariant 4: what the index believes is on disk. Apart from
+    /// <summary>ADR-0009: what the index believes is on disk. Apart from
     /// <c>registrations</c>, whose rows come and go with every reconcile, so the first unregister (a
     /// profile switch) keeps the hash.</summary>
     internal static void CreateFilesTable(DuckDBConnection connection) =>

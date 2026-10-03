@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The write side as ADR-0015 invariant 5 has it: a temporary tracked tree, a load order
+/// <summary>The write side as ADR-0015 has it: a temporary tracked tree, a load order
 /// value, the codec and the schema. No index and no factory anywhere in it.</summary>
 public sealed class SourceEditFixture : IDisposable
 {

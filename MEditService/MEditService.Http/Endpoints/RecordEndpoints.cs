@@ -73,7 +73,7 @@ public static class RecordEndpoints
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
-        // The single write path's one door (ADR-0007 invariant 4). Scripts and agents reach the same
+        // The single write path's one door (ADR-0007). Scripts and agents reach the same
         // handler the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/edit", (
             string formKey, RecordEditRequest request, EditRecordHandler edits) =>
@@ -99,21 +99,21 @@ public static class RecordEndpoints
             "gone at Effective, still served at Head until the deletion is committed and " +
             "compiled. Each record is deleted or refused on its own, and the answer names both. No " +
             "reference cascade — a FormLink elsewhere pointing at a deleted record goes dangling and " +
-            "surfaces as an ordinary compile diagnostic (ADR-0007 invariant 4), the same as any other dangling link.")
+            "surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.")
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
         .ProducesProblem(400)
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // Copy (plugins.md, Copy) writes each destination's working tree (ADR-0007 invariant 4).
+        // Copy (plugins.md, Copy) writes each destination's working tree (ADR-0007).
         app.MapPost("/records/copy", (RecordCopyRequest request, CopyRecordHandler edits) =>
             CopyRecord(request, edits, logger))
         .WithName("CopyRecord")
         .WithSummary("Copy records into destination plugins, each record into each destination on its own.")
         .WithDescription(
             "Override: the source record's own text lands verbatim in the destination under the same " +
-            "FormKey; the master dependency is derived at compile (ADR-0008 invariant 1). A destination that already " +
+            "FormKey; the master dependency is derived at compile (ADR-0008). A destination that already " +
             "holds the record is refused unless replace is given, and a replacement changes its own fields " +
             "only, keeping the children the destination's copy carries. New: a duplicate under the " +
             "destination's next free FormID, with an EditorID derived from the source's; a container's " +

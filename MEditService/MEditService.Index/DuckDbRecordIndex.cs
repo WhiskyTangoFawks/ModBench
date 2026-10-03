@@ -78,7 +78,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _store = new Store(logger, databasePath, timeProvider);
     }
 
-    // ADR-0011 invariant 1.
+    // ADR-0011.
     internal void CreateRecordTypeViews()
     {
         if (_recordTypeViewsCreated) return;
@@ -113,7 +113,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
-    // ADR-0009 invariant 5: the rebuild's whole job on an already-opened index — construction
+    // ADR-0009: the rebuild's whole job on an already-opened index — construction
     // already refused (IndexHeldElsewhereException) if another process held the file, so nothing
     // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
@@ -143,7 +143,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
     public void Announce(Action publish) => _store.Announce(publish);
 
-    // ADR-0012 invariant 1.
+    // ADR-0012.
     private void Index(
         IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath,
         DerivedFrom derivedFrom)
@@ -293,7 +293,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // Replaced whole, never diffed (ADR-0013 invariants 1 and 3).
+    // Replaced whole, never diffed (ADR-0013).
     private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
         Execute($"DELETE FROM {TableDdlBuilder.ActiveRelation}");
@@ -362,7 +362,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0015 invariant 3: after the commit, so a subscriber re-reading on receipt sees the rows
+        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows
         // this names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
@@ -387,8 +387,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         RequireWorkingTreeOverlay().MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
-        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009
-        // invariant 2).
+        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009).
         UpdateWinnersCore();
         _store.BumpSequence();
         tx.Commit();
@@ -419,7 +418,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var projection = BeginProjection();
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
-        // (ADR-0007 invariant 3), bytes moved or not: a plugin tracked after indexing arrives here
+        // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
         if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
             _store.RestampDerivation(key, DerivedFrom.SourceTree);
@@ -476,7 +475,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
-    // The projection reads the plugin's rows whether it is active or not (ADR-0009 invariant 1).
+    // The projection reads the plugin's rows whether it is active or not (ADR-0009).
     private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -521,7 +520,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         var after = EffectiveContentHashes(key);
 
-        // ADR-0015 invariant 3: the keys asked about, and every row the tree read again moved, gone
+        // ADR-0015: the keys asked about, and every row the tree read again moved, gone
         // or gained, at the sequence it landed on.
         var moved = before.Keys.Union(after.Keys, StringComparer.Ordinal)
             .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now);
@@ -576,7 +575,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
-    // ADR-0009 invariant 4, asked of one plugin. A binary has no smaller unit, so a mismatch is a
+    // ADR-0009, asked of one plugin. A binary has no smaller unit, so a mismatch is a
     // rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(PluginAddress key)
     {
@@ -597,7 +596,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
-        // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
+        // one destroyed outside Modbench (ADR-0007), which the caller re-derives.
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport([], NeedsRebuild: true, []);
 
@@ -1109,7 +1108,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             using var connection = owner.OpenRead();
 
-            // ADR-0011 invariant 3: the placed ref's base form comes out of the document rather than a
+            // ADR-0011: the placed ref's base form comes out of the document rather than a
             // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
             // with no base reads NULL.
             var typeList = string.Join(", ", cellChildTypes.Select(t => $"'{t}'"));
@@ -1198,7 +1197,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         private static string FullNameOf(string alias) =>
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
-        // The callers hold ADR-0012 invariant 1, not this builder: RecordQueryService's
+        // The callers hold ADR-0012, not this builder: RecordQueryService's
         // RecordFilterGuard refuses a plugin without its origin, and every other caller passes both
         // or neither.
         private static (string where, List<string> paramValues) BuildWhere(

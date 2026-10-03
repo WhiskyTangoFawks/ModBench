@@ -7,8 +7,8 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // The caller that names `plugin` (a tree row) always knows which origin it means (ADR-0012
-    // invariant 1).
+    // The caller that names `plugin` (a tree row) always knows which origin it means
+    // (ADR-0012).
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);
     CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin);

@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>The Compile gesture's handler (ADR-0014 invariant 3): it owns the selection, and every
+/// <summary>The Compile gesture's handler (ADR-0014): it owns the selection, and every
 /// step of the compile itself stays on <see cref="PluginCompileService"/>.</summary>
 public sealed class CompilePluginHandler
 {

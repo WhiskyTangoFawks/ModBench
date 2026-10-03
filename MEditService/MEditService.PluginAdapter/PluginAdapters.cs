@@ -18,7 +18,7 @@ public static class PluginAdapters
     public static bool CanRead(this IPluginAdapter adapter, RegisteredPlugin plugin) =>
         adapter.CanRead(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path));
 
-    /// <summary>The files the game loads (ADR-0013 invariant 3), with <paramref name="compiled"/>
+    /// <summary>The files the game loads (ADR-0013), with <paramref name="compiled"/>
     /// among them whether it is active or not.</summary>
     public static LinkAnswers LinkTargets(
         this IPluginAdapter adapter, LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
@@ -37,7 +37,7 @@ public static class PluginAdapters
 
     /// <summary>The source-tree door for a caller holding the load order's record of the plugin.
     /// Building the mod path is building a Mutagen value, and this is the box that owns those
-    /// (ADR-0005 invariant 2).</summary>
+    /// (ADR-0005).</summary>
     public static Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
         this IPluginAdapter adapter, RegisteredPlugin plugin, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>

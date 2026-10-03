@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Commands.Tests.Edits;
 
 /// <summary>A real tracked mod folder and the load order value over it, and nothing else: compile
-/// reads only those (ADR-0015 invariant 1). A change to the tree here goes through the repository,
+/// reads only those (ADR-0015). A change to the tree here goes through the repository,
 /// never the edit service.</summary>
 public sealed class CompileFixture : IDisposable
 {

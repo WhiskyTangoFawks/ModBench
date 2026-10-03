@@ -21,11 +21,11 @@ public record PluginDiagnosisReport(
 /// told the Index, and what a filter, a parse failure and the rows' own derivation add.</summary>
 public sealed record PluginRow(
     RegisteredPlugin Plugin,
-    // LoadOrderIndex (ADR-0013 invariant 3), null when the plugin is not active.
+    // LoadOrderIndex (ADR-0013), null when the plugin is not active.
     int? LoadOrderIndex,
     bool IsImmutable,
     PluginContent Content,
-    // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
+    // MasterIssues (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
@@ -34,8 +34,8 @@ public sealed record PluginRow(
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure,
-    // IsTracked (ADR-0007 invariant 3), as the Index holds it. Whether a .git is on disk now is the
-    // Source adapter's (ADR-0007 invariant 2).
+    // IsTracked (ADR-0007), as the Index holds it. Whether a .git is on disk now is the Source
+    // adapter's.
     bool IsTracked);
 
 public record RecordDetail(
@@ -46,7 +46,7 @@ public record RecordDetail(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
-    // Origin (ADR-0012 invariant 1), paired with Plugin, never encoded into it. Required so every construction
+    // Origin (ADR-0012), paired with Plugin, never encoded into it. Required so every construction
     // says which origin; it precedes the defaulted fields only because C# requires that.
     string Origin,
     // The schema table name; "Copy as New Record" must supply it to CreateRecord up front. Defaults
@@ -74,7 +74,7 @@ public record CompareOverride(
     string RecordType = "",
     bool IsPartialForm = false,
     string? ParseDiagnosis = null,
-    // Overwrite (ADR-0012 invariant 2), computed here (PluginOrigin.IsOverwrite) so the webview
+    // Overwrite (ADR-0012), computed here (PluginOrigin.IsOverwrite) so the webview
     // never interprets Origin itself.
     bool IsInOverwrite = false)
     : RecordDetail(
@@ -87,10 +87,10 @@ public record FieldDiff(
     string WinnerColumn,
     [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     // This subtree's own aggregate, distinct from the record-wide ClassifyResult.ConflictAll; drives
-    // the compare grid's per-row background (ADR-0018 invariant 3): a struct's aggregate while collapsed.
+    // the compare grid's per-row background (ADR-0018): a struct's aggregate while collapsed.
     ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
-    // Only on a scalar formKey leaf (ADR-0005 invariant 6), keyed like Values; never aggregated up from Children,
+    // Only on a scalar formKey leaf (ADR-0005), keyed like Values; never aggregated up from Children,
     // so a dangling sibling can't hide a live hyperlink on the leaf next to it.
     [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
     // This node's own subtree's link check, per column — a struct row states the errors under it
@@ -110,7 +110,7 @@ public record CompareResult(
     ConflictAll ConflictAll,
     string RecordTypeName);
 
-// ADR-0012 invariant 1.
+// ADR-0012.
 public record ReferenceResult(
     string FormKey, string Plugin, string Origin, string FieldPath, string RecordType, string RecordTypeName, string? EditorId);
 
@@ -120,7 +120,7 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName, 
 
 public record CreatableRecordType(string Type, string DisplayName);
 
-/// <summary>The answer to "did the projection reach at least N?" (ADR-0015 invariant 3). Sequence
+/// <summary>The answer to "did the projection reach at least N?" (ADR-0015). Sequence
 /// is the value observed at the moment of that answer, not necessarily equal to the awaited
 /// bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);

@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>Why Track refused (ADR-0019 invariant 4): each value is a different way out, and the
+/// <summary>Why Track refused (ADR-0019): each value is a different way out, and the
 /// endpoint's status is one switch over them.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TrackRefusal
@@ -16,14 +16,14 @@ public enum TrackRefusal
     /// <summary>The mod's repository already holds the plugin's source.</summary>
     AlreadyTracked,
 
-    /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007 invariant 1).</summary>
+    /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007).</summary>
     DataDirectoryOrigin,
 
-    /// <summary>The origin is Overwrite (ADR-0012 invariant 2); the way out is moving the plugin into
+    /// <summary>The origin is Overwrite (ADR-0012); the way out is moving the plugin into
     /// a mod.</summary>
     OverwriteOrigin,
 
-    /// <summary>ADR-0006 invariant 2's gate refused it, or the plugin cannot be read or deep-parsed
+    /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
     /// at all. A data problem in the plugin, not a state conflict.</summary>
     RoundTripFailed,
 
@@ -33,11 +33,11 @@ public enum TrackRefusal
     /// <summary>The plugin passed its gate, and git or the file system refused its baseline commit.</summary>
     CommitFailed,
 
-    /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007 invariant 5).</summary>
+    /// <summary>git is not on PATH, so no repository can be created at all (ADR-0007).</summary>
     GitUnavailable,
 }
 
-/// <summary>One plugin's Track outcome, or a whole selection's refusal (ADR-0014 invariant 4). The
+/// <summary>One plugin's Track outcome, or a whole selection's refusal (ADR-0014). The
 /// message names the way out.</summary>
 public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Message)
 {

@@ -55,7 +55,7 @@ public readonly record struct CellPlacement(
 public sealed partial class SourceRepository
 {
     // One repository is one operation, so all live and die with it: the next Track, compile or edit
-    // looks at the tree again, never trusting a file timestamp (ADR-0009 invariant 4).
+    // looks at the tree again, never trusting a file timestamp (ADR-0009).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<(string SourceRoot, string FormKey), TreeScan> _scansByKey = [];
@@ -339,7 +339,7 @@ public sealed partial class SourceRepository
                 .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
-    /// holds it. Only the repository reads block directories back (ADR-0014 invariant 5). A
+    /// holds it. Only the repository reads block directories back (ADR-0014). A
     /// worldspace document declaring no FormKey throws.</summary>
     public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
     {

@@ -53,11 +53,11 @@ export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
 export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
 export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
 
-/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0014 invariant 2). `kind` is
+/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0014). `kind` is
  *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
 export type NotificationEvent = Schemas['NotificationEvent'];
 
-/** The two refusal states carry different scope (ADR-0009 point 5): `heldElsewhere` overrides
+/** The two refusal states carry different scope (ADR-0009): `heldElsewhere` overrides
  *  even an already-held row, `failed` only a row not yet held. Internal to the client, not a
  *  wire type. */
 export type LoadOrderRefusal = { kind: 'heldElsewhere' | 'failed'; message: string };

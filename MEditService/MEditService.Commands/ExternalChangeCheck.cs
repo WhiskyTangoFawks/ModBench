@@ -5,7 +5,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>ADR-0003 invariant 3, plus each tracked mod's untracked plugins.</summary>
+/// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
+/// untracked plugins.</summary>
 internal sealed class ExternalChangeCheck(INotificationPublisher notifications, PluginFileHashes hashes)
 {
     private readonly Lock _checking = new();
@@ -52,7 +53,7 @@ internal sealed class ExternalChangeCheck(INotificationPublisher notifications, 
             notifications.Publish(new UntrackedPluginsNotification(origin, [.. tracked[false].Select(plugin => plugin.Name)]));
     }
 
-    // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003, Derived tactical observations).
+    // Bytes that cannot be read, or a last write that cannot, match nothing (ADR-0003).
     private static bool MatchesLastWrite(string modFolder, ChangedPlugin plugin) =>
         plugin.BytesSha256 is { } observed
         && SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin.Name)

@@ -2,8 +2,7 @@ using System.Collections.Concurrent;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Each plugin file's hash, kept by its stamp (ADR-0009, Derived tactical
-/// observations).</summary>
+/// <summary>Each plugin file's hash, kept by its stamp (ADR-0009).</summary>
 public sealed class PluginFileHashes(TimeProvider timeProvider)
 {
     // A file system stamps a change with a clock coarser than a hash is quick, and a network share's

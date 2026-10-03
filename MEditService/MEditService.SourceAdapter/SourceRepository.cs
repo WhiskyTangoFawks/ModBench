@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>Documents by identity over one tracked mod folder (ADR-0014 invariant 5), and ADR-0007's
+/// <summary>Documents by identity over one tracked mod folder (ADR-0014), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
 public sealed partial class SourceRepository
@@ -74,7 +74,7 @@ public sealed partial class SourceRepository
             .OfType<string>()];
     }
 
-    /// <summary>ADR-0007 invariant 1, asked of a plugin's origin and path.</summary>
+    /// <summary>Whether a plugin can be edited (ADR-0007), asked of its origin and path.</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder && IsTracked(modFolder);
 
@@ -228,7 +228,7 @@ public sealed partial class SourceRepository
             .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
 
     // One path that cannot be written never stops the pass, and every other one is still put back
-    // (ADR-0019 invariant 4).
+    // (ADR-0019).
     private List<string> PutBack(PreImage before)
     {
         var unrestored = new List<string>();
@@ -389,8 +389,7 @@ public sealed partial class SourceRepository
             .. earlier.Select(sha => $"{EarlierBinaryTrailer}: {sha}")]);
     }
 
-    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003,
-    /// invariant 3).</summary>
+    /// <summary>The compiled binary is written, so the parked snapshot names it alone (ADR-0003).</summary>
     public static void NarrowCompileSnapshot(string modFolder, string plugin)
     {
         var gitDir = Path.Combine(modFolder, ".git");
@@ -530,5 +529,5 @@ public enum SourceRemoval
 }
 
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
-/// (ADR-0005 invariant 1).</summary>
+/// (ADR-0005).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);

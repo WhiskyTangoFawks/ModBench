@@ -6,11 +6,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Bytes to documents and facts and back (ADR-0005 invariant 2). The game release is a
+/// <summary>Bytes to documents and facts and back (ADR-0005). The game release is a
 /// parameter of every verb.</summary>
 public interface IPluginAdapter
 {
-    /// <summary>The plugin as the documents its source tree would hold (ADR-0007 invariant 3). Owns the open
+    /// <summary>The plugin as the documents its source tree would hold (ADR-0007). Owns the open
     /// until the result is disposed; omitting <paramref name="strings"/> is not neutral for a
     /// localized plugin.</summary>
     IPluginDocuments OpenDocuments(
@@ -38,7 +38,7 @@ public interface IPluginAdapter
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files at
     /// <paramref name="loadOrder"/>, as the game resolves it, beside the unreadable files. The link
-    /// cache is built and dropped here (ADR-0005 invariant 2).</summary>
+    /// cache is built and dropped here (ADR-0005).</summary>
     LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
@@ -49,7 +49,7 @@ public interface IPluginAdapter
     // travels beside the path: a ModKey renders the extension from Mutagen's lowercase constants.
 
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
-    /// does not (ADR-0005 invariant 2). A tree that will not read answers with its diagnosis.</summary>
+    /// does not (ADR-0005). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,

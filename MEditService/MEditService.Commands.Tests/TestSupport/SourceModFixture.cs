@@ -8,7 +8,7 @@ namespace MEditService.Commands.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
 /// it: the caller fills the plugin, this writes, registers and tracks it. No index and no store
-/// (ADR-0015 invariant 5).</summary>
+/// (ADR-0015).</summary>
 internal sealed class SourceModFixture : IDisposable
 {
     private readonly string _instanceRoot;
@@ -29,7 +29,7 @@ internal sealed class SourceModFixture : IDisposable
         var tracked = origin != PluginOrigin.DataDirectory && !PluginOrigin.IsOverwrite(origin);
 
         // The game's own Data folder and Overwrite are never mod folders, and never a repository
-        // either (ADR-0012 invariant 2).
+        // either (ADR-0012).
         ModFolder = origin switch
         {
             PluginOrigin.DataDirectory => GameDirectory,
@@ -67,7 +67,7 @@ internal sealed class SourceModFixture : IDisposable
     }
 
     /// <summary>A stray plugin in Overwrite holding one NPC: registered and loaded, with no mod
-    /// folder at all (ADR-0012 invariant 2).</summary>
+    /// folder at all (ADR-0012).</summary>
     internal static SourceModFixture OverwriteStray(out FormKey npc)
     {
         var formKey = FormKey.Null;

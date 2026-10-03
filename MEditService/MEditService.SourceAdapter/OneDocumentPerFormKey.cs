@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter;
 
 /// <summary>A FormKey two documents hold, as their own record or as an embedded child, is neither's
-/// (ADR-0006 invariant 6).</summary>
+/// (ADR-0006).</summary>
 internal static class OneDocumentPerFormKey
 {
     /// <summary>Records that <paramref name="document"/> holds <paramref name="formKey"/>, throwing

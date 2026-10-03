@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Ports;
 
-/// <summary>ADR-0014 invariant 2's publish port.</summary>
+/// <summary>ADR-0014's publish port.</summary>
 public interface INotificationPublisher
 {
     void Publish(Notification notification);
@@ -24,7 +24,7 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, Keys, Sequence);
 }
 
-/// <summary>A validation re-derived or removed a whole plugin (ADR-0009 invariant 4) — too many
+/// <summary>A validation re-derived or removed a whole plugin (ADR-0009) — too many
 /// rows to name, so this names the plugin instead.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : Notification("plugin-changed")
@@ -48,7 +48,7 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
 }
 
 /// <summary>At a snapshot: each tracked plugin whose bytes differ from what Modbench last wrote
-/// (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out matches; a mod whose
+/// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>
 public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
     : Notification("external-change")

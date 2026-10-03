@@ -5,7 +5,7 @@ namespace MEditService.Http;
 public record PluginResponse(
     string Name,
     string Path,
-    // The load index (ADR-0013 invariant 3), null when the plugin is not active; record-level
+    // The load index (ADR-0013), null when the plugin is not active; record-level
     // LoadOrderIndex values are sort keys and put such a plugin last.
     int? LoadOrderIndex,
     bool IsLight,
@@ -17,16 +17,16 @@ public record PluginResponse(
     int RecordCount,
     bool IsImmutable,
     string Origin,
-    // MasterIssues (ADR-0012 invariant 4): the masters in this plugin's header that are not active.
+    // MasterIssues (ADR-0012): the masters in this plugin's header that are not active.
     // Null while the snapshot is not indexed: not yet checked, which is not no issues.
     IReadOnlyList<string>? MasterIssues,
-    // InLoadOrder (ADR-0013 invariant 3).
+    // InLoadOrder (ADR-0013).
     bool InLoadOrder,
     // HasMatchingRecords (plugins.md): a record filter prunes records, never a
     // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
     // to true: only the plugin listing answers inside a filter.
     bool HasMatchingRecords = true,
-    // IsTracked (ADR-0007 invariant 3), as the Index holds it. False with no mod folder at all
+    // IsTracked (ADR-0007), as the Index holds it. False with no mod folder at all
     // (IsImmutable tells the two apart).
     bool IsTracked = false,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level

@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A plugin's bytes as the files of its plugin source, or why they cannot be: ADR-0006
-/// invariant 2's gate refused it, or it cannot be read. Writes nothing.</summary>
+/// <summary>A plugin's bytes as the files of its plugin source, or why they cannot be: ADR-0006's
+/// gate refused it, or it cannot be read. Writes nothing.</summary>
 internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefusal Refusal, string Message)
 {
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
@@ -18,7 +18,7 @@ internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefus
 /// </summary>
 internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
 {
-    // Asked of the Plugin adapter (ADR-0015 invariant 1): a plugin whose file
+    // Asked of the Plugin adapter (ADR-0015): a plugin whose file
     // cannot be read has no bytes to deep-parse.
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
@@ -65,7 +65,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         return new Decompiled(files, DecompileRefusal.None, "");
     }
 
-    // ADR-0006 invariant 2's gate. Reparse, not the pre-write object: only written bytes show what
+    // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
     // the writer does.
     private async Task<string?> VerifyRoundTrip(
         string pluginName,
@@ -114,12 +114,12 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
             return $"{pluginName} does not round-trip through its own source: {divergence}";
         }
 
-        // An encoding-only difference (ADR-0006 invariant 2) is reported, never a refusal.
+        // An encoding-only difference (ADR-0006) is reported, never a refusal.
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "{Plugin} is model-identical to its own source but not byte-identical — " +
-                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 invariant 2).",
+                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006).",
                 pluginName);
         }
 

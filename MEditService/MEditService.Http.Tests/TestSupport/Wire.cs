@@ -20,7 +20,7 @@ internal static class Wire
         client.PutLoadOrderAndAwaitReady(SnapshotPlugins.Body(fx.GameDirectory, fx.InstanceRoot, plugins));
 
     /// <summary>What Modbench sends once its watch sees a change: the snapshot again, whose arrival
-    /// validates every file (ADR-0009 invariant 4).</summary>
+    /// validates every file (ADR-0009).</summary>
     internal static async Task NextSnapshot(this HttpClient client, ScatteredFixtureData fx, params string[] origins) =>
         (await client.PutLoadOrder(fx, origins)).EnsureSuccessStatusCode();
 
@@ -85,7 +85,7 @@ internal static class Wire
         (string Plugin, string Origin) destination, bool replace = false) =>
         client.Copy([(formKey, source.Plugin, source.Origin)], mode, [destination], replace);
 
-    // ADR-0012 invariant 1: a plugin is (origin, filename) together, so origin is required here too.
+    // ADR-0012: a plugin is (origin, filename) together, so origin is required here too.
     internal static async Task<string> FirstFormKey(this HttpClient client, string plugin, string origin, string type = "npc_")
     {
         var records = await client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&origin={origin}&type={type}");
@@ -119,7 +119,7 @@ internal static class Wire
     internal static async Task<JsonElement> Plugin(this HttpClient client, string name) =>
         (await client.Plugins()).Single(p => p.GetProperty("name").GetString() == name);
 
-    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015 invariant 2), on the
+    /// <summary>Track's write reaches the answers at the next snapshot (ADR-0015), on the
     /// service's own thread, so the answer is polled until it reports the plugin tracked.</summary>
     internal static async Task PluginReportsTracked(this HttpClient client, string name)
     {

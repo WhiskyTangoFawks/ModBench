@@ -147,7 +147,7 @@ internal sealed class WorkingTreeOverlay
     // about creation.
     private void InsertNewWorkingTreeRow(PluginAddress key, string formKey, string recordType, string body)
     {
-        // ADR-0009 invariant 2: no load_order_idx to carry into the row; this check only refuses a
+        // ADR-0009: no load_order_idx to carry into the row; this check only refuses a
         // plugin the registration doesn't know.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");

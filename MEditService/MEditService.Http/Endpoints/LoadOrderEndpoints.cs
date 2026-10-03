@@ -9,12 +9,12 @@ public static class LoadOrderEndpoints
 
     public static IEndpointRouteBuilder MapLoadOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0013 invariants 1 and 4. PUT, because sending the same body twice changes nothing.
+        // ADR-0013. PUT, because sending the same body twice changes nothing.
         app.MapPut("/load-order", PutLoadOrder)
             .WithName("PutLoadOrder")
             .WithTags(Tag)
             .WithDescription(
-                "Reconciles the load order against this snapshot (ADR-0013 invariant 1): every plugin file in " +
+                "Reconciles the load order against this snapshot (ADR-0013): every plugin file in " +
                 "the instance, each with its origin and path, the active plugins in load order, and " +
                 "the plugins loaded with no line, as Mod Management decided them. Plugins new to the snapshot are opened and " +
                 "registered (indexed only if never seen), plugins absent from it are unregistered, " +
@@ -37,7 +37,7 @@ public static class LoadOrderEndpoints
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
-        // No instance root, nowhere to keep the rows (ADR-0009 invariant 3).
+        // No instance root, nowhere to keep the rows (ADR-0009).
         if (!Directory.Exists(req.InstanceRoot))
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
 
@@ -48,7 +48,7 @@ public static class LoadOrderEndpoints
         {
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin.", statusCode: 400);
         }
-        // Never defaulted here (ADR-0013 invariant 3).
+        // Never defaulted here (ADR-0013).
         if (req.Active is not { } active || req.LoadedWithNoLine is not { } loadedWithNoLine)
             return Results.Problem("The snapshot must state its active plugins and those loaded with no line.", statusCode: 400);
 

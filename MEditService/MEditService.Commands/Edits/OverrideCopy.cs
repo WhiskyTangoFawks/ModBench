@@ -162,7 +162,7 @@ internal sealed class OverrideCopy
     {
         var loadOrder = _loadOrder.Current;
 
-        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012 invariant 1) the
+        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
         // active one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
         var origin = loadOrder.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));

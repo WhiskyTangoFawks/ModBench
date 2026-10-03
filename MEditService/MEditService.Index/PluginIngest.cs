@@ -35,7 +35,7 @@ internal sealed class PluginIngest
         List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
         string? EditorId, string? ParseDiagnosis);
 
-    // ADR-0009 invariant 1: a re-index replaces its own rows, the header's included. Called before
+    // ADR-0009: a re-index replaces its own rows, the header's included. Called before
     // DuckDbRecordIndex.Index creates the appender rather than resting on an unverified assumption
     // about how an appender behaves relative to a later delete.
     public void DeletePriorDocuments(string plugin, string origin)
@@ -225,7 +225,7 @@ internal sealed class PluginIngest
         var root = parsed.RootElement;
         var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
 
-        // ADR-0005 invariant 5: where a cell sits and what a container holds come from the GRUP
+        // ADR-0005: where a cell sits and what a container holds come from the GRUP
         // hierarchy, so a container whose document the codec refused still lists and still holds
         // its children. A refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
@@ -371,7 +371,7 @@ internal sealed class PluginIngest
         DuckDbSql.ExecuteFor(_connection,
             "DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2", plugin, origin);
 
-    // ADR-0012 invariant 1. Every reindexed table goes through this.
+    // ADR-0012. Every reindexed table goes through this.
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin) =>
         DuckDbSql.ExecuteFor(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
 

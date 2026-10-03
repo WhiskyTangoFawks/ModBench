@@ -27,8 +27,8 @@ public sealed class ContainerChildQueryService(
         ["Responses"] = "info",
     };
 
-    // The caller that names `plugin` (a tree row) always knows which origin it means (ADR-0012
-    // invariant 1).
+    // The caller that names `plugin` (a tree row) always knows which origin it means
+    // (ADR-0012).
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string origin)
     {
         var repo = _index.RequireReads();

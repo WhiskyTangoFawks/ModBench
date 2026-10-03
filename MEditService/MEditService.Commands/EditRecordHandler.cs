@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0014 invariant 3). The target and the pre-write gate are
+/// <summary>The Edit gesture's handler (ADR-0014). The target and the pre-write gate are
 /// <see cref="WriteTargets"/>'s, so nothing here re-derives one.</summary>
 public sealed class EditRecordHandler
 {
@@ -37,7 +37,7 @@ public sealed class EditRecordHandler
         _cellLanding = new CellLanding(targets, codec, schemaReflector, logger);
     }
 
-    /// <summary>The single write path (ADR-0007 invariant 4): <see cref="DocumentEdit"/> patches the
+    /// <summary>The single write path (ADR-0007): <see cref="DocumentEdit"/> patches the
     /// document, and this method owns only the IO around it.</summary>
     public RecordEditResult Edit(PluginAddress plugin, string formKey, RecordEditEnvelope envelope)
     {
@@ -178,7 +178,7 @@ public sealed class EditRecordHandler
 
     // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
     // one would desynchronize the side tables, which nothing here re-derives. No SetPlacement-style
-    // write-back exists: containment is the path (ADR-0006 invariant 4).
+    // write-back exists: containment is the path (ADR-0006).
     private static RecordEditResult? RefuseIfContainmentField(
         string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
@@ -194,7 +194,7 @@ public sealed class EditRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldReadOnly,
                 $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
-                "source tree's own structure rather than by a field (ADR-0006 invariant 4). Adding, removing or " +
+                "source tree's own structure rather than by a field (ADR-0006). Adding, removing or " +
                 "reordering a container's children is a structural gesture, not a field edit.");
         }
 

@@ -1,6 +1,6 @@
 namespace MEditService.Index;
 
-// ADR-0012 invariant 1.
+// ADR-0012.
 public record RecordSummary(
     string FormKey,
     string Plugin,

@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0007 invariant 3: tracked and untracked plugins share one indexing call.</summary>
+/// <summary>ADR-0007: tracked and untracked plugins share one indexing call.</summary>
 internal static class SourceIngest
 {
     /// <summary>Whether this plugin has a tree to ingest from; false reads the binary instead.
@@ -93,7 +93,7 @@ internal static class SourceIngest
     }
 
     // Diffs HEAD's documents against the working tree's by FormKey, needing no path identity
-    // (ADR-0007 invariant 3). A schema-unpublished type is skipped on the deletion side: a
+    // (ADR-0007). A schema-unpublished type is skipped on the deletion side: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
         SourceRepository repository, PluginAddress key,

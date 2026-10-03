@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The Track gesture end to end (ADR-0007 invariant 2).</summary>
+/// <summary>The Track gesture end to end (ADR-0007).</summary>
 public sealed class TrackService(
     ILogger<TrackService> logger, IPluginAdapter adapter, INotificationPublisher? notifications = null)
 {
@@ -141,7 +141,7 @@ public sealed class TrackService(
                     "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
-        // ADR-0007 invariant 2.
+        // Track takes a mod with no repository (ADR-0007).
         if (SourceRepository.IsTracked(modFolder))
         {
             return Refuse(TrackRefusal.AlreadyTracked,

@@ -23,17 +23,17 @@ public enum UnrestoredReason
 }
 
 /// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
-/// lists it (ADR-0019 invariant 4).</summary>
+/// lists it (ADR-0019).</summary>
 public sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>Rollback's own filesystem primitives (ADR-0003 invariant 4): nested so undoing a mint or a move reaches
+/// <summary>Rollback's own filesystem primitives (ADR-0003): nested so undoing a mint or a move reaches
 /// the same private machinery the put or move it undoes used, rather than a second copy of it.</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
-    /// applied all or restored all (commands.md, A failed gesture writes nothing; ADR-0003
-    /// invariant 4).</summary>
+    /// applied all or restored all (commands.md, A failed gesture writes nothing;
+    /// ADR-0003).</summary>
     public sealed class SourceTransaction
     {
         /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
@@ -167,7 +167,7 @@ public sealed partial class SourceRepository
 
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
         /// before an earlier act moves back into it. A restore failure is collected, never thrown
-        /// (ADR-0019 invariant 4).</summary>
+        /// (ADR-0019).</summary>
         public IReadOnlyList<UnrestoredPath> Rollback()
         {
             var unrestored = new List<UnrestoredPath>();

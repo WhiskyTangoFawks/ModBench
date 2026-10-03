@@ -55,7 +55,7 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
   );
 }
 
-// RecordPanelClient's own read (ADR-0002 invariant 2): the host's mEdit client answers with the
+// RecordPanelClient's own read (ADR-0002): the host's mEdit client answers with the
 // comparison, the plugin list and conflictsComputed, untransformed.
 export function requestRecordLoad(formKey: string): Promise<RecordLoadAnswer> {
   return requestReply(

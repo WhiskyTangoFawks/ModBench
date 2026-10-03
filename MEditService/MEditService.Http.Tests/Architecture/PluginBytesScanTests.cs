@@ -32,7 +32,7 @@ public sealed class PluginBytesScanTests
         Assert.True(
             named.Count == 0,
             "A type outside the Plugin adapter opens a plugin file. A live Mutagen mod reaches nothing "
-            + "but the codec and the Plugin adapter (ADR-0005 invariant 2), so ask the adapter for the "
+            + "but the codec and the Plugin adapter (ADR-0005), so ask the adapter for the "
             + "answer as data instead:\n"
             + string.Join("\n", named));
     }
@@ -49,7 +49,7 @@ public sealed class PluginBytesScanTests
         Assert.True(
             named.Count == 0,
             "A type outside the Plugin adapter names the tree door's implementation. Reading a source "
-            + "tree into a mod and writing one back are the port's two members (ADR-0005 invariant 2), so "
+            + "tree into a mod and writing one back are the port's two members (ADR-0005), so "
             + "ask the adapter:\n"
             + string.Join("\n", named));
     }
@@ -94,7 +94,7 @@ public sealed class PluginBytesScanTests
         Assert.True(
             named.Count == 0,
             "The Plugin adapter names the Source repository. What a plugin holds is its own bytes' answer "
-            + "(ADR-0015 invariant 5), and where a tree sits and how it is read are the repository's:\n"
+            + "(ADR-0015), and where a tree sits and how it is read are the repository's:\n"
             + string.Join("\n", named));
     }
 

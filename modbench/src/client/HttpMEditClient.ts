@@ -54,7 +54,7 @@ export class HttpMEditClient implements MEditClient {
       reconnectDelayMs: deps.reconnectDelayMs,
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
-    // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
+    // ADR-0014: the stream is open exactly while the backend is attached, so no
     // module outside this one starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
       if (status === 'running') this.notifications.start();
@@ -88,7 +88,7 @@ export class HttpMEditClient implements MEditClient {
     return this.notifications.subscribe(kind, listener);
   }
 
-  // ADR-0014 invariant 2: `track` rides its own notification kind. `extract` picks that kind's
+  // ADR-0014: `track` rides its own notification kind. `extract` picks that kind's
   // payload out of the flat wire envelope; undefined skips the event.
   private subscribeStatus<T>(
     kind: NotificationKind,
@@ -138,7 +138,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   /** ADR-0014: Refresh's first step; mEdit refills the index against the load order it holds.
-   *  ADR-0009 invariant 5: a 423 is `heldElsewhere`, apart from every other failure — never a
+   *  ADR-0009: a 423 is `heldElsewhere`, apart from every other failure — never a
    *  rejection. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
     try {

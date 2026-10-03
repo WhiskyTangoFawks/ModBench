@@ -1,6 +1,6 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>A plugin's identity (ADR-0012 invariant 1); PluginName is the name-only filter
+/// <summary>A plugin's identity (ADR-0012); PluginName is the name-only filter
 /// counterpart.</summary>
 public readonly record struct PluginAddress(string Name, string Origin)
 {

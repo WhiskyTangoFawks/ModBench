@@ -65,8 +65,8 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>The held load order arriving again (ADR-0013 invariant 1), which validates every
-    /// plugin (ADR-0009 invariant 4).</summary>
+    /// <summary>The held load order arriving again (ADR-0013), which validates every
+    /// plugin (ADR-0009).</summary>
     internal static void NextSnapshot(this Indexer index)
     {
         if (!Holders.TryGetValue(index, out var holder))

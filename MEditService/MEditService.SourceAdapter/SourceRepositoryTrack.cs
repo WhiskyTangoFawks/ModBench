@@ -17,7 +17,7 @@ internal static class PristineFileWriter
     }
 }
 
-/// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007 invariant 6),
+/// <summary>One plugin's facts as its baseline commit's trailers carry them (ADR-0007),
 /// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
 public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
 

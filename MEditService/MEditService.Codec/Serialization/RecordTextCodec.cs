@@ -14,7 +14,7 @@ using Noggog.IO;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>The per-record codec, never a whole plugin (ADR-0006 invariant 4). Takes
+/// <summary>The per-record codec, never a whole plugin (ADR-0006). Takes
 /// IMajorRecordGetter rather than the generated serializer's narrower interface, because
 /// reflection needs only runtime assignability.</summary>
 public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)

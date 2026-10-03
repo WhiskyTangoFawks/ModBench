@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Composition;
 
-/// <summary>Where the gesture handlers are built (ADR-0014 invariant 3), because only this assembly
+/// <summary>Where the gesture handlers are built (ADR-0014), because only this assembly
 /// can name the internal module they share. The host calls this one method.</summary>
 public static class CommandHandlers
 {

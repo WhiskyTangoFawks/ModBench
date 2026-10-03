@@ -1,9 +1,9 @@
 import type { SelectionOutcome } from './selectionOutcome';
 
-/** ADR-0019 invariant 2's severity tiers, as the one type every caller names. */
+/** ADR-0019's severity tiers, as the one type every caller names. */
 export type Severity = 'error' | 'warning';
 
-/** ADR-0019 invariant 3 surfacing: injected so business logic stays free of vscode types. The
+/** ADR-0019 surfacing: injected so business logic stays free of vscode types. The
  *  composition root implements it over the window API. */
 export interface Reporter {
   // Arrow-typed properties, not methods, so a test holds a bare reference to one

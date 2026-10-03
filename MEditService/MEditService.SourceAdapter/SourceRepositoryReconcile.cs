@@ -15,7 +15,7 @@ public sealed record DirtyDocument(string FormKey, string RecordType, string? Co
 public sealed record WorkingTreeDirt(IReadOnlyList<DirtyDocument> Documents, bool NeedsStructuralPass);
 
 /// <summary>What a reconcile asks the tree: where its dirt leaves each record, and the documents it
-/// holds now against the ones a ref committed (ADR-0007 invariant 3).</summary>
+/// holds now against the ones a ref committed (ADR-0007).</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>Every record the tree's dirt moves, by identity and text. Dirt is git status, never a
@@ -62,7 +62,7 @@ public sealed partial class SourceRepository
             if (!inWorkingTree)
             {
                 // Deleted in the working tree: gone at Effective, and it must keep answering at Head so
-                // the user can see, diff or revert it (ADR-0007 invariant 3).
+                // the user can see, diff or revert it (ADR-0007).
                 if (committedText == null) continue;
                 var goneFormKey = RootStringIn(committedText, FormKeyMember)
                     ?? throw new UnreadableSourceDocumentException(

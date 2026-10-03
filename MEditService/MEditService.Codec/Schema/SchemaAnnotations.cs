@@ -54,7 +54,7 @@ internal sealed record SchemaAnnotations(
     // Shapes the walk reaches and could present, but nobody has decided a presentation for, by CLR
     // name (a generic by its definition's). Each reason says what a future ticket would decide.
     Dictionary<string, string> RefusedShapes,
-    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0005 invariant 3).
+    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0005).
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, string>> EnumMemberLabels,
     // Upstream Mutagen defects, each with an effect the schema and the write path honour. A defect
     // identified only by an exception message is a plugin diagnosis, not a row here.
@@ -141,7 +141,7 @@ internal sealed record SchemaAnnotations(
         new(modHeaderGetter, "FormVersion", "Form Version"),
         new(modHeaderGetter, "Version2", "Version Control Info 2"),
         new(modHeaderGetter, "Author"),
-        // ADR-0008 invariant 2.
+        // ADR-0008.
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 

@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>ADR-0007 invariant 4's compile, for one plugin.</summary>
+/// <summary>ADR-0007's compile, for one plugin.</summary>
 public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
@@ -19,7 +19,7 @@ public sealed class PluginCompileService(
     ILogger<PluginCompileService> logger)
 {
     // The palette entry verbatim; a tracked mod refuses Track, so decompile is the way back
-    // (ADR-0007 invariant 2).
+    // (ADR-0007).
     private const string RegenerateTheSource = "Run \"Modbench: Decompile Plugin\" to regenerate the source.";
 
     public async Task<CompileResult> CompileAsync(PluginAddress plugin)
@@ -37,8 +37,8 @@ public sealed class PluginCompileService(
         var sourceFiles = repository.FilesOf(plugin);
 
         // A document the read could not open is content this compile does not have, and compiling the
-        // rest would write a binary missing that record with nothing left to notice it (ADR-0019
-        // invariant 1).
+        // rest would write a binary missing that record with nothing left to notice it
+        // (ADR-0019).
         if (sourceFiles.Unreadable is { } unreadable)
         {
             return CompileResult.Refused(
@@ -149,8 +149,8 @@ public sealed class PluginCompileService(
     private sealed record Content(
         IReadOnlyList<SourceRecord> Records, IReadOnlyList<string> Masters, IReadOnlyCollection<string> Links);
 
-    // The masters come from the records here, through the collector and the schema (ADR-0008
-    // invariant 2; ADR-0015 invariant 1).
+    // The masters come from the records here, through the collector and the schema
+    // (ADR-0008; ADR-0015).
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
@@ -169,8 +169,8 @@ public sealed class PluginCompileService(
         return new Content(records, InLoadOrderOrder(required.Masters, loadOrder), required.Links);
     }
 
-    // ADR-0007 invariant 4, answered after the write by the files the game loads, the one just
-    // written among them.
+    // A dangling link is a diagnostic, not a refusal (ADR-0007), answered after the write by the
+    // files the game loads, the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
         Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,
         SourceRepository repository)
@@ -181,7 +181,7 @@ public sealed class PluginCompileService(
             answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
 
         // A file nothing could be read from answers nothing about the records in it, so a link into
-        // it is unchecked with that reason, never broken (ADR-0019 invariant 1).
+        // it is unchecked with that reason, never broken (ADR-0019).
         var unread = answers.UnreadableFiles.ToDictionary(
             file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
         string? WhyUnchecked(string formKey) =>
@@ -268,7 +268,7 @@ public sealed class PluginCompileService(
         return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} {RegenerateTheSource}");
     }
 
-    // ADR-0006 invariant 6. The generated deserializer skips an unrecognized property or file without
+    // ADR-0006. The generated deserializer skips an unrecognized property or file without
     // throwing, so a successful parse proves nothing. The check runs both ways: a document the
     // regeneration does not produce is content the parse dropped.
 

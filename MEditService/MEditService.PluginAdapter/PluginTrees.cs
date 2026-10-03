@@ -151,8 +151,7 @@ internal static class PluginTrees
     private const string ReadScratchPrefix = "medit-readtree-";
 
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
-    /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005
-    /// invariant 2).</summary>
+    /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
         string? scratchRoot = null, CancellationToken cancel = default)

@@ -12,7 +12,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// the actual defect from the plugin's own bytes.</summary>
     public const string UnknownClass = "unknown";
 
-    // Kind A is ADR-0006 invariant 7's legitimate data, matched by message substring since Mutagen's
+    // Kind A is ADR-0006's legitimate data, matched by message substring since Mutagen's
     // exceptions carry no error code. The second message is UnmappableFormIDException's generic one
     // for any unresolvable master, so its tail says "likely".
     private static readonly (string MessageContains, string Tail)[] KindATable =

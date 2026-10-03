@@ -17,7 +17,7 @@ public sealed record NamedFile(string GitPath, string? WorkingTreeText);
 /// could not.</summary>
 public sealed record TreeChanges(string? Head, IReadOnlyList<ChangedDocument>? Documents, IReadOnlyList<NamedFile>? Named);
 
-/// <summary>Git's index as the tree's stamp (ADR-0009, Derived tactical observations).</summary>
+/// <summary>Git's index as the tree's stamp (ADR-0009).</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>Every document of the plugin's tree git reports dirty, and every one a move of HEAD

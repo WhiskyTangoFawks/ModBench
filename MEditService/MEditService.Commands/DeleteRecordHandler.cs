@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The Delete gesture's handler (ADR-0014 invariant 3): a working-tree deletion, gone at
+/// <summary>The Delete gesture's handler (ADR-0014): a working-tree deletion, gone at
 /// Effective, still served at Head until compiled. No reference cascade (plugins.md, Delete).</summary>
 public sealed class DeleteRecordHandler
 {
@@ -19,7 +19,7 @@ public sealed class DeleteRecordHandler
         (_targets, _loadOrder, _logger) = (targets, loadOrder, logger);
 
     /// <summary>Per record (commands.md, A selection is one gesture). Throws
-    /// <see cref="NoLoadOrderException"/> when no load order is held (ADR-0013 invariant 4).</summary>
+    /// <see cref="NoLoadOrderException"/> when no load order is held (ADR-0013).</summary>
     public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();

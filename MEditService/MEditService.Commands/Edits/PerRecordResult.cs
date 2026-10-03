@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A record and the plugin holding it (ADR-0012 invariant 1).</summary>
+/// <summary>A record and the plugin holding it (ADR-0012).</summary>
 public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
 
 // The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.

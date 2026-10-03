@@ -1,6 +1,6 @@
 namespace MEditService.Index;
 
-/// <summary>The instance's index file is open in another process (ADR-0009 invariant 5).</summary>
+/// <summary>The instance's index file is open in another process (ADR-0009).</summary>
 public sealed class IndexHeldElsewhereException : Exception
 {
     // RCS1194: the three standard constructors for well-behaved rethrow callers. The index throws

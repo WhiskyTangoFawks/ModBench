@@ -22,7 +22,7 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
-    // One per Store (ADR-0009, Derived tactical observations).
+    // One per Store (ADR-0009).
     private readonly PluginFileHashes _hashes;
 
     public DuckDBConnection Connection { get; private set; }
@@ -36,7 +36,7 @@ internal sealed class Store : IDisposable
         Connection = Open();
     }
 
-    // ADR-0009 invariant 5.
+    // ADR-0009.
     private DuckDBConnection Open()
     {
         if (_databasePath == null)
@@ -133,7 +133,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    // ADR-0009 invariant 4, with no in-place migration.
+    // ADR-0009, with no in-place migration.
     private void DiscardFileWrittenUnderAnotherVersion(string indexVersion)
     {
         if (_databasePath == null) return;
@@ -175,7 +175,7 @@ internal sealed class Store : IDisposable
     }
 
     // Only reachable once the file has already been opened, so it can never race the second-writer
-    // case IsAnotherWriter guards. Internal: ADR-0009 invariant 5's rebuild reuses this same
+    // case IsAnotherWriter guards. Internal: ADR-0009's rebuild reuses this same
     // delete-and-reopen.
     internal void RebuildFile()
     {
@@ -198,7 +198,7 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009 invariant 4. Registrations are not cleared (ADR-0013, Derived tactical
+    /// <summary>ADR-0009. Registrations are not cleared (ADR-0013, Derived tactical
     /// observations).</summary>
     public List<PluginAddress> ValidateAgainstDisk()
     {
@@ -308,7 +308,7 @@ internal sealed class Store : IDisposable
             key.Name, key.Origin);
     }
 
-    // ADR-0009 invariant 4: the plugin half of an Index() call, inside its transaction. A caller
+    // ADR-0009: the plugin half of an Index() call, inside its transaction. A caller
     // naming no file (an in-memory mod) writes no file row, so nothing vouches for those rows and
     // the next load re-indexes.
     public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)
@@ -373,7 +373,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {PluginDiagnosisRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
     }
 
-    // ADR-0015 invariant 3: one advance per logical projection, not per transaction inside it. A whole-plugin
+    // ADR-0015: one advance per logical projection, not per transaction inside it. A whole-plugin
     // ingest is four transactions, so a client awaiting the sequence once could otherwise read an
     // in-between state.
     private readonly Lock _projectionLock = new();
@@ -483,7 +483,7 @@ internal sealed class Store : IDisposable
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    // ADR-0015 invariant 3: raises the sequence to at least atLeast, never lowers it — Sequence
+    // ADR-0015: raises the sequence to at least atLeast, never lowers it — Sequence
     // must never regress within one process across a rebuild.
     internal void SeedSequence(long atLeast)
     {

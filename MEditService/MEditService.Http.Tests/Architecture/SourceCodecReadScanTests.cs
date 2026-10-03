@@ -29,8 +29,8 @@ public sealed class SourceCodecReadScanTests
 
         Assert.True(
             counts.Count == 0,
-            "The Source folder touches a RecordTextCodec member outside its bound (ADR-0014 "
-            + "invariant 1): a driven adapter reads the kernel for facts about types and for the "
+            "The Source folder touches a RecordTextCodec member outside its bound (ADR-0014): "
+            + "a driven adapter reads the kernel for facts about types and for the "
             + "spelling of a layout level it mints, never for a record's content. Only "
             + "RecordTypeDispatch (type facts, not counted here) and RecordTextCodec.BlankDocument "
             + "(the level it mints) are permitted — read the type fact through RecordTypeDispatch or "

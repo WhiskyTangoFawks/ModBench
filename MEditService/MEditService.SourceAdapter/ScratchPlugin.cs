@@ -1,7 +1,7 @@
 namespace MEditService.SourceAdapter;
 
 /// <summary>A folder holding one recompiled plugin and nothing else, removed on dispose. Where those
-/// bytes land is the repository's answer (ADR-0014 invariant 5); what they mean is the caller's.</summary>
+/// bytes land is the repository's answer (ADR-0014); what they mean is the caller's.</summary>
 public sealed class ScratchPlugin : IDisposable
 {
     private readonly string _folder;
