@@ -472,9 +472,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         {`${result.recordTypeName} ${title}`}
       </div>
       {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
-      {/* An unmarked cell here paints a verdict nothing has checked yet (editor.md, States, story
-          3). Clears itself with no user action once refresh() next lands a settled
-          `conflictsComputed`. */}
+      {/* See recordPanelIncompleteMessage. Clears itself with no user action once refresh() next
+          lands a settled `conflictsComputed`. */}
       {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {recordPanelIncompleteMessage(conflictsComputed) && (
         <div style={messageStyle}>{recordPanelIncompleteMessage(conflictsComputed)}</div>

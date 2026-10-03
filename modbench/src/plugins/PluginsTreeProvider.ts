@@ -144,8 +144,8 @@ function openHeaderCommand(plugin: string, origin: string): vscode.Command {
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
- *  setting one would silently change every row's icon. Overridden plugins are indexed,
- *  not displayed (plugins.md, The tree, story 3). */
+ *  setting one would silently change every row's icon. Overridden plugins:
+ *  plugins.md, The tree, story 3. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
@@ -246,8 +246,8 @@ type RowDecoration = {
   iconPath: vscode.TreeItem['iconPath'];
 };
 
-// plugins.md, States 3-4: what a row not resolved by the load order shows. `everyRow`: a second
-// window (ADR-0009). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
+// What a row not resolved by the load order shows (plugins.md, States, stories 3, 4 and 6).
+// `everyRow`: a second window (ADR-0009). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
 // plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the

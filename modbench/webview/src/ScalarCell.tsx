@@ -30,7 +30,8 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
     : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
 }
 
-/** ADR-0018; xedit.md, divergence 6. */
+/** A click focuses a cell (editor.md, The focused cell, story 1); no left click reaches the
+ *  extended editor (xedit.md, divergence 6). */
 export function ScalarCell({
   value, meta, editable = false, onCommit, ariaLabel, displayOverride,
 }: ScalarCellProps) {

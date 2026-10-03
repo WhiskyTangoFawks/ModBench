@@ -207,8 +207,8 @@ export function DiffRow({
 
   return (
     <tr style={{ backgroundColor: rowBg, ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      {/* Double-clicking the label expands or collapses the node (editor.md, Rows, story 4). For a
-          row with no children the flip lands in expandedStructs, an entry nothing reads. */}
+      {/* editor.md, Rows, story 4. For a row with no children the flip lands in expandedStructs,
+          an entry nothing reads. */}
       <DiskCell
         style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}

@@ -21,7 +21,7 @@ export function say(session: TeardownSession, message: string | undefined): void
   if (message === undefined) session.pluginsNameFilter?.refresh();
 }
 
-/** Takes the backend down, and nothing else (ADR-0002). */
+/** Abandons the reconcile in flight and takes the backend down (ADR-0002). */
 export function exitEditing(session: TeardownSession, client: { stop(): Promise<void> }): void {
   // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
   // 'abandoned' rather than reporting a killed backend to the user as a network failure.

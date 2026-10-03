@@ -17,9 +17,9 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
-/** The Plugins tree's one progress surface: a spinner over the view while the work
- *  runs, and the view's own message line. The composition root holds the `TreeView`, so it
- *  supplies both. */
+/** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
+ *  view while the work runs, and the view's own message line. The composition root holds the
+ *  `TreeView`, so it supplies both. */
 export interface PluginsViewProgress {
   /** Runs `work` under the spinner, clearing the message on every exit path. */
   while: (work: () => Promise<void>) => Promise<void>;

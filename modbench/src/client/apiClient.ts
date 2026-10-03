@@ -57,7 +57,7 @@ export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
 export type NotificationEvent = Schemas['NotificationEvent'];
 
 /** `heldElsewhere` overrides even an already-held row, `failed` only a row not yet held
- *  (plugins.md, States 4 and 6). Internal to the client, not a wire type. */
+ *  (plugins.md, States, stories 4 and 6). Internal to the client, not a wire type. */
 export type LoadOrderRefusal = { kind: 'heldElsewhere' | 'failed'; message: string };
 
 /** The `load-order-status` notification's payload, subscribed alongside the in-flight
@@ -66,7 +66,7 @@ export interface LoadOrderStatus {
   /** How many plugins the snapshot resolved to — the denominator for progress. Plugins that
    *  fail to open still count toward it. */
   totalPlugins: number;
-  /** How many plugins the game loads (ADR-0009). */
+  /** How many plugins the game loads: the active plugins (ADR-0012). */
   activePlugins: number;
   /** The plugins whose indexing has completed, in the order they landed. A plugin appears here
    *  only once it is wholly queryable — strictly later than "opened", which is what

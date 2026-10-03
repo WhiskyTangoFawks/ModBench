@@ -8,9 +8,6 @@ export function reportPutOutcome(result: LoadOrderOutcome, deps: { error: (msg: 
   if (result.outcome === 'failed') deps.error(result.message);
 }
 
-/** `warn` toasts, `log` writes the channel,
- *  `setStatusText` writes the status bar, `notifyConflictsComputed` fires once, `refreshTree`
- *  re-reads the record browser's own caches. */
 export interface ReconciledDeps {
   log: (msg: string) => void;
   warn: (msg: string) => void;
@@ -24,7 +21,8 @@ export interface ReconciledDeps {
 }
 
 /** A reconcile that reached Ready, whoever started it, reported and then handed to the views.
- *  Ready is only published after the winner sweep, so conflicts are computed. */
+ *  Ready is only published once the snapshot is indexed (common.md, The status bar, story 1),
+ *  so conflicts are computed. */
 export async function settleReconciled(status: LoadOrderProgress, deps: ReconciledDeps): Promise<void> {
   reportSkippedPlugins(status.failures, deps);
   deps.setStatusText(`$(check) mEdit: Ready (${status.activePlugins} plugins)`);

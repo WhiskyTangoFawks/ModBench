@@ -11,8 +11,7 @@ export type LoadResult =
       // Null is a record held by no active plugin.
       ok: true; result: CompareResult | null; immutableSet: Set<ColumnKey> | null;
       // Null exactly when immutableSet is, but degrading the opposite way: to "nothing is
-      // editable", because wrongly offering an edit that cannot land is worse than wrongly
-      // withholding one (ADR-0019). Read fail-closed.
+      // editable" (commands.md, No dead entries). Read fail-closed.
       trackedSet: Set<ColumnKey> | null;
       // Whether the winner sweep has run (editor.md, States, story 3). Fails *closed*: an absent
       // answer reads as "not computed", never as "settled", or a status-fetch blip would render a
