@@ -26,6 +26,7 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { accessTo, readModlistEntries } from '../../test/mo2/adapterOver';
+import { present } from '../../ports/present';
 
 async function anchorRowOfARealTreeOverTheCorpusModlist(direction: SortDirection, isRow: (node: ModlistNode) => boolean): Promise<ModlistNode> {
   const instance = new FakeInstance(instanceValueFixture({ mods: await readModlistEntries(CORPUS_FIXTURE) }));
@@ -33,8 +34,8 @@ async function anchorRowOfARealTreeOverTheCorpusModlist(direction: SortDirection
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
-  if (!row) throw new Error('anchor row not found');
-  return row;
+  expect(row, 'the anchor row').toBeDefined();
+  return present(row, 'the anchor row');
 }
 
 const separatorMarks = {
@@ -49,8 +50,8 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const reporter = recordingReporter();
   registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => [], separatorMarks);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
-  if (!call) throw new Error('modbench.separator.add not registered');
-  await call[1](anchor);
+  expect(call, 'the modbench.separator.add registration').toBeDefined();
+  await present(call, 'the modbench.separator.add registration')[1](anchor);
   expect(reporter.reports).toEqual([]);
   const text = await readFile(`${root}/${DEFAULT_MODLIST}`, 'utf8');
   await rm(root, { recursive: true, force: true });

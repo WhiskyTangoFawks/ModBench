@@ -82,7 +82,7 @@ describe('excludeDownload / includeDownload', () => {
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nremoved=true\r\n');
   });
 
-  it('refuses, never throws, when the metadata cannot be written, here for a directory where it belongs', async () => {
+  it('refuses rather than throwing when the metadata cannot be written, here for a directory where it belongs', async () => {
     await writeArchive('foo.7z');
     await mkdir(metaPath('foo.7z'));
 

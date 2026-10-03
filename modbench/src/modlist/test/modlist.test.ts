@@ -501,7 +501,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
     });
 
-    it('refuses a gone separator by name while the others land, in one write, trashing nothing for it though its folder is still under mods/ as MO2 or another tool may leave it', async () => {
+    it('refuses a gone separator by name while the others land, in one write, trashing nothing for it its folder left under mods/ as MO2 or another tool may leave it', async () => {
       await mkdir(join(dir, 'mods', 'No Such Separator_separator'));
       vi.mocked(rename).mockClear();
 
@@ -864,7 +864,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect((await readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
     });
 
-    it('writes no sidecar for an archive that is absent from downloads/, a mod outliving its download and MO2 never writing a sidecar beside no archive', async () => {
+    it('writes no sidecar for an archive that is absent from downloads/ (a mod can outlive its download, and MO2 writes no sidecar beside no archive)', async () => {
       const outcome = await uninstallMods(accessTo(dir), 'Default', [{ name: 'Harder VATS', archiveFilename: 'Long Gone-1-0.7z' }], trash);
 
       expect(outcome).toEqual({ applied: true, outcome: { landed: [{ name: 'Harder VATS' }], refused: [] } });
@@ -897,7 +897,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   describe('createEmptyMod', () => {
-    it('refuses a name a mod folder already has in another case, as MO2 keys mods by name without case and a Windows folder answers to either', async () => {
+    it('refuses a name a mod folder already has in another case (MO2 keys mods by name without case, and a Windows folder answers to either)', async () => {
       assertRefusalNarrowedByHandSinceExpectMatchersAreTypedAny(await createEmptyMod(accessTo(dir), 'Default', 'harder vats'), 'already exists');
     });
 
@@ -910,7 +910,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect((await readModlist()).filter((e) => e.name.toLowerCase() === 'new mod')).toHaveLength(1);
     });
 
-    it('refuses a name a separator\'s folder has, writing no line, since MO2 knows a mod by its folder\'s name', async () => {
+    it('refuses a name a separator\'s folder has, writing no line (MO2 knows a mod by its folder\'s name)', async () => {
       const before = await readFile(modlistPath(), 'utf8');
       const name = 'Unassigned (Modlist Development)_separator';
 
@@ -1071,7 +1071,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(writesToModlist()).toBe(0);
   });
 
-  it('keeps the line of a mod whose folder is a link to a folder, as MO2 lists a linked mod folder as a mod, rather than counting only real directories', async () => {
+  it('keeps the line of a mod whose folder is a link to a folder (MO2 lists a linked mod folder as a mod), rather than counting only real directories', async () => {
     const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
     try {
       await symlink(target, join(dir, 'mods', 'Linked Mod'), 'junction');
@@ -1086,7 +1086,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     }
   });
 
-  it('skips a mod folder link whose target cannot be checked, and drops its line, as MO2 has no mod by its name, rather than refusing the whole sync', async () => {
+  it('skips a mod folder link whose target cannot be checked, and drops its line (MO2 has no mod by its name), rather than refusing the whole sync', async () => {
     await symlink(join(dir, 'mods', 'Loop'), join(dir, 'mods', 'Loop'));
     await writeFile(modlistPath(), `+Loop\r\n${await readFile(modlistPath(), 'utf8')}`);
 
@@ -1095,7 +1095,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(outcome.applied && outcome.dropped).toContain('Loop');
   });
 
-  it('keeps a line whose folder differs only in case, when the handed list misses it, as MO2 matches a line to its folder without case where a Linux disk does not', async () => {
+  it('keeps a line whose folder differs only in case, when the handed list misses it (MO2 matches a line to its folder without case; a Linux disk does not)', async () => {
     await writeFile(modlistPath(), (await readFile(modlistPath(), 'utf8')).replace('-Harder VATS', '+harder vats'));
     const kept = (await readModlist())
       .filter((e) => e.name !== '[NODELETE] Radfall' && e.name !== 'Radfall - All-In-One Survival Overhaul');
@@ -1129,7 +1129,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(await readFile(modlistPath(), 'utf8')).not.toContain('Weapons/Armor');
   });
 
-  it('drops a mod line whose name escapes mods/, looking at nothing outside it, since MO2 has no mod by a name with a /', async () => {
+  it('drops a mod line whose name escapes mods/, looking at nothing outside it, (MO2 has no mod by a name with a /)', async () => {
     const outside = join(dir, 'Escaped');
     await mkdir(outside);
     await writeFile(modlistPath(), '+../Escaped\r\n+Harder VATS\r\n');
@@ -1141,7 +1141,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 
-  it('matches a line to its folder without case, mods and separators alike as MO2 keys them, dropping and adding nothing', async () => {
+  it('matches a line to its folder without case, for a mod and a separator (MO2 keys both without case), dropping and adding nothing', async () => {
     await writeFile(modlistPath(), '+harder vats\r\n-unassigned (modlist development)_separator\r\n');
 
     const outcome = await sync(FIXTURE_MOD_FOLDERS);

@@ -193,7 +193,7 @@ describe('EditsInFlight, the tab going with the record to its new FormKey and re
       expect(await sentTo(edits, panel, { ...EDITED_MOD_ESP_FROM_MODA, origin: 'ModB' })).toEqual(['000800:Mod.esp']);
     });
 
-    it('from a gate taken before the move goes to the new FormKey after the tab reads it, as an extended editor keeps the address it was opened on, and one taken after does not', async () => {
+    it('from a gate taken before the move goes to the new FormKey after the tab reads it (an extended editor keeps the address it was opened on), and one taken after does not', async () => {
       const { client, panel, edits } = openOn('000800:Mod.esp');
       const openedBefore = edits.gate(panel);
       await edits.gate(panel)(EDITED_MOD_ESP_FROM_MODA, () => Promise.resolve('000900:Mod.esp'));

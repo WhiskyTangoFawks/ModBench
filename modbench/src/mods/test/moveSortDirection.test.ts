@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
+import { present } from '../../ports/present';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import {
@@ -50,8 +51,8 @@ async function shownRowsTopToBottomWithEverySeparatorExpanded(provider: ModListP
 function rowsNamed(rows: readonly ModlistNode[], named: readonly RowName[]): ModlistNode[] {
   return named.map((want) => {
     const row = rows.find((r) => r.kind === want.kind && nameOf(r) === want.name);
-    if (!row) throw new Error(`no ${want.kind} row named ${want.name}`);
-    return row;
+    expect(row, `a ${want.kind} row named ${want.name}`).toBeDefined();
+    return present(row, `the ${want.kind} row named ${want.name}`);
   });
 }
 

@@ -13,7 +13,7 @@ const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuick
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
   showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
-  showQuickPick: vi.fn(),
+  showQuickPick: vi.fn<(items: readonly { label: string }[]) => Promise<unknown>>(),
   openExternal: vi.fn(),
 }));
 
@@ -505,7 +505,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
-  it('refuses in the prompt a name another separator\'s folder holds, in any case as MO2 keys separators by name, and takes its own name or a mod\'s', async () => {
+  it('refuses in the prompt a name another separator\'s folder holds, in any case (MO2 keys separators by name without case), and takes its own name or a mod\'s', async () => {
     const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Group A_separator', 'Group B_separator', 'Mod A']);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
@@ -895,13 +895,11 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const losingAtTop = { selection: () => [], direction: () => 'losingAtTop' as const };
   const pickedLabels = (): string[] => {
-    const items: unknown = showQuickPick.mock.calls[0]?.[0];
-    if (!Array.isArray(items)) return [];
-    return items.map((item: unknown) =>
-      (typeof item === 'object' && item !== null && 'label' in item ? String(item.label) : ''));
+    const [items] = present(showQuickPick.mock.calls[0], 'the one showQuickPick call');
+    return items.map((item) => item.label);
   };
   const pickLabelled = (label: string) => showQuickPick.mockImplementationOnce(
-    (items: { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
+    (items: readonly { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
 
   it('right-clicked on a mod in a mixed selection, moves only the mods to the picked separator', async () => {
     pickLabelled('Group B');

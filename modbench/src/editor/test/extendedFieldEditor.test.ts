@@ -238,7 +238,7 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
   });
 
-  it('a hostile origin cannot make the write land outside the file the port answers, since the editor builds no path of its own from the origin', async () => {
+  it('a hostile origin cannot make the write land outside the file the port answers', async () => {
     const tempRoot = await makeTempRoot();
     const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });

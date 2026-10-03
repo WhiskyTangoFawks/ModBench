@@ -232,7 +232,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(installFromArchive).toHaveBeenCalledTimes(1);
   });
 
-  it('install: writes no sidecar of its own, leaving the mark to install as the one writer of MO2\'s .meta', async () => {
+  it('install: writes no sidecar of its own, the mark being install\'s', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');

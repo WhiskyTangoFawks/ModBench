@@ -133,7 +133,7 @@ describe('wireBackendStatus', () => {
 });
 
 describe('a backend that disconnects mid-send', () => {
-  it('leaves the send reporting abandoned, not a network failure the user cannot act on, as a deliberate abort answers abandoned where a refused connection would answer failed', async () => {
+  it('leaves the send reporting abandoned, not a network failure the user cannot act on (the fixture answers abandoned on a deliberate abort, where a refused connection would answer failed)', async () => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');
     let putStarted!: () => void;

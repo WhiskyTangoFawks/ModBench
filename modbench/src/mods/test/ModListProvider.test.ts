@@ -672,7 +672,7 @@ describe('ModListProvider', () => {
   });
 
   describe('setFilter — reset behaviour', () => {
-    it('clearing filter resets groupingOn to true whatever grouping is passed with the cleared text, and shows all nodes', async () => {
+    it('clearing filter resets groupingOn to true when grouping off is passed with the cleared text, and shows all nodes', async () => {
       const provider = makeProvider([sep('Sep'), mod('Mod')]);
       provider.setFilter('x', false);
       provider.setFilter('', false);
@@ -682,7 +682,7 @@ describe('ModListProvider', () => {
   });
 
   describe('view direction', () => {
-    it('default view renders the losing end (last file entry) at the top, as MO2 does, so a sibling list renders reversed from the winning-first file order', async () => {
+    it('default view renders the losing end (last file entry) at the top, the sibling list reversed from the winning-first file order', async () => {
       const provider = makeProvider([mod('Winning'), mod('Middle'), mod('Losing')]);
       const roots = await provider.getChildren();
       expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label))

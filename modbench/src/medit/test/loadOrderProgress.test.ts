@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { makeReconcileProgressHandler, reportIndexRefusal } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../../client';
 
-describe('makeReconcileProgressHandler, applying a tick only when it landed something new, since applying re-renders the whole tree and re-fetches record types for every expanded row', () => {
+describe('makeReconcileProgressHandler, applying a tick only when it landed something new, since applying re-renders the whole tree and re-fetches record types for an expanded row', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 3, activePlugins: 3, indexedPlugins: [], conflictsComputed: false, holdsNone: false, failures: [], version: 1, ...over });
 

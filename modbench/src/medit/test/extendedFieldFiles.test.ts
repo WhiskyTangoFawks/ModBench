@@ -5,7 +5,7 @@ import { extendedFieldFile } from '../extendedFieldFiles';
 const DEACON = { recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data' };
 
 describe('extendedFieldFile', () => {
-  it('sanitizes the FormKey\'s Windows-reserved colon, keeps the brackets every filesystem allows, and composes dir/origin/file from record, field, plugin', () => {
+  it('sanitizes the FormKey\'s Windows-reserved colon, keeps the brackets (valid in a filename on any filesystem), and composes dir/origin/file from record, field, plugin', () => {
     expect(extendedFieldFile('/tmp/root', DEACON)).toEqual({
       folder: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data'),
       file: join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm]'),
