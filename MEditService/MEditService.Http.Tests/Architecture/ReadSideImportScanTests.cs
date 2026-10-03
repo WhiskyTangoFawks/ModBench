@@ -3,15 +3,10 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The kernel, the codec and the write side never import the read side (ADR-0014
-/// invariants 1 and 3): an import here is a type filed in Queries that is not a read
-/// model.</summary>
 public sealed class ReadSideImportScanTests
 {
     private const string ReadSideImport = "using MEditService.Queries;";
 
-    // The kernel's three boxes, the write side, and the three driven adapters. Whole projects, so a
-    // new folder in one joins the scan rather than sitting outside it.
     private static readonly string[] ScannedRoots =
     [
         "MEditService.Codec",

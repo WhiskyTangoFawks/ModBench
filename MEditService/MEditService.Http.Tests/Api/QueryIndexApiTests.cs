@@ -7,8 +7,6 @@ using static MEditService.Http.Tests.Api.QueriedPluginsFixture;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>query-index's questions that change nothing, asked of one host that loaded
-/// <see cref="QueriedPluginsFixture"/> once.</summary>
 public sealed class QueryIndexApiTests(LoadedApiFixture<QueriedPluginsFixture> loaded)
     : IClassFixture<LoadedApiFixture<QueriedPluginsFixture>>
 {

@@ -3,15 +3,11 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A caption the code contradicts: Queries hide the Index's reads and draw no arrow to a
-/// store.</summary>
 public sealed class QueriesScanTests
 {
     private const string QueriesRoot = "MEditService.Queries";
 
-    // Every spelling of the file system a core module reaches for. The three statics are anchored
-    // against a member access, since a receiver's own Path or File property is the caller's data.
-    private static readonly (string Label, string Pattern)[] FileSystemNeedles =
+    private static readonly (string Label, string Pattern)[] FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName =
     [
         ("File.", @"(?<![\w.])File\."),
         ("Directory.", @"(?<![\w.])Directory\."),
@@ -22,15 +18,13 @@ public sealed class QueriesScanTests
         ("System.IO", @"\bSystem\.IO\b"),
     ];
 
-    // ADR-0014 invariant 1: the core knows no path and no byte format. Queries hide the Index's
-    // reads, so a disk read here answers from a file the Index never saw.
     [Fact]
-    public void Queries_NameNoFileSystem()
+    public void Queries_NameNoFileSystem_BecauseAQueryHidesTheIndexAndAnswersFromARow()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
         var walked = ScannedFiles(root, QueriesRoot);
-        var named = Sites(root, walked, FileSystemNeedles);
+        var named = Sites(root, walked, FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName);
 
         Assert.True(walked.Count > 10, $"The Queries scan walked only {walked.Count} files.");
         Assert.True(
@@ -56,7 +50,7 @@ public sealed class QueriesScanTests
 
             Assert.Equal(
                 ["Q/Reads.cs: Directory.: 1", "Q/Reads.cs: File.: 2"],
-                Sites(root, ScannedFiles(root, "Q"), FileSystemNeedles));
+                Sites(root, ScannedFiles(root, "Q"), FileSystemNeedlesWhoseStaticsAreAnchoredAgainstAMemberAccessOfTheSameName));
         }
         finally
         {
@@ -67,8 +61,6 @@ public sealed class QueriesScanTests
     private static List<string> ScannedFiles(string root, string scannedRoot) =>
         [.. SourceTree.CSharpFiles(Path.Combine(root, scannedRoot.Replace('/', Path.DirectorySeparatorChar)))];
 
-    // A count, not a line number: a reference is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Sites(
         string root, IEnumerable<string> files, (string Label, string Pattern)[] needles) =>
         [.. files

@@ -6,9 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>index-load-order: the snapshot arrives, the Indexer reconciles it against what the
-/// plugins actually hold, and the Store announces what changed — so the client sees status, then
-/// a rows-changed push, then its own re-read.</summary>
 public sealed class IndexLoadOrderTraceTests : HostedTests
 {
     private const string Plugin = "Projected.esp";
@@ -39,8 +36,6 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
-    // ADR-0013 invariant 1: an identical snapshot does nothing. Every reconcile ends by publishing
-    // its status, so a reconcile the identical PUT started would publish before the moved one opens.
     [Fact]
     public async Task PuttingTheLoadOrderHeld_AnswersItsVersion_AndStartsNoReconcile()
     {

@@ -5,8 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-// ADR-0012: the wire contract's Origin round-trip — a caller-supplied ExplicitPlugin.Origin
-// travels through /load-order and back out on GET /plugins.
 public sealed class LoadOrderApiOriginTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

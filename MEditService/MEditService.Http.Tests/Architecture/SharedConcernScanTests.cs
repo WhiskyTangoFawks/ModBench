@@ -3,31 +3,22 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The write side's three shared concerns have one implementation each, in the module the
-/// gestures share (ADR-0014). A gesture resolving its own target, rename or FormKey fails
-/// here.</summary>
 public sealed class SharedConcernScanTests
 {
-    // The mechanism each concern is made of, not the module's own method names: a handler calling
-    // the module names the module, and only a second copy names these.
-    private static readonly (string Concern, string Needle)[] Concerns =
+    private static readonly (string Concern, string Needle)[] ConcernMechanismNeedles =
     [
         ("target resolution", @"\bUnreadableDocumentFor\b"),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
     ];
 
-    // The gestures, the collaborators they write through, and the wire door above them.
     private static readonly string[] ScannedRoots =
         ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
 
-    // The module itself, which is where all four needles belong.
     private const string SharedModuleFileName = "WriteTargets.cs";
 
-    // A second copy, not a second implementation: a resolver rebuilt from IdentityOf and Locate,
-    // an allocator from Max()+1, or a rename from File.Move matches no needle here.
     [Fact]
-    public void TheWriteSide_ImplementsNoSharedConcernItself()
+    public void TheWriteSide_CarriesNoCopyOfASharedConcernsMechanism()
     {
         var counts = Counts(ArchitectureTests.SolutionDirectory(), ScannedRoots);
 
@@ -38,19 +29,15 @@ public sealed class SharedConcernScanTests
             + string.Join("\n", counts));
     }
 
-    // A needle matching nothing anywhere would pass the scan above for the wrong reason, so each is
-    // asserted against the module it was written from.
     [Fact]
     public void EveryNeedle_MatchesTheSharedModuleItself()
     {
         var module = File.ReadAllText(Path.Combine(
             ArchitectureTests.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
 
-        Assert.Empty(Concerns.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
+        Assert.Empty(ConcernMechanismNeedles.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
     }
 
-    // ADR-0014's testing decision: the module is internal and has no suite of its own, so the
-    // gestures are its tests. A suite naming it is one testing it directly.
     [Fact]
     public void NoTestFile_NamesTheSharedModule()
     {
@@ -58,7 +45,6 @@ public sealed class SharedConcernScanTests
 
         var hits = Directory.EnumerateDirectories(root, "MEditService.*Tests*")
             .SelectMany(SourceTree.CSharpFiles)
-            // A scan is not its own subject: this file names the module to scan for it.
             .Where(file => !Path.GetFileName(file).Equals(nameof(SharedConcernScanTests) + ".cs", StringComparison.Ordinal))
             .Where(file => Regex.IsMatch(File.ReadAllText(file), @"\bWriteTargets\b"))
             .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
@@ -79,7 +65,6 @@ public sealed class SharedConcernScanTests
                 Path.Combine(root, "Layer", "Second.cs"),
                 "if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return why;\n"
                 + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
-            // The module's own file is what the counts are measured against, so it is not one of them.
             File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.UnreadableDocumentFor(plugin, id);");
             File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "repository.UnreadableDocumentFor(a, b);");
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "repository.Put(plugin, document);");
@@ -108,7 +93,7 @@ public sealed class SharedConcernScanTests
             .Order(StringComparer.Ordinal)];
 
     private static IEnumerable<(string Needle, int Count)> References(string text) =>
-        Concerns
+        ConcernMechanismNeedles
             .Select(c => (c.Needle, Count: Regex.Count(text, c.Needle)))
             .Where(r => r.Count > 0);
 }

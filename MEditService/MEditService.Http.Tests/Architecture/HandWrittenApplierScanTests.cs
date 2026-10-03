@@ -18,18 +18,13 @@ public sealed class HandWrittenApplierScanTests
     private static readonly string[] ScannedRoots =
         [Path.Combine("MEditService.Codec", "Schema"), Path.Combine("MEditService.Commands", "Edits")];
 
-    // The name is captured dotted and matched on its last segment, so a fully qualified
-    // construction cannot slip past; a name ending the line is an object initializer whose brace
-    // opens on the next.
-    private static readonly Regex Construction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*(?:[(<{]|$)", RegexOptions.Compiled);
+    private static readonly Regex QualifiedOrLineEndingConstruction = new(@"\bnew\s+([A-Za-z_][A-Za-z0-9_.]*)\s*(?:[(<{]|$)", RegexOptions.Compiled);
 
     private static readonly IReadOnlySet<string> MutagenTypeNames = MutagenAndNoggogTypeNames();
 
     [Fact]
     public void EditingStack_HandWritesNoApplier()
     {
-        // The names come from the assemblies, so a load order that resolved none would pass this
-        // over an empty set rather than over the surface it guards.
         Assert.Contains("MemorySlice", MutagenTypeNames);
         Assert.Contains("TranslatedString", MutagenTypeNames);
         Assert.Contains("FormLink", MutagenTypeNames);
@@ -79,7 +74,7 @@ public sealed class HandWrittenApplierScanTests
 
     private static bool IsApplierSite(string line) =>
         Needles.Any(needle => line.Contains(needle, StringComparison.Ordinal))
-        || Construction.Matches(line).Any(m => MutagenTypeNames.Contains(m.Groups[1].Value.Split('.')[^1]));
+        || QualifiedOrLineEndingConstruction.Matches(line).Any(m => MutagenTypeNames.Contains(m.Groups[1].Value.Split('.')[^1]));
 
     private static IReadOnlySet<string> MutagenAndNoggogTypeNames()
     {

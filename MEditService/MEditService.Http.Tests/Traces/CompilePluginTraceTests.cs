@@ -7,8 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>compile-plugin: compile writes the source tree's documents back as the plugin's
-/// bytes, so the proof is another load of those same bytes answering with the edit.</summary>
 public sealed class CompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Compiled.esp";
@@ -102,8 +100,6 @@ public sealed class CompilePluginTraceTests : HostedTests
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
             .GetProperty("value").GetDouble();
 
-    // A second service, loading a copy of the compiled file alone, in a folder no repository holds,
-    // so what answers is the bytes compile wrote: in its tracked mod the plugin reads as its source.
     private static async Task<JsonElement> RecordInTheWrittenBytes(
         ScatteredFixtureData fx, string plugin, string origin, string formKey)
     {

@@ -3,8 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The traces are the integration suite: a trace that draws an mEdit box as an actor is a
-/// flow the endpoints compose, so it has one test class here, named for the trace file.</summary>
 public sealed class TraceTestClassScanTests
 {
     private const string Endpoints = "MEditService.Http.Tests";
@@ -79,7 +77,6 @@ public sealed class TraceTestClassScanTests
             .SelectMany(file => Regex.Matches(File.ReadAllText(file), @"\bclass\s+(\w+TraceTests)\b"))
             .Select(match => match.Groups[1].Value)];
 
-    // The inverse of ClassNameFor: each capital starts a new word, lowercased and hyphen-joined.
     private static string TraceStemFor(string traceSuffixedClass)
     {
         var stem = traceSuffixedClass[..^"TraceTests".Length];

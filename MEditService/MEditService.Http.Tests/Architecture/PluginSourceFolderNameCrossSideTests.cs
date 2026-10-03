@@ -2,9 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The plugin source root's name, declared once on each side of the process boundary:
-/// <c>SourceRepositoryLayout.RootFolderName</c> here, <c>PLUGIN_SOURCE_FOLDER</c> in modbench's
-/// <c>instanceAdapter/layout.ts</c>. Nothing else keeps the two in step.</summary>
 public sealed class PluginSourceFolderNameCrossSideTests
 {
     private static readonly Regex BackendValue =
@@ -22,7 +19,6 @@ public sealed class PluginSourceFolderNameCrossSideTests
         Assert.Equal(ValueIn(backendFile, BackendValue), ValueIn(frontendFile, FrontendValue));
     }
 
-    // Rival: a regex that always reports equal, however the two files really read.
     [Fact]
     public void TheScan_CatchesAPlantedMismatch()
     {

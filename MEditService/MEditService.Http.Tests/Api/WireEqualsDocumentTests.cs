@@ -6,9 +6,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Every value <c>/compare</c> shows for a field is the same node the independent
-/// <c>GET /records/{formKey}</c> read already carries for it — the compare tree invents no second
-/// value.</summary>
 public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFixture> loaded)
     : IClassFixture<LoadedApiFixture<CutDownPluginApiFixture>>
 {
@@ -25,11 +22,8 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         foreach (var formKey in formKeys)
         {
             var compare = await _client.Compare(formKey);
-            // GetRecord (reads.GetDocument) and GetCompare (reads.GetOverrideStack, then
-            // ConflictClassifier) are separate production paths over the same committed document —
-            // an independent side a client can read, not compare's own output checked against itself.
-            var record = await _client.Record(formKey);
-            var fields = record.GetProperty("fields");
+            var independentRecordRead = await _client.Record(formKey);
+            var fields = independentRecordRead.GetProperty("fields");
 
             var metadata = new Dictionary<string, FieldMetadata>(StringComparer.Ordinal);
             var fieldsByName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -48,8 +42,6 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
                 Collect(diff, root, metadata.GetValueOrDefault(name), formKey, mismatches);
             }
 
-            // The reverse direction: a field the flat read carries with a real value but the
-            // compare tree drops entirely leaves no diff at all to check against.
             var onTheWire = compare.GetProperty("diffs").EnumerateArray()
                 .Select(d => d.GetProperty("fieldName").GetString().Require()).ToHashSet(StringComparer.Ordinal);
             foreach (var (name, value) in fieldsByName)
@@ -62,22 +54,22 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
             + $"field read's own nodes:\n{string.Join("\n", mismatches.Take(20))}");
     }
 
-    // node is this diff's own already-resolved value (the field read's node at this path); meta
-    // describes its shape, for resolving each child from it in turn.
     private static void Collect(
-        JsonElement diff, JsonElement? node, FieldMetadata? meta, string path, List<string> mismatches)
+        JsonElement diff, JsonElement? fieldReadNodeAtThisPath, FieldMetadata? shapeOfThatNode, string path, List<string> mismatches)
     {
         var fieldName = diff.GetProperty("fieldName").GetString().Require();
         var here = $"{path}.{fieldName}";
-        CompareValues(diff, node, here, mismatches);
+        CompareValues(diff, fieldReadNodeAtThisPath, here, mismatches);
 
-        var shape = meta == null || node == null ? meta : DocumentNodes.VariantFor(meta, node);
+        var shape = shapeOfThatNode == null || fieldReadNodeAtThisPath == null
+            ? shapeOfThatNode
+            : DocumentNodes.VariantFor(shapeOfThatNode, fieldReadNodeAtThisPath);
         if (!diff.TryGetProperty("children", out var children) || children.ValueKind != JsonValueKind.Array) return;
 
         foreach (var child in children.EnumerateArray())
         {
             var childName = child.GetProperty("fieldName").GetString().Require();
-            Collect(child, Resolve(node, child, childName), ChildMeta(shape, childName), here, mismatches);
+            Collect(child, Resolve(fieldReadNodeAtThisPath, child, childName), ChildMeta(shape, childName), here, mismatches);
         }
     }
 
@@ -96,7 +88,6 @@ public sealed class WireEqualsDocumentTests(LoadedApiFixture<CutDownPluginApiFix
         }
     }
 
-    // An array's children share the element's metadata; a struct's each have their own member's.
     private static FieldMetadata? ChildMeta(FieldMetadata? owner, string label) =>
         owner?.Type == "array" ? owner.ElementType : owner?.Fields?.FirstOrDefault(f => f.Name == label);
 

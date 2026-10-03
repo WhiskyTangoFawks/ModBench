@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-// ADR-0013 invariant 3: Mod Management states which plugins are active, and a plugin comes back in
-// the load order exactly when the snapshot lists it as active.
 public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;

@@ -24,8 +24,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         return doc;
     }
 
-    // --- POST /load-order ---
-
     [Theory]
     [InlineData("badGameDir", null, "Fallout4")]
     [InlineData(null, "badInstance", "Fallout4")]
@@ -47,8 +45,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 400);
     }
 
-    // A GameRelease with no Mutagen assembly is a client error, not a server fault. Its own
-    // factory: BeginLoad tears down the loaded load order before the support probe runs.
     [Fact]
     public async Task PutLoadOrder_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
@@ -71,8 +67,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Contains("SkyrimSE", body);
         Assert.Contains("Mutagen.Bethesda.Skyrim", body);
     }
-
-    // --- POST /plugins/create ---
 
     [Theory]
     [InlineData("", 400)]
@@ -99,17 +93,12 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 409);
     }
 
-    // --- No load order ---
-
     [Theory]
     [InlineData("createPlugin", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
     [InlineData("deleteRecord", 503)]
-    // Each route's own "no load order" guard: the request body's validation passes (real values
-    // below), so the request reaches the no-load-order branch and the 503 these routes declare
-    // via .ProducesProblem(503).
-    public async Task Endpoint_NoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
+    public async Task Endpoint_WithAValidRequestAndNoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new MEditHost();
         var client = app.CreateClient();
