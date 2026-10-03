@@ -1,6 +1,6 @@
 # Editor: conflict colours
 
-The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md); [the conflict-model notes](../../research/xedit-conflict-model.md)). mEdit classifies; the panel only draws what it is given ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md)). Where the panel departs from xEdit, [xedit.md](../../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
+The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md); [the conflict-model notes](../../research/xedit-conflict-model.md)). mEdit classifies; the panel only draws what it is given. Where the panel departs from xEdit, [xedit.md](../../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
 
 Each story cites its source. A story with no source is owned here.
 

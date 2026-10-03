@@ -163,8 +163,8 @@ As a user, I want:
 As a user, I want:
 
 1. A pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod and the phase. *catalog `track`*
-2. `Edits` to track `plugin-source/` and `.gitignore`, and `Everything` every file except the plugin binaries. Neither tracks `meta.ini`. *ADR-0007*
-3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`, `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out. *ADR-0007*
+2. `Edits` to track `plugin-source/` and `.gitignore`, and `Everything` every file except the plugin binaries. Neither tracks `meta.ini`. *ADR-0006*
+3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`, `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out.
 4. Each file's line endings kept as written.
 5. A track that refuses every plugin to leave no repository. A plugin refused part way leaves the commits before it, and the rest go on. This is an exception to *A failed gesture writes nothing*.
 

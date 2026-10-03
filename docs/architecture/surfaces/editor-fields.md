@@ -1,6 +1,6 @@
 # Editor: how each field reads and edits
 
-A cell in the record panel is one plugin's value for one field. This file says what a cell reads, what its editor is, and what copy, cut and paste do, type by type. How a cell is focused, opened and dragged is in [editor.md](editor.md); its colours are in [editor-conflicts.md](editor-conflicts.md). The field's type, its default and what it may hold come from the record type's schema, and the panel adds no rule of its own ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md)). What a value reads as is xEdit's answer, and reading changes neither the value an edit writes nor the value copy takes (ADR-0005).
+A cell in the record panel is one plugin's value for one field. This file says what a cell reads, what its editor is, and what copy, cut and paste do, type by type. How a cell is focused, opened and dragged is in [editor.md](editor.md); its colours are in [editor-conflicts.md](editor-conflicts.md). The field's type, its default and what it may hold come from the record type's schema, and the panel adds no rule of its own ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md)). What a value reads as is xEdit's answer, and reading changes neither the value an edit writes nor the value copy takes (ADR-0018).
 
 Each story cites its source. A story with no source is owned here.
 
@@ -8,7 +8,7 @@ Each story cites its source. A story with no source is owned here.
 
 As a user, I want:
 
-1. A value to read as what it means, never as it is stored: an enum or a flag by its name, a reference by its record, never "null" or "undefined". Never a raw integer, except an enum value the enum does not name (By type). *ADR-0005*
+1. A value to read as what it means, never as it is stored: an enum or a flag by its name, a reference by its record, never "null" or "undefined". Never a raw integer, except an enum value the enum does not name (By type). *ADR-0018*
 2. A value the record holds, but its document leaves out because it equals its default, to read as the default its schema declares. A field the record does not hold at all to read as nothing, as xEdit shows a subrecord a plugin lacks. *ADR-0005; xEdit*
 3. A value too wide for its column cut with an ellipsis, and copied whole.
 4. Ctrl+C to copy the value as its editor shows it, so Ctrl+V takes it back unchanged. *xEdit's EditValue*
@@ -100,7 +100,7 @@ As a user, I want:
 
 A condition list is an array like any other. As a user, I want:
 
-1. A parameter the condition's function does not use to have no row, unless a column uses it, so an overridden record's data is never hidden. *xedit.md, divergence 13; ADR-0005*
+1. A parameter the condition's function does not use to have no row, unless a column uses it, so an overridden record's data is never hidden. *xedit.md, divergence 13*
 2. A change of function, or of Run On, to empty the parameters it leaves unused, so a stale value never reaches the plugin.
 3. The function chosen from the ordinary enum dropdown.
 

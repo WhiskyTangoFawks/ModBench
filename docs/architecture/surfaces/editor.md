@@ -14,7 +14,7 @@ Each story cites its source. A story with no source is owned here.
 
 ## Opening
 
-The record tab is a VS Code editor, and each record has its own address. Preview, pinning, Go Back and Go Forward, the recent editors, reopening a closed tab, and restoring the tabs after a reload behave as they do for any file. *VS Code; ADR-0018*
+The record tab is a VS Code editor, and each record has its own address. Preview, pinning, Go Back and Go Forward, the recent editors, reopening a closed tab, and restoring the tabs after a reload behave as they do for any file. *VS Code; Existing tools*
 
 As a user, I want:
 
@@ -108,7 +108,7 @@ As a user, I want:
 
 1. Before the record's first read lands, an empty panel, so "not read yet" never reads as "no fields". *common, States, story 1*
 2. When the first read fails, in place of the grid, "Failed to load:" and the reason, and a line in the Output. No notification. The next good read replaces it. *common, States, story 2; ADR-0019*
-3. While mEdit is still indexing plugins, a message above the grid: "This record's comparison is not complete: the colours are not final." It goes by itself once they are, and the grid reads again. *ADR-0019*
+3. While mEdit is still indexing plugins, a message above the grid: "This record's comparison is not complete: the colours are not final." It goes by itself once they are, and the grid reads again. *Never silently wrong*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
 5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the scroll stay. *ADR-0015*
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing the last good read:" and the reason. *common, States, story 6*
