@@ -22,7 +22,6 @@ internal sealed record DocumentEditRequest(
 /// text or one refusal out.</summary>
 internal static class DocumentEdit
 {
-    private const string EditorIdMember = RecordMembers.EditorId;
     private const string FormKeyMember = RecordMembers.FormKey;
 
     /// <summary>The new document text in <paramref name="text"/> on success (a null return), and the cell
@@ -180,21 +179,10 @@ internal static class DocumentEdit
         cursor = null;
         var spelled = RecordEditEnvelope.Spell(path);
         var name = path[0].RequireName();
-        var column = schema.RecordColumns.FirstOrDefault(c => c.Name == name);
-        if (column == null)
+        if (schema.RecordColumns.FirstOrDefault(c => c.Name == name) is not { } column)
         {
-            // The one identity member every record's document spells that no column reflects.
-            if (name == EditorIdMember && !schema.IsHeader)
-            {
-                column = new ColumnSpec(
-                    new SubFieldSpec(EditorIdMember, "string", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers, AllowsNull: true),
-                    EditorIdMember, "VARCHAR");
-            }
-            else
-            {
-                return RecordEditResult.RefusedAt(
-                    RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
-            }
+            return RecordEditResult.RefusedAt(
+                RecordEditRefusal.FieldNotFound, spelled, $"'{schema.TableName}' has no field '{name}'.");
         }
         if (column.Synthetic != null && path.Count > 1)
             return RecordEditResult.RefusedAt(RecordEditRefusal.FieldNotFound, spelled, $"'{name}' has no members.");
@@ -321,7 +309,7 @@ internal static class DocumentEdit
     private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
     {
         if (schema.IsHeader || !PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType)) return null;
-        if (cursor.Column.Name == EditorIdMember || cursor.Column.Field.IsRecordHeaderMember) return null;
+        if (cursor.Column.Field.IsEditorId || cursor.Column.Field.IsRecordHeaderMember) return null;
         return RecordEditResult.RefusedAt(
             RecordEditRefusal.PartialFormFieldReadOnly, spelled,
             $"{record[FormKeyMember]} is a Partial Form override — its own fields are ignored for conflict " +

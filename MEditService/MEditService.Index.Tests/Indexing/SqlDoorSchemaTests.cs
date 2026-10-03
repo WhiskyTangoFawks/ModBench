@@ -54,6 +54,17 @@ public sealed class SqlDoorSchemaTests : IDisposable
         Assert.Contains(Listing(), i => i.Plugin == BaseKey.Name);
     }
 
+    [Fact]
+    public void ARecordTypeView_SpellsTheEditorIdOnce_AsEditorId()
+    {
+        _index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'SharedNpc'", "filter.sql");
+        Assert.Equal(2, Listing().Count);
+
+        var unbound = Assert.ThrowsAny<System.Data.Common.DbException>(
+            () => _index.SetFilter("SELECT form_key FROM npc_ WHERE \"EditorID\" = 'SharedNpc'", "filter.sql"));
+        Assert.Contains("Referenced column \"EditorID\" not found", unbound.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]

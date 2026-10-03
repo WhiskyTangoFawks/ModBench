@@ -37,8 +37,8 @@ public sealed class PartialFormCompareTests
 
         var rows = new[]
         {
-            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release, "cell", ["WaterHeight"])),
-            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", ["WaterHeight"])),
+            new FakeRow(BasePlugin, 0, IsWinner: false, RealDocuments.Of(baseCell, BasePlugin, 0, isWinner: false, Release, "cell", ["EditorID", "WaterHeight"])),
+            new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(overrideCell, OverridePlugin, 1, isWinner: true, Release, "cell", ["EditorID", "WaterHeight"])),
             new FakeRow(OverridePlugin, 1, IsWinner: true, RealDocuments.Of(refr, OverridePlugin, 1, isWinner: true, Release, "refr", [])),
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
@@ -104,6 +104,17 @@ public sealed class PartialFormCompareTests
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
         Assert.Equal(MasterWaterHeight, Assert.IsType<System.Text.Json.JsonElement>(waterHeight.Values["Base.esm"]).GetSingle());
+    }
+
+    [Fact]
+    public void APartialFormCopysEditorID_TakesPartInTheComparison_AsItsOwnFieldsDoNot()
+    {
+        var compare = _service.GetCompare(_cellKey.ToString());
+        Assert.NotNull(compare);
+        var editorId = compare.Diffs.Single(d => d.FieldName == "EditorID");
+
+        Assert.Equal(ConflictThis.IdenticalToMaster, editorId.CellStates["Partial.esp"]);
+        Assert.Equal("TestCell", Assert.IsType<System.Text.Json.JsonElement>(editorId.Values["Partial.esp"]).GetString());
     }
 
     [Fact]

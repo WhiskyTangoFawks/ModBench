@@ -1,6 +1,6 @@
 using System.Reflection;
+using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Schema;
 
@@ -8,20 +8,15 @@ namespace MEditService.Codec.Schema;
 /// member of its getter interface, built by the same leaf builders every nested member uses.</summary>
 internal static class ColumnReflection
 {
-    // Declared by Mutagen.Bethesda.Core's IMajorRecordGetter for every game, and the write path's to
-    // handle as the record's identity. Per-game header-adjacent members (GRUP timestamps) are
-    // SchemaAnnotations.ExcludedColumns.
-    private const string EditorIdMember = nameof(IMajorRecordGetter.EditorID);
-
     internal static List<ColumnSpec> ReflectColumns(
         Type getterType, GameReflection game, ILogger logger)
     {
-        var declarations = ReflectedTypes.GetAllInterfaceProperties(getterType).ToLookup(p => p.Name, StringComparer.Ordinal);
-        var columns = RecordHeaderColumns.For(getterType, declarations, game, logger);
-        var headerOrAlias = columns.Select(c => c.Name).Concat(columns.SelectMany(c => c.Aliases)).Append(EditorIdMember)
+        var members = ReflectedTypes.Members(getterType);
+        var columns = RecordHeaderColumns.For(getterType, members.ToDictionary(m => m.Key, StringComparer.Ordinal), game, logger);
+        var headerOrAlias = columns.Select(c => c.Name).Concat(columns.SelectMany(c => c.Aliases))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var group in declarations.Where(g => !headerOrAlias.Contains(g.Key)))
+        foreach (var group in members.Where(g => !headerOrAlias.Contains(g.Key)))
         {
             var kept = group
                 .Where(p => !game.Annotations.IsExcludedColumn(p))
@@ -30,7 +25,8 @@ internal static class ColumnReflection
                 .ToList();
             if (kept.Count == 0) continue;
             var prop = ReflectedTypes.MostDerived(kept);
-            if (BuildColumn(prop, prop.Name, game, logger) is { } column) columns.Add(column);
+            if (BuildColumn(prop, prop.Name, game, logger) is not { } column) continue;
+            columns.Add(prop.Name == RecordMembers.EditorId ? column with { Field = column.Field with { IsEditorId = true } } : column);
         }
 
         return columns;

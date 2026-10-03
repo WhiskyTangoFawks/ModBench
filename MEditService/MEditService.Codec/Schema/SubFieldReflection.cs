@@ -17,14 +17,14 @@ internal static class SubFieldReflection
     {
         if (Enter(path, getterInterface, game) is not { } inner) return [];
 
-        var grouped = ReflectedTypes.GetAllInterfaceProperties(getterInterface)
-            .Where(p => !game.Annotations.IsExcludedMember(p))
-            .GroupBy(p => p.Name, StringComparer.Ordinal);
+        var kept = ReflectedTypes.Members(getterInterface)
+            .Select(member => member.Where(p => !game.Annotations.IsExcludedMember(p)).ToList())
+            .Where(declarations => declarations.Count > 0);
 
         var result = new List<SubFieldSpec>();
-        foreach (var group in grouped)
+        foreach (var declarations in kept)
         {
-            var spec = GetSubFieldInfo(ReflectedTypes.MostDerived(group), game, inner, logger);
+            var spec = GetSubFieldInfo(ReflectedTypes.MostDerived(declarations), game, inner, logger);
             if (spec != null) result.Add(spec);
         }
 
