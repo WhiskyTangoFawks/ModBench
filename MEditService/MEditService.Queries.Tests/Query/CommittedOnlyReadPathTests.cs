@@ -7,9 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Queries.Tests.Query;
 
-// Plugin filtering and per-type counting are the Index's own behaviour (Index.Tests/Query/
-// RecordReadsTests.cs, Index.Tests/Records/RecordTypeViewsTests.cs). What remains: a field here
-// reads off the committed document, not a working-tree rebuild (ADR-0007).
 public sealed class CommittedOnlyReadPathTests
 {
     private const string PluginName = "TestPlugin.esp";

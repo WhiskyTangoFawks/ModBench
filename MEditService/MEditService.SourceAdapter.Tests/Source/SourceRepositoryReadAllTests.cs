@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Whole-plugin reads over a real tracked tree, with no index in the fixture: the working
-/// tree's own documents, and the same question answered at a named ref through git.</summary>
 public sealed class SourceRepositoryReadAllTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -28,18 +26,14 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
 
     public void Dispose() => _modFolder.Dispose();
 
-    // The NPC's own relative path, spelled from the fixture's own constants rather than asked of the
-    // repository: Track needs it to seed the pristine commit before any repository exists to ask.
-    private static readonly string NpcRelativePath =
+    private static readonly string NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk =
         Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    // Track parks each plugin's last-compile ref at its baseline, so the ref this reads at is the one
-    // compile parks.
     private SourceRepository Tracked()
     {
         PluginBaselines.Track(
             _modFolder, SourcePreset.Edits,
-            [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
+            [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
@@ -47,8 +41,6 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     private static (string, string, string?, string) Tuple(SourceDocument document) =>
         (document.FormKey, document.RecordType, document.EditorId, document.Body);
 
-    // The header's own document, at the tree's root. It declares a ModKey, never a FormKey, which is
-    // why the FormKey it is filed under is PluginHeader's to compute.
     private static readonly string HeaderRelativePath =
         Path.Combine("plugin-source", PluginName, "RecordData.json");
 
@@ -61,7 +53,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         PluginBaselines.Track(
             _modFolder, SourcePreset.Edits,
             [new TreeFile(HeaderRelativePath, Encoding.UTF8.GetBytes(HeaderBody)),
-             new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
+             new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         return SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
@@ -86,7 +78,6 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         Assert.Equal(PluginHeader.RecordType, header.RecordType);
     }
 
-    // The path a caller asks by is its own document's, so Get answers the header too.
     [Fact]
     public void GetAt_ThePluginHeader_IsTheCommittedHeaderDocument()
     {
@@ -179,11 +170,9 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     }
 
     [Fact]
-    public void ReadAll_AtTheWorkingTree_SkipsAFileUnderTheTreeThatDeclaresNoRecord()
+    public void ReadAll_AtTheWorkingTree_SkipsGroupMetadataAndAStrayFileDeclaringNoFormKey_ForADocumentIsWhatDeclaresAFormKeyNotWhereItSits()
     {
         var repository = Tracked();
-        // Group metadata and a stray hand-written file both land here: what makes a file a document
-        // is the FormKey it declares, not where it sits.
         var npcsFolder = Path.Combine(SourceRepository.RootIn(_modFolder, PluginName), "Npcs");
         File.WriteAllText(Path.Combine(npcsFolder, "GroupRecordData.json"), "{\n  \"Type\": \"npc_\"\n}");
         File.WriteAllText(Path.Combine(npcsFolder, "notes.json"), "{\n  \"Note\": \"scratch\"\n}");

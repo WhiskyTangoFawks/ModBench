@@ -7,8 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>What git names as changed in a plugin's tree since a validated HEAD: the dirty documents
-/// and the ones a moved HEAD changed, each by the record it declares (ADR-0009).</summary>
 public sealed class SourceRepositoryChangesSinceTests : IDisposable
 {
     private const string PluginName = "Test.esp";
@@ -154,19 +152,16 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Null(changes.Documents);
     }
 
-    // A path the whole-tree read counts as a document but whose text declares no record.
     [Fact]
-    public void ADocumentDeclaringNoFormKey_NarrowsNothing()
+    public void ADocumentTheWholeTreeReadCountsButWhoseTextDeclaresNoFormKey_NarrowsNothing()
     {
         File.WriteAllText(FullPath(NpcRelativePath), "{\"EditorID\":\"Nameless\"}");
 
         Assert.Null(_repository.ChangesSince(Plugin, _validatedHead).Documents);
     }
 
-    // A copy under a name that does not carry its FormKey: the tree's other document for it is one
-    // git does not name, so only a whole-tree read can see the two.
     [Fact]
-    public void ADocumentWhoseNameDoesNotCarryItsFormKey_NarrowsNothing()
+    public void ACopyWhoseNameDoesNotCarryItsFormKey_NarrowsNothing_ForOnlyAWholeTreeReadSeesItAndTheTreesOtherDocumentForIt()
     {
         File.WriteAllText(FullPath(Path.Combine("plugin-source", PluginName, "Npcs", "Copy of FixtureNpc.json")), NpcBody);
 
@@ -181,9 +176,8 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Null(_repository.ChangesSince(Plugin, _validatedHead).Documents);
     }
 
-    // A path the commit added stays new to the validated HEAD, whatever status says of it since.
     [Fact]
-    public void ACommittedCopyEditedSince_NarrowsNothing()
+    public void ACommittedCopyEditedSince_NarrowsNothing_ForAPathTheCommitAddedStaysNewToTheValidatedHead()
     {
         File.WriteAllText(FullPath(TwinRelativePath), NpcBody);
         Git("add", "--", GitPath(TwinRelativePath));
@@ -193,9 +187,8 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Null(_repository.ChangesSince(Plugin, _validatedHead).Documents);
     }
 
-    // Untracked files under an untracked folder: -uall lists each, where git would name the folder.
     [Fact]
-    public void ADocumentInANewFolder_IsNamedByItsOwnPath()
+    public void ADocumentInANewUntrackedFolder_IsNamedByItsOwnPath_NotByTheFolderGitStatusNamesByDefault()
     {
         var sorted = Path.Combine("plugin-source", PluginName, "Npcs", "Sorted", $"Sorted - 000A00_{PluginName}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(FullPath(sorted)).Require());
@@ -204,9 +197,8 @@ public sealed class SourceRepositoryChangesSinceTests : IDisposable
         Assert.Equal("000A00:Test.esp", Assert.Single(Named()).FormKey);
     }
 
-    // The whole-tree read counts an ignored document, so git has to name it too.
     [Fact]
-    public void AnIgnoredDocument_IsNamed()
+    public void AnIgnoredDocument_IsNamed_ForTheWholeTreeReadCountsIt()
     {
         var ignored = Path.Combine("plugin-source", PluginName, "Npcs", $"Ignored - 000A00_{PluginName}.json");
         File.WriteAllText(FullPath(Path.Combine("plugin-source", PluginName, "Npcs", ".gitignore")), "Ignored - *\n");

@@ -5,19 +5,31 @@ namespace MEditService.Queries.Tests.Query;
 
 public class ElementKeyTextTests
 {
-    [Theory]
-    // A string member.
-    [InlineData("""{"Name":"Ambush","Flags":"Local"}""", "Ambush", "Name")]
-    // A composite key, joined in the order the annotation lists the members.
-    [InlineData("""{"Stage":10,"StageIndex":0}""", "10 / 0", "Stage", "StageIndex")]
-    // A dotted member name walks into the element's own sub-struct.
-    [InlineData("""{"Property":{"Name":"","Alias":3}}""", "3", "Property.Alias")]
-    [InlineData("""{"on":true}""", "true", "on")]
-    // A freshly added element names its discriminator and nothing else, so its key is empty: a real
-    // key, and the only handle on the row until the user names it.
-    [InlineData("""{"MutagenObjectType":"ScriptIntProperty"}""", "", "Name")]
-    [InlineData("""{"Name":null}""", "", "Name")]
-    public void KeyText(string elementJson, string expected, params string[] keyMembers)
+    [Fact]
+    public void KeyText_OfAStringMember_IsTheString() =>
+        AssertKeyText("""{"Name":"Ambush","Flags":"Local"}""", "Ambush", "Name");
+
+    [Fact]
+    public void KeyText_OfACompositeKey_JoinsTheMembersInTheOrderTheAnnotationListsThem() =>
+        AssertKeyText("""{"Stage":10,"StageIndex":0}""", "10 / 0", "Stage", "StageIndex");
+
+    [Fact]
+    public void KeyText_OfADottedMemberName_WalksIntoTheElementsOwnSubStruct() =>
+        AssertKeyText("""{"Property":{"Name":"","Alias":3}}""", "3", "Property.Alias");
+
+    [Fact]
+    public void KeyText_OfABoolMember_IsLowercaseTrue() =>
+        AssertKeyText("""{"on":true}""", "true", "on");
+
+    [Fact]
+    public void KeyText_OfAFreshlyAddedElementNamingOnlyItsDiscriminator_IsEmpty_ARealKeyAndTheOnlyHandleOnTheRowUntilTheUserNamesIt() =>
+        AssertKeyText("""{"MutagenObjectType":"ScriptIntProperty"}""", "", "Name");
+
+    [Fact]
+    public void KeyText_OfANullMember_IsEmpty() =>
+        AssertKeyText("""{"Name":null}""", "", "Name");
+
+    private static void AssertKeyText(string elementJson, string expected, params string[] keyMembers)
     {
         var element = JsonDocument.Parse(elementJson).RootElement;
         Assert.Equal(expected, ElementKey.Of(element, keyMembers).Text);
@@ -30,10 +42,8 @@ public class ElementKeyTextTests
         new("Flags", "flags", false, [], [new("OnStart", "1"), new("OnCompletion", "2")]),
     ]);
 
-    // The codec omits a member equal to its default, so an element carrying no StageIndex is the
-    // same key as one spelling out 0.
     [Fact]
-    public void AnAbsentKeyMember_ReadsAsItsDefault()
+    public void AnAbsentKeyMember_ReadsAsItsDefault_ForTheCodecOmitsAMemberEqualToItsDefault()
     {
         var omitted = JsonDocument.Parse("""{"Stage":10}""").RootElement;
         var spelled = JsonDocument.Parse("""{"Stage":10,"StageIndex":0}""").RootElement;
@@ -43,7 +53,6 @@ public class ElementKeyTextTests
             ElementKey.Of(spelled, ["Stage", "StageIndex"], FragmentElement)));
     }
 
-    // A key member with a declared default above zero reads as that default when absent.
     [Fact]
     public void AnAbsentKeyMember_ReadsAsItsDeclaredDefault()
     {
@@ -63,10 +72,8 @@ public class ElementKeyTextTests
         Assert.NotEqual(0, unset.CompareTo(zero));
     }
 
-    // A flags member keys by the names the document carries and orders by their bits, as xEdit's
-    // wbStructSK does, so OnStart (1) precedes OnCompletion (2) whatever the names' own order.
     [Fact]
-    public void AFlagsKeyMember_ReadsAsItsNames_AndOrdersByItsBits()
+    public void AFlagsKeyMember_ReadsAsItsNames_AndOrdersByItsBitsAsXEditsWbStructSKDoes()
     {
         var start = JsonDocument.Parse("""{"Flags":["OnStart"]}""").RootElement;
         var completion = JsonDocument.Parse("""{"Flags":["OnCompletion"]}""").RootElement;

@@ -8,30 +8,34 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Group-folder names come from <see cref="RecordTypeDispatch"/> rather than literals, so
-/// these tests cannot drift from whatever the reflection walk decides.</summary>
 public sealed class SourceRepositoryLayoutTests
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
+    [Fact]
+    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForARoutineRecord() =>
+        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc");
+
+    [Fact]
+    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForARecordWithNoEditorId() =>
+        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Vendor.esp", null);
+
+    [Fact]
+    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForAPluginNameWithItsOwnInternalDotKeptAsOneWholeSegment() =>
+        AssertPutThenGetRoundTrips("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword");
+
+    [Fact]
+    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForAnOverrideWhoseOriginModKeyDiffersFromThePluginHoldingIt() =>
+        AssertPutThenGetRoundTrips("Vendor.esp", "npc_", "000800:Master1.esm", "AnOverride");
+
     [Theory]
-    // The routine case.
-    [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc")]
-    // No EditorID — the bare filesafe FormKey, no leading "&lt;EditorID&gt; - ".
-    [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", null)]
-    // A plugin name with its own internal dot must round-trip as one whole segment (the layout
-    // never splits a plugin name on its own dots) — a patch-plugin-shaped filename proves this for
-    // real rather than by argument.
-    [InlineData("Vendor.patch.esp", "Keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
-    // The record's origin ModKey legitimately differs from the plugin holding it (an override edited
-    // through a patch plugin) — the two segments must recombine into the *origin's* FormKey, not the
-    // target plugin's.
-    [InlineData("Vendor.esp", "npc_", "000800:Master1.esm", "AnOverride")]
-    // Non-ASCII plugin names and EditorIDs are ordinary in this modding scene — the identity
-    // recovered from the path must carry the same plugin-name bytes For() started from.
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
-    public void Put_ThenGet_RoundTripsPluginAndRecordType(
+    public void Put_ThenGet_RoundTripsPluginAndRecordType_ForNonAsciiPluginNamesAndEditorIds(
+        string pluginFileName, string recordType, string formKeyString, string? editorId) =>
+        AssertPutThenGetRoundTrips(pluginFileName, recordType, formKeyString, editorId);
+
+    private static void AssertPutThenGetRoundTrips(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
@@ -45,31 +49,23 @@ public sealed class SourceRepositoryLayoutTests
         var path = Path.GetRelativePath(
             modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
-        // Everything nests under one root "plugin-source/" folder (the on-disk root Track and Put
-        // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
-        // tree.
-        var segments = path.Split(Path.DirectorySeparatorChar);
-        Assert.Equal("plugin-source", segments[0]);
-        Assert.Equal(pluginFileName, segments[1]);
+        var segmentsUnderTheOneRootTrackAndPutBothWriteTo = path.Split(Path.DirectorySeparatorChar);
+        Assert.Equal("plugin-source", segmentsUnderTheOneRootTrackAndPutBothWriteTo[0]);
+        Assert.Equal(pluginFileName, segmentsUnderTheOneRootTrackAndPutBothWriteTo[1]);
 
-        // The identity survives the round trip: Get, asked with the exact identity Put was
-        // given, finds the very file Put just placed.
         var document = repository.Get(plugin, new RecordIdentity(formKeyString, recordType, editorId));
 
         Assert.NotNull(document);
         Assert.Equal(formKeyString, document.FormKey);
-        // Get answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
-        // two need not match textually, only resolve to the same concrete type, which this
-        // equality checks for real rather than assuming a spelling.
-        var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
-        Assert.NotNull(expectedConcrete);
-        Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
+        var concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
+        Assert.NotNull(concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo);
+        Assert.Equal(
+            concreteTypeGetsSchemaTableSpellingAndPutsSpellingBothResolveTo,
+            RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
     }
 
-    // The one bridge from the door's own tree to the mod folder holding it. The name is verbatim: a
-    // ModKey renders the extension lowercase, and a tree read from another root is invisible.
     [Fact]
-    public void PristineFilesOf_PutsTheDoorsTree_UnderTheRootTheNameSpells()
+    public void PristineFilesOf_PutsTheDoorsTree_UnderTheRootTheNameSpellsVerbatim_NotAModKeysLowercaseExtension()
     {
         var pristine = SourceRepository.PristineFilesOf(
             "Mixed.ESP",
@@ -97,20 +93,16 @@ public sealed class SourceRepositoryLayoutTests
             SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
     }
 
-    // A container's document is named for the door, not for the record, so the FormKey is on the
-    // directory holding it.
     [Fact]
-    public void PathCarrying_AContainer_IsTheDocumentOfTheDirectoryWhoseNameCarriesTheFormKey()
+    public void PathCarrying_AContainer_IsTheDocumentOfTheDirectoryWhoseNameCarriesTheFormKey_ForTheDocumentIsNamedForTheDoorNotTheRecord()
     {
         string[] paths = ["plugin-source/Vendor.esp/Cells/0, 0/0, 0/SomeCell - 0012AB_Vendor.esp/RecordData.json"];
 
         Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
     }
 
-    // The plugin header's document is the one the layout names after no FormKey at all: it is the
-    // plugin's own, and PluginHeader decides which FormKey that is.
     [Fact]
-    public void PathCarrying_ThePluginsOwnHeader_IsTheTreesRootDocument()
+    public void PathCarrying_ThePluginsOwnHeader_IsTheTreesRootDocument_ThoughTheLayoutNamesItAfterNoFormKey()
     {
         string[] paths = ["plugin-source/Vendor.esp/RecordData.json"];
 
@@ -120,8 +112,6 @@ public sealed class SourceRepositoryLayoutTests
                 paths, "Vendor.esp", PluginHeader.FormKeyFor(ModKey.FromFileName("Vendor.esp"))));
     }
 
-    // The rival that reads every door-named document as the record of the directory above it would
-    // answer the plugin's own folder here.
     [Fact]
     public void PathCarrying_ARecordThatIsNotTheHeader_DoesNotMatchTheTreesRootDocument()
     {
@@ -130,17 +120,14 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Null(SourceRepository.PathCarrying(paths, "Vendor.esp", "000800:Vendor.esp"));
     }
 
-    // A git listing spells its separators one way and a Windows working tree the other, so the door
-    // answers both and no caller normalizes before asking.
     [Fact]
-    public void PathCarrying_AWindowsSeparatedContainer_IsAnsweredLikeAGitListing()
+    public void PathCarrying_AWindowsSeparatedContainer_IsAnsweredLikeAGitListing_SoNoCallerNormalizesSeparatorsBeforeAsking()
     {
         string[] paths = [@"C:\mods\VendorMod\plugin-source\Vendor.esp\Cells\0, 0\0, 0\SomeCell - 0012AB_Vendor.esp\RecordData.json"];
 
         Assert.Equal(paths[0], SourceRepository.PathCarrying(paths, "Vendor.esp", "0012AB:Vendor.esp"));
     }
 
-    // The same, for the header's fixed path: its own separators must not decide whether it is found.
     [Fact]
     public void PathCarrying_AWindowsSeparatedHeaderDocument_IsThePluginsOwnHeader()
     {
@@ -159,10 +146,8 @@ public sealed class SourceRepositoryLayoutTests
             ["plugin-source/Vendor.esp/npc_/Other - 000900_Vendor.esp.json"], "Vendor.esp", "000800:Vendor.esp"));
     }
 
-    // A listing is read from git and from a directory walk, and neither is promised to be free of an
-    // empty line: the door answers for one rather than throwing past its caller.
     [Fact]
-    public void PathCarrying_APathWithNoSegments_IsPassedOver()
+    public void PathCarrying_APathWithNoSegments_IsPassedOver_NotThrownPast_ForNeitherGitNorADirectoryWalkIsPromisedFreeOfAnEmptyLine()
     {
         string[] paths = ["", "/", "plugin-source/Vendor.esp/npc_/SomeNpc - 000800_Vendor.esp.json"];
 

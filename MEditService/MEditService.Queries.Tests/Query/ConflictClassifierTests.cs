@@ -38,16 +38,11 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin);
 
-    // A Partial Form override — its own fields are excluded from conflict detection
-    // regardless of their content (not merely when null, unlike the generic absent-field rule
-    // above).
-    private static RecordDetail MakePartialFormOverride(string plugin, int loadOrder, bool isWinner,
+    private static RecordDetail MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", IsPartialForm: true);
 
-    // The codec omits a member equal to its default, so one document's omission and another's
-    // spelled-out default are the same value, never a conflict; a non-default still is.
     [Theory]
     [InlineData("int", "0", true)]
     [InlineData("int", "5", false)]
@@ -58,7 +53,7 @@ public class ConflictClassifierTests
     [InlineData("formKey", "\"Null\"", true)]
     [InlineData("formKey", "\"000001:Test.esp\"", false)]
     [InlineData("struct", "{}", true)]
-    public void Classify_AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault(
+    public void Classify_AbsentAgainstAnExplicitValue_IsAConflictOnlyWhenTheValueIsNotTheDefault_ForTheCodecOmitsAMemberEqualToItsDefault(
         string type, string json, bool equal)
     {
         var meta = new FieldMetadata("Member", type, false, [], []);
@@ -71,13 +66,11 @@ public class ConflictClassifierTests
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
     }
 
-    // Mutagen declares some defaults above zero (VirtualMachineAdapter.ObjectFormat = 2), and the
-    // codec omits exactly those, so the declared value is the one an omission equals.
     [Theory]
     [InlineData("2", true)]
     [InlineData("2.0", true)]
     [InlineData("0", false)]
-    public void Classify_AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero(string json, bool equal)
+    public void Classify_AbsentAgainstAnExplicitValue_EqualsTheDeclaredDefault_NotZero_ForMutagenDeclaresVirtualMachineAdapterObjectFormatAsTwoAndTheCodecOmitsExactlyThat(string json, bool equal)
     {
         var meta = new FieldMetadata("ObjectFormat", "int", false, [], [], Default: 2);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null, [new FieldValue(meta, null)], "Data");
@@ -88,8 +81,6 @@ public class ConflictClassifierTests
 
         Assert.Equal(equal ? ConflictThis.IdenticalToMaster : ConflictThis.Override, diff.CellStates["B.esp"]);
     }
-
-    // --- OnlyOne ---
 
     [Fact]
     public void Classify_EmptyList_ReturnsOnlyOne()
@@ -126,21 +117,16 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_MultiplePlugins_NoWinnerMarked_Throws()
+    public void Classify_MultiplePlugins_NoWinnerMarked_Throws_NamingTheRecordsFormKey()
     {
         var a = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var b = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
-        // MakeOverride uses FormKey "000001:Test.esp" — the message must name it, not be a
-        // generic or blank string.
         var ex = Assert.Throws<InvalidOperationException>(() => Classify([a, b]));
         Assert.Contains("000001:Test.esp", ex.Message);
     }
 
-    // ADR-0012: two columns sharing a filename, differing in origin. Bare-plugin
-    // dictionary keys (o.Plugin) would collide here — ToDictionary throws on the literal duplicate
-    // key "Shared.esp".
     [Fact]
-    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
+    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide_WhereBarePluginDictionaryKeysWouldThrowOnTheDuplicate()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "FromModA"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("Name", "FromModB"));
@@ -153,10 +139,8 @@ public class ConflictClassifierTests
         Assert.Equal("FromModB", nameDiff.Values["Shared.esp|ModB"]);
     }
 
-    // A change to one column's value must never appear on the other column's diff entry —
-    // "action on one never affects the other", exercised at the value level.
     [Fact]
-    public void Classify_SameFilenameDifferentOrigin_ActionOnOneDoesNotAffectOther()
+    public void Classify_SameFilenameDifferentOrigin_EditingOneColumnsValue_LeavesTheOtherColumnsValueInTheDiff()
     {
         var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "Original"));
         var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("Name", "Original"));
@@ -164,17 +148,13 @@ public class ConflictClassifierTests
         var baselineDiff = Assert.Single(baseline.Diffs, d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.IdenticalToMaster, baselineDiff.CellStates["Shared.esp|ModB"]);
 
-        // "Edit" only ModA's column.
         var modAEdited = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("Name", "Edited"));
         var after = Classify([modAEdited, modB]);
 
         var afterDiff = Assert.Single(after.Diffs, d => d.FieldName == "Name");
         Assert.Equal("Edited", afterDiff.Values["Shared.esp|ModA"]);
-        // ModB's own value/state is untouched by the edit to ModA's column.
         Assert.Equal("Original", afterDiff.Values["Shared.esp|ModB"]);
     }
-
-    // --- NoConflict / Override / Conflict ---
 
     [Fact]
     public void Classify_TwoPlugins_AllFieldsSame_ReturnsNoConflict()
@@ -197,10 +177,8 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_FourPlugins_OneITM_TwoDisagree_ReturnsConflict()
+    public void Classify_FourPlugins_OneITM_TwoDisagree_ReturnsConflict_NotNoConflictThoughOneIsIdenticalToMaster()
     {
-        // hasAnyChange: Any()=true (B,D change), All()=false (C is ITM) — an All()-based check
-        // would wrongly return NoConflict.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var itm = MakeOverride("C.esp", 2, false, ("Name", "Alice"));
@@ -221,9 +199,8 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_TwoPlugins_DifferentValues_ReturnsOverride()
+    public void Classify_TwoPlugins_DifferentValues_ReturnsOverride_ForOnlyOneNonMasterChangesTheFieldSoItIsUncontested()
     {
-        // Only one non-master plugin changes the field — uncontested → Override, not Conflict
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
         var result = Classify([master, override1]);
@@ -247,7 +224,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_ThreePlugins_OneFieldConflicts_OtherAgreesOnChange_ReturnsConflict()
     {
-        // B and C agree on "Name" but disagree on "Level". hasConflict: Any()=true, All()=false.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Bob"), ("Level", 10));
@@ -255,13 +231,9 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Winner ConflictThis ---
-
     [Fact]
     public void Classify_WinnerChangesField_OnlyOneContesterAmongMultiple_GetsConflictWins()
     {
-        // D=winner changes "Name". B contests (B.name≠D.name). C doesn't contest (C.name=null absent).
-        // contested: Any()=true (B contests), All()=false (C doesn't).
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var contester = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 1));
         var nonContester = MakeOverride("C.esp", 2, false, ("Name", null), ("Level", 5));
@@ -271,11 +243,8 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_WinnerChangesLevel_OtherChangesName_WinnerGetsOverride()
+    public void Classify_WinnerChangesLevel_OtherChangesName_WinnerGetsOverride_ForAnotherPluginsNameChangeDoesNotContestTheWinnersLevel()
     {
-        // C changes only "Level"; B changes "Name", which is not in C's changedFields, and B.level equals
-        // C.level. With && in the contest check this is Override; an || would wrongly read B.name
-        // non-null as contesting.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var other = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Alice"), ("Level", 5));
@@ -283,13 +252,9 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictThis.Override, result.PluginStates["C.esp"]);
     }
 
-    // --- Loser ConflictThis ---
-
     [Fact]
     public void Classify_LoserChangesMultipleFields_OnlyOneLost_GetsConflictLoses()
     {
-        // B changes "Name" and "Level". C changes "Name" differently, "Level" same as B.
-        // B loses "Name" but not "Level". lost: Any()=true, All()=false.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"), ("Level", 5));
@@ -297,26 +262,20 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
     }
 
-    // --- PartialForm null rule ---
-
     [Fact]
-    public void Classify_NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses()
+    public void Classify_NullFieldInNonMaster_TreatedAsAbsent_NotConflictLoses_ForAPluginThatLeavesTheFieldAbsent()
     {
-        // B.esp has "Name" absent (null) — a PartialForm that doesn't override "Name".
-        // C.esp sets "Name" to "Charlie". B.esp should not get ConflictLoses for "Name".
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 1));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null), ("Level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"), ("Level", 5));
         var result = Classify([master, partial, winner]);
         Assert.NotEqual(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
-        // Diff for "Name" is included even though B has null (master & C are non-null)
         Assert.Contains(result.Diffs, d => d.FieldName == "Name");
     }
 
     [Fact]
     public void Classify_NullFieldInNonMaster_DoesNotCountAsConflict()
     {
-        // B.esp absent on "Name", C.esp sets "Name" = same as master — no non-master disagreement
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var partial = MakeOverride("B.esp", 1, false, ("Name", null));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Alice"));
@@ -324,16 +283,9 @@ public class ConflictClassifierTests
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Per-field WinnerColumn fallthrough ---
-    //
-    // A field the record-wide winner never set must not report that winner's null value instead of
-    // falling through to whichever plugin actually carries one.
-
     [Fact]
     public void Classify_RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
     {
-        // C.esp is the record-wide winner (IsWinner=true) but never touches "Level" — only "Name".
-        // The field's own winner must be A.esp (the only plugin with a "Level" value), not C.esp.
         var master = MakeOverride("A.esp", 0, false, ("Level", 1), ("Name", "Alice"));
         var winner = MakeOverride("C.esp", 1, true, ("Level", null), ("Name", "Bob"));
         var result = Classify([master, winner]);
@@ -343,15 +295,11 @@ public class ConflictClassifierTests
         Assert.Equal(1, level.Values[level.WinnerColumn]);
     }
 
-    // --- Partial Form flag rule ---
-
     [Fact]
     public void Classify_PartialFormOverride_OwnNonNullFieldDiffersFromMaster_StillNoConflict()
     {
-        // B.esp is Partial Form and genuinely sets "Level" to a different value than the master —
-        // not merely absent (unlike the generic null rule above). Its own field is still excluded.
         var master = MakeOverride("A.esp", 0, false, ("Level", 1));
-        var partial = MakePartialFormOverride("B.esp", 1, true, ("Level", 999));
+        var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, true, ("Level", 999));
         var result = Classify([master, partial]);
 
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
@@ -361,20 +309,16 @@ public class ConflictClassifierTests
     public void Classify_PartialFormOverride_OwnFieldNeverWinsOrLoses()
     {
         var master = MakeOverride("A.esp", 0, false, ("Level", 1));
-        var partial = MakePartialFormOverride("B.esp", 1, false, ("Level", 999));
+        var partial = MakePartialFormOverrideWhoseOwnFieldsAreExcludedRegardlessOfContent("B.esp", 1, false, ("Level", 999));
         var winner = MakeOverride("C.esp", 2, true, ("Level", 5));
         var result = Classify([master, partial, winner]);
 
         Assert.DoesNotContain(result.Diffs, d => d.CellStates.ContainsKey("B.esp"));
     }
 
-    // --- JsonElement comparison (ValuesEqual branch) ---
-
     [Fact]
-    public void Classify_TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict()
+    public void Classify_TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict_ComparedByRawTextNotReferenceEquality()
     {
-        // JsonElement fields come from DuckDbRecordIndex (array/struct fields).
-        // ValuesEqual must compare by raw text, not reference equality.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var master = MakeOverride("A.esp", 0, false, ("Keywords", (object?)arrayA));
@@ -397,7 +341,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_PluginMissingFieldEntirely_TreatedAsNull()
     {
-        // B.esp's Fields list doesn't include "Name" at all (not just null — absent from list).
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
             [new FieldValue(Meta("Name"), "Alice"), new FieldValue(Meta("Level"), 1)], Origin: "Data");
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
@@ -406,8 +349,6 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
     }
-
-    // --- Link array comparison ---
 
     [Fact]
     public void Classify_LinkArraySameElementsDifferentOrder_ReturnsOverride()
@@ -426,7 +367,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_LinkArrayDifferentLengths_ReturnsOverride()
     {
-        // Length check: [a] vs [a,b] differ in count → not equal → Override.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
@@ -461,32 +401,30 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
-    // --- CellStates per-field ---
-
     [Fact]
-    public void Classify_TwoPlugins_NonMasterMatchesMaster_CellStateIsIdenticalToMaster()
+    public void Classify_TwoPlugins_NonMasterMatchesMaster_CellStateIsIdenticalToMaster_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Alice"));
         var result = Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.IdenticalToMaster, nameDiff.CellStates["B.esp"]);
-        Assert.False(nameDiff.CellStates.ContainsKey("A.esp")); // master omitted
+        Assert.False(nameDiff.CellStates.ContainsKey("A.esp"));
     }
 
     [Fact]
-    public void Classify_TwoPlugins_NonMasterChangesFieldUncontestedly_CellStateIsOverride()
+    public void Classify_TwoPlugins_NonMasterChangesFieldUncontestedly_CellStateIsOverride_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
         var result = Classify([master, override1]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.Override, nameDiff.CellStates["B.esp"]);
-        Assert.False(nameDiff.CellStates.ContainsKey("A.esp")); // master omitted
+        Assert.False(nameDiff.CellStates.ContainsKey("A.esp"));
     }
 
     [Fact]
-    public void Classify_ThreePlugins_TwoDisagreeOnField_WinnerGetsConflictWins_LoserGetsConflictLoses()
+    public void Classify_ThreePlugins_TwoDisagreeOnField_WinnerGetsConflictWins_LoserGetsConflictLoses_AndTheMasterHasNoCellState()
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
@@ -495,28 +433,24 @@ public class ConflictClassifierTests
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.ConflictWins, nameDiff.CellStates["C.esp"]);
         Assert.Equal(ConflictThis.ConflictLoses, nameDiff.CellStates["B.esp"]);
-        Assert.False(nameDiff.CellStates.ContainsKey("A.esp")); // master omitted
+        Assert.False(nameDiff.CellStates.ContainsKey("A.esp"));
     }
 
     [Fact]
-    public void Classify_FieldWinnerDiffersFromRecordWinner_FieldWinnerGetsOverride()
+    public void Classify_FieldWinnerDiffersFromRecordWinner_FieldWinnerGetsOverride_NotConflictLoses_AndTheNullRecordWinnerHasNoCellState()
     {
-        // Record winner (C.esp) has null for "Name"; B.esp (mid-stack) set it → B is field winner for "Name".
-        // No other non-master has a different non-null value → B gets Override (not ConflictLoses).
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var fieldWinner = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var recordWinner = MakeOverride("C.esp", 2, true, ("Name", null));
         var result = Classify([master, fieldWinner, recordWinner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal(ConflictThis.Override, nameDiff.CellStates["B.esp"]);
-        Assert.False(nameDiff.CellStates.ContainsKey("C.esp")); // null → omitted
+        Assert.False(nameDiff.CellStates.ContainsKey("C.esp"));
     }
 
     [Fact]
-    public void Classify_NonWinnerMatchesFieldWinner_CellStateIsOverride()
+    public void Classify_NonWinnerMatchesFieldWinner_CellStateIsOverride_NotConflictLoses()
     {
-        // B.esp and C.esp both set "Name" to "Bob". C.esp (load 2) is field winner.
-        // B.esp is not the field winner; !ValuesEqual("Bob","Bob") = false → Override, not ConflictLoses.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var nonWinner = MakeOverride("B.esp", 1, false, ("Name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Bob"));
@@ -533,12 +467,9 @@ public class ConflictClassifierTests
         var winner = MakeOverride("C.esp", 2, true, ("Name", "Charlie"));
         var result = Classify([master, partial, winner]);
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
-        Assert.False(nameDiff.CellStates.ContainsKey("B.esp")); // null → omitted
+        Assert.False(nameDiff.CellStates.ContainsKey("B.esp"));
         Assert.True(nameDiff.CellStates.ContainsKey("C.esp"));
     }
-
-    // --- Per-node ConflictAll (bottom-up, scoped to one FieldDiff's own subtree — distinct
-    // from ClassifyResult.ConflictAll, the record-wide value the Plugins-tree badge still uses) ---
 
     [Fact]
     public void Classify_LeafField_AllPluginsAgree_ConflictAllIsNoConflict()
@@ -571,11 +502,8 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, nameDiff.ConflictAll);
     }
 
-    // The literal regression guard: a naive implementation that stamped the record-wide
-    // ConflictAll onto every FieldDiff would make "Level" (which every plugin agrees on) read
-    // Override, same as "Name" — this proves the two sibling rows carry independent values.
     [Fact]
-    public void Classify_TwoSiblingFields_OnlyOneDiffers_OnlyThatFieldsConflictAllIsNonNoConflict()
+    public void Classify_TwoSiblingFields_OnlyOneDiffers_OnlyThatFieldsConflictAllIsNonNoConflict_NotTheRecordWideValueStampedOnEveryRow()
     {
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"), ("Level", 5));
@@ -608,16 +536,12 @@ public class ConflictClassifierTests
 
         Assert.Equal(ConflictAll.Override, xChild.ConflictAll);
         Assert.Equal(ConflictAll.NoConflict, yChild.ConflictAll);
-        // The struct row itself aggregates the worst state found anywhere in its subtree.
         Assert.Equal(ConflictAll.Override, boundsDiff.ConflictAll);
     }
 
     [Fact]
     public void Classify_NestedStructInsideTheOverridesElement_GrandchildConflictAggregatesTwoLevelsUp()
     {
-        // Array field "Items" of struct elements, each struct carrying a sub-struct "Pos" with
-        // field "X" — proves aggregation recurses through more than one level (array -> struct
-        // element -> nested struct -> leaf), not just a single hop.
         var subX = Meta("X", "int");
         var posMeta = new FieldMetadata("Pos", "struct", false, [], [], Fields: [subX]);
         var elementMeta = new FieldMetadata("", "struct", false, [], [], Fields: [posMeta]);
@@ -647,15 +571,11 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_PerNodeConflictAll_DoesNotChangeRecordWideConflictAll()
     {
-        // The record-wide ClassifyResult.ConflictAll (Plugins-tree badge) is a different,
-        // legitimate use of the same concept at record scope and must stay untouched by this.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"), ("Level", 5));
         var override1 = MakeOverride("B.esp", 1, true, ("Name", "Bob"), ("Level", 5));
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
-
-    // --- Struct Children ---
 
     private static FieldMetadata StructMeta(string name, params FieldMetadata[] subFields) =>
         new(name, "struct", false, [], [], Fields: [.. subFields]);
@@ -758,7 +678,6 @@ public class ConflictClassifierTests
         var masterVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 0}");
         var overrideVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 5}");
 
-        // C.esp is the winner but doesn't have "Pos" at all
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, false, structMeta, overrideVal);
         var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, [], Origin: "Data");
@@ -778,7 +697,6 @@ public class ConflictClassifierTests
         var subY = Meta("Y", "int");
         var structMeta = StructMeta("Bounds", subX, subY);
 
-        // B.esp has no Y in its struct
         var masterVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 10, \"Y\": 20}");
         var overrideVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 15}");
 
@@ -792,13 +710,12 @@ public class ConflictClassifierTests
 
         var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.False(yChild.CellStates.ContainsKey("B.esp")); // absent → omitted
+        Assert.False(yChild.CellStates.ContainsKey("B.esp"));
     }
 
     [Fact]
     public void Classify_StructField_ArraySubFieldIncluded_ProducesChildRows()
     {
-        // The depth guard is gone: array sub-fields inside structs are now recursed into.
         var subX = Meta("X", "int");
         var subYArray = new FieldMetadata("Y", "array", true, [], [],
             ElementType: new FieldMetadata("", "int", false, [], []));
@@ -816,7 +733,6 @@ public class ConflictClassifierTests
         Assert.NotNull(boundsDiff.Children);
         Assert.Contains(RequireChildren(boundsDiff), c => c.FieldName == "X");
 
-        // Y is now recursed into, not skipped — its elements become sub-children
         var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
         Assert.NotNull(yChild.Children);
@@ -824,9 +740,8 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_StructField_SubFieldWinnerIsHighestLoadOrder()
+    public void Classify_StructField_SubFieldWinnerIsTheHighestLoadOrderPluginWithAValue_NotTheLowest()
     {
-        // WinnerColumn must be the highest load-order plugin with a value (MaxBy, not MinBy).
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
 
@@ -846,7 +761,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_StructField_JsonNullSubField_TreatedAsAbsent()
     {
-        // ExtractSubFieldValue: JSON null must map to null, not a JsonElement.
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
         var structMeta = StructMeta("Bounds", subX, subY);
@@ -861,10 +775,8 @@ public class ConflictClassifierTests
 
         var yChild = RequireChildren(result.Diffs.First(d => d.FieldName == "Bounds")).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.False(yChild.CellStates.ContainsKey("B.esp")); // JSON null → treated as absent
+        Assert.False(yChild.CellStates.ContainsKey("B.esp"));
     }
-
-    // --- Resolutions (ADR-0005) ---
 
     [Fact]
     public void Classify_ScalarFormKeyField_PopulatesResolutionPerPlugin()
@@ -890,8 +802,6 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_LinkArray_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
     {
-        // kw1 resolves, kw2 is dangling — the regression this replaces would let kw2's missing
-        // resolution suppress kw1's (or vice versa) by aggregating to the array field's own state.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
             [LinkArrayField("Keywords", (object?)arrayA)], Origin: "Data");
@@ -902,7 +812,7 @@ public class ConflictClassifierTests
         var result = Classifier.Classify([master], GameRelease.Fallout4, Resolve);
 
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
-        Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
+        Assert.Null(arrayDiff.Resolutions);
 
         var kw1 = RequireChildren(arrayDiff)[0];
         var kw2 = RequireChildren(arrayDiff)[1];
@@ -910,8 +820,6 @@ public class ConflictClassifierTests
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, RequireResolutions(kw1)["A.esp"].State);
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(kw2)["A.esp"].State);
     }
-
-    // --- CheckErrors, per column, at every depth ---
 
     [Fact]
     public void Classify_StructFormKeySubField_ReportsItsOwnCheckErrorAndTheParentReportsTheSubtreePathed()
@@ -942,10 +850,8 @@ public class ConflictClassifierTests
         Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
     }
 
-    // ADR-0018: a Partial Form override's own fields are excluded as if absent, and an exclusion is
-    // not the record saying the link is unset, so its column reports no check error of its own.
     [Fact]
-    public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError()
+    public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError_ForAnExclusionIsNotTheRecordSayingTheLinkIsUnset()
     {
         var meta = new FieldMetadata("Race", "formKey", false, ["race"], []);
         var link = JsonSerializer.Deserialize<JsonElement>("\"000AAA:Test.esp\"");
@@ -975,7 +881,7 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField()
+    public void Classify_StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField_ANonFormKeySiblingGetsNoResolutions()
     {
         var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], []);
         var rankField = Meta("Rank", "int");
@@ -984,15 +890,16 @@ public class ConflictClassifierTests
         var val = JsonSerializer.Deserialize<JsonElement>("""{"Faction":"000FFF:Test.esp","Rank":1}""");
         var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
 
-        // dangling: every FormKey is unresolved
-        var result = Classifier.Classify([master], GameRelease.Fallout4, _ => null);
+        static MEditService.Index.RecordLookupEntry? EveryFormKeyDangling(string _) => null;
+
+        var result = Classifier.Classify([master], GameRelease.Fallout4, EveryFormKeyDangling);
 
         var factionsDiff = result.Diffs.First(d => d.FieldName == "Factions");
         var factionChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Faction");
         var rankChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Rank");
 
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(factionChild)["A.esp"].State);
-        Assert.Null(rankChild.Resolutions); // non-formKey sibling never gets a Resolutions entry
+        Assert.Null(rankChild.Resolutions);
     }
 
     [Fact]

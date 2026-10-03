@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Which unit holds a record, as a caller outside the repository is told it: embedded or
-/// not, whose document it is, directory-per-record or not, and that document's path.</summary>
 public sealed class SourceRepositoryUnitHoldingTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -29,10 +27,8 @@ public sealed class SourceRepositoryUnitHoldingTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
-    // The header has no group folder and carries no FormKey in its file name, so every other
-    // resolution branch answers null for it.
     [Fact]
-    public void UnitHolding_AHeaderFormKey_IsItsOwnUndeletableDocument()
+    public void UnitHolding_AHeaderFormKey_IsItsOwnUndeletableDocument_ThoughItHasNoGroupFolderOrFormKeyInItsFileName()
     {
         var repository = Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(PluginName));
@@ -44,16 +40,12 @@ public sealed class SourceRepositoryUnitHoldingTests : IDisposable
         Assert.False(unit.IsEmbedded);
         Assert.Equal(headerFormKey, unit.OwnerFormKey);
         Assert.Equal(PluginHeader.RecordType, unit.OwnerRecordType);
-        // Filename-only, the header's root RecordData.json shares the name a container's document has.
-        Assert.False(unit.IsDirectoryPerRecord);
-        // From the same read as the facts, so nothing can move between them and the path a refusal names.
+        Assert.False(unit.IsDirectoryPerRecord, "the header's root RecordData.json shares the file name a container's document has");
         Assert.Equal(HeaderPath, unit.RelativePath);
     }
 
-    // An embedded type has no file of its own, so nothing is computed for it: either a document in the
-    // tree carries it or no unit holds it at all.
     [Fact]
-    public void UnitHolding_AnEmbeddedRecordNoDocumentCarries_AnswersNothing()
+    public void UnitHolding_AnEmbeddedRecordNoDocumentCarries_AnswersNothing_ForAnEmbeddedTypeHasNoFileOfItsOwn()
     {
         var repository = Tracked();
 
