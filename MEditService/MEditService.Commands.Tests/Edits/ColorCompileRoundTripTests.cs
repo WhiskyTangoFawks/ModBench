@@ -60,7 +60,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
     [InlineData("lcrt")]
     [InlineData("aact")]
     [InlineData("lctn")]
-    public async Task AllowlistedColorField_AlphaEdit_CompilesAndReparsesAllFourComponents(string table)
+    public async Task ByteRgbaColor_AlphaEdit_CompilesAndReparsesAllFourComponents(string table)
     {
         var record = table switch
         {
@@ -68,7 +68,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
             "lcrt" => _fixture.LocationReferenceType,
             "aact" => _fixture.ActionRecord,
             "lctn" => _fixture.Location,
-            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "unknown allowlist table"),
+            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "unknown table"),
         };
 
         Edit(record, "Color", "\"#A0285078\"");
