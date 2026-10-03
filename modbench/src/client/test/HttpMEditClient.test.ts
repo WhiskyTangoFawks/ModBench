@@ -593,7 +593,8 @@ describe('HttpMEditClient — searchRecords', () => {
 
     await client.searchRecords('Lever', ['acti', 'furn']);
 
-    expect(new URL(fetch.mock.calls[0]![0].url).searchParams.getAll('type')).toEqual(['acti', 'furn']);
+    const [request] = fetch.mock.calls.map((call) => call[0]);
+    expect(new URL(request?.url ?? '').searchParams.getAll('type')).toEqual(['acti', 'furn']);
   });
 });
 
