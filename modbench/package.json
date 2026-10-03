@@ -555,7 +555,7 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleFolder"
+          "when": "focusedView == modbench.modList && modbench.folder == instance && modbench.mod.singleOpenFolderRow"
         },
         {
           "command": "modbench.mod.enable",
@@ -1002,6 +1002,16 @@
           "command": "modbench.mod.openFolder",
           "when": "view == modbench.modList && viewItem == overwrite",
           "group": "1_open@1"
+        },
+        {
+          "command": "modbench.mod.openFolder",
+          "when": "view == modbench.modList && (viewItem == file || viewItem == folder)",
+          "group": "1_open@1"
+        },
+        {
+          "command": "modbench.copyValue",
+          "when": "view == modbench.modList && (viewItem == file || viewItem == folder)",
+          "group": "5_copy@1"
         },
         {
           "command": "modbench.mod.install",

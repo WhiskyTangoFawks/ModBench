@@ -12,6 +12,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     profiles: ['Default'],
     files: new FileConflictLookup(),
     filesByMod: new Map(),
+    foldersByMod: new Map(),
     plugins: [],
     downloads: { kind: 'listed', rows: [] },
     activeProfile: 'Default',
@@ -24,6 +25,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     pluginsLoadedWithNoLine: undefined,
     modStatuses: new Map(),
     overwriteFiles: [],
+    overwriteFolders: [],
     paths: { overwriteDir: undefined, downloadsDir: '', modDirs: new Map() },
     ...overrides,
   };

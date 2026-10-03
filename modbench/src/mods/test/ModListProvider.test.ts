@@ -65,7 +65,7 @@ function valueOf(
 }
 
 const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
-  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, absolutePath: `/instance/overwrite/F4SE/${at}.log` }));
+  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, path: `/instance/overwrite/F4SE/${at}.log`, sourcePath: `/instance/overwrite/F4SE/${at}.log` }));
 
 const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;

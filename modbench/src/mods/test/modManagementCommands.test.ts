@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile, uriFrom } from '../../test/vscodeMock';
 
 interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   prompt?: string;
@@ -22,7 +22,7 @@ vi.mock('vscode', () => ({
   window: { showOpenDialog, showInputBox, showQuickPick },
   env: { openExternal },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString,
-  Uri: { file: uriFile, parse: (s: string) => ({ toString: () => s }) },
+  Uri: { file: uriFile, from: uriFrom, parse: (s: string) => ({ toString: () => s }) },
 }));
 
 const {
@@ -47,6 +47,7 @@ import {
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
 import { MODS_KEY_ARGS } from '../gestureEntry';
+import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
@@ -1043,7 +1044,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   });
 });
 
-describe('open folder: one command for a mod and for the Overwrite row', () => {
+describe('open folder: one command for a mod, the Overwrite row, a file and a folder', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const instance = {
@@ -1111,6 +1112,53 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     await invoke('modbench.mod.openFolder');
 
     expect(revealed()).toEqual([]);
+  });
+
+  const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds' };
+  const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
+    { relativePath: 'textures', path: '/instance/mods/My Mod/textures' }, [linked], [], 'textures');
+  const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
+
+  it('reveals a file where it sits in its mod, a link too, clicked or the one selected from the palette', async () => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [leaf]);
+    await invoke('modbench.mod.openFolder', leaf);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod/textures/a.dds', '/instance/mods/My Mod/textures/a.dds']);
+  });
+
+  it('reveals a folder where the value says it sits, clicked or the one selected from the palette', async () => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [folder]);
+    await invoke('modbench.mod.openFolder', folder);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod/textures', '/instance/mods/My Mod/textures']);
+  });
+
+  it('refuses a folder the value names no path for, naming it by its path in its mod', async () => {
+    const reporter = recordingReporter();
+    const unnamed = new FolderNode(myMod, folder.origin, { relativePath: 'textures', path: undefined }, [linked], [], 'textures');
+
+    registerOpenFolderCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openFolder', unnamed);
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "textures".', detail: 'No folder holds it.' },
+    ]);
+  });
+
+  it('names the file by its path in its mod when its reveal fails', async () => {
+    executeCommand.mockRejectedValueOnce(new Error('no explorer'));
+    const reporter = recordingReporter();
+
+    registerOpenFolderCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openFolder', leaf);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "textures/a.dds".', detail: 'no explorer' },
+    ]);
   });
 
   it('reports a reveal that fails', async () => {
@@ -1182,7 +1230,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 });
 
-describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, one per line', () => {
+describe('modsCopyValueText, one line for each selected row copy value takes', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const beta = new ModNode({ kind: 'mod', name: 'Beta', enabled: true });
@@ -1225,6 +1273,18 @@ describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, 
   it('copies the view\'s selection for the Mods key\'s own args', () => {
     const viewSelection = (): ModlistNode[] => [alpha, groupA, new OverwriteNode([], 'MO2')];
     expect(modsCopyValueText(viewSelection)(MODS_KEY_ARGS, undefined)).toBe('Alpha\nGroup A');
+  });
+
+  it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
+    const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds' };
+    const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures' }, [file], [], 'textures');
+    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+    const selection = [alpha, folder, leaf];
+
+    expect(modsCopyValueText(noSelection)(leaf, undefined)).toBe('textures/armour/a.dds');
+    expect(modsCopyValueText(noSelection)(folder, selection)).toBe('Alpha\ntextures\ntextures/armour/a.dds');
+    expect(modsCopyValueText(() => [leaf, folder])(MODS_KEY_ARGS, undefined)).toBe('textures/armour/a.dds\ntextures');
   });
 
   it('owns the Mods key\'s invocation with nothing to copy when nothing is selected', () => {

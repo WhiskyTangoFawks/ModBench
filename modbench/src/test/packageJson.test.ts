@@ -1190,6 +1190,17 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     expect(placed(rowMenu('viewItem == overwrite'))).toEqual([['modbench.mod.openFolder', '1_open']]);
   });
 
+  const menuOn = (viewItem: string): [string, string][] =>
+    placed(inModsView('view/item/context').filter((e) => holds(e.when, { view: 'modbench.modList', viewItem })));
+
+  it('File menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
+    expect(menuOn('file')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
+  });
+
+  it('Folder menu: open folder, then copy value, and no item of a mod\'s, a separator\'s or Overwrite\'s', () => {
+    expect(menuOn('folder')).toEqual([['modbench.mod.openFolder', '1_open'], ['modbench.copyValue', '5_copy']]);
+  });
+
   const ONE_SEPARATOR = 'modbench.mod.selectionKind == separator && modbench.mod.singleRow';
   const ON_THE_TREE = `focusedView == modbench.modList && listFocus && !inputFocus && ${IN_AN_INSTANCE}`;
 
@@ -1217,7 +1228,7 @@ describe('package.json Mods title bar, menus, keys and palette follow mods.md', 
     ['modbench.mod.uninstall', 'modbench.mod.selectionKind == mod'],
     ['modbench.mod.createEmpty', undefined],
     ['modbench.mod.install', undefined],
-    ['modbench.mod.openFolder', 'modbench.mod.singleFolder'],
+    ['modbench.mod.openFolder', 'modbench.mod.singleOpenFolderRow'],
   ] as const;
 
   it.each(MODS_PALETTE)('%s is in the palette only while the Mods view has focus and its selection holds: %s', (command, holds) => {

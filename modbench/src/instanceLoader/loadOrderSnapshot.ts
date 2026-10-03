@@ -165,7 +165,7 @@ export function buildLoadOrderRows(
     const overwriteFile = overwriteFiles.get(foldPath(name));
     const enabledLine = enabledNames.has(foldPath(name));
     if (overwriteFile !== undefined) {
-      return { name, path: overwriteFile.path, origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
+      return { name, path: overwriteFile.sourcePath, origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
     }
     return {
       name,
@@ -196,7 +196,7 @@ export function buildLoadOrderRows(
   const strays = [...overwriteFiles]
     .filter(([folded, file]) => !slotByName.has(folded) && isPluginFile(file.relativePath))
     .map(([, file]) => ({
-      name: file.relativePath, path: file.path, origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
+      name: file.relativePath, path: file.sourcePath, origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));
 
   return [...listed, ...outside, ...strays];

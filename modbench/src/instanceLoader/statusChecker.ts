@@ -33,7 +33,7 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
 
 // A contested file this mod wins is an override; one it loses is a conflict.
 function countConflicts(
-  modFiles: ModFile[],
+  modFiles: readonly ModFile[],
   index: FileConflictIndex,
   modName: string,
 ): { conflictLines: string[]; conflicts: number; overrides: number } {

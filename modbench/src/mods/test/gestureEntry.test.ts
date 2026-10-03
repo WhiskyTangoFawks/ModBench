@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon } from '../../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, uriFile, uriFrom } from '../../test/vscodeMock';
 
 const { registerCommand } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -7,13 +7,14 @@ const { registerCommand } = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({
   commands: { registerCommand },
-  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
+  TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon, Uri: { file: uriFile, from: uriFrom },
 }));
 
 import {
   MODS_KEY_ARGS, modsKeyContext, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
 } from '../gestureEntry';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { FileNode, FolderNode } from '../modFiles';
 
 const modRow = (name: string) => new ModNode({ kind: 'mod', name, enabled: true });
 const separatorRow = (name: string) => new SeparatorNode({ kind: 'separator', name, enabled: true }, []);
@@ -212,18 +213,33 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).selectionKind).toBeUndefined();
   });
 
+  it('Space, Delete and F2 do nothing over a selection that holds a file or a folder, which may be the focused row', () => {
+    const file = { relativePath: 'textures/a.dds', path: '/instance/mods/On/textures/a.dds', sourcePath: '/instance/mods/On/textures/a.dds' };
+    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'textures', path: '/instance/mods/On/textures' }, [file], [], 'textures');
+    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+
+    for (const selection of [[enabledMod, leaf], [disabledMod, folder], [group, leaf]]) {
+      expect(modsKeyContext(selection, byRow)).toMatchObject({ selectionToggle: undefined, selectionKind: undefined });
+    }
+  });
+
   it('F2 and a singular gesture see whether exactly one row is selected', () => {
     expect(modsKeyContext([group], byRow).singleRow).toBe(true);
     expect(modsKeyContext([group, separatorRow('Other')], byRow).singleRow).toBe(false);
     expect(modsKeyContext([], byRow).singleRow).toBe(false);
   });
 
-  it('open folder sees exactly one selected row that has a folder: a mod, or Overwrite', () => {
-    expect(modsKeyContext([enabledMod], byRow).singleFolder).toBe(true);
-    expect(modsKeyContext([new OverwriteNode([], 'MO2')], byRow).singleFolder).toBe(true);
-    expect(modsKeyContext([group], byRow).singleFolder).toBe(false);
-    expect(modsKeyContext([enabledMod, disabledMod], byRow).singleFolder).toBe(false);
-    expect(modsKeyContext([], byRow).singleFolder).toBe(false);
+  it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
+    const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds' };
+    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x' }, [file], [], 'x');
+    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+    expect(modsKeyContext([folder], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([enabledMod], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([new OverwriteNode([], 'MO2')], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([leaf], byRow).singleOpenFolderRow).toBe(true);
+    expect(modsKeyContext([group], byRow).singleOpenFolderRow).toBe(false);
+    expect(modsKeyContext([enabledMod, leaf], byRow).singleOpenFolderRow).toBe(false);
+    expect(modsKeyContext([], byRow).singleOpenFolderRow).toBe(false);
   });
 
   it('enable sees a selected disabled mod, and disable a selected enabled one, read as they are now', () => {

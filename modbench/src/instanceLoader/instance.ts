@@ -1,6 +1,6 @@
 // The instance value (ADR-0015).
 
-import { buildFileConflictIndex, FileConflictLookup, modFileOf, type FileWinners, type ModFile } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, type FileWinners, type ModFile } from './fileConflictIndex';
 import {
   buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
   type PluginAddress,
@@ -9,14 +9,14 @@ import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFiles, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFiles, type OriginFolder, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
 export type { ModFile } from './fileConflictIndex';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
@@ -61,6 +61,8 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each listed mod's own files, a disabled mod's too. */
   readonly filesByMod: ReadonlyMap<string, readonly ModFile[]>;
+  /** Each listed mod's folders, a disabled mod's too. */
+  readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
   /** Every plugin file, with origin, slot, enabled and winning. A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game folder is not found. */
@@ -92,6 +94,8 @@ export interface InstanceValue {
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
   readonly overwriteFiles: readonly ModFile[];
+  /** Overwrite's folders, as `overwriteFiles` holds its files. */
+  readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */
   readonly paths: InstancePaths;
 }
@@ -148,6 +152,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
+  foldersByMod: new Map(),
   plugins: [],
   downloads: { kind: 'listed', rows: [] },
   activeProfile: '',
@@ -161,6 +166,7 @@ const emptyValue = (managerNames: ManagerNames): InstanceValue => ({
   pluginsLoadedWithNoLine: undefined,
   modStatuses: new Map(),
   overwriteFiles: [],
+  overwriteFolders: [],
   paths: { overwriteDir: undefined, downloadsDir: undefined, modDirs: new Map() },
 });
 
@@ -389,6 +395,7 @@ export class Instance implements Subscription {
       profiles,
       files: index.files,
       filesByMod: index.filesByMod,
+      foldersByMod: index.foldersByMod,
       plugins,
       downloads: downloadsOutcome.kind === 'unresolved'
         ? { kind: 'unresolved', reason: downloadsOutcome.reason }
@@ -405,7 +412,8 @@ export class Instance implements Subscription {
       dataFolderPlugins,
       pluginsLoadedWithNoLine: pluginsLoadedWithNoLineOf(gameMastersOf(gameRelease), creationClub, dataFolderPlugins, plugins),
       modStatuses: computeModStatuses(entries, index),
-      overwriteFiles: runtimeOutput.files.map(modFileOf),
+      overwriteFiles: runtimeOutput.files,
+      overwriteFolders: runtimeOutput.folders,
       paths: pathsOf(runtimeOutput, downloadsOutcome, entries, modFolders),
     };
   }

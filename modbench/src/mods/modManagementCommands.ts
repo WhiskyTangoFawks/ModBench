@@ -4,6 +4,7 @@ import {
   isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
 } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
+import { FileNode, FolderNode } from './modFiles';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -295,13 +296,14 @@ export function registerCreateEmptyModCommand(
   });
 }
 
-/** A mod row opens the mod's folder, and the Overwrite row the overwrite folder. */
+/** A mod row opens the mod's folder, the Overwrite row the overwrite folder, and a file or folder
+ *  row shows itself where it sits. */
 export function registerOpenFolderCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable {
   return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
     const anchor = entry.clicked ?? entry.focused;
-    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode)) return;
+    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode || anchor instanceof FolderNode || anchor instanceof FileNode)) return;
     const target = folderOf(instance, anchor);
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       if (target.folder === undefined) throw new Error('No folder holds it.');
@@ -318,14 +320,19 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
   }
 }
 
-// The value's own folder for a mod row, never a path joined here: the Instance adapter owns every
+// The value's own path for each row, never a path joined here: the Instance adapter owns every
 // path function, and the value carries its answer.
 function folderOf(
-  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode,
+  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode | FolderNode | FileNode,
 ): { name: string; folder: vscode.Uri | undefined } {
   const { overwriteDir, modDirs } = instance.value.paths;
-  const [name, folder] = node.kind === OVERWRITE_NODE_KIND ? ['Overwrite', overwriteDir] : [node.mod.name, modDirs.get(node.mod.name)];
-  return { name, folder: folder === undefined ? undefined : vscode.Uri.file(folder) };
+  const uriOf = (path: string | undefined) => (path === undefined ? undefined : vscode.Uri.file(path));
+  switch (node.kind) {
+    case OVERWRITE_NODE_KIND: return { name: 'Overwrite', folder: uriOf(overwriteDir) };
+    case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
+    case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
+    case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
+  }
 }
 
 /** The Argument of view on Nexus. Each surface's row adapts itself to it, so a mod row and a
@@ -348,23 +355,34 @@ export function registerViewOnNexusCommand(
   });
 }
 
-function isModlistEntryNode(node: unknown): node is ModNode | SeparatorNode {
-  return node instanceof ModNode || node instanceof SeparatorNode;
+type CopyRow = ModNode | SeparatorNode | FolderNode | FileNode;
+
+function isCopyRow(node: unknown): node is CopyRow {
+  return node instanceof ModNode || node instanceof SeparatorNode || node instanceof FolderNode || node instanceof FileNode;
 }
 
-function copyValueRowNames(rows: readonly (ModNode | SeparatorNode)[]): string {
-  return rows.map((row) => (row.kind === 'mod' ? row.mod.name : row.separator.name)).join('\n');
+function copyValueOf(row: CopyRow): string {
+  switch (row.kind) {
+    case 'mod': return row.mod.name;
+    case 'separator': return row.separator.name;
+    case 'folder': return row.folder.relativePath;
+    case 'file': return row.file.relativePath;
+  }
 }
 
-/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a mod or
- *  separator row or the Mods key's args, so the palette and another view's key defer. */
+const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
+
+const copyValueLines = (entry: GestureEntry): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
+
+/** Mods' own text for the catalog's one copy value id. `undefined` unless `clicked` is a row copy
+ *  value takes or the Mods key's args, so the palette and another view's key defer. */
 export function modsCopyValueText(
   viewSelection: () => readonly ModlistNode[],
 ): (clicked: unknown, allSelected: readonly unknown[] | undefined) => string | undefined {
   return (clicked, allSelected) => {
-    if (isModsKeyArgs(clicked)) return copyValueRowNames(selectionArgument({ selection: viewSelection() }, 'mod', 'separator'));
-    if (!isModlistEntryNode(clicked)) return undefined;
-    const selected = allSelected?.length ? allSelected.filter(isModlistEntryNode) : undefined;
-    return copyValueRowNames(selectionArgument(modsGestureEntry(clicked, selected, viewSelection), 'mod', 'separator'));
+    if (isModsKeyArgs(clicked)) return copyValueLines({ selection: viewSelection() });
+    if (!isCopyRow(clicked)) return undefined;
+    const selected = allSelected?.length ? allSelected.filter(isCopyRow) : undefined;
+    return copyValueLines(modsGestureEntry(clicked, selected, viewSelection));
   };
 }

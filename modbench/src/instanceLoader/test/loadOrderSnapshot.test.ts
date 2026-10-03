@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import type { GameFolder, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
+import { FileConflictLookup, modOrigin, type FileConflictIndex, type ModFile } from '../fileConflictIndex';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
   type LoadOrderPluginLine, type PluginAddress,
@@ -15,7 +15,7 @@ type Provider = { winner: string; winnerMod: string; providers?: string[] };
 
 function index(
   files: Record<string, Provider>,
-  filesByMod: Record<string, { relativePath: string; absolutePath: string }[]> = {},
+  filesByMod: Record<string, ModFile[]> = {},
 ): FileConflictIndex {
   const lookup = new FileConflictLookup();
   for (const [relativePath, { winner, winnerMod, providers }] of Object.entries(files)) {
@@ -23,7 +23,7 @@ function index(
       relativePath, winner, winnerOrigin: modOrigin(winnerMod), providers: (providers ?? [winnerMod]).map(modOrigin),
     });
   }
-  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)) };
+  return { files: lookup, filesByMod: new Map(Object.entries(filesByMod)), foldersByMod: new Map() };
 }
 
 const DATA_FOLDER = join('/game', 'Data');
@@ -33,7 +33,10 @@ const OVERWRITE = join('/instance', 'overwrite');
 const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
   order.map((name) => ({ name, enabled: enabled.includes(name) }));
 
-const runtimeOutput = (relativePath: string): OriginFile => ({ relativePath, path: join(OVERWRITE, ...relativePath.split('/')) });
+const runtimeOutput = (relativePath: string): OriginFile => {
+  const path = join(OVERWRITE, ...relativePath.split('/'));
+  return { relativePath, path, sourcePath: path };
+};
 
 describe('buildLoadOrderRows, its origins asserted as the literal reserved values of the wire contract rather than the constants the module produces them from', () => {
   it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', () => {
@@ -66,8 +69,8 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
     const fakeIndex = index(
       { 'Shared.esp': { winner: '/mods/A/Shared.esp', winnerMod: 'A', providers: ['A', 'B'] } },
       {
-        A: [{ relativePath: 'Shared.esp', absolutePath: '/mods/A/Shared.esp' }],
-        B: [{ relativePath: 'Shared.esp', absolutePath: '/mods/B/Shared.esp' }],
+        A: [{ relativePath: 'Shared.esp', path: '/mods/A/Shared.esp', sourcePath: '/mods/A/Shared.esp' }],
+        B: [{ relativePath: 'Shared.esp', path: '/mods/B/Shared.esp', sourcePath: '/mods/B/Shared.esp' }],
       },
     );
 
@@ -80,7 +83,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a plugin file no plugins.txt line names is sent with no slot, not enabled, winning if it is the sole provider', () => {
     const fakeIndex = index(
       { 'Stray.esp': { winner: '/mods/C/Stray.esp', winnerMod: 'C' } },
-      { C: [{ relativePath: 'Stray.esp', absolutePath: '/mods/C/Stray.esp' }, { relativePath: 'textures/x.dds', absolutePath: '/mods/C/textures/x.dds' }] },
+      { C: [{ relativePath: 'Stray.esp', path: '/mods/C/Stray.esp', sourcePath: '/mods/C/Stray.esp' }, { relativePath: 'textures/x.dds', path: '/mods/C/textures/x.dds', sourcePath: '/mods/C/textures/x.dds' }] },
     );
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
@@ -94,7 +97,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   it('a plugin resolved from overwrite/ wins path and origin over a mod-provided plugin, which is then sent as overridden', () => {
     const fakeIndex = index(
       { 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } },
-      { A: [{ relativePath: 'Foo.esp', absolutePath: '/mods/A/Foo.esp' }] },
+      { A: [{ relativePath: 'Foo.esp', path: '/mods/A/Foo.esp', sourcePath: '/mods/A/Foo.esp' }] },
     );
 
     const result = buildLoadOrderRows(lines(['Foo.esp']), fakeIndex, [runtimeOutput('Foo.esp')], GAME_FOLDER);
@@ -140,7 +143,7 @@ describe('buildLoadOrderRows, its origins asserted as the literal reserved value
   });
 
   it('a disabled mod\'s own plugin is sent with no slot, not enabled, not winning', () => {
-    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', absolutePath: '/mods/Disabled/Off.esp' }] });
+    const fakeIndex = index({}, { Disabled: [{ relativePath: 'Off.esp', path: '/mods/Disabled/Off.esp', sourcePath: '/mods/Disabled/Off.esp' }] });
 
     const result = buildLoadOrderRows(lines(['Listed.esp']), fakeIndex, [], GAME_FOLDER);
 
