@@ -4,6 +4,7 @@ BACKEND=false
 FRONTEND=false
 API_DRIFT=false
 DOCS=false
+COMMENTS=false
 DETACH=false
 WAIT=false
 FAILED=false
@@ -15,6 +16,7 @@ while [[ $# -gt 0 ]]; do
     --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
     --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
     --docs)      DOCS=true;      GATE_ARGS+=("$1"); shift ;;
+    --comments)  COMMENTS=true;  GATE_ARGS+=("$1"); shift ;;
     --detach)    DETACH=true;    shift ;;
     --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
@@ -26,6 +28,25 @@ DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
 GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
+
+changed_since_main() {
+  local base
+  base=$(git -C "$ROOT" merge-base main HEAD) || return
+  git -C "$ROOT" diff --name-only --no-renames "$base" && git -C "$ROOT" ls-files --others --exclude-standard
+}
+
+if ! $COMMENTS && ! git -C "$ROOT" merge-base --is-ancestor main HEAD; then
+  echo "Refused: HEAD is behind main. Merge main first, so the gates test the tree that will land."
+  exit 1
+fi
+
+if [[ ${#GATE_ARGS[@]} -eq 0 ]]; then
+  selection=$(changed_since_main | python3 "$ROOT/.claude/skills/validate/select_gates.py") || exit 1
+  echo "=== Gates the change since main can break ==="
+  echo "${selection:-none beyond Gate 1}"
+  flags=$(cut -d' ' -f1 <<< "$selection")
+  exec bash "$0" ${flags:---comments}
+fi
 
 # Runs a command in one of a machine-wide count of slots. -o keeps the lock out of child
 # processes, so a lingering build server cannot hold it. A waiter queues on the first slot rather
@@ -95,11 +116,9 @@ echo "=== Gate runner tests ==="
 ARCHITECTURE_SCANS=(MEditService.Http.Tests --filter "FullyQualifiedName~MEditService.Http.Tests.Architecture.")
 
 backend_tests() {
-  local results="/tmp/medit-test-results.$(basename "$ROOT")" base changed selected
+  local results="/tmp/medit-test-results.$(basename "$ROOT")" changed selected
   rm -rf "$results" && mkdir -p "$results" || return
-  base=$(git -C "$ROOT" merge-base main HEAD) || return
-  changed=$(git -C "$ROOT" diff --name-only --no-renames "$base" &&
-    git -C "$ROOT" ls-files --others --exclude-standard) || return
+  changed=$(changed_since_main) || return
   selected=$(python3 "$ROOT/.claude/skills/validate/select_backend_tests.py" \
     "$ROOT/MEditService" "$results/selected.slnf" <<< "$changed") || return
   echo "Test projects: ${selected:-none, no backend change since main}" | paste -sd ' '

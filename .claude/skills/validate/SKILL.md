@@ -1,53 +1,34 @@
 ---
 name: validate
-description: Repo gate runner — classify changed files, run the matching build/test gates. Use at the end of any coding task, and whenever a skill (e.g. /implement) says to run the tests or the full test suite.
+description: The bar for done. Run before reporting work done, committing for merge, or when a skill says to run the tests or the full suite.
 ---
 
 # Validate
 
-The repo's gates: classify what changed, run the matching gates, fix failures, rerun.
+`main` is the ground every stream of work builds on. Each worktree is cut from it, and each agent reads it as true. A defect that lands there spreads into work that never touched it, and nothing marks it as wrong. So work earns its merge with evidence, never with its author's belief.
 
-```bash
-git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
-git diff --name-only --no-renames "$(git merge-base main HEAD)" && git ls-files --others --exclude-standard
-```
+The gates are the first evidence: nothing the work can break is broken. A gate run counts only on the tree that will land, and only as a run you watched. Verified means observed. Review is the evidence the gates cannot give. An author reads its own code with the intent it wrote it with, and sees the intent where the code says something else. A separate agent sees only the code.
 
-The first line must print `current`: HEAD on a branch that contains `main`. A detached HEAD or a branch behind `main` gates a tree that will not land — stop and say so (merge `main` into the branch first; a detached HEAD is the user's to resolve).
+The work is done when both kinds of evidence exist. Validate runs before the merge because the author still holds the context to fix what the evidence finds. That context is gone once the work merges. *Root cause* governs every fix.
 
-Classify changed files → run matching gate (never review non-compiling code):
+## 1. Gates
 
-| Changed | Command |
-|---|---|
-| `MEditService/**`, except `*.md` | `bash .claude/skills/validate/run-gates.sh --backend --api-drift` |
-| `modbench/**`, except `*.md` | `… --frontend` |
-| `docs/**`, or `CONTEXT.md` | `… --docs`: the tests that read the docs, not the whole suites |
-| any other `*.md`, and other config | `… ` with no flag — Gate 1 alone |
+Merge current `main` into the branch first. The gates then test the tree that will land. A detached HEAD is the user's to resolve.
 
-A branch that matches several rows runs every flag they name: a `.cs` and a `.d2` change is `--backend --api-drift --docs`.
+Run `bash .claude/skills/validate/run-gates.sh --detach`. Then run `run-gates.sh --wait` in the foreground until it prints a verdict. Exit 3 means wait again. Gates queue on machine-wide slots, so one run can outlast one foreground call. The runner reads the diff since `main`, and names each gate it runs and why.
 
-`--backend` formats and builds the whole solution. It runs only the test projects that reference a changed project, directly or through other projects (`select_backend_tests.py` reads the csproj files). A change under `MEditService/` outside every project, such as `Directory.Build.props`, runs every test project. The architecture scans in `MEditService.Http.Tests` read every project's source, so they run beside any selection. Then `check_test_times.py` fails the gate for each test over its ceiling.
+A red gate is yours to fix. A failure already on `main` is a defect that already landed. It is yours to fix for the same reason. Green means the code passes the gate as the gate stands. A change to a gate, a test's assertion or a time ceiling needs the maintainer's approval, as a suppression does.
 
-`--frontend` runs its steps side by side (`frontend_gates.py`), and each step prints its whole output when it ends. `check_test_times.py` fails the gate for each unit test over its ceiling.
+**Criterion:** the last run, on the tree you will commit, printed `All mechanical gates passed`.
 
-`bash .claude/skills/validate/run-gates.sh` with no flags runs Gate 1 alone in seconds and exits 1 on failure; an orchestrator runs it on a branch before merging, because the editor-time hook does not fire on script-patched files. Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s `EXCLUDE_RE`): Vale over comments in `.cs`/`.ts`/`.tsx`/`.py`/`.mjs` and over markdown text (`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which reaches string literals but carries only the History rule (`.vale-raw.ini`); `comment-shape.py` for the doc-comment shape checks on `.cs`/`.ts`/`.tsx`; and the discipline's own tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
+## 2. Review
 
-`--api-drift` boots a fresh backend and fails if `modbench/src/wire/generated/api.ts` has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can silently invalidate it, so it rides along with `--backend`, not `--frontend`.
+An author cannot see its own blind spots. The work merges only after a separate agent reviews it. `/code-review` counts, because it reviews in fresh subagents. If the work has no review and your brief sets none ahead of the merge, run `/code-review main` now.
 
-The backend and frontend gates each queue on machine-wide slots, so a run can outlast a foreground command's 10-minute cap, and a subagent that ends its turn to wait has reported instead. Run `run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the verdict. Exit 3 means call it again.
+Sort each finding under root CLAUDE.md's chain of authority. Note why a finding is not real. A fix that changes logic sends you back to step 1.
 
-Fix all failures, rerun.
+**Criterion:** a separate agent's review covers the work, every finding has a disposition, and the gates are green on the final tree.
 
-## Finding dispositions
+## Report
 
-Review itself belongs to the calling workflow (`/implement` closes with `/code-review`; `/orchestrate` § 3, step 4, runs its own). In-loop, the maintainer rules on findings live, by this table (first match). An orchestrated run sorts findings by `/orchestrate` § 3, step 11. Neither files an issue: the tracker holds no standing bug/tech-debt backlog (`docs/agents/issue-tracker.md`):
-
-| Outcome | When → Action |
-|---|---|
-| **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it |
-| **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev; verdict is fix / reject / report |
-| **Report** | real, of settled value, but needs its own design or plan, or touches surface outside this branch → state it in the session summary (finding + analysis + recommendation); the maintainer decides whether it enters the grill → `/to-epic` pipeline |
-| **Reject** | not real → note why |
-
-Rerun the gates if any fix changed logic.
-
-Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces them continuously during the work, scoped to changed files, and the work in progress triages them. Validate owns correctness and gates — nothing else.
+Quote the verdict line. Name the gates that ran and why. List each finding with its disposition.

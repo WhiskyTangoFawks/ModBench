@@ -37,6 +37,19 @@ class GateTimeout(unittest.TestCase):
         run = hook("Bash", TOP, command="bash .claude/skills/validate/run-gates.sh --wait", timeout=600000)
         self.assertEqual(run.returncode, 0)
 
+    def test_run_gates_after_cd_without_timeout_is_blocked(self):
+        self.assertEqual(hook("Bash", TOP, command="cd /x && bash .claude/skills/validate/run-gates.sh").returncode, 2)
+
+    def test_run_gates_by_path_without_timeout_is_blocked(self):
+        self.assertEqual(hook("Bash", TOP, command="./.claude/skills/validate/run-gates.sh --comments").returncode, 2)
+
+    def test_reading_run_gates_needs_no_timeout(self):
+        for command in ("cat .claude/skills/validate/run-gates.sh",
+                        "git diff main...x -- .claude/skills/validate/run-gates.sh",
+                        "grep -n flock .claude/skills/validate/run-gates.sh"):
+            with self.subTest(command=command):
+                self.assertEqual(hook("Bash", TOP, command=command).returncode, 0)
+
     def test_gate_named_inside_quotes_is_data(self):
         self.assertEqual(hook("Bash", TOP, command="git commit -m 'run-gates.sh --wait'").returncode, 0)
 

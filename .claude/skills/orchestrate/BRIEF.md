@@ -8,11 +8,7 @@ Verified means observed, and that includes my claims. A run you watched outranks
 
 Work test-first, using `/tdd` at the seams the ticket names. Typecheck and run the single test files you are touching as you go, rather than saving every failure for the end.
 
-Run `/validate` when the work stands. Report which gates ran and why.
-
-Review is the orchestrator's and is dispatched against your branch, so do not run `/code-review` yourself.
-
-Merge `main` into the branch before every gate run. Conflicts are yours to resolve on the branch, and then the gates run again from the top. Use local `main` only. Nothing in this run pushes.
+Run `/validate` when the work stands. Review is the orchestrator's, dispatched against your branch once you report. Conflicts from merging `main` are yours to resolve on the branch. Use local `main` only. Nothing in this run pushes.
 
 A guard test is vacuous until you have watched it fail. For every slice that arrives green and every test that forbids a state, name the **rival**: the plausible wrong implementation, or the precondition removed. Apply the rival, run the test, and report the failure you observed. A rival that passes is a finding, so report what actually enforces the property. Restore from a file copy so that uncommitted work survives.
 
