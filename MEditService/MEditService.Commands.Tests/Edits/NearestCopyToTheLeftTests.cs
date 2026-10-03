@@ -96,6 +96,34 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void ClearingDeleted_KeepsEachOtherBitTheWriteChanges_AndTakesTheRestFromTheCopyToItsLeft()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(Bit9 | InitiallyDisabled, "Guy")), false),
+            (Plugin("Override.esp", NpcCopy(Deleted | Bit9)), true));
+
+        var undeleted = Written(TheNpc, OffLimits);
+
+        Assert.Equal(OffLimits | InitiallyDisabled, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_AndSettingPersistent_OnAPlacedRecord_MovesItIntoItsCellsPersistentGroup()
+    {
+        var rock = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Rock" };
+        var deleted = new PlacedObject(TheRef, Fallout4Release.Fallout4) { MajorRecordFlagsRaw = Deleted };
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: Placing(rock))), false),
+            (Plugin("Override.esp", CellCopy(0, "Inside", also: Placing(deleted))), true));
+
+        var undeleted = Written(TheRef, Persistent);
+
+        var cell = JsonNode.Parse(_plugins.Text(Edited, TheCell)).Require().AsObject();
+        Assert.Equal(Persistent, undeleted["MajorRecordFlagsRaw"]?.GetValue<int>());
+        Assert.Equal(["Rock"], cell["Persistent"].Require().AsArray().Select(r => r?["EditorID"]?.GetValue<string>()));
+    }
+
+    [Fact]
     public void ClearingDeleted_DropsItsFormVersion_WhenTheCopyToItsLeftSpellsNone()
     {
         var middle = Plugin("Middle.esp", NpcCopy(0, "Guy", formVersion: 120));
@@ -238,18 +266,30 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
-    public void ClearingPartialForm_KeepsTheCopysRecordHeaderRowsAndChildren()
+    public void ClearingPartialForm_KeepsTheCopysChildren()
     {
         var theirs = new PlacedObject(TheRef, Fallout4Release.Fallout4) { EditorID = "Theirs" };
         var mine = new PlacedObject(new FormKey(ModKey.FromFileName("Override.esp"), 0x801), Fallout4Release.Fallout4) { EditorID = "Mine" };
         Load(
-            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f, cell => { cell.VersionControl = 3; cell.Temporary.Add(theirs); })), false),
-            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => { cell.VersionControl = 7; cell.Temporary.Add(mine); })), true));
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", 5f, Placing(theirs))), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: Placing(mine))), true));
 
         var whole = Written(TheCell, 0);
 
-        Assert.Equal(7, whole["VersionControl"]?.GetValue<int>());
         Assert.Equal([mine.FormKey.ToString()], whole["Temporary"].Require().AsArray().Select(r => r?["FormKey"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void ClearingPartialForm_SetsVersionControlInfo1And2ToZero()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside", also: cell => { cell.VersionControl = 3; cell.Version2 = 4; })), false),
+            (Plugin("Override.esp", CellCopy(PartialForm, "Inside", also: cell => { cell.VersionControl = 7; cell.Version2 = 8; })), true));
+
+        var whole = Written(TheCell, 0);
+
+        Assert.Equal(0, whole["VersionControl"]?.GetValue<int>() ?? 0);
+        Assert.Equal(0, whole["Version2"]?.GetValue<int>() ?? 0);
     }
 
     [Fact]
@@ -276,6 +316,18 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
 
         Assert.Equal(OffLimits | PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
         Assert.Equal(120, partial["FormVersion"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void SettingDeletedAndPartialFormTogether_WithACopyToItsLeft_EndsAPartialFormThatIsNotDeleted()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(OffLimits, "Inside")), false),
+            (Plugin("Override.esp", CellCopy(0, "Mine")), true));
+
+        var partial = Written(TheCell, Deleted | PartialForm);
+
+        Assert.Equal(OffLimits | PartialForm, partial["MajorRecordFlagsRaw"]?.GetValue<int>());
     }
 
     [Fact]
