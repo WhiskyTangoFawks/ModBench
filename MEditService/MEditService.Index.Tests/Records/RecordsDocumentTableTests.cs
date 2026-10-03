@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>What one plugin's documents are, measured against the binary they came from rather
-/// than against literals: the curated slice is regenerable.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
 {
@@ -27,18 +25,16 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture)
     public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
     {
         using var overlay = OpenPlugin();
-        // The header is excluded from the enumeration, a ModHeader not being an IMajorRecordGetter, and
-        // added back as the one ordinary document it contributes, so leaving it out would under-count
-        // by exactly one per plugin.
-        var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
+        const int theHeaderDocumentAddedBackBecauseAModHeaderIsNotAMajorRecordGetter = 1;
+        var expectedMeasuredFromTheBinaryBecauseTheCuratedSliceIsRegenerable = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)
             .Where(kv => kv.Key != PluginHeader.RecordType)
             .Sum(kv => overlay.EnumerateMajorRecords(kv.Value.RecordType, throwIfUnknown: false).Count())
-            + 1;
+            + theHeaderDocumentAddedBackBecauseAModHeaderIsNotAMajorRecordGetter;
 
         var actual = DocumentsOf("TRUE");
 
-        Assert.True(expected > 0, "The cut-down plugin should contain records of indexed types.");
-        Assert.Equal(expected, actual);
+        Assert.True(expectedMeasuredFromTheBinaryBecauseTheCuratedSliceIsRegenerable > 0, "The cut-down plugin should contain records of indexed types.");
+        Assert.Equal(expectedMeasuredFromTheBinaryBecauseTheCuratedSliceIsRegenerable, actual);
     }
 
     [Fact]

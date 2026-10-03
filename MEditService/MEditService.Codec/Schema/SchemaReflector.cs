@@ -50,7 +50,7 @@ public sealed class SchemaReflector
     private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
 
     /// <summary>The Mutagen build this schema and every generated serializer came from — part of an
-    /// index file's version stamp (ADR-0009).</summary>
+    /// index file's version stamp (ADR-0009 invariant 4).</summary>
     public static string MutagenVersion =>
         typeof(IModGetter).Assembly.GetName().Version?.ToString() ?? "unknown";
 

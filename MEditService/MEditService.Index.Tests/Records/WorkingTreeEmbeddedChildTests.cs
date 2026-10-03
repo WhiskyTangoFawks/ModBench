@@ -10,8 +10,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A container's document is the only thing a write hands the index; every embedded
-/// descendant's row follows from it.</summary>
 public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -25,9 +23,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     private string CellBody() => _fixture.Reads.DocumentOf(_fixture.EmbedCell, _fixture.Plugin).BodyOf();
 
-    // The container's document as the write path produces it: read through the codec, changed on the
-    // object graph, written back through the codec.
-    private string CellBodyAfter(Action<IMajorRecord> change)
+    private string CellBodyAfterCodecRoundTripThrough(Action<IMajorRecord> change)
     {
         var cell = Codec.DeserializeFromBytes(Encoding.UTF8.GetBytes(CellBody()), GameRelease.Fallout4, "cell");
         change(cell);
@@ -38,7 +34,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     public void ApplyingAContainersDocument_WithAChildHeldAtNeitherRef_CreatesTheChildsRowAndPlacement()
     {
         var newRef = FormKey.Factory($"000F10:{ContainerMod.PluginName}");
-        var body = CellBodyAfter(cell => ((Cell)cell).Temporary.Add(
+        var body = CellBodyAfterCodecRoundTripThrough(cell => ((Cell)cell).Temporary.Add(
             new PlacedObject(newRef, Fallout4Release.Fallout4) { EditorID = "AppendedRef", Position = new P3Float(4f, 5f, 6f) }));
 
         Project(_fixture.EmbedCell, body);
@@ -56,7 +52,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective()
     {
         var removed = _fixture.TemporaryRef;
-        var body = CellBodyAfter(cell =>
+        var body = CellBodyAfterCodecRoundTripThrough(cell =>
         {
             var target = ((Cell)cell).Temporary.Single(p => p.FormKey.ToString() == removed);
             Assert.True(((Cell)cell).Temporary.Remove(target));
@@ -66,10 +62,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Assert.Null(_fixture.Reads.GetDocument(removed, _fixture.Plugin));
         Assert.Null(_fixture.Reads.GetPlacement(removed, _fixture.Plugin));
-        // The sibling in the other slot is exactly as it was.
-        Assert.NotNull(_fixture.Reads.GetDocument(_fixture.PersistentRef, _fixture.Plugin));
-        var persistentPlacement = Assert.NotNull(_fixture.Reads.GetPlacement(_fixture.PersistentRef, _fixture.Plugin));
-        Assert.Equal(_fixture.EmbedCell, persistentPlacement.ParentCell);
+        var siblingInTheOtherSlot = _fixture.PersistentRef;
+        Assert.NotNull(_fixture.Reads.GetDocument(siblingInTheOtherSlot, _fixture.Plugin));
+        var siblingPlacement = Assert.NotNull(_fixture.Reads.GetPlacement(siblingInTheOtherSlot, _fixture.Plugin));
+        Assert.Equal(_fixture.EmbedCell, siblingPlacement.ParentCell);
     }
 
     [Fact]
@@ -80,18 +76,18 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
             Assert.Null(_fixture.Reads.GetDocument(formKey, _fixture.Plugin));
         Assert.Null(_fixture.Reads.GetPlacement(_fixture.TopCellRef, _fixture.Plugin));
-        // A cell in another container is nobody's descendant here.
-        Assert.NotNull(_fixture.Reads.GetDocument(_fixture.TemporaryRef, _fixture.Plugin));
+        var refInAnotherContainer = _fixture.TemporaryRef;
+        Assert.NotNull(_fixture.Reads.GetDocument(refInAnotherContainer, _fixture.Plugin));
     }
 
     [Fact]
     public void ApplyingAContainersDocument_DerivesTheEmbeddedChildsOwnDocument_AtEffectiveOnly()
     {
-        // The two placed refs carry distinct scales, so this substitution reaches exactly TemporaryRef.
-        var edited = CellBody().Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal);
-        Assert.NotEqual(CellBody(), edited);
+        var scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales =
+            CellBody().Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal);
+        Assert.NotEqual(CellBody(), scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales);
 
-        Project(_fixture.EmbedCell, edited);
+        Project(_fixture.EmbedCell, scaleEditReachingOnlyTemporaryRefBecauseThePlacedRefsCarryDistinctScales);
 
         var effectiveChild = _fixture.Reads.DocumentOf(_fixture.TemporaryRef, _fixture.Plugin);
         var headChild = _fixture.Reads.HeadDocument(_fixture.TemporaryRef, _fixture.Plugin);

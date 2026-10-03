@@ -8,9 +8,8 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>The header's source document — the whole-mod door's root <c>RecordData.json</c>
-/// (ADR-0007) — produced and read back through that same door, never a second implementation of
-/// its dialect, without touching the disk.</summary>
+/// <summary>The header's source document, the whole-mod door's root <c>RecordData.json</c>,
+/// produced and read back through that same door without touching the disk.</summary>
 public static class HeaderDocument
 {
     // Same literal as SourceRepository.RecordDataFileName; kept separate because the two answer

@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>The scope of "embedded" is Spriggit's, so a quest's document carries none of its
-/// topics. Subjects are measured, since a hardcoded FormKey would decay silently.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
 {
@@ -66,15 +64,14 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture)
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
 
-        var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
+        var questMeasuredToHoldTopicsSpriggitDoesNotEmbed = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
 
-        // Exactly what a Track writes into a source file — which is nothing but the codec call itself.
-        var sourceBytes = Codec.SerializeToBytes(quest, GameRelease.Fallout4);
+        var bytesATrackWritesToASourceFile = Codec.SerializeToBytes(questMeasuredToHoldTopicsSpriggitDoesNotEmbed, GameRelease.Fallout4);
 
-        var body = StoredBody(quest.FormKey.ToString());
+        var body = StoredBody(questMeasuredToHoldTopicsSpriggitDoesNotEmbed.FormKey.ToString());
 
         Assert.NotNull(body);
-        Assert.Equal(Encoding.UTF8.GetString(sourceBytes), body);
+        Assert.Equal(Encoding.UTF8.GetString(bytesATrackWritesToASourceFile), body);
     }
 
     [Fact]

@@ -9,9 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>A tracked plugin's read model is seeded from its source, never the compiled artifact
-/// (ADR-0007 invariant 3). The tree reads as documents, so tracked and untracked plugins share one
-/// indexing call.</summary>
+/// <summary>ADR-0007 invariant 3: tracked and untracked plugins share one indexing call.</summary>
 internal static class SourceIngest
 {
     /// <summary>Whether this plugin has a tree to ingest from; false reads the binary instead.

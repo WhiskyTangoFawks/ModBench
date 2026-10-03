@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0015 invariant 3: the Index's one projection verb, over a tracked tree another tool
-/// has moved under it — the cases the sequence tests do not reach.</summary>
 public sealed class RefreshByKeysTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;
@@ -61,8 +59,6 @@ public sealed class RefreshByKeysTests : IDisposable
         Assert.Equal("RenamedByHand", entry.Head.EditorId);
     }
 
-    // GetDocument answers from the Index's last projection, never a live re-read of the source
-    // file — a hand-edit made outside Modbench is invisible until Refresh is told to look.
     [Fact]
     public void AHandEditMadeBeforeAnyRefresh_LeavesTheServedDocumentUnchanged()
     {
@@ -78,10 +74,8 @@ public sealed class RefreshByKeysTests : IDisposable
         Assert.Equal("RenamedByHand", Reads.GetDocument(_npc, _mod.KeyOf())?.EditorId);
     }
 
-    // A create's whole-file side, made without the write API: the document is in the tree and
-    // nothing has told the Index about it.
     [Fact]
-    public void ARefreshedKeyTheIndexHasNeverSeen_LandsTheRecordTheTreeHasGained()
+    public void ARefreshedKeyTheIndexHasNeverSeen_LandsTheRecordTheTreeHasGained_ListedAsAdded()
     {
         var formKey = "000F00:Fixture.esp";
         var body = Reads.DocumentOf(_npc, _mod.KeyOf()).BodyOf()
@@ -91,11 +85,8 @@ public sealed class RefreshByKeysTests : IDisposable
 
         Refresh();
 
-        // A document alone cannot say where the tree puts a record, so the plugin is re-derived whole
-        // — and the record, its identity row and its EditorID all arrive with it.
         Assert.Equal("HandCreated", Reads.GetDocument(formKey, _mod.KeyOf())?.EditorId);
         Assert.Contains(formKey, Reads.GetNativeFormKeys(_mod.KeyOf()));
-        // Never committed, so the listing reports it as an addition.
         var listing = Reads.Search(new RecordQuery(Plugin: _mod.Name, Origin: _mod.Origin, RecordTypes: ["npc_"], Limit: 50));
         Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
@@ -105,9 +96,8 @@ public sealed class RefreshByKeysTests : IDisposable
     {
         var before = Reads.DocumentOf(_npc, _mod.KeyOf()).BodyOf();
 
-        // Mid-save, or hand-edited into something that is not a document at all: never assume
-        // exclusive ownership of the file (ADR-0003).
-        File.WriteAllText(_mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf())), "{ this is not json");
+        const string notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold = "{ this is not json";
+        File.WriteAllText(_mod.SourceFileOf(Reads.DocumentOf(_npc, _mod.KeyOf())), notADocumentAtAllAsAMidSaveOrHandEditedFileMayHold);
 
         Refresh();
 

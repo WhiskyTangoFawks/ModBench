@@ -21,9 +21,8 @@ internal sealed class DuckDbRecordIndexFactory(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
     private readonly TimeProvider? _timeProvider = timeProvider;
 
-    /// <summary>ADR-0009: <paramref name="instanceRoot"/> keys one persistent file per instance; an
-    /// origin is a mod folder name, unique only within one. Null means an in-memory index that dies
-    /// with this object.</summary>
+    /// <summary>ADR-0009 invariant 3. A null <paramref name="instanceRoot"/> means an in-memory
+    /// index that dies with this object.</summary>
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
         var repo = new DuckDbRecordIndex(

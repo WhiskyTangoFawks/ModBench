@@ -17,8 +17,6 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         return manager;
     }
 
-    // The picker's search has no `type` filter when a field allows more than one record type, so it
-    // goes through the multi-table union path, where the FormKey-shaped match also needs to resolve.
     [Fact]
     public void Search_AcrossMultipleRecordTypes_ByFormKey_ResolvesRecord()
     {

@@ -3,9 +3,9 @@ using MEditService.Codec.Schema;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>Kind B detectors (ADR-0006): byte-level scans naming a defect class from the plugin's
-/// original bytes alone, with no Mutagen. Expected values come from vanilla binaries, not a
-/// reference's comments.</summary>
+/// <summary>Kind B detectors (ADR-0006 invariant 7, a plugin malformed by another tool): byte-level
+/// scans of the plugin's original bytes, with no Mutagen. Expected values come from vanilla
+/// binaries, not a reference's comments.</summary>
 public static class MalformedPluginScan
 {
     // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.

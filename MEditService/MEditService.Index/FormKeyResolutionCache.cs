@@ -1,7 +1,6 @@
 namespace MEditService.Index;
 
-// ADR-0005: resolution is one batched pass per response, not a query per value. Wrapping the
-// resolver once per response means each distinct FormKey is queried at most once however many
+// Wrapped once per response, so each distinct FormKey is queried at most once however many
 // FieldDiff leaves share it.
 public static class FormKeyResolutionCache
 {

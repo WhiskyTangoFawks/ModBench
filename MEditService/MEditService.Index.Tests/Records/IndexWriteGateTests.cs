@@ -4,8 +4,6 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class IndexWriteGateTests
 {
-    // Absence by order, never by elapsed time: the first caller releases only once it has heard
-    // the second is attempting entry, so a non-exclusive gate shows "second-in" before "first-out".
     [Fact]
     public async Task ASecondCaller_EntersOnlyAfterTheFirstReleases()
     {
@@ -35,20 +33,18 @@ public sealed class IndexWriteGateTests
         Assert.Equal(["first-in", "first-out", "second-in"], order);
     }
 
-    // Reentrancy is load-bearing: a validation takes the gate and then calls Index doors that take
-    // it again, so a non-reentrant gate would self-deadlock on the ordinary path.
     [Fact]
     public void TheSameThread_CanEnterTwice()
     {
         var gate = new IndexWriteGate(TimeSpan.FromMilliseconds(200));
 
         using var outer = gate.Enter();
-        var nested = Record.Exception(() =>
+        var nestedAsAValidationCallingIndexDoorsDoes = Record.Exception(() =>
         {
             using var inner = gate.Enter();
         });
 
-        Assert.Null(nested);
+        Assert.Null(nestedAsAValidationCallingIndexDoorsDoes);
     }
 
     [Fact]
