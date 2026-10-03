@@ -44,9 +44,7 @@ public sealed class IndexVisibilityTests
 
         var reads = tallies.Sum(t => t.Reads);
         Assert.True(reads > 50, $"only {reads} reads completed during indexing — reads are being blocked by it");
-        var partialCounts = tallies.SelectMany(t => t.PartialCounts).ToList();
-        Assert.True(partialCounts.Count == 0,
-            $"reads observed {string.Join(", ", partialCounts)} of {NpcCount} records — a partially-indexed plugin was visible");
+        Assert.Empty(tallies.SelectMany(t => t.PartialCounts));
         Assert.Equal(NpcCount, index.RequireReads().CountOf(key, "npc_"));
         var highestSequenceRead = tallies.Max(t => t.HighestSequence);
         Assert.True(highestSequenceRead <= index.Sequence,
