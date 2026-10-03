@@ -1422,7 +1422,7 @@ describe('A plugin row carries no read-only tooltip before the backend has launc
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
     const tree = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
     tree.invalidate();
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
+    const row = await waitFor('the Immutable.esm row', async () => (await tree.getChildren()).find((r) => rowName(r) === 'Immutable.esm'));
 
     const tooltip = tree.getTreeItem(row).tooltip;
 
