@@ -54,17 +54,26 @@ public sealed class DocumentEditRealDataTests : IDisposable
         return recordTypes;
     }
 
+    [Fact]
+    public void TheSmallestRecordOfEachShape_OffersOverAHundredGestures() =>
+        Assert.True(OnTheSmallestRecordOfEachShape().Count() > 100,
+            $"the plugin should offer plenty of gestures; it offered {OnTheSmallestRecordOfEachShape().Count()}");
+
     [Theory]
     [MemberData(nameof(RecordTypesOfferingGestures))]
     public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
-        RunSweep([.. EveryGesture.Value
-            .Where(g => g.Record.RecordType == recordType)
-            .OrderBy(g => g.Record.Text.Length)
-            .DistinctBy(g => (g.Envelope.Op, g.Path))], minGestures: 0);
+        RunSweep([.. OnTheSmallestRecordOfEachShape().Where(g => g.Record.RecordType == recordType)]);
 
     [SmokeFact("sweep every record of the cut-down plugin, not one per gesture shape")]
-    public void EveryGestureOfEveryRecord_ChangesExactlyItsPath() =>
-        RunSweep(EveryGesture.Value, minGestures: 4900);
+    public void EveryGestureOfEveryRecord_ChangesExactlyItsPath()
+    {
+        Assert.True(EveryGesture.Value.Count > 4900, $"the plugin should offer plenty of gestures; it offered {EveryGesture.Value.Count}");
+        RunSweep(EveryGesture.Value);
+    }
+
+    private static IEnumerable<Gesture> OnTheSmallestRecordOfEachShape() => EveryGesture.Value
+        .OrderBy(g => g.Record.Text.Length)
+        .DistinctBy(g => (g.Record.RecordType, g.Envelope.Op, g.Path));
 
     private readonly record struct Gesture(PluginDocument Record, RecordEditEnvelope Envelope, string Path);
 
@@ -90,9 +99,8 @@ public sealed class DocumentEditRealDataTests : IDisposable
             yield return new(record, envelope, path);
     }
 
-    private void RunSweep(IReadOnlyList<Gesture> gestures, int minGestures)
+    private void RunSweep(IReadOnlyList<Gesture> gestures)
     {
-        Assert.True(gestures.Count > minGestures, $"the plugin should offer plenty of gestures; it offered {gestures.Count}");
 
         var trackedTree = TrackedTree();
         var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
