@@ -10,39 +10,39 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary><c>Faction.VendorLocation.Target</c> as the subject: its <c>LocationFallback</c> leaf
-/// has no FormLink members, so this fixture needs no supporting cast of linked records.</summary>
 public sealed class NestedStructSubFieldEditTests : IDisposable
 {
+    private const string NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue = "NearSelf";
+
     private readonly FactionFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // PLVD's binary discriminator is its Type value, so the seeded LocationFallback reparses as a
-    // LocationTarget through Track: this write switches the concrete leaf as well as the value.
     [Fact]
-    public void VendorLocationTarget_NamedInPayload_RoundTrips()
+    public void VendorLocationTarget_NamedInPayload_RoundTripsAndSwitchesTheLeafFromTheTrackedLocationTargetToLocationFallback()
     {
+        Assert.Contains("\"MutagenObjectType\": \"LocationTarget\"", _fixture.Body(), StringComparison.Ordinal);
+
         var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
+            Json($$$"""
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}
             """));
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.Body();
+        Assert.Contains("\"MutagenObjectType\": \"LocationFallback\"", body, StringComparison.Ordinal);
         Assert.Contains("\"Radius\": 99", body, StringComparison.Ordinal);
         Assert.Contains("\"Data\": 3", body, StringComparison.Ordinal);
     }
 
-    // One leaf, one change: the siblings the gesture never named stay as they were.
     [Fact]
     public void VendorLocationTarget_SecondEditOfOneLeaf_KeepsUnnamedMembers()
     {
         var service = _fixture.Service();
         var first = service.Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""{"Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}"""));
+            Json($$$"""{"Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}"""));
         Assert.True(first.Applied, first.Message);
 
         var second = service.Edit(_fixture.Plugin, _fixture.Faction.ToString(),
@@ -60,8 +60,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         var before = _fixture.Body();
 
         var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": "not-a-number"}}
+            Json($$$"""
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": "not-a-number"}}
             """));
 
         Assert.False(result.Applied);

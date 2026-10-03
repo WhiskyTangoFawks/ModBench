@@ -8,8 +8,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A complex field (array or struct) is written as one atomic value; a payload shaped
-/// like a single element of one is refused rather than silently dropped.</summary>
 public sealed class ComplexFieldElementEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -21,8 +19,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
-
-    // ── per-element payloads are refused, not silently dropped ────────────────
 
     [Fact]
     public void KeywordsArray_PerElementPayload_IsRefusedAndWritesNothing()
@@ -66,8 +62,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.Equal(before, omod.Body(armorMod));
     }
 
-    // ── the whole-value write the webview now sends does land ─────────────────
-
     [Fact]
     public void KeywordsArray_WholeArrayWrite_LandsInTheSourceDocument()
     {
@@ -92,8 +86,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void FactionsStructArray_WholeArrayWriteWithAChangedSubField_LandsInTheSourceDocument()
     {
-        // A real, resolvable Faction to point at: an element's FormLink sub-field is validated like any
-        // other, so a null or invented one would refuse for an unrelated reason.
         var faction = _mod.CreateHandler.CreateRecord(_mod.Plugin, "fact", "FixtureFaction");
         Assert.True(faction.Applied, faction.Message);
 
@@ -109,8 +101,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.Contains("\"Rank\": 9", NpcBody(), StringComparison.Ordinal);
     }
-
-    // ── write-side polymorphism — OMOD properties' element type is abstract ──────────────────
 
     [Fact]
     public void OmodPropertiesArray_MissingDiscriminator_IsRefusedAndWritesNothing()
@@ -170,7 +160,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
         var properties = JsonDocument.Parse(omod.Body(armorMod)).RootElement.GetProperty("Properties");
         Assert.Equal(2, properties.GetArrayLength());
-        // The discriminator's own first value is the codec's spelling of the leaf class.
         Assert.Equal(
             SharedSchemaReflector.FirstArrayElementLeaf("omod", "Properties", "MutagenObjectType"),
             properties[1].GetProperty("MutagenObjectType").GetString());
@@ -188,7 +177,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             """));
         Assert.True(seed.Applied, seed.Message);
 
-        // Move Up on the second element == the whole array resent with the same two elements swapped.
         var result = omod.EditHandler.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [
                 {"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"},
@@ -235,7 +223,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             """));
         Assert.True(seed.Applied, seed.Message);
 
-        // Remove on the second element == the whole array resent holding only the survivor, verbatim.
         var result = omod.EditHandler.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]"""));
 
@@ -246,8 +233,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
-    // FunctionType is an enum on every OMOD property leaf, over that leaf's own domain: MultAndAdd
-    // is a float function the bool leaf has no member for, so the switch drops it.
     [Fact]
     public void SwitchingAnOmodPropertyLeaf_DropsAMemberWhoseDomainTheIncomingLeafLacks()
     {
@@ -266,8 +251,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.False(element.TryGetProperty("FunctionType", out _), "MultAndAdd is not a bool function");
     }
 
-    // ── a declined member fails the whole struct/array write, not just that member ───────────
-
     [Fact]
     public void WeightStruct_OneMemberValueDeclined_RefusesTheWholeStructWrite()
     {
@@ -282,8 +265,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    // An OMOD carries a struct-element array with an abstract element type, which the shared
-    // fixture's NPC shape has no equivalent of.
     private static SourceModFixture OmodMod(out FormKey armorMod)
     {
         var formKey = FormKey.Null;

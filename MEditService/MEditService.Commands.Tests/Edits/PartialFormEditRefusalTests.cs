@@ -15,8 +15,8 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     private const string PluginName = "PartialFormEdit.esp";
     private const string Origin = "PartialFormEditMod";
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-partialform-mod-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-partialform-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-partialform-mod-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-partialform-game-");
 
     public PluginAddress Plugin { get; } = new(PluginName, Origin);
     public LoadOrderSnapshot LoadOrder { get; }
@@ -57,10 +57,8 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup */ }
-        try { Directory.Delete(_gameDirectory, recursive: true); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     private EditRecordHandler Service() => EditHandler;
@@ -84,10 +82,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         Assert.Equal(before, File.ReadAllText(SourcePath()));
     }
 
-    // xEdit's own CanAssignInternal (wbImplementation.pas:9905-9914) explicitly allows
-    // EDID assignment on a Partial Form record — ADR-0018 makes that binding. EditorID is an
-    // ordinary, already-writable field (RecordFieldWriter.EditorIdFieldPath), so it needs no
-    // header write path.
     [Fact]
     public void EditField_EditorIdOnPartialFormRecord_Succeeds()
     {
@@ -99,8 +93,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     [Fact]
     public void EditField_NonHeaderFieldOnOrdinaryRecord_IsUnaffected()
     {
-        // A non-Partial-Form record beside the fixture — the guard must not blanket-refuse the rest
-        // of the plugin.
         var result = Service().Set(Plugin, OrdinaryNpc.ToString(), "Name", Json("""{"Value": "New Name"}"""));
 
         Assert.True(result.Applied);
@@ -109,7 +101,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     [Fact]
     public void EditField_ChildRefInsideAPartialFormCell_IsUnaffected()
     {
-        // CONTEXT.md's Partial Form entry: "children are unaffected — they are separate records".
         var result = Service().Set(Plugin, ChildRef.ToString(), "Scale", Json("2.5"));
 
         Assert.True(result.Applied);

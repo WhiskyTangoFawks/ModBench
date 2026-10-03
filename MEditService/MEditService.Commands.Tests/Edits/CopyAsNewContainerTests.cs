@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Copy as New Record covers the QUST/DIAL/INFO family (xEdit allows exactly these;
-/// CELL/WRLD stay on the permanent blacklist).</summary>
 public sealed class CopyAsNewContainerTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -22,8 +20,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
     private readonly List<IDisposable> _overlays = [];
 
-    // Every response the destination's copy of a topic carries, in slot order, out of the topic's own
-    // document — the only place they exist, since a response has no file of its own.
     private IReadOnlyList<JsonElement> Responses(string topicFormKey)
     {
         var topic = _fixture.Document(_fixture.DestinationPlugin, topicFormKey);
@@ -46,9 +42,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         return (IFallout4ModGetter)overlay;
     }
 
-    // The topic and each response draw fresh native FormKeys and the destination gets an auto-created
-    // bare Partial Form override of the parent quest. Response2's sibling link still points at the
-    // original, which is xEdit's own behavior.
     [Fact]
     public async Task CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
     {
@@ -59,14 +52,10 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var newTopicFormKey = result.NewFormKey.Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newTopicFormKey, StringComparison.OrdinalIgnoreCase);
 
-        // The parent chain: quest auto-created as a bare Partial Form override, same FormKey as the
-        // source quest (it is an override, not a copy).
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
         Assert.NotNull(quest);
         Assert.True(quest.IsPartialForm());
 
-        // The new topic's own document carries both responses, fresh keys, source order preserved,
-        // each under its own derived EditorID (the Creation Kit's shape).
         var responses = Responses(newTopicFormKey);
         Assert.Equal(2, responses.Count);
         Assert.Equal(
@@ -78,9 +67,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.DoesNotContain(_fixture.Response1.ToString(), responseKeys);
         Assert.DoesNotContain(_fixture.Response2.ToString(), responseKeys);
 
-        // Compiled: the quest carries the new topic; the topic carries both responses under their
-        // new keys in order; the copied Response2 still links the ORIGINAL Response1.
-        // Both responses are inline in the new topic's one document.
         var topicText = File.ReadAllText(
             _fixture.DestinationSourceFileContaining(ContainerCopyFixture.DialogTopicEditorId + "DUPLICATE001"));
         Assert.All(responseKeys, key => Assert.Contains(key, topicText, StringComparison.Ordinal));
@@ -120,8 +106,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
             responses.Select(r => Member(r, "EditorID")).ToArray());
     }
 
-    // An existing parent override keeps its own fields and flag: the new topic lands in its
-    // DialogTopics slot and nothing else in the document changes.
     [Fact]
     public async Task CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
@@ -135,8 +119,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // The plain override landed with empty child lists, so the slot is new; every other member
-        // is byte-for-byte what it was.
         Assert.False(questBefore.RootElement.TryGetProperty(nameof(Quest.DialogTopics), out _));
         var questAfter = JsonDocument.Parse(File.ReadAllText(questFile));
         foreach (var property in questBefore.RootElement.EnumerateObject())
@@ -152,7 +134,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
 
         Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
 
-        // One quest file total, and no directory: the topic is inside it.
         var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
         Assert.Empty(Directory.EnumerateDirectories(questsDir));
         Assert.Single(Directory.EnumerateFiles(questsDir), f => Path.GetFileName(f) != "GroupRecordData.json");
@@ -162,9 +143,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Single(compiledQuest.DialogTopics, t => t.FormKey.ToString() == result.NewFormKey);
     }
 
-    // An INFO copied alone: the whole missing parent chain (quest, then topic) auto-creates as bare
-    // Partial Form overrides — both under their ORIGINAL FormKeys (they are overrides); only the
-    // response itself draws a fresh key.
     [Fact]
     public async Task CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
     {
@@ -181,8 +159,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "FormKey"));
 
-        // Inline in the minted topic's document, which is the only file the response is in, under
-        // its own derived EditorID (the Creation Kit's shape).
         var responseFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response1EditorId + "DUPLICATE001");
         Assert.Contains(newFormKey, File.ReadAllText(responseFile), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateDirectories(_fixture.DestinationSourceRoot, "Responses", SearchOption.AllDirectories));
@@ -194,8 +170,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.Equal(ContainerCopyFixture.Response1EditorId + "DUPLICATE001", compiledResponse.EditorID);
     }
 
-    // A Quest copies as its own record only — its children never ride along with a plain Copy as
-    // New Record (deep copy is a separate operation).
     [Fact]
     public async Task CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
@@ -210,7 +184,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
         Assert.NotNull(document);
         Assert.Equal(ContainerCopyFixture.QuestEditorId + "DUPLICATE001", document.EditorId);
 
-        // Empty child lists in the document itself, not just in the binary.
         var questText = File.ReadAllText(
             _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId + "DUPLICATE001"));
         Assert.DoesNotContain(ContainerCopyFixture.DialogTopicEditorId, questText, StringComparison.Ordinal);

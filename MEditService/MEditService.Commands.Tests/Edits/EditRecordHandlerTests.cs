@@ -8,8 +8,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Asserted against a real git repo through the real CLI, because "visible in the Source
-/// Control panel" is a claim about what <c>git status</c> says (ADR-0007).</summary>
 public sealed class EditRecordHandlerTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -17,8 +15,6 @@ public sealed class EditRecordHandlerTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
-    // ---- an EditorID edit is a rename as well as a content change ----
 
     [Fact]
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
@@ -30,7 +26,6 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
-        // Resolved after the rename: RelativeSourcePath answers where the record is right now.
         var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
         var moved = Path.Combine(_mod.ModFolder, newRelative);
         Assert.True(File.Exists(moved));
@@ -49,24 +44,18 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         Assert.True(_mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        // Resolved after the rename: resolving both paths up front would have them collide on the
-        // same still-old file and make the assertions below pass without checking anything.
         var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
 
-        // The unstaged reality, asserted rather than glossed, so a future reader does not mistake it
-        // for a bug in the write path.
         Assert.Contains($"D {oldRelative}", _mod.GitStatus());
 
-        // Measured similarity on real git runs R099 for a container document down to R050 for the
-        // minimal one — exactly git's default 50% threshold, so a smaller shape puts detection at risk.
         var git = Path.Combine(_mod.ModFolder, ".git");
         GitProbe.Run(git, _mod.ModFolder, "add", "-A");
-        var staged = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
+        var stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
 
-        var rename = Assert.Single(staged, l => l.StartsWith('R'));
+        var rename = Assert.Single(stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor, l => l.StartsWith('R'));
         Assert.Contains(oldRelative, rename, StringComparison.Ordinal);
         Assert.Contains(newRelative, rename, StringComparison.Ordinal);
     }
@@ -74,8 +63,6 @@ public sealed class EditRecordHandlerTests : IDisposable
     [Fact]
     public void EditField_OnATrackedPlugin_LeavesTheRecordsSourceFileDirtyInTheSourceControlPanel()
     {
-        // Track has just committed the complete pristine state, so anything git reports afterwards
-        // is this edit's own doing — the positive control for every status assertion below.
         Assert.Empty(_mod.GitStatus());
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
@@ -90,8 +77,6 @@ public sealed class EditRecordHandlerTests : IDisposable
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        // Re-parsed through the codec rather than string-matched: the file has to remain a document
-        // the source can round-trip, not merely text that happens to contain the right number.
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var reparsed = codec.DeserializeFile(_mod.NpcSourceFile, GameRelease.Fallout4, "npc_");
         Assert.Equal(_mod.Npc, reparsed.FormKey);
@@ -126,8 +111,6 @@ public sealed class EditRecordHandlerTests : IDisposable
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMin", Json("0.5"));
 
-        // The second edit reads what the first wrote, not the committed baseline, so both values are
-        // in the file the second edit produced.
         var text = File.ReadAllText(Path.Combine(
             _mod.ModFolder, _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId)));
         Assert.Contains("0.75", text, StringComparison.Ordinal);
@@ -154,28 +137,21 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    // ---- parse status is the codec's, asked at edit time (ADR-0015 invariant 5) ----
-
     [Fact]
     public void EditField_OfADocumentTheCodecCannotRead_RefusesWithTheCodecsOwnMessage()
     {
-        // Hand-edited into a document the codec cannot build a record from: text where the record's
-        // own class carries a number.
         var corrupted = Corrupt("\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"");
 
         var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        // The codec's own words, not a wrapper that could stand in front of any failure.
         Assert.Contains(
             "Unable to cast object of type 'System.String' to type 'System.Int64'",
             result.Message, StringComparison.Ordinal);
         Assert.Equal(corrupted, File.ReadAllText(_mod.NpcSourceFile));
     }
 
-    // JsonDocument tolerates a duplicate member and JsonNode does not, so this document never
-    // reaches the codec at all.
     [Fact]
     public void EditField_OfADocumentWithADuplicateMember_RefusesRatherThanThrowing()
     {
@@ -196,8 +172,6 @@ public sealed class EditRecordHandlerTests : IDisposable
         return corrupted;
     }
 
-    // Present, so this is not a record the plugin does not hold: the file naming it is there and its
-    // text is not a document.
     [Fact]
     public void EditField_OfADocumentThatIsNotJson_RefusesAsUnreadable_AndWritesNothing()
     {

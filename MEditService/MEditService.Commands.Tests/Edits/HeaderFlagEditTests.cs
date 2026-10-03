@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The ESL flag's one sanctioned write door is the synthetic <c>IsSmallMaster</c> header field;
-/// a write to the raw <c>Flags</c> column changes every other bit and refuses this one.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
     private readonly SourceEditFixture _fixture = SourceEditFixture.Tracked();
@@ -31,7 +29,6 @@ public sealed class HeaderFlagEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // The source document is the truth: the root RecordData.json now carries the flag.
         Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
         var compile = await CompileServices.Over(_fixture.LoadOrder)
@@ -45,8 +42,6 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(((IModFlagsGetter)written).IsSmallMaster);
     }
 
-    // The allocator answers from the document, not the load order's in-memory mod object: a flag
-    // flipped this session caps FormID minting immediately, with no reconcile in between.
     [Fact]
     public void AfterSettingIsLight_ATypedTargetOutsideTheLightRange_IsRefusedImmediately()
     {

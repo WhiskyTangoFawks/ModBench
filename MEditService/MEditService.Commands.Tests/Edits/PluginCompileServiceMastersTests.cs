@@ -12,8 +12,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Masters are derived from content (ADR-0008) and written in the current load order,
-/// never Mutagen's alphabetical default or the plugin's own prior header.</summary>
 public sealed class PluginCompileServiceMastersTests : IDisposable
 {
     private const string PluginName = "MastersHost.esp";
@@ -27,17 +25,10 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
     private readonly FormKey _charlieKeyword;
-    // Loaded alongside the others but never referenced at Track time —
-    // "a cross-plugin reference edit updates the declaring plugin's masters without user action"
-    // needs a plugin that provably was *not* already a master before the edit introduces it.
     private readonly FormKey _deltaKeyword;
 
-    // A record in a loaded plugin that is not a Keyword, so a Keywords entry naming it is resolvable
-    // and wrong-typed — the diagnostic axis a link into another plugin can only reach this way.
     private readonly FormKey _bravoRace;
 
-    // Charlie.esm loads *before* Bravo.esm — deliberately not alphabetical, so an order assertion
-    // can't pass by coincidence.
     public PluginCompileServiceMastersTests()
     {
         var bravoPath = Path.Combine(_gameDirectory, BravoName);
@@ -92,8 +83,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private PluginCompileService CompileService() =>
         CompileServices.Over(_loadOrder);
 
-    // The set the Index's masters read computed from its references table, now derived by running the
-    // collector over the same records (ADR-0008).
     [Fact]
     public async Task Compile_ReportsTheEffectiveMasters_InLoadOrder()
     {
@@ -103,8 +92,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName], result.Masters);
     }
 
-    // Compile sees one plugin's records, so a link into a plugin the load order holds is one it
-    // cannot answer for; claiming it unresolved would fill the Problems panel with every valid link.
     [Fact]
     public async Task Compile_ForALinkIntoAPluginTheLoadOrderHolds_ReportsNoUnresolvedDiagnostic()
     {
@@ -115,8 +102,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
-    // The other half of the Index's masters rule: a plugin whose record this one overrides is a
-    // master whether or not anything here references it (ADR-0008).
     [Fact]
     public async Task Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
     {
@@ -131,8 +116,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName, DeltaName], result.Masters);
     }
 
-    // The Index answered this from its global lookup; the link cache answers it from the plugin the
-    // load order loads, so what the author sees in the Problems panel is unchanged.
     [Fact]
     public async Task Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
     {
@@ -165,8 +148,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName], masterNames);
     }
 
-    // Written into the tracked source after Track rather than pre-baked into the baseline. DeltaName
-    // is loaded but never referenced at Track time, so it provably is not yet a master.
     [Fact]
     public async Task Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
@@ -185,8 +166,6 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
 
         var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
         Assert.Contains(DeltaName, masterNames);
-        // Load order (Charlie, Bravo, Delta all precede MastersHost), not the order the edit listed
-        // FormKeys in: the same ADR-0008 claim, against a master this edit makes effective.
         Assert.Equal([CharlieName, BravoName, DeltaName], masterNames);
     }
 }

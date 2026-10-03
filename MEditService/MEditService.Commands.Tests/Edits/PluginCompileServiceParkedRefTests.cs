@@ -5,7 +5,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Every compile parks what it writes on the last-compile ref before it writes it.</summary>
 public sealed class PluginCompileServiceParkedRefTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
@@ -42,8 +41,6 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public async Task Compile_ThatRefuses_LeavesTheParkedRefUntouched()
     {
-        // Two source files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
-        // structurally cannot emit, so nothing about the plugin's parked state should move.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath) ?? throw new InvalidOperationException($"Expected '{collidingPath}' to have a parent directory."));
@@ -56,8 +53,6 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         Assert.Equal(baselineParked, RunGit("rev-parse", ParkedRef).Trim());
     }
 
-    // plugins.md, Compile, story 5: the record goes down before the binary does, so a compile that
-    // cannot record writes nothing.
     [Fact]
     public async Task Compile_ThatCannotParkItsRecord_LeavesTheOldBinary()
     {

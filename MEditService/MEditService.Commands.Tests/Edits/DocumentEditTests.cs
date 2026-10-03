@@ -13,8 +13,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Document text, envelope and metadata in; a gesture's output is the input with exactly
-/// the edited path changed, through the real <see cref="EditRecordHandler"/>.</summary>
 public sealed class DocumentEditTests : IDisposable
 {
     private readonly DocumentEditFixture _fixture = new();
@@ -75,7 +73,6 @@ public sealed class DocumentEditTests : IDisposable
         return after ?? throw new InvalidOperationException("Expected an applied edit to report its document.");
     }
 
-    // Every difference between the documents sits under the edited path, and there is one.
     private static void AssertOnlyChanged(string before, string after, params string[] paths)
     {
         var diffs = ConditionEditTests.DocumentDiff(before, after);
@@ -89,8 +86,6 @@ public sealed class DocumentEditTests : IDisposable
         foreach (var hop in dotted.Split('.')) node = node[hop].Require();
         return node;
     }
-
-    // ── set, at every depth ─────────────────────────────────────────────────
 
     [Fact]
     public void Set_TopLevelScalar_ChangesExactlyThatPath()
@@ -111,7 +106,6 @@ public sealed class DocumentEditTests : IDisposable
 
         var after = Applied(formKey, SetAt(Json("0.5"), Member("Weight"), Member("Thin")));
 
-        // The struct was absent, so the document gains it holding exactly the one member.
         Assert.Equal(["Weight: <absent> -> {\"Thin\":0.5}"], ConditionEditTests.DocumentDiff(before, after));
     }
 
@@ -148,8 +142,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(["HeightMax: 1.0 -> <absent>"], ConditionEditTests.DocumentDiff(before, after));
     }
 
-    // ── the discriminator switch ────────────────────────────────────────────
-
     [Fact]
     public void Set_Discriminator_KeepsSharedMembersAndDropsTheMemberTheNewLeafShapesDifferently()
     {
@@ -167,8 +159,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal("GreaterThan", Node(after, "Conditions")[0].Require()["CompareOperator"].Require().GetValue<string>());
     }
 
-    // Association is a form link on every archetype leaf, over that leaf's own target type: a cloak
-    // effect names a spell, a light effect a light. The switch drops it.
     [Fact]
     public void Set_Discriminator_DropsALinkWhoseTargetTypeTheIncomingLeafDoesNotName()
     {
@@ -207,8 +197,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Null(after);
         Assert.Equal(before, _fixture.Document(formKey));
     }
-
-    // ── add, remove, move ───────────────────────────────────────────────────
 
     [Fact]
     public void Add_Remove_Move_OnAPositionalArray_ChangeThatArrayAlone()
@@ -271,7 +259,6 @@ public sealed class DocumentEditTests : IDisposable
     private static IEnumerable<string> ScriptNames(string document) =>
         Node(document, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>());
 
-    // An element that is not there is a path the document does not know, on every operation.
     [Theory]
     [InlineData(RecordEditEnvelope.Remove)]
     [InlineData(RecordEditEnvelope.Move)]
@@ -307,8 +294,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(before, _fixture.Document(formKey));
     }
 
-    // ── the cascade is the writer's ─────────────────────────────────────────
-
     [Fact]
     public void Set_GoverningMember_IdlesEverySlotTheNewValueDoesNotUse()
     {
@@ -341,8 +326,6 @@ public sealed class DocumentEditTests : IDisposable
             ],
             ConditionEditTests.DocumentDiff(before, after));
     }
-
-    // ── the closed pre-check list ───────────────────────────────────────────
 
     [Fact]
     public void UnknownTopLevelPath_IsRefusedByName_AndNothingLandsSilently()
@@ -493,8 +476,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(before, _fixture.Document(formKey));
     }
 
-    // Shape is the codec's and nothing else is (ADR-0015 invariant 5): what a FormKey points at is
-    // not a fact the document carries, so the edit lands and the read side reports it.
     [Theory]
     [InlineData("ABCDEF:Nowhere.esp")]
     [InlineData("kywd")]
@@ -524,8 +505,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
-
-    // ── the codec is the one shape gate ─────────────────────────────────────
 
     [Fact]
     public void CodecRejection_NamesThePathAndQuotesMutagen()
@@ -596,8 +575,6 @@ public sealed class DocumentEditTests : IDisposable
         AssertOnlyChanged(before, after, "Name");
     }
 
-    // ── the synthetic members ───────────────────────────────────────────────
-
     [Fact]
     public void Header_IsSmallMaster_WritesTheFlagsMemberAndNothingElse()
     {
@@ -655,8 +632,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.True(_fixture.Apply(formKey, SetAt(Json("\"Renamed\""), Member("EditorID"))).Result.Applied);
         Assert.True(_fixture.Apply(formKey, SetAt(Json("0"), Member("MajorRecordFlagsRaw"))).Result.Applied);
     }
-
-    // ── container children ──────────────────────────────────────────────────
 
     [Fact]
     public void EmbeddedChild_IsPatchedInsideItsParentsDocument()

@@ -6,9 +6,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A minted interior block level has no Track-written document behind it, so only
-/// compiling the tree and reading the block back out of the binary proves the level the repository
-/// spelled is one the reader accepts.</summary>
 public sealed class InteriorCellCopyCompileTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -35,8 +32,6 @@ public sealed class InteriorCellCopyCompileTests : IDisposable
         Assert.Contains(subBlock.Cells, c => c.FormKey == _fixture.InteriorCell);
     }
 
-    // The reference auto-creates its cell, so the same mint runs from the other direction and the
-    // child has to arrive inside the cell the minted bucket holds.
     [Fact]
     public async Task CopyInteriorPlacedReference_IntoAPluginHoldingNoCells_CompilesWithTheRefInsideTheMintedCell()
     {
