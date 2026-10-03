@@ -21,7 +21,7 @@ const groupB = separatorRow('Group B', 'Beta', 'Gamma');
 
 const BOTH: readonly SortDirection[] = ['losingAtTop', 'winningAtTop'];
 const endTheViewShowsAtTheTop = { losingAtTop: 'losing', winningAtTop: 'winning' } as const;
-const endTheViewShowsAtTheBottom ={ losingAtTop: 'winning', winningAtTop: 'losing' } as const;
+const endTheViewShowsAtTheBottom = {losingAtTop: 'winning', winningAtTop: 'losing' } as const;
 
 describe.each(BOTH)('a drop is a move, as shown, with %s', (direction) => {
   it('mods dropped on a mod land directly above it', () => {

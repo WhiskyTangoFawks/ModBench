@@ -22,9 +22,9 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
-const rowNamesOfDownloadNodes =(nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
+const rowNamesOfDownloadNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
 
-const row =(extra: Partial<DownloadRow> = {}): DownloadFile => {
+const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
   const base: DownloadRow = {
     name: 'foo.zip',
     displayName: 'foo.zip',
@@ -79,7 +79,7 @@ class FakeInstance {
   }
 }
 
-const explicitFailureIfNotSettledWithin =<T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
 ]);

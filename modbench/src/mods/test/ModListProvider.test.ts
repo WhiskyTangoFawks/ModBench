@@ -97,7 +97,7 @@ class FakeInstance {
   }
 }
 
-const explicitFailureIfNotSettledWithin =<T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
 ]);
@@ -111,7 +111,7 @@ const makeProvider = (
   log: extra.log ?? (() => undefined),
 });
 
-const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt =(): ModlistEntry[] => [
+const orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt = ():ModlistEntry[] => [
   mod('Late Tweak'),
   mod('Early Fix', false),
   sep('Late Section'),

@@ -31,7 +31,7 @@ function fakeActiveRecordTrackerOfJustFormKeyOf() {
   };
 }
 
-const gateHoldingNoReadSinceNoEditIsInFlight ={ holds: () => false, waitingFor: () => undefined, release: () => false };
+const gateHoldingNoReadSinceNoEditIsInFlight = {holds: () => false, waitingFor: () => undefined, release: () => false };
 
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {

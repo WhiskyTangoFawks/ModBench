@@ -60,7 +60,7 @@ import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-const node =(root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
+const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
   new DownloadNode(downloadRowFixture(name, row, root));
 
 const NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS: InstanceValue['mods'] = [];
@@ -175,7 +175,7 @@ const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) 
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('registers open and open .meta, and leaves install and view on Nexus to the mod', () => {
+  it('registers open and open .meta, and leaves install and view on Nexus to the mod, registered once for both views since VS Code throws on a second registration of a command id', () => {
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual([
       'modbench.downloadedFile.open',

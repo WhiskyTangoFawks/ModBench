@@ -288,7 +288,7 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    it('marks the records before the write, so each deleted record\'s row keeps its place marked, then tells the marks which landed', async () => {
+    it('marks the records before the write, then tells the marks which landed', async () => {
       const client = new InMemoryMEditClient();
       const { told } = invoke(client, 'Delete');
       client.setCommandHandler('deleteRecords', () => {
@@ -627,7 +627,7 @@ describe('modbench.record.copy, one command over the selection: the mode picked,
     expect(showQuickPick).toHaveBeenCalledOnce();
   });
 
-  it('marks each copy it writes before the write, so each destination\'s row carries the mark, then tells the marks which landed and under what FormKey', async () => {
+  it('marks each copy it writes before the write, then tells the marks which landed and under what FormKey', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     pick('New', [PATCH, OTHER]);

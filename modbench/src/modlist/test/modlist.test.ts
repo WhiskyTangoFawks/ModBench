@@ -501,7 +501,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(vi.mocked(rename).mock.calls.filter(([, to]) => to === modlistPath())).toHaveLength(1);
     });
 
-    it('refuses a gone separator by name while the others land, in one write, trashing nothing for it its folder left under mods/ as MO2 or another tool may leave it', async () => {
+    it('refuses a gone separator by name while the others land, in one write, trashing nothing for it, its folder left under mods/ as MO2 or another tool may leave it', async () => {
       await mkdir(join(dir, 'mods', 'No Such Separator_separator'));
       vi.mocked(rename).mockClear();
 
@@ -544,7 +544,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     });
 
-    it('the line a delete leaves after the trash, naming a folder that is gone, is dropped by the next mod sync, which drops separator lines as well as mod lines', async () => {
+    it('the line a delete leaves after the trash, naming a folder that is gone, is dropped by the next mod sync, which drops a separator line', async () => {
       vi.mocked(writeFile).mockRejectedValueOnce(new Error('disk full'));
       await deleteSeparators(accessTo(dir), 'Default', [UNASSIGNED], trash);
       expect(await order()).toContain(`separator:${UNASSIGNED}`);
@@ -722,7 +722,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     });
     beforeEach(() => { trashed.length = 0; trash.mockClear(); });
 
-    const writeOrderAcrossMocksSharingOneCallOrderCounter =(path: string): number => {
+    const writeOrderAcrossMocksSharingOneCallOrderCounter = (path: string): number => {
       const callIdx = vi.mocked(rename).mock.calls.findIndex(([, to]) => to === path);
       return present(vi.mocked(rename).mock.invocationCallOrder[callIdx], `a rename landing ${path}`);
     };
@@ -1118,7 +1118,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(names).toEqual(expect.arrayContaining(['mod:Harder VATS', 'separator:Unassigned (Modlist Development)']));
   });
 
-  it('drops a separator line whose name MO2 never gives a folder, another tool having written it, building no path from it', async () => {
+  it('drops a separator line another tool wrote whose name MO2 never gives a folder, building no path from it', async () => {
     await writeFile(modlistPath(), '-Weapons/Armor_separator\r\n+Harder VATS\r\n');
     const folders = await foldersAsAValueListsThem(dir, FIXTURE_MOD_FOLDERS);
     forgetPathsReached();
@@ -1141,7 +1141,7 @@ describe('syncMods — modlist.txt brought into line with the folders in mods/ i
     expect(pathsReached().filter((p) => p.includes('Escaped'))).toEqual([]);
   });
 
-  it('matches a line to its folder without case, for a mod and a separator (MO2 keys both without case), dropping and adding nothing', async () => {
+  it('matches a line to its folder without case, for a mod and a separator (MO2 keys both without case), dropping neither line and adding no second line for either', async () => {
     await writeFile(modlistPath(), '+harder vats\r\n-unassigned (modlist development)_separator\r\n');
 
     const outcome = await sync(FIXTURE_MOD_FOLDERS);

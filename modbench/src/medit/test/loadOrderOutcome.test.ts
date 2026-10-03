@@ -60,7 +60,7 @@ describe('settleReconciled, a reconcile that reached Ready being reported and th
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
 
-  it('warns and logs a skipped plugin, never silently (ADR-0019)', async () => {
+  it('warns and logs a skipped plugin by name', async () => {
     const deps = settleDeps();
     const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
 

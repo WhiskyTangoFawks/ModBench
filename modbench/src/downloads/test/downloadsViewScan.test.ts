@@ -11,7 +11,7 @@ const VIEW_FILES_WALKED_NOT_LISTED =readdirSync(VIEW_DIR)
 
 const FS_MODULES = ['fs', 'fs/promises', 'node:fs', 'node:fs/promises'];
 
-const FS_CALLS_NAMED_BECAUSE_AN_ALIAS_EVADES_THE_IMPORT_CHECK =['readFile', 'writeFile', 'readdir', 'mkdir', 'rm', 'access', 'stat', 'cp', 'rename'];
+const FS_CALLS_NAMED_BECAUSE_AN_ALIAS_EVADES_THE_IMPORT_CHECK = ['readFile', 'writeFile', 'readdir', 'mkdir', 'rm', 'access', 'stat', 'cp', 'rename'];
 
 function importsOf(source: string): string[] {
   return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]

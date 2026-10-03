@@ -31,7 +31,7 @@ import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from '../extend
 
 type FieldFile = ExtendedFieldEditorDeps['fieldFile'];
 
-const fieldFileUnderWithEverySegmentEscaped =(tempRoot: string): FieldFile => (field) => {
+const fieldFileUnderWithEverySegmentEscaped = (tempRoot: string): FieldFile => (field) => {
   const folder = join(tempRoot, encodeURIComponent(field.recordLabel), encodeURIComponent(field.origin));
   return { folder, file: join(folder, `${encodeURIComponent(field.fieldName)} [${encodeURIComponent(field.plugin)}]`) };
 };

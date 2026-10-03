@@ -51,7 +51,6 @@ async function shownRowsTopToBottomWithEverySeparatorExpanded(provider: ModListP
 function rowsNamed(rows: readonly ModlistNode[], named: readonly RowName[]): ModlistNode[] {
   return named.map((want) => {
     const row = rows.find((r) => r.kind === want.kind && nameOf(r) === want.name);
-    expect(row, `a ${want.kind} row named ${want.name}`).toBeDefined();
     return present(row, `the ${want.kind} row named ${want.name}`);
   });
 }

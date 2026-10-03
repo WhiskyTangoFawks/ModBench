@@ -34,7 +34,6 @@ async function anchorRowOfARealTreeOverTheCorpusModlist(direction: SortDirection
   provider.setViewDirection(direction);
   const row = (await provider.getChildren()).find(isRow);
   provider.dispose();
-  expect(row, 'the anchor row').toBeDefined();
   return present(row, 'the anchor row');
 }
 
@@ -50,7 +49,6 @@ async function writeWithAnchor(anchor: ModlistNode): Promise<string> {
   const reporter = recordingReporter();
   registerSeparatorCommands(accessTo(root), instance, reporter, scriptedDialog(), vi.fn(), () => [], separatorMarks);
   const call = registerCommand.mock.calls.find((c) => c[0] === 'modbench.separator.add');
-  expect(call, 'the modbench.separator.add registration').toBeDefined();
   await present(call, 'the modbench.separator.add registration')[1](anchor);
   expect(reporter.reports).toEqual([]);
   const text = await readFile(`${root}/${DEFAULT_MODLIST}`, 'utf8');

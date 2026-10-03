@@ -42,7 +42,7 @@ describe('firstReadOf', () => {
   });
 });
 
-const explicitFailureIfNotSettledWithin =<T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`did not settle within ${ms} ms`)), ms)),
 ]);
