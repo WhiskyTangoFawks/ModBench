@@ -12,7 +12,7 @@ public class MasterResolutionTests
 {
     private static (LoadOrderEntry Registered, PluginContent? Content) Plugin(string name, params string[] masters) =>
         (new LoadOrderEntry(name, name, "Data", Slot: 0, Enabled: true, Winning: true),
-            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, masters, RecordCount: 0));
+            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, masters, RecordCount: 0, IsMedium: false));
 
     private static (LoadOrderEntry Registered, PluginContent? Content) Disabled(string name, params string[] masters)
     {

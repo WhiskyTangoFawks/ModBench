@@ -11,6 +11,7 @@ public record PluginMetadata(
     string Path,
     int? LoadOrderIndex,
     bool IsLight,
+    bool IsMedium,
     bool IsMaster,
     bool IsBlueprint,
     IReadOnlyList<string> Masters,
@@ -21,9 +22,9 @@ public record PluginMetadata(
 
     public Registration Registration => new(LoadOrderIndex);
 
-    public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount);
+    public PluginContent Content => new(IsLight, IsMaster, IsBlueprint, Masters, RecordCount, IsMedium);
 }
 
 /// <summary>What reading the file told the Index about a plugin, which no registration carries.
 /// Read once when the plugin is opened; a plugin that never opened has none.</summary>
-public sealed record PluginContent(bool IsLight, bool IsMaster, bool IsBlueprint, IReadOnlyList<string> Masters, int RecordCount);
+public sealed record PluginContent(bool IsLight, bool IsMaster, bool IsBlueprint, IReadOnlyList<string> Masters, int RecordCount, bool IsMedium);
