@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -175,7 +176,7 @@ public sealed class RoundTripSurvey
             var db = b.AsSpan(y.DataStart, Math.Min(y.DataLen, b.Length - y.DataStart)).ToArray();
             var hdrEq = a.AsSpan(x.Start, 24).SequenceEqual(b.AsSpan(y.Start, 24));
             if (hdrEq && da.AsSpan().SequenceEqual(db)) continue;
-            if ((x.Flags & CompressedFlag) != 0) { try { da = PluginBinaryWalk.Inflate(da); db = PluginBinaryWalk.Inflate(db); } catch (Exception ex) when (ex is not OutOfMemoryException) { o.AppendLine("  inflate failed"); return; } }
+            if ((x.Flags & CompressedFlag.Bit) != 0) { try { da = PluginBinaryWalk.Inflate(da); db = PluginBinaryWalk.Inflate(db); } catch (Exception ex) when (ex is not OutOfMemoryException) { o.AppendLine("  inflate failed"); return; } }
             o.AppendLine(CultureInfo.InvariantCulture, $"  {x.Type} {x.FormId:X8} flags {x.Flags:X8}->{y.Flags:X8}  hdr {Convert.ToHexString(a, x.Start, 24)} / {Convert.ToHexString(b, y.Start, 24)}");
             var sa = PluginBinaryWalk.WalkSubrecords(da); var sb = PluginBinaryWalk.WalkSubrecords(db);
             o.AppendLine(CultureInfo.InvariantCulture, $"  original order : {string.Join(" ", sa.Select(t => t.Sig))}");
@@ -224,8 +225,6 @@ public sealed class RoundTripSurvey
     //
     // The walk itself lives in PluginBinaryWalk: exactly one implementation, not two kept in sync by
     // hand. What stays here is this survey's own classification on top of it.
-
-    private const uint CompressedFlag = 0x00040000;
 
     private static Dictionary<string, int> Classify(byte[] a, byte[] b)
     {
@@ -284,7 +283,7 @@ public sealed class RoundTripSurvey
                 continue;
             }
 
-            bool compA = (x.Flags & CompressedFlag) != 0, compB = (y.Flags & CompressedFlag) != 0;
+            bool compA = (x.Flags & CompressedFlag.Bit) != 0, compB = (y.Flags & CompressedFlag.Bit) != 0;
             if (compA || compB)
             {
                 if (compA != compB) { Add($"other:{x.Type}/compressed-flag"); continue; }
