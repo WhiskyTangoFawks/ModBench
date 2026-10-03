@@ -153,8 +153,6 @@ describe('modbench.record.filter, from a document', () => {
     expect(deps.showRecordFilter).toHaveBeenCalledWith({ sql: ARMOR_SQL, source: 'from-the-root.sql' });
   });
 
-  // The rival: showing the filter (or refreshing) on a failed set would leave the view claiming a
-  // filter mEdit never took.
   it('reports a refused set and touches nothing else', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('setFilter', 'Filter SQL must return a form_key column');
@@ -173,8 +171,6 @@ describe('modbench.record.filter, from a document', () => {
 });
 
 describe('modbench.record.clearFilter', () => {
-  // A clear refreshes exactly as a set does, or a stale no-match row survives the filter that
-  // hid it.
   it('shows no filter and refreshes the tree and the matching plugins, as a set does', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('clearFilter', null);
@@ -188,7 +184,6 @@ describe('modbench.record.clearFilter', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // plugins.md, Order and view state, story 3: mEdit still filters, so the view keeps saying so.
   it('reports a refused clear and keeps showing the filter', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('clearFilter', 'No load order has been received yet.');
@@ -205,7 +200,6 @@ describe('modbench.record.clearFilter', () => {
   });
 });
 
-// The one writer of everything that says a record filter is in force.
 describe('makeShowRecordFilter', () => {
   function shown() {
     const lens = { setActiveSql: vi.fn() };

@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Captures every registerCommand(id, handler) so each row's handler can be invoked directly —
-// the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
   handlers, registerCommand, showQuickPick, createQuickPick, withProgress, executeCommand, openRepository,
 } = vi.hoisted(() => {
@@ -23,7 +21,6 @@ const {
   };
 });
 
-// Every one of this file's own vscode needs, real fakes rather than this file's own stubs.
 import {
   TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
   Diagnostic, DiagnosticSeverity, Range, uriFile,
@@ -63,13 +60,9 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
 
 type PresetItem = { label: 'Edits' | 'Everything'; description?: string };
 
-// plugins.md, Track, story 2, in the QuickPick items' own words (plugins.md, Track, story 1:
-// "each with a line saying what it keeps").
 const EDITS_ITEM: PresetItem = { label: 'Edits', description: 'Keeps plugin-source/ and .gitignore' };
 const EVERYTHING_ITEM: PresetItem = { label: 'Everything', description: 'Keeps every file except the plugin binaries' };
 
-// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
-// directly, matching DownloadsPanel.test.ts's own fake.
 function makeFakeQuickPick() {
   const acceptListeners: Array<() => void> = [];
   const hideListeners: Array<() => void> = [];
@@ -91,23 +84,19 @@ function makeFakeQuickPick() {
   };
 }
 
-// ── modbench.mod.track ─────────────────────────────────────────────────────
-
 describe('modbench.mod.track', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const INSTANCE_PLUGINS = [FIRST, OTHER, { name: 'Loose.esp', origin: 'overwrite' }, SECOND];
-  // ADR-0007 invariant 7: each track call carries the upstream versions ModA records and ModB does
-  // not. The separator first, named like a mod, is the rival a lookup by name alone falls for.
+  const SEPARATOR_NAMED_LIKE_A_MOD = { kind: 'separator', name: 'ModA', enabled: true } as const;
   const INSTANCE_MODS: InstanceValue['mods'] = [
-    { kind: 'separator', name: 'ModA', enabled: true },
+    SEPARATOR_NAMED_LIKE_A_MOD,
     { kind: 'mod', name: 'ModA', enabled: true, version: '1.2.3' },
     { kind: 'mod', name: 'ModB', enabled: true },
   ];
 
-  // Stands for a Mods row, whose type this box does not import.
-  class ModRow extends TreeItem {
+  class ModsRowStandIn extends TreeItem {
     constructor(readonly modName: string) { super(modName); }
   }
 
@@ -126,7 +115,7 @@ describe('modbench.mod.track', () => {
       progress, client, reporter, onTracked,
       plugins: () => INSTANCE_PLUGINS,
       mods: () => INSTANCE_MODS,
-      modOfRow: (value) => (value instanceof ModRow ? value.modName : undefined),
+      modOfRow: (value) => (value instanceof ModsRowStandIn ? value.modName : undefined),
     }, paletteSelection);
     return {
       handler: present(handlers.get('modbench.mod.track'), 'the track command registerTrackCommand registers'),
@@ -134,8 +123,6 @@ describe('modbench.mod.track', () => {
     };
   }
 
-  // Runs `handler(...)` and settles the preset pick it opens once `createQuickPick` has been
-  // called, so the QuickPick's own async wiring (onDidAccept/onDidHide) has a chance to attach.
   async function runTrackedWithPreset(
     handler: (...args: unknown[]) => unknown, picked: PresetItem | undefined, ...args: unknown[]
   ): Promise<ReturnType<typeof makeFakeQuickPick>['qp']> {
@@ -174,12 +161,11 @@ describe('modbench.mod.track', () => {
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
   });
 
-  // commands.md, "A selection is one gesture": one call with the whole selection, asked once.
   it('on selected Mods rows, tracks every plugin of each mod in one call and asks the preset once', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
     const { handler, reporter } = invokeTrack(client);
-    const mods = [new ModRow('ModA'), new ModRow('ModB')];
+    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     const qp = await runTrackedWithPreset(handler, EVERYTHING_ITEM, mods[1], mods);
 
@@ -189,7 +175,6 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked 2 mods.']);
   });
 
-  // editor.md, Menus and keys, story 5: track on a column acts on its plugin's mod.
   it('on an Editor column header, tracks the column plugin\'s mod', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [FIRST, SECOND], refused: [] });
@@ -204,11 +189,10 @@ describe('modbench.mod.track', () => {
     expect(trackCalls(client)).toEqual([{ method: 'track', args: [[FIRST, SECOND], 'Edits', { ModA: '1.2.3' }, expect.anything()] }]);
   });
 
-  // The palette hands the command no row: it takes the selection of the view last selected in.
   it('from the palette, tracks the mods of a Mods selection', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [OTHER], refused: [] });
-    const { handler, reporter } = invokeTrack(client, undefined, () => [new ModRow('ModB')]);
+    const { handler, reporter } = invokeTrack(client, undefined, () => [new ModsRowStandIn('ModB')]);
 
     await runTrackedWithPreset(handler, EDITS_ITEM);
 
@@ -227,8 +211,6 @@ describe('modbench.mod.track', () => {
     expect(reporter.landings).toEqual(['Tracked "ModB".']);
   });
 
-  // ADR-0007: a landed track tells the record panels, and registers each tracked mod's repository
-  // with vscode.git once. Rival: registering before the notice that registers again.
   it('a landed track, through the conflicts-computed notice, registers the tracked repository once', async () => {
     const client = clientWithOrigin('Other.esp', 'ModB');
     client.setCommandResult('track', { landed: [OTHER], refused: [] });
@@ -247,15 +229,13 @@ describe('modbench.mod.track', () => {
     expect(channel.error).not.toHaveBeenCalled();
   });
 
-  // commands.md, "each item lands on its own": one notification naming each refused plugin and
-  // why, while the rest land.
   it('reports each refused plugin once while the rest land', async () => {
     const client = new InMemoryMEditClient();
     const outcome = { landed: [FIRST], refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }] };
     client.setCommandResult('track', outcome);
     const { handler, onTracked, reporter } = invokeTrack(client);
 
-    await runTrackedWithPreset(handler, EDITS_ITEM, new ModRow('ModA'));
+    await runTrackedWithPreset(handler, EDITS_ITEM, new ModsRowStandIn('ModA'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not track 1 of 2 plugins.', detail: '"Second.esp (ModA)" (Second.esp does not round-trip.)' },
@@ -264,12 +244,11 @@ describe('modbench.mod.track', () => {
     expect(onTracked).toHaveBeenCalledOnce();
   });
 
-  // principles.md, Never silently wrong: a mod that provides no plugin is named, never dropped.
   it('on Mods rows where one provides no plugin, tracks the rest and names the one left out', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
     const { handler, onTracked, reporter } = invokeTrack(client);
-    const mods = [new ModRow('ModA'), new ModRow('ModC'), new ModRow('ModB')];
+    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC'), new ModsRowStandIn('ModB')];
 
     const qp = await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
 
@@ -286,7 +265,7 @@ describe('modbench.mod.track', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { landed: [FIRST], refused: [{ item: SECOND, reason: 'Second.esp does not round-trip.' }] });
     const { handler, reporter } = invokeTrack(client);
-    const mods = [new ModRow('ModA'), new ModRow('ModC')];
+    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModC')];
 
     await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
 
@@ -300,7 +279,7 @@ describe('modbench.mod.track', () => {
     const client = new InMemoryMEditClient();
     const { handler, onTracked, reporter } = invokeTrack(client);
 
-    await handler(new ModRow('ModC'));
+    await handler(new ModsRowStandIn('ModC'));
 
     expect(createQuickPick).not.toHaveBeenCalled();
     expect(trackCalls(client)).toEqual([]);
@@ -310,9 +289,7 @@ describe('modbench.mod.track', () => {
     expect(onTracked).not.toHaveBeenCalled();
   });
 
-  // The rival: landing the toast on a refusal too would tell the user a track landed when the
-  // backend refused the whole selection.
-  it('reports the ready-to-show message at error when the backend refuses the whole selection', async () => {
+  it('reports the ready-to-show message at error and lands nothing when the backend refuses the whole selection', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('track', { refused: true, message: 'Could not track 1 plugin — git was not found on PATH.' });
     const { handler, onTracked, reporter } = invokeTrack(client);
@@ -355,7 +332,7 @@ describe('modbench.mod.track', () => {
     client.setCommandResult('track', { landed: [FIRST, SECOND, OTHER], refused: [] });
     const trackSpy = vi.spyOn(client, 'track');
     const { handler, said } = invokeTrack(client);
-    const mods = [new ModRow('ModA'), new ModRow('ModB')];
+    const mods = [new ModsRowStandIn('ModA'), new ModsRowStandIn('ModB')];
 
     await runTrackedWithPreset(handler, EDITS_ITEM, mods[0], mods);
 
@@ -368,8 +345,6 @@ describe('modbench.mod.track', () => {
     expect(said).toEqual(['Tracking "ModB" — committing to git…']);
   });
 });
-
-// ── modbench.plugin.compile ────────────────────────────────────────────────
 
 describe('modbench.plugin.compile', () => {
   const PATCH = { name: 'MyPatch.esp', origin: 'ModA' };
@@ -408,7 +383,7 @@ describe('modbench.plugin.compile', () => {
           progress.runs++;
           try { await work(); } finally { progress.running = false; }
         },
-        say: () => { /* compile says nothing in the message line */ },
+        say: () => undefined,
       },
       reporter, problems: new CompileProblems(diagnostics),
       originFiles: (origin) => (origin === 'ModA' ? PATCH_FILES : undefined),
@@ -485,8 +460,6 @@ describe('modbench.plugin.compile', () => {
     ]);
   });
 
-  // Never silently wrong: a plugin refused this time has not been rebuilt, so what its last compile
-  // found still stands, beside a plugin of the same mod that compiled again.
   it('replaces the diagnostics of each plugin that compiled, and keeps a refused plugin\'s of the same mod', async () => {
     const SIBLING = { name: 'Sibling.esp', origin: 'ModA' };
     const diagnosticOf = (plugin: { name: string }) =>
@@ -573,8 +546,7 @@ describe('modbench.plugin.compile', () => {
     expect(compileCalls(client)).toEqual([[[OTHER]]]);
   });
 
-  // plugins.md, Menus and keys: compile (tracked), read-only or not.
-  it('from the palette, picks among only the tracked plugins, the selected one first, and compiles the pick', async () => {
+  it('from the palette, picks among the tracked plugins, read-only included, the selected one first, and compiles the pick', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('compile', { landed: [compiledPluginFixture({ plugin: OTHER })], refused: [] });
     showQuickPick.mockResolvedValue({ label: 'Other.esp', description: 'ModB' });
@@ -626,8 +598,6 @@ describe('modbench.plugin.compile', () => {
   });
 });
 
-// ── modbench.plugin.decompile ──────────────────────────────────────────────
-
 describe('modbench.plugin.decompile', () => {
   const FIRST = { name: 'First.esp', origin: 'ModA' };
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
@@ -655,7 +625,7 @@ describe('modbench.plugin.decompile', () => {
           progress.running = true;
           try { await work(); } finally { progress.running = false; }
         },
-        say: () => { /* decompile says nothing in the message line */ },
+        say: () => undefined,
       },
       reporter, ask,
     }, () => viewSelection);
@@ -667,7 +637,6 @@ describe('modbench.plugin.decompile', () => {
 
   const decompileCalls = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'decompile').map((c) => c.args);
 
-  // plugins.md, Decompile: one confirmation, naming the plugin and saying what decompile replaces.
   it('on a plugin row, asks once naming it, then decompiles it under the view\'s progress bar and lands once', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
@@ -700,7 +669,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual(['Decompiled 2 plugins.']);
   });
 
-  // commands.md, Esc changes nothing.
   it('decompiles nothing and says nothing when the confirmation is dismissed', async () => {
     const client = new InMemoryMEditClient();
     const { handler, reporter } = registered(client, undefined);
@@ -712,7 +680,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  // editor.md, Menus and keys, story 5: decompile on a column acts on that column's plugin.
   it('decompiles the plugin a record tab\'s column header names, at its own origin', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('decompile', { landed: [SECOND], refused: [] });
@@ -764,8 +731,6 @@ describe('modbench.plugin.decompile', () => {
     expect(reporter.landings).toEqual([]);
   });
 });
-
-// ── CompileProblems ────────────────────────────────────────────────────────
 
 describe('CompileProblems', () => {
   const diagnosticAt = (sourceRelativePath: string) => [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }];

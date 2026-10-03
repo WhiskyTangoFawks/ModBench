@@ -93,8 +93,6 @@ describe('modbench.plugin.enable / modbench.plugin.disable: the whole selection,
     expect(setPluginsEnabled).toHaveBeenCalledWith(access, 'Default', ['Alpha.esp'], true);
   });
 
-  // plugins.md, "the locked rows are never part of the Argument": a plugin the game loads with no
-  // line drops out of a mixed selection before it reaches the write.
   it('drops a locked row from the selection it writes', async () => {
     setPluginsEnabled.mockResolvedValue({ applied: true, outcome: { landed: ['Alpha.esp'], refused: [] } });
 
