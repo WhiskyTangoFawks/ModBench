@@ -258,8 +258,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0013: one row per plugin file, carrying its load index, null when it is not active.
-    // Not cleared at open (ADR-0013).
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
