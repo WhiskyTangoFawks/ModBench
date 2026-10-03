@@ -130,8 +130,6 @@ internal sealed class PluginIngest
     public void DeleteAllRowsFor(string plugin, string origin)
     {
         DeleteExistingForOrigin("records", plugin, origin);
-        // A leftover snapshot would keep answering at Head for a plugin the load order does not hold,
-        // the opposite of unregistered-answers-nothing (ADR-0013).
         DeleteExistingForOrigin("records_committed", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);

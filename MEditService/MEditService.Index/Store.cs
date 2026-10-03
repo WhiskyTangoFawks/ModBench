@@ -198,8 +198,8 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009. Registrations are not cleared (ADR-0013, Derived tactical
-    /// observations).</summary>
+    /// <summary>ADR-0009: the indexed plugins whose file is gone or differs from its hash, for the
+    /// caller to unindex.</summary>
     public List<PluginAddress> ValidateAgainstDisk()
     {
         var stale = new List<PluginAddress>();
