@@ -9,18 +9,15 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>The plugins the Index has open (ADR-0013), keyed by identity: what the adapter read out
-/// of each file. Not a load order — which plugins are active is the kernel's value. Reconcile
-/// mutates it in place.</summary>
+/// <summary>The plugins the Index has open, keyed by identity: what the adapter read out of each
+/// file. Not a load order (ADR-0013 invariant 4). Reconcile mutates it in place.</summary>
 internal sealed class HeldPlugins
 {
     private readonly List<PluginMetadata> _plugins = [];
     private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
-    // ADR-0012: keyed by the compound (origin, filename) identity — two plugins that share a
-    // filename are ordinarily held at once. Compared as every other keyed lookup compares it, the
-    // kernel's own comparer.
+    // ADR-0012 invariant 1.
     private readonly Dictionary<PluginAddress, PluginLoadFailure> _loadFailures = new(PluginAddress.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
@@ -80,9 +77,8 @@ internal sealed class HeldPlugins
 
         try
         {
-            // The binary path — the "binary is for untracked plugins" overlay (ADR-0007
-            // amendment) — needs the same explicit strings parameters Track does, or a Localized
-            // untracked plugin throws instead of opening.
+            // The binary path (ADR-0007 invariant 3) needs the same explicit strings parameters
+            // Track does, or a Localized untracked plugin throws instead of opening.
             var readTimer = Stopwatch.StartNew();
             var (content, unreachable) = _adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,

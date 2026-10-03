@@ -15,7 +15,7 @@ public readonly record struct CellLocationRow(
 /// <summary>The table a child record's parentage lands in.</summary>
 internal enum ParentageTable { ContainerChild, Placement, CellLocation }
 
-/// <summary>The worldspace-tree side tables (ADR-0005) read off documents: a cell's grid and a
+/// <summary>The worldspace-tree side tables (ADR-0011) read off documents: a cell's grid and a
 /// placed object's position out of their own text, the block coordinates out of the structure
 /// handed over beside them.</summary>
 internal static class PlacementWalker

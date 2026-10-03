@@ -2,9 +2,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/>. A read of a
-/// record sees only the active plugins (ADR-0009 invariant 1); a plugin's own facts answer while
-/// the snapshot names it.</summary>
+/// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/> (ADR-0009
+/// invariant 1). A plugin's own facts answer while the snapshot names it.</summary>
 public interface IRecordReads
 {
     /// <summary>What the Index read out of each plugin it has open, keyed by identity. A plugin it has
@@ -35,11 +34,12 @@ public interface IRecordReads
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginAddress plugin);
 
     /// <summary>O(1) FormKey → (record type, EditorID) lookup against the winning override,
-    /// backed by <c>form_lookup</c> (ADR-0005).</summary>
+    /// backed by <c>form_lookup</c> (ADR-0011).</summary>
     RecordLookupEntry? Resolve(string formKey);
 
     /// <summary>One response's <see cref="Resolve"/> about <paramref name="formKey"/>: the links its
-    /// copies carry resolve in one query up front, any other FormKey alone (ADR-0005).</summary>
+    /// copies carry resolve in one query up front, any other FormKey alone (ADR-0005 invariant
+    /// 6).</summary>
     Func<string, RecordLookupEntry?> LinkResolver(string formKey) => FormKeyResolutionCache.Memoize(Resolve);
 
     IReadOnlyList<ReferenceRow> GetReferencedBy(string targetFormKey);
@@ -66,8 +66,8 @@ public interface IRecordReads
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginAddress plugin);
 
-    // Worldspace tree reads (ADR-0005) (from the placement / cell_location side tables), in the
-    // order xEdit's navigator lists them.
+    // Worldspace tree reads (plugins.md, The tree, story 6) from the placement / cell_location side
+    // tables, in the order xEdit's navigator lists them.
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginAddress plugin, string worldspaceFormKey);
     IReadOnlyList<CellLocationSummary> GetInteriorCells(PluginAddress plugin);
     CellChildRecords GetCellChildRecords(PluginAddress plugin, string cellFormKey);

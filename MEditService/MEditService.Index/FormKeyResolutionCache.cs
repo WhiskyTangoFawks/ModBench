@@ -1,8 +1,8 @@
 namespace MEditService.Index;
 
-// ADR-0005: resolution is one batched pass per response, not a query per value. Wrapping the
-// resolver once per response means each distinct FormKey is queried at most once however many
-// FieldDiff leaves share it.
+// ADR-0005 invariant 6: resolution is one batched pass per response, not a query per value.
+// Wrapping the resolver once per response means each distinct FormKey is queried at most once
+// however many FieldDiff leaves share it.
 public static class FormKeyResolutionCache
 {
     public static Func<string, RecordLookupEntry?> Memoize(Func<string, RecordLookupEntry?> resolve)

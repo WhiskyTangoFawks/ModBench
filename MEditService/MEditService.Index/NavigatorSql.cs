@@ -1,8 +1,7 @@
 namespace MEditService.Index;
 
-/// <summary>How xEdit's navigator nests and orders a plugin's records (ADR-0018): a record another
-/// record holds is listed beneath its holder and nowhere else, and a group lists its records in
-/// load-order FormID order.</summary>
+/// <summary>How xEdit's navigator nests and orders a plugin's records (plugins.md, The tree,
+/// stories 5 and 6), a group's records in load-order FormID order.</summary>
 internal static class NavigatorSql
 {
     /// <summary>One row per record a record holds in the same plugin: a topic in its quest, a
