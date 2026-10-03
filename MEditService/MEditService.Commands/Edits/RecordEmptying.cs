@@ -10,7 +10,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>xEdit's Delete, MakePartialForm and their undoing, which refills the copy from the nearest
 /// copy to its left that is neither. TwbRecordHeaderStruct.ElementChanged applies Partial Form last, so
 /// making one of a deleted copy refills it first.</summary>
-internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
+internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
 {
     /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
     /// clears neither flag.</summary>
@@ -28,7 +28,7 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
         var refills = clears || deletesBeforeMakingPartialForm;
         if (!deletes && !makesPartialForm && !refills) return null;
         var heldPersistent = (write.Held & PersistentFlag.Bit) != 0;
-        return new(flags, deletes, makesPartialForm, refills, heldPersistent);
+        return new(flags, write.Held ^ write.Next, deletes, makesPartialForm, refills, heldPersistent);
     }
 
     /// <summary>Whether a write of <paramref name="envelope"/> refills the record at
@@ -93,12 +93,12 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     private static RecordEditResult Cannot(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.CannotBePartialForm, spelled, $"'{spelled}': {why}. Nothing was written.");
 
-    /// <summary>xEdit's AssignInternal copies the left copy's flags; Delete and MakePartialForm clear Compressed.</summary>
+    /// <summary>xEdit's AssignInternal copies the left copy's flags, but a write ends as it asks (xedit.md,
+    /// divergence 25): only the bits it leaves alone take the left copy's. Delete and MakePartialForm clear
+    /// Compressed.</summary>
     internal JsonElement FlagsWith(JsonObject? left)
     {
-        var flags = Flags;
-        if (left != null) flags = RecordFlagsWrite.HeldBy(left);
-        if (left != null && MakesPartialForm) flags |= PartialFormFlag.Bit;
+        var flags = left == null ? Flags : (RecordFlagsWrite.HeldBy(left) & ~Changed) | (Flags & Changed);
         if (Deletes || MakesPartialForm) flags &= ~CompressedFlag.Bit;
         return JsonSerializer.SerializeToElement(flags);
     }
@@ -111,9 +111,17 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
             if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
             else if (fromTheLeft || Deletes || member != RecordMembers.EditorId) record.Remove(member);
         }
-        if (left?[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
-        else if (left != null) record.Remove(RecordMembers.FormVersion);
+        if (left == null) return;
+        if (left[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
+        else record.Remove(RecordMembers.FormVersion);
+        foreach (var stamp in VersionControlStamps(schema)) record[stamp] = 0;
     }
+
+    // xEdit's AssignInternal sets Version Control Info 1 and 2 to 0, each where the game has it.
+    private static IEnumerable<string> VersionControlStamps(RecordTableSchema schema) =>
+        schema.RecordColumns
+            .Select(c => c.PropertyName)
+            .Where(member => member is RecordMembers.VersionControlInfo1 or RecordMembers.VersionControlInfo2);
 
     internal JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;

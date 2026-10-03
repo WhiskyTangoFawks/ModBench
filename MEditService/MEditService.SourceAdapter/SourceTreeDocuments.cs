@@ -146,10 +146,15 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
         // A record filed here that nothing can read would go missing from the read model. The caller
         // degrades to the binary and says so, which is visible; dropping it here would not be.
-        using (var document = JsonDocument.Parse(text))
+        try
         {
+            using var document = JsonDocument.Parse(text);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 throw new UnreadableSourceDocumentException(file, "its root is not an object");
+        }
+        catch (JsonException ex)
+        {
+            throw new UnreadableSourceDocumentException(file, $"it is no JSON document: {ex.Message.TrimEnd('.')}");
         }
 
         var recordType = SourceRepository.RecordTypeOf(relativePath, _release)
