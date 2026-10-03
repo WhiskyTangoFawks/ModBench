@@ -8,17 +8,13 @@ Verified means observed, and that includes my claims. A run you watched outranks
 
 Work test-first, using `/tdd` at the seams the ticket names. Typecheck and run the single test files you are touching as you go, rather than saving every failure for the end.
 
-Run `/validate` when the work stands. Report which gates ran and why.
-
-Review is the orchestrator's and is dispatched against your branch, so do not run `/code-review` yourself.
-
-Merge `main` into the branch before every gate run. Conflicts are yours to resolve on the branch, and then the gates run again from the top. Use local `main` only. Nothing in this run pushes.
+Run `/validate` when the work stands. Review is the orchestrator's, dispatched against your branch once you report. Conflicts from merging `main` are yours to resolve on the branch. Use local `main` only. Nothing in this run pushes.
 
 A guard test is vacuous until you have watched it fail. For every slice that arrives green and every test that forbids a state, name the **rival**: the plausible wrong implementation, or the precondition removed. Apply the rival, run the test, and report the failure you observed. A rival that passes is a finding, so report what actually enforces the property. Restore from a file copy so that uncommitted work survives.
 
 Your turn is your life. The final message of your turn is your report, and nothing you were waiting for arrives after it. Every wait is a foreground call: Bash with `run_in_background: false` and `timeout: 600000`, or Agent with `run_in_background: false`. Work that outlasts one call is detached and polled with further foreground calls, which is how `/validate` runs the gates.
 
-Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
+Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A red gate in a box another lane holds is such a finding. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
 
 Root CLAUDE.md's chain of authority governs your work. Your report carries every break and every strategic question in its form.
 

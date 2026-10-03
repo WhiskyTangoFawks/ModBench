@@ -9,7 +9,7 @@
       Complexity / maintainability rules (S3776 S1541 S138 S134 S107 S1067) are held at `suggestion`
       severity in .editorconfig, so they are info-level and never warnings — no TreatWarningsAsErrors
       exemption is needed. The code-quality Stop hook (.claude/hooks/code-quality.py) surfaces them,
-      scoped to changed files, for per-instance triage. See /validate Step 3.
+      scoped to changed files, for per-instance triage.
     -->
     <!-- One project per box (ADR-0014): a box reaches only the boxes its own reference list draws
          in docs/architecture/target-architecture-references.d2, so a box two hops down is a compile
