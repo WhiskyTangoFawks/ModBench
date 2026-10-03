@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.Codec.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -8,9 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>Two positive types on purpose: Npc and a childless Cell, differently shaped generated
-/// classes, which is what distinguishes "resolves for the one type tried" from "resolves by a
-/// naming convention that holds".</summary>
 public class RecordTypeDispatchTests
 {
     private static Npc MakeNpc() =>
@@ -34,93 +32,63 @@ public class RecordTypeDispatchTests
         };
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeFile_DispatchesNpcByRuntimeType()
+    public async Task SerializeAsync_ThenDeserializeFile_DispatchesNpcByRuntimeType_OneOfTwoDifferentlyShapedGeneratedClassesSoResolvesForTheOneTypeTriedIsToldApartFromResolvesByAHoldingNamingConvention()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeNpc();
-        var dir = Directory.CreateTempSubdirectory("medit-dispatch-npc-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "npc.json");
+        using var dir = new ScratchDirectory("medit-dispatch-npc-");
+        var filePath = Path.Combine(dir.Path, "npc.json");
 
-            // The public seam takes IMajorRecordGetter, not INpcGetter — proves the caller never
-            // has to name the concrete type to serialize, only to deserialize back into one.
-            await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Npc)codec.DeserializeFile(filePath, GameRelease.Fallout4, "npc_");
+        IMajorRecordGetter callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne = original;
+        await codec.SerializeAsync(callerNeverNamesTheConcreteTypeToSerializeOnlyToDeserializeBackIntoOne, filePath, GameRelease.Fallout4);
+        var roundTripped = (Npc)codec.DeserializeFile(filePath, GameRelease.Fallout4, "npc_");
 
-            var mask = original.GetEqualsMask(roundTripped);
-            var leaves = MaskInspector.CountLeaves(mask).ToList();
-            var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
+        var mask = original.GetEqualsMask(roundTripped);
+        var leaves = MaskInspector.CountLeaves(mask).ToList();
+        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
 
-            Assert.NotEmpty(leaves);
-            Assert.Empty(divergent);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        Assert.NotEmpty(leaves);
+        Assert.Empty(divergent);
     }
 
     [Fact]
-    public async Task SerializeAsync_ThenDeserializeFile_DispatchesCellByRuntimeType()
+    public async Task SerializeAsync_ThenDeserializeFile_DispatchesCellByRuntimeType_AChildlessCellSoItAlreadyEmitsOneFileWithNoShallowCopyInterventionWhileContainerSingleFileTestsCoversTheLayoutOncePopulated()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var original = MakeCell();
-        var dir = Directory.CreateTempSubdirectory("medit-dispatch-cell-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "cell.json");
+        using var dir = new ScratchDirectory("medit-dispatch-cell-");
+        var filePath = Path.Combine(dir.Path, "cell.json");
 
-            await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Cell)codec.DeserializeFile(filePath, GameRelease.Fallout4, "Cell");
+        await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
+        var roundTripped = (Cell)codec.DeserializeFile(filePath, GameRelease.Fallout4, "Cell");
 
-            var mask = original.GetEqualsMask(roundTripped);
-            var leaves = MaskInspector.CountLeaves(mask).ToList();
-            var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
+        var mask = original.GetEqualsMask(roundTripped);
+        var leaves = MaskInspector.CountLeaves(mask).ToList();
+        var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
 
-            Assert.NotEmpty(leaves);
-            Assert.Empty(divergent);
-            // A childless Cell already emits one file with no shallow-copy intervention —
-            // ContainerSingleFileTests proves the layout holds once children are populated.
-            Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        Assert.NotEmpty(leaves);
+        Assert.Empty(divergent);
+        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
     }
 
-    // An unresolvable type must fail loud and actionable, not with a bare NullReferenceException. A
-    // record_type the schema does not know means "expect the document to name itself", so the failure
-    // is a document naming a type with no case.
     [Fact]
-    public async Task DeserializeFile_ForTextNamingAnUnknownType_ThrowsNamedException()
+    public async Task DeserializeFile_ForTextNamingAnUnknownType_ThrowsNamedException_NotABareNullReferenceExceptionBecauseARecordTypeTheSchemaDoesNotKnowMeansExpectTheDocumentToNameItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var dir = Directory.CreateTempSubdirectory("medit-dispatch-unsupported-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "unsupported.json");
-            await codec.SerializeAsync(MakeGlobalFloat(), filePath, GameRelease.Fallout4);
+        using var dir = new ScratchDirectory("medit-dispatch-unsupported-");
+        var filePath = Path.Combine(dir.Path, "unsupported.json");
+        var globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt = MakeGlobalFloat();
+        await codec.SerializeAsync(globalFloatNotAnNpcBecauseOnlyPathAmbiguousTypesSelfDescribeSoAnNpcDocumentHasNoDiscriminatorToCorrupt, filePath, GameRelease.Fallout4);
 
-            // A GlobalFloat, not an Npc: only path-ambiguous types self-describe, so an Npc document
-            // has no discriminator left to corrupt. Rewriting only it leaves type resolution the
-            // one thing that can fail.
-            var text = await File.ReadAllTextAsync(filePath);
-            Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
-            await File.WriteAllTextAsync(filePath,
-                text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
+        var text = await File.ReadAllTextAsync(filePath);
+        Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(filePath,
+            text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
 
-            var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
-                () => codec.DeserializeFile(filePath, GameRelease.Fallout4, "glob"));
+        var ex = Assert.Throws<RecordTypeSerializationUnsupportedException>(
+            () => codec.DeserializeFile(filePath, GameRelease.Fallout4, "glob"));
 
-            // The offending name is deliberately not asserted: the kernel discards it on this route, so
-            // requiring it would pin an upstream detail rather than this codec's contract.
-            Assert.Contains("MutagenObjectType", ex.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        const string TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail = "MutagenObjectType";
+        Assert.Contains(TheMemberNameNotTheOffendingValueBecauseTheKernelDiscardsItOnThisRouteSoRequiringItWouldPinAnUpstreamDetail, ex.Message, StringComparison.Ordinal);
     }
 }

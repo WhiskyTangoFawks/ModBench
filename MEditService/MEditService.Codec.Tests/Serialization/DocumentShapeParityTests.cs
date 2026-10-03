@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -7,9 +8,6 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>Zero normalization: codec bytes and the whole-mod door's file are the same bytes
-/// (ADR-0007). Linux only — that door indents with <c>Environment.NewLine</c>. Tests-side because
-/// Core's guard keeps the mixin out.</summary>
 public sealed class DocumentShapeParityTests
 {
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
@@ -17,7 +15,7 @@ public sealed class DocumentShapeParityTests
     private static Fallout4Mod NewMod() => new(ModKey.FromFileName("Parity.esp"), Fallout4Release.Fallout4);
 
     [Fact]
-    public async Task PerRecordCodecBytes_ForAnEmbeddedCell_EqualTheWholeModPathsFileForIt()
+    public async Task PerRecordCodecBytes_ForAnEmbeddedCell_EqualTheWholeModPathsFileForIt_WithZeroNormalizationOnLinuxWhereThatDoorIndentsWithEnvironmentNewLine()
     {
         var mod = NewMod();
         var cell = new Cell(mod) { EditorID = "ParityCell" };
@@ -32,35 +30,28 @@ public sealed class DocumentShapeParityTests
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
 
-        await AssertBothDoorsAgree(mod, cell, "ParityCell");
+        await AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(mod, cell, "ParityCell");
     }
 
     [Fact]
-    public async Task PerRecordCodecBytes_ForAQuest_EqualTheWholeModPathsFileForIt()
+    public async Task PerRecordCodecBytes_ForAQuest_EqualTheWholeModPathsFileForIt_WithZeroNormalizationOnLinuxWhereThatDoorIndentsWithEnvironmentNewLine()
     {
         var mod = NewMod();
         var quest = MakePopulatedQuest(mod);
         mod.Quests.Add(quest);
 
-        await AssertBothDoorsAgree(mod, quest, "ParityQuest");
+        await AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(mod, quest, "ParityQuest");
     }
 
     [Fact]
     public async Task SerializeAsync_ForAQuest_WritesExactlyOneFileAndNoChildFolders()
     {
-        var dir = Directory.CreateTempSubdirectory("medit-parity-quest-files-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "quest.json");
-            await Codec().SerializeAsync(MakePopulatedQuest(NewMod()), filePath, GameRelease.Fallout4);
+        using var dir = new ScratchDirectory("medit-parity-quest-files-");
+        var filePath = Path.Combine(dir.Path, "quest.json");
+        await Codec().SerializeAsync(MakePopulatedQuest(NewMod()), filePath, GameRelease.Fallout4);
 
-            Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
-            Assert.Empty(Directory.GetDirectories(dir.FullName, "*", SearchOption.AllDirectories));
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetDirectories(dir.Path, "*", SearchOption.AllDirectories));
     }
 
     private static Quest MakePopulatedQuest(Fallout4Mod mod)
@@ -91,55 +82,40 @@ public sealed class DocumentShapeParityTests
         worldspace.EditorID = "TimestampWorldspace";
         worldspace.SubCellsTimestamp = 424242;
 
-        var dir = Directory.CreateTempSubdirectory("medit-parity-synthetic-");
-        try
-        {
-            await MutagenJsonConverter.Instance.Serialize(mod, dir.FullName);
+        using var dir = new ScratchDirectory("medit-parity-synthetic-");
+        await MutagenJsonConverter.Instance.Serialize(mod, dir.Path);
 
-            var rootText = await File.ReadAllTextAsync(Path.Combine(dir.FullName, "RecordData.json"));
-            Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
-            Assert.Contains(overriddenForm.ToString(), rootText, StringComparison.Ordinal);
+        var rootText = await File.ReadAllTextAsync(Path.Combine(dir.Path, "RecordData.json"));
+        Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
+        Assert.Contains(overriddenForm.ToString(), rootText, StringComparison.Ordinal);
 
-            var cellGroupFile = Path.Combine(dir.FullName, "Cells", "0", "GroupRecordData.json");
-            Assert.True(File.Exists(cellGroupFile), $"Expected {cellGroupFile} to exist.");
-            Assert.Contains("\"LastModified\": 424242", await File.ReadAllTextAsync(cellGroupFile), StringComparison.Ordinal);
+        var cellGroupFile = Path.Combine(dir.Path, "Cells", "0", "GroupRecordData.json");
+        Assert.True(File.Exists(cellGroupFile), $"Expected {cellGroupFile} to exist.");
+        Assert.Contains("\"LastModified\": 424242", await File.ReadAllTextAsync(cellGroupFile), StringComparison.Ordinal);
 
-            var worldspaceFile = Directory.EnumerateFiles(dir.FullName, "RecordData.json", SearchOption.AllDirectories)
-                .Single(f => f.Contains("TimestampWorldspace", StringComparison.Ordinal));
-            Assert.Contains("\"SubCellsTimestamp\": 424242", await File.ReadAllTextAsync(worldspaceFile), StringComparison.Ordinal);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        var worldspaceFile = Directory.EnumerateFiles(dir.Path, "RecordData.json", SearchOption.AllDirectories)
+            .Single(f => f.Contains("TimestampWorldspace", StringComparison.Ordinal));
+        Assert.Contains("\"SubCellsTimestamp\": 424242", await File.ReadAllTextAsync(worldspaceFile), StringComparison.Ordinal);
     }
 
-    private static async Task AssertBothDoorsAgree(
+    private static async Task AssertBothDoorsAgreeTestsSideBecauseCoresGuardKeepsTheMixinOut(
         Fallout4Mod mod, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter record, string editorId)
     {
-        var dir = Directory.CreateTempSubdirectory("medit-parity-");
-        try
-        {
-            await MutagenJsonConverter.Instance.Serialize(mod, dir.FullName);
+        using var dir = new ScratchDirectory("medit-parity-");
+        await MutagenJsonConverter.Instance.Serialize(mod, dir.Path);
 
-            // A directory-per-record container's RecordData.json, or a flat record's own file.
-            var wholeModFile = Assert.Single(
-                Directory.EnumerateDirectories(dir.FullName, $"*{editorId}*", SearchOption.AllDirectories)
-                    .Select(d => Path.Combine(d, "RecordData.json"))
-                    .Concat(Directory.EnumerateFiles(dir.FullName, $"*{editorId}*.json", SearchOption.AllDirectories)));
-            Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
+        var directoryPerRecordContainersRecordDataJsonOrAFlatRecordsOwnFile = Directory.EnumerateDirectories(dir.Path, $"*{editorId}*", SearchOption.AllDirectories)
+            .Select(d => Path.Combine(d, "RecordData.json"))
+            .Concat(Directory.EnumerateFiles(dir.Path, $"*{editorId}*.json", SearchOption.AllDirectories));
+        var wholeModFile = Assert.Single(directoryPerRecordContainersRecordDataJsonOrAFlatRecordsOwnFile);
+        Assert.True(File.Exists(wholeModFile), $"Expected the whole-mod door to write {wholeModFile}.");
 
-            var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
-            var codecBytes = Codec().SerializeToBytes(record, GameRelease.Fallout4);
+        var wholeModBytes = await File.ReadAllBytesAsync(wholeModFile);
+        var codecBytes = Codec().SerializeToBytes(record, GameRelease.Fallout4);
 
-            Assert.Equal(
-                System.Text.Encoding.UTF8.GetString(wholeModBytes),
-                System.Text.Encoding.UTF8.GetString(codecBytes));
-            Assert.Equal(wholeModBytes, codecBytes);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        Assert.Equal(
+            System.Text.Encoding.UTF8.GetString(wholeModBytes),
+            System.Text.Encoding.UTF8.GetString(codecBytes));
+        Assert.Equal(wholeModBytes, codecBytes);
     }
 }

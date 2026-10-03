@@ -5,8 +5,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>Each slot's element type, derived from the same game modules as the slots themselves, so
-/// a document read names an embedded child's class without deserializing its owner.</summary>
 public sealed class ContainerSlotElementTypesTests
 {
     [Fact]
@@ -14,7 +12,6 @@ public sealed class ContainerSlotElementTypesTests
     {
         var members = ContainerMembers.Derived;
 
-        // A derivation that stored nothing would agree with every assertion below.
         Assert.NotEmpty(members.ElementTypeBySlot);
 
         foreach (var ((_, parentType, slot), element) in members.ElementTypeBySlot)
@@ -39,10 +36,8 @@ public sealed class ContainerSlotElementTypesTests
         Assert.Empty(missing);
     }
 
-    // What lets a read that found a child below the level whose type it knows still name it: the
-    // slot name alone decides.
     [Fact]
-    public void NoTwoContainersSpellAnEmbeddedSlotTheSameAndMeanDifferentTypes()
+    public void NoTwoContainersSpellAnEmbeddedSlotTheSameAndMeanDifferentTypes_BecauseTheSlotNameAloneNamesAChildFoundBelowAKnownLevel()
     {
         var members = ContainerMembers.Derived;
         var ambiguous = members.EmbeddedSlots

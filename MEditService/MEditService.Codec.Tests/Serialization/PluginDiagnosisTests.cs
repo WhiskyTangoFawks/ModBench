@@ -7,13 +7,10 @@ using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>The shapes the real fixtures cannot reach cheaply, chiefly the nested
-/// <see cref="AggregateException"/> chain walk, built from real defects' captured messages rather
-/// than committing every fixture this needs a shape from.</summary>
 public sealed class PluginDiagnosisTests
 {
     [Fact]
-    public void FromParseException_WalksNestedAggregateExceptionsForTheInnermostRecordException()
+    public void FromParseException_WalksNestedAggregateExceptionsForTheInnermostRecordException_BuiltFromARealDefectsCapturedMessagesRatherThanCommittingEveryFixtureItNeedsAShapeFrom()
     {
         var formKey = FormKey.Factory("431EDC:SouthOfTheSea.esm");
         var modKey = Mutagen.Bethesda.Plugins.ModKey.FromFileName("SouthOfTheSea.esm");
@@ -101,11 +98,8 @@ public sealed class PluginDiagnosisTests
     }
 
     [Fact]
-    public void Describe_AClassedDiagnosisWithATail_CarriesBoth()
+    public void Describe_AClassedDiagnosisWithATail_CarriesBoth_NeitherShadowingTheOtherInTheRefusalText()
     {
-        // A Kind B diagnosis knows its class *and* its repair tail; neither may shadow
-        // the other in the refusal text. Kind A stays as before: its class is `unknown`, so
-        // only the tail shows.
         var diagnosis = new PluginDiagnosis(
             Anchor: "REGN 001D2AF4 (DowntownRegion)", DefectClass: "fixed-size-subrecord-short",
             Tail: "repairable (lossless)", Message: "RDAT is 6 bytes; a REGN RDAT is always 8");
@@ -123,7 +117,7 @@ public sealed class PluginDiagnosisTests
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
 
         var unmappable = new UnmappableFormIDException(
-            new FormLinkInformation(nukaWorldFormKey, typeof(IFallout4MajorRecordGetter)), new StubMasterPackage());
+            new FormLinkInformation(nukaWorldFormKey, typeof(IFallout4MajorRecordGetter)), new StubMasterPackageWhoseEveryMemberThrowsBecauseNothingUnderTestReadsThePackageOnlyUnmappableFormKey());
         var recordEx = new RecordException(
             formKey: questFormKey, recordType: typeof(Quest), modKey: modKey, edid: "DiaQ_LLInjector_SpadeyAMR",
             innerException: unmappable);
@@ -155,15 +149,14 @@ public sealed class PluginDiagnosisTests
     {
         var unmappable = new UnmappableFormIDException(
             new FormLinkInformation(FormKey.Factory("03F98D:DLCNukaWorld.esm"), typeof(IFallout4MajorRecordGetter)),
-            new StubMasterPackage());
+            new StubMasterPackageWhoseEveryMemberThrowsBecauseNothingUnderTestReadsThePackageOnlyUnmappableFormKey());
         var recordEx = new RecordException(formKey: null, recordType: null, modKey: null, edid: null, innerException: unmappable);
         var aggregate = new AggregateException(recordEx);
 
         Assert.True(PluginDiagnosis.HasUnmappableFormID(aggregate));
     }
 
-    // Nothing under test reads the package, only UnmappableFormKey, so every member throws.
-    private sealed class StubMasterPackage : IReadOnlySeparatedMasterPackage
+    private sealed class StubMasterPackageWhoseEveryMemberThrowsBecauseNothingUnderTestReadsThePackageOnlyUnmappableFormKey : IReadOnlySeparatedMasterPackage
     {
         public ModKey CurrentMod => throw new NotSupportedException();
         public IReadOnlyMasterReferenceCollection Raw => throw new NotSupportedException();

@@ -5,9 +5,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>Record classes sharing a signature, OMOD's generic-closed properties, abstract and
-/// concrete unions: every base with leaves is one sparse union, the document's discriminator
-/// beside members carrying a variant per leaf wherever leaves differ (ADR-0005).</summary>
 public sealed class UnionMechanismSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -87,10 +84,8 @@ public sealed class UnionMechanismSchemaTests
         Assert.NotEqual("string", data.Type);
     }
 
-    // glob.OutputChar is declared by GlobalFloat alone, so "false" is that class's default and no
-    // other's: a view putting it back would answer it for a GlobalInt row that has no such member.
     [Fact]
-    public void AColumnVaryingByRecordClass_CoalescesToNoLiteral()
+    public void AColumnVaryingByRecordClass_CoalescesToNoLiteral_BecauseGlobOutputCharIsDeclaredByGlobalFloatAloneSoAViewPuttingFalseBackWouldAnswerItForAGlobalIntRowWithNoSuchMember()
     {
         var outputChar = Schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
 

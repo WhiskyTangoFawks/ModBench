@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -8,68 +9,51 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>Populated, not empty, on purpose: a childless container is one file no matter what,
-/// so an empty fixture would pass forever without testing anything.</summary>
 public class ContainerSingleFileTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
 
     [Theory]
     [MemberData(nameof(PopulatedContainers))]
-    public async Task PopulatedContainer_SerializesToExactlyOneFile_AndRoundTripsAsItsOwnType(
+    public async Task PopulatedContainer_SerializesToExactlyOneFile_AndRoundTripsAsItsOwnConcreteTypeFromTheStatedRecordType_PopulatedBecauseAChildlessContainerIsOneFileNoMatterWhat(
         IMajorRecord record, Type concreteType, string recordType)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var dir = Directory.CreateTempSubdirectory("medit-container-single-file-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "record.json");
-            await codec.SerializeAsync((IMajorRecordGetter)record, filePath, GameRelease.Fallout4);
+        using var dir = new ScratchDirectory("medit-container-single-file-");
+        var filePath = Path.Combine(dir.Path, "record.json");
+        await codec.SerializeAsync((IMajorRecordGetter)record, filePath, GameRelease.Fallout4);
 
-            Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
-            Assert.Empty(Directory.GetDirectories(dir.FullName, "*", SearchOption.AllDirectories));
+        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetDirectories(dir.Path, "*", SearchOption.AllDirectories));
 
-            // A container whose children the writer tried to spill into a sibling folder fails here
-            // rather than merely looking wrong, and comes back as its own concrete type from the
-            // stated record_type.
-            var roundTripped = codec.DeserializeFile(filePath, GameRelease.Fallout4, recordType);
-            Assert.IsType(concreteType, roundTripped);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        var roundTripped = codec.DeserializeFile(filePath, GameRelease.Fallout4, recordType);
+        Assert.IsType(concreteType, roundTripped);
     }
 
     public static IEnumerable<object[]> PopulatedContainers()
     {
-        // Cell — every slot Spriggit embeds, so this case is the embed mechanism's layout half.
-        var cell = new Cell(Mod) { EditorID = "TestCell", Grid = new CellGrid { Point = new P2Int(1, 2) } };
-        cell.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });
-        cell.Temporary.Add(new PlacedObject(Mod) { EditorID = "TemporaryRef" });
-        cell.NavigationMeshes.Add(new NavigationMesh(Mod));
-        cell.Landscape = new Landscape(Mod);
-        yield return [cell, typeof(Cell), "Cell"];
+        var cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf = new Cell(Mod) { EditorID = "TestCell", Grid = new CellGrid { Point = new P2Int(1, 2) } };
+        cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.Persistent.Add(new PlacedObject(Mod) { EditorID = "PersistentRef" });
+        cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.Temporary.Add(new PlacedObject(Mod) { EditorID = "TemporaryRef" });
+        cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.NavigationMeshes.Add(new NavigationMesh(Mod));
+        cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf.Landscape = new Landscape(Mod);
+        yield return [cellWithEverySlotSpriggitEmbedsSoItIsTheEmbedMechanismsLayoutHalf, typeof(Cell), "Cell"];
 
-        // Worldspace — TopCell is embedded; SubCells is the type most likely to look "fine" for the
-        // wrong reason, since Worldspace_Serialization drops it under FilePerRecord by design.
-        var worldspace = new Worldspace(Mod) { EditorID = "TestWorld" };
-        worldspace.TopCell = new Cell(Mod) { EditorID = "TopCell" };
-        worldspace.SubCells.Add(new WorldspaceBlock());
-        yield return [worldspace, typeof(Worldspace), "wrld"];
+        var worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign = new Worldspace(Mod) { EditorID = "TestWorld" };
+        worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign.TopCell = new Cell(Mod) { EditorID = "TopCell" };
+        worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign.SubCells.Add(new WorldspaceBlock());
+        yield return [worldspaceWhoseSubCellsLookFineForTheWrongReasonSinceWorldspaceSerializationDropsThemUnderFilePerRecordByDesign, typeof(Worldspace), "wrld"];
 
-        // Quest — every child slot embedded, transitively: the topic below carries a response.
-        var quest = new Quest(Mod) { EditorID = "TestQuest" };
-        quest.DialogBranches.Add(new DialogBranch(Mod));
+        var questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse = new Quest(Mod) { EditorID = "TestQuest" };
+        questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.DialogBranches.Add(new DialogBranch(Mod));
         var questTopic = new DialogTopic(Mod);
         questTopic.Responses.Add(new DialogResponses(Mod));
-        quest.DialogTopics.Add(questTopic);
-        quest.Scenes.Add(new Scene(Mod));
-        yield return [quest, typeof(Quest), "qust"];
+        questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.DialogTopics.Add(questTopic);
+        questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse.Scenes.Add(new Scene(Mod));
+        yield return [questWithEveryChildSlotEmbeddedTransitivelySinceTheTopicCarriesAResponse, typeof(Quest), "qust"];
 
-        // DialogTopic — its responses are embedded, the same mechanism as the cell's slots.
-        var dialogTopic = new DialogTopic(Mod) { EditorID = "TestDialogTopic" };
-        dialogTopic.Responses.Add(new DialogResponses(Mod));
-        yield return [dialogTopic, typeof(DialogTopic), "dial"];
+        var dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots = new DialogTopic(Mod) { EditorID = "TestDialogTopic" };
+        dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots.Responses.Add(new DialogResponses(Mod));
+        yield return [dialogTopicWhoseResponsesAreEmbeddedByTheSameMechanismAsTheCellsSlots, typeof(DialogTopic), "dial"];
     }
 }
