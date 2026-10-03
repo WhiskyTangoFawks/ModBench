@@ -110,13 +110,14 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         var worldspace = Parsed(document.Body, move.Worldspace);
         Step<JsonObject> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject held
             ? new Step<JsonObject>.Done(held)
-            : CopiedOrNew(
+            : MastersOf(move)
+                .Then(masters => CopiedOrNew(
                     move,
                     targets.NearestCopyToTheLeft(
                         move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject,
-                        among: MastersOf(move)),
+                        among: masters),
                     copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
-                    PersistentFlag.Bit, (0, 0))
+                    PersistentFlag.Bit, (0, 0)))
                 .Then<JsonObject>(copied =>
                 {
                     worldspace[PlacedCell.WorldspacePersistentCellMember] = copied;
@@ -136,20 +137,23 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         if (move.Repository.CellAt(move.Plugin, move.Worldspace, grid.X, grid.Y) is { } held)
             return new Step<Landed>.Done(IntoHeldCell(move, held, record));
 
-        var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, MastersOf(move));
-        if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
-            && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+        return MastersOf(move).Then(masters =>
         {
-            return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
-        }
+            var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, masters);
+            if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
+                && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+            {
+                return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
+            }
 
-        return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
-        {
-            TakeIn(cell, PersistentFlag.TemporaryGroup, record);
-            var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
-            return new Step<Landed>.Done(new(
-                new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
-                CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+            return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
+            {
+                TakeIn(cell, PersistentFlag.TemporaryGroup, record);
+                var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
+                return new Step<Landed>.Done(new(
+                    new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
+                    CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+            });
         });
     }
 
@@ -165,9 +169,23 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
     }
 
     // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile), and a tracked
-    // plugin's masters are what its working tree's content requires (ADR-0008 invariant 2).
-    private IReadOnlySet<string> MastersOf(Move move) =>
-        RequiredMasters.InTheTree(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release));
+    // plugin's masters are what its working tree's content requires (ADR-0008 invariant 2). A document
+    // it cannot read could name a master, so that refuses.
+    private Step<IReadOnlySet<string>> MastersOf(Move move)
+    {
+        try
+        {
+            return new Step<IReadOnlySet<string>>.Done(
+                RequiredMasters.InTheTree(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release)));
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return new Step<IReadOnlySet<string>>.Refused(RecordEditResult.RefusedAt(
+                RecordEditRefusal.RecordParseFailed, move.Spelled,
+                $"'{move.Spelled}': the cell {move.Moved.FormKey} moves into comes only from a master of {move.Plugin.Name}, " +
+                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written."));
+        }
+    }
 
     // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)

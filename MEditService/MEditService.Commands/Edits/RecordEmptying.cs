@@ -10,7 +10,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>xEdit's Delete, MakePartialForm and their undoing, which refills the copy from the nearest
 /// copy to its left that is neither. TwbRecordHeaderStruct.ElementChanged applies Partial Form last, so
 /// making one of a deleted copy refills it first.</summary>
-internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool Deletes, bool MakesPartialForm, bool Refills)
+internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bool MakesPartialForm, bool Refills, bool HeldPersistent)
 {
     /// <summary>The emptying a write of <paramref name="value"/> makes, or null when it newly sets and
     /// clears neither flag.</summary>
@@ -27,7 +27,8 @@ internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool D
         var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
         var refills = clears || deletesBeforeMakingPartialForm;
         if (!deletes && !makesPartialForm && !refills) return null;
-        return new(write, flags, deletes, makesPartialForm, refills);
+        var heldPersistent = (write.Held & PersistentFlag.Bit) != 0;
+        return new(flags, write.Held ^ write.Next, deletes, makesPartialForm, refills, heldPersistent);
     }
 
     /// <summary>Whether a write of <paramref name="envelope"/> refills the record at
@@ -73,7 +74,7 @@ internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool D
     {
         if (!MakesPartialForm || !RecordTypeDispatch.For(release).IsCell(schema.TableName)) return null;
         var formKey = record[RecordMembers.FormKey]?.GetValue<string>();
-        if ((Write.Held & PersistentFlag.Bit) == 0 && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
+        if (!HeldPersistent && prefix is not [.., { Name: PlacedCell.WorldspacePersistentCellMember }])
         {
             if (PlacedCell.SaidBy(record, cellCopyOnTheLeft?.FoundText) is not { } said)
             {
@@ -97,8 +98,7 @@ internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool D
     /// Compressed.</summary>
     internal JsonElement FlagsWith(JsonObject? left)
     {
-        var changed = Write.Held ^ Write.Next;
-        var flags = left == null ? Flags : (RecordFlagsWrite.HeldBy(left) & ~changed) | (Flags & changed);
+        var flags = left == null ? Flags : (RecordFlagsWrite.HeldBy(left) & ~Changed) | (Flags & Changed);
         if (Deletes || MakesPartialForm) flags &= ~CompressedFlag.Bit;
         return JsonSerializer.SerializeToElement(flags);
     }
@@ -117,12 +117,11 @@ internal sealed record RecordEmptying(RecordFlagsWrite Write, long Flags, bool D
         foreach (var stamp in VersionControlStamps(schema)) record[stamp] = 0;
     }
 
-    // xEdit's AssignInternal sets Version Control Info 1 and 2 to 0: the header stamps it ignores in
-    // conflicts, but Form Version.
+    // xEdit's AssignInternal sets Version Control Info 1 and 2 to 0, each where the game has it.
     private static IEnumerable<string> VersionControlStamps(RecordTableSchema schema) =>
         schema.RecordColumns
-            .Where(c => c.Field is { IsRecordHeaderMember: true, IgnoredInConflicts: true } && c.PropertyName != RecordMembers.FormVersion)
-            .Select(c => c.PropertyName);
+            .Select(c => c.PropertyName)
+            .Where(member => member is RecordMembers.VersionControlInfo1 or RecordMembers.VersionControlInfo2);
 
     internal JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
