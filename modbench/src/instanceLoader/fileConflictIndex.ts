@@ -131,7 +131,7 @@ export async function buildFileConflictIndex(
     }
   }
 
-  // The run-time output wins over every mod (MO2 places Overwrite at the winning end).
+  // The run-time output wins over every mod.
   for (const file of overwriteFiles) {
     const existing = files.get(file.relativePath);
     files.set({
