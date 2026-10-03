@@ -13,9 +13,6 @@ internal static class RecordHeaderColumns
     // Every bit, so each flag view Mutagen spells over the raw integer shows up.
     private const long AllBits = -1;
 
-    // wbFlagsList names Deleted and Ignored (bit 12) in every flag list xEdit gives a record.
-    private static readonly long[] NamedInEveryXEditList = [DeletedFlag.Bit, 0x0000_1000];
-
     internal static List<ColumnSpec> For(
         Type getterType, ILookup<string, PropertyInfo> declarations, GameReflection game, ILogger logger)
     {
@@ -55,8 +52,6 @@ internal static class RecordHeaderColumns
 
     // A bit two views name takes the name of the view declared on the narrower type, and otherwise
     // of the view first by member name. A bit no view names takes its annotation row's name.
-    // Where the type's flags are one enum per base record type, a view's name is wrong for some
-    // bases unless every one of xEdit's lists names the bit alike.
     private static List<EnumMember> BitNames(
         IReadOnlyList<string> aliases, ILookup<string, PropertyInfo> declarations, Type getterType, GameReflection game)
     {
@@ -74,12 +69,7 @@ internal static class RecordHeaderColumns
                     byBit[bit] = (member, declaring);
             }
         }
-        var enums = game.Annotations.RecordFlagEnumsFor(getterType);
-        if (enums.Count > 1)
-        {
-            foreach (var bit in byBit.Keys.Except(NamedInEveryXEditList).ToList()) byBit.Remove(bit);
-        }
-        foreach (var (bit, member) in AgreedBits(enums))
+        foreach (var (bit, member) in AgreedBits(game.Annotations.RecordFlagEnumsFor(getterType)))
             byBit[bit] = (member, getterType);
         foreach (var (bit, name) in game.Annotations.RecordFlagNamesFor(getterType))
         {
