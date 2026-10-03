@@ -12,9 +12,8 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import type { InstanceValue, Mod, ModlistEntry, OriginFile, OriginFolder } from '../../instanceLoader/instance';
+import type { FileOrigin, InstanceValue, Mod, ModlistEntry, OriginFile, OriginFolder } from '../../instanceLoader/instance';
 import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
-import type { FileOrigin, OriginFiles } from '../../instanceAdapter/instanceAdapter';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { accessTo } from '../../test/mo2/adapterOver';
@@ -36,8 +35,8 @@ async function indexedValueOf(
   listings: Record<string, { files: OriginFile[]; folders?: OriginFolder[] }>,
   overwrite: { files: OriginFile[]; folders?: OriginFolder[] } = { files: [] },
 ): Promise<InstanceValue> {
-  const adapter = {
-    originFiles: (origin: FileOrigin): Promise<OriginFiles> => {
+  const adapter: Parameters<typeof buildFileConflictIndex>[2] = {
+    originFiles: (origin) => {
       const name = origin.kind === 'mod' ? origin.name : 'overwrite';
       const listing = listings[name] ?? { files: [] };
       return Promise.resolve({ origin: name, folder: `/instance/${name}`, files: listing.files, folders: listing.folders ?? [], notes: [] });

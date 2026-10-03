@@ -24,9 +24,7 @@ import { present } from '../../ports/present';
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false });
 
-// Every folder that holds a file, sitting where the file's own path puts it, as the adapter lists
-// each folder it walks.
-function foldersOf(files: readonly OriginFile[]): OriginFolder[] {
+function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
   const byPath = new Map<string, OriginFolder>();
   for (const { relativePath, path } of files) {
     const segments = relativePath.split('/');
@@ -44,8 +42,8 @@ function providerOver(
 ): ModListProvider {
   const value = instanceValueFixture({
     mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles,
-    foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersOf(files)])),
-    overwriteFolders: folders.overwrite ?? foldersOf(overwriteFiles),
+    foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersHoldingFiles(files)])),
+    overwriteFolders: folders.overwrite ?? foldersHoldingFiles(overwriteFiles),
   });
   return new ModListProvider({ instance: new FakeInstance(value), access: accessTo('/instance'), log: () => undefined });
 }
@@ -272,7 +270,7 @@ describe('a file or folder row\'s identity is its mod or Overwrite, and the path
 
   it('stays as it was across a new instance value, so selection and expansion survive a change on disk', async () => {
     const valueHolding = (enabled: boolean, files: OriginFile[]) =>
-      instanceValueFixture({ mods: [mod('A', enabled)], filesByMod: new Map([['A', files]]), foldersByMod: new Map([['A', foldersOf(files)]]) });
+      instanceValueFixture({ mods: [mod('A', enabled)], filesByMod: new Map([['A', files]]), foldersByMod: new Map([['A', foldersHoldingFiles(files)]]) });
     const instance = new FakeInstance(valueHolding(true, [file('x/a.dds')]));
     const provider = new ModListProvider({ instance, access: accessTo('/instance'), log: () => undefined });
     const idsNow = async () => {
