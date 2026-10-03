@@ -5,8 +5,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-/// <summary>Where a link points, answered from the plugin files the load order loads (ADR-0005 rule
-/// 2): a link cache over those files, and nothing live crossing back out.</summary>
 public sealed class LoadOrderLinkTargetsTests
 {
     private const string BaseName = "LinkBase.esm";
@@ -67,8 +65,6 @@ public sealed class LoadOrderLinkTargetsTests
         Assert.True(targets.ContainsKey(_keyword.ToString()));
     }
 
-    // The load order is a load order, not a bag of files: the winning override is what a link
-    // reaches in game, so it is what the answer names.
     [Fact]
     public void AnOverriddenRecord_IsNamedByTheCopyTheLoadOrderResolvesTo()
     {
@@ -79,8 +75,6 @@ public sealed class LoadOrderLinkTargetsTests
         Assert.Equal(new ResolvedFormKey("kywd", "RenamedByPatch"), targets[_overriddenKeyword.ToString()]);
     }
 
-    // A file the load order names can be gone or malformed by the time compile asks (ADR-0003). It
-    // answers nothing, and it is named as unread, because the caller has to say so (ADR-0019).
     [Fact]
     public void AFileTheLoadOrderNamesButDiskDoesNotHold_IsNamedAsUnread_AndLeavesTheRestAnswered()
     {

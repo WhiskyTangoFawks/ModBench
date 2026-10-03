@@ -68,10 +68,13 @@ async function editName(value: string, { heard = true } = {}) {
 const logged = () => vi.mocked(vscode.postMessage).mock.calls.map(([m]) => m)
   .filter(m => m.type === WEBVIEW_TO_EXTENSION.LOG);
 
+function letWaitForAdvanceFakeTimersThroughJestsGlobal() {
+  vi.stubGlobal('jest', { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
-  // Testing Library's waitFor advances fake timers only when it finds Jest's global.
-  vi.stubGlobal('jest', { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) });
+  letWaitForAdvanceFakeTimersThroughJestsGlobal();
   vi.stubGlobal('mEditFormKey', FORM_KEY);
   vi.mocked(vscode.postMessage).mockClear();
   disk = recordNamed('Before');
@@ -272,8 +275,7 @@ describe('an edit of the FormID', () => {
 
 describe('a replaced element of an array without a key', () => {
   const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
-  // mEdit's alignment, in sequence, of the master's ['A', 'B'] and MyMod.esp's ['A', mine].
-  const items = (mine: string): CompareResult => compareResultFixture({
+  const sequenceAlignedItems = (mine: string): CompareResult => compareResultFixture({
     overrides: [
       compareOverride({ formKey: FORM_KEY, plugin: 'Fallout4.esm', editorId: 'TestNPC', fields: [{ metadata: itemsMeta, value: ['A', 'B'] }] }),
       compareOverride({
@@ -298,7 +300,7 @@ describe('a replaced element of an array without a key', () => {
     required(required(screen.getByText(row).closest('tr'), `the ${row} row`).querySelectorAll('td')[2], `MyMod.esp's ${row} cell`);
 
   async function writeSecondElement(value: string) {
-    disk = items('B');
+    disk = sequenceAlignedItems('B');
     renderPanel();
     await waitFor(() => screen.getByText('[1]'));
     fireEvent.doubleClick(within(myCell('[1]')).getByText('B'));
@@ -311,7 +313,7 @@ describe('a replaced element of an array without a key', () => {
   it('says once that the disk shows something else, though the element now aligns on another row', async () => {
     await writeSecondElement('Z');
 
-    disk = items('Y');
+    disk = sequenceAlignedItems('Y');
     reported();
 
     await waitFor(() => expect(logged()).toEqual([{
@@ -323,7 +325,7 @@ describe('a replaced element of an array without a key', () => {
   it('says nothing when the disk holds what was written', async () => {
     await writeSecondElement('Z');
 
-    disk = items('Z');
+    disk = sequenceAlignedItems('Z');
     reported();
 
     await waitFor(() => expect(myCell('[2]')).toHaveTextContent(/^Z$/));
@@ -525,8 +527,7 @@ describe('an element added, removed or moved, until mEdit confirms it (common.md
     expect(marked()).toEqual([]);
   });
 
-  // The host tells a panel nothing more of a gesture mEdit never answered.
-  it('keeps the mark of a gesture with no answer until a refresh reads the disk', async () => {
+  it('keeps the mark of a gesture mEdit never answered, of which the host tells the panel nothing more, until a refresh reads the disk', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('[2]'));
     written({ op: 'remove', path: [VALUES, at(1)] });

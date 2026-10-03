@@ -1,17 +1,13 @@
 using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
+using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>Two real survey fixtures: one whose malformed PERK carries full identity at the top level, and
-/// a Kind A defect (ADR-0006) carrying none, proving no identity is fabricated.</summary>
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]
@@ -60,15 +56,13 @@ public sealed class PluginDiagnosisRoundTripGateTests
         Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
-    // Stub masters come from the fixture's own declared list: Track's round-trip write needs the
-    // names present, not their content.
     private sealed class RealFixtureScratch : IDisposable
     {
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-diagnosis-game-");
         private readonly LoadOrderSnapshot _loadOrder;
         private const string Origin = "DiagnosisFixtureMod";
 
-        public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-diagnosis-mod-").FullName;
+        public ScratchDirectory ModFolder { get; } = new("medit-diagnosis-mod-");
 
         public RealFixtureScratch(string fixtureFileName)
         {
@@ -76,20 +70,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             var pluginPath = Path.Combine(ModFolder, fixtureFileName);
             File.Copy(fixturePath, pluginPath);
 
-            var inputs = new List<LoadOrderEntry>();
-            using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(fixtureFileName), pluginPath), Fallout4Release.Fallout4))
-            {
-                foreach (var master in overlay.ModHeader.MasterReferences)
-                {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
-                }
-            }
-            inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
-
-            _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(pluginPath, Origin, _gameDirectory);
         }
 
         public async Task<TrackResult> TrackAsync() =>
@@ -98,8 +79,8 @@ public sealed class PluginDiagnosisRoundTripGateTests
 
         public void Dispose()
         {
-            try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
-            try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+            ModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }
