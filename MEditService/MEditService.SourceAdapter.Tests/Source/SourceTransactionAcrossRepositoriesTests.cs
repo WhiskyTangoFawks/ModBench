@@ -17,16 +17,13 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _firstFolder = Directory.CreateTempSubdirectory("medit-batch-a-").FullName;
-    private readonly string _secondFolder = Directory.CreateTempSubdirectory("medit-batch-b-").FullName;
+    private readonly ScratchDirectory _firstFolder = new("medit-batch-a-");
+    private readonly ScratchDirectory _secondFolder = new("medit-batch-b-");
 
     public void Dispose()
     {
-        foreach (var folder in new[] { _firstFolder, _secondFolder })
-        {
-            try { Directory.Delete(folder, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-        }
+        _firstFolder.Dispose();
+        _secondFolder.Dispose();
     }
 
     private static string BodyOf(string pluginName, string editorId) =>

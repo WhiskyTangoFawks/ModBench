@@ -19,7 +19,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
     private const string Origin = "TestMod";
 
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-external-change-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-external-change-");
 
     private readonly Lazy<PutLoadOrderHandler> _handler;
 
@@ -33,12 +33,7 @@ public sealed class ExternalChangeCheckTests : IDisposable
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 
     private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
     {

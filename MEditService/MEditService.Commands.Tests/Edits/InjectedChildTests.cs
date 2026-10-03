@@ -28,7 +28,7 @@ public sealed class InjectedChildTests : IDisposable
     private const string InjectorPluginName = "InjectionInjector.esp";
     private const string InjectorOrigin = "InjectionInjectorMod";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-injection-instance-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-injection-instance-");
     private readonly string _baseModFolder;
     private readonly string _injectorModFolder;
     private readonly string _gameDirectory;
@@ -140,10 +140,5 @@ public sealed class InjectedChildTests : IDisposable
         mod.EnumerateMajorRecords().Single(r => r.FormKey == container)
             .EnumerateMajorRecords().Select(r => r.FormKey);
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 }

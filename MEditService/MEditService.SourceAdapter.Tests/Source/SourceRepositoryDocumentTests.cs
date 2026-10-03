@@ -18,13 +18,9 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-repository-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-repository-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository RequireOpened() =>
         SourceRepository.Open(_modFolder, GameRelease.Fallout4)

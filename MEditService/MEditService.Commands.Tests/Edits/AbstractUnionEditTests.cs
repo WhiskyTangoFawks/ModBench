@@ -195,8 +195,8 @@ public sealed class AbstractUnionEditTests : IDisposable
         private const string PluginName = "AbstractUnion548.esp";
         private const string Origin = "AbstractUnion548Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-548-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-548-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-548-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-548-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -243,15 +243,8 @@ public sealed class AbstractUnionEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

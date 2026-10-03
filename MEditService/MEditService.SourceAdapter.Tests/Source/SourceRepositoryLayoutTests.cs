@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -33,44 +34,36 @@ public sealed class SourceRepositoryLayoutTests
     public void Put_ThenGet_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        var modFolder = Directory.CreateTempSubdirectory("medit-layout-roundtrip-").FullName;
-        try
-        {
-            PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, []);
-            var repository = SourceRepository.Open(modFolder, Release)
-                ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
-            var plugin = new PluginAddress(pluginFileName, "LayoutMod");
-            repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}"));
+        using var modFolder = new ScratchDirectory("medit-layout-roundtrip-");
+        PluginBaselines.Track(
+            modFolder, SourcePreset.Edits, []);
+        var repository = SourceRepository.Open(modFolder, Release)
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+        var plugin = new PluginAddress(pluginFileName, "LayoutMod");
+        repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
-            var path = Path.GetRelativePath(
-                modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
+        var path = Path.GetRelativePath(
+            modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
-            // Everything nests under one root "plugin-source/" folder (the on-disk root Track and Put
-            // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
-            // tree.
-            var segments = path.Split(Path.DirectorySeparatorChar);
-            Assert.Equal("plugin-source", segments[0]);
-            Assert.Equal(pluginFileName, segments[1]);
+        // Everything nests under one root "plugin-source/" folder (the on-disk root Track and Put
+        // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
+        // tree.
+        var segments = path.Split(Path.DirectorySeparatorChar);
+        Assert.Equal("plugin-source", segments[0]);
+        Assert.Equal(pluginFileName, segments[1]);
 
-            // The identity survives the round trip: Get, asked with the exact identity Put was
-            // given, finds the very file Put just placed.
-            var document = repository.Get(plugin, new RecordIdentity(formKeyString, recordType, editorId));
+        // The identity survives the round trip: Get, asked with the exact identity Put was
+        // given, finds the very file Put just placed.
+        var document = repository.Get(plugin, new RecordIdentity(formKeyString, recordType, editorId));
 
-            Assert.NotNull(document);
-            Assert.Equal(formKeyString, document.FormKey);
-            // Get answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
-            // two need not match textually, only resolve to the same concrete type, which this
-            // equality checks for real rather than assuming a spelling.
-            var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
-            Assert.NotNull(expectedConcrete);
-            Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
-        }
-        finally
-        {
-            try { Directory.Delete(modFolder, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-        }
+        Assert.NotNull(document);
+        Assert.Equal(formKeyString, document.FormKey);
+        // Get answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
+        // two need not match textually, only resolve to the same concrete type, which this
+        // equality checks for real rather than assuming a spelling.
+        var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
+        Assert.NotNull(expectedConcrete);
+        Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
     }
 
     // The one bridge from the door's own tree to the mod folder holding it. The name is verbatim: a

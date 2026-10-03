@@ -247,8 +247,8 @@ public sealed class ConditionEditTests : IDisposable
         private const string PluginName = "Conditions692.esp";
         private const string Origin = "Conditions692Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-692-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-692-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-692-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-692-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -335,15 +335,8 @@ public sealed class ConditionEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

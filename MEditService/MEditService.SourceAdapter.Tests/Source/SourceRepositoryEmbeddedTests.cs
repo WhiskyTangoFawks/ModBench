@@ -22,7 +22,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "EmbeddedMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-embedded-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-embedded-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -68,12 +68,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             _modFolder, SourcePreset.Edits, PristineFiles());
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     // The four documents the whole-mod door writes for this graph.
     private TreeFile[] PristineFiles() =>

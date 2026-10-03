@@ -19,7 +19,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "TreeDocumentsMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-treedocuments-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-treedocuments-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -71,11 +71,7 @@ public sealed class SourceTreeDocumentsTests : IDisposable
             ]);
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private static string Root => SourceRepository.RootFor(PluginName);
 

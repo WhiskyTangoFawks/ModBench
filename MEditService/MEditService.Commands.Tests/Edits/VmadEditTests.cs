@@ -446,8 +446,8 @@ public sealed class VmadEditTests : IDisposable
         private const string PluginName = "Vmad694.esp";
         private const string Origin = "Vmad694Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-694-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-694-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-694-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-694-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -571,15 +571,8 @@ public sealed class VmadEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

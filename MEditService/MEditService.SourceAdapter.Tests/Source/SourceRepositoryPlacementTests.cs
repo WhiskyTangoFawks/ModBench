@@ -1,4 +1,5 @@
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
@@ -14,13 +15,9 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
 
     private static readonly PluginAddress Key = new(Plugin, "VendorMod");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-placement-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-placement-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     // Over rather than Open: placement is a document verb, and a tree with no .git answers every one
     // of them.

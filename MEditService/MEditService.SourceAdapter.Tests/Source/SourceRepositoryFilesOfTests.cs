@@ -18,7 +18,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FilesOfMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-filesof-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-filesof-");
 
     // Tracked with the header alone, then the NPC written through the repository's own door so its
     // file lands where the tree's placement puts it, and committed: both refs then hold the tree.
@@ -33,11 +33,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         Git("commit", "-q", "-m", "the fixture's npc");
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
