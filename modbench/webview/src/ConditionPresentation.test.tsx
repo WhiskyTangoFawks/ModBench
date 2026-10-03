@@ -397,6 +397,16 @@ describe('a collapsed condition reads as xEdit prose', () => {
     await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
   });
+
+  it('a list of one condition reads as that condition, the last of its list', async () => {
+    currentCompare = oneColumn([documentSpelledCondition({ Flags: ['OR'] }, { Function: 'IsSneaking' })]);
+    renderPanel();
+    await openConditions();
+    const conditions = required(rowLabelTdNotAValueCellOfTheSameText('Conditions')?.closest('tr'), 'the Conditions row');
+    fireEvent.click(required(conditions.querySelector('button'), 'the Conditions row toggle'));
+
+    expect(conditions.querySelectorAll('td')[1]?.textContent).toBe('Subject.IsSneaking = 1.000000');
+  });
 });
 
 describe('the table keys on the leaf type name: the discriminator\'s value where the leaf is a union, the schema\'s declared type name where it is not', () => {

@@ -1,5 +1,5 @@
 import { displayValue } from './modelValue';
-import { discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr } from './recordUtils';
+import { defaultOf, discriminatorOf, getAtPath, metaAtPath, rootFieldOf, toStr } from './recordUtils';
 import { siblingsInUseFor } from './siblingsInUse';
 import type { CompareOverride, FieldDiff, FieldMetadata, PathHop } from './types';
 
@@ -217,8 +217,6 @@ function summarizerFor(
   return summarize == null ? undefined : { summarize, leaf };
 }
 
-const COLLAPSED_PLACEHOLDER = '{…}';
-
 const memberPath = (path: readonly string[]): PathHop[] =>
   path.map(name => ({ kind: 'member', name }));
 
@@ -228,20 +226,48 @@ function diffAt(diff: FieldDiff, path: readonly string[]): FieldDiff | undefined
   return cur;
 }
 
-/** Empty for every row whose leaf has no entry in the table — which is where the grid's own "{…}"
- *  stands. */
-export function collapsedSummaries(
-  diff: FieldDiff, meta: FieldMetadata, isLast: (column: string) => boolean,
-): Record<string, string> {
-  const summaries: Record<string, string> = {};
-  for (const column of Object.keys(diff.values)) {
-    const summary = summaryIn(diff, meta, column, isLast(column));
-    if (summary != null) summaries[column] = summary;
-  }
-  return summaries;
+/** What a collapsed row reads in one column. A placeholder says only that something is there. */
+export interface Reading {
+  text: string;
+  isPlaceholder: boolean;
 }
 
-function summaryIn(
+/** Where an array element sits: its array, and whether it is the last element this column holds. */
+export interface ElementOf {
+  array: FieldMetadata;
+  isLast: boolean;
+}
+
+const content = (text: string): Reading => ({ text, isPlaceholder: false });
+const placeholder = (text: string): Reading => ({ text, isPlaceholder: true });
+
+const elementsIn =(diff: FieldDiff | undefined, column: string): FieldDiff[] =>
+  (diff?.children ?? []).filter(c => c.values[column] != null);
+
+/** editor-fields.md § Collapsed readings: the first row that applies. */
+export function collapsedReading(
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, element?: ElementOf,
+): Reading {
+  const value = diff.values[column];
+  const named = value == null ? undefined : namedReading(diff, meta, column, element?.isLast ?? true);
+  if (named != null) return content(named);
+  if (meta?.type === 'array') {
+    // The column's own array is the count: a null slot holds a place but no value.
+    const list = value ?? defaultOf(meta);
+    const length = Array.isArray(list) ? list.length : 0;
+    const [only] = elementsIn(diff, column);
+    return length === 1 && only
+      ? collapsedReading(only, meta.elementType ?? undefined, column, { array: meta, isLast: true })
+      : placeholder(`[${length}]`);
+  }
+  // A one-element array's element can be a plain value, which reads as its own cell does.
+  if (value != null && meta != null && meta.type !== 'struct') {
+    return content(displayValue(value, meta, diff.resolutions?.[column]));
+  }
+  return placeholder('{…}');
+}
+
+function namedReading(
   diff: FieldDiff, meta: FieldMetadata | undefined, column: string, isLast: boolean,
 ): string | undefined {
   const value = diff.values[column];
@@ -267,10 +293,10 @@ function summaryIn(
     leaf: found.leaf,
     kind: discriminator == null ? undefined : member(discriminator).label,
     elements: (...path) => {
-      const listMeta = metaAtPath(meta, memberPath(path), value)?.elementType ?? undefined;
-      const present = (diffAt(diff, path)?.children ?? []).filter(c => c.values[column] != null);
-      return present.map((child, i) =>
-        summaryIn(child, listMeta, column, i === present.length - 1) ?? COLLAPSED_PLACEHOLDER);
+      const array = metaAtPath(meta, memberPath(path), value);
+      const present = elementsIn(diffAt(diff, path), column);
+      return present.map((child, i) => collapsedReading(
+        child, array?.elementType ?? undefined, column, array && { array, isLast: i === present.length - 1 }).text);
     },
   });
 }

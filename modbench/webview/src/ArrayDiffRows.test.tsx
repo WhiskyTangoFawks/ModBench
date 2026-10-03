@@ -815,4 +815,14 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
 
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('Items'), at(2)], value: 'Z' });
   });
+
+  it('the collapsed array counts the null slot', async () => {
+    await waitFor(() => screen.getByText('Items'));
+    const items = required(screen.getByText('Items').closest('tr'), 'the Items row');
+    fireEvent.click(within(items).getByText('▼'));
+
+    const cells = items.querySelectorAll('td');
+    expect(cells[1]?.textContent).toBe('[2]');
+    expect(cells[2]?.textContent).toBe('[3]');
+  });
 });

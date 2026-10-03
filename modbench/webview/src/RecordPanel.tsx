@@ -9,7 +9,7 @@ import {
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getCellStyle, DIMMED_OPACITY, COLLAPSED_COLUMN_WIDTH, columnWidthStyle } from './gridStyles';
-import { collapsedSummaries } from './presentation';
+import type { ElementOf } from './presentation';
 import { readsAsFlags } from './modelValue';
 import { idleMembers } from './siblingsInUse';
 import type {
@@ -41,7 +41,7 @@ interface RowAt {
   present: (column: ColumnKey) => boolean;
   editable: Set<ColumnKey>;
   depth: number;
-  collapsedSummary?: Record<string, string>;
+  elementOf?: (column: ColumnKey) => ElementOf;
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 }
 
@@ -347,7 +347,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     // A diff node naming a member no override's schema declares has no shape to render against, so
     // it and its subtree are dropped rather than rendered against a guessed one.
     if (!meta) return [];
-    const { path, rootField, rowKey, parent, present, editable, depth, collapsedSummary, cellMetas } = at;
+    const { path, rootField, rowKey, parent, present, editable, depth, elementOf, cellMetas } = at;
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = !collapsedRows.has(rowKey);
     navRows.push({ key: rowKey, parent, expandable: hasChildren || readsAsFlags(meta), expanded: isExpanded });
@@ -374,7 +374,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         focusedCell={focusedCell}
         onFocusCell={handleFocusCell}
         isExpanded={isExpanded}
-        collapsedSummary={collapsedSummary}
+        elementOf={elementOf}
         ownerPresent={present}
         cellMetas={cellMetas}
         onToggle={() => toggleRow(rowKey)}
@@ -392,16 +392,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     for (const [child, childRowKey] of withRowKeys(rowKey, children)) {
       if (idle?.has(child.fieldName)) continue;
       if (meta.type === 'array' && meta.elementType) {
-        // The presentation table's unit is one element of a list, and "the last one in this
-        // column" is the last child that column carries a value for.
-        const collapsedSummary = collapsedSummaries(child, meta.elementType, column =>
-          children.filter(c => c.values[column] != null).at(-1) === child);
-        // An element is spelled in full, so a column has it exactly where its value is.
+        // An element is spelled in full, so a column has it exactly where its value is, and "the
+        // last one in this column" is the last child that column carries a value for.
         rows.push(...buildRows(child, meta.elementType, {
           ...at,
           path: [...path, { kind: 'element', indexes: child.indexes, keyed: !!meta.keyMembers }],
           rowKey: childRowKey, parent: rowKey, present: column => child.values[column] != null, depth: depth + 1,
-          collapsedSummary, cellMetas: undefined,
+          elementOf: column => ({ array: meta, isLast: children.filter(c => c.values[column] != null).at(-1) === child }),
+          cellMetas: undefined,
         }));
       } else if (meta.type === 'struct') {
         // A union member's shape is the leaf's the row's own values name; the row takes the first
@@ -418,7 +416,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           rowKey: childRowKey, parent: rowKey,
           present: column => present(column) && columnHasNode(meta, diff.values[column])
             && (!member || declaresMember(member, diff.values[column], meta)),
-          depth: depth + 1, collapsedSummary: undefined, cellMetas,
+          depth: depth + 1, elementOf: undefined, cellMetas,
         }));
       }
     }

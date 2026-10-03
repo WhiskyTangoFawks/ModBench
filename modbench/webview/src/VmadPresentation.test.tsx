@@ -135,6 +135,11 @@ function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { la
   return all;
 }
 
+function firstLeafsShapeOf(member: FieldMetadata, owners: Record<string, unknown>): FieldMetadata {
+  const leaf = Object.values(owners).map(owner => reflectedPropertyOf(owner, 'MutagenObjectType')).find(l => typeof l === 'string');
+  return (typeof leaf === 'string' ? member.variants?.[leaf] : undefined) ?? member;
+}
+
 function metadataDrivenUnionAlignedDiff(
   fieldName: string, meta: FieldMetadata, values: Record<string, unknown>,
   editorIds: Record<string, string>,
@@ -163,7 +168,7 @@ function metadataDrivenUnionAlignedDiff(
           indexes: row.indexes,
         }))
         : meta.type === 'struct'
-          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => reflectedPropertyOf(values[c], f.name)]))
+          ? each((meta.fields ?? []).map(f => [f.name, firstLeafsShapeOf(f, values), (c: string) => reflectedPropertyOf(values[c], f.name)]))
           : undefined,
   });
 }
@@ -369,6 +374,69 @@ describe('a collapsed script reads as xEdit prose', () => {
     toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard(Nothing: Script Property)');
+  });
+});
+
+describe('a collapsed array reads by its elements', () => {
+  it('an array with one element reads as that element', async () => {
+    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    renderPanel();
+    await openScripts();
+    toggleRow('Scripts');
+
+    expect(summaryOf('Scripts')).toBe('Guard(Radius: Int = 10)');
+  });
+
+  it('counts its elements per column, so one column reads its one element where another reads the count', async () => {
+    currentCompare = compareResult({
+      [PLUGIN]: [script('Guard')],
+      'Other.esp': [script('Ambush'), script('Guard')],
+    });
+    renderPanel();
+    await openScripts();
+    toggleRow('Scripts');
+
+    const scripts = rowOf(fieldCell('Scripts'));
+    expect(cellAt(scripts, 1).textContent).toBe('Guard()');
+    expect(cellAt(scripts, 2).textContent).toBe('[2]');
+  });
+
+  it('an array whose one element has no reading reads as that element does', async () => {
+    currentCompare = oneColumn([{ Property: { Alias: 0 }, Scripts: [] }], {}, aliasesMeta);
+    renderPanel();
+    await waitFor(() => screen.getByText('Aliases'));
+    toggleRow('Aliases');
+
+    expect(summaryOf('Aliases')).toBe('{…}');
+  });
+
+  it('an array whose one element is a plain value reads as that value, each column by its own leaf\'s shape', async () => {
+    currentCompare = compareResult({
+      [PLUGIN]: [script('Guard', [documentSpelledProperty('Names', 'ScriptStringListProperty', { Data: ['alpha'] })])],
+      'Other.esp': [script('Guard', [documentSpelledProperty('Names', 'ScriptIntProperty', { Data: 3 })])],
+    });
+    renderPanel();
+    await waitFor(() => fieldCell('Data'));
+    toggleRow('Data');
+
+    const data = rowOf(fieldCell('Data'));
+    expect(cellAt(data, 1).textContent).toBe('alpha');
+    expect(cellAt(data, 2).textContent).toBe('3');
+  });
+});
+
+describe('a collapsed struct reads as its elements do', () => {
+  it('a member with a reading of its own reads by it', async () => {
+    currentCompare = oneColumn(
+      [{ Property: { Object: '00000014:Fallout4.esm', Alias: -2 }, Scripts: [] }],
+      { '00000014:Fallout4.esm': 'PlayerRef' },
+      aliasesMeta,
+    );
+    renderPanel();
+    await waitFor(() => fieldCell('Property'));
+    toggleRow('Property');
+
+    expect(summaryOf('Property')).toBe('PlayerRef [00000014:Fallout4.esm], Alias[Player]');
   });
 });
 
