@@ -8,7 +8,6 @@ namespace MEditService.Http.Tests.Api;
 /// <summary>Pins what the classifier makes of several plugins disagreeing, at the wire, including
 /// the two easy to get wrong: an override identical to its master (not a conflict) and one
 /// out-competed by a later override.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : IClassFixture<CompareGoldenApiFixture>
 {
     private HttpClient Client => fixture.Client;

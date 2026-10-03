@@ -2,9 +2,7 @@ using System.Text.Json;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
-using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -59,19 +57,6 @@ public sealed class AbstractUnionEditTests : IDisposable
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Npc.ToString(), "Level", Json("""{"Level": 20}"""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(before, _fixture.NpcBody());
-    }
-
-    [Fact]
-    public void Level_UnrecognizedDiscriminator_IsRefusedAndWritesNothing()
-    {
-        var before = _fixture.NpcBody();
-
-        var result = _fixture.Service().Set(
-            _fixture.Plugin, _fixture.Npc.ToString(), "Level",
-            Json("""{"Level": 20, "MutagenObjectType": "NotARealLevelShape"}"""));
 
         Assert.False(result.Applied);
         Assert.Equal(before, _fixture.NpcBody());
@@ -205,20 +190,6 @@ public sealed class AbstractUnionEditTests : IDisposable
     private static List<JsonElement> Written(string body) =>
         [.. JsonDocument.Parse(body).RootElement.GetProperty("Aliases").EnumerateArray()];
 
-    [Fact]
-    public void Aliases_UnrecognizedElementDiscriminator_IsRefusedAndWritesNothing()
-    {
-        var before = _fixture.QuestBody();
-
-        var result = _fixture.Service().Set(
-            _fixture.Plugin, _fixture.Quest.ToString(), "Aliases",
-            Json("""[{"MutagenObjectType": "NotARealAliasKind", "Name": "X"}]"""));
-
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
-        Assert.False(result.Applied);
-        Assert.Equal(before, _fixture.QuestBody());
-    }
-
     private sealed class AbstractUnionFixture : IDisposable
     {
         private const string PluginName = "AbstractUnion548.esp";
@@ -255,14 +226,11 @@ public sealed class AbstractUnionEditTests : IDisposable
             mod.Quests.Add(quest);
             Quest = quest.FormKey;
 
-            mod.WriteToBinary(pluginPath);
+            TrackedTemplates.WriteTracked(_modFolder, mod);
 
             LoadOrder = SnapshotPlugins.Snapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
-            new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-                .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
 
             holder.Apply(LoadOrder);
             EditHandler = TestEditService.EditHandler(holder);

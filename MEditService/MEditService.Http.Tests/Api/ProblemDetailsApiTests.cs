@@ -6,7 +6,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-[Collection(WebHostCollection.Name)]
 public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private const string ProblemContentType = "application/problem+json";

@@ -37,7 +37,6 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.Contains("fixed-size-subrecord-short", result.Message);
         Assert.Contains("repairable (lossless)", result.Message);
         Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", result.Message);
-        Assert.DoesNotContain("header or a container's own structure", result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 

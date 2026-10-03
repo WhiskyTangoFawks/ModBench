@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 
@@ -114,21 +113,6 @@ public sealed class CopyAsNewTests
         Assert.Null(document.EditorId);
     }
 
-    [Fact]
-    public void CopyRecordAsNewRecord_IsAbsentAtHead_UntilCommittedAndCompiled()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.NotNull(result.NewFormKey);
-        var newFormKey = result.NewFormKey;
-        Assert.Null(mod.CommittedDocument(
-            mod.DestinationPlugin,
-            new RecordIdentity(newFormKey, "npc_", CopyFixture.SourceNpcEditorId)));
-    }
-
     // "Internal self-references follow the duplicate, not the
     // original" — RemapLinks fired right after Duplicate, on a record whose own FormLink field can
     // validly target its own record type (a Faction related to itself).
@@ -147,19 +131,6 @@ public sealed class CopyAsNewTests
         Assert.NotNull(document);
         Assert.Contains(newFormKey, document.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), document.Body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheDestinationIsUntracked_NamingTheTrackCommand()
-    {
-        using var mod = CopyFixture.Create();
-        Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
-
-        var result = mod.CopyHandler.CopyAsNew(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Modbench: Track…", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

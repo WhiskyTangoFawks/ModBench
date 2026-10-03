@@ -1,3 +1,0 @@
-# Game-concrete Mutagen names outside the codec (Serialization, Schema) and the Plugin adapter
-# (PluginAdapter). This list is empty: every site that named a game has moved behind one of those
-# two, and a new line here is a regression rather than a step.
