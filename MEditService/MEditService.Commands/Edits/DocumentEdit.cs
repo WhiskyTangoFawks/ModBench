@@ -547,7 +547,8 @@ internal static class DocumentEdit
     // ── the closed pre-check list ───────────────────────────────────────────
 
     // Discriminator first on a union element, a member a known-defect row marks read-only, hex
-    // length where the document establishes one; walked over the value with the metadata beside it.
+    // length where the document establishes one, no alpha where a colour holds none; walked over the
+    // value with the metadata beside it.
     private static RecordEditResult? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
     {
         switch (value)
@@ -588,6 +589,14 @@ internal static class DocumentEdit
                     return RecordEditResult.RefusedAt(
                         RecordEditRefusal.HexLengthMismatch, path,
                         $"'{path}' holds {heldBytes.Length} bytes; a value of {newBytes.Length} bytes would resize it, and nothing here knows which bytes a resize moves.");
+                }
+                return null;
+            case JsonValue text when meta.Type == ColorReading.ApiType && !meta.HoldsAlpha:
+                if (text.TryGetValue<string>(out var color) && ColorReading.SpellsAlpha(color))
+                {
+                    return RecordEditResult.RefusedAt(
+                        RecordEditRefusal.AlphaNotHeld, path,
+                        $"'{path}' holds no alpha; '{color}' gives one that compiling would drop, so nothing was written. Give it as #RRGGBB.");
                 }
                 return null;
             default:

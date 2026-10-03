@@ -559,6 +559,53 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(["Color: <absent> -> \"#102030\""], ConditionEditTests.DocumentDiff(before, after));
     }
 
+    [Theory]
+    [InlineData("\"#7F102030\"")]
+    [InlineData("\"#FF102030\"")]
+    public void AColorHoldingNoAlpha_RefusesAnAlpha_NamingTheField(string color)
+    {
+        var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+        var before = _fixture.Document(formKey);
+
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json(color), Member("LightningColor")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
+        Assert.Equal("LightningColor", result.Path);
+        Assert.Contains("'LightningColor'", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _fixture.Document(formKey));
+    }
+
+    [Theory]
+    [InlineData("\"#102030\"")]
+    [InlineData("\"#00102030\"")]
+    public void AColorHoldingNoAlpha_TakesItsRgb_AndItsOwnDocumentsAlphaOfNone(string color)
+    {
+        var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+
+        Applied(formKey, SetAt(Json(color), Member("LightningColor")));
+    }
+
+    [Fact]
+    public void AnElementPasted_WithAnAlphaInAColorHoldingNone_IsRefusedNamingThatColor()
+    {
+        var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
+
+        var (result, _) = _fixture.Apply(formKey, AddAt(Json("""{"Data": {"Tint": "#7F102030"}}"""), Member("Sprites")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
+        Assert.Equal("Sprites[0].Data.Tint", result.Path);
+    }
+
+    [Fact]
+    public void AnElementPasted_AsItsDocumentSpellsAColorHoldingNoAlpha_IsTaken()
+    {
+        var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
+
+        Applied(formKey, AddAt(Json("""{"Data": {"Tint": "#00102030"}}"""), Member("Sprites")));
+    }
+
     [Fact]
     public void ValueTheCodecDrops_IsRefusedNamingIt_NeverReportedAsSuccess()
     {

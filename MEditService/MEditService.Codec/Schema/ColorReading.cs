@@ -1,3 +1,4 @@
+using System.Globalization;
 using Noggog;
 
 namespace MEditService.Codec.Schema;
@@ -7,6 +8,16 @@ namespace MEditService.Codec.Schema;
 public static class ColorReading
 {
     public const string ApiType = "color";
+
+    /// <summary>Whether the text spells an alpha other than the 00 Mutagen's binary read gives a colour
+    /// that holds none.</summary>
+    public static bool SpellsAlpha(string text)
+    {
+        var hex = text.StartsWith('#') ? text[1..] : text;
+        return hex.Length == 8
+            && byte.TryParse(hex.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var alpha)
+            && alpha != 0;
+    }
 
     /// <summary>Text with no colour reading is its own.</summary>
     public static string Of(string text, bool holdsAlpha)
