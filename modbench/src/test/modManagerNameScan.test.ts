@@ -17,7 +17,7 @@ const MO2_ENTRY = './instanceAdapter/mo2Instance';
 
 const NAMES_ANYWHERE_IN_FILE = [/mo2/i, /\bMod Organizer\b/i];
 
-const FILES_IN_STRING_LITERALS = ['modlist.txt', 'ModOrganizer.ini', 'meta.ini'];
+const NAMES_IN_STRING_LITERALS = ['modlist.txt', 'ModOrganizer.ini', 'meta.ini', '.mohidden'];
 
 const isMo2Implementation = (relPath: string): boolean =>
   relPath.startsWith(ADAPTER + sep) && relPath !== ADAPTER_INTERFACE;
@@ -58,8 +58,8 @@ function withoutConstruction(sourceText: string, fileName: string): string {
 function managerMentions(sourceText: string, fileName: string): string[] {
   const names = NAMES_ANYWHERE_IN_FILE.filter((name) => name.test(sourceText)).map((name) => name.source);
   const literals = stringLiterals(sourceText, fileName);
-  const files = FILES_IN_STRING_LITERALS.filter((file) => literals.some((literal) => literal.includes(file)));
-  return [...names, ...files];
+  const literalNames = NAMES_IN_STRING_LITERALS.filter((name) => literals.some((literal) => literal.includes(name)));
+  return [...names, ...literalNames];
 }
 
 function findOffenders(roots: readonly string[]): Record<string, string[]> {

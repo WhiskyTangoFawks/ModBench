@@ -2,8 +2,8 @@
 // ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
 // opened (ADR-0016).
 
-import type { FileOrigin, ModlistEntry } from '../instanceAdapter/instanceAdapter';
-import type { FileConflictIndex, ModFile } from './fileConflictIndex';
+import type { FileOrigin, ModlistEntry, OriginFile } from '../instanceAdapter/instanceAdapter';
+import type { FileConflictIndex } from './fileConflictIndex';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -33,7 +33,7 @@ function computeEntryStatus(entry: ModlistEntry, index: FileConflictIndex): ModS
 
 // A contested file this mod wins is an override; one it loses is a conflict.
 function countConflicts(
-  modFiles: readonly ModFile[],
+  modFiles: readonly OriginFile[],
   index: FileConflictIndex,
   modName: string,
 ): { conflictLines: string[]; conflicts: number; overrides: number } {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, ModFile, ModlistEntry, OriginFolder } from '../../instanceLoader/instance';
+import type { Mod, OriginFile, ModlistEntry, OriginFolder } from '../../instanceLoader/instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
@@ -22,15 +22,28 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): ModFile => ({ relativePath, path, sourcePath });
+const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): OriginFile => ({ relativePath, path, sourcePath, excluded: false });
+
+function foldersHoldingFiles(files: readonly OriginFile[]): OriginFolder[] {
+  const byPath = new Map<string, OriginFolder>();
+  for (const { relativePath, path } of files) {
+    const segments = relativePath.split('/');
+    for (let depth = 1; depth < segments.length; depth++) {
+      const folder = segments.slice(0, depth).join('/');
+      byPath.set(folder, { relativePath: folder, path: path.slice(0, path.length - relativePath.length + folder.length), excluded: false });
+    }
+  }
+  return [...byPath.values()];
+}
 
 function providerOver(
-  mods: ModlistEntry[], filesByMod: Record<string, ModFile[]>, overwriteFiles: ModFile[] = [],
+  mods: ModlistEntry[], filesByMod: Record<string, OriginFile[]>, overwriteFiles: OriginFile[] = [],
   folders: { byMod?: Record<string, OriginFolder[]>; overwrite?: OriginFolder[] } = {},
 ): ModListProvider {
   const value = instanceValueFixture({
     mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles,
-    foldersByMod: new Map(Object.entries(folders.byMod ?? {})), overwriteFolders: folders.overwrite ?? [],
+    foldersByMod: new Map(Object.entries(filesByMod).map(([name, files]) => [name, folders.byMod?.[name] ?? foldersHoldingFiles(files)])),
+    overwriteFolders: folders.overwrite ?? foldersHoldingFiles(overwriteFiles),
   });
   return new ModListProvider({ instance: new FakeInstance(value), access: accessTo('/instance'), log: () => undefined });
 }
@@ -77,7 +90,7 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
 
   it('names that differ only in case keep one order whatever order the listing gives', async () => {
     const listed = [file('textures/a.dds'), file('Textures/b.dds'), file('a.txt'), file('A.txt')];
-    const rowsFor = async (files: ModFile[]) => {
+    const rowsFor = async (files: OriginFile[]) => {
       const provider = providerOver([mod('Armour')], { Armour: files });
       return shown(await provider.getChildren(await rootOf(provider, ModNode, 'Armour')));
     };
@@ -95,6 +108,21 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
     expect(children.map((child) => [labelOf(child), child.collapsibleState])).toEqual([
       ['meshes', Collapsed], ['textures', Collapsed], ['Armour.esp', None], ['readme.txt', None],
     ]);
+  });
+
+  it('an empty folder is a row with no expander, and a folder holding only an empty folder opens into it, as the Explorer\'s do', async () => {
+    const provider = providerOver([mod('Armour')], { Armour: [file('Armour.esp')] }, [], {
+      byMod: { Armour: [
+        { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false },
+        { relativePath: 'outer', path: '/instance/mods/Armour/outer', excluded: false },
+        { relativePath: 'outer/inner', path: '/instance/mods/Armour/outer/inner', excluded: false },
+      ] },
+    });
+    const children = await provider.getChildren(await rootOf(provider, ModNode, 'Armour'));
+
+    expect(children.map((child) => [`${child.kind} ${labelOf(child)}`, child.collapsibleState]))
+      .toEqual([['folder empty', None], ['folder outer', Collapsed], ['file Armour.esp', None]]);
+    expect(shown(await provider.getChildren(present(children[1], 'outer')))).toEqual(['folder inner']);
   });
 
   it('a disabled mod opens too', async () => {
@@ -185,21 +213,21 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
   it('carries where each folder sits as the value names it, by its whole path in its mod, in a mod and in Overwrite', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('meshes/textures/a.nif'), file('textures/armour/a.dds')] }, [file('F4SE/a.log')], {
       byMod: { Armour: [
-        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes' },
-        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures' },
-        { relativePath: 'textures', path: '/linked/textures' },
-        { relativePath: 'textures/armour', path: '/linked/textures/armour' },
+        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes', excluded: false },
+        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures', excluded: false },
+        { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
+        { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
       ] },
-      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE' }],
+      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false }],
     });
     const textures = expectInstanceOf(await childNamed(provider, await rootOf(provider, ModNode, 'Armour'), 'textures'), FolderNode);
     const armour = expectInstanceOf(await childNamed(provider, textures, 'armour'), FolderNode);
     const f4se = expectInstanceOf(await childNamed(provider, await rootOf(provider, OverwriteNode, 'Overwrite'), 'F4SE'), FolderNode);
 
     expect([textures.folder, armour.folder, f4se.folder]).toEqual([
-      { relativePath: 'textures', path: '/linked/textures' },
-      { relativePath: 'textures/armour', path: '/linked/textures/armour' },
-      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE' },
+      { relativePath: 'textures', path: '/instance/mods/Armour/textures', excluded: false },
+      { relativePath: 'textures/armour', path: '/instance/mods/Armour/textures/armour', excluded: false },
+      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE', excluded: false },
     ]);
   });
 
@@ -246,7 +274,9 @@ describe('a file or folder row\'s identity is its mod or Overwrite, and the path
   });
 
   it('stays as it was across a new instance value, so selection and expansion survive a change on disk', async () => {
-    const instance = new FakeInstance(instanceValueFixture({ mods: [mod('A')], filesByMod: new Map([['A', [file('x/a.dds')]]]) }));
+    const valueHolding = (enabled: boolean, files: OriginFile[]) =>
+      instanceValueFixture({ mods: [mod('A', enabled)], filesByMod: new Map([['A', files]]), foldersByMod: new Map([['A', foldersHoldingFiles(files)]]) });
+    const instance = new FakeInstance(valueHolding(true, [file('x/a.dds')]));
     const provider = new ModListProvider({ instance, access: accessTo('/instance'), log: () => undefined });
     const idsNow = async () => {
       const modRow = await rootOf(provider, ModNode, 'A');
@@ -255,7 +285,7 @@ describe('a file or folder row\'s identity is its mod or Overwrite, and the path
     };
     const before = await idsNow();
 
-    instance.publish(instanceValueFixture({ mods: [mod('A', false)], filesByMod: new Map([['A', [file('x/a.dds'), file('x/b.dds')]]]) }));
+    instance.publish(valueHolding(false, [file('x/a.dds'), file('x/b.dds')]));
 
     expect(await idsNow()).toEqual(before);
   });

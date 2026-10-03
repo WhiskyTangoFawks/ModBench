@@ -97,7 +97,7 @@ describe('computeModStatuses — the line naming a path\'s winner', () => {
     files.set({ relativePath: 'a.dds', winner: '/o/a.dds', winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }, modOrigin('overwrite')] });
     files.set({ relativePath: 'b.dds', winner: '/m/b.dds', winnerOrigin: modOrigin('overwrite'), providers: [modOrigin('overwrite'), modOrigin('Other')] });
     const index = { files, filesByMod: new Map([['overwrite', [
-      { relativePath: 'a.dds', path: '/m/a.dds', sourcePath: '/m/a.dds' }, { relativePath: 'b.dds', path: '/m/b.dds', sourcePath: '/m/b.dds' },
+      { relativePath: 'a.dds', path: '/m/a.dds', sourcePath: '/m/a.dds', excluded: false }, { relativePath: 'b.dds', path: '/m/b.dds', sourcePath: '/m/b.dds', excluded: false },
     ]]]), foldersByMod: new Map() };
 
     expect(computeModStatuses(entries, index).get('overwrite')?.conflictLines).toEqual([

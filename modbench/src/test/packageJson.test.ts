@@ -28,6 +28,7 @@ import { NO_PLUGINS_MESSAGE } from '../plugins/PluginsTreeProvider';
 import { DECOMPILE_PLUGIN_TITLE } from '../plugins/externalChangeNotice';
 import { DownloadNode } from '../downloads/DownloadsProvider';
 import { downloadRowFixture } from './mo2/downloadRowFixture';
+import { GREY_INACTIVE_FILES_SETTING } from '../mods/inactiveFiles';
 
 interface ViewsWelcomeEntry { view: string; contents: string; when?: string; }
 interface ViewEntry { id: string; name: string; when?: string; }
@@ -35,7 +36,7 @@ interface MenuEntry { command: string; when: string; group?: string; icon?: stri
 interface CommandEntry { command: string; title: string; category: string; icon?: string; }
 interface KeybindingEntry { command: string; key: string; when: string; mac?: string; args?: unknown; }
 interface ViewsContainerEntry { id: string; }
-interface SettingEntry { description?: string; }
+interface SettingEntry { description?: string; type?: unknown; default?: unknown; }
 
 interface PackageManifest {
   activationEvents: string[];
@@ -466,6 +467,12 @@ describe('package.json title-bar rubric', () => {
     const sidebar = sidebarIds.map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
+  });
+});
+
+describe('package.json contributes the grey of a file the game does not get as a setting (mods.md, Indicators)', () => {
+  it('a switch, on by default, under the key the grey reads', () => {
+    expect(pkg.contributes.configuration.properties[GREY_INACTIVE_FILES_SETTING]).toMatchObject({ type: 'boolean', default: true });
   });
 });
 

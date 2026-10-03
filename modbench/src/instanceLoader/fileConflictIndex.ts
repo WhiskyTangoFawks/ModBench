@@ -4,9 +4,7 @@ import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile, OriginFolde
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
-const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
-
-export type ModFile = OriginFile;
+export const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -64,7 +62,7 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each listed mod's own files, a disabled mod's too, so callers don't need a second
    *  filesystem walk. */
-  filesByMod: Map<string, readonly ModFile[]>;
+  filesByMod: Map<string, readonly OriginFile[]>;
   /** Each listed mod's folders, as `filesByMod` holds its files. */
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
@@ -92,7 +90,7 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
 // Output line.
 async function modListing(
   adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<{ files: readonly ModFile[]; folders: readonly OriginFolder[] }> {
+): Promise<{ files: readonly OriginFile[]; folders: readonly OriginFolder[] }> {
   const { files, folders, notes } = await adapter.originFiles(modOrigin(modName));
   for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
   return { files, folders };
@@ -105,7 +103,7 @@ export async function buildFileConflictIndex(
   log: (msg: string) => void,
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
-  const filesByMod = new Map<string, readonly ModFile[]>();
+  const filesByMod = new Map<string, readonly OriginFile[]>();
   const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
@@ -123,7 +121,7 @@ export async function buildFileConflictIndex(
     foldersByMod.set(mod.name, folders);
     if (!mod.enabled) continue;
 
-    for (const file of ownFiles) {
+    for (const file of ownFiles.filter((own) => !own.excluded)) {
       const existing = files.get(file.relativePath);
       if (existing) {
         existing.providers.push(modOrigin(mod.name)); // loses to the earlier (winning) provider
@@ -139,13 +137,13 @@ export async function buildFileConflictIndex(
   }
 
   // The run-time output wins over every mod.
-  for (const file of overwriteFiles) {
+  for (const file of overwriteFiles.filter((own) => !own.excluded)) {
     const existing = files.get(file.relativePath);
     files.set({
       relativePath: file.relativePath,
       winner: file.sourcePath,
-      winnerOrigin: OVERWRITE,
-      providers: [OVERWRITE, ...(existing?.providers ?? [])],
+      winnerOrigin: RUNTIME_OUTPUT,
+      providers: [RUNTIME_OUTPUT, ...(existing?.providers ?? [])],
     });
   }
 

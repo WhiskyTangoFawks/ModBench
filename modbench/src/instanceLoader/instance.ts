@@ -1,6 +1,6 @@
 // The instance value (ADR-0015).
 
-import { buildFileConflictIndex, FileConflictLookup, type FileWinners, type ModFile } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
   buildLoadOrderRows, pluginsLoadedWithNoLineOf, type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
   type PluginAddress,
@@ -9,16 +9,15 @@ import { buildDownloadRows, modsByInstallationFile, type DownloadFile } from './
 import { gameMastersOf, nexusSlugFor } from '../tables/gamePaths';
 import {
   GAME_FOLDER_SETTING, type DownloadedFiles, type GameFolder, type InstanceAdapter, type ModFolder, type ModFolders,
-  type ManagerNames, type ModlistEntry, type OriginFiles, type OriginFolder, type Subscription,
+  type ManagerNames, type ModlistEntry, type OriginFile, type OriginFiles, type OriginFolder, type Subscription,
 } from '../instanceAdapter/instanceAdapter';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
-export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
+export type { FileOrigin, InstalledFileId, Mod, ModlistEntry, OriginFile, OriginFolder, PluginEntry, Separator } from '../instanceAdapter/instanceAdapter';
 export type { DownloadFile, DownloadRow } from './downloadRows';
-export type { ModFile } from './fileConflictIndex';
 export type { DownloadStatus } from '../instanceAdapter/instanceAdapter';
 export type { GameFolder, GameFolderLook } from '../instanceAdapter/instanceAdapter';
 
@@ -60,7 +59,7 @@ export interface InstanceValue {
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
   /** Each listed mod's own files, a disabled mod's too. */
-  readonly filesByMod: ReadonlyMap<string, readonly ModFile[]>;
+  readonly filesByMod: ReadonlyMap<string, readonly OriginFile[]>;
   /** Each listed mod's folders, a disabled mod's too. */
   readonly foldersByMod: ReadonlyMap<string, readonly OriginFolder[]>;
   /** Every plugin file, with origin, slot, enabled and winning. A listed
@@ -93,7 +92,7 @@ export interface InstanceValue {
   /** Each mod's conflict/override status, keyed by mod name: the Mods tree's badges. */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** Overwrite's own files, recursive; none when the folder is absent or empty. */
-  readonly overwriteFiles: readonly ModFile[];
+  readonly overwriteFiles: readonly OriginFile[];
   /** Overwrite's folders, as `overwriteFiles` holds its files. */
   readonly overwriteFolders: readonly OriginFolder[];
   /** The paths this generation's rows name. */

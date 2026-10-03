@@ -8,10 +8,10 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_DIR_NAME } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles, OriginFolder } from './instanceAdapter';
-import { isPluginSourceFolder, isTempWrite, originDir, overwriteDir } from './layout';
+import { isExcludedName, isPluginSourceFolder, isTempWrite, originDir, overwriteDir } from './layout';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
-const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
+const NOT_CONTENT = new Set([MOD_META_FILE_NAME]);
 
 interface Walk {
   readonly root: string;
@@ -27,13 +27,17 @@ export const relativeUnder = (root: string, path: string, separator: string = se
 
 const childOf = (dir: string, name: string): string => dir + sep + name;
 
+// MO2 keeps from the game every entry whose name, or a folder's above it, carries its suffix.
+const isExcluded = (relativePath: string): boolean => relativePath.split('/').some(isExcludedName);
+
 function keep(walk: Walk, path: string, sourcePath: string = path): void {
   const relativePath = relativeUnder(walk.root, path);
-  if (!EXCLUDED_RELATIVE_PATHS.has(relativePath)) walk.files.push({ relativePath, path, sourcePath });
+  if (!NOT_CONTENT.has(relativePath)) walk.files.push({ relativePath, path, sourcePath, excluded: isExcluded(relativePath) });
 }
 
 const keepFolder = (walk: Walk, path: string): void => {
-  walk.folders.push({ relativePath: relativeUnder(walk.root, path), path });
+  const relativePath = relativeUnder(walk.root, path);
+  walk.folders.push({ relativePath, path, excluded: isExcluded(relativePath) });
 };
 
 // Another tool can remove a subfolder mid-walk: that skips it alone, noted. The root's absence is
