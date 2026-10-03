@@ -48,8 +48,6 @@ describe('onPluginCheckboxChanged', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // The core requirement this handler exists to satisfy: several boxes toggled in one VS Code
-  // event reach the core in one splice, not one write per row.
   it('several boxes toggled to the same state make one call to the core, one write', async () => {
     setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['A.esp', 'B.esp'], refused: [] } });
     const reporter = recordingReporter();
@@ -70,8 +68,6 @@ describe('onPluginCheckboxChanged', () => {
     );
   });
 
-  // The rival this guards against: grouping by target state and issuing one splice per group,
-  // which turns a single mixed-state VS Code event into two writes and two reports.
   it('boxes toggled to different states still make one call to the core, one write', async () => {
     setPluginsParticipation.mockResolvedValue({ applied: true, outcome: { landed: ['A.esp', 'B.esp'], refused: [] } });
     const reporter = recordingReporter();
@@ -198,7 +194,6 @@ describe('the check box and the unconfirmed marks', () => {
   });
 });
 
-// plugins.md, The view; ADR-0015 invariant 2: the rows follow the Instance loader's next value.
 describe('a check-box enable and the Plugins rows', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });

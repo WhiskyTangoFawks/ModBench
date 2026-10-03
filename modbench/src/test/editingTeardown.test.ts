@@ -23,8 +23,6 @@ describe('exitEditing', () => {
     expect(client.stop).toHaveBeenCalled();
   });
 
-  // The views keep their shape across a backend that goes: the rows stay and expand into an
-  // error node, and the reconcile that replaces the diagnoses does so wholesale.
   it('takes nothing away from the views', () => {
     const session = makeSession();
 
@@ -51,7 +49,6 @@ describe('refreshMatchingPlugins', () => {
     expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
   });
 
-  // A missing tree is no load order to describe, so nothing is read.
   it('a workspace with no tree reads nothing', async () => {
     await expect(refreshMatchingPlugins({})).resolves.toBeUndefined();
   });

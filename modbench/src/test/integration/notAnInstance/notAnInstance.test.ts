@@ -4,9 +4,6 @@ import { before, describe, it } from 'mocha';
 import type { ActivateExports } from '../../../extension';
 import { IN_AN_INSTANCE, isRecord, requires } from '../../manifest';
 
-// VS Code exposes neither a context key's value nor whether a welcome or a palette entry is
-// showing, so this suite asserts the answer the extension wrote and the manifest VS Code loaded.
-
 let ext: vscode.Extension<ActivateExports> | undefined;
 
 interface Entry { command: string; when: string }
@@ -44,9 +41,6 @@ describe('a folder that is not an instance', () => {
     assert.strictEqual(ext?.exports.instanceRead(), false);
   });
 
-  // The palette lists every contributed command its `commandPalette` entry does not hide, so a
-  // command this window never registered must be hidden there, and bound to no key, until an
-  // instance answer.
   it('offers no palette entry or key for a command this window never registered', async () => {
     const registered = new Set(await vscode.commands.getCommands(true));
     const unregistered = contributed(ext?.packageJSON, (c) => c.commands, 'a contributes.commands array')

@@ -1,6 +1,3 @@
-// One composite project per box, one for the composition root, one for the webview, a test
-// project over every test, and a root solution over them all. The reference lists are the
-// maintainer's, drawn in target-architecture-references.d2.
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -13,8 +10,6 @@ const MODBENCH = join(__dirname, '..', '..');
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
 const ROOT_SOLUTION = 'tsconfig.json';
-// The composition root: the activation file and the wiring it calls, which reference every box by
-// definition (target-architecture-references.d2's reading).
 const ROOT_PROJECT = join('src', 'tsconfig.json');
 const TEST_PROJECT = 'tsconfig.test.json';
 const WEBVIEW_PROJECT = join('webview', 'tsconfig.json');
@@ -23,11 +18,8 @@ const LINT_RULES = 'eslint-rules';
 
 const boxProject = (box: string): string => join('src', box, 'tsconfig.json');
 
-// Every project that holds production source, so a file's owner can be counted.
 const PRODUCTION_PROJECTS = [...BOXES.map(boxProject), ROOT_PROJECT];
 
-// TypeScript's own resolution of include, exclude and `extends`, so what is asserted is what the
-// compiler builds, not the globs and the inheritance chain that happen to spell it.
 function parsed(relativePath: string): ts.ParsedCommandLine {
   const path = join(MODBENCH, relativePath);
   const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {
@@ -46,14 +38,11 @@ const referencePaths = (relativePath: string): string[] =>
 
 const isTest = (f: string): boolean => f.includes('.test.') || f.split('/').includes('test');
 
-// Off the disk, not off a project's file list: a file belonging to no project is invisible to
-// every list there is, which is the very state this has to catch.
 const filesOnDisk = (dir: string): string[] =>
   tsFiles(join(MODBENCH, dir), { tsx: false }).map((f) => relative(MODBENCH, f));
 
 const testFilesOnDisk = (dir: string): string[] => filesOnDisk(dir).filter((f) => f.endsWith('.test.ts'));
 
-// The integration suite compiles in its own project against the real VS Code process.
 const productionFilesOnDisk = (): string[] =>
   tsFiles(join(MODBENCH, 'src'), { tsx: false, includeTests: false, exclude: ['test'] })
     .map((f) => relative(MODBENCH, f));
@@ -63,53 +52,36 @@ describe('one composite project per box', () => {
     expect(existsSync(join(MODBENCH, boxProject(box)))).toBe(true);
   });
 
-  // Composite is what lets another project reference it, and what lets `tsc -b` skip a box
-  // whose inputs have not changed.
   it.each(BOXES)('%s is composite', (box) => {
     expect(parsed(boxProject(box)).options.composite).toBe(true);
   });
 
-  // The rule the compiler enforces: a kernel box references nothing, so a box that starts
-  // needing another box fails `tsc -b` rather than compiling quietly.
   it.each(KERNEL_BOXES)('%s references nothing', (box) => {
     expect(referencePaths(boxProject(box))).toEqual([]);
   });
 
-  // `types: ["node"]` is the other half of the same rule: without it every @types package,
-  // `@types/vscode` included, is ambient in a box the record panel also reads.
   it.each(KERNEL_BOXES)('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  // The Instance adapter holds the one file system door and the Instance loader reads only through
-  // it: a VS Code type in either would put the extension host behind that door.
   it.each(Object.keys(DRIVEN_BOXES))('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  // A command writes through the Instance adapter and forgets, and the client is the one seam a
-  // tool handler could call without an extension host: neither holds a host type.
   it.each(Object.keys(CORE_BOXES))('%s sees the Node types and no others', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node']);
   });
 
-  // A view is a driving adapter onto VS Code's own trees, panels and palette — the one band
-  // whose whole reason to exist is the extension host.
   it.each(Object.keys(VIEW_BOXES))('%s sees the Node and VS Code types', (box) => {
     expect(parsed(boxProject(box)).options.types).toEqual(['node', 'vscode']);
   });
 
-  // Rival: a view reaching a codec for a splice or a table for a game name. Read off the
-  // tsconfig on disk, one assertion per box, so either box alone fails it.
   it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
     const references = referencePaths(boxProject(box));
     expect(references).not.toContain(join('src', 'loadOrderFileCodec'));
     expect(references).not.toContain(join('src', 'tables'));
   });
 
-  // The rule the compiler enforces for the driven and core columns: each box references exactly
-  // the arrows the diagram draws for it, so a new dependency fails `tsc -b` rather than
-  // compiling quietly.
   it.each(Object.entries(REFERENCING_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
     expect(referencePaths(boxProject(box))).toEqual(references.map((r) => join('src', r)).sort());
   });
@@ -131,7 +103,6 @@ describe('the composition root is one project referencing every box', () => {
     expect(parsed(ROOT_PROJECT).options.composite).toBe(true);
   });
 
-  // The activation file is the composition root, and the extension host is what it composes onto.
   it('sees the Node and VS Code types', () => {
     expect(parsed(ROOT_PROJECT).options.types).toEqual(['node', 'vscode']);
   });
@@ -144,7 +115,6 @@ describe('the composition root is one project referencing every box', () => {
     expect(relative(MODBENCH, parsed(ROOT_PROJECT).options.outDir ?? '')).toBe(join('out', 'projects', 'root'));
   });
 
-  // The root and the wiring it calls, and no file of any box.
   it('compiles the activation file, its wiring and no box file', () => {
     const files = fileNames(ROOT_PROJECT);
     expect(files).toContain(join('src', 'extension.ts'));
@@ -164,13 +134,10 @@ describe('every production file belongs to exactly one project', () => {
     expect(productionFilesOnDisk().length).toBeGreaterThan(100);
   });
 
-  // Rival: a file left outside every project's include, which no `tsc -b` ever reads.
   it('no production file on disk is outside every project', () => {
     expect(productionFilesOnDisk().filter((f) => !owners.has(f))).toEqual([]);
   });
 
-  // Rival: one project's glob swallowing another's file, so the same source is typed twice and
-  // the reference between them buys nothing.
   it('no production file is compiled by two projects', () => {
     expect([...owners].filter(([, projects]) => projects.length > 1).map(([f]) => f)).toEqual([]);
   });
@@ -185,21 +152,15 @@ describe('the test project holds every test and no production file', () => {
     expect(parsed(TEST_PROJECT).options.noEmit).toBe(true);
   });
 
-  // A box test may reach outside the kernel — the codecs' own tests read fixtures from disk —
-  // so every one of them compiles here, and none inside the box's project.
   it.each([...BOXES, 'medit'])('compiles every test on disk under %s', (dir) => {
     const compiled = new Set(fileNames(TEST_PROJECT));
     expect(testFilesOnDisk(join('src', dir)).filter((f) => !compiled.has(f))).toEqual([]);
   });
 
-  // Rival: a walk finding no test under any box would satisfy every containment row above
-  // vacuously; a kernel box such as ports may honestly hold none, so the count is over boxes.
   it('finds tests on disk under most boxes', () => {
     expect(BOXES.filter((box) => testFilesOnDisk(join('src', box)).length > 0).length).toBeGreaterThan(10);
   });
 
-  // The integration suite is the one exception: it compiles in its own project, for Mocha and
-  // the real extension host.
   it('compiles every unit test under src/test, and none of the integration suite', () => {
     const compiled = new Set(fileNames(TEST_PROJECT));
     const integration = join('src', 'test', 'integration') + '/';
@@ -217,8 +178,6 @@ describe('the test project holds every test and no production file', () => {
 });
 
 describe('the webview references the wire box and nothing else in the extension', () => {
-  // Composite with its own root is what makes an import of any other src/ path a TS6059 and a
-  // TS6307 rather than a file the compiler quietly pulls in.
   it('is composite and rooted in its own directory', () => {
     expect(parsed(WEBVIEW_PROJECT).options.composite).toBe(true);
     expect(relative(MODBENCH, parsed(WEBVIEW_PROJECT).options.rootDir ?? '')).toBe('webview');
@@ -241,8 +200,6 @@ describe('the root solution builds every project', () => {
       .toEqual([...BOXES.map((box) => join('src', box)), 'src', TEST_PROJECT, 'webview', LINT_RULES].sort());
   });
 
-  // A solution file lists projects, never sources: an empty file list is what stops `tsc -b`
-  // compiling the tree twice, once through the solution and once through a project.
   it('compiles no file of its own', () => {
     expect(fileNames(ROOT_SOLUTION)).toEqual([]);
   });

@@ -51,7 +51,6 @@ function channelWrites(channel: FakeLogOutputChannel): unknown[][] {
     .flatMap((spy) => spy.mock.calls);
 }
 
-// The four views over the one Instance, wired to the Output as the composition root wires them.
 function fourViewsOverOneInstance() {
   const root = cloneCorpusFixture();
   roots.push(root);

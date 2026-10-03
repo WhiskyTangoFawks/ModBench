@@ -23,7 +23,6 @@ const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'Ed
 
 const ACCEPT = 'Delete';
 
-// Two questions through one real consumer, one after the other: whether each delete went ahead.
 async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<boolean[]> {
   const client = new InMemoryMEditClient();
   client.setCommandResult('deleteRecords', { landed: [], refused: [] });
@@ -37,8 +36,6 @@ async function offerTwice(dialog: ReturnType<typeof scriptedDialog>): Promise<bo
   return [await offer('A.esp'), await offer('B.esp')];
 }
 
-// Both doubles are driven through a real consumer of the seam, never called directly: a double
-// that only satisfies its own test proves nothing about the seam it stands in for.
 describe('the recording reporter', () => {
   it('records the severity, message and detail a module reported, in order', async () => {
     const reporter = recordingReporter();
@@ -66,7 +63,6 @@ describe('the recording reporter', () => {
   });
 });
 
-// No command takes a selection yet, so makeReporter is the consumer the double must agree with.
 describe('the recording reporter, given a selection\'s outcome', () => {
   beforeEach(() => { showErrorMessage.mockClear(); });
 
