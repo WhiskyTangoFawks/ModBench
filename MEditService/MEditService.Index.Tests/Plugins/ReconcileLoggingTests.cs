@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// Only per-plugin progress lines stay at Info; every other pipeline milestone is Debug. Level is
-// what these assert, which the broader Plugins suite never does.
 public sealed class ReconcileLoggingTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()

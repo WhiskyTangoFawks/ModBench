@@ -6,15 +6,11 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// The reconcile door takes the snapshot and the version it arrived as, on the caller's thread,
-// and turns every outcome into status data: nothing escapes it, and every version is answered.
 public sealed class ReconcileDoorTests
 {
     private static LoadOrderStatusNotification[] StatusesPublished(InMemoryNotificationPublisher notifications) =>
         [.. notifications.Notifications.OfType<LoadOrderStatusNotification>()];
 
-    // The rival this pins: a door that rethrows the refusal, leaving Status at None with no way
-    // for the extension to learn "another window has this".
     [ForeignIndexHolderFact]
     public void AnotherWindowHoldsTheInstance_IsAnsweredAsHeldElsewhereStatus_NotThrown()
     {
@@ -57,9 +53,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)).Status.State);
     }
 
-    // plugins.md, States, story 6: the next change to the instance tries again, and arrives as the
-    // same snapshot. A file where the store's folder goes, found where an earlier reconcile left
-    // it, keeps the store from opening.
     [Fact]
     public void AFailedReconcile_IsTriedAgain_ByAnEqualSnapshot()
     {
@@ -99,8 +92,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(LoadOrderState.Failed, Assert.Single(StatusesPublished(notifications)[before..]).Status.State);
     }
 
-    // Every recompute sends the snapshot, so an equal one over an index that has not failed says
-    // nothing.
     [Fact]
     public void AnEqualSnapshot_OfAnIndexThatHasNotFailed_PublishesNoStatus()
     {
@@ -117,8 +108,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(before, StatusesPublished(notifications).Length);
     }
 
-    // A superseded reconcile is ordinary (a recompute mid-load): never an escaped exception,
-    // never mistaken for the held-elsewhere refusal, and the survivor finishes Ready for its version.
     [Fact]
     public async Task ASupersededReconcile_NeverEscapes_AndTheSurvivorAnswersReadyForItsOwnVersion()
     {
@@ -146,8 +135,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(second, StatusesPublished(notifications).Last(n => n.Status.State == LoadOrderState.Ready).Status.Version);
     }
 
-    // An identical resend answers the version already terminal, which the client reads from the
-    // status itself rather than waiting on a tick.
     [Fact]
     public void AnIdenticalResend_AnswersTheVersionAlreadyReady_AndPublishesNothing()
     {
@@ -169,8 +156,6 @@ public sealed class ReconcileDoorTests
         Assert.Equal(before, notifications.Notifications.Count);
     }
 
-    // The rival this pins: a door that schedules the reconcile and returns, which would make every
-    // caller poll for an answer the call itself could have given.
     [Fact]
     public void Reconcile_AnswersOnTheCallersThread_BeforeReturning()
     {

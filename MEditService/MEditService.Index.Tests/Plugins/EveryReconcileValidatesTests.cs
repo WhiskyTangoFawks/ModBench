@@ -12,9 +12,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>ADR-0009 invariant 4: every reconcile validates every file, so a snapshot equal to the
-/// one held still finds what changed on disk since, and one that finds nothing publishes
-/// nothing.</summary>
 public sealed class EveryReconcileValidatesTests : IDisposable
 {
     private const string Untracked = "Untracked.esp";
@@ -39,7 +36,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         _tracked = _fixture.Plugins.Single(p => p.Name == Tracked);
         _trackedNpc = npc.ToString();
         TrackedMods.Track(_tracked, _fixture.GameDirectory);
-        // Past every write the fixture makes, so a stamp the store takes is one it may keep.
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
         _index = new Indexer(
             _holder, TestAdapters.Mutagen(), SharedSchemaReflector.Instance,
@@ -106,8 +102,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
             && PluginAddress.Comparer.Equals(changed.Plugin, _untracked.KeyOf()));
     }
 
-    // A tracked mod whose repository and binary both went: its rows at HEAD go with the rest, the
-    // committed state of a dirty record included.
     [Fact]
     public void AnEqualSnapshot_TakesEveryRowOfAPluginWhoseRepositoryAndBinaryWent_ItsDirtyRecordsHeadRowsToo()
     {
@@ -124,8 +118,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Empty(_index.RequireReads().GetDocuments(_tracked.KeyOf()));
     }
 
-    // Read off the store itself: every read through the Index answers only for a registered plugin,
-    // and an unindexed one is unregistered.
     private long CommittedRowsOf(LoadOrderEntry plugin)
     {
         using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_fixture.InstanceRoot)}");
@@ -151,8 +143,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "UntrackedNpc");
     }
 
-    // A handle that denies sharing makes a read fail, so a clean answer while it is open came from
-    // the hash the stamp kept.
     [Fact]
     public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
     {
@@ -165,10 +155,8 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Empty(_index.Status.Failures);
     }
 
-    // Held with a failure, the plugin is read again only once its bytes change: a re-read of bytes
-    // that failed before would publish on every snapshot that merely names it.
     [Fact]
-    public void AnEqualSnapshot_ThatFindsNothingChanged_PublishesNothing()
+    public void AnEqualSnapshot_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_untracked.Path, "not a plugin");
         Reconcile();
@@ -177,8 +165,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Empty(PublishedDuring(Reconcile));
     }
 
-    // A tracked mod holds a tree per plugin, and may hold none for one: that plugin reads from its
-    // binary, and validates against it.
     [Fact]
     public void AnEqualSnapshot_OfAPluginWithNoTreeInATrackedMod_PublishesNothing()
     {
@@ -196,8 +182,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.Empty(PublishedDuring(ReconcileWithLoose));
     }
 
-    // Git's status is the tree's stamp (ADR-0009): a tree that failed to read is asked again through
-    // the files git names, and a file it does not name is never opened. One held shut proves it.
     [Fact]
     public void AnEqualSnapshot_OfATreeThatFailedToRead_OpensNoFileGitDoesNotName()
     {
@@ -227,8 +211,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.DoesNotContain(_index.Status.Failures, f => f.Name == Untracked);
     }
 
-    // plugins.md, States, story 6: the next change to the instance tries a failed index again, and a
-    // change that moves no plugin arrives as the same snapshot.
     [Fact]
     public async Task Subscribed_AnEqualSnapshotArriving_TriesAFailedReconcileAgain()
     {
@@ -250,8 +232,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.NotEmpty(failing.RequireReads().GetDocuments(_untracked.KeyOf()));
     }
 
-    // ADR-0007 invariant 3: a mod gaining a repository moves which truth answers for its plugin,
-    // and nothing in the load order moves with it.
     [Fact]
     public async Task Subscribed_AnEqualSnapshotArriving_ReadsAPluginWhoseModGainedARepository_FromItsTree()
     {

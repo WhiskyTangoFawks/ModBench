@@ -8,13 +8,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// ADR-0013: the winner sweep carries a participation predicate: an indexed-but-non-participating
-// plugin's copy can never be a winner, regardless of its slot.
 public class PluginParticipationTests
 {
-    // PluginA.esm defines SharedNPC; PluginB.esp overrides it. Deterministic FormID assignment
-    // means npcKey is identical across independently-built fixtures, so two indexes built from two
-    // calls to this helper can be compared directly by (plugin -> IsWinner).
     private static PluginFixtureData SharedNpcFixture(string prefix, out FormKey npcKey, bool pluginBEnabled = true)
     {
         FormKey key = default;
@@ -39,8 +34,6 @@ public class PluginParticipationTests
     [Fact]
     public void DisabledPlugin_LaterInLoadOrder_DoesNotDisplaceEnabledWinner()
     {
-        // PluginB sits last in the load order (highest slot) but is disabled — a bare MAX(slot)
-        // sweep would incorrectly make it the winner.
         using var fixture = SharedNpcFixture("participation-winner", out var npcKey, pluginBEnabled: false);
         using var index = Indexes.Reconciled(fixture);
 

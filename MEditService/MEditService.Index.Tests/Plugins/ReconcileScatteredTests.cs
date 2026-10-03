@@ -74,9 +74,8 @@ public sealed class ReconcileScatteredTests
         Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginAddress("A.esp", "Data")));
     }
 
-    // A single plugin whose binary data Mutagen can't parse (e.g.
     [Fact]
-    public void Reconcile_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
+    public void Reconcile_OnePluginFailsToIndex_OthersStillLoad_AndTheFailureIsReportedWithoutListingItAsIndexed()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-index-failure")
@@ -96,7 +95,6 @@ public sealed class ReconcileScatteredTests
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(0, reads.GetRecordTypeCounts(new PluginAddress("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        // A plugin whose open threw never returned, so it is never listed as indexed.
         Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }
 }

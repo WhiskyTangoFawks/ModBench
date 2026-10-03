@@ -8,9 +8,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Indexing;
 
-/// <summary>ADR-0011: the per-type relations are the contract for user filter SQL, so they are
-/// asked over real game data rather than against literals. Asked off the store, past the door,
-/// whose refusals SqlDoorSealTests owns.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
 {
@@ -32,7 +29,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         }
     }
 
-    // COLUMNS() with no match is a binder error.
     private bool AnyColumnOf(string table, IEnumerable<string> columns)
     {
         var names = columns.Select(Regex.Escape).ToList();
@@ -84,8 +80,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames_SoAFilterCanMatchOneWithLike()
     {
-        // Taken off a document rather than written down: the curated slice is regenerable, and a
-        // flag it stops carrying would turn the LIKE below into a match against nothing.
         var flagName = IndexFiles.Rows(fixture.InstanceRoot, "SELECT form_key FROM cell")
             .Select(row => fixture.Reads.GetDocument(row[0], CutDownPluginFixture.Plugin)?.Fields.FirstOrDefault(f => f.Metadata.Name == "Flags")?.Value)
             .OfType<JsonElement>()
@@ -96,8 +90,6 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture)
         Assert.True(Matching($"SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%{flagName}%'") > 0,
             $"A flag name must be matchable with LIKE — that is the capability this rendering exists to keep, and '{flagName}' is a name the fixture carries.");
 
-        // A JSON array rendering would carry brackets and quotes, and LIKE on a flag name would
-        // then depend on the punctuation around it.
         Assert.Equal(0, Matching("SELECT form_key FROM \"cell\" WHERE \"Flags\" LIKE '%[%' OR \"Flags\" LIKE '%\"%'"));
     }
 
