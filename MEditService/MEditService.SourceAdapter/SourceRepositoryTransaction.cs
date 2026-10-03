@@ -23,17 +23,17 @@ public enum UnrestoredReason
 }
 
 /// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
-/// lists it. ADR-0019: a partial outcome is a structured collection, never a formatted string.</summary>
+/// lists it (ADR-0019).</summary>
 public sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>Rollback's own filesystem primitives (ADR-0007): nested so undoing a mint or a move reaches
+/// <summary>Rollback's own filesystem primitives (ADR-0003): nested so undoing a mint or a move reaches
 /// the same private machinery the put or move it undoes used, rather than a second copy of it.</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
-    /// applied all or restored all (ADR-0007). Conditional by design: a path something else has written
-    /// since is preserved and reported, never reverted.</summary>
+    /// applied all or restored all (commands.md, A failed gesture writes nothing;
+    /// ADR-0003).</summary>
     public sealed class SourceTransaction
     {
         /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
@@ -106,8 +106,8 @@ public sealed partial class SourceRepository
             if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
             // Refused before the tree is touched: a container's removal takes its whole directory, block
-            // subtree and all, and one document's bytes cannot put that back. A batch that cannot restore
-            // an act must not perform it (ADR-0007).
+            // subtree and all, and one document's bytes cannot put that back (commands.md, A failed
+            // gesture writes nothing).
             if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
 
             var before = Snapshot(unit.FullPath);
@@ -166,8 +166,8 @@ public sealed partial class SourceRepository
         }
 
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
-        /// before an earlier act moves back into it. A restore failure never stops the pass; it is
-        /// collected (ADR-0019), not thrown.</summary>
+        /// before an earlier act moves back into it. A restore failure is collected, never thrown
+        /// (ADR-0019).</summary>
         public IReadOnlyList<UnrestoredPath> Rollback()
         {
             var unrestored = new List<UnrestoredPath>();

@@ -55,7 +55,7 @@ public readonly record struct CellPlacement(
 public sealed partial class SourceRepository
 {
     // One repository is one operation, so all live and die with it: the next Track, compile or edit
-    // looks at the tree again (ADR-0009 — never a file timestamp).
+    // looks at the tree again, never trusting a file timestamp (ADR-0009).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TreeScan> _scansBySourceRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<(string SourceRoot, string FormKey), TreeScan> _scansByKey = [];

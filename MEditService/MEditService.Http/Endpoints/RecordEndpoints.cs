@@ -73,7 +73,7 @@ public static class RecordEndpoints
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
-        // ADR-0007: the single write path's one door. Scripts and agents reach the same
+        // The single write path's one door (ADR-0007). Scripts and agents reach the same
         // handler the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/edit", (
             string formKey, RecordEditRequest request, EditRecordHandler edits) =>
@@ -106,8 +106,7 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0007: each record lands in each destination's working tree, as an override under its own
-        // FormKey or as a duplicate under the destination's next free one.
+        // Copy (plugins.md, Copy) writes each destination's working tree (ADR-0007).
         app.MapPost("/records/copy", (RecordCopyRequest request, CopyRecordHandler edits) =>
             CopyRecord(request, edits, logger))
         .WithName("CopyRecord")

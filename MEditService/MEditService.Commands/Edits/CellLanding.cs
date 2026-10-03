@@ -168,8 +168,8 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         return new(Document(identity, codec.RoundTrip(cell.ToJsonString(), move.Release, identity.RecordType)), null);
     }
 
-    // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile), which for a tracked
-    // plugin are what its working tree requires (ADR-0008). An unreadable document refuses.
+    // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile; ADR-0008).
+    // An unreadable document refuses.
     private Step<IReadOnlySet<string>> MastersOf(Move move)
     {
         try

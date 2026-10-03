@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The write side's shared concerns (ADR-0014): target resolution, its pre-write refusals,
+/// <summary>The write side's shared concerns (target-architecture.d2 medit_core.commands): target resolution, its pre-write refusals,
 /// and FormKey allocation. An internal seam, tested through the
 /// gestures.</summary>
 internal sealed class WriteTargets(
@@ -23,15 +23,15 @@ internal sealed class WriteTargets(
 {
     /// <summary>The palette title verbatim (package.json's "Track…" under category "Modbench"); a signpost
     /// naming a command the user cannot find is worse than none.</summary>
-    internal const string TrackCommandTitle = "Modbench: Track\u2026";
+    internal const string TrackCommandTitle = "Modbench: Track Mod\u2026";
 
     // The unit is read before anything is written, so a rename or a delete this gesture performs
     // cannot change the document its messages and logs name.
     internal readonly record struct EditTarget(
         GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, SourceRepository Repository);
 
-    // The working tree is the only thing asked (ADR-0015): a second edit builds on the
-    // first, and no document comes from the Index. The copy gestures read the source instead.
+    // The working tree is the only thing asked (ADR-0015), so a second edit builds on
+    // the first. The copy gestures read the source instead.
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target)
     {
         target = default;
@@ -161,8 +161,7 @@ internal sealed class WriteTargets(
         return RefuseIfNotLoaded(plugin);
     }
 
-    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not
-    // (ADR-0012).
+    // Tracking is per mod folder and implies neither that the plugin is active nor that it is not.
     private RecordEditResult? RefuseIfNotLoaded(PluginAddress plugin) =>
         loadOrder.Current.IsActive(plugin)
             ? null
@@ -182,8 +181,7 @@ internal sealed class WriteTargets(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // ADR-0012: the game's Data folder and Overwrite are both origins with no mod
-    // folder, but neither one's way out is the other's.
+    // Neither origin's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin) =>
         PluginOrigin.IsOverwrite(plugin.Origin)
             ? $"{plugin.Name} is loaded from Overwrite, an origin and not a mod, so it has no mod " +
@@ -267,8 +265,8 @@ internal sealed class WriteTargets(
             FormKeySpaceExhaustedMessage(plugin, allocator.IsLight, freeAboveTheLightCap));
     }
 
-    // The header document in the working tree is the truth (ADR-0007), so a flag flipped this session
-    // caps minting immediately.
+    // The working tree's header document decides (ADR-0007), so a flag flipped this
+    // session caps minting immediately.
     private static bool IsLightByRemovableFlag(SourceRepository repository, PluginAddress plugin)
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
@@ -349,8 +347,7 @@ internal sealed class WriteTargets(
             : null;
     }
 
-    // Parse status is not a precondition (ADR-0015): the codec is asked at edit time, and
-    // its own words are the reason.
+    // The codec's own words are the reason (ADR-0015).
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);

@@ -5,8 +5,8 @@ using MEditService.SourceAdapter;
 
 namespace MEditService.Commands;
 
-/// <summary>ADR-0003, at each snapshot: each tracked plugin's bytes against what Modbench
-/// last wrote, and each tracked mod's untracked plugins. It keeps and refuses nothing.</summary>
+/// <summary>Each tracked plugin changed outside Modbench (ADR-0003), and each tracked mod's
+/// untracked plugins.</summary>
 internal sealed class ExternalChangeCheck(INotificationPublisher notifications, PluginFileHashes hashes)
 {
     private readonly Lock _checking = new();

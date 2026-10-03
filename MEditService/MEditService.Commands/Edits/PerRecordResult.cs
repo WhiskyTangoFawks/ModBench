@@ -2,8 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A record and the plugin holding it, named by filename and origin (ADR-0012):
-/// one filename can be in two mods, each holding the record.</summary>
+/// <summary>A record and the plugin holding it (ADR-0012).</summary>
 public readonly record struct RecordAt(PluginAddress Plugin, string FormKey);
 
 // The plugin compares as every other lookup on it does, and a FormKey's mod name is a filename.
@@ -24,9 +23,8 @@ internal sealed class SameRecord : IEqualityComparer<RecordAt>
 /// naming the way out.</summary>
 public sealed record RecordRefused(RecordAt Record, RecordEditRefusal Refusal, string Message);
 
-/// <summary>A gesture over several records answers per record, never the whole batch for one
-/// (ADR-0019), except for a cause no record escapes: <see cref="SelectionRefusal"/> names
-/// it, and no record was written.</summary>
+/// <summary>A gesture over several records (commands.md, A selection is one gesture): a cause no
+/// record escapes is <see cref="SelectionRefusal"/>.</summary>
 public sealed class PerRecordResult
 {
     private PerRecordResult(

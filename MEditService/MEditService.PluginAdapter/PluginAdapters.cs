@@ -18,8 +18,8 @@ public static class PluginAdapters
     public static bool CanRead(this IPluginAdapter adapter, RegisteredPlugin plugin) =>
         adapter.CanRead(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path));
 
-    /// <summary>The files the game loads, the active plugins in load order, with
-    /// <paramref name="compiled"/> among them whether it is active or not (ADR-0013).</summary>
+    /// <summary>The files the game loads (ADR-0013), with <paramref name="compiled"/>
+    /// among them whether it is active or not.</summary>
     public static LinkAnswers LinkTargets(
         this IPluginAdapter adapter, LoadOrderSnapshot loadOrder, RegisteredPlugin compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys)

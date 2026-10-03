@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The Create gesture's handler (ADR-0014): mints a bare record (ruling 4) and
+/// <summary>The Create gesture's handler (ADR-0014): mints a bare record (plugins.md, Create record, story 2) and
 /// writes it as a new source file. FormKey allocation is <see cref="WriteTargets"/>'s alone.</summary>
 public sealed class CreateRecordHandler
 {

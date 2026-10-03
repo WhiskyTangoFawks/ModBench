@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>Bytes to documents and facts and back (ADR-0005): a live mod crosses this door
-/// in neither direction. The game release is a parameter of every verb.</summary>
+/// <summary>Bytes to documents and facts and back (ADR-0005). The game release is a
+/// parameter of every verb.</summary>
 public interface IPluginAdapter
 {
     /// <summary>The plugin as the documents its source tree would hold (ADR-0007). Owns the open
@@ -37,8 +37,8 @@ public interface IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files at
-    /// <paramref name="loadOrder"/>, as the game resolves it, beside the files that could not be
-    /// read. The link cache is built and dropped here (ADR-0005).</summary>
+    /// <paramref name="loadOrder"/>, as the game resolves it, beside the unreadable files. The link
+    /// cache is built and dropped here (ADR-0005).</summary>
     LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,

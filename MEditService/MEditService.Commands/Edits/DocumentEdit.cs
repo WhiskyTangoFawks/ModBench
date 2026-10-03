@@ -18,9 +18,8 @@ internal sealed record DocumentEditRequest(
     LeftCopy? CellCopyOnTheLeft,
     LeftCopy? RefillCopyOnTheLeft);
 
-/// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch,
-/// codec round trip, compare what came back with what was asked. Pure: text and metadata
-/// in, text or one refusal out.</summary>
+/// <summary>A write is a patch on the document (ADR-0005). Pure: text and metadata in,
+/// text or one refusal out.</summary>
 internal static class DocumentEdit
 {
     private const string EditorIdMember = RecordMembers.EditorId;

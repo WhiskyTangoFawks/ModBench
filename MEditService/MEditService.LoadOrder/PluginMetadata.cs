@@ -1,8 +1,8 @@
 namespace MEditService.LoadOrder;
 
-// One plugin file the Index holds (ADR-0013). Origin (ADR-0012) is opaque here, never
-// interpreted; record tables key on (form_key, origin, plugin), and every construction site must
-// say which origin this is rather than fall back silently.
+// One plugin file the Index holds (ADR-0012). Origin is opaque here, never interpreted; record
+// tables key on it (ADR-0009), and every construction site must say which origin this
+// is rather than fall back silently.
 
 // LoadOrderIndex is the plugin's place among the active plugins, null when the snapshot does not
 // list it as active.

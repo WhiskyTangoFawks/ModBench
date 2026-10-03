@@ -7,9 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>The Track gesture end to end: decompiles each plugin of the selection, then gives each
-/// mod with no repository one, with a baseline commit per plugin. A designated door
-/// (ADR-0007).</summary>
+/// <summary>The Track gesture end to end (ADR-0007).</summary>
 public sealed class TrackService(
     ILogger<TrackService> logger, IPluginAdapter adapter, INotificationPublisher? notifications = null)
 {
@@ -17,12 +15,11 @@ public sealed class TrackService(
     // mutated, so Volatile.Read/Write suffices and no lock is needed.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
-    // ADR-0014: null in every test that does not care, and nothing is published when it is.
+    // Null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
     private readonly PluginDecompiler _decompiler = new(logger, adapter);
 
-    /// <summary>Each plugin of the selection lands or is refused on its own (commands.md, "A selection
-    /// is one gesture"). git missing refuses the whole selection once, before any write.</summary>
+    /// <summary>Per plugin (commands.md, A selection is one gesture).</summary>
     public async Task<TrackSelectionResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
         IReadOnlyList<PluginAddress> plugins,
@@ -121,7 +118,7 @@ public sealed class TrackService(
         }
     }
 
-    // Nothing of the plugin is written here: every refusal comes before its commit (ADR-0006).
+    // Every refusal comes before the plugin's commit (commands.md, A selection is one gesture).
     private async Task<Verification> VerifyAsync(
         LoadOrderSnapshot loadOrder, PluginAddress key, string? upstreamVersion, Action onParsed, CancellationToken cancel)
     {
@@ -144,14 +141,14 @@ public sealed class TrackService(
                     "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
         }
 
-        // ADR-0007: Track takes a mod with no repository.
+        // Track takes a mod with no repository (ADR-0007).
         if (SourceRepository.IsTracked(modFolder))
         {
             return Refuse(TrackRefusal.AlreadyTracked,
                 $"'{modFolder}' is already tracked. To put {plugin.Name}'s source into its working tree, decompile it.");
         }
 
-        // ADR-0003: a repository with history but no main is someone else's, never written to.
+        // A repository with history but no main is someone else's, never written to (ADR-0003).
         if (SourceRepository.HoldsAnotherRepository(modFolder))
             return Refuse(TrackRefusal.AlreadyTracked, $"'{modFolder}' already holds a repository with no main branch.");
 

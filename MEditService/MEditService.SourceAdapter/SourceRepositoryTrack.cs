@@ -21,8 +21,7 @@ internal static class PristineFileWriter
 /// on the write side and the read side alike. A fact with no value is left out of the commit.</summary>
 public sealed record BaselineTrailers(string Plugin, string? UpstreamVersion, string? BinarySha256);
 
-/// <summary>The two <c>.gitignore</c> presets ADR-0007 names: Edits tracks source only; Everything
-/// additionally tracks assets. Plugin binaries and <c>meta.ini</c> are ignored in both.</summary>
+/// <summary>The two <c>.gitignore</c> presets (plugins.md, Track, story 2).</summary>
 public enum SourcePreset
 {
     Edits,
@@ -152,8 +151,6 @@ public sealed partial class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // meta.ini is never tracked content (ADR-0007) and plugin binaries are the compiled
-    // artifact; both are ignored in every preset.
     private static string GitignoreContent(SourcePreset preset) => preset switch
     {
         // Root-anchored: a bare "plugin-source/" would also un-ignore a same-named folder nested

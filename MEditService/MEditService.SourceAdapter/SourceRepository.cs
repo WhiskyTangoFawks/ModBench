@@ -74,8 +74,7 @@ public sealed partial class SourceRepository
             .OfType<string>()];
     }
 
-    /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a plugin's
-    /// origin and path.</summary>
+    /// <summary>Whether a plugin can be edited (ADR-0007), asked of its origin and path.</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         LoadOrderSnapshot.ModFolderOf(origin, pluginPath) is { } modFolder && IsTracked(modFolder);
 
@@ -228,7 +227,8 @@ public sealed partial class SourceRepository
             .Order(StringComparer.Ordinal)
             .Select(path => (Path: path, Bytes: File.ReadAllBytes(path)))]);
 
-    // One path that cannot be written never stops the pass (ADR-0019): every other one is still put back.
+    // One path that cannot be written never stops the pass, and every other one is still put back
+    // (ADR-0019).
     private List<string> PutBack(PreImage before)
     {
         var unrestored = new List<string>();
@@ -529,5 +529,5 @@ public enum SourceRemoval
 }
 
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
-/// (ADR-0007).</summary>
+/// (ADR-0005).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);

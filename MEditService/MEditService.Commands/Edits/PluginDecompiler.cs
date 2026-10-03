@@ -7,8 +7,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>A plugin's bytes as the files of its plugin source, or why they cannot be: the plugin
-/// does not survive its own source (ADR-0006), or cannot be read. Writes nothing.</summary>
+/// <summary>A plugin's bytes as the files of its plugin source, or why they cannot be: ADR-0006's
+/// gate refused it, or it cannot be read. Writes nothing.</summary>
 internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefusal Refusal, string Message)
 {
     internal static Decompiled Refused(DecompileRefusal refusal, string message) => new(null, refusal, message);
@@ -18,7 +18,7 @@ internal sealed record Decompiled(IReadOnlyList<TreeFile>? Files, DecompileRefus
 /// </summary>
 internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
 {
-    // Asked of the Plugin adapter, never the Index (ADR-0015): a plugin whose file
+    // Asked of the Plugin adapter (ADR-0015): a plugin whose file
     // cannot be read has no bytes to deep-parse.
     internal async Task<Decompiled> DecompileAsync(
         LoadOrderSnapshot loadOrder, RegisteredPlugin plugin, string modFolder, Action onParsed, CancellationToken cancel)
@@ -65,9 +65,8 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
         return new Decompiled(files, DecompileRefusal.None, "");
     }
 
-    // ADR-0006's gate: the tree is read back, recompiled and reparsed; refuses unless every
-    // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
-    // writer does.
+    // ADR-0006's gate. Reparse, not the pre-write object: only written bytes show what
+    // the writer does.
     private async Task<string?> VerifyRoundTrip(
         string pluginName,
         string originalPluginPath,
@@ -115,8 +114,7 @@ internal sealed class PluginDecompiler(ILogger logger, IPluginAdapter adapter)
             return $"{pluginName} does not round-trip through its own source: {divergence}";
         }
 
-        // Model-identical but not byte-identical: an encoding-only difference ADR-0006
-        // documents rather than gates. Reported, never a refusal.
+        // An encoding-only difference (ADR-0006) is reported, never a refusal.
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(

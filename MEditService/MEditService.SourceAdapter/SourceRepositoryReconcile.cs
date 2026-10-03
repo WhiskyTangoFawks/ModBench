@@ -15,7 +15,7 @@ public sealed record DirtyDocument(string FormKey, string RecordType, string? Co
 public sealed record WorkingTreeDirt(IReadOnlyList<DirtyDocument> Documents, bool NeedsStructuralPass);
 
 /// <summary>What a reconcile asks the tree: where its dirt leaves each record, and the documents it
-/// holds now against the ones a ref committed (ADR-0003).</summary>
+/// holds now against the ones a ref committed (ADR-0007).</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>Every record the tree's dirt moves, by identity and text. Dirt is git status, never a

@@ -3,8 +3,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>Why Track refused, typed rather than a string to match on (ADR-0019): each value is a
-/// different way out, and the endpoint's status is one switch over them.</summary>
+/// <summary>Why Track refused (ADR-0019): each value is a different way out, and the
+/// endpoint's status is one switch over them.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TrackRefusal
 {
@@ -19,12 +19,12 @@ public enum TrackRefusal
     /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0007).</summary>
     DataDirectoryOrigin,
 
-    /// <summary>The origin is Overwrite, not a mod; the way out is moving the plugin into one
-    /// (ADR-0012).</summary>
+    /// <summary>The origin is Overwrite (ADR-0012); the way out is moving the plugin into
+    /// a mod.</summary>
     OverwriteOrigin,
 
-    /// <summary>ADR-0006's gate: the plugin does not survive its own source, or cannot be
-    /// read or deep-parsed at all. A data problem in the plugin, not a state conflict.</summary>
+    /// <summary>ADR-0006's gate refused it, or the plugin cannot be read or deep-parsed
+    /// at all. A data problem in the plugin, not a state conflict.</summary>
     RoundTripFailed,
 
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
@@ -37,8 +37,8 @@ public enum TrackRefusal
     GitUnavailable,
 }
 
-/// <summary>One plugin's Track outcome, or a whole selection's refusal: applied-or-refusal, never an
-/// exception (ADR-0014). The message names the way out.</summary>
+/// <summary>One plugin's Track outcome, or a whole selection's refusal (ADR-0014). The
+/// message names the way out.</summary>
 public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Message)
 {
     public static TrackResult Success() => new(true, TrackRefusal.None, "");
@@ -50,8 +50,8 @@ public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Mess
 /// message naming the way out.</summary>
 public sealed record TrackRefused(PluginAddress Plugin, TrackRefusal Refusal, string Message);
 
-/// <summary>Track over a selection answers per plugin (ADR-0019), except for a cause no
-/// plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
+/// <summary>Track over a selection (commands.md, A selection is one gesture): a cause no plugin
+/// escapes is <see cref="SelectionRefusal"/>.</summary>
 public sealed class TrackSelectionResult
 {
     private TrackSelectionResult(

@@ -216,8 +216,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             stringsWriter?.Dispose();
         }
 
-        // ADR-0008: masters are ordered explicitly from the load order when supplied, so the written
-        // file's master list matches what xEdit shows (ADR-0018 at the file level).
+        // The master order follows the load order when supplied (ADR-0008), so the written file's
+        // master list matches what xEdit shows (ADR-0018).
         if (masterOrder != null)
             writeBuilder = writeBuilder.WithMastersListOrdering(masterOrder.Select(name => ModKey.FromFileName(name)));
 

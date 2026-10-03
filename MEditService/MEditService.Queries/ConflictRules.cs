@@ -1,6 +1,6 @@
 namespace MEditService.Queries;
 
-// Single owner of the ADR-0018 two-axis model's decision rules, so a rule change cannot drift
+// Single owner of ADR-0018's two-axis model's decision rules, so a rule change cannot drift
 // between the sites that fold per-plugin values through them.
 internal static class ConflictRules
 {
