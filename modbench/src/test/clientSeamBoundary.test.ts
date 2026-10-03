@@ -5,10 +5,6 @@ import { join, relative, sep } from 'node:path';
 import { present } from '../ports/present';
 import { tsFiles } from './tsFiles';
 
-// ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
-// stream's endpoint path live only under the client box. The webview sits outside modbench/src,
-// so this walk never reaches it.
-
 const SRC = join(__dirname, '..');
 const CLIENT_DIR = 'client';
 const GENERATED_DIR = 'generated';
@@ -25,9 +21,6 @@ function isClientFolder(relativePath: string): boolean {
   return relativePath.split(sep)[0] === CLIENT_DIR;
 }
 
-// Pre-existing, narrow, type-only reads of the generated schema, neither the HTTP adapter: the
-// webview wire protocol and the load-failure report. Named so this fold stays the five modules
-// the ticket lists.
 const GENERATED_TYPE_ONLY_EXCEPTIONS = [join('wire', 'messages.ts'), join('medit', 'pluginFailures.ts')];
 
 interface Offense { path: string; reason: string }
@@ -36,9 +29,9 @@ function findOffenders(root: string): Offense[] {
   const offenses: Offense[] = [];
   for (const path of tsFiles(root)) {
     const relPath = relative(root, path);
-    if (relPath.split(sep).includes(GENERATED_DIR)) continue; // the schema mirror itself
-    if (isTestSupport(relPath)) continue; // fixtures and doubles, not production wiring
-    if (isClientFolder(relPath)) continue; // the seam itself
+    if (relPath.split(sep).includes(GENERATED_DIR)) continue;
+    if (isTestSupport(relPath)) continue;
+    if (isClientFolder(relPath)) continue;
 
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
@@ -115,21 +108,17 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
   });
 });
 
-// The proof-of-done's third clause: the in-memory adapter is the only fake in editing tests —
-// walked into test folders too, exactly where a rival fake would live.
 describe('the port has exactly two adapters', () => {
   function classesImplementing(text: string): boolean {
     return /\bimplements MEditClient\b/.test(text);
   }
 
-  // This file's own source quotes the pattern it looks for (the regex above, the fixtures
-  // below) — its own unavoidable false positive, allowlisted by name, not by folder.
-  const SELF = join('test', 'clientSeamBoundary.test.ts');
+  const THIS_FILE_QUOTING_THE_PATTERN =join('test', 'clientSeamBoundary.test.ts');
 
   function classDeclarers(root: string): string[] {
     return tsFiles(root)
       .map((path) => relative(root, path))
-      .filter((relPath) => !isClientFolder(relPath) && relPath !== SELF)
+      .filter((relPath) => !isClientFolder(relPath) && relPath !== THIS_FILE_QUOTING_THE_PATTERN)
       .filter((relPath) => classesImplementing(readFileSync(join(root, relPath), 'utf8')));
   }
 
@@ -148,7 +137,6 @@ describe('the port has exactly two adapters', () => {
     expect(declarers.sort()).toEqual(['HttpMEditClient.ts', 'InMemoryMEditClient.ts']);
   });
 
-  // Planted inside a test folder, not production code: proves the walk now reaches there too.
   it('a planted third adapter, inside a test folder, is caught', () => {
     const root = mkdtempSync(join(tmpdir(), 'medit-client-second-adapter-'));
     try {

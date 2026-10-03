@@ -75,8 +75,6 @@ describe("the instance's first read", () => {
   });
 });
 
-// A second writer, such as a default set at activation, would make a key read as answered
-// before its fact is known.
 describe('each key has one writer', () => {
   const SRC = join(__dirname, '..');
   const OWNERS = ['folderContext.ts', 'workspaceConfig.ts'];

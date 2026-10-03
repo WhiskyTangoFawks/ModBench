@@ -27,7 +27,6 @@ describe('the downloads folder unresolved, in the Output', () => {
     expect(lines).toEqual([REASON_D_DRIVE]);
   });
 
-  // Rival: a line per landed value, which every watched file change would repeat.
   it('stays one line over every later value that is still unresolved for the same reason', () => {
     const instance = new FakeInstance(LISTED);
     const lines = logged(instance);
@@ -48,7 +47,6 @@ describe('the downloads folder unresolved, in the Output', () => {
     expect(lines).toEqual([]);
   });
 
-  // Rival: a flag set once and never cleared, which would hide the second failure.
   it('is a new line when the folder is unresolved again after being resolved', () => {
     const instance = new FakeInstance(LISTED);
     const lines = logged(instance);

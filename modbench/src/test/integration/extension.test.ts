@@ -104,6 +104,7 @@ function pluginNamesOf(body: string): string[] {
 let mockPluginsOverride: MockPlugin[] | null = null;
 let putLoadOrderShouldFail = false;
 let rebuildIndexShouldFail = false;
+const RAW_INDEX_LOCKED_DETAIL = 'raw backend detail: index lock held by pid 4242';
 let getPluginsShouldFail = false;
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready' | 'HeldElsewhere' | 'Failed';
@@ -198,7 +199,7 @@ function createMockBackend(): http.Server {
       req.on('end', () => {
         if (rebuildIndexShouldFail) {
           res.writeHead(423, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ detail: 'This instance\'s index is open in another Modbench window.' }));
+          res.end(JSON.stringify({ detail: RAW_INDEX_LOCKED_DETAIL }));
           return;
         }
         res.writeHead(204);
@@ -1406,6 +1407,29 @@ describe('Plugin load-order rows expand into records', () => {
   });
 });
 
+describe('A plugin row carries no read-only tooltip before the backend has launched', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+
+  after(async () => {
+    if (!root) return;
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
+  });
+
+  it('shows a plugin the backend would report immutable without the read-only line', async () => {
+    if (!root) return;
+    resetMockBackend();
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
+    const tree = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
+    tree.invalidate();
+    const row = findRow(await tree.getChildren(), 'Immutable.esm');
+
+    const tooltip = tree.getTreeItem(row).tooltip;
+
+    assert.ok(!(typeof tooltip === 'string' && tooltip.includes('read-only')), `expected no read-only tooltip, got: ${describeTooltip(tooltip)}`);
+  });
+});
+
 describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1718,6 +1742,7 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
         `expected the refusal's words, got: ${toast}`,
       );
       assert.ok(root !== undefined && toast?.includes(root), `expected the instance named, got: ${toast}`);
+      assert.ok(!toast?.includes(RAW_INDEX_LOCKED_DETAIL), `expected the backend's raw detail kept out of the toast, got: ${toast}`);
     } finally {
       Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
     }

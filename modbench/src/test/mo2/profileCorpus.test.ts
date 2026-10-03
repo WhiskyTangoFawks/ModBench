@@ -1,5 +1,3 @@
-// Composition, against the committed mo2-instance-corpus fixture: proving switch profile touches
-// only the settings and nothing else.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from './fakeVscodeWatcher';
 
@@ -20,9 +18,6 @@ describe('profile corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // Rival this catches: an implementation that copies or merges profile content
-  // instead of repointing selected_profile — both profiles' modlist.txt/plugins.txt
-  // must stay byte-identical across a switch.
   it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
     const before = await snapshotTree(dir);
     await switchProfile(accessTo(dir), 'Secondary', ['Default', 'Secondary']);

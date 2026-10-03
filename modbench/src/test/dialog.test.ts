@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// `askQuestion` is the one real adapter for ADR-0019's dialog seam. It imports the real 'vscode'
-// module, so the seam it puts over `showWarningMessage` is only assertable behind this mock.
 const { showWarningMessage } = vi.hoisted(() => ({ showWarningMessage: vi.fn() }));
 vi.mock('vscode', () => ({ window: { showWarningMessage } }));
 
