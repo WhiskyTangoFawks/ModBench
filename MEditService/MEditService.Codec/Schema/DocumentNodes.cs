@@ -32,24 +32,39 @@ public static class DocumentNodes
     public static bool SameNode(object? a, object? b, FieldMetadata shape, bool absentMeansDefault)
     {
         if (a is JsonElement ja && b is JsonElement jb)
-            return ja.GetRawText() == jb.GetRawText() || InKeyOrder(ja, shape) == InKeyOrder(jb, shape);
+            return ja.GetRawText() == jb.GetRawText() || KeyOrderedText(ja, shape) == KeyOrderedText(jb, shape);
         if (a is null && b is null) return true;
         if (a is null || b is null)
             return absentMeansDefault && (a ?? b) is JsonElement present && IsOmitted(present, shape);
         return Equals(a, b);
     }
 
-    // A stable sort, so elements sharing a key keep their turn, as they align.
-    private static string InKeyOrder(JsonElement value, FieldMetadata meta)
+    /// <summary>The codec's text with every keyed array in extended-key order, so one value reads
+    /// alike whatever order its plugin holds its keyed arrays in.</summary>
+    public static string KeyOrderedText(JsonElement value, FieldMetadata meta)
     {
         var node = JsonNode.Parse(value.GetRawText());
-        foreach (var keyed in KeyedArrays.Under(node, meta))
-        {
-            var ordered = keyed.Elements.Zip(keyed.Keys).OrderBy(pair => pair.Second, ElementKey.Order).Select(pair => pair.First).ToList();
-            keyed.Elements.Clear();
-            foreach (var element in ordered) keyed.Elements.Add(element);
-        }
+        SortKeyedArrays(node, meta);
         return node?.ToJsonString() ?? "null";
+    }
+
+    // A stable sort by the extended key, so elements sharing it keep their turn, as they align.
+    private static void SortKeyedArrays(JsonNode? node, FieldMetadata meta)
+    {
+        if (node is JsonObject obj && meta.Fields is { } fields)
+        {
+            foreach (var field in fields)
+            {
+                if (obj[field.Name] is { } child) SortKeyedArrays(child, VariantFor(field, obj));
+            }
+            return;
+        }
+        if (node is not JsonArray array || meta.ElementType is not { } elementMeta) return;
+        foreach (var element in array) SortKeyedArrays(element, elementMeta);
+        if (meta.KeyMembers == null) return;
+        var ordered = array.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order).ToList();
+        array.Clear();
+        foreach (var element in ordered) array.Add(element);
     }
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,

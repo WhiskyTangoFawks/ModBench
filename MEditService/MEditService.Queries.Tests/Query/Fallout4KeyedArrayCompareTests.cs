@@ -109,7 +109,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         Perks = [.. InOrder(reversed,
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(A), Rank = 1 },
             new PerkPlacement { Perk = new FormLink<IPerkGetter>(B), Rank = 2 })],
-        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
+        Items = [.. DifferentEntriesOfOneItem(reversed)],
         Attacks = [.. InOrder(reversed,
             new Attack { AttackEvent = "attackStart", AttackData = new AttackData { DamageMult = 1 } },
             new Attack { AttackEvent = "bashStart", AttackData = new AttackData { DamageMult = 2 } })],
@@ -135,10 +135,16 @@ public sealed class Fallout4KeyedArrayCompareTests
         ],
     };
 
-    private static IEnumerable<ContainerEntry> ContainerEntriesHoldingAnItemTwice(bool reversed) => InOrder(reversed,
-        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(A), Count = 1 } },
-        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(A), Count = 1 } },
-        new ContainerEntry { Item = new ContainerItem { Item = new FormLink<IItemGetter>(B), Count = 2 } });
+    private static IEnumerable<ContainerEntry> DifferentEntriesOfOneItem(bool reversed) => InOrder(reversed,
+        ItemEntry(A, 1),
+        ItemEntry(A, 2),
+        ItemEntry(A, 2, new ExtraData { ItemCondition = 0.5f }),
+        ItemEntry(A, 2, new ExtraData { ItemCondition = 0.5f, Owner = new NpcOwner { Npc = new FormLink<INpcGetter>(A), Global = new FormLink<IGlobalGetter>(B) } }),
+        ItemEntry(A, 2, new ExtraData { ItemCondition = 0.5f, Owner = new FactionOwner { Faction = new FormLink<IFactionGetter>(A), RequiredRank = 1 } }),
+        ItemEntry(B, 1));
+
+    private static ContainerEntry ItemEntry(FormKey item, int count, ExtraData? data = null) =>
+        new() { Item = new ContainerItem { Item = new FormLink<IItemGetter>(item), Count = count }, Data = data };
 
     private static Faction Faction(bool reversed) => new(FactionKey, Fallout4Release.Fallout4)
     {
@@ -152,7 +158,12 @@ public sealed class Fallout4KeyedArrayCompareTests
     {
         Entries = [.. InOrder(reversed,
             new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 1 } },
-            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 1 } },
+            new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 2 } },
+            new LeveledItemEntry
+            {
+                Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(A), Count = 2 },
+                ExtraData = new ExtraData { ItemCondition = 0.5f },
+            },
             new LeveledItemEntry { Data = new LeveledItemEntryData { Level = 1, Reference = new FormLink<IItemGetter>(B), Count = 2 } })],
         FilterKeywordChances = [.. InOrder(reversed,
             new FilterKeywordChance { FilterKeyword = new FormLink<IKeywordGetter>(A) },
@@ -163,7 +174,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     {
         Entries = [.. InOrder(reversed,
             new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 1, Reference = new FormLink<INpcSpawnGetter>(A), Count = 1 } },
-            new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 1, Reference = new FormLink<INpcSpawnGetter>(A), Count = 1 } },
+            new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 1, Reference = new FormLink<INpcSpawnGetter>(A), Count = 2 } },
             new LeveledNpcEntry { Data = new LeveledNpcEntryData { Level = 2, Reference = new FormLink<INpcSpawnGetter>(A), Count = 2 } })],
     };
 
@@ -177,12 +188,12 @@ public sealed class Fallout4KeyedArrayCompareTests
 
     private static Container Container(bool reversed) => new(ContainerKey, Fallout4Release.Fallout4)
     {
-        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
+        Items = [.. DifferentEntriesOfOneItem(reversed)],
     };
 
     private static Furniture Furniture(bool reversed) => new(FurnitureKey, Fallout4Release.Fallout4)
     {
-        Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)],
+        Items = [.. DifferentEntriesOfOneItem(reversed)],
     };
 
     private static LensFlare LensFlare(bool reversed) => new(LensFlareKey, Fallout4Release.Fallout4)
@@ -237,7 +248,7 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static Quest Quest(bool reversed) => new(QuestKey, Fallout4Release.Fallout4)
     {
         Stages = [.. InOrder(reversed, new QuestStage { Index = 10 }, new QuestStage { Index = 20 })],
-        Aliases = [new QuestReferenceAlias { Items = [.. ContainerEntriesHoldingAnItemTwice(reversed)] }],
+        Aliases = [new QuestReferenceAlias { Items = [.. DifferentEntriesOfOneItem(reversed)] }],
     };
 
     private static Location Location(bool reversed) => new(LocationKey, Fallout4Release.Fallout4)
@@ -361,9 +372,16 @@ public sealed class Fallout4KeyedArrayCompareTests
     private static FakeRow Row(IMajorRecordGetter record, PluginAddress plugin, int loadOrderIndex, bool isWinner, string recordType, string[] fields) =>
         new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, Release, recordType, fields));
 
-    private void AssertTopCopyIsIdenticalToMaster(FormKey record) => AssertTopCopyIs(ConflictThis.IdenticalToMaster, record);
+    private void AssertTopCopyIsIdenticalToMaster(FormKey record)
+    {
+        var diffs = AssertTopCopyIs(ConflictThis.IdenticalToMaster, record);
 
-    private void AssertTopCopyIs(ConflictThis expected, FormKey record)
+        Assert.All(diffs.SelectMany(RowsUnder), row => Assert.Equal(ConflictAll.NoConflict, row.ConflictAll));
+    }
+
+    private static IEnumerable<FieldDiff> RowsUnder(FieldDiff row) => (row.Children ?? []).SelectMany(child => RowsUnder(child).Prepend(child));
+
+    private IReadOnlyList<FieldDiff> AssertTopCopyIs(ConflictThis expected, FormKey record)
     {
         var compare = _service.GetCompare(record.ToString())
             ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
@@ -371,6 +389,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         var topCells = compare.Diffs.Select(d => (d.FieldName, State: d.CellStates[TopPlugin.Name])).ToList();
         Assert.Equal(Records.Single(r => r.Key == record).Fields.Order(), topCells.Select(c => c.FieldName).Distinct().Order());
         Assert.All(topCells, cell => Assert.Equal(expected, cell.State));
+        return compare.Diffs;
     }
 
     [Fact]
@@ -382,35 +401,35 @@ public sealed class Fallout4KeyedArrayCompareTests
         AssertTopCopyIsIdenticalToMaster(FactionKey);
 
     [Fact]
-    public void ALeveledItemCopyHoldingItsEntriesAndFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
+    public void ALeveledItemCopyHoldingDifferentEntriesAtOneKeyAndItsFilterKeywordChancesInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(LeveledItemKey);
 
     [Fact]
-    public void ALeveledNpcCopyHoldingItsEntriesInAnotherOrder_IsIdenticalToMaster() =>
+    public void ALeveledNpcCopyHoldingDifferentEntriesAtOneKeyInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(LeveledNpcKey);
 
     [Fact]
-    public void AnObjectModCopyHoldingItsPropertiesInAnotherOrder_IsIdenticalToMaster() =>
+    public void AnObjectModCopyHoldingAPropertyTwiceInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(ObjectModKey);
 
     [Fact]
-    public void AContainerCopyHoldingItsItemsInAnotherOrder_IsIdenticalToMaster() =>
+    public void AContainerCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(ContainerKey);
 
     [Fact]
-    public void AFurnitureCopyHoldingItsItemsInAnotherOrder_IsIdenticalToMaster() =>
+    public void AFurnitureCopyHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(FurnitureKey);
 
     [Fact]
-    public void ALensFlareCopyHoldingItsSpritesInAnotherOrder_IsIdenticalToMaster() =>
+    public void ALensFlareCopyHoldingASpriteTwiceInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(LensFlareKey);
 
     [Fact]
-    public void AMaterialSwapCopyHoldingItsSubstitutionsInAnotherOrder_IsIdenticalToMaster() =>
+    public void AMaterialSwapCopyHoldingASubstitutionTwiceInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(MaterialSwapKey);
 
     [Fact]
-    public void ARegionCopyHoldingItsSoundsInAnotherOrder_IsIdenticalToMaster() =>
+    public void ARegionCopyHoldingASoundTwiceInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(RegionKey);
 
     [Fact]
@@ -422,7 +441,7 @@ public sealed class Fallout4KeyedArrayCompareTests
         AssertTopCopyIsIdenticalToMaster(PerkKey);
 
     [Fact]
-    public void AQuestCopyHoldingItsStagesAndAnAliasItemsInAnotherOrder_IsIdenticalToMaster() =>
+    public void AQuestCopyHoldingItsStagesAndAnAliasHoldingDifferentEntriesOfOneItemInAnotherOrder_IsIdenticalToMaster() =>
         AssertTopCopyIsIdenticalToMaster(QuestKey);
 
     [Fact]

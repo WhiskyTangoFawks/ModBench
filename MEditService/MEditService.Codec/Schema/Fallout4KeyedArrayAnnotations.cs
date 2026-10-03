@@ -93,4 +93,16 @@ internal static class Fallout4KeyedArrayAnnotations
         ("IMaterialSwapGetter", "Substitutions", ["OriginalMaterial"]),
         ("IStaticCollectionGetter", "Parts", ["Static"]),
     ];
+
+    /// <summary>What a wbStructExSK adds to its key, which orders the elements sharing a key before
+    /// xEdit pairs the nth across plugins. COED's owner with its global or rank is one Mutagen union.</summary>
+    public static readonly (string TypeName, string MemberName, string[] ExtendedKeyMembers)[] ExtendedKeys =
+    [
+        ("IContainerGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("IFurnitureGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("INpcGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("IQuestReferenceAliasGetter", "Items", ["Item.Count", "Data.ItemCondition", "Data.Owner"]),
+        ("ILeveledItemGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
+        ("ILeveledNpcGetter", "Entries", ["Data.Count", "ExtraData.ItemCondition", "ExtraData.Owner"]),
+    ];
 }

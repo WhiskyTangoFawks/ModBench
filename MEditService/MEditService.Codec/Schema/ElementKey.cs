@@ -21,6 +21,16 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
     public static ElementKey Of(JsonNode? node, IReadOnlyList<string> keyMembers, FieldMetadata? elementMeta = null) =>
         Of(JsonSerializer.SerializeToElement(node), keyMembers, elementMeta);
 
+    /// <summary>xEdit's extended sort key: the key, then what a wbStructExSK adds to it.</summary>
+    public static ElementKey SortKeyOf(JsonElement element, FieldMetadata array) =>
+        Of(element, SortMembers(array), array.ElementType);
+
+    public static ElementKey SortKeyOf(JsonNode? node, FieldMetadata array) =>
+        Of(node, SortMembers(array), array.ElementType);
+
+    private static IReadOnlyList<string> SortMembers(FieldMetadata array) =>
+        [.. array.KeyMembers ?? [], .. array.ExtendedKeyMembers ?? []];
+
     private static FieldMetadata? MemberAt(FieldMetadata? meta, string keyPath)
     {
         foreach (var hop in keyPath.Split('.'))
@@ -65,6 +75,8 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
             // A flags member is an array of names (ScenePhaseFragment.Flags keys a fragment); its
             // order is its bits', read off the members the schema declares.
             JsonValueKind.Array => (FlagBits(current, member), string.Join(", ", current.EnumerateArray().Select(e => e.ToString()))),
+            // A union extends a key whole: COED's owner is one Mutagen union of its leaves' members.
+            JsonValueKind.Object => (null, current.GetRawText()),
             _ => Absent,
         };
 

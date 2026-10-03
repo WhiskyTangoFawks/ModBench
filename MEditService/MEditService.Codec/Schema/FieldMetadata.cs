@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Codec.Schema;
 
 /// <summary>BitValue is the member's bit as a decimal string, so one above 2^53 survives JSON;
@@ -36,8 +38,8 @@ public record FieldMetadata(
     IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUse = null,
 
     // The element member(s) identifying an element (xEdit's wbArrayS); null where an array aligns
-    // by values in sequence. Aligned by key, kept in the order held, duplicates refused. A name
-    // may be dotted to reach one struct member down.
+    // by values in sequence. Aligned by key and kept in the order held. A name may be dotted to
+    // reach one struct member down.
     IReadOnlyList<string>? KeyMembers = null,
 
     // For 'struct': the Loqui/CLR class the schema declares, null for every other type. Distinct
@@ -71,4 +73,8 @@ public record FieldMetadata(
 
     // The header member xEdit reads as the date, user and index it packs, by the record's Form
     // Version: xEdit's Version Control Info 1 (wbRecordHeader).
-    bool IsVersionControlInfo1 = false);
+    bool IsVersionControlInfo1 = false,
+
+    // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
+    // pairs with the nth in every other column. The compare reads it; the webview never does.
+    [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null);

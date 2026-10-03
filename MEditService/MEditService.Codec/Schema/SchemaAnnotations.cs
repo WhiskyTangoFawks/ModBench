@@ -64,8 +64,10 @@ internal sealed record SchemaAnnotations(
     // would silently idle every member the row governs; validated in all four directions.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, IReadOnlyList<string>>> SiblingsInUse,
     // xEdit's wbArrayS: elements identified by key members (Mutagen member names, dotted one struct
-    // down), not by position. Aligned by key in the compare grid, kept in the order held, duplicates refused.
+    // down), not by position. Aligned by key in the compare grid, kept in the order held.
     Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> KeyedArrays,
+    // See FieldMetadata.ExtendedKeyMembers; every row extends a KeyedArrays row.
+    Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> ExtendedKeys,
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
@@ -263,6 +265,8 @@ internal sealed record SchemaAnnotations(
             },
             KeyedArrays: Fallout4VmadAnnotations.KeyedArrays.Concat(Fallout4KeyedArrayAnnotations.KeyedArrays).ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.KeyMembers),
+            ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
+                r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: new()
@@ -303,6 +307,7 @@ internal sealed record SchemaAnnotations(
             KnownDefects: [],
             SiblingsInUse: [],
             KeyedArrays: [],
+            ExtendedKeys: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
@@ -346,6 +351,7 @@ internal sealed record SchemaAnnotations(
             KnownDefects: [],
             SiblingsInUse: [],
             KeyedArrays: [],
+            ExtendedKeys: [],
             PermittedNullFormLinks: [],
             AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
@@ -397,6 +403,7 @@ internal sealed record SchemaAnnotations(
     public IReadOnlyDictionary<string, IReadOnlyList<string>>? SiblingsInUseFor(PropertyInfo prop) =>
         SiblingsInUse.GetValueOrDefault(Key(prop));
     public IReadOnlyList<string>? KeyMembersFor(PropertyInfo prop) => KeyedArrays.GetValueOrDefault(Key(prop));
+    public IReadOnlyList<string>? ExtendedKeyMembersFor(PropertyInfo prop) => ExtendedKeys.GetValueOrDefault(Key(prop));
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
     public KnownDefect? DefectFor(PropertyInfo prop) =>
@@ -465,11 +472,20 @@ internal sealed record SchemaAnnotations(
         }
     }
 
-    // A row naming a key the element lacks would key every element alike, collapsing the array to
-    // one row in the compare grid and refusing every second element as a duplicate.
-    private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName)
+    private IEnumerable<string> UnresolvedKeyMembers(ILookup<string, Type> typesByName) =>
+    [
+        .. UnresolvedKeyPaths(typesByName, nameof(KeyedArrays), KeyedArrays),
+        .. UnresolvedKeyPaths(typesByName, nameof(ExtendedKeys), ExtendedKeys),
+        .. ExtendedKeys.Keys.Where(entry => !KeyedArrays.ContainsKey(entry))
+            .Select(entry => $"{nameof(ExtendedKeys)}: {entry.TypeName}.{entry.MemberName} extends no keyed array"),
+    ];
+
+    // A row naming a key the element lacks would key every element alike, so the array would align
+    // by position alone.
+    private static IEnumerable<string> UnresolvedKeyPaths(
+        ILookup<string, Type> typesByName, string table, Dictionary<(string TypeName, string MemberName), IReadOnlyList<string>> rows)
     {
-        foreach (var (entry, keyMembers) in KeyedArrays)
+        foreach (var (entry, keyMembers) in rows)
         {
             var declaring = typesByName[entry.TypeName].FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
             if (declaring == null) continue;
@@ -477,7 +493,7 @@ internal sealed record SchemaAnnotations(
             var property = declaring.GetProperty(entry.MemberName)
                 ?? throw new InvalidOperationException(
                     $"Expected '{declaring.Name}' to still declare '{entry.MemberName}'.");
-            var label = $"{nameof(KeyedArrays)}: {entry.TypeName}.{entry.MemberName}";
+            var label = $"{table}: {entry.TypeName}.{entry.MemberName}";
             if (!ReflectedTypes.IsListType(property.PropertyType, out var elementType))
             {
                 yield return $"{label} is not a list";

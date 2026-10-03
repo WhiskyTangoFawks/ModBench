@@ -8,7 +8,7 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-public sealed class KeyedArrayAddTests : IDisposable
+public sealed class RepeatedDefaultKeyTests : IDisposable
 {
     private static readonly ModKey Mod = ModKey.FromFileName("DocEdit.esp");
 

@@ -164,7 +164,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         List<ElementRow>? rows = null;
         if (columns.TrueForAll(c => c.Elements.Count <= MaxArrayChildCount))
-            rows = array.KeyMembers is { } keyMembers ? KeyedRows(keyMembers, element, columns) : SequenceRows(columns);
+            rows = array.KeyMembers is { } keyMembers ? KeyedRows(array, keyMembers, element, columns) : SequenceRows(element, columns);
         if (rows == null || rows.Count > MaxArrayChildCount)
         {
             ctx.Logger.LogWarning(
@@ -185,15 +185,15 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     }
 
     private static List<ElementRow> KeyedRows(
-        IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
+        FieldMetadata array, IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
     {
-        // Elements sharing a key each take a row, the nth at a key aligning with the nth in every
-        // other column, as xEdit's TfrmMain.InitChildren counts them.
+        // Elements sharing a key each take a row, the nth at a key in extended-key order aligning
+        // with the nth in every other column, as xEdit's TfrmMain.InitChildren counts them.
         var rows = new Dictionary<(string Key, int Turn), (ElementKey Key, int Turn, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
             var turns = new Dictionary<string, int>(StringComparer.Ordinal);
-            for (var index = 0; index < elements.Count; index++)
+            foreach (var index in Enumerable.Range(0, elements.Count).OrderBy(i => ElementKey.SortKeyOf(elements[i], array), ElementKey.Order))
             {
                 var key = ElementKey.Of(elements[index], keyMembers, element);
                 var turn = turns[key.Text] = turns.GetValueOrDefault(key.Text) + 1;
@@ -209,12 +209,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     // xEdit's TfrmMain.InitChildren: each column in load order diffed against the rows before it,
     // with no modified pair, and a row only those rows hold before a row only the column holds.
-    private static List<ElementRow> SequenceRows(List<(string Column, List<JsonElement> Elements)> columns)
+    private static List<ElementRow> SequenceRows(FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
     {
         var rows = new List<(string Text, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
-            var texts = elements.Select(e => e.GetRawText()).ToList();
+            var texts = elements.Select(e => DocumentNodes.KeyOrderedText(e, element)).ToList();
             var common = new int[rows.Count + 1, texts.Count + 1];
             for (var r = rows.Count - 1; r >= 0; r--)
             {
