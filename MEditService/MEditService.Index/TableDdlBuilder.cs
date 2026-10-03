@@ -111,7 +111,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // Header included.
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 

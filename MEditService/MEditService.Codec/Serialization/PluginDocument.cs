@@ -20,7 +20,7 @@ public readonly record struct ChildRecord(string FormKey, string SlotName, int S
 public readonly record struct DocumentContainment(string ParentFormKey, string ParentRecordType, string SlotName);
 
 /// <summary>One record as the text its source file holds (ADR-0005), under the schema table name
-/// the index keys it by. A diagnosis makes the text an identity-only stub (ADR-0005).</summary>
+/// the index keys it by. A diagnosis makes the text an identity-only stub.</summary>
 public sealed record PluginDocument(
     string RecordType,
     string FormKey,
