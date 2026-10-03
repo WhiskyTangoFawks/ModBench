@@ -1,6 +1,3 @@
-// The tests observe the effect on disk rather than the steps: what the instance shows while the
-// install runs, and which files moved.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -21,7 +18,6 @@ import type { Runner } from '../extractArchive';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 import { present } from '../../ports/present';
 
-// ModOrganizer.ini's own `gameName` in the corpus fixture, which the caller reads off the value.
 const GAME_NAME = 'Fallout 4';
 
 const MOD = 'Freshly Installed Mod';
@@ -39,7 +35,6 @@ async function writePayload(root: string): Promise<void> {
   }
 }
 
-// Forward-slash relative paths of every file below `dir`, or null when it does not exist.
 async function treeOf(dir: string): Promise<string[] | null> {
   const out: string[] = [];
   const walk = async (at: string): Promise<void> => {
@@ -59,8 +54,6 @@ async function treeOf(dir: string): Promise<string[] | null> {
 
 const COMPLETE = [...PAYLOAD.map((p) => p.split(sep).join('/')), 'meta.ini'].sort();
 
-// A pre-existing target mod: an old plugin, a foreign meta.ini key, and (for the tracked case) a
-// `.git` directory an upgrade must leave byte-identical.
 async function makeExistingMod(root: string, name: string, tracked: boolean): Promise<string> {
   const modDir = join(root, 'mods', name);
   await mkdir(modDir, { recursive: true });
@@ -69,7 +62,6 @@ async function makeExistingMod(root: string, name: string, tracked: boolean): Pr
     await writeFile(join(modDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   }
   await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
-  // `category` is a key install does not own, so it proves an upgrade keeps what it does not own.
   await writeFile(
     join(modDir, 'meta.ini'),
     '[General]\ngameName=Fallout4\nmodid=0\nversion=1.0.0\ninstallationFile=Old-1-0.7z\ncategory="-1,"\n',
@@ -84,30 +76,25 @@ function runnerFor(payloadRoot = 'Wrapper'): Runner {
   };
 }
 
-// ADR-0007 invariant 5: git on PATH is a product requirement. Isolated from the machine's own
-// global/system config, so a host core.autocrlf or commit.gpgsign never reaches these commits.
 const EMPTY_GLOBAL_GITCONFIG = join(mkdtempSync(join(tmpdir(), 'medit-git-config-')), 'gitconfig');
 writeFileSync(EMPTY_GLOBAL_GITCONFIG, '');
-const GIT_ENV = {
+const GIT_ENV_ISOLATED_FROM_THE_HOSTS_AUTOCRLF_AND_GPGSIGN = {
   GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com',
   GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com',
   GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: EMPTY_GLOBAL_GITCONFIG,
 };
 function git(cwd: string, args: string[]): void {
-  execFileSync('git', args, { cwd, env: { ...process.env, ...GIT_ENV } });
+  execFileSync('git', args, { cwd, env: { ...process.env, ...GIT_ENV_ISOLATED_FROM_THE_HOSTS_AUTOCRLF_AND_GPGSIGN } });
 }
 
-// Polls rather than awaiting one event: fs.watch's first callback can be a metadata touch, not
-// the write under test, so a single `once` risks resolving on the wrong event.
-async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+async function pollUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now();
   while (!condition()) {
-    if (Date.now() - start > timeoutMs) throw new Error('waitFor: condition never became true');
+    if (Date.now() - start > timeoutMs) throw new Error('pollUntil: condition never became true');
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
 
-// The Instance adapter over the instance, with the members a test replaces.
 const withAdapter = (access: InstallAccess, over: Partial<InstanceAdapter>): InstallAccess =>
   ({ ...access, adapter: { ...access.adapter, ...over } });
 
@@ -119,7 +106,6 @@ describe('install commands', () => {
   let access: InstallAccess;
   let sourceFolder: string;
 
-  // A downloaded file: its archive on disk in the downloads folder.
   async function downloadedFile(name: string): Promise<{ name: string; path: string }> {
     const path = join(root, 'downloads', name);
     await writeFile(path, 'archive bytes');
@@ -137,8 +123,6 @@ describe('install commands', () => {
     await rm(sourceFolder, { recursive: true, force: true });
   });
 
-  // Rival: extract into a staging folder beside mods/. The observer sees that folder appear in
-  // the instance, and this fails.
   it('writes nothing outside mods/<name> while it runs, from an archive or a folder', async () => {
     const FOLDER_MOD = 'Folder Installed Mod';
     const entriesAt = async (): Promise<string[]> =>
@@ -169,12 +153,11 @@ describe('install commands', () => {
     await observer;
 
     expect(outcomes).toEqual([{ applied: true, wrote: true, isFomod: false }, { applied: true, wrote: true, isFomod: false }]);
-    expect(seen.has(`mods/${MOD}`)).toBe(true); // the observer interleaved with the slow install
+    const observerInterleavedWithTheSlowInstall = seen.has(`mods/${MOD}`);
+    expect(observerInterleavedWithTheSlowInstall).toBe(true);
     expect([...seen].filter((path) => path !== `mods/${MOD}` && path !== `mods/${FOLDER_MOD}`)).toEqual([]);
   });
 
-  // Rival: append the modlist line from the installer. The touch-set below has no modlist.txt
-  // in it, so the snapshot comparison fails.
   it('writes the mod folder and nothing else — no modlist line, no download bookkeeping', async () => {
     const before = await snapshotTree(root);
 
@@ -184,7 +167,7 @@ describe('install commands', () => {
     assertOnlyChanged(before, after, new Set(COMPLETE.map((p) => `mods/${MOD}/${p}`)));
   });
 
-  it('the meta.ini carries the gameName it is handed, and an archive install its installationFile', async () => {
+  it('the meta.ini carries the gameName it is handed, and an archive install its installationFile, peeling the lone wrapper directory so the payload lands at the mod root', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
     const run: Runner = async (_bin, args) => {
       const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
@@ -196,7 +179,6 @@ describe('install commands', () => {
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
     expect(meta).toContain('installationFile=Freshly-1-0.7z');
-    // The lone wrapper directory is peeled, so the payload lands at the mod root.
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
@@ -211,8 +193,6 @@ describe('install commands', () => {
     expect(await downloadMetaOf(file.name)).toMatchObject({ status: 'Installed' });
   });
 
-  // Rival: mark by filename alone. The downloads folder holds an archive of the same name, so a
-  // mark would appear on a downloaded file the user never installed from.
   it('marks no downloaded file for an archive that is not one, even one sharing its name', async () => {
     const file = await downloadedFile('Freshly-1-0.7z');
     const archive = join(sourceFolder, file.name);
@@ -222,7 +202,6 @@ describe('install commands', () => {
     expect(await downloadMetaOf(file.name)).toBeUndefined();
   });
 
-  // The mod IS installed; only the bookkeeping failed, so the refusal rides beside `applied`.
   it('reports a failed mark beside the landed mod rather than as a refusal', async () => {
     const file = await downloadedFile('Freshly-1-0.7z');
     await mkdir(`${file.path}.meta`);
@@ -234,7 +213,6 @@ describe('install commands', () => {
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
-  // Rival: read `gone` as marked. The value listed the file, but it left the disk before the mark.
   it('reports a downloaded file gone before its mark beside the landed mod, naming it', async () => {
     const file = { name: 'Freshly-1-0.7z', path: join(root, 'downloads', 'Freshly-1-0.7z') };
 
@@ -253,7 +231,6 @@ describe('install commands', () => {
     expect(meta).toContain('version=3.0.0');
   });
 
-  // Rival: remove only the folder the mod root was detected in, which leaves the wrapper's parent.
   it('leaves nothing beside mods/ behind, on success or on refusal', async () => {
     const before = await readdir(root);
 
@@ -263,9 +240,6 @@ describe('install commands', () => {
     expect((await readdir(root)).sort()).toEqual(before.sort());
   });
 
-  // Rival: restore the `exists(modDir)` branch that made an existing folder an upgrade. The
-  // folder is then emptied and refilled, so both the refusal and the untouched-tree assertion
-  // fail.
   it('refuses a new install onto an existing folder and leaves it untouched, even unlisted', async () => {
     const name = 'Unlisted Folder';
     const modDir = await makeExistingMod(root, name, false);
@@ -278,8 +252,6 @@ describe('install commands', () => {
     expect(await treeOf(modDir)).toEqual(before);
   });
 
-  // Rival: fall back to landing a new mod when the folder is gone. The folder would then exist
-  // and hold the payload, so both assertions fail.
   it('refuses an upgrade of a folder that is not under mods/, writing nothing', async () => {
     const before = await snapshotTree(root);
 
@@ -303,12 +275,12 @@ describe('install commands', () => {
     expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
     expect(await treeOf(modDir)).toEqual([...COMPLETE, '.git/HEAD'].sort());
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
-    expect(meta).toContain('gameName=Fallout 4'); // owned key, freshly written
+    expect(meta).toContain('gameName=Fallout 4');
     expect(meta).toContain('modid=111');
     expect(meta).toContain('installationFile=Freshly-2-0.7z');
     expect(meta).toContain('1\\modid=111');
     expect(meta).toContain('1\\fileid=222');
-    expect(meta).toContain('category="-1,"'); // foreign key, untouched
+    expect(meta).toContain('category="-1,"');
   });
 
   it('upgrades an untracked target: the folder ends up holding only the release and meta.ini', async () => {
@@ -322,8 +294,6 @@ describe('install commands', () => {
     expect(await treeOf(modDir)).toEqual(COMPLETE);
   });
 
-  // Rival: keep `.git` alone, as an upgrade once did. The repository's ignore rules and the
-  // plugin source would then go with the release they have nothing to do with.
   it('upgrades around the repository and the plugin source: .git, .gitignore and plugin-source/ survive', async () => {
     const name = 'Tracked Target';
     const modDir = await makeExistingMod(root, name, true);
@@ -370,9 +340,7 @@ describe('install commands', () => {
     expect(() => git(modDir, ['check-ignore', 'meta.ini'])).not.toThrow();
   });
 
-  // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation Kit
-  // ships script sources at a release's own root Source/ — ordinary content, not a collision.
-  it('upgrades a release that ships a root Source folder, as ordinary content', async () => {
+  it('upgrades a release that ships a root Source folder, as ordinary content, Skyrim SE\'s Creation Kit shipping script sources at a release\'s own root Source/', async () => {
     const name = 'Untracked Target';
     const modDir = await makeExistingMod(root, name, false);
     const shipsSource: Runner = async (bin, args) => {
@@ -388,10 +356,8 @@ describe('install commands', () => {
     expect(await treeOf(modDir)).toContain('Source/Script.psc');
   });
 
-  // Rival: a case-sensitive match. Windows would move Plugin-Source/ onto the kept plugin-source/
-  // part way; elsewhere it would land beside it and drop out of the mod's files.
   it.each(['.GITIGNORE', 'Plugin-Source'])(
-    'refuses, before any write, a release that ships %s, naming it',
+    'refuses, before any write, a release that ships %s in another case than the kept entry, naming it, as Windows would otherwise move it onto the kept entry part way',
     async (entry) => {
       const name = 'Untracked Target';
       const modDir = await makeExistingMod(root, name, false);
@@ -412,8 +378,7 @@ describe('install commands', () => {
     },
   );
 
-  // mods.md, What install does, story 5: installing again is the recovery, so nothing is undone.
-  it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back', async () => {
+  it('an upgrade that fails part way says so, naming the mod and what failed, and that nothing was rolled back, installing again being the recovery', async () => {
     const name = 'Untracked Target';
     await makeExistingMod(root, name, false);
     const failing = withAdapter(access, {
@@ -432,7 +397,7 @@ describe('install commands', () => {
   });
 
   it('an upgrade with a sidecar version rewrites meta.ini\'s version', async () => {
-    const name = 'Versioned Target'; // makeExistingMod's meta.ini starts at version=1.0.0
+    const name = 'Versioned Target';
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
@@ -443,10 +408,8 @@ describe('install commands', () => {
     expect(meta).not.toContain('version=1.0.0');
   });
 
-  // Rival: pass the identity's meta straight through without merging against the old text. The
-  // version key is owned, so `undefined` there would clear it instead of leaving it as found.
-  it('an upgrade with no sidecar version preserves whatever version the old meta.ini had', async () => {
-    const name = 'Unversioned Upgrade'; // makeExistingMod's meta.ini starts at version=1.0.0
+  it('an upgrade with no sidecar version preserves whatever version the old meta.ini had, the version key being owned so an undefined must not clear it', async () => {
+    const name = 'Unversioned Upgrade';
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
@@ -456,7 +419,7 @@ describe('install commands', () => {
     expect(meta).toContain('version=1.0.0');
   });
 
-  it('a watcher armed on the target folder before an upgrade still fires for a write after it', async () => {
+  it('a watcher armed on the target folder before an upgrade still fires for a write after it, polled as fs.watch\'s first callback can be a metadata touch rather than the write under test', async () => {
     const name = 'Watched Target';
     const modDir = await makeExistingMod(root, name, true);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
@@ -469,16 +432,13 @@ describe('install commands', () => {
 
       fired = false;
       await writeFile(join(modDir, 'after-upgrade.txt'), 'x');
-      await waitFor(() => fired);
+      await pollUntil(() => fired);
     } finally {
       watcher.close();
     }
   });
 
-  // Rival: drop the write lock. Both see the folder absent before either has written anything,
-  // and the loser's rename onto the now-populated target fails with a raw ENOTEMPTY instead of
-  // the collision refusal.
-  it('serializes two new installs of one name — exactly one lands, the loser refuses as a collision', async () => {
+  it('serializes two new installs of one name — exactly one lands, the loser refuses as a collision rather than failing with a raw ENOTEMPTY', async () => {
     const outcomes = await Promise.all([
       installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
       installFromFolder(access, { kind: 'new', name: MOD }, sourceFolder, { gameName: GAME_NAME }),
@@ -496,7 +456,6 @@ describe('install commands', () => {
     expect(await treeOf(sourceFolder)).toEqual(PAYLOAD.map((p) => p.split(sep).join('/')).sort());
   });
 
-  // Rival: report the failure and leave the folder, so the half-extracted mod shows up in mods/.
   it('removes the folder of a new install that fails partway, and writes nothing else', async () => {
     const before = await snapshotTree(root);
     const dies: Runner = async (bin, args) => {
@@ -511,7 +470,6 @@ describe('install commands', () => {
     assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
 
-  // Rival: clear the folder before extracting, so a failed extraction leaves it emptied.
   it('an upgrade whose extraction fails leaves the folder as it was, with the error shown', async () => {
     const name = 'Tracked Target';
     const modDir = await makeExistingMod(root, name, true);
@@ -539,10 +497,8 @@ describe('install commands', () => {
   });
 });
 
-// Install's one export about which files it takes: every picker, and the Downloads view, reads
-// this list rather than naming an extension of its own.
 describe('ARCHIVE_EXTENSIONS', () => {
-  it('is the archive extensions install can extract, lower-cased', () => {
+  it('is the archive extensions install can extract, lower-cased, the one list every picker and the Downloads view read rather than naming an extension of their own', () => {
     expect([...ARCHIVE_EXTENSIONS].sort()).toEqual(['7z', 'rar', 'zip']);
   });
 });

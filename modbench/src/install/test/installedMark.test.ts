@@ -10,7 +10,6 @@ import { cloneCorpusFixture } from '../../test/mo2/corpusFixture';
 import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import type { InstanceAdapter } from '../../instanceAdapter/instanceAdapter';
 
-// expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
 function assertRefusal(result: InstalledMarkResult, expectedSubstring: string): void {
   if (result.applied) throw new Error('expected a refusal, got applied:true');
   expect(result.refusal).toContain(expectedSubstring);
@@ -38,7 +37,6 @@ describe('markDownloadInstalled', () => {
     expect(await statusOf('manual.7z')).toBe('Installed');
   });
 
-  // Rival: read `gone` as marked, so a file that left the disk reads as done.
   it('refuses, naming it, a downloaded file gone from disk, and writes it no metadata', async () => {
     assertRefusal(await markDownloadInstalled(adapter, 'gone.7z'), '"gone.7z" is gone from disk');
 

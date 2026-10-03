@@ -5,8 +5,6 @@ vi.mock('node:fs/promises');
 
 import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseRegQuerySteamPath, type GameAutodetect } from '../gamePathDetector';
 
-// A fixture, not a platform lock (CLAUDE.md): the real facts come from gamePaths.ts; this
-// module takes them as data and names no game itself.
 const FO4_APP_ID = '377160';
 const FO4: GameAutodetect = { steamAppId: FO4_APP_ID, steamFolderName: 'Fallout 4' };
 
@@ -61,9 +59,7 @@ describe('detectGamePaths (Linux)', () => {
   });
 });
 
-// The Proton prefix root, factored out of `detectLinux` for gameDirectory.ts's Wine translation.
-// Also parseLibraryFoldersVdf's seam now that it is not exported: no fs.access to also stub.
-describe('detectWinePrefix', () => {
+describe('detectWinePrefix, the Proton prefix root for gameDirectory.ts\'s Wine translation and the seam of the unexported parseLibraryFoldersVdf', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });

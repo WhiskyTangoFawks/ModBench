@@ -7,8 +7,6 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
-// A fetch double that never answers — the health check below (backendLifecycle.ts's own
-// injectable) is what actually drives lifecycle in these tests; nothing here calls the API client.
 function neverFetch(): (input: Request) => Promise<Response> {
   return () => new Promise<Response>(() => {});
 }
@@ -26,14 +24,10 @@ function makeClient(
   });
 }
 
-// A stream response that stays open (a reader on it never settles) — for the notification
-// stream endpoint, whose connection this suite cares about, never its frames.
 function openStreamResponse(): Response {
   return new Response(new ReadableStream({ start: () => {} }), { status: 200 });
 }
 
-// A stream this suite can push frames onto after the fact — for a test whose subject is a tick
-// itself, not merely the connection.
 function pushableStreamResponse(): { response: Response; push: (chunk: Uint8Array) => void } {
   let push!: (chunk: Uint8Array) => void;
   const stream = new ReadableStream<Uint8Array>({ start: (c) => { push = (chunk) => c.enqueue(chunk); } });
@@ -47,11 +41,8 @@ function loadOrderStatusTick(loadOrderStatus: {
   return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
 }
 
-// The tick putLoadOrder's own promise waits for: Ready, since that is what settles it (ADR-0013).
-const readyTick = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
+const readyTickThatSettlesPutLoadOrder =() => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
 
-// Dispatches by URL substring — for a test that scripts both the notification stream and one
-// API call through the same injected `fetch`.
 function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
   return vi.fn((req: Request) => {
     const route = routes.find(([match]) => req.url.includes(match));
@@ -64,9 +55,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  // A cached copy of a push-only event can disagree with the process it describes; the lifecycle
-  // is inside this client, so the read is the process's own.
-  it('reads the lifecycle\'s own status, not a cached copy of it', async () => {
+  it('reads the lifecycle\'s own status, not a cached copy of it, as a cached copy of a push-only event can disagree with the process it describes', async () => {
     const client = makeClient(neverFetch());
     expect(client.status).toBe('starting');
 
@@ -99,16 +88,14 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-// ADR-0014 invariant 2: the notification stream follows the status, and only this module drives
-// it — scripted here through the injected `fetch`, the same seam production wires to `undici`.
-describe('HttpMEditClient — the notification stream follows the status', () => {
+describe('HttpMEditClient — the notification stream follows the status, and only this module drives it', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('opens the stream when the backend attaches', async () => {
     const fetch = vi.fn((req: Request) => {
       expect(req.url).toContain('/notifications/stream');
-      return Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 })); // stays open
+      return Promise.resolve(new Response(new ReadableStream({ start: () => {} }), { status: 200 }));
     });
     const client = makeClient(fetch);
 
@@ -121,7 +108,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
     let sawSignal: AbortSignal | undefined;
     const fetch = vi.fn((req: Request) => {
       sawSignal = req.signal;
-      return new Promise<Response>(() => {}); // never resolves — stop() must abort it directly
+      return new Promise<Response>(() => {});
     });
     const client = makeClient(fetch);
     await client.start();
@@ -143,12 +130,8 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
   });
 });
 
-// ADR-0019: the adapter's own logic — transport, timeouts and error mapping — with the per-verb
-// wiring left to the backend's own handler tests.
 describe('HttpMEditClient — a 503 from a write', () => {
-  // 503 has one meaning left: the load order went away. The rival is a client that reads more
-  // into the status than the detail says.
-  it('relays the load-order-absent 503 as the backend worded it', async () => {
+  it('relays the load-order-absent 503 as the backend worded it, 503 having one meaning left: the load order went away, so the client reads no more into the status than the detail says', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
@@ -173,9 +156,7 @@ describe('HttpMEditClient — creating a record', () => {
     expect(await request?.json()).toEqual({ origin: 'ModA', recordType: 'npc_', editorId: null, formKey: null });
   });
 
-  // plugins.md, Create record: no free FormID is refused, naming the remedies, and nothing offers
-  // to remove the flag and try again.
-  it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once', async () => {
+  it('answers a full FormID space as a refusal carrying mEdit\'s remedies, asking once, nothing offering to remove the flag and try again', async () => {
     const detail = 'MyPatch.esp has exhausted its ESL FormKey space. Clear the light flag in the header, or change a record\'s FormID.';
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(422, { detail })));
     const client = makeClient(fetch);
@@ -220,8 +201,7 @@ describe('HttpMEditClient — deleting records answers per record', () => {
     expect(result).toEqual({ refused: true, message: 'Could not delete 2 records — Bad Request' });
   });
 
-  // common.md, Unconfirmed writes, story 6: a request with no answer may have written.
-  it('resolves a thrown request the same way, told apart as unanswered', async () => {
+  it('resolves a thrown request the same way, told apart as unanswered, as a request with no answer may have written', async () => {
     const fetch = vi.fn(() => Promise.reject(new Error('socket hang up')));
     const client = makeClient(fetch);
 
@@ -495,9 +475,7 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  // 503 has one meaning: the load order went away. There is no typed refusal in it, so the
-  // outcome carries this side's own 'Unknown'.
-  it('editRecord leaves the load-order-absent 503 alone', async () => {
+  it('editRecord leaves the load-order-absent 503 alone, its outcome carrying this side\'s own Unknown as there is no typed refusal in it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
@@ -509,8 +487,6 @@ describe('HttpMEditClient — the not-OK response text', () => {
   });
 });
 
-// ADR-0009 invariant 5: a 423 is refused by name, apart from every other failure — the rival is
-// a client that folds it into the same generic-failure shape every other non-ok response gets.
 describe('HttpMEditClient — rebuildIndex', () => {
   it('POSTs the instance root and game release, and resolves rebuilt on success', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
@@ -524,7 +500,7 @@ describe('HttpMEditClient — rebuildIndex', () => {
     expect(await request?.json()).toEqual({ instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
-  it('answers a 423 as heldElsewhere, apart from every other failure', async () => {
+  it('answers a 423 as heldElsewhere, apart from the generic-failure shape every other non-ok response gets', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(423, {
       detail: 'This instance\'s index is open in another Modbench window (/instance/modbench/index.duckdb). '
         + 'Close mEdit there first, or open a different instance here.',
@@ -597,9 +573,6 @@ describe('HttpMEditClient — the record filter', () => {
   });
 });
 
-// putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
-// lifetime, and the deliberate-abort outcome ('abandoned') that is not a WriteRefused-shaped
-// failure.
 describe('HttpMEditClient — a group\'s records', () => {
   it('asks for what the record filter hides too, only when told to', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(jsonResponse(200, { items: [], total: 0 })));
@@ -631,15 +604,13 @@ describe('HttpMEditClient — putLoadOrder', () => {
 
     const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
     await vi.waitFor(() => expect(putBody).toBeDefined());
-    push(readyTick());
+    push(readyTickThatSettlesPutLoadOrder());
     await load;
 
     expect(putBody).toEqual({ plugins, active, loadedWithNoLine, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
 
-  // The backend publishes its first tick as the PUT lands, so a PUT that outran the stream
-  // would lose every tick published before it connects.
-  it('holds the PUT until the notification stream has connected', async () => {
+  it('holds the PUT until the notification stream has connected, as the backend publishes its first tick as the PUT lands and a PUT that outran the stream would lose every tick published before it connects', async () => {
     let resolveStream!: (r: Response) => void;
     const streamPromise = new Promise<Response>((r) => { resolveStream = r; });
     const putFetch = vi.fn(() => Promise.resolve(jsonResponse(200, appliedBody)));
@@ -652,14 +623,12 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await client.start();
 
     const load = client.putLoadOrder(plugins, active, loadedWithNoLine, '/game/Data', '/instance', 'Fallout4');
-    // No wait needed: streamPromise is still unresolved, so nothing — no amount of elapsed
-    // time — could have let the PUT fire yet.
     expect(putFetch).not.toHaveBeenCalled();
 
     const { response, push } = pushableStreamResponse();
     resolveStream(response);
     await vi.waitFor(() => expect(putFetch).toHaveBeenCalledTimes(1));
-    push(readyTick());
+    push(readyTickThatSettlesPutLoadOrder());
     await load;
   });
 
@@ -692,13 +661,11 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
 
-    streams[1]?.push(readyTick());
+    streams[1]?.push(readyTickThatSettlesPutLoadOrder());
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  // ADR-0013 invariant 1: a snapshot identical to the one held reconciles nothing and publishes no
-  // tick, so its answer is the version already Ready.
-  it('answers a PUT whose version is already Ready from the process\'s own status, with no tick', async () => {
+  it('answers a PUT whose version is already Ready from the process\'s own status, with no tick, a snapshot identical to the one held reconciling nothing and publishing no tick', async () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
       ['/load-order/status', () => Promise.resolve(jsonResponse(200, {
@@ -713,9 +680,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
       .resolves.toMatchObject({ outcome: 'applied', status: { version: 1, conflictsComputed: true } });
   });
 
-  // A reopened stream carries none of the ticks published while it was down, so the terminal one
-  // is read from the process when it opens again.
-  it('settles a PUT whose terminal tick was lost to a stream reopening, from the status read then', async () => {
+  it('settles a PUT whose terminal tick was lost to a stream reopening, from the status read then, a reopened stream carrying none of the ticks published while it was down', async () => {
     const streams: { push: (chunk: Uint8Array) => void; end: () => void }[] = [];
     let status = { state: 'Reconciling', totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
     const fetch = routedFetch([
@@ -820,13 +785,12 @@ describe('HttpMEditClient — whether the game has light plugins', () => {
   });
 });
 
-// withTimeout: the race every spatial/record read verb shares. getRecordTypes stands in for all six.
-describe('HttpMEditClient — read timeout', () => {
+describe('HttpMEditClient — read timeout, checked through getRecordTypes as the race is shared by every spatial/record read verb', () => {
   it('rejects a hung read after the configured timeout, aborting the request', async () => {
     let sawSignal: AbortSignal | undefined;
     const fetch = vi.fn((req: Request) => {
       sawSignal = req.signal;
-      return new Promise<Response>(() => {}); // never resolves
+      return new Promise<Response>(() => {});
     });
     const client = makeClient(fetch, { timeoutMs: 20 });
 

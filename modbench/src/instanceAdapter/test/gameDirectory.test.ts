@@ -14,7 +14,6 @@ const NO_DETECTORS: GameDetectors = {
   winePrefix: () => Promise.resolve(null),
 };
 
-// The corpus's own game, so the tables answer with real Steam facts and autodetection runs.
 const iniOf = (gamePath?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath})\r\n`}`;
 
@@ -31,9 +30,7 @@ describe('normalizeGamePath', () => {
     expect(await normalizeGamePath('C:\\Games\\Fallout4', 'win32', noDetectPrefix)).toBe('C:\\Games\\Fallout4');
   });
 
-  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped)', async () => {
-    // Unlike Windows, a colon elsewhere in a path is legal on Linux (e.g. a mod folder someone
-    // named literally "A:B") — an unanchored strip would corrupt it.
+  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped), a colon elsewhere in a path being legal on Linux — a folder named literally "A:B" — and an unanchored strip corrupting it', async () => {
     const path = '/home/user/mods/A:B/Fallout4';
     expect(await normalizeGamePath(path, 'linux', noDetectPrefix)).toBe(path);
   });
@@ -112,12 +109,11 @@ describe('the game directory resolver', () => {
     expect(resolved).toMatchObject({ root: gameRoot });
   });
 
-  // Rival: falling through to the ini gamePath, which resolves a folder the user did not name.
-  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder', async () => {
+  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the ini gamePath, which would resolve a folder the user did not name', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const gameRoot = join(dir, 'Stock Game Folder');
-    await mkdir(gameRoot, { recursive: true }); // no Data/ underneath
+    await mkdir(gameRoot, { recursive: true });
     const iniGameRoot = await gameFolder();
 
     const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOf(iniGameRoot));
@@ -139,7 +135,6 @@ describe('the game directory resolver', () => {
 
   it('normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
-    // MO2 under Proton stores the path as a Wine Z: drive with backslashes.
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
 
     const resolved = await resolverWith()(iniOf(winePath));
@@ -191,7 +186,7 @@ describe('the game directory resolver', () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const staleGameRoot = join(dir, 'Stale Game Folder');
-    await mkdir(staleGameRoot, { recursive: true }); // no Data/ underneath — a broken/moved install
+    await mkdir(staleGameRoot, { recursive: true });
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
@@ -251,9 +246,7 @@ describe('the game directory resolver', () => {
     expect(asked).toBe(false);
   });
 
-  // Rival: detecting up front on every branch, which reads Steam's library file (and spawns
-  // `reg query` on Windows) on every recompute, even when the setting or the ini already answered.
-  it('asks Steam nothing when the setting answers the root', async () => {
+  it('asks Steam nothing when the setting answers the root, not detecting up front on every branch, which reads Steam\'s library file (and spawns `reg query` on Windows) on every recompute', async () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
