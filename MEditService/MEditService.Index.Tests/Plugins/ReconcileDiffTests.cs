@@ -210,7 +210,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void FailedPlugin_IsAFailureOnTheRow_IsNotReadAgainWhileItsBytesStay_AndRecoversOnceTheyChange()
+    public void FailedPlugin_IsAFailureOnTheRow_AnEqualSnapshotRunsNoSweep_AndRecoversOnceItsBytesChange()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-failed").WithPlugin("Good.esp").BuildScattered();

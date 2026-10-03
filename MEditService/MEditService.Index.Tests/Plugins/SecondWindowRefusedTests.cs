@@ -11,7 +11,7 @@ public sealed class SecondWindowRefusedTests
     private static Indexer MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [ForeignIndexHolderFact]
-    public void ASecondWindowOnTheSameInstance_IsRefusedByName_StaysNone_MintsNoFile_AndLoadsWarmOnceTheFirstCloses()
+    public void ASecondWindowOnTheSameInstance_IsAnsweredHeldElsewhereByName_ReadsNothing_MintsNoFile_AndLoadsOnceTheFirstCloses()
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("second-window")

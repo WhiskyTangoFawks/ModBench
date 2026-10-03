@@ -75,15 +75,21 @@ public sealed class SqlDoorSchemaTests : IDisposable
     }
 
     [Theory]
-    [InlineData("records", true)]
-    [InlineData("records_committed", false)]
-    [InlineData("form_lookup", true)]
-    public void ARelation_ExposesLoadOrderIndex_AndRecordsCommittedHoldsNoRowOfACleanPlugin(string relation, bool holdsACleanPluginsRows)
+    [InlineData("records")]
+    [InlineData("form_lookup")]
+    public void ARelation_ExposesLoadOrderIndex(string relation)
     {
         _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
 
-        if (holdsACleanPluginsRows) Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
-        else Assert.Empty(Listing());
+        Assert.Single(Listing(), i => i.Plugin == OverKey.Name);
+    }
+
+    [Fact]
+    public void RecordsCommitted_ExposesLoadOrderIndex_AndHoldsNoRowOfACleanPlugin()
+    {
+        _index.SetFilter("SELECT form_key FROM records_committed WHERE load_order_idx = 1", "filter.sql");
+
+        Assert.Empty(Listing());
     }
 
     [Fact]

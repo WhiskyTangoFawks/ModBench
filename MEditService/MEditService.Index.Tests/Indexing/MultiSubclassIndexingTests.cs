@@ -11,6 +11,8 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class MultiSubclassIndexingTests
 {
+    private const ushort LastFormVersionTheParserReadsADmgtAsIndexed = 77;
+
     private static Dictionary<string, object?> FieldByEditorId(IRecordReads reads, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -55,7 +57,7 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Glob_AllSubclasses_DataColumnRoundTripsForEveryType()
+    public void Index_Glob_EverySubclassLands_AndOnlyGlobalBoolsDataIsLostInTheBinary()
     {
         using var fixture = new PluginFixtureBuilder("glob-subclasses")
             .WithPlugin("Glob263.esp", mod =>
@@ -73,7 +75,6 @@ public class MultiSubclassIndexingTests
         Assert.Equal(7, Assert.IsType<JsonElement>(byEdid["TestGlobInt"]).GetInt32());
         Assert.Equal(1.25f, Assert.IsType<JsonElement>(byEdid["TestGlobFloat"]).GetSingle());
         Assert.Equal(3, Assert.IsType<JsonElement>(byEdid["TestGlobShort"]).GetInt32());
-        Assert.True(byEdid.ContainsKey("TestGlobBool"));
         Assert.Null(byEdid["TestGlobBool"]);
     }
 
@@ -128,7 +129,7 @@ public class MultiSubclassIndexingTests
                     Spell = new FormLink<ISpellGetter>(FormKey.Factory("000002:Test.esp")),
                 });
                 mod.DamageTypes.Add(structShaped);
-                var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { FormVersion = 77, DamageTypes = new ExtendedList<uint> { 7, 11 } };
+                var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { FormVersion = LastFormVersionTheParserReadsADmgtAsIndexed, DamageTypes = new ExtendedList<uint> { 7, 11 } };
                 mod.DamageTypes.Add(scalarShaped);
             })
             .Build();
