@@ -16,8 +16,37 @@ const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0
 const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
   collator.compare(a, b) || byCodeUnit(a, b);
 
-export const expanderOver = (children: readonly unknown[]): vscode.TreeItemCollapsibleState =>
-  (children.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
+/** Whether a row shows everything under it, or only what the name filter matched there, and then
+ *  opens on its own. */
+export type ChildrenShown = 'all' | 'matching';
+
+export const expanderOver = (children: readonly unknown[], shown: ChildrenShown = 'all'): vscode.TreeItemCollapsibleState => {
+  if (children.length === 0) return vscode.TreeItemCollapsibleState.None;
+  return shown === 'matching' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
+};
+
+type NameMatch = (name: string) => boolean;
+
+const pathNamed = (relativePath: string, matches: NameMatch): boolean => relativePath.split('/').some(matches);
+
+/** Whether an entry is found by the name filter: its own name matches, or that of a folder above it. */
+export function holdsMatch(files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch): boolean {
+  return files.some((file) => pathNamed(file.relativePath, matches)) || folders.some((folder) => pathNamed(folder.relativePath, matches));
+}
+
+/** The files and folders the name filter finds, and the folders above them. */
+export function narrowToMatches(
+  files: readonly OriginFile[], folders: readonly OriginFolder[], matches: NameMatch,
+): { files: OriginFile[]; folders: OriginFolder[] } {
+  const foundFiles = files.filter((file) => pathNamed(file.relativePath, matches));
+  const foundFolders = folders.filter((folder) => pathNamed(folder.relativePath, matches));
+  const above = new Set<string>();
+  for (const { relativePath } of [...foundFiles, ...foundFolders]) {
+    const segments = relativePath.split('/');
+    for (let depth = 1; depth < segments.length; depth++) above.add(segments.slice(0, depth).join('/'));
+  }
+  return { files: foundFiles, folders: folders.filter((folder) => foundFolders.includes(folder) || above.has(folder.relativePath)) };
+}
 
 /** The URI of a file's or folder's row: its origin, and the path in it. A mod's name holds no
  *  slash, so no two rows share one. */
@@ -42,8 +71,9 @@ export class FolderNode extends vscode.TreeItem {
     public readonly files: readonly OriginFile[],
     public readonly folders: readonly OriginFolder[],
     name: string,
+    public readonly shown: ChildrenShown = 'all',
   ) {
-    super(name, expanderOver([...files, ...folders]));
+    super(name, expanderOver([...files, ...folders], shown));
     fileRow(this, parent, origin, name, folder.relativePath);
     this.contextValue = 'folder';
   }
@@ -83,9 +113,11 @@ function byLevel<T extends { readonly relativePath: string }>(entries: readonly 
 }
 
 /** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
- *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
+ *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself.
+ *  Under a parent showing `matching`, a folder whose name does not match shows only what matches. */
 export function filesIn(
   parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
+  filter?: { shown: ChildrenShown; matches: NameMatch },
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
@@ -93,6 +125,7 @@ export function filesIn(
   return [
     ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
       parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
+      filter?.shown === 'matching' && !filter.matches(name) ? 'matching' : 'all',
     )),
     ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name)),
   ];

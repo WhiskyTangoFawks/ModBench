@@ -59,7 +59,7 @@ async function childNamed(provider: ModListProvider, parent: ModlistNode, label:
   return present((await provider.getChildren(parent)).find((row) => labelOf(row) === label), label);
 }
 
-const { Collapsed, None } = TreeItemCollapsibleState;
+const { Collapsed, Expanded, None } = TreeItemCollapsibleState;
 
 describe('a mod opens into its files as a folder tree (mods.md, The tree, story 7)', () => {
   const armour = [
@@ -353,5 +353,107 @@ describe('files and folders are not dragged, and nothing drops on them (mods.md,
     }
 
     expect(executeCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('the name filter finds a file at every level (mods.md, Order and view state, story 2)', () => {
+  const armour = [file('readme.txt'), file('textures/armour/b.dds'), file('textures/icon.dds'), file('meshes/armour.nif')];
+  const gear = [mod('Armour'), mod('Boots'), { kind: 'separator', name: 'Gear', enabled: false } satisfies ModlistEntry];
+
+  function filtered(
+    term: string, grouping = true,
+    over: { mods?: ModlistEntry[]; files?: Record<string, OriginFile[]>; overwrite?: OriginFile[]; folders?: Record<string, OriginFolder[]> } = {},
+  ) {
+    const provider = providerOver(
+      over.mods ?? gear, over.files ?? { Armour: armour, Boots: [file('boots.esp')] }, over.overwrite, { byMod: over.folders },
+    );
+    provider.setFilter(term, grouping);
+    return provider;
+  }
+
+  it('a mod whose name does not match is shown for the files that do, open, and a folder for the files below it', async () => {
+    const provider = filtered('b.dds');
+    const separator = await rootOf(provider, SeparatorNode, 'Gear');
+    const row = expectInstanceOf((await provider.getChildren(separator))[0], ModNode);
+    const textures = await childNamed(provider, row, 'textures');
+
+    expect(shown(await provider.getChildren(separator))).toEqual(['mod Armour']);
+    expect(row.collapsibleState).toBe(Expanded);
+    expect(shown(await provider.getChildren(row))).toEqual(['folder textures']);
+    expect(textures.collapsibleState).toBe(Expanded);
+    expect(shown(await provider.getChildren(textures))).toEqual(['folder armour']);
+    expect(shown(await provider.getChildren(await childNamed(provider, textures, 'armour')))).toEqual(['file b.dds']);
+  });
+
+  it('a separator is shown for a file it holds, open', async () => {
+    const provider = filtered('b.dds');
+
+    expect((await rootOf(provider, SeparatorNode, 'Gear')).collapsibleState).toBe(Expanded);
+  });
+
+  it('a mod whose name matches shows all its files, collapsed', async () => {
+    const provider = filtered('armour');
+    const separator = await rootOf(provider, SeparatorNode, 'Gear');
+    const row = expectInstanceOf((await provider.getChildren(separator))[0], ModNode);
+
+    expect(row.collapsibleState).toBe(Collapsed);
+    expect(shown(await provider.getChildren(row))).toEqual(['folder meshes', 'folder textures', 'file readme.txt']);
+  });
+
+  it('a folder whose name matches shows all its children, collapsed, and a folder below it that does not match stays collapsed', async () => {
+    const provider = filtered('textures');
+    const row = expectInstanceOf((await provider.getChildren(await rootOf(provider, SeparatorNode, 'Gear')))[0], ModNode);
+    const textures = await childNamed(provider, row, 'textures');
+
+    expect(shown(await provider.getChildren(row))).toEqual(['folder textures']);
+    expect(textures.collapsibleState).toBe(Collapsed);
+    expect(shown(await provider.getChildren(textures))).toEqual(['folder armour', 'file icon.dds']);
+    expect((await childNamed(provider, textures, 'armour')).collapsibleState).toBe(Collapsed);
+  });
+
+  it('a separator whose name matches shows all its mods, and each opens into all its files', async () => {
+    const provider = filtered('gear');
+    const separator = await rootOf(provider, SeparatorNode, 'Gear');
+    const [boots] = await provider.getChildren(separator);
+
+    expect(shown(await provider.getChildren(separator))).toEqual(['mod Boots', 'mod Armour']);
+    expect(shown(await provider.getChildren(present(boots, 'Boots')))).toEqual(['file boots.esp']);
+  });
+
+  it('with no separators, a mod is listed for the files that match, and opens to them only', async () => {
+    const provider = filtered('icon', false);
+    const row = await rootOf(provider, ModNode, 'Armour');
+
+    expect(shown(await provider.getChildren())).toEqual(['mod Armour', 'overwrite Overwrite']);
+    expect(shown(await provider.getChildren(row))).toEqual(['folder textures']);
+  });
+
+  it('a mod with no file or name that matches is not shown, with or without a separator', async () => {
+    const withSeparator = filtered('icon');
+    const ungrouped = filtered('icon', true, { mods: [mod('Armour'), mod('Boots')] });
+
+    expect(shown(await withSeparator.getChildren(await rootOf(withSeparator, SeparatorNode, 'Gear')))).toEqual(['mod Armour']);
+    expect(shown(await ungrouped.getChildren())).toEqual(['mod Armour', 'overwrite Overwrite']);
+  });
+
+  it('Overwrite stays, does not match by its own name, and shows only its files that do', async () => {
+    const overwrite = [file('F4SE/Plugins/a.log'), file('Tool.esp')];
+    const named = filtered('overwrite', true, { overwrite });
+    const found = filtered('a.log', true, { overwrite });
+    const row = await rootOf(found, OverwriteNode, 'Overwrite');
+
+    expect(row.collapsibleState).toBe(Expanded);
+    expect(shown(await found.getChildren(row))).toEqual(['folder F4SE']);
+    expect((await rootOf(named, OverwriteNode, 'Overwrite')).collapsibleState).toBe(None);
+    expect(shown(await named.getChildren(await rootOf(named, OverwriteNode, 'Overwrite')))).toEqual([]);
+  });
+
+  it('a mod whose only match is an empty folder is shown, and opens to it', async () => {
+    const empty: OriginFolder = { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false };
+    const provider = filtered('empty', true, { mods: [mod('Armour')], files: { Armour: [] }, folders: { Armour: [empty] } });
+    const row = await rootOf(provider, ModNode, 'Armour');
+
+    expect(row.collapsibleState).toBe(Expanded);
+    expect(shown(await provider.getChildren(row))).toEqual(['folder empty']);
   });
 });

@@ -9,7 +9,7 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
-import { expanderOver, filesIn, FileNode, FolderNode } from './modFiles';
+import { expanderOver, filesIn, holdsMatch, narrowToMatches, FileNode, FolderNode, type ChildrenShown } from './modFiles';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -146,7 +146,7 @@ export class SeparatorNode extends vscode.TreeItem {
   constructor(
     public readonly separator: Separator,
     public readonly mods: Mod[],
-    shown: 'allMods' | 'matchingMods' = 'allMods',
+    public readonly shown: 'allMods' | 'matchingMods' = 'allMods',
   ) {
     super(separator.name, separatorExpander(mods, shown));
     this.id = rowIdentity(this.kind, separator.name);
@@ -167,8 +167,9 @@ export class ModNode extends vscode.TreeItem {
     public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts,
     public readonly files: readonly OriginFile[] = [],
     public readonly folders: readonly OriginFolder[] = [],
+    public readonly shown: ChildrenShown = 'all',
   ) {
-    super(mod.name, expanderOver(files));
+    super(mod.name, expanderOver([...files, ...folders], shown));
     this.id = rowIdentity(this.kind, mod.name);
     this.nexusModId = mod.nexusId;
     const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
@@ -198,8 +199,11 @@ export function modOfRow(value: unknown): string | undefined {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_ORIGIN;
-  constructor(public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
-    super('Overwrite', expanderOver(files));
+  constructor(
+    public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = [],
+    public readonly shown: ChildrenShown = 'all',
+  ) {
+    super('Overwrite', expanderOver([...files, ...folders], shown));
     this.id = this.kind;
     this.contextValue = OVERWRITE_ORIGIN;
     const fileCount = files.length;
@@ -542,10 +546,14 @@ export class ModListProvider
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
-    if (element instanceof ModNode) return filesIn(element, modOrigin(element.mod.name), element.files, element.folders);
-    if (element instanceof OverwriteNode) return filesIn(element, RUNTIME_OUTPUT, element.files, element.folders);
+    if (element instanceof ModNode) {
+      return filesIn(element, modOrigin(element.mod.name), element.files, element.folders, undefined, this.within(element));
+    }
+    if (element instanceof OverwriteNode) {
+      return filesIn(element, RUNTIME_OUTPUT, element.files, element.folders, undefined, this.within(element));
+    }
     if (element instanceof FolderNode) {
-      return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath);
+      return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath, this.within(element));
     }
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
@@ -575,11 +583,11 @@ export class ModListProvider
     const groups = [...tree.groups].reverse();
     if (this.filterText && !this.groupingOn) {
       const flat = [...ungrouped, ...groups.flatMap((g) => this.losingFirst(g.mods))];
-      return { ungrouped: flat.filter((m) => this.matches(m.name)).map(this.toModNode), separators: [] };
+      return { ungrouped: this.matchingModNodes(flat), separators: [] };
     }
     if (!this.filterText) {
       return {
-        ungrouped: ungrouped.map(this.toModNode),
+        ungrouped: ungrouped.map((m) => this.modNode(m)),
         separators: groups.map((g) => this.separatorNode(g.separator, this.inViewOrder(g.mods))),
       };
     }
@@ -589,12 +597,12 @@ export class ModListProvider
         separators.push(this.separatorNode(g.separator, this.inViewOrder(g.mods)));
         continue;
       }
-      const matchingMods = g.mods.filter((m) => this.matches(m.name));
+      const matchingMods = g.mods.filter(this.holdsMatch);
       if (matchingMods.length > 0) {
         separators.push(this.separatorNode(g.separator, this.inViewOrder(matchingMods), 'matchingMods'));
       }
     }
-    return { ungrouped: ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode), separators };
+    return { ungrouped: this.matchingModNodes(ungrouped), separators };
   }
 
   private writtenName(entry: ModlistEntry): ModlistEntry {
@@ -611,21 +619,39 @@ export class ModListProvider
 
   private overwriteNode(): OverwriteNode {
     const { overwriteFiles, managerNames, overwriteFolders } = this.instanceValue;
-    return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
+    if (!this.filterText) return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
+    const found = narrowToMatches(overwriteFiles, overwriteFolders, this.matches);
+    return new OverwriteNode(found.files, managerNames.manager, found.folders, 'matching');
   }
 
-  private toModNode = (m: Mod): ModNode => {
+  private holdsMatch = (m: Mod): boolean => this.matches(m.name)
+    || holdsMatch(this.instanceValue.filesByMod.get(m.name) ?? [], this.instanceValue.foldersByMod.get(m.name) ?? [], this.matches);
+
+  private matchingModNodes(mods: readonly Mod[]): ModNode[] {
+    return mods.filter(this.holdsMatch).map((m) => this.modNode(m, 'matching'));
+  }
+
+  /** Under a row showing only what matches, a mod whose name matches still shows all its files. */
+  private modNode(m: Mod, shown: ChildrenShown = 'all'): ModNode {
     const write = this.unconfirmed.get(m.name);
+    const files = this.instanceValue.filesByMod.get(m.name) ?? [];
+    const folders = this.instanceValue.foldersByMod.get(m.name) ?? [];
+    const narrowed = shown === 'matching' && !this.matches(m.name);
+    const found = narrowed ? narrowToMatches(files, folders, this.matches) : { files, folders };
     const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
-    }, this.instanceValue.filesByMod.get(m.name), this.instanceValue.foldersByMod.get(m.name));
+    }, found.files, found.folders, narrowed ? 'matching' : 'all');
     if (write?.marked || this.shapeMarked(m)) markRow(row);
     return row;
-  };
+  }
+
+  private within(row: ModNode | OverwriteNode | FolderNode): { shown: ChildrenShown; matches: (name: string) => boolean } {
+    return { shown: row.shown, matches: this.matches };
+  }
 
   private separatorChildren(element: SeparatorNode): ModlistNode[] {
     return element.mods.map((m) => {
-      const row = this.toModNode(m);
+      const row = this.modNode(m, element.shown === 'matchingMods' ? 'matching' : 'all');
       this.parents.set(row, element);
       return row;
     });
@@ -645,9 +671,7 @@ export class ModListProvider
     return this.direction === 'winningAtTop' ? [...mods] : this.losingFirst(mods);
   }
 
-  private matches(name: string): boolean {
-    return name.toLowerCase().includes(this.filterLower);
-  }
+  private matches = (name: string): boolean => name.toLowerCase().includes(this.filterLower);
 
   // The check box is an entry point to the same command a context menu click or key reaches
   // (mods.md, Menus and keys): one mod through the same `setModsEnabled`.
