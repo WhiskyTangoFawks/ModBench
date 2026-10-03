@@ -1,5 +1,5 @@
 // The boxes the zoom-out draws, each with the reference list target-architecture-references.d2
-// draws for it.
+// draws for it, plus its band's lib by the band's rule.
 
 export const KERNEL_BOXES = ['loadOrderFileCodec', 'tables', 'wire', 'ports'];
 

@@ -36,6 +36,10 @@ const fileNames = (relativePath: string): string[] =>
 const referencePaths = (relativePath: string): string[] =>
   (parsed(relativePath).projectReferences ?? []).map((r) => relative(MODBENCH, r.path)).sort();
 
+const LIBS = [DRIVEN_BOXES, CORE_BOXES, DRIVING_BOXES].flatMap((band) => Object.keys(band)
+  .filter((box) => box.endsWith('Lib'))
+  .map((lib) => ({ lib, band, users: BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib))) })));
+
 const isTest = (f: string): boolean => f.includes('.test.') || f.split('/').includes('test');
 
 const filesOnDisk = (dir: string): string[] =>
@@ -82,17 +86,12 @@ describe('one composite project per box', () => {
     expect(references).not.toContain(join('src', 'tables'));
   });
 
-  const BANDS = [DRIVEN_BOXES, CORE_BOXES, DRIVING_BOXES];
-  const LIBS = BANDS.flatMap((band) => Object.keys(band).filter((box) => box.endsWith('Lib')).map((lib) => ({ lib, band })));
-
-  it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ lib, band }) => {
-    const users = BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib)));
+  it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ users, band }) => {
     expect(users.length).toBeGreaterThanOrEqual(2);
     expect(users.filter((box) => !(box in band))).toEqual([]);
   });
 
-  it.each(LIBS)('$lib references only boxes every box using it references', ({ lib }) => {
-    const users = BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib)));
+  it.each(LIBS)('$lib references only boxes every box using it references', ({ lib, users }) => {
     const reachedByEveryUser = (reference: string) => users.every((box) => referencePaths(boxProject(box)).includes(reference));
     expect(referencePaths(boxProject(lib)).filter((reference) => !reachedByEveryUser(reference))).toEqual([]);
   });
