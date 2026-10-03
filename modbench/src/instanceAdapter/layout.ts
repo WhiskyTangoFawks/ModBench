@@ -9,7 +9,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { MODLIST_FILE_NAME, OVERWRITE_DIR_NAME, separatorModName } from './codecs/modlistText';
 import { SETTINGS_FILE_NAME } from './codecs/modOrganizerIni';
 import { PLUGINS_FILE_NAME } from '../loadOrderFileCodec/pluginsText';
-import type { EntryRef } from './instanceAdapter';
+import type { EntryRef, FileOrigin } from './instanceAdapter';
 import { PLUGIN_EXTENSIONS } from './pluginFile';
 
 const PROFILES = 'profiles';
@@ -63,6 +63,18 @@ export const entryDir = (instanceRoot: string, entry: EntryRef): string | undefi
   const folder = modFolderName(entry.name);
   return folder === undefined ? undefined : modDir(instanceRoot, folder);
 };
+
+/** The folder an origin's files are in; `undefined` for a mod whose name gives it none. */
+export const originDir = (instanceRoot: string, origin: FileOrigin): string | undefined =>
+  (origin.kind === 'runtimeOutput' ? overwriteDir(instanceRoot) : entryDir(instanceRoot, { kind: 'mod', name: origin.name }));
+
+const EXCLUDED_SUFFIX = '.mohidden';
+
+export const isExcludedName = (name: string): boolean => name.toLowerCase().endsWith(EXCLUDED_SUFFIX);
+
+export const excludedName = (name: string): string => name + EXCLUDED_SUFFIX;
+
+export const includedName = (name: string): string => name.slice(0, -EXCLUDED_SUFFIX.length);
 
 const NEW_MOD_EXTRACTION_PREFIX = '.medit-extract-new-';
 const UPGRADE_EXTRACTION_PREFIX = '.medit-extract-upgrade-';

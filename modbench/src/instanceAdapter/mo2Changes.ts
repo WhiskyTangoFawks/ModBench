@@ -15,17 +15,20 @@ import { readSelectedProfile, setSelectedProfileInText } from './codecs/modOrgan
 import { spliceDownloadMeta, trashDownloadMeta } from './downloadMeta';
 import { ensureDir, exists, get, putIfChanged, remove, rename, withLock, write } from './files';
 import {
-  entryNotFound, type DownloadedFileMark, type EntryRef, type InstanceAdapter, type ModlistEntry, type ModOrderChange,
+  entryNotFound, type DownloadedFileMark, type EntryRef, type OriginFileMark, type InstanceAdapter, type ModlistEntry, type ModOrderChange,
   type MovePlace, type PluginOrderChange, type SeparatorsPlace,
 } from './instanceAdapter';
-import { downloadFile, mo2FolderName, modlistFile, pluginsFile, separatorDir, settingsFile } from './layout';
+import {
+  downloadFile, excludedName, fileInFolder, includedName, isExcludedName, mo2FolderName, modlistFile, originDir, pluginsFile,
+  separatorDir, settingsFile,
+} from './layout';
 import {
   currentDownloadsDir, entryKey, folderHolding, listedAs, listModFolders, modFoldersOf, newModFolder, refuseFolderTaken, type Mo2Context,
 } from './mo2Context';
 
 export type Mo2Changes = Pick<InstanceAdapter,
   | 'changeModOrder' | 'changePluginOrder' | 'createModFolder' | 'trashEntryFolder' | 'markDownloadedFile'
-  | 'trashDownloadedFileMeta' | 'selectProfile'>;
+  | 'trashDownloadedFileMeta' | 'selectProfile' | 'markOriginFile'>;
 
 type Undo = () => Promise<void>;
 
@@ -145,6 +148,12 @@ function markIn(text: string, mark: DownloadedFileMark): string {
   }
 }
 
+// `relativePath` as a path under `folder`; a path that leaves it, or names it, is no file of the origin.
+function fileUnder(folder: string | undefined, relativePath: string): string | undefined {
+  const reachesOut = relativePath.split('/').some((segment) => ['', '.', '..'].includes(segment) || segment.includes('\\'));
+  return folder === undefined || reachesOut ? undefined : fileInFolder(folder, relativePath);
+}
+
 // Every undo is tried, newest first, and each one that fails is named beside the failure it
 // followed.
 async function undoAll(undos: readonly Undo[], err: unknown): Promise<unknown> {
@@ -261,6 +270,19 @@ export function mo2Changes(context: Mo2Context): Mo2Changes {
 
     async trashDownloadedFileMeta(name, trash) {
       return trashDownloadMeta(await currentDownloadsDir(context), name, trash);
+    },
+
+    async markOriginFile(origin, relativePath, mark: OriginFileMark) {
+      const from = fileUnder(originDir(instanceRoot, origin), relativePath);
+      if (from === undefined) throw new Error(`Not a file of ${origin.kind === 'mod' ? `mod "${origin.name}"` : 'Overwrite'}: "${relativePath}"`);
+      return withLock(from, async () => {
+        if (!(await exists(from))) return { gone: true };
+        if (isExcludedName(from) === (mark === 'Excluded')) return { gone: false, wrote: false };
+        const to = mark === 'Excluded' ? excludedName(from) : includedName(from);
+        if (await exists(to)) throw new Error(`"${to}" is already there`);
+        await rename(from, to);
+        return { gone: false, wrote: true };
+      });
     },
 
     selectProfile(profile) {

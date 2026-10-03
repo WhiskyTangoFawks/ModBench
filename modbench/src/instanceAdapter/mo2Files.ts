@@ -8,7 +8,7 @@ import { MOD_META_FILE_NAME } from './codecs/metaIni';
 import { OVERWRITE_DIR_NAME } from './codecs/modlistText';
 import { factsOf, listDir } from './files';
 import type { FileOrigin, OriginFile, OriginFiles } from './instanceAdapter';
-import { entryDir, isPluginSourceFolder, isTempWrite, overwriteDir } from './layout';
+import { isPluginSourceFolder, isTempWrite, originDir, overwriteDir } from './layout';
 
 // The mod's metadata is MO2's, not the mod's content: nearly every mod has one.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
@@ -128,7 +128,7 @@ export async function originFilesIn(instanceRoot: string, origin: FileOrigin): P
     const { root, files, notes } = await listOverwrite(overwriteDir(instanceRoot));
     return { origin: OVERWRITE_DIR_NAME, folder: root, files, notes };
   }
-  const folder = entryDir(instanceRoot, { kind: 'mod', name: origin.name });
+  const folder = originDir(instanceRoot, origin);
   if (folder === undefined) return { origin: origin.name, folder: undefined, files: [], notes: [] };
   const { files, notes } = await walkMod(folder);
   return { origin: origin.name, folder, files, notes };
