@@ -17,7 +17,7 @@ describe('ImplicitMasterDecorationProvider', () => {
   const providerOver = (...rows: vscode.Uri[]) =>
     new ImplicitMasterDecorationProvider(() => new Set(rows.map((uri) => uri.toString())));
 
-  it('grays a locked row the tree renders with the disabledForeground theme color', () => {
+  it('grays a locked row the tree renders as MO2 grays a forceLoaded row, with the disabledForeground theme color', () => {
     const decoration = present(providerOver(FALLOUT4).provideFileDecoration(FALLOUT4), 'the decoration for the locked row');
     expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
     expect(decoration.badge).toBeUndefined();

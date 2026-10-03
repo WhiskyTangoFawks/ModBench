@@ -142,7 +142,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
   });
 
-  it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
+  it('returns every record in one call at a large, realistic-worst-case count, as xEdit\'s record-type group nodes load in full', async () => {
     const FALLOUT4_ESM_INFO_COUNT = 78_089;
     const records = Array.from({ length: FALLOUT4_ESM_INFO_COUNT }, (_, i) => makeRecord(i));
     const repo = makeClient({ records: { items: records, total: FALLOUT4_ESM_INFO_COUNT } });
@@ -196,16 +196,16 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
 describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out for container presence', () => {
   it('listing ~1,300 Quests issues exactly one getRecords call and zero getContainerChildren calls', async () => {
-    const FALLOUT4_ESM_QUST_COUNT = 1_300;
+    const FALLOUT4_ESM_APPROXIMATE_QUST_COUNT = 1_300;
     const records = Array.from(
-      { length: FALLOUT4_ESM_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
-    const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_QUST_COUNT } });
+      { length: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }, (_, i) => makeRecord(i, 'None', i % 2 === 0));
+    const repo = makeClient({ recordTypes: [{ type: 'qust', count: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT }], records: { items: records, total: FALLOUT4_ESM_APPROXIMATE_QUST_COUNT } });
     const provider = new PluginTreeProvider(repo);
     const typeNode = present(expectInstancesOf(await provider.getPluginChildren('Plugin0.esp', 'Data'), RecordTypeNode)[0], 'the sole RecordTypeNode');
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children).toHaveLength(FALLOUT4_ESM_QUST_COUNT);
+    expect(children).toHaveLength(FALLOUT4_ESM_APPROXIMATE_QUST_COUNT);
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
     expect(repo.calls.some(c => c.method === 'getContainerChildren')).toBe(false);
   });
@@ -871,7 +871,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 
-  it('caches one plugin once, whatever case its filename and origin arrive in', async () => {
+  it('caches one plugin once, whatever case its filename and origin arrive in, as MO2 and a Windows filesystem compare them', async () => {
     const repo = sharedClient();
     const provider = new PluginTreeProvider(repo);
 

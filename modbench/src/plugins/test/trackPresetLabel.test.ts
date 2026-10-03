@@ -18,7 +18,7 @@ function editsLabelFolderNameIn(text: string): string {
 }
 
 describe('the Track preset label', () => {
-  it('names the same folder as the Instance adapter\'s layout', () => {
+  it('names the same folder as the Instance adapter\'s layout, read as text because the adapter hides layout.ts from every other box', () => {
     const folderName = pluginSourceFolderNameIn(readFileSync(LAYOUT_FILE, 'utf8'));
     const labelledName = editsLabelFolderNameIn(readFileSync(COMMANDS_FILE, 'utf8'));
 

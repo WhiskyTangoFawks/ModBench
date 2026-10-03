@@ -330,7 +330,7 @@ describe('registerRevealInExplorerCommand', () => {
     return { run: present(handlers.get('modbench.plugin.reveal'), "the reveal plugin command's registered handler"), reporter };
   }
 
-  it('reveals a locked row\'s copy in the game folder, resolved from the row', async () => {
+  it('reveals a locked row\'s file, resolved from the row', async () => {
     const { run } = invoke((name) => Promise.resolve(`/game/Data/${name}`));
 
     await run(new ImplicitMasterNode('Fallout4.esm', 'Data'));
@@ -457,7 +457,7 @@ describe('the sort direction', () => {
     .map((c) => (c as unknown[])[2]);
   const run = (command: string) => present(handlers.get(command), command)();
 
-  it('starts losing at the top, and sets the title-bar icon\'s key to agree without waiting for a toggle', () => {
+  it('starts losing at the top, and sets the title-bar icon\'s key to agree without waiting for a toggle, as a context key outlives an extension host restart', () => {
     const setViewDirection = vi.fn();
     registerPluginSortCommands({ setViewDirection });
 

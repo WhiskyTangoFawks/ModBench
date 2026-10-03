@@ -196,7 +196,7 @@ function callCount(client: InMemoryMEditClient, method: string): number {
 }
 
 describe('ImplicitMasterNode — leading slot', () => {
-  it('renders a lock icon, not a checkbox', () => {
+  it('renders a lock icon, not a checkbox, as VS Code has no non-interactive checkbox variant', () => {
     const node = new ImplicitMasterNode('Fallout4.esm', 'Data');
     expect(node.iconPath).toEqual({ id: 'lock' });
     expect(node.checkboxState).toBeUndefined();
@@ -885,7 +885,7 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
     expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'C.esp' } }]);
   });
 
-  it('fires a drop that puts a plugin that is not a blueprint before its blueprint master', async () => {
+  it('fires a drop that puts a plugin that is not a blueprint before its blueprint master, as MO2\'s setPluginPriority keeps master order only between two blueprints or two non-blueprints', async () => {
     const { calls, reports } = await dropAfterReconcile(
       ['D.esp'], node('B.esp'), heldAll({ 'B.esp': { isBlueprint: true }, 'D.esp': { masters: ['B.esp'] } }));
     expect(calls).toEqual([{ names: ['D.esp'], drop: { kind: 'before', name: 'B.esp' } }]);
@@ -1058,17 +1058,17 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 
 describe('PluginsTreeProvider — implicit master rows', () => {
   const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
-  const ABSENT = null;
+  const ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = null;
   const treeFor = (
     plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
-    implicit: readonly string[] | typeof ABSENT = [],
-    dataFolderFile: ((name: string) => string | undefined) | typeof ABSENT = ADAPTER_ANSWER,
+    implicit: readonly string[] | typeof ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = [],
+    dataFolderFile: ((name: string) => string | undefined) | typeof ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT = ADAPTER_ANSWER,
   ) => makeTree(plugins, {
     dataFolderFile: dataFolderFile ?? (() => undefined),
-    ...(implicit === ABSENT ? {} : { loadedWithNoLine: implicit }),
+    ...(implicit === ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT ? {} : { loadedWithNoLine: implicit }),
   }).tree;
 
-  it('renders the backend names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, with no checkbox and contextValue pluginImplicit', async () => {
+  it('renders the backend names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, not sorted (DLCCoast.esm would sort ahead of Fallout4.esm), with no checkbox and contextValue pluginImplicit', async () => {
     const rows = await treeFor(
       [plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
     ).getChildren();
@@ -1110,11 +1110,11 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   });
 
   it('renders no implicit row, and every plugins.txt line, when the value cannot say', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ABSENT).getChildren();
+    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
-    expect([...treeFor([], ABSENT).lockedRowUris()]).toEqual([]);
+    expect([...treeFor([], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).lockedRowUris()]).toEqual([]);
   });
 
   it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
@@ -1123,7 +1123,7 @@ describe('PluginsTreeProvider — implicit master rows', () => {
   });
 
   it('leaves an implicit row without a resourceUri when the Data folder is unresolved', async () => {
-    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm'], ABSENT).getChildren();
+    const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm'], ABSENT_SINCE_UNDEFINED_SELECTS_THE_DEFAULT).getChildren();
     expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toBeUndefined();
   });
 
@@ -2558,14 +2558,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     expect(tooltip).toBe('A.esp\nSomeMod');
   });
 
-  it('tags a read-only plugin tooltip once the load order says so', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { isImmutable: true })]);
-
-    expect((await rowItem(h)).tooltip).toContain('read-only');
-  });
-
-  it('shows a read-only plugin by its tooltip alone, with no icon', async () => {
+  it('tags a read-only plugin tooltip once the load order says so, and gives the row no icon or description', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isImmutable: true })]);
 
@@ -2611,7 +2604,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
   });
 });
 
-describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)', () => {
+describe('PluginsTreeProvider — master-issue decoration', () => {
   const withIssues = (h: Harness, issues: string[] | null) => reconcile(h, [held('A.esp', { masterIssues: issues })]);
 
   it('flags a row with a master that is not active, in the Problems panel\'s red', async () => {
@@ -2702,7 +2695,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
   });
 });
 
-describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () => {
+describe('PluginsTreeProvider — load-failure decoration', () => {
   it('flags a row whose plugin failed to read, with every line of a multi-line reason', async () => {
     const h = makeTree([A_ROW()]);
     const exceptionChainReason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
@@ -2794,7 +2787,7 @@ describe('PluginsTreeProvider — parse-failure decoration', () => {
 describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => {
   const REGN = 'REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): RDAT is 6 bytes; a REGN RDAT is always 8';
 
-  it('decorates a diagnosed plugin row with the warning badge and the diagnosis text', async () => {
+  it('decorates a plugin whose only status is malformed with the warning icon, the word malformed and the diagnosis text', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.ESP', REGN)]);
     await reconcile(h, [held('A.esp')]);
@@ -2969,16 +2962,6 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
     expect(item.description).toBe('1 master issue, unreadable records');
   });
 
-  it('uses the warning icon only when Malformed is the sole status present', async () => {
-    const h = makeTree([A_ROW()]);
-    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [held('A.esp')]);
-
-    const item = await rowItem(h);
-    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsWarningIcon.foreground'));
-    expect(item.description).toBe('malformed');
-  });
-
   it('carries the read-only line alongside a status', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', {
@@ -2993,16 +2976,17 @@ describe('PluginsTreeProvider — several statuses on one row', () => {
   });
 });
 
-describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
-  it.each([[0, 'A.esp'], [1, 'B.esp']])('renders plugin row %i plainly, whatever the load order state', async (index, name) => {
+describe('PluginsTreeProvider — a healthy plugin row after a reconcile', () => {
+  it('states only its kind and where track and compile apply, with no description and the base tooltip', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
 
-    const item = await rowItem(h, index);
+    const items = [await rowItem(h, 0), await rowItem(h, 1)];
 
-    expect(item.contextValue).toBe('plugin enabled inUntrackedMod untracked editable');
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBe(`${name}\nSomeMod`);
+    expect(items.map((i) => [i.contextValue, i.description, i.tooltip])).toEqual([
+      ['plugin enabled inUntrackedMod untracked editable', undefined, 'A.esp\nSomeMod'],
+      ['plugin enabled inUntrackedMod untracked editable', undefined, 'B.esp\nSomeMod'],
+    ]);
   });
 });
 
@@ -3020,7 +3004,7 @@ describe('PluginsTreeProvider fact refresh', () => {
   });
 });
 
-describe('PluginsTreeProvider — a name under two origins joins to the row own origin', () => {
+describe('PluginsTreeProvider — a name under two origins joins to the row own origin, replies listing the row\'s own plugin first so a name-only join would answer with the other', () => {
   const SHARED_ROW = () => plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA' });
 
   it('badges the row from its own plugin master issues, not the other plugin', async () => {
