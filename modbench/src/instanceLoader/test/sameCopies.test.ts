@@ -54,8 +54,7 @@ function digestsRead(read: string[]): (adapter: InstanceAdapter) => InstanceAdap
 
 const MODIFIED_ON_A_WHOLE_SECOND = new Date('2020-01-01T00:00:00Z');
 
-// Every write the test makes is then older than a file system's clock tick.
-const clockPastEveryWrite = (): void => {
+const clockAnHourPastEveryWrite = (): void => {
   vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 3_600_000 });
 };
 
@@ -119,7 +118,7 @@ describe('Instance — which copies of a file are the same', () => {
   });
 
   it('reads no copy again whose stamp is unchanged, a value rebuilt between the asks or not', async () => {
-    clockPastEveryWrite();
+    clockAnHourPastEveryWrite();
     const read: string[] = [];
     const { instance } = await twoCopiesOfOneSize(read);
     await instance.sameCopies([SHARED]);
@@ -131,7 +130,7 @@ describe('Instance — which copies of a file are the same', () => {
   });
 
   it('reads again a copy another tool rewrote keeping its size and date modified', async () => {
-    clockPastEveryWrite();
+    clockAnHourPastEveryWrite();
     const { instance, paths: [nono] } = await twoCopiesOfOneSize([]);
     const copy = present(nono, 'the winning copy');
     await utimes(copy, MODIFIED_ON_A_WHOLE_SECOND, MODIFIED_ON_A_WHOLE_SECOND);
