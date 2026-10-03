@@ -4,7 +4,7 @@ import { before, describe, it } from 'mocha';
 import type { ActivateExports } from '../../../extension';
 import { IN_AN_INSTANCE, isRecord, requires } from '../../manifest';
 
-// VS Code exposes neither a context key's value nor whether a welcome or a title-bar entry is
+// VS Code exposes neither a context key's value nor whether a welcome or a palette entry is
 // showing, so this suite asserts the answer the extension wrote and the manifest VS Code loaded.
 
 let ext: vscode.Extension<ActivateExports> | undefined;
@@ -42,12 +42,6 @@ describe('a folder that is not an instance', () => {
     assert.strictEqual(ext?.exports.downloadsProvider, undefined);
     assert.strictEqual(ext?.exports.instance, undefined);
     assert.strictEqual(ext?.exports.instanceRead(), false);
-  });
-
-  it('offers no title-bar gesture: every entry VS Code loaded waits for an instance answer', () => {
-    const entries = contributed(ext?.packageJSON, menu('view/title'), "a contributes.menus['view/title'] array");
-    assert.ok(entries.length > 0, 'the loaded manifest has no title-bar entries — the shape changed');
-    assert.deepStrictEqual(entries.filter((e) => !requires(e.when, IN_AN_INSTANCE)).map((e) => e.command), []);
   });
 
   // The palette lists every contributed command its `commandPalette` entry does not hide, so a

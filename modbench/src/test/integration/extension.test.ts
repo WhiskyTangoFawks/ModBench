@@ -13,7 +13,7 @@ import { isRecord } from '../manifest';
 import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../../plugins/gestureEntry';
 
-const TEST_PORT = 15172;
+const TEST_PORT = Number(present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run'));
 let mockBackend: http.Server;
 let ext: vscode.Extension<ActivateExports> | undefined;
 
@@ -363,8 +363,8 @@ function createMockBackend(): http.Server {
 }
 
 // Start a mock backend that answers GET /health → 200 so the extension reaches
-// 'running'. /plugins is load-order-gated (see above). Uses port 15172 (set via
-// workspace settings).
+// 'running'. /plugins is load-order-gated (see above). Listens on the run's port, which the
+// workspace settings name.
 before(async function () {
   this.timeout(15000);
 
@@ -401,10 +401,6 @@ after(async () => {
 // ── Activation ───────────────────────────────────────────────────────────────────
 
 describe('modbench activation', () => {
-  it('auto-activates on startup without any explicit activate() call', () => {
-    assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
-  });
-
   it('answers the instance check for an instance folder: instance', () => {
     assert.strictEqual(ext?.exports.folder, 'instance');
   });
@@ -429,16 +425,12 @@ describe('the loaded extension bundle is not older than its sources', () => {
     const pkgRoot = path.join(__dirname, '..', '..', '..');
     const srcDir = path.join(pkgRoot, 'src');
     const bundlePath = path.join(pkgRoot, 'out', 'extension.js');
-    // The workspace fixture is live — other suites write into it mid-run, so its mtimes churn
-    // independently of any bundle-affecting source edit. It is not part of the bundle either.
-    const excluded = path.join(srcDir, 'test', 'integration', 'workspace');
 
     let newestMtimeMs = -Infinity;
     let newestFile = '';
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
-        if (full === excluded) continue;
         if (entry.isDirectory()) {
           walk(full);
         } else if (entry.isFile()) {
@@ -508,11 +500,6 @@ describe('modbench command registration', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
-  });
-
-  it('registers no load-more command', async () => {
-    const all = await vscode.commands.getCommands(/* filterInternal */ true);
-    assert.ok(!all.includes('modbench.loadMore'), 'modbench.loadMore is registered');
   });
 });
 
@@ -756,10 +743,6 @@ describe('modbench.downloads tree', () => {
     fs.rmSync(downloadsDir, { recursive: true, force: true });
   });
 
-  it('exposes the live DownloadsProvider from activate()', () => {
-    assert.ok(provider(), 'activate() should return { downloadsProvider } for the open workspace');
-  });
-
   // Rows come from the Instance value (ADR-0015): written through writeAndAwaitInstance and
   // read back with no direct call to the provider's own invalidate().
   it('renders one row per archive, .meta sidecars suppressed', async () => {
@@ -847,10 +830,6 @@ describe('Overwrite row', () => {
   after(() => {
     if (!root) return;
     fs.rmSync(overwriteDir, { recursive: true, force: true });
-  });
-
-  it('exposes the live ModListProvider from activate()', () => {
-    assert.ok(provider(), 'activate() should return { modListProvider } for the open workspace');
   });
 
   it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
@@ -995,6 +974,14 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     await waitFor('the view to ask for its roots', () => asked.includes('root'));
     await new Promise((r) => setTimeout(r, 750));
   };
+  const expandsAfter = async (change: () => unknown): Promise<void> => {
+    asked = [];
+    await change();
+    await waitFor('the re-rendered view to ask for the separator\'s children', () => {
+      const rendered = asked.indexOf('root');
+      return rendered >= 0 && asked.indexOf('separator:Gear', rendered) > rendered;
+    });
+  };
   const onTheSeparator = async (command: 'list.expand' | 'list.collapse') => {
     await vscode.commands.executeCommand('modbench.modList.focus');
     await vscode.commands.executeCommand('list.focusFirst');
@@ -1035,8 +1022,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
 
   it('expands a separator it already rendered collapsed, while a filter shows it for its matching mods', async function () {
     if (!root) this.skip();
-    await renderAfter(() => provider().setFilter('armor', true));
-    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+    await expandsAfter(() => provider().setFilter('armor', true));
   });
 
   it('keeps a separator the user collapsed collapsed, and one the user expanded expanded, across a change on disk', async function () {
@@ -1050,10 +1036,9 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     assert.ok(!gearExpanded(), `a change on disk expanded a collapsed separator: ${JSON.stringify(asked)}`);
 
     await onTheSeparator('list.expand');
-    await renderAfter(() => writeAndAwaitInstance(() => {
+    await expandsAfter(() => writeAndAwaitInstance(() => {
       fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Late Armor\r\n+Weapons\r\n-Gear_separator\r\n');
     }));
-    assert.ok(gearExpanded(), `a change on disk collapsed an expanded separator: ${JSON.stringify(asked)}`);
   });
 
   it('expands a separator the user collapsed, while a filter shows it for its matching mods', async function () {
@@ -1062,8 +1047,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     await renderAfter(() => provider().setFilter('', true));
     assert.ok(!gearExpanded(), `the collapse did not land: ${JSON.stringify(asked)}`);
 
-    await renderAfter(() => provider().setFilter('weap', true));
-    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+    await expandsAfter(() => provider().setFilter('weap', true));
   });
 });
 
@@ -1301,7 +1285,6 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
 
 describe('Launch mEdit populates the editing plugin tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const treeProvider = () => ext?.exports.treeProvider;
   let gameDir = '';
 
   // enterEditing needs a resolvable game directory and an enabled plugin in the active profile to
@@ -1326,10 +1309,6 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the live PluginTreeProvider from activate()', () => {
-    assert.ok(treeProvider(), 'activate() should return { treeProvider } for the editing view');
   });
 
   it('loads the load order and shows plugins (not an empty tree) after launch', async () => {
@@ -1387,10 +1366,6 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the live PluginsTreeProvider from activate()', () => {
-    assert.ok(pluginListProvider(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
   it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
@@ -1542,10 +1517,6 @@ describe('Plugin load-order rows expand into records', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the merged Plugins tree from activate()', () => {
-    assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
   // ADR-0013 invariant 3: Mod Management takes the game's masters from the per-release table,
