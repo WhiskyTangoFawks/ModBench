@@ -75,6 +75,6 @@ export async function providedPluginsIn(root: string, profile = 'Default'): Prom
   const [entries, lines, runtimeOutput] = await Promise.all([
     adapter.modOrder(profile), adapter.pluginOrder(profile), adapter.originFiles({ kind: 'runtimeOutput' }),
   ]);
-  const index = await buildFileConflictIndex(entries, adapter, () => {});
+  const index = await buildFileConflictIndex(entries, adapter, () => {}, runtimeOutput.files);
   return providedPluginsOf(buildLoadOrderRows(lines, index, runtimeOutput.files, GAME_FOLDER_NOT_FOUND));
 }
