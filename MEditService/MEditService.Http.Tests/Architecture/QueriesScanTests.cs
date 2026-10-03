@@ -3,14 +3,10 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A caption the code contradicts: Queries hide the Index's reads and draw no arrow to a
-/// store.</summary>
 public sealed class QueriesScanTests
 {
     private const string QueriesRoot = "MEditService.Queries";
 
-    // Every spelling of the file system a core module reaches for. The three statics are anchored
-    // against a member access, since a receiver's own Path or File property is the caller's data.
     private static readonly (string Label, string Pattern)[] FileSystemNeedles =
     [
         ("File.", @"(?<![\w.])File\."),
@@ -22,8 +18,6 @@ public sealed class QueriesScanTests
         ("System.IO", @"\bSystem\.IO\b"),
     ];
 
-    // ADR-0014 invariant 1: the core knows no path and no byte format. Queries hide the Index's
-    // reads, so a disk read here answers from a file the Index never saw.
     [Fact]
     public void Queries_NameNoFileSystem()
     {
@@ -67,8 +61,6 @@ public sealed class QueriesScanTests
     private static List<string> ScannedFiles(string root, string scannedRoot) =>
         [.. SourceTree.CSharpFiles(Path.Combine(root, scannedRoot.Replace('/', Path.DirectorySeparatorChar)))];
 
-    // A count, not a line number: a reference is the unit of work, and a line number would fail the
-    // gate for any unrelated edit above one.
     private static List<string> Sites(
         string root, IEnumerable<string> files, (string Label, string Pattern)[] needles) =>
         [.. files

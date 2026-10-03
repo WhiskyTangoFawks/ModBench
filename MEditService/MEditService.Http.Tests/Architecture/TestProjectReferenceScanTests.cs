@@ -2,9 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A test project is a caller. Its references are its box, the arrows the reference view
-/// draws from its box, the kernel by the band rule, and test support; the arrows are read from the
-/// d2.</summary>
 public sealed class TestProjectReferenceScanTests
 {
     private const string TestSupport = "MEditService.TestSupport";
@@ -14,8 +11,6 @@ public sealed class TestProjectReferenceScanTests
     private const string CompositionRoot = "medit_driving.http";
     private const string KernelBand = "medit_kernel";
 
-    // The reference view names boxes, the solution names projects; this is that naming and nothing
-    // more. What each box reaches is read from the d2.
     private static readonly Dictionary<string, string> BoxOfProject = new(StringComparer.Ordinal)
     {
         ["MEditService.Http"] = CompositionRoot,
@@ -33,7 +28,7 @@ public sealed class TestProjectReferenceScanTests
     public void EveryTestSideProject_ReferencesItsBoxTheArrowsTheKernelAndTestSupport()
     {
         var solution = ArchitectureTests.SolutionDirectory();
-        var arrows = ReachedProjects(RefArrows(solution));
+        var arrows = ReachedProjects(RefArrowLinesIn(solution));
         var violations = new List<string>();
 
         foreach (var project in ServiceProjects.TestSide(solution))
@@ -68,12 +63,10 @@ public sealed class TestProjectReferenceScanTests
             + string.Join("\n", violations));
     }
 
-    // An arrow set that parsed to nothing would make every expected list the kernel alone, and the
-    // gate would pass by measuring nothing.
     [Fact]
     public void TheArrowParse_ReadsTheReferenceViewAndFindsEveryBoxOutsideTheKernel()
     {
-        var arrows = RefArrows(ArchitectureTests.SolutionDirectory());
+        var arrows = RefArrowLinesIn(ArchitectureTests.SolutionDirectory());
         var drawn = arrows.SelectMany(arrow => new[] { arrow.From, arrow.To }).ToHashSet(StringComparer.Ordinal);
         var absent = BoxOfProject.Values
             .Where(box => !box.StartsWith(KernelBand, StringComparison.Ordinal) && !drawn.Contains(box))
@@ -106,15 +99,12 @@ public sealed class TestProjectReferenceScanTests
 
         SortedSet<string> required = [box, .. arrows.TryGetValue(id, out var reached) ? reached : []];
 
-        // The band rule: the kernel is "read by every Core box and driven adapter"; a driving
-        // adapter's kernel arrows are drawn, and inside the kernel "Ports reads Load order state;
-        // nothing else in the kernel references anything".
-        if (id.StartsWith("medit_core", StringComparison.Ordinal)
-            || id.StartsWith("medit_driven", StringComparison.Ordinal))
+        var readsTheKernelByTheBandRule = id.StartsWith("medit_core", StringComparison.Ordinal)
+            || id.StartsWith("medit_driven", StringComparison.Ordinal);
+        if (readsTheKernelByTheBandRule)
             required.UnionWith(Kernel());
         if (id == Ports) required.Add(LoadOrder);
 
-        // "A composition root ... references every box below it by definition."
         if (id == CompositionRoot)
             required.UnionWith(ServiceProjects.Production(solution).Where(p => p != box));
 
@@ -125,8 +115,7 @@ public sealed class TestProjectReferenceScanTests
         BoxOfProject.Where(pair => pair.Value.StartsWith(KernelBand, StringComparison.Ordinal))
             .Select(pair => pair.Key);
 
-    // The d2 grammar resists a general parse, so only the arrow lines are read.
-    private static List<(string From, string To)> RefArrows(string solution) =>
+    private static List<(string From, string To)> RefArrowLinesIn(string solution) =>
         [.. Regex.Matches(
                 File.ReadAllText(Path.Combine(
                     ServiceProjects.DocsArchitecture(solution), "target-architecture-references.d2")),

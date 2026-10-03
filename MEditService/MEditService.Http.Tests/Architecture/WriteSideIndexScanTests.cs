@@ -6,13 +6,8 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The write side names no Index type (ADR-0015 invariants 1, 2, 3 and 5): it writes
-/// source text, and what the Index holds is asked for on the read side.</summary>
 public sealed class WriteSideIndexScanTests
 {
-    // The store and its factory, the read surface, the ref enum, the Index, the query surface, the
-    // five query services and the write gate. Naming one is how a write path starts reading its own
-    // effect.
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
@@ -22,8 +17,6 @@ public sealed class WriteSideIndexScanTests
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
-    // Whole projects, not folders inside them: a folder literal means a new folder joins the write
-    // side unguarded. The composition root is not the write side and is not here.
     private static readonly string[] ProductionRoots =
     [
         "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
@@ -31,8 +24,6 @@ public sealed class WriteSideIndexScanTests
         "MEditService.SourceAdapter",
     ];
 
-    // Not write side: Records is the Index module itself and Queries is the read side, both of which
-    // name these types by definition.
     private static readonly string[] NotWriteSide =
         ["MEditService.Index", "MEditService.Queries"];
 
@@ -48,8 +39,6 @@ public sealed class WriteSideIndexScanTests
             + string.Join("\n", counts));
     }
 
-    // Zero symbols found and zero files walked read the same: this is what tells them apart,
-    // so a ProductionRoots or exclusion typo that scans nothing cannot pass by matching nothing.
     [Fact]
     public void TheScan_WalksMoreThanFiftyProductionFiles()
     {
@@ -82,11 +71,9 @@ public sealed class WriteSideIndexScanTests
             File.WriteAllText(
                 Path.Combine(root, "Edits", "EditService.cs"),
                 "IRecordReads reads = index.Reads!;\nvar rows = reads.At(RecordRef.Effective);\n");
-            // The longer name is its own symbol: a prefix match would count it as the interface too.
             File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new IRecordIndexFactory();");
             File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "IRecordIndex index;");
             File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
-            // An excluded subtree is skipped whole, not file by file.
             Directory.CreateDirectory(Path.Combine(root, "Records"));
             File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "IRecordIndex index;");
 
@@ -106,23 +93,17 @@ public sealed class WriteSideIndexScanTests
         }
     }
 
-    // The endpoints are a write-side root too: a route that reads the Index and hands the answer to
-    // a handler is the write side reading its own effect through the API.
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
-    // The rebuild's refusal is the Index's own exception, and it crosses Queries' RebuildStore
-    // unchanged (ADR-0009 invariant 5), so no signature carries it.
-    private static readonly string[] IndexTypesQueriesThrow = ["IndexHeldElsewhereException"];
+    private static readonly string[] IndexExceptionsCrossingQueriesUnchanged = ["IndexHeldElsewhereException"];
 
-    // Read off the assemblies, so a type the Index adds is forbidden the day it lands. What a query
-    // service's own members take or answer crosses the endpoint as it is.
     private static string[] IndexTypesNoQuerySignatureCarries() =>
         [.. typeof(Indexer).Assembly.GetExportedTypes().Select(SourceName)
             .Except(typeof(IRecordQueryService).Assembly.GetExportedTypes()
                 .SelectMany(SignatureTypes)
                 .SelectMany(Unwrapped)
                 .Select(SourceName), StringComparer.Ordinal)
-            .Except(IndexTypesQueriesThrow, StringComparer.Ordinal)
+            .Except(IndexExceptionsCrossingQueriesUnchanged, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)];
 
     private static IEnumerable<Type> SignatureTypes(Type type) =>
@@ -156,8 +137,6 @@ public sealed class WriteSideIndexScanTests
             + string.Join("\n", named));
     }
 
-    // The endpoints reference the Source repository as the composition root, and call it not: a
-    // route's one call is to a handler or a query service.
     private static readonly string[] UndrawnCallees = ["SourceRepository"];
 
     [Fact]

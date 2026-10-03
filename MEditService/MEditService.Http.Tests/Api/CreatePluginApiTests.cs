@@ -7,8 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>The create gesture writes the file and nothing else: the load order it answers beside is
-/// the one it found, and the plugin reaches a reader only once a load order names it.</summary>
 public sealed class CreatePluginApiTests : HostedTests
 {
     private const string Held = "Held.esp";
@@ -40,8 +38,6 @@ public sealed class CreatePluginApiTests : HostedTests
     private static string NewModFolder(ScatteredFixtureData fx, string name) =>
         Directory.CreateDirectory(Path.Combine(fx.Root, name)).FullName;
 
-    // A record gesture resolves its target from the held load order alone, so a refused one is the
-    // plugin not being registered there.
     private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
         Client.PostAsJsonAsync(
             $"/plugins/{Uri.EscapeDataString(plugin)}/records",
@@ -61,8 +57,6 @@ public sealed class CreatePluginApiTests : HostedTests
         Assert.False((await CreateARecordIn("Minted.esp", "MintedMod")).IsSuccessStatusCode);
     }
 
-    // The plugin reaches the Index through the load order Mod Management puts once plugin sync gave
-    // it a line, never through the create itself.
     [Fact]
     public async Task CreatingAPlugin_LeavesThePluginsReadAsItWas_UntilALoadOrderNamesIt()
     {

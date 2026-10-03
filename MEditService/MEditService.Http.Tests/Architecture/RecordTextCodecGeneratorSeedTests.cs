@@ -4,17 +4,18 @@ namespace MEditService.Http.Tests.Architecture;
 
 public class RecordTextCodecGeneratorSeedTests
 {
-    // The doors are public because the Plugin adapter is a separate assembly; BannedApiScopeTests
-    // holds the package edge that stops another box calling them. This scans source text: the
-    // mixin's name may appear only here (ADR-0007).
+    private const string CompileTimeSeedDoor = "RecordTextCodecGeneratorSeed.cs";
+    private const string PluginBinaryAndTreeDoor = "PluginTrees.cs";
+    private const string PluginHeaderDocumentDoor = "HeaderDocument.cs";
+
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {
         const string mixinTypeName = "MutagenJsonConverterFallout4ModMixIns";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "RecordTextCodecGeneratorSeed.cs", // the compile-time seed, never invoked
-            "PluginTrees.cs",                  // a plugin's binary and its tree, composed
+            CompileTimeSeedDoor,
+            PluginBinaryAndTreeDoor,
         };
 
         var sourceFiles = ProductionSources();
@@ -29,21 +30,15 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // C# extension syntax does not spell the containing static class, so the scan above stays silent
-    // for exactly the call shape a real caller writes. This scans for the gateway method name instead,
-    // which every real call site does spell.
     [Fact]
     public void CoreSources_CallSerializeWholeModOnlyFromDesignatedDoorFiles()
     {
         const string gatewayMethodName = "SerializeWholeMod";
-        const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
+        const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "PluginTrees.cs",           // a plugin's binary read as its tree
-            // The plugin header's own body: a ModHeader is not an IMajorRecordGetter, so the per-
-            // record codec cannot produce it and the only alternative is the second dialect this
-            // whitelist prevents.
-            "HeaderDocument.cs",        // the plugin header's document, both directions
+            PluginBinaryAndTreeDoor,
+            PluginHeaderDocumentDoor,
         };
 
         var sourceFiles = ProductionSources();
@@ -58,20 +53,15 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // Its own test rather than a second entry above: that scan is a case-sensitive search for
-    // "SerializeWholeMod", which "DeserializeWholeMod" does not contain, so it is structurally silent
-    // for every ingest-from-source call site.
     [Fact]
     public void CoreSources_CallDeserializeWholeModOnlyFromDesignatedDoorFiles()
     {
         const string gatewayMethodName = "DeserializeWholeMod";
-        const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
+        const string gatewayFile = CompileTimeSeedDoor;
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "PluginTrees.cs",          // a tree read as a mod, and compiled back to bytes
-            // The read half of the same header door. Symmetric by construction: the document this reads is the
-            // one HeaderDocument.Write produced, so any other reader reintroduces the dialect split.
-            "HeaderDocument.cs",       // the plugin header's document, both directions
+            PluginBinaryAndTreeDoor,
+            PluginHeaderDocumentDoor,
         };
 
         var sourceFiles = ProductionSources();
@@ -86,13 +76,11 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // The guard sits at the bootstrap receiver rather than either gateway method's name because a
-    // second bootstrap-shaped call site for the same mod-typed seed does not compile at all.
     [Fact]
     public void CoreSources_NameTheBootstrapReceiverOnlyInTheGatewayFile()
     {
         const string bootstrapReceiver = "MutagenJsonConverter.Instance";
-        const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
+        const string gatewayFile = CompileTimeSeedDoor;
 
         var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
@@ -106,14 +94,11 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // MajorRecordListParallelHelper has an upstream race under a genuinely parallel IWorkDropoff, so
-    // the doors pass InlineWorkDropoff explicitly even though it is the library default, and may never
-    // name ParallelWorkDropoff. Listing a file here only tightens the check.
     [Fact]
-    public void DoorFiles_NeverNameAParallelWorkDropoff()
+    public void DoorFiles_NeverNameTheParallelWorkDropoffThatRacesInMajorRecordListParallelHelper()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", "PluginTrees.cs", "HeaderDocument.cs" };
+        var doorFiles = new[] { "TrackService.cs", PluginBinaryAndTreeDoor, PluginHeaderDocumentDoor };
 
         var sourceFiles = ProductionSources()
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))
@@ -128,8 +113,6 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Empty(offendingFiles);
     }
 
-    // Every production project: the doors the whitelists name sit in three of them, and a scan
-    // scoped to one would stop seeing the other two.
     private static readonly string[] ProductionProjects =
     [
         "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",

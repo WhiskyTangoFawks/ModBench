@@ -4,11 +4,10 @@ using System.Net.Sockets;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>The extension spawns the backend with no working directory, so an unanchored content
-/// root would never load the committed <c>appsettings.json</c>. A real child process from an
-/// unrelated directory, since <c>WebApplicationFactory</c> never reproduces this.</summary>
 public sealed class BackendContentRootTests
 {
+    private const string EphemeralLoopbackUrl = "http://127.0.0.1:0";
+
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
         ?? throw new InvalidOperationException($"Expected '{typeof(Program).Assembly.Location}' to have a parent directory.");
 
@@ -17,9 +16,7 @@ public sealed class BackendContentRootTests
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        // An ephemeral port (Kestrel refuses dynamic binding on the bare "localhost" host name)
-        // cannot collide with a developer's own running backend.
-        using var process = Spawn(["--urls", "http://127.0.0.1:0"], workingDirectory, lines);
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralLoopbackUrl], workingDirectory, lines);
         try
         {
             var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
@@ -44,12 +41,10 @@ public sealed class BackendContentRootTests
     [Fact]
     public async Task SpawnedFromArbitraryCwd_WithExtensionArgv_SuppressesRequestPipelineLogsButKeepsAppInfo()
     {
-        // The extension's argv, at Debug — the harder case: Default=Debug must not resurrect the
-        // Microsoft.AspNetCore override, since it's a different config key.
         var port = GetFreeTcpPort();
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = Spawn(
+        using var process = SpawnThroughTheDotnetMuxer(
             ["--urls", $"http://localhost:{port}", "--Serilog:MinimumLevel:Default", "Debug"],
             workingDirectory, lines);
         try
@@ -64,19 +59,14 @@ public sealed class BackendContentRootTests
             for (var i = 0; i < 3; i++)
                 await client.GetAsync(new Uri($"http://localhost:{port}/health"));
 
-            // A 404 always logs a WRN line (proven below); once it appears, every earlier request's
-            // own lines are already in the captured stream, since output for one process is ordered.
             await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
-            var sawMarker = await WaitForLineAsync(lines,
+            var sawTheOrderingMarker404 = await WaitForLineAsync(lines,
                 l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(10));
-            Assert.True(sawMarker,
+            Assert.True(sawTheOrderingMarker404,
                 $"expected the marker 404 to produce a visible line; captured output:\n{string.Join('\n', Snapshot(lines))}");
             var snapshot = Snapshot(lines);
 
-            // The six-line ASP.NET Core pipeline log that must stay suppressed. Distinct from — and
-            // unaffected by — UseSerilogRequestLogging's own one-line-per-request summary (pinned
-            // separately below), which writes under a different category entirely.
             Assert.DoesNotContain(snapshot, l =>
                 l.Contains("Request starting", StringComparison.Ordinal) ||
                 l.Contains("Executing endpoint", StringComparison.Ordinal) ||
@@ -93,12 +83,10 @@ public sealed class BackendContentRootTests
     [Fact]
     public async Task SpawnedFromArbitraryCwd_RequestLogging_ShowsFailuresButNotSuccessesAtDefaultLevel()
     {
-        // No --Serilog:MinimumLevel:Default here: the default (Information) is exactly the
-        // "without enabling debug" case.
         var port = GetFreeTcpPort();
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = Spawn(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
         try
         {
             var started = await WaitForLineAsync(lines,
@@ -108,8 +96,8 @@ public sealed class BackendContentRootTests
                 $"backend never reported listening on its own port; captured output:\n{string.Join('\n', Snapshot(lines))}");
 
             using var client = new HttpClient();
-            await client.GetAsync(new Uri($"http://localhost:{port}/health")); // 200
-            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route")); // 404, no route matches
+            await client.GetAsync(new Uri($"http://localhost:{port}/health"));
+            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route"));
 
             var sawFailureLine = await WaitForLineAsync(lines,
                 l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
@@ -132,7 +120,7 @@ public sealed class BackendContentRootTests
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = Spawn(["--urls", "http://127.0.0.1:0"], workingDirectory, lines);
+        using var process = SpawnThroughTheDotnetMuxer(["--urls", EphemeralLoopbackUrl], workingDirectory, lines);
         try
         {
             var started = await WaitForLineAsync(lines,
@@ -149,9 +137,7 @@ public sealed class BackendContentRootTests
         }
     }
 
-    // Faithful to the extension's published native executable even through the dotnet muxer:
-    // AppContext.BaseDirectory, which the content root anchors to, resolves identically either way.
-    private static Process Spawn(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
+    private static Process SpawnThroughTheDotnetMuxer(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
     {
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -221,7 +207,6 @@ public sealed class BackendContentRootTests
         }
         catch (InvalidOperationException)
         {
-            // Already exited between the check and the kill — nothing left to do.
         }
         finally
         {

@@ -5,9 +5,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Pins what the classifier makes of several plugins disagreeing, at the wire, including
-/// the two easy to get wrong: an override identical to its master (not a conflict) and one
-/// out-competed by a later override.</summary>
 public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : IClassFixture<CompareGoldenApiFixture>
 {
     private HttpClient Client => fixture.Client;
@@ -29,15 +26,14 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
             fields = o.GetProperty("fields").EnumerateArray()
                 .ToDictionary(f => f.GetProperty("metadata").GetProperty("name").GetString().Require(), f => f.GetProperty("value")),
         }).ToList(),
-        // Only fields that actually differ somewhere: an aligned diff tree over every reflected
-        // column of an NPC is ~200 entries of "everyone agrees", which would bury the four that
-        // carry the answer.
-        diffs = compare.GetProperty("diffs").EnumerateArray()
-            .Where(d => d.GetProperty("cellStates").EnumerateObject()
-                .Any(s => s.Value.GetString() is not ("OnlyOne" or "IdenticalToMaster" or "Master")))
-            .ToList(),
+        diffs = DiffsThatDifferSomewhere(compare).ToList(),
         diffFieldCount = compare.GetProperty("diffs").GetArrayLength(),
     };
+
+    private static IEnumerable<JsonElement> DiffsThatDifferSomewhere(JsonElement compare) =>
+        compare.GetProperty("diffs").EnumerateArray()
+            .Where(d => d.GetProperty("cellStates").EnumerateObject()
+                .Any(s => s.Value.GetString() is not ("OnlyOne" or "IdenticalToMaster" or "Master")));
 
     [Fact]
     public async Task Compare_AcrossThreePlugins_MatchesGolden()
@@ -92,7 +88,6 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
 
         var captured = new
         {
-            // Path is deliberately absent: it is a per-run temp directory.
             plugins = plugins.Select(p => new
             {
                 name = p.GetProperty("name"),

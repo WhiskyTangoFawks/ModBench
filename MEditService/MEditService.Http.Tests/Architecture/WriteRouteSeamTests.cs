@@ -2,13 +2,8 @@ using System.Text.RegularExpressions;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>Every write route's error mapping goes through WriteEndpointMapping, the write
-/// handlers' one shared seam. Routes are spelled by their answering method, checked against
-/// <see cref="WriteRouteHandlerTests"/>'s own canonical set so the two cannot drift apart.</summary>
 public sealed class WriteRouteSeamTests
 {
-    // Route, and the internal method answering it. Method + Pattern are joined with a space, matching
-    // how they're compared against WriteRouteHandlerTests.Routes below.
     private static readonly (string Route, string Method)[] Routes =
     [
         ("POST /records/{formKey}/edit", "EditRecord"),
@@ -28,9 +23,7 @@ public sealed class WriteRouteSeamTests
     private static readonly Regex ProblemCall = new(@"Results\.Problem\(", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
-    // Every request-shape validation 400 a write route's reach still hand-rolls, normalized
-    // (whitespace collapsed). Anything else found here is a handler outcome, forbidden below.
-    private static readonly string[] ValidationCarveOut =
+    private static readonly string[] HandRolledRequestShapeValidation400s =
     [
         """Results.Problem("Plugin name and origin are required.", statusCode: 400)""",
         """Results.Problem("An operation and a path are required.", statusCode: 400)""",
@@ -81,9 +74,9 @@ public sealed class WriteRouteSeamTests
     [MemberData(nameof(EveryNamedMethodRoute))]
     public void AWriteRoute_NeverHandRollsAResultsProblemForAHandlerOutcome(string route, string method)
     {
-        var offenders = ReachIn(EndpointFiles.Select(EndpointFile), method)
+        var offenders = ReachInFollowingEachHelperOnce(EndpointFiles.Select(EndpointFile), method)
             .SelectMany(ExtractProblemCalls)
-            .Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal))
+            .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
             .ToArray();
 
         Assert.True(
@@ -103,8 +96,8 @@ public sealed class WriteRouteSeamTests
             + "        return WriteEndpointMapping.NoLoadOrder(null!);\n    }\n}\n",
             file =>
             {
-                Assert.Null(MethodBodyIn(file, "NoSuchMethod"));
-                var body = MethodBodyIn(file, "DirectHit");
+                Assert.Null(BlockBodyOfStaticDeclarationIn(file, "NoSuchMethod"));
+                var body = BlockBodyOfStaticDeclarationIn(file, "DirectHit");
                 Assert.NotNull(body);
                 Assert.Contains("WriteEndpointMapping.", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("Caller", body, StringComparison.Ordinal);
@@ -123,8 +116,6 @@ public sealed class WriteRouteSeamTests
             file => Assert.True(MapsThroughSeamIn([file], "ThroughASibling")));
     }
 
-    // The rival this scan exists to catch: a route whose only sibling call never reaches
-    // WriteEndpointMapping must still fail.
     [Fact]
     public void TheScan_FailsARouteWhoseSiblingNeverReachesTheSeam()
     {
@@ -137,9 +128,9 @@ public sealed class WriteRouteSeamTests
             file =>
             {
                 Assert.False(MapsThroughSeamIn([file], "ThroughAHandRolledSibling"));
-                var offenders = ReachIn([file], "ThroughAHandRolledSibling")
+                var offenders = ReachInFollowingEachHelperOnce([file], "ThroughAHandRolledSibling")
                     .SelectMany(ExtractProblemCalls)
-                    .Where(call => !ValidationCarveOut.Contains(call, StringComparer.Ordinal))
+                    .Where(call => !HandRolledRequestShapeValidation400s.Contains(call, StringComparer.Ordinal))
                     .ToArray();
                 Assert.Single(offenders);
             });
@@ -164,12 +155,9 @@ public sealed class WriteRouteSeamTests
         Path.Combine(ArchitectureTests.SolutionDirectory(), "MEditService.Http", "Endpoints", name);
 
     private static bool MapsThroughSeamIn(IEnumerable<string> files, string methodName) =>
-        ReachIn(files, methodName).Any(body => body.Contains("WriteEndpointMapping.", StringComparison.Ordinal));
+        ReachInFollowingEachHelperOnce(files, methodName).Any(body => body.Contains("WriteEndpointMapping.", StringComparison.Ordinal));
 
-    // A route's own body is the first place to look; a body that only delegates to a shared private
-    // helper is followed one call at a time, bounded by visited so a cycle between two siblings
-    // cannot loop forever.
-    private static IReadOnlyList<string> ReachIn(IEnumerable<string> files, string methodName)
+    private static IReadOnlyList<string> ReachInFollowingEachHelperOnce(IEnumerable<string> files, string methodName)
     {
         var fileList = files.ToArray();
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -180,7 +168,7 @@ public sealed class WriteRouteSeamTests
         void Collect(string method)
         {
             if (!visited.Add(method)) return;
-            var body = fileList.Select(file => MethodBodyIn(file, method)).FirstOrDefault(b => b is not null);
+            var body = fileList.Select(file => BlockBodyOfStaticDeclarationIn(file, method)).FirstOrDefault(b => b is not null);
             if (body is null) return;
             bodies.Add(body);
 
@@ -202,11 +190,9 @@ public sealed class WriteRouteSeamTests
     private static string Normalize(string text) => WhitespaceRun.Replace(text, " ").Trim();
 
     private static string? MethodBody(string methodName) =>
-        EndpointFiles.Select(file => MethodBodyIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
+        EndpointFiles.Select(file => BlockBodyOfStaticDeclarationIn(EndpointFile(file), methodName)).FirstOrDefault(body => body is not null);
 
-    // A true declaration is "static <return type> Name(", never a call site. An expression-bodied
-    // declaration (=> ...;) has no block, and answers null rather than wander into the next method.
-    private static string? MethodBodyIn(string file, string methodName)
+    private static string? BlockBodyOfStaticDeclarationIn(string file, string methodName)
     {
         var text = File.ReadAllText(file);
         var declaration = new Regex(

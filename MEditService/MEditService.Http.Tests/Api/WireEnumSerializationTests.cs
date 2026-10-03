@@ -7,17 +7,11 @@ using Microsoft.Extensions.Options;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Swashbuckle only honors a per-enum <c>JsonStringEnumConverter</c> attribute while
-/// <c>Program.cs</c> registers the converter globally, so adding the attribute must leave the bytes
-/// alone.</summary>
 public sealed class WireEnumSerializationTests
 {
-    private static async Task<JsonSerializerOptions> AppSerializerOptionsAsync()
+    private static async Task<JsonSerializerOptions> SerializerOptionsFromTheRunningAppsDiAsync()
     {
         await using var app = new MEditHost();
-        // Options come from the running app's DI: a hand-built JsonSerializerOptions would keep
-        // passing if the global converter registration were dropped.
-        // Force the host to build before resolving out of it.
         _ = app.CreateClient();
         return app.Services
             .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
@@ -27,7 +21,7 @@ public sealed class WireEnumSerializationTests
     [Fact]
     public async Task WorkingTreeState_SerializesAsMemberName()
     {
-        var options = await AppSerializerOptionsAsync();
+        var options = await SerializerOptionsFromTheRunningAppsDiAsync();
         var json = JsonSerializer.Serialize(
             new RecordSummary("00000800:Fallout4.esm", "MyPatch.esp", 3, true, "Npc", "ModA", WorkingTreeState.Modified),
             options);
@@ -38,7 +32,7 @@ public sealed class WireEnumSerializationTests
     [Fact]
     public async Task TrackPhase_SerializesAsMemberName()
     {
-        var options = await AppSerializerOptionsAsync();
+        var options = await SerializerOptionsFromTheRunningAppsDiAsync();
         var json = JsonSerializer.Serialize(new TrackProgress("ModA", TrackPhase.Serializing, 2, 5), options);
 
         Assert.Contains("\"phase\":\"Serializing\"", json, StringComparison.Ordinal);
@@ -47,7 +41,7 @@ public sealed class WireEnumSerializationTests
     [Fact]
     public async Task LoadOrderState_SerializesAsMemberName()
     {
-        var options = await AppSerializerOptionsAsync();
+        var options = await SerializerOptionsFromTheRunningAppsDiAsync();
         var json = JsonSerializer.Serialize(LoadOrderStatus.None with { State = LoadOrderState.Reconciling }, options);
 
         Assert.Contains("\"state\":\"Reconciling\"", json, StringComparison.Ordinal);

@@ -11,9 +11,6 @@ using Noggog;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>a-change-from-another-tool: a change from another tool and a change from Modbench are
-/// the same signal, the next snapshot, because each read model learns only through the one
-/// watch.</summary>
 public sealed class AChangeFromAnotherToolApiTests : HostedTests
 {
     private const string Plugin = "Shared.esp";
@@ -53,8 +50,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == name)
             .GetProperty("value");
 
-    // A hand edit under the source tree is a change Modbench did not make, and it comes back as the
-    // same rows-changed push an edit through the API produces.
     [Fact]
     public async Task AHandEditToADocumentUnderTheSourceTree_PushesRowsChanged_AndTheNextReadAgrees()
     {
@@ -71,8 +66,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("RenamedByAnotherTool", (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
 
-    // The old path is gone and the new one declares the same record: it moved, it did not go. The
-    // quest's edits settle a snapshot before the rename and anchor the frames after it.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("SortedByHand/{0}")]
@@ -159,8 +152,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await stream.EventsUntil("load-order-status", e => FailureOf(e) is not null);
     }
 
-    // A tool that moves by copying and then deleting leaves the record in two documents until the
-    // snapshot after the delete.
     [Theory]
     [InlineData("RenamedByHand.json")]
     [InlineData("Misnamed - 000900_Shared.esp.json")]
@@ -190,7 +181,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(Npc, (await Client.Record(npc)).GetProperty("editorId").GetString());
     }
 
-    // The copy is a cell of its own, and the placed reference it carries is the original's.
     private static string ACellCopiedUnderAKeyOfItsOwn(string modFolder, string cell)
     {
         var original = Path.GetDirectoryName(OtherTool.SourceDocumentCarrying(modFolder, Plugin, $"\"{Cell}\"")).Require();
@@ -295,8 +285,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             .Select(f => f.GetProperty("reason").GetString())
             .FirstOrDefault();
 
-    // An earlier projection's frame can name the record too, and a write joining the delete's snapshot
-    // is a move that advances nothing: the delete's frame is the one after which the record reads gone.
     private async Task TheFrameAfterWhichItReadsGone(StreamReader stream, string formKey)
     {
         while (true)
@@ -397,9 +385,8 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
             "the edit reached the read");
     }
 
-    // A folder moved in whole names nothing inside it to any watch.
     [Fact]
-    public async Task ARecordInAFolderMovedInByHand_IsRead()
+    public async Task ARecordInAFolderMovedInWholeByHand_IsRead()
     {
         using var fx = await ATrackedMod();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
@@ -418,8 +405,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal("AddedNpc", (await Client.Record(added)).GetProperty("editorId").GetString());
     }
 
-    // A validation publishes the quest's frame before a record it dropped, so only a later
-    // snapshot's frame bounds everything the first one published.
     private async Task<List<(string Kind, JsonElement Data)>> FramesOfTheSnapshotAnchoredBy(
         ScatteredFixtureData fx, StreamReader stream, string modFolder, string quest)
     {
@@ -436,8 +421,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
     private static bool Names(JsonElement rowsChanged, string formKey) =>
         rowsChanged.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey);
 
-    // An untracked plugin's bytes are its only truth, so the Index re-derives the plugin itself and
-    // names it whole: too many rows to list.
     [Fact]
     public async Task ARewriteOfAnUntrackedPluginsBytes_PushesPluginChanged_AndTheNextReadAgrees()
     {
@@ -458,9 +441,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         Assert.Equal(0.9, (await Field(formKey, "HeightMax")).GetDouble(), 3);
     }
 
-    // A container record's document is one the repository lays out on its own terms, and a revert
-    // by git is a write Modbench did not make: it reaches the next read the same way a flat
-    // record's does.
     [Fact]
     public async Task AGitRevertOfAQuestsDocument_ReachesTheNextRead()
     {
@@ -477,8 +457,6 @@ public sealed class AChangeFromAnotherToolApiTests : HostedTests
         await Wire.Eventually(async () => (await Field(quest, "Filter")).GetString() == "OriginalFilter", "the revert reached the read");
     }
 
-    // An embedded child lives in its owning cell's document, so the revert of that one file is
-    // what brings the placed ref back.
     [Fact]
     public async Task AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
     {

@@ -12,13 +12,9 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>Source-text and reflection checks for the invariants a compiling change can still break
-/// silently. Each test names the ADR it enforces.</summary>
 public sealed class ArchitectureTests
 {
-    // Every box's own assembly, reached through one type each: a seam is an interface in whichever
-    // box publishes it, and one box's assembly would leave the other eight unscanned.
-    private static readonly Assembly[] Boxes =
+    private static readonly Assembly[] EveryBoxAssembly =
     [
         typeof(RecordTextCodec).Assembly,
         typeof(TrackHandler).Assembly,
@@ -31,20 +27,17 @@ public sealed class ArchitectureTests
         typeof(SourceRepository).Assembly,
     ];
 
-    // Where a DTO's own shape decides identity: the read side's models, and the wire records the
-    // endpoints bind. A record in either travels to the frontend as it is declared.
-    private static readonly (Assembly Assembly, string Namespace)[] DtoBoxes =
+    private static readonly (Assembly Assembly, string Namespace)[] ReadModelAndWireRecordNamespaces =
     [
         (typeof(IRecordQueryService).Assembly, "MEditService.Queries"),
         (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
-    // ADR-0012: a bare filename compiles and passes single-plugin tests, then misidentifies.
     [Fact]
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
         var offenders = new List<string>();
-        foreach (var type in Boxes.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
+        foreach (var type in EveryBoxAssembly.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {
@@ -54,7 +47,7 @@ public sealed class ArchitectureTests
             offenders.AddRange(PluginStringsWithoutOrigin(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
                 .Select(p => $"{type.Name}.{p}"));
         }
-        foreach (var record in DtoBoxes.SelectMany(box => box.Assembly.GetExportedTypes()
+        foreach (var record in ReadModelAndWireRecordNamespaces.SelectMany(box => box.Assembly.GetExportedTypes()
             .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
         {
             var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)
@@ -65,7 +58,6 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "A plugin name travels without its origin:\n" + string.Join("\n", offenders));
     }
 
-    // A typed PluginAddress parameter already carries both halves; only a string name can travel alone.
     internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
         PluginStringsWithoutOrigin(parameters
             .Select(p => (p.Name ?? throw new InvalidOperationException("Expected a parameter to have a name."), p.ParameterType))
@@ -82,9 +74,6 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0009: a hash is kept unread only while the stamp, change time included, matches. .NET has
-    // no change time, so a .NET LastWriteTime read is modification time alone, which ADR-0003
-    // rejects: other tools' writes can preserve it.
     [Fact]
     public void DiskDerivedState_NeverReadsModificationTimeAlone()
     {
@@ -93,8 +82,6 @@ public sealed class ArchitectureTests
             "Modification time read without change time in:\n" + string.Join("\n", offenders));
     }
 
-    // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
-    // would still pass the assertion above.
     [Fact]
     public void DiskDerivedState_TheScanWalksMoreThanOneHundredFiles()
     {
@@ -103,8 +90,6 @@ public sealed class ArchitectureTests
         Assert.True(walked > 100, $"The mtime scan walked only {walked} files under {string.Join(", ", Projects)}.");
     }
 
-    // The same Offenders() the assertion above calls, with its own needle: proves a planted mtime
-    // read is caught rather than the needle itself having gone stale.
     [Fact]
     public void DiskDerivedState_TheScanCatchesAPlantedLastWriteTimeRead()
     {
@@ -124,13 +109,10 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013 invariant 1: the put-load-order handler is the only writer, the Index's own
-    // subscription the only reconciler — a second of either makes the Index's Status lie.
     [Fact]
     public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyByTheIndex()
     {
         var root = SolutionDirectory();
-        // The Index reconciles on its own subscription, so no box calls its reconcile door.
         string[] reconcilers = [];
         string[] writers = ["PutLoadOrderHandler.cs"];
 
@@ -153,8 +135,6 @@ public sealed class ArchitectureTests
 
     private const string LoadOrderFolder = "MEditService.LoadOrder";
 
-    // ADR-0013 invariant 4: the load order value is built from what Mod Management sent. An
-    // adapter type here is a disk read on its construction path.
     [Fact]
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
     {
@@ -165,8 +145,6 @@ public sealed class ArchitectureTests
             "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
     }
 
-    // The value is what Mod Management sent, so a disk read here answers from the instance rather
-    // than from the snapshot — and the two disagree the moment another tool touches a file.
     [Fact]
     public void TheLoadOrderValue_ReadsNoFileOrDirectory()
     {
@@ -179,8 +157,6 @@ public sealed class ArchitectureTests
             "The load order folder reads the disk in:\n" + string.Join("\n", offenders));
     }
 
-    // Zero offenders and an empty folder read the same: a path that scanned nothing would still
-    // pass the assertions above.
     [Fact]
     public void TheLoadOrderValueScan_WalksTheLoadOrderFolder()
     {
@@ -192,38 +168,38 @@ public sealed class ArchitectureTests
         Assert.Contains("Registration.cs", walked);
     }
 
-    // Typed by the receiver, not by a token the whole file shares: the Index holds a holder to read
-    // from and calls the store's own Register beside it, which "this file names both" cannot tell
-    // apart.
     internal static List<string> HolderWrites(string root, string[] projects, string verb) =>
         [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
-            .Where(f => CallsHolder(File.ReadAllText(f), verb))
+            .Where(f => CallsVerbOnAReceiverTypedAsHolder(File.ReadAllText(f), verb))
             .Select(f => Path.GetRelativePath(root, f))];
 
-    // A declaration, or an assignment from anything naming the type — construction, a DI resolve,
-    // a property. The name is all that is wanted; over-capturing costs a receiver nobody calls the
-    // verb on, while under-capturing loses the write.
-    private static readonly Regex HolderReceiver = new(
+    private static readonly Regex DeclaredOrAssignedHolderReceiver = new(
         @"LoadOrderHolder\??\s+(\w+)|(\w+)\s*=(?!>)[^;]*\bLoadOrderHolder\b", RegexOptions.Compiled);
 
-    private static bool CallsHolder(string text, string verb) =>
-        HolderReceiver.Matches(text)
+    internal static bool CallsVerbOnAReceiverTypedAsHolder(string text, string verb) =>
+        DeclaredOrAssignedHolderReceiver.Matches(text)
             .SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value })
             .Where(name => name.Length > 0)
             .Distinct(StringComparer.Ordinal)
-            // Bounded, or a receiver named `holder` answers for `placeholder.Apply(`.
             .Any(name => Regex.IsMatch(text, $@"\b{Regex.Escape(name)}\.{verb}\("));
 
     private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
         named.Where(f => !allowed.Contains(Path.GetFileName(f)));
 
-    // An allowance matching no call pre-authorizes a write nobody reviews, and reads as though the
-    // rule had an exception it does not have.
     internal static List<string> DeadAllowances(string[] allowed, params List<string>[] scans)
     {
         var named = scans.SelectMany(s => s).Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
         return [.. allowed.Where(a => !named.Contains(a)).Order(StringComparer.Ordinal)];
+    }
+
+    [Fact]
+    public void ABareHolderReceiverName_DoesNotAnswerForAPlaceholderCall()
+    {
+        Assert.False(CallsVerbOnAReceiverTypedAsHolder(
+            "LoadOrderHolder holder; placeholder.Apply(x);", "Apply"));
+        Assert.True(CallsVerbOnAReceiverTypedAsHolder(
+            "LoadOrderHolder holder; holder.Apply(x);", "Apply"));
     }
 
     [Fact]
@@ -234,9 +210,6 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0014 invariant 3: Queries are the only readers of the read model, so a member of
-    // IQueryIndex no query service calls is a widening nobody asked for — every implementer
-    // pays for it.
     [Fact]
     public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
@@ -244,19 +217,15 @@ public sealed class ArchitectureTests
             .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
             .Select(File.ReadAllText)
             .ToList();
-        // Property getters travel as get_X methods; naming the property is what a caller does.
-        var members = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
+        var propertiesAndNonAccessorMethods = typeof(IQueryIndex).GetProperties().Select(m => m.Name)
             .Concat(typeof(IQueryIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name));
-        var uncalled = members
+        var uncalled = propertiesAndNonAccessorMethods
             .Where(name => !queries.Exists(text => text.Contains($".{name}", StringComparison.Ordinal)))
             .ToList();
         Assert.True(uncalled.Count == 0,
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
-    // answer to "which plugin wins". As a parameter it is the snapshot going in, the allowed
-    // direction.
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
@@ -275,8 +244,6 @@ public sealed class ArchitectureTests
     private const BindingFlags EveryMember =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
 
-    // Internal counts, private does not: the Indexer reads the kernel through a private field,
-    // and the rule is about what it hands out.
     private static bool VisibleOutsideItsType(MemberInfo member) => member switch
     {
         PropertyInfo property =>
@@ -298,8 +265,6 @@ public sealed class ArchitectureTests
     private static bool IsALoadOrder(Type? type) =>
         type is not null && (type == typeof(LoadOrderSnapshot) || type == typeof(LoadOrderHolder));
 
-    // ADR-0013 invariant 3: Mod Management alone decides the active plugins, so Editing spells the
-    // rule nowhere — enabled, winning, and named by a plugins.txt line.
     [Fact]
     public void TheActivePluginRule_IsSpelledNowhereInProduction()
     {
@@ -314,8 +279,6 @@ public sealed class ArchitectureTests
         Assert.Empty(spellings);
     }
 
-    // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
-    // AND` both match, and either one alone does not — a read of a single fact is ordinary.
     private static readonly Regex ParticipationRule = new(
         @"enabled\s*(?:&&|AND)\s*[^\n]{0,24}?winning\s*(?:&&|AND)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
@@ -331,11 +294,8 @@ public sealed class ArchitectureTests
 
     private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs"];
 
-    // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
-    // ADR-0005 invariant 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
-    // where the replace-by-rename discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {
@@ -348,8 +308,6 @@ public sealed class ArchitectureTests
             "A plugin binary is opened or written outside the Plugin adapter in:\n" + string.Join("\n", offenders));
     }
 
-    // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
-    // would still pass the assertion above.
     [Fact]
     public void ExistingPluginBinary_TheScanWalksMoreThanOneHundredFiles()
     {
@@ -358,8 +316,6 @@ public sealed class ArchitectureTests
         Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
     }
 
-    // The same Offenders() the assertion above calls, with its own four needles: proves a planted
-    // open or write outside the adapter is caught under every spelling.
     [Fact]
     public void ExistingPluginBinary_TheScanCatchesAPlantedBinaryOpenOrWriteOutsideAnAllowedFile()
     {
@@ -390,36 +346,29 @@ public sealed class ArchitectureTests
         }
     }
 
-    // The adapter's write verb lays bytes down in place, with no rename, so who calls it is the
-    // whole of the replace-by-rename discipline.
     [Fact]
     public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToReplace()
     {
-        // PluginWriter writes a temp file and renames it over the binary, PluginTrees writes a
-        // scratch copy, and the create gesture writes a brand-new file — none lays bytes over an
-        // existing binary in place.
         string[] writers = ["PluginWriter.cs", "PluginTrees.cs", "CreatePluginHandler.cs"];
 
-        // Carries no leading dot, so CreateAndWriteAsync is caught alongside WriteAsync; the two
-        // adapter files that declare and implement them call neither.
-        var writes = Offenders(
+        string[] filesDeclaringAndImplementingTheVerbs = [.. PluginBinaryWriters, "IPluginAdapter.cs"];
+        var writesIncludingCreateAndWrite = Offenders(
             SolutionDirectory(), Projects, ["PluginAdapter", "WriteAsync("],
-            [.. PluginBinaryWriters, "IPluginAdapter.cs"]);
+            filesDeclaringAndImplementingTheVerbs);
 
-        var offenders = Unallowed(writes, writers).ToList();
+        var offenders = Unallowed(writesIncludingCreateAndWrite, writers).ToList();
         Assert.True(offenders.Count == 0,
             "A plugin binary is replaced by writing a temp file and renaming it over the binary, and the "
             + "adapter's write verb writes in place. Only PluginWriter (which renames), PluginTrees (which "
             + "writes a scratch copy) and the create gesture (which writes a file with no existing binary) "
             + "may call it. It is called in:\n" + string.Join("\n", offenders));
 
-        var dead = DeadAllowances(writers, writes).ToList();
+        var dead = DeadAllowances(writers, writesIncludingCreateAndWrite).ToList();
         Assert.True(dead.Count == 0,
             "Allowances naming no such call — delete them rather than leaving a plugin write pre-authorized:\n"
             + string.Join("\n", dead));
     }
 
-    // The repo is public: a plugin lands in TestData only by a deliberate edit to the allowlist.
     [Fact]
     public void TestDataPlugins_AreExactlyTheAllowlist()
     {
@@ -440,8 +389,6 @@ public sealed class ArchitectureTests
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);
 
-    // Every needle, not any: a conjunction scopes a common token like ".Apply(" to the files that
-    // name the type it is forbidden on.
     internal static List<string> Offenders(string root, string[] projects, string[] needles, string[] allowedFiles)
     {
         return projects

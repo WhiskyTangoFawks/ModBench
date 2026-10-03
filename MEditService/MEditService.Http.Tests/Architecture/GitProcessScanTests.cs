@@ -3,9 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>GitCli is the service's one process boundary, so every git call runs without optional
-/// locks: the user's own commit or rebase fails on an index.lock a background read holds
-/// (ADR-0003).</summary>
 public sealed class GitProcessScanTests
 {
     private const string GitRunner = "MEditService.SourceAdapter/GitCli.cs";

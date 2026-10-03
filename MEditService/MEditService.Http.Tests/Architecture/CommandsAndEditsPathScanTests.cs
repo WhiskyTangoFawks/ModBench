@@ -3,13 +3,9 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A path names the Source repository (ADR-0014.5); a plugin's bytes name the Plugin
-/// adapter (ADR-0005.2). Commands and Edits ask one of those layers instead.</summary>
 public sealed class CommandsAndEditsPathScanTests
 {
-    // Neither a member named Path nor a type ending in Path (RelativePath, FieldPath) is a BCL call,
-    // and the System.IO. spelling of one is: the qualifier decides, not the dot before the type.
-    private static readonly Regex Operation = new(
+    private static readonly Regex BclPathFileDirectoryOperation = new(
         @"(?:(?<![\w.])|(?<=\bSystem\.IO\.))(Path|File|Directory)\.[A-Za-z]+"
         + @"|(?<![\w.])new\s+(?:System\.IO\.)?(?:FileInfo|DirectoryInfo|FileStream|FileSystemWatcher)\b",
         RegexOptions.Compiled);
@@ -28,8 +24,6 @@ public sealed class CommandsAndEditsPathScanTests
             + string.Join("\n", counts));
     }
 
-    // Zero offenders and zero files walked read the same: a ScannedRoots typo that scans nothing
-    // would still pass the assertion above.
     [Fact]
     public void TheScan_WalksMoreThanTwentyFiles()
     {
@@ -90,7 +84,7 @@ public sealed class CommandsAndEditsPathScanTests
             .Order(StringComparer.Ordinal)];
 
     private static IEnumerable<(string Operation, int Count)> Occurrences(string text) =>
-        Operation.Matches(text)
+        BclPathFileDirectoryOperation.Matches(text)
             .Select(m => m.Value)
             .GroupBy(v => v, StringComparer.Ordinal)
             .Select(g => (Operation: g.Key, Count: g.Count()));

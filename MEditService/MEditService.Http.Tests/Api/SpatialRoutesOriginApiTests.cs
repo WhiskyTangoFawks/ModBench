@@ -10,18 +10,12 @@ using Noggog;
 
 namespace MEditService.Http.Tests.Api;
 
-// ADR-0012 for the spatial routes, over a load order really holding two files of one filename.
-// Real mod-folder origins: ColumnKey.Of elides PluginOrigin.DataDirectory, so a default-origin
-// fixture passes whether or not the routes honour origin.
 public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both plugins build in the same order from a fresh Fallout4Mod against the same ModKey, so
-    // they land on identical FormKeys: one captured FormKey addresses both plugins' routes,
-    // distinguished only by `origin`.
-    private static (string WorldspaceFk, string CellFk) ConfigurePlugin(Fallout4Mod mod, string tag)
+    private static (string WorldspaceFk, string CellFk) ConfigurePluginWithFormKeysIdenticalAcrossPlugins(Fallout4Mod mod, string tag)
     {
         var wrld = mod.Worldspaces.AddNew($"World{tag}");
         var extCell = new Cell(mod) { EditorID = $"Cell{tag}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
@@ -49,10 +43,10 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         string? worldspaceFk = null;
         string? cellFk = null;
         var fx = new PluginFixtureBuilder("api-spatial-origin")
-            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModB"), origin: "ModB")
             .WithPlugin("Shared.esp", mod =>
             {
-                var (wrld, cell) = ConfigurePlugin(mod, "ModA");
+                var (wrld, cell) = ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModA");
                 worldspaceFk = wrld;
                 cellFk = cell;
             }, origin: "ModA")
@@ -65,8 +59,6 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
     private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
-        // only the winning, enabled, listed one is active, and only it is read.
         var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
@@ -93,8 +85,6 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         Assert.Empty((await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModA")).EnumerateArray());
     }
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
-    // filename, so the route refuses rather than picking the load order's winner for it.
     [Fact]
     public async Task GetWorldspaces_OmittedOrigin_ReturnsBadRequest()
     {
@@ -182,8 +172,6 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await AssertOriginRequiredProblem(omitted);
     }
 
-    // A 400 alone doesn't say why: some other cause could return the same status, so the problem
-    // detail itself is the assertion that this is the origin guard and not a stray 400 elsewhere.
     private static async Task AssertOriginRequiredProblem(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

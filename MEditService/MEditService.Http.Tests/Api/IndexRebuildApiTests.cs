@@ -4,9 +4,6 @@ using MEditService.Http.Tests.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Refresh's own first step (commands.md, `refresh`): the index file is dropped, and mEdit
-/// reads every plugin again against the load order it holds, as a cold load does. Nothing is sent.
-/// </summary>
 public sealed class IndexRebuildApiTests : HostedTests
 {
     private const string Plugin = "Rebuild.esp";

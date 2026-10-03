@@ -8,9 +8,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>edit-record: the envelope goes down to the source tree and the next snapshot's
-/// projection comes back up: an applied reply or a typed refusal, then a rows-changed push, then
-/// the editor's own re-read.</summary>
 public sealed class EditRecordTraceTests : HostedTests
 {
     private const string Plugin = "Editable.esp";
@@ -191,8 +188,8 @@ public sealed class EditRecordTraceTests : HostedTests
         Assert.Equal(
             [(records[0], UntrackedPlugin, "PluginNotTracked"), (records[1], UntrackedPlugin, "PluginNotTracked")],
             answer.GetProperty("refused").EnumerateArray().Select(RefusedFrom).ToArray());
-        Assert.Single(DestinationDocumentsCarrying(fx, records[0]));
-        Assert.Single(DestinationDocumentsCarrying(fx, records[1]));
+        Assert.Single(DestinationDocumentsOnDiskCarrying(fx, records[0]));
+        Assert.Single(DestinationDocumentsOnDiskCarrying(fx, records[1]));
     }
 
     private async Task<ScatteredFixtureData> TwoRecordsAndTwoDestinations()
@@ -216,8 +213,7 @@ public sealed class EditRecordTraceTests : HostedTests
         return response;
     }
 
-    // The tracked destination's working tree, read as a file on disk rather than through any answer.
-    private static string[] DestinationDocumentsCarrying(ScatteredFixtureData fx, string formKey) =>
+    private static string[] DestinationDocumentsOnDiskCarrying(ScatteredFixtureData fx, string formKey) =>
         [.. Directory.EnumerateFiles(
                 SourceRepository.RootIn(OtherTool.ModFolderOf(fx, OtherOrigin), OtherPlugin), "*.json",
                 SearchOption.AllDirectories)
@@ -249,8 +245,6 @@ public sealed class EditRecordTraceTests : HostedTests
         (item.GetProperty("record").GetProperty("formKey").GetString().Require(),
             item.GetProperty("destination").GetProperty("name").GetString().Require());
 
-    // FormKey.Factory throws on malformed input, and the fix is the endpoint's own 400 rather than a
-    // new refusal case.
     [Fact]
     public async Task CreatingARecordWithAMalformedFormKey_Is400()
     {
