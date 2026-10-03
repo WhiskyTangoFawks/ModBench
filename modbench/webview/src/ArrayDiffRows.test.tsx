@@ -826,3 +826,28 @@ describe('RecordPanel — an element after a null slot is addressed at its own i
     expect(cells[2]?.textContent).toBe('[3]');
   });
 });
+
+describe('RecordPanel — an array whose one slot is null', () => {
+  const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
+
+  it('reads as an element with no reading', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    render(<RecordPanel client={panelClient(() => compareResultFixture({
+      overrides: [compareOverride({
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: itemsMeta, value: [null] }],
+      })],
+      diffs: [diffNode({
+        fieldName: 'Items',
+        values: { 'MyMod.esp': [null] },
+        children: [diffNode({ fieldName: '[0]', values: { 'MyMod.esp': null }, indexes: { 'MyMod.esp': 0 } })],
+      })],
+    }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] })} />);
+    await waitFor(() => screen.getByText('Items'));
+    const items = required(screen.getByText('Items').closest('tr'), 'the Items row');
+    fireEvent.click(within(items).getByText('▼'));
+
+    expect(items.querySelectorAll('td')[1]?.textContent).toBe('{…}');
+    vi.unstubAllGlobals();
+  });
+});

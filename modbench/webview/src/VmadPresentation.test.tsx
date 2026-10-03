@@ -106,7 +106,7 @@ const documentSpelledProperty = (name: string, concreteType: string, over: Obj =
   ...over,
 });
 
-const script = (name: string, properties: Obj[] = []): Obj => ({ Name: name, Flags: 'Local', Properties: properties });
+const script = (name: string, properties: (Obj | null)[] = []): Obj => ({ Name: name, Flags: 'Local', Properties: properties });
 
 const PLUGIN = 'MyMod.esp';
 
@@ -366,6 +366,16 @@ describe('a collapsed script reads as xEdit prose', () => {
     expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
   });
 
+  it('a null slot of a passed-through list holds its place, so the count stays true', async () => {
+    currentCompare = oneColumn([script('Guard', [null, documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    renderPanel();
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
+
+    expect(summaryOf('Guard')).toBe('Guard({…}, Radius: Int = 10)');
+  });
+
   it('the concrete base is a leaf like any other and reads with no value', async () => {
     currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Nothing', 'ScriptProperty')])]);
     renderPanel();
@@ -425,7 +435,7 @@ describe('a collapsed array reads by its elements', () => {
   });
 });
 
-describe('a collapsed struct reads as its elements do', () => {
+describe('a collapsed struct reads by its own reading', () => {
   it('a member with a reading of its own reads by it', async () => {
     currentCompare = oneColumn(
       [{ Property: { Object: '00000014:Fallout4.esm', Alias: -2 }, Scripts: [] }],

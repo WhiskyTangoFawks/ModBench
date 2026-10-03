@@ -232,32 +232,26 @@ export interface Reading {
   isPlaceholder: boolean;
 }
 
-/** Where an array element sits: its array, and whether it is the last element this column holds. */
-export interface ElementOf {
-  array: FieldMetadata;
-  isLast: boolean;
-}
-
 const content = (text: string): Reading => ({ text, isPlaceholder: false });
 const placeholder = (text: string): Reading => ({ text, isPlaceholder: true });
 
-const elementsIn =(diff: FieldDiff | undefined, column: string): FieldDiff[] =>
-  (diff?.children ?? []).filter(c => c.values[column] != null);
+/** The elements of an array row this column's array holds, a null slot among them. */
+export const elementsIn = (array: FieldDiff | undefined, column: string): FieldDiff[] =>
+  (array?.children ?? []).filter(c => c.indexes?.[column] != null);
 
 /** editor-fields.md § Collapsed readings: the first row that applies. */
 export function collapsedReading(
-  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, element?: ElementOf,
+  diff: FieldDiff, meta: FieldMetadata | undefined, column: string, isLast = true,
 ): Reading {
   const value = diff.values[column];
-  const named = value == null ? undefined : namedReading(diff, meta, column, element?.isLast ?? true);
+  const named = value == null ? undefined : namedReading(diff, meta, column, isLast);
   if (named != null) return content(named);
   if (meta?.type === 'array') {
-    // The column's own array is the count: a null slot holds a place but no value.
     const list = value ?? defaultOf(meta);
     const length = Array.isArray(list) ? list.length : 0;
     const [only] = elementsIn(diff, column);
     return length === 1 && only
-      ? collapsedReading(only, meta.elementType ?? undefined, column, { array: meta, isLast: true })
+      ? collapsedReading(only, meta.elementType ?? undefined, column)
       : placeholder(`[${length}]`);
   }
   // A one-element array's element can be a plain value, which reads as its own cell does.
@@ -293,10 +287,9 @@ function namedReading(
     leaf: found.leaf,
     kind: discriminator == null ? undefined : member(discriminator).label,
     elements: (...path) => {
-      const array = metaAtPath(meta, memberPath(path), value);
+      const elementMeta = metaAtPath(meta, memberPath(path), value)?.elementType ?? undefined;
       const present = elementsIn(diffAt(diff, path), column);
-      return present.map((child, i) => collapsedReading(
-        child, array?.elementType ?? undefined, column, array && { array, isLast: i === present.length - 1 }).text);
+      return present.map((child, i) => collapsedReading(child, elementMeta, column, i === present.length - 1).text);
     },
   });
 }
