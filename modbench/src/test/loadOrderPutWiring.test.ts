@@ -79,7 +79,7 @@ describe('the load order is put at every recompute', () => {
     const { puts, land, putPluginNames } = wired('running', valueWith('A.esp'));
     await puts.putOnMEditStarted();
 
-    for (const value of [valueWith('A.esp'), valueWith('B.esp'), valueWith('B.esp', { overwriteFileCount: 3 })]) {
+    for (const value of [valueWith('A.esp'), valueWith('B.esp'), valueWith('B.esp', { overwriteFiles: [{ relativePath: 'F4SE/a.log', absolutePath: '/instance/overwrite/F4SE/a.log' }] })]) {
       land(value);
       await settled();
     }

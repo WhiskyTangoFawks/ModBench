@@ -6,6 +6,14 @@ export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
 const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
 
+/** One file of an origin: the path its own tree names it with, and where it is read from. */
+export interface ModFile {
+  readonly relativePath: string;
+  readonly absolutePath: string;
+}
+
+export const modFileOf = (file: OriginFile): ModFile => ({ relativePath: file.relativePath, absolutePath: file.path });
+
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
    *  case-variant paths resolve to one entry, kept at that casing rather than a folded one. */
@@ -60,11 +68,9 @@ export type FileWinners = Omit<FileConflictLookup, 'set'>;
 export interface FileConflictIndex {
   /** Conflict/winner info, for every path provided by >=1 enabled mod or by Overwrite. */
   files: FileConflictLookup;
-  /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
-  filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
-  /** Each disabled mod's own files, read in the same walk, outside conflict resolution. The
-   *  snapshot names their plugins too (ADR-0013). */
-  disabledModFiles: Map<string, { relativePath: string; absolutePath: string }[]>;
+  /** Each listed mod's own files, a disabled mod's too, so callers don't need a second
+   *  filesystem walk. */
+  filesByMod: Map<string, ModFile[]>;
 }
 
 // Plugins live at a mod's root, so a nested file sharing a plugin's basename must not match.
@@ -89,21 +95,20 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
 // A mod's own files as the adapter lists them; each entry the listing skipped is one Output line.
 async function modFiles(
   adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<{ relativePath: string; absolutePath: string }[]> {
-  const { files, notes } = await adapter.originFiles({ kind: 'mod', name: modName });
+): Promise<ModFile[]> {
+  const { files, notes } = await adapter.originFiles(modOrigin(modName));
   for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
-  return files.map((file) => ({ relativePath: file.relativePath, absolutePath: file.path }));
+  return files.map(modFileOf);
 }
 
 export async function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
+  overwriteFiles: readonly OriginFile[],
   adapter: Pick<InstanceAdapter, 'originFiles'>,
   log: (msg: string) => void,
-  overwriteFiles: readonly OriginFile[],
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
-  const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
-  const disabledModFiles = new Map<string, { relativePath: string; absolutePath: string }[]>();
+  const filesByMod = new Map<string, ModFile[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
 
@@ -116,11 +121,8 @@ export async function buildFileConflictIndex(
   // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
   for (const { mod, files: ownFiles } of listed) {
-    if (!mod.enabled) {
-      disabledModFiles.set(mod.name, ownFiles);
-      continue;
-    }
     filesByMod.set(mod.name, ownFiles);
+    if (!mod.enabled) continue;
 
     for (const file of ownFiles) {
       const existing = files.get(file.relativePath);
@@ -148,5 +150,5 @@ export async function buildFileConflictIndex(
     });
   }
 
-  return { files, filesByMod, disabledModFiles };
+  return { files, filesByMod };
 }

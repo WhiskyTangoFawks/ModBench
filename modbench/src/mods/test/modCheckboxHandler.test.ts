@@ -58,7 +58,7 @@ describe('onModCheckboxChanged', () => {
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
     const setModEnabled = vi.fn();
     const modListProvider = { setModEnabled, markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn() };
-    const overwriteNode = new OverwriteNode(1, 'MO2');
+    const overwriteNode = new OverwriteNode([], 'MO2');
 
     await onModCheckboxChanged({ items: [[overwriteNode, 1]] }, modListProvider, recordingReporter());
 

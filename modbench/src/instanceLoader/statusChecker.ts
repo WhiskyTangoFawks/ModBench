@@ -2,8 +2,8 @@
 // ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
 // opened (ADR-0016).
 
-import { OVERWRITE_ORIGIN, type FileOrigin, type ModlistEntry } from '../instanceAdapter/instanceAdapter';
-import type { FileConflictIndex } from './fileConflictIndex';
+import type { FileOrigin, ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import type { FileConflictIndex, ModFile } from './fileConflictIndex';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -16,9 +16,7 @@ export interface ModStatusResult {
   conflictLines: string[];
 }
 
-const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
-
-type ModFile = { relativePath: string; absolutePath: string };
+const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? `"${origin.name}"` : 'Overwrite');
 
 export function computeModStatuses(entries: ModlistEntry[], index: FileConflictIndex): Map<string, ModStatusResult> {
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');

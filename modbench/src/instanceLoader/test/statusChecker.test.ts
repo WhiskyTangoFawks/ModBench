@@ -7,7 +7,7 @@ import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import type { Mod, ModlistEntry } from '../instance';
-import { buildFileConflictIndex } from '../fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, modOrigin } from '../fileConflictIndex';
 import { computeModStatuses } from '../statusChecker';
 import { adapterOver } from '../../test/mo2/adapterOver';
 
@@ -44,7 +44,7 @@ describe('computeModStatuses', () => {
   });
 
   async function statuses() {
-    const index = await buildFileConflictIndex(entriesHighWinningOverLowOnSharedNif, adapterOver(instanceRoot), () => {}, []);
+    const index = await buildFileConflictIndex(entriesHighWinningOverLowOnSharedNif, [], adapterOver(instanceRoot), () => {});
     return computeModStatuses(entriesHighWinningOverLowOnSharedNif, index);
   }
 
@@ -69,7 +69,7 @@ describe('computeModStatuses', () => {
 
   it('skips separator entries entirely — no status map entry', async () => {
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entriesHighWinningOverLowOnSharedNif];
-    const index = await buildFileConflictIndex(withSeparator, adapterOver(instanceRoot), () => {}, []);
+    const index = await buildFileConflictIndex(withSeparator, [], adapterOver(instanceRoot), () => {});
     const result = computeModStatuses(withSeparator, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
@@ -80,12 +80,29 @@ describe('computeModStatuses — case-insensitive conflicts, Proton/Wine resolvi
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
-    const index = await buildFileConflictIndex(entries, adapterOver(caseFixture), () => {}, []);
+    const index = await buildFileConflictIndex(entries, [], adapterOver(caseFixture), () => {});
     const statuses = computeModStatuses(entries, index);
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });
     const modB = statuses.get('ModB');
     expect(modB?.status).toEqual({ kind: 'conflicts', count: 1 });
     expect(modB?.conflictLines.join('\n')).toContain('ModA');
+  });
+});
+
+describe('computeModStatuses — the line naming a path\'s winner', () => {
+  it('names Overwrite as MO2 does, and a mod by its quoted name, so a mod folder named overwrite reads apart from Overwrite', () => {
+    const entries: ModlistEntry[] = [mod('overwrite'), mod('Other')];
+    const files = new FileConflictLookup();
+    files.set({ relativePath: 'a.dds', winner: '/o/a.dds', winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }, modOrigin('overwrite')] });
+    files.set({ relativePath: 'b.dds', winner: '/m/b.dds', winnerOrigin: modOrigin('overwrite'), providers: [modOrigin('overwrite'), modOrigin('Other')] });
+    const index = { files, filesByMod: new Map([['overwrite', [
+      { relativePath: 'a.dds', absolutePath: '/m/a.dds' }, { relativePath: 'b.dds', absolutePath: '/m/b.dds' },
+    ]]]) };
+
+    expect(computeModStatuses(entries, index).get('overwrite')?.conflictLines).toEqual([
+      'a.dds → winner: Overwrite',
+      'b.dds → winner: "overwrite"',
+    ]);
   });
 });

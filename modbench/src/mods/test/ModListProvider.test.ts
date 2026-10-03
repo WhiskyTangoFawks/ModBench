@@ -5,7 +5,7 @@ import type { ModStatusResult } from '../../instanceLoader/statusChecker';
 import { present } from '../../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFile, DataTransferItem, DataTransfer, FakeCancellationToken,
+  uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 import type { setModsEnabled } from '../../modlist/modlist';
@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   commands: { executeCommand },
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  Uri: { file: uriFile }, DataTransferItem, DataTransfer,
+  Uri: { file: uriFile, from: uriFrom }, DataTransferItem, DataTransfer,
 }));
 
 const { setModsEnabledMock } = vi.hoisted(() => ({
@@ -51,18 +51,21 @@ const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', 
 
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount' | 'paths' | 'managerNames' | 'modFolders'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFiles' | 'paths' | 'managerNames' | 'modFolders'>> = {},
 ): InstanceValue {
   return instanceValueFixture({
     mods,
     activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
-    overwriteFileCount: extra.overwriteFileCount ?? 0,
+    overwriteFiles: extra.overwriteFiles ?? [],
     ...(extra.paths ? { paths: extra.paths } : {}),
     ...(extra.managerNames ? { managerNames: extra.managerNames } : {}),
     ...(extra.modFolders ? { modFolders: extra.modFolders } : {}),
   });
 }
+
+const overwriteHolding = (count: number): InstanceValue['overwriteFiles'] =>
+  Array.from({ length: count }, (_, at) => ({ relativePath: `F4SE/${at}.log`, absolutePath: `/instance/overwrite/F4SE/${at}.log` }));
 
 const SEQUENCE_ALREADY_LOADED = 1;
 const SEQUENCE_NOT_READ_YET = 0;
@@ -169,7 +172,7 @@ describe('a row\'s identity is its kind and its name', () => {
     const idsOf = async () => (await provider.getChildren()).map((n) => n.id);
     const before = await idsOf();
 
-    instance.publish(valueOf(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt(), { overwriteFileCount: 4 }));
+    instance.publish(valueOf(orderedWinningFirstEachSeparatorHeadingTheLinesAboveIt(), { overwriteFiles: overwriteHolding(4) }));
 
     expect(await idsOf()).toEqual(before);
     expect(new Set(before).size).toBe(before.length);
@@ -275,15 +278,15 @@ describe('a row\'s parent, which VS Code\'s reveal walks up through getParent an
   });
 });
 
-describe('a click only selects', () => {
-  it('no row carries a command', async () => {
+describe('a click on a separator, a mod, Overwrite or a folder only selects', () => {
+  it('none of those rows carries a command', async () => {
     const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries, { overwriteFileCount: 5 })) });
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries, { overwriteFiles: overwriteHolding(5) })) });
     const roots = await provider.getChildren();
     const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
     const rows = [...roots, ...children.flat()];
 
-    expect(rows.map((n) => n.kind).sort()).toEqual(['mod', 'mod', 'overwrite', 'separator']);
+    expect(rows.map((n) => n.kind).sort()).toEqual(['folder', 'mod', 'mod', 'overwrite', 'separator']);
     expect(rows.filter((n) => n.command !== undefined)).toEqual([]);
   });
 });
@@ -832,10 +835,10 @@ describe('ModListProvider', () => {
     });
   });
 
-  describe('Overwrite row, a pinned leaf outside separator grouping, over the value\'s own count', () => {
+  describe('Overwrite row, pinned outside separator grouping, over the value\'s own files', () => {
     const entries = (): ModlistEntry[] => [mod('Alpha'), sep('Group A'), mod('Beta')];
-    const overwriteRow = async (overwriteFileCount: number) => {
-      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { overwriteFileCount })) });
+    const overwriteRow = async (fileCount: number) => {
+      const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries(), { overwriteFiles: overwriteHolding(fileCount) })) });
       return expectInstanceOf((await provider.getChildren()).find((n) => n instanceof OverwriteNode), OverwriteNode);
     };
 
