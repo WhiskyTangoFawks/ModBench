@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>Reads of the stored document by the schema's own paths. A node is handed out cloned,
-/// so it outlives the <see cref="JsonDocument"/> it was parsed from.</summary>
+/// <summary>Reads and rewrites of the stored document by the schema's own paths. An element read is
+/// handed out cloned, so it outlives the <see cref="JsonDocument"/> it was parsed from.</summary>
 public static class DocumentNodes
 {
     /// <summary>The member at a dotted path from the root, or null where the document omits it — which
@@ -42,32 +42,47 @@ public static class DocumentNodes
     /// reads, so one value reads alike whatever order holds its keyed arrays and whatever alpha a
     /// colour holding none carries.</summary>
     public static string ComparedText(JsonElement value, FieldMetadata meta) =>
-        AsCompared(JsonNode.Parse(value.GetRawText()), meta)?.ToJsonString() ?? "null";
+        Rewrite(JsonNode.Parse(value.GetRawText()), meta, AsCompared)?.ToJsonString() ?? "null";
 
-    private static JsonNode? AsCompared(JsonNode? node, FieldMetadata meta)
+    private static JsonNode? AsCompared(JsonNode node, FieldMetadata meta)
     {
         switch (node)
         {
             case JsonValue leaf when meta.Type == ColorReading.ApiType && leaf.TryGetValue<string>(out var text):
                 return JsonValue.Create(ColorReading.Of(text, meta.HoldsAlpha));
-            case JsonObject obj when meta.Fields is { } fields:
-                foreach (var field in fields)
-                {
-                    if (obj[field.Name] is { } child && AsCompared(child, VariantFor(field, obj)) is var read && read != child)
-                        obj[field.Name] = read;
-                }
-                return obj;
-            case JsonArray array when meta.ElementType is { } elementMeta:
-                var elements = array.ToList();
-                array.Clear();
-                var compared = elements.Select(element => AsCompared(element, elementMeta));
+            case JsonArray array when meta.KeyMembers != null:
                 // A stable sort by the extended key, so elements sharing it keep their turn, as they align.
-                if (meta.KeyMembers != null) compared = compared.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order);
-                foreach (var element in compared.ToList()) array.Add(element);
+                var sorted = array.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order).ToList();
+                array.Clear();
+                foreach (var element in sorted) array.Add(element);
                 return array;
             default:
                 return node;
         }
+    }
+
+    /// <summary>The value, mutated in place, with <paramref name="rewrite"/> given every node in it
+    /// beside the shape the schema gives that node, children before the node holding them.</summary>
+    public static JsonNode? Rewrite(JsonNode? node, FieldMetadata meta, Func<JsonNode, FieldMetadata, JsonNode?> rewrite)
+    {
+        switch (node)
+        {
+            case JsonObject obj when meta.Fields is { } fields:
+                foreach (var field in fields)
+                {
+                    if (obj[field.Name] is { } child && Rewrite(child, VariantFor(field, obj), rewrite) is var rewritten && rewritten != child)
+                        obj[field.Name] = rewritten;
+                }
+                break;
+            case JsonArray array when meta.ElementType is { } elementMeta:
+                for (var i = 0; i < array.Count; i++)
+                {
+                    if (array[i] is { } element && Rewrite(element, elementMeta, rewrite) is var rewritten && rewritten != element)
+                        array[i] = rewritten;
+                }
+                break;
+        }
+        return node is null ? null : rewrite(node, meta);
     }
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,
