@@ -358,13 +358,14 @@ export class Instance implements Subscription {
     const settings = await adapter.settings();
     const { profile, gameName, gameRelease } = settings;
     const entries = await this.readMods(profile);
+    const runtimeOutputRead = adapter.originFiles({ kind: 'runtimeOutput' });
     const [index, pluginOrder, downloadsOutcome, runtimeOutput, modFolders, profiles, game, trackedMods] = await Promise.all([
-      buildFileConflictIndex(entries, adapter, log),
+      runtimeOutputRead.then((output) => buildFileConflictIndex(entries, adapter, log, output.files)),
       adapter.pluginOrder(profile),
       // Both answers come from the settings read above, so a rewrite cannot land two generations
       // in one value.
       settings.downloadedFiles(),
-      adapter.originFiles({ kind: 'runtimeOutput' }),
+      runtimeOutputRead,
       this.readModFolders(),
       adapter.profiles(),
       settings.gameFolder().then(async (gameFolder) => ({

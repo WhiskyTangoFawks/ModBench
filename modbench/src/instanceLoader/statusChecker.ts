@@ -2,7 +2,7 @@
 // ModlistEntry[] + a precomputed FileConflictIndex; no vscode import, and no plugin file is
 // opened (ADR-0016).
 
-import type { ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import { OVERWRITE_ORIGIN, type FileOrigin, type ModlistEntry } from '../instanceAdapter/instanceAdapter';
 import type { FileConflictIndex } from './fileConflictIndex';
 
 export type ModStatus =
@@ -15,6 +15,8 @@ export interface ModStatusResult {
   /** Hover tooltip lines: conflicting relative paths and their winner. */
   conflictLines: string[];
 }
+
+const winnerLabel = (origin: FileOrigin): string => (origin.kind === 'mod' ? origin.name : OVERWRITE_ORIGIN);
 
 type ModFile = { relativePath: string; absolutePath: string };
 
@@ -43,8 +45,8 @@ function countConflicts(
   for (const file of modFiles) {
     const conflict = index.files.get(file.relativePath);
     if (!conflict || conflict.providers.length < 2) continue;
-    conflictLines.push(`${file.relativePath} → winner: ${conflict.winnerMod}`);
-    if (conflict.winnerMod === modName) overrides++;
+    conflictLines.push(`${file.relativePath} → winner: ${winnerLabel(conflict.winnerOrigin)}`);
+    if (conflict.winnerOrigin.kind === 'mod' && conflict.winnerOrigin.name === modName) overrides++;
     else conflicts++;
   }
   return { conflictLines, conflicts, overrides };

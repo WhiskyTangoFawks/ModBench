@@ -1,6 +1,10 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { InstanceAdapter, ModlistEntry } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile } from '../instanceAdapter/instanceAdapter';
+
+export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
+
+const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -8,9 +12,9 @@ export interface ConflictEntry {
   relativePath: string;
   /** Absolute path of the winning enabled provider (nearest the winning end). */
   winner: string;
-  winnerMod: string;
-  /** Every enabled mod providing this relative path. */
-  providers: string[];
+  winnerOrigin: FileOrigin;
+  /** Every provider of this relative path, winning-most first. */
+  providers: FileOrigin[];
 }
 
 /** Comparison keys only — never display, never written back to disk. Locale-independent,
@@ -54,7 +58,7 @@ export class FileConflictLookup {
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
 export interface FileConflictIndex {
-  /** Conflict/winner info, for every path provided by >=1 enabled mod. */
+  /** Conflict/winner info, for every path provided by >=1 enabled mod or by Overwrite. */
   files: FileConflictLookup;
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
@@ -75,9 +79,11 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
 }
 
 /** The origin-resolution twin of `rootLevelWinners` (ADR-0012), under the same
- *  root-level-only contract. */
+ *  root-level-only contract. A path Overwrite wins has no mod winner and no entry. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
-  return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
+  const modWinners = rootLevelEntries(index).flatMap((entry): [string, string][] =>
+    entry.winnerOrigin.kind === 'mod' ? [[foldPath(entry.relativePath), entry.winnerOrigin.name]] : []);
+  return new Map(modWinners);
 }
 
 // A mod's own files as the adapter lists them; each entry the listing skipped is one Output line.
@@ -93,6 +99,7 @@ export async function buildFileConflictIndex(
   entries: readonly ModlistEntry[],
   adapter: Pick<InstanceAdapter, 'originFiles'>,
   log: (msg: string) => void,
+  overwriteFiles: readonly OriginFile[],
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
@@ -118,16 +125,27 @@ export async function buildFileConflictIndex(
     for (const file of ownFiles) {
       const existing = files.get(file.relativePath);
       if (existing) {
-        existing.providers.push(mod.name); // loses to the earlier (winning) provider
+        existing.providers.push(modOrigin(mod.name)); // loses to the earlier (winning) provider
       } else {
         files.set({
           relativePath: file.relativePath,
           winner: file.absolutePath,
-          winnerMod: mod.name,
-          providers: [mod.name],
+          winnerOrigin: modOrigin(mod.name),
+          providers: [modOrigin(mod.name)],
         });
       }
     }
+  }
+
+  // The run-time output wins over every mod.
+  for (const file of overwriteFiles) {
+    const existing = files.get(file.relativePath);
+    files.set({
+      relativePath: file.relativePath,
+      winner: file.path,
+      winnerOrigin: OVERWRITE,
+      providers: [OVERWRITE, ...(existing?.providers ?? [])],
+    });
   }
 
   return { files, filesByMod, disabledModFiles };
