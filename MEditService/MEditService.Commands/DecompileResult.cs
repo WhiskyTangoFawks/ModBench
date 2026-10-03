@@ -3,8 +3,8 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Commands;
 
-/// <summary>Why decompile refused a plugin, typed rather than a string to match on (ADR-0019): each
-/// value is a different way out.</summary>
+/// <summary>Why decompile refused a plugin (ADR-0019 invariant 4): each value is a different way
+/// out.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DecompileRefusal
 {
@@ -17,8 +17,8 @@ public enum DecompileRefusal
     /// way out is Track.</summary>
     NotInTrackedMod,
 
-    /// <summary>ADR-0006 decision 2's gate: the plugin does not survive its own source, or cannot be
-    /// read or deep-parsed at all.</summary>
+    /// <summary>ADR-0006 invariant 2's gate refused it, or the plugin cannot be read or deep-parsed
+    /// at all.</summary>
     RoundTripFailed,
 
     /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
@@ -28,7 +28,7 @@ public enum DecompileRefusal
     /// as it was.</summary>
     WriteFailed,
 
-    /// <summary>git is not on PATH (ADR-0007), found for the whole selection before any write.</summary>
+    /// <summary>git is not on PATH (ADR-0007 invariant 5).</summary>
     GitUnavailable,
 }
 
@@ -39,8 +39,8 @@ public sealed record DecompileRefused(PluginAddress Plugin, DecompileRefusal Ref
 /// <summary>A cause no plugin of the selection escapes, found before any write.</summary>
 public sealed record DecompileSelectionRefusal(DecompileRefusal Refusal, string Message);
 
-/// <summary>Decompile over a selection answers per plugin (ADR-0019 invariant 4), except for a cause
-/// no plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
+/// <summary>Decompile over a selection (commands.md, A selection is one gesture): a cause no plugin
+/// escapes is <see cref="SelectionRefusal"/>.</summary>
 public sealed class DecompileSelectionResult
 {
     private DecompileSelectionResult(

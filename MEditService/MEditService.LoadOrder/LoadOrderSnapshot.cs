@@ -2,15 +2,14 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder;
 
-/// <summary>One plugin file in the instance (ADR-0013 invariant 2): origin, filename and path.</summary>
+/// <summary>One plugin file in the instance (ADR-0013 invariant 2).</summary>
 public sealed record RegisteredPlugin(string Name, string Origin, string Path)
 {
     public PluginAddress Key => new(Name, Origin);
 }
 
-/// <summary>ADR-0013 invariant 4: the load order is state, sent by Mod Management, held in the
-/// shared kernel, read by both sides. Immutable — nothing here opens, holds or disposes a plugin
-/// file.</summary>
+/// <summary>ADR-0013 invariant 4's snapshot. Immutable: nothing here opens, holds or disposes a
+/// plugin file.</summary>
 public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 {
     /// <summary>No snapshot has arrived.</summary>
@@ -29,8 +28,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>Every plugin file in the instance, in the order it was given.</summary>
     public IReadOnlyList<RegisteredPlugin> Plugins { get; }
 
-    /// <summary>ADR-0013 invariant 3: the active plugins, in load order, as Mod Management decided
-    /// them. A plugin's place here is its load index.</summary>
+    /// <summary>ADR-0013 invariant 3's active plugins.</summary>
     public IReadOnlyList<RegisteredPlugin> Active { get; }
 
     /// <summary>The plugins Mod Management loads with no line: the game's own, a DLC's or a Creation
@@ -57,8 +55,8 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     private RegisteredPlugin PluginRefusalOfVouchesFor(PluginAddress address) => Plugin(address)
         ?? throw new InvalidOperationException($"Expected RefusalOf to have refused {address.Name} from {address.Origin}.");
 
-    /// <summary>Why these plugins and active plugins make no snapshot, or null when they do. ADR-0012:
-    /// the game loads one file per name, and a FormID or a winner is read by filename.</summary>
+    /// <summary>Why these plugins and active plugins make no snapshot, or null when they do. The
+    /// game loads one file per name, and a FormID or a winner is read by filename.</summary>
     public static string? RefusalOf(
         IReadOnlyList<RegisteredPlugin> plugins, IReadOnlyList<PluginAddress> active, IReadOnlyList<PluginAddress> loadedWithNoLine)
     {
@@ -91,8 +89,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     public bool IsImmutable(PluginAddress address) => !IsActive(address) || _loadedWithNoLine.Contains(address);
 
     /// <summary>The folder holding the plugin's file, or null for the game's own Data directory or
-    /// Overwrite — origins, not mods (ADR-0012 invariant 2) — or a plugin none registered here
-    /// names.</summary>
+    /// Overwrite (ADR-0012 invariant 2), or a plugin none registered here names.</summary>
     public string? ModFolderOf(PluginAddress plugin) =>
         Plugin(plugin) is { } registered ? ModFolderOf(registered.Origin, registered.Path) : null;
 
@@ -106,8 +103,7 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// and Overwrite answer their own folder rather than null.</summary>
     public static string? FileFolderOf(string pluginPath) => Path.GetDirectoryName(pluginPath);
 
-    /// <summary>ADR-0012: origin is required, not optional — the instance can hold two plugins that
-    /// share a filename, so the filename alone does not say which.</summary>
+    /// <summary>ADR-0012 invariant 1.</summary>
     public RegisteredPlugin? Plugin(PluginAddress address) =>
         Plugins.FirstOrDefault(c => PluginAddress.Comparer.Equals(c.Key, address));
 

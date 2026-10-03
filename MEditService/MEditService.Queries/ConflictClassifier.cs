@@ -11,7 +11,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // resolveFormKey (ADR-0005): the O(1) lookup, batched once per Classify so every formKey leaf's
+    // resolveFormKey (ADR-0005 invariant 6): the O(1) lookup, batched once per Classify so every formKey leaf's
     // Resolutions is populated in this pass; null leaves Resolutions empty. loadOrderFormIds orders
     // a keyed array's FormKeys; null orders them by their text.
     public ClassifyResult Classify(
@@ -51,9 +51,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
-        // ADR-0012: keyed by the compound column identity, not the bare plugin — two overrides
-        // sharing a filename but differing in origin must land as two independent entries here,
-        // not collide (ToDictionary would throw on a literal duplicate key).
+        // Keyed by the compound column identity (ADR-0012 invariant 1); ToDictionary would throw on
+        // a literal duplicate key.
         var pluginConflictThis = new Dictionary<string, ConflictThis>();
         foreach (var o in conflictingRecords)
         {
@@ -68,7 +67,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
-    // MasterColumn (ADR-0012) is the compound ColumnKey.Of identity, so no plain-plugin comparison
+    // MasterColumn (ADR-0012 invariant 1) is the compound ColumnKey.Of identity, so no plain-plugin comparison
     // can match the wrong column.
     private sealed record DiffContext(
         string MasterColumn,
@@ -253,7 +252,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         return [.. rows.Select((row, index) => new ElementRow($"[{index}]", row.Held))];
     }
 
-    // ADR-0005: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
+    // Resolutions (ADR-0005 invariant 6) are a scalar formKey node's alone, never aggregated up from Children, so
     // a dangling sibling can't hide a live hyperlink beside it. A check error is the node's whole
     // subtree's.
     private static (Dictionary<string, FormKeyResolution>? Resolutions, Dictionary<string, string>? CheckErrors) LinkFacts(

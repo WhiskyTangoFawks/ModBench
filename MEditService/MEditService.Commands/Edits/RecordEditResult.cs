@@ -2,21 +2,20 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>Why an edit was refused, typed rather than a string to match on (ADR-0019). Each value
-/// names a different way out, which is what the message has to say.</summary>
+/// <summary>Why an edit was refused (ADR-0019 invariant 4). Each value names a different way out,
+/// which is what the message has to say.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RecordEditRefusal
 {
     None,
 
-    /// <summary>The way out is Track, once per mod (ADR-0007: the friction is deliberate).</summary>
+    /// <summary>The way out is Track, once per mod (ADR-0007 invariant 1).</summary>
     PluginNotTracked,
 
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
     PluginHasNoModFolder,
 
-    /// <summary>The game does not load the plugin (ADR-0012 invariant 5); the way out is enabling its
-    /// line or moving its mod toward the winning end.</summary>
+    /// <summary>The game does not load the plugin (ADR-0012 invariant 5).</summary>
     PluginNotActive,
 
     RecordNotFound,
@@ -25,7 +24,7 @@ public enum RecordEditRefusal
     /// (a column only another record class declares, a union member of another leaf).</summary>
     FieldNotFound,
 
-    /// <summary>Permanently unwritable (masters are compile-derived, ADR-0008), unlike the state-dependent Partial Form refusal.</summary>
+    /// <summary>Permanently unwritable, as masters are (ADR-0008 invariant 2), unlike the state-dependent Partial Form refusal.</summary>
     FieldReadOnly,
 
     InvalidFormLink,
@@ -50,8 +49,8 @@ public enum RecordEditRefusal
     /// a computed path: a container's path lives in the tree, not in a formula.</summary>
     SourceUnitNotFound,
 
-    /// <summary>The file system refused the write: the tree is not Modbench's alone (ADR-0003), so the
-    /// message is the file system's own words, and the way out is outside Modbench.</summary>
+    /// <summary>The file system refused the write (ADR-0003), so the message is the file system's own
+    /// words, and the way out is outside Modbench.</summary>
     SourceWriteFailed,
 
     /// <summary>Two documents in the tree claim one FormKey, most likely left by another tool or an
@@ -125,8 +124,8 @@ public enum RecordEditRefusal
     /// reason, and repairing it is not a field edit.</summary>
     RecordParseFailed,
 
-    /// <summary>git cannot be run, which no record of a selection escapes, so the whole selection is
-    /// refused once; the way out is putting git on the PATH (ADR-0007).</summary>
+    /// <summary>git cannot be run (ADR-0007 invariant 5), a cause no record of a selection escapes
+    /// (commands.md, A selection is one gesture).</summary>
     GitUnavailable,
 }
 

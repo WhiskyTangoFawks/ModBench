@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The content hash of a plugin binary (ADR-0009: validity by content).
+/// <summary>The content hash of a plugin binary (ADR-0009 invariant 4).
 /// Sits in the one namespace both the index and the runtime watches may reference, so their two
 /// hashes cannot drift apart.</summary>
 public static class PluginBinaryHash
@@ -25,7 +25,8 @@ public static class PluginBinaryHash
     /// spells it, so a file read once for two purposes hashes as one read would.</summary>
     public static string OfBytes(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    /// <summary>The same hash upper-cased, which is how the commit trailers spell it (ADR-0003).
+    /// <summary>The same hash upper-cased, which is how the commit messages spell it (ADR-0007
+    /// invariant 6; ADR-0003, Derived tactical observations).
     /// Throws rather than answering null: a caller here has just written the file.</summary>
     public static string TrailerFormOfFile(string path)
     {

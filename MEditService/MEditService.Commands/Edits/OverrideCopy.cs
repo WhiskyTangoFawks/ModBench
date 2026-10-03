@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Copy's override mode, one record into one destination: xEdit's "Copy as Override
-/// Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0007).</summary>
+/// Into…": the source's own bytes land verbatim under the same FormKey.</summary>
 internal sealed class OverrideCopy
 {
     private readonly WriteTargets _targets;
@@ -162,7 +162,7 @@ internal sealed class OverrideCopy
     {
         var loadOrder = _loadOrder.Current;
 
-        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012) the
+        // A FormKey carries only a filename, so with two plugins that share a filename (ADR-0012 invariant 1) the
         // active one is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
         var origin = loadOrder.Active.FirstOrDefault(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase));

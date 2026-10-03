@@ -12,8 +12,8 @@ public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Un
 /// same tree, at the working tree.</summary>
 public sealed partial class SourceRepository
 {
-    // One repository is one operation, so a tree is read once: the next compile looks again (ADR-0009 —
-    // never a file timestamp).
+    // One repository is one operation, so a tree is read once: the next compile looks again, never
+    // trusting a file timestamp (ADR-0009 invariant 4).
     private readonly Dictionary<string, PluginSourceFiles> _filesByPlugin = new(StringComparer.Ordinal);
 
     /// <summary>Every file one plugin's source tree holds in the working tree, relative to the mod

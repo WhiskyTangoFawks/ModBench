@@ -39,8 +39,7 @@ public sealed class CompilePluginHandler
 
     private async Task<CompileResult> CompileOneAsync(PluginAddress plugin)
     {
-        // The binary lives in a folder Modbench does not own exclusively (ADR-0003), so a write the
-        // file system refuses is this plugin's failure, and the rest of the selection still compiles.
+        // A write the file system refuses (ADR-0003) is this plugin's refusal alone.
         try
         {
             return await _compileService.CompileAsync(plugin);

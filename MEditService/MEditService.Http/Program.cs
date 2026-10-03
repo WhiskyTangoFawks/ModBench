@@ -61,15 +61,15 @@ try
     });
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<SchemaReflector>();
-    // ADR-0014: one publisher instance, resolved as both types — the concrete type for the stream
-    // endpoint's own subscribe/unsubscribe, the interface for every publisher.
+    // One publisher instance (ADR-0014 invariant 2), resolved as both types: the concrete type for
+    // the stream endpoint's own subscribe/unsubscribe, the interface for every publisher.
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    // ADR-0014 invariant 5: one Index for the whole process, so the two sides never project into
-    // two stores. ADR-0009: which file it opens comes from the load request, not from here.
+    // One Index for the whole process (ADR-0014 invariant 5). Which file it opens comes from the
+    // load request (ADR-0009 invariant 3), not from here.
     builder.Services.AddSingleton(sp => new Indexer(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IPluginAdapter>(),
@@ -84,15 +84,15 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
-    // ADR-0014 invariant 3: one handler per gesture, registered where the module they share is
-    // visible, and resolved by the route that names the gesture.
+    // The handlers (ADR-0014 invariant 3) are registered where the module they share is visible,
+    // and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
 
     var app = builder.Build();
 
-    // ADR-0013 invariant 1: the record index reconciles every arrival of the load order.
+    // ADR-0013 invariant 1.
     app.Services.GetRequiredService<Indexer>().Subscribe();
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure

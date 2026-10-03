@@ -7,16 +7,16 @@ namespace MEditService.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // ADR-0012 invariant 1: a plugin is (origin, filename) together — the caller that names
-    // `plugin` (a tree row built from one) always knows which origin it means.
+    // The caller that names `plugin` (a tree row) always knows which origin it means (ADR-0012
+    // invariant 1).
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string origin);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string origin);
     CellChildRecords GetCellChildRecords(string plugin, string cellFormKey, string origin);
     IReadOnlyList<InteriorCellBlock> GetInteriorCells(string plugin, string origin);
 }
 
-/// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
-/// See ADR-0005.</summary>
+/// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner
+/// (plugins.md, The tree).</summary>
 public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {

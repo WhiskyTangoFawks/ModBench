@@ -13,8 +13,8 @@ public static class IndexEndpoints
 
     public static IEndpointRouteBuilder MapIndexEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0013 invariant 4: polled alongside an in-flight PUT, so it answers 200 in every state
-        // including "no load order yet". Reporting that absence is this route's job, not a failure.
+        // Polled alongside an in-flight PUT, so it answers 200 in every state including "no load
+        // order yet" (ADR-0013 invariant 4). Reporting that absence is this route's job, not a failure.
         app.MapGet("/load-order/status", GetStatus)
             .WithName("GetLoadOrderStatus")
             .WithTags(LoadOrderTag)
@@ -40,8 +40,8 @@ public static class IndexEndpoints
             .Produces<FilterResponse>()
             .ProducesProblem(503);
 
-        // ADR-0015 invariant 3: the read side's read-your-writes hook. 0 with no index held, the
-        // same "absence is a state" answer GetLoadOrderStatus gives.
+        // ADR-0015 invariant 3's sequence. 0 with no index held, the same "absence is a state" answer
+        // GetLoadOrderStatus gives.
         app.MapGet("/load-order/sequence", GetSequence)
             .WithName("GetSequence")
             .WithTags(LoadOrderTag)
@@ -53,7 +53,7 @@ public static class IndexEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
-        // ADR-0009 invariant 5: Refresh's own first step. The PUT /load-order that follows is then an
+        // Refresh's own first step (ADR-0009 invariant 5). The PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds the
         // file.
         app.MapPost("/index/rebuild", PostRebuildIndex)
@@ -170,9 +170,8 @@ public static class IndexEndpoints
         }
         catch (IndexHeldElsewhereException ex)
         {
-            // ADR-0009 invariant 5: another Modbench window holds this instance's index. 423 Locked,
-            // distinct from a failed reconcile (500) and a superseded snapshot (409): nothing is wrong,
-            // the instance is simply in use.
+            // 423 Locked (ADR-0009 invariant 5), beside a failed reconcile's 500 and a superseded
+            // snapshot's 409.
             logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
             return Results.Problem(ex.Message, statusCode: 423);
         }

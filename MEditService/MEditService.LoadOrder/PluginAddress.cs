@@ -1,7 +1,6 @@
 namespace MEditService.LoadOrder;
 
-/// <summary>Filename plus providing mod folder (ADR-0012): two plugins can share a filename. The
-/// identity every row, lookup, command and wire payload uses; PluginName is the name-only filter
+/// <summary>A plugin's identity (ADR-0012 invariant 1); PluginName is the name-only filter
 /// counterpart.</summary>
 public readonly record struct PluginAddress(string Name, string Origin)
 {

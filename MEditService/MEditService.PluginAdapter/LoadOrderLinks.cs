@@ -11,7 +11,7 @@ namespace MEditService.PluginAdapter;
 public readonly record struct UnreadablePlugin(string FileName, string Reason);
 
 /// <summary>What a link cache over the load order's files answers: the record each FormKey asked
-/// about names, and the files nothing could be read from (ADR-0019).</summary>
+/// about names, and the files nothing could be read from (ADR-0019 invariant 4).</summary>
 public sealed record LinkAnswers(
     IReadOnlyDictionary<string, ResolvedFormKey> Targets,
     IReadOnlyList<UnreadablePlugin> UnreadableFiles)

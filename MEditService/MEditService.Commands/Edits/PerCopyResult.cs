@@ -20,8 +20,7 @@ public sealed record CopyLanded(CopyItem Item, string? NewFormKey);
 
 public sealed record CopyRefused(CopyItem Item, RecordEditRefusal Refusal, string Message);
 
-/// <summary>Copy answers per record and destination, never the whole batch for one (ADR-0019
-/// invariant 4).</summary>
+/// <summary>Copy answers per record and destination (ADR-0019 invariant 4).</summary>
 public sealed class PerCopyResult(IReadOnlyList<CopyLanded> applied, IReadOnlyList<CopyRefused> refused)
 {
     public IReadOnlyList<CopyLanded> Applied { get; } = applied;

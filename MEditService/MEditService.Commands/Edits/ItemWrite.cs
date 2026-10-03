@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands.Edits;
 
 /// <summary>One item of a selection, written: a tree another tool changed, or a file system that
-/// refused the write, is that item's answer, not the batch's (ADR-0019 invariant 4).</summary>
+/// refused the write, is that item's answer (ADR-0019 invariant 4).</summary>
 internal static class ItemWrite
 {
     /// <summary><paramref name="failure"/> says what could not be written; the file system's words

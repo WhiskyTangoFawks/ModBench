@@ -1,6 +1,6 @@
 namespace MEditService.Commands;
 
-/// <summary>Why Put load order refused, typed rather than a string to match on (ADR-0019).</summary>
+/// <summary>Why Put load order refused (ADR-0019 invariant 4).</summary>
 public enum PutLoadOrderRefusal
 {
     None,
@@ -12,8 +12,8 @@ public enum PutLoadOrderRefusal
     InvalidSnapshot,
 }
 
-/// <summary>Put load order's outcome — applied-or-refusal, never an exception (ADR-0014 invariant
-/// 4). The message names the way out, since a refusal the user cannot act on is dead UI.</summary>
+/// <summary>Put load order's outcome (ADR-0014 invariant 4). The message names the way out, since a
+/// refusal the user cannot act on is dead UI.</summary>
 public sealed record PutLoadOrderResult(bool Applied, PutLoadOrderRefusal Refusal, string Message, long Version = 0)
 {
     public static PutLoadOrderResult Success(long version) => new(true, PutLoadOrderRefusal.None, "", version);

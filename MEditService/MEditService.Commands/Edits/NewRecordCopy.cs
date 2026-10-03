@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Commands.Edits;
 
 /// <summary>Copy's new mode, one record into one destination: xEdit's "Copy as New Record Into…" —
-/// the codec's duplicate under a freshly allocated FormKey (ADR-0007).</summary>
+/// the codec's duplicate under the next free FormKey (plugins.md, Copy, story 2).</summary>
 internal sealed class NewRecordCopy
 {
     private readonly WriteTargets _targets;

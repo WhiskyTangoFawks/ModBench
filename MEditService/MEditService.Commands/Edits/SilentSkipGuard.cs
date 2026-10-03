@@ -7,12 +7,9 @@ namespace MEditService.Commands.Edits;
 
 /// <summary>What the codec wrote back holds what the patch asked: every member the patch spelled
 /// is present in the codec's spelling, unless a default the codec omits. A dropped member names the
-/// failure (ADR-0005).</summary>
+/// failure (ADR-0005 invariant 5).</summary>
 internal static class SilentSkipGuard
 {
-    // What came back holds what was asked: every member the patch spelled is present, in whatever
-    // spelling the codec normalized it to, unless it was the default the codec omits. A member the
-    // codec dropped names the failure.
     internal static bool Keeps(JsonNode? written, JsonNode? patched, FieldMetadata? meta, string path, out string dropped)
     {
         dropped = "";

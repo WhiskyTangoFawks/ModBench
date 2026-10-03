@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter;
 
-/// <summary>A tracked plugin's tree read as the documents it already holds (ADR-0003):
+/// <summary>A tracked plugin's tree read as the documents it already holds (ADR-0007 invariant 3):
 /// each file as it stands, plus the children a container's document embeds. Nothing is deserialized
 /// into a mod.</summary>
 internal sealed class SourceTreeDocuments : IPluginDocuments
@@ -173,8 +173,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         }
     }
 
-    // ADR-0005: what a cell holds. Read off its own document, since the tree files a child record
-    // inside its cell rather than beside it.
+    // What a cell holds, read off its own document: the tree files a child record inside its cell
+    // (ADR-0006 invariant 4).
     private IReadOnlyList<ChildRecord>? ContentsOf(string recordType, string text)
     {
         if (!_containers.IsCell(recordType)) return null;
@@ -210,8 +210,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         {
             if (!ContainerChildFields.EmbeddedSlotsFor(_release.ToCategory()).Contains((containerType, child.SlotName))) continue;
 
-            // ADR-0003: the tree is the system of record for a record's content, so a hand edit the
-            // codec would respell reaches the index as the file spells it.
+            // The index holds the file's own bytes (ADR-0011), so a hand edit the codec would respell
+            // reaches it as the file spells it.
             var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
                 ?? throw new UnreadableSourceDocumentException(
                     ownerDocument,
