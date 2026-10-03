@@ -122,8 +122,8 @@ The menus follow VS Code's groups: open, change, create, source control, copy, t
 | Title bar | 1: filter, or clear filter while active. 2: sort direction. 3: filter records, or clear the record filter while active. 4: create plugin. Collapse All last. |
 | Plugin menu | reveal · enable or disable · create record… · track… (in a mod with no repository) · decompile (in a tracked mod) · compile (tracked) · copy value |
 | Plugin the game loads with no line | reveal · copy value |
-| Record-type group menu | create record…, except on a group of container records or of a type the game cannot create |
-| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · copy… · copy value · delete |
+| Record-type group menu | create record…, except on a group of a type the game cannot create |
+| Record menu, on every record row, worldspaces, cells and placed references included | open to the side · create record… (on a container record) · copy… · copy value · delete |
 | Check box | enable or disable |
 | Keys | Space: enable or disable. Enter: open, as a click does. Delete: delete records. Ctrl+C: copy value. |
 
@@ -186,17 +186,22 @@ As a user, I want:
 
 As a user, I want:
 
-1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create, and no container record. The new record is selected and opens in the record panel. *catalog `create` under Record, record type Option; xEdit selects what it adds*
+1. On a group, a new record of that type with no prompt, and on a plugin a pick of the record type first. The pick lists the types the game can create. The new record is selected and opens in the record panel. *catalog `create` under Record, record type Option; xEdit selects what it adds*
 2. The new record to take the next free FormKey that neither the working tree nor the last commit uses, and no EditorID, as xEdit adds one.
 3. When no FormKey is free, a refusal naming the remedies: clear the light flag, or change a record's FormID.
-4. No create record on a group of container records, or of a type the game cannot create. *No dead entries*
+4. No create record on a group of a type the game cannot create. *No dead entries*
+5. On a container record, a pick of the types it can hold. The pick is skipped when it can hold one type. The new record lands inside the container. *xEdit; Mutagen's data*
+6. A placed reference created on a cell to land in its temporary child records, or in its persistent ones when the cell is persistent. In an exterior cell's temporary child records, it starts at the centre of the cell. *xEdit*
+7. A cell created on a plugin or on the Cell group to be an interior cell. It takes its block and sub-block from its FormID. *xEdit*
+8. On a worldspace, a prompt for the new cell's grid position as `x, y`. The prompt refuses anything but two whole numbers. The new cell lands in the block and sub-block its position falls in. *xEdit*
+9. A position where the worldspace already has a cell, in this plugin or a master, refused, naming the cell. When a master holds the cell, the refusal points at copy as override. *xedit.md, divergence 27*
 
 ### Copy
 
 As a user, I want:
 
 1. A pick of the mode, then a pick of the destination: the plugins I can edit, each with its load index. A destination that already holds a copy asks whether to replace it. Esc on either copies nothing. *catalog `copy`*
-2. A copy as new to take the next free FormKey. A reference to itself follows it, and a container the destination lacks is created bare, as a Partial Form.
+2. A copy as new to take the next free FormKey. A reference to itself follows it, and a container the destination lacks is copied in as an override. *xEdit*
 3. A copy as override into a plugin that loads before the source refused: that is an underride. A cell or a worldspace copied as new refused.
 4. Deep copy as override in the mode pick when a selected record has child records. It copies each such record with its fields and all its child records, at any depth. A selected record with no child records copies as an override. Override and new copy each record without its child records. While it runs, the Plugins view's progress bar, from whichever view it started. *xEdit; No dead entries*
 5. Deep copy as override into a destination that holds any of the record's child records to ask whether to replace them, once for the selection. Replace overwrites each child record the destination holds, and keeps its copy of the record itself. A child record the destination holds and the source lacks stays. Declining leaves those destinations as they are. *xEdit; Confirm what destroys; xedit.md, divergence 26*
