@@ -18,7 +18,6 @@ public sealed class PluginWriterSaveTests
 
         await PluginWriter.SaveAsync(pluginPath, GameRelease.Fallout4);
 
-        // The original path (not a temp copy) holds a valid, re-loadable plugin after save.
         var reloaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
         Assert.Equal("TestPlugin.esp", reloaded.ModKey.FileName);
@@ -53,7 +52,6 @@ public sealed class PluginWriterSaveTests
         Assert.Equal([pluginPath], Directory.GetFiles(data.DataFolder, "TestPlugin*"));
     }
 
-    // plugins.md, Compile, story 5: an interrupted write leaves the old binary or the new one.
     [Fact]
     public async Task Commit_ThatCannotMoveTheNewBinaryIn_LeavesTheOldOne()
     {

@@ -24,8 +24,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = _fixture.EditHandler.Set(_fixture.Plugin, _fixture.Cell.ToString(), "WaterHeight", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
-        // Every untouched byte is compared, which makes "only that field's lines diff" a measurement
-        // rather than an assertion.
         Assert.Equal(
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
@@ -43,14 +41,12 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
-        // The new directory is named by identity alone: a rename carries no position, because the cell's
-        // slot lives in its sub-block's ordered child list keyed by FormKey, which a rename does not touch.
-        var newDirectory = Path.Combine(
+        var newDirectoryNamedByIdentityAlone = Path.Combine(
             Path.GetDirectoryName(oldDirectory) ?? throw new InvalidOperationException($"Expected '{oldDirectory}' to have a parent directory."), "RenamedCell - " + FilesafeCellKey);
-        Assert.True(Directory.Exists(newDirectory));
+        Assert.True(Directory.Exists(newDirectoryNamedByIdentityAlone));
         Assert.Contains(
             "\"EditorID\": \"RenamedCell\"",
-            File.ReadAllText(Path.Combine(newDirectory, "RecordData.json")),
+            File.ReadAllText(Path.Combine(newDirectoryNamedByIdentityAlone, "RecordData.json")),
             StringComparison.Ordinal);
 
         var git = Path.Combine(_fixture.ModFolder, ".git");

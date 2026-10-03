@@ -2,8 +2,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder.Tests.Plugins;
 
-// ADR-0013 invariant 3 on the immutable value the shared kernel holds: Mod Management decides the
-// active plugins, and the value carries that decision. No DuckDB and no disk.
 public sealed class LoadOrderTests
 {
     private const string Data = @"C:\Games\Fallout4\Data";
@@ -46,7 +44,6 @@ public sealed class LoadOrderTests
         Assert.Equal(2, order.LoadOrderIndex(c.Key));
     }
 
-    // ADR-0012 invariant 1: two plugins share a filename, and only the one listed is active.
     [Fact]
     public void OfTwoPluginsOfOneFilename_OnlyTheOneListedAsActive_IsActive()
     {
@@ -65,9 +62,8 @@ public sealed class LoadOrderTests
         Assert.Throws<ArgumentException>(() => Order([Registered("A.esp", "ModA")], Registered("B.esp", "ModB")));
     }
 
-    // ADR-0012: the game loads one file per name.
     [Fact]
-    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins()
+    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins_BecauseTheGameLoadsOneFilePerName()
     {
         RegisteredPlugin[] plugins = [Registered("A.esp", "ModA"), Registered("A.esp", "ModB")];
 
@@ -77,8 +73,6 @@ public sealed class LoadOrderTests
         Assert.Throws<ArgumentException>(() => Order(plugins, plugins));
     }
 
-    // ADR-0012 invariant 5 and editor.md's read-only status: a plugin the game does not load, and one
-    // loaded with no line (the game's own, a DLC's or a Creation Club plugin), is never edited.
     [Fact]
     public void IsImmutable_OnAnInactivePluginOrOneLoadedWithNoLine_AndOnlyThere()
     {
@@ -93,10 +87,8 @@ public sealed class LoadOrderTests
         Assert.True(order.IsImmutable(inactive.Key));
     }
 
-    // Where the file sits decides nothing: a mod's cleaned copy of the game's master is still the
-    // game's own.
     [Fact]
-    public void AModsCleanedMaster_LoadedWithNoLine_IsImmutable()
+    public void AModsCleanedMaster_LoadedWithNoLine_IsImmutable_WhereverTheFileSits()
     {
         var cleaned = Registered("DLCCoast.esm", "CleanedMasters");
 
@@ -207,8 +199,6 @@ public sealed class LoadOrderTests
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModC")));
     }
 
-    // ADR-0012 invariant 2: the game's Data folder and Overwrite are origins, not mods — neither
-    // one is a folder a repository can live in.
     [Fact]
     public void ModFolderOf_OnDataDirectoryOrOverwrite_IsNull()
     {
