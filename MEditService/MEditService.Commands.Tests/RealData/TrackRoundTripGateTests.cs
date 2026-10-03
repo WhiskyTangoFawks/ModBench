@@ -25,7 +25,7 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             : throw new InvalidOperationException("Expected a FormKey member.");
 
     [Fact]
-    public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
+    public void Track_OfTheRealFixtureHoldingCellsAndWorldspaces_WritesTheSourceContainerLayout()
     {
         var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
