@@ -38,9 +38,8 @@ import { createdRecordSelection } from './plugins/createdRecordSelection';
 import { errorMessage } from './ports/errorMessage';
 import { modOfRow } from './mods/ModListProvider';
 
-// The backend launches with the extension: the DB-file-backed session made startup cheap enough
-// that lifecycle stopped being a user decision (ADR-0002). A config change is the only gesture
-// that can mean "try again".
+// The backend launches with the extension (ADR-0002), and a change to the game folder setting is
+// its only retry.
 function wireAutoLaunch(
   session: ExtensionSession, client: HttpMEditClient, context: vscode.ExtensionContext,
   outputChannel: vscode.LogOutputChannel, enterEditing: (() => Promise<void>) | undefined,
@@ -88,9 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(loadDiagnostics);
   session.loadDiagnostics = loadDiagnostics;
 
-  // The mEdit client (ADR-0002): built once here, owning the backend process and every call
-  // across the seam; nothing outside this module constructs the generated client, `openapi-fetch`
-  // or the notification stream.
+  // ADR-0002.
   const meditClient = new HttpMEditClient({ backend: backendOptions(attachPort, outputChannel), log });
   activeClient = meditClient; // deactivate()'s only way to reach it
   const treeProvider = new PluginTreeProvider(meditClient, log);
@@ -101,8 +98,8 @@ export function activate(context: vscode.ExtensionContext) {
   const filterScripts = setupScriptsFolder(meditConfig());
   const filterProvider = new FilterCodeLensProvider();
 
-  // ADR-0014: one subscription for the whole session, opened and closed with the
-  // backend by the mEdit client itself.
+  // One subscription for the whole session; the mEdit client opens and closes its stream with the
+  // backend.
   context.subscriptions.push(
     { dispose: subscribeTreeToNotifications(meditClient, treeProvider, () => { void refreshMatchingPlugins(session); }) },
     { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker, editsInFlight) },
@@ -116,8 +113,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }, () => focusedView.enter(GRID_VIEW));
 
-  // Fires on every completed reconcile and on a landed Track (ADR-0007 — the one reliable point to
-  // register the tracked repositories).
+  // Fires on every completed reconcile and on a landed Track, the one reliable point to register
+  // the tracked repositories.
   const conflictsComputed = conflictsComputedOver(() => announceConflictsComputed(recordPanels, editsInFlight), {
     client: meditClient,
     outputChannel,

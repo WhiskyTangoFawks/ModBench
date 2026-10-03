@@ -43,8 +43,7 @@ async function showBeside(path: string): Promise<void> {
 const openTabs = new Map<string, Promise<boolean>>();
 
 function reportOpenFailure(deps: ExtendedFieldEditorDeps, err: unknown): void {
-  // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
-  // "explicit action failed" row: error notification + log, not a silent swallow.
+  // The user opened it from a cell's menu, an explicit action (ADR-0019).
   deps.reporter.report('error', 'Could not open the extended editor.', errorMessage(err));
 }
 
@@ -96,8 +95,8 @@ async function openFirst(
       openTabs.delete(path);
       saveListener.dispose();
       closeListener.dispose();
-      // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced
-      // (ADR-0019). Awaited so the listener's promise settles only once the file is gone — an
+      // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced.
+      // Awaited so the listener's promise settles only once the file is gone — an
       // orphaned unlink races anything observing the path.
       await unlink(path).catch((err: unknown) => {
         deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${errorMessage(err)}`);

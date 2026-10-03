@@ -213,7 +213,7 @@ export type ModOrderChange =
   | { readonly kind: 'dropMod'; readonly mod: string }
   | { readonly kind: 'dropSeparator'; readonly separator: string };
 
-/** Plugin names match as the game matches them, ignoring case (ADR-0012). A plugin added is
+/** Plugin names compare as ADR-0012 says. A plugin added is
  *  disabled and lands at the winning end; a move lands its plugins, in their own order, at
  *  `toIndex` among the plugins that remain. */
 export type PluginOrderChange =
@@ -320,7 +320,7 @@ export interface InstanceAdapter {
   entryFolder(entry: EntryRef): Promise<ModFolder | undefined>;
   /** An origin's files, none when its folder is not there. */
   originFiles(origin: FileOrigin): Promise<OriginFiles>;
-  /** Whether the mod's folder holds a repository (ADR-0007). */
+  /** ADR-0007. */
   modTracked(mod: string): Promise<boolean>;
 
   // Changes.

@@ -25,7 +25,7 @@ async function pickRecordType(deps: RecordCreateDeps): Promise<string | undefine
   return (await vscode.window.showQuickPick(items, { placeHolder: 'Record type' }))?.type;
 }
 
-/** ADR-0018: xEdit's Add, on a group or on a plugin. The new record is blank, as xEdit's is. */
+/** xEdit's Add (plugins.md, Create record). */
 export function registerRecordCreateCommand(
   deps: RecordCreateDeps, viewSelection: () => readonly PluginsTreeNode[],
 ): vscode.Disposable {

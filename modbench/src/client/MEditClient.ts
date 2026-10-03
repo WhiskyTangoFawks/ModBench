@@ -11,8 +11,8 @@ import {
 import type { RecordEditEnvelope } from '../wire/messages';
 import type { ItemRefusal, SelectionOutcome } from '../ports/selectionOutcome';
 
-/** What `editRecord` is handed. Re-exported because a caller of the one write path names this
- *  type, and the client is the seam it reaches the backend through (ADR-0007). */
+/** What `editRecord` is handed, re-exported because its caller reaches the backend only through
+ *  this port. */
 export type { RecordEditEnvelope } from '../wire/messages';
 
 /** The backend process as the extension reports it: starting while it comes up, running while
@@ -20,7 +20,8 @@ export type { RecordEditEnvelope } from '../wire/messages';
 export type BackendStatus = 'starting' | 'running' | 'disconnected' | 'stopped';
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
- *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
+ *  `message` is the ready-to-show toast (common.md, Reporting); a 200 typed refusal lives on the
+ *  success arm. */
 export interface WriteRefused {
   readonly refused: true;
   /** mEdit never answered, so the write may have landed (common.md, Unconfirmed writes, story 6). */
@@ -88,8 +89,7 @@ export type RecordEditOutcome =
   | { applied: true; newFormKey?: string }
   | { applied: false; refusal: string; message: string };
 
-/** `rebuildIndex`'s own outcome (ADR-0009): a 423 — this instance's index held by
- *  another window — is told apart from every other failure, which carries its own detail. */
+/** `rebuildIndex`'s own outcome (ADR-0009). */
 export type RebuildIndexOutcome =
   | { rebuilt: true }
   | { rebuilt: false; heldElsewhere: true }
@@ -108,7 +108,7 @@ export type InteriorCellSubBlock = components['schemas']['InteriorCellSubBlock']
 // apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
-/** A plugin named by filename and origin (ADR-0012): one filename can be in two mods. */
+/** ADR-0012. */
 export type PluginAddress = components['schemas']['PluginAddress'];
 export type UpstreamVersionByOrigin = components['schemas']['TrackRequest']['upstreamVersionByOrigin'];
 
@@ -119,8 +119,7 @@ export interface CompileOutcome {
 }
 
 export type RecordCreateResponse = components['schemas']['RecordCreateResponse'];
-/** A record and the plugin holding it, named by filename and origin (ADR-0012): one
- *  filename can be in two mods, each holding the record. */
+/** A record and the plugin holding it (ADR-0012). */
 export type RecordAddress = components['schemas']['RecordAddress'];
 /** Copy's mode Option (commands.md, Record, `copy`). */
 export type CopyMode = components['schemas']['CopyMode'];
@@ -132,9 +131,7 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  (plugins.md, Record filter). */
 export type RecordFilter = components['schemas']['FilterRequest'];
 
-/** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"
- *  box), hiding whichever adapter is wired in and the process itself. Names nothing HTTP, no
- *  port number, no generated client. */
+/** target-architecture.d2's mEdit client (ADR-0002). */
 export interface MEditClient {
   // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` answers with its own outcome shape (RebuildIndexOutcome).
@@ -145,7 +142,8 @@ export interface MEditClient {
     options?: { onProgress?: (status: TrackStatus) => void },
   ): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
   createRecord(plugin: string, origin: string, recordType: string): Promise<RecordCreateResponse | WriteRefused>;
-  // The whole selection is one call; each record lands or is refused on its own (ADR-0019). A WriteRefused is the call itself failing, with nothing deleted.
+  // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
+  // call itself failing, with nothing deleted.
   deleteRecords(records: readonly RecordAddress[]): Promise<SelectionOutcome<RecordAddress> | WriteRefused>;
   // Each record into each destination is one item, landed or refused on its own. `replace` lets an
   // override copy over the one a destination already holds.
@@ -155,7 +153,8 @@ export interface MEditClient {
   // Each plugin's source is replaced from its bytes, or it is refused, on its own. A WriteRefused is
   // the call itself refused, with nothing written.
   decompile(plugins: readonly PluginAddress[]): Promise<SelectionOutcome<PluginAddress> | WriteRefused>;
-  // The whole selection is one call; each plugin compiles or is refused on its own (ADR-0019). A WriteRefused is the call itself refused, with nothing written.
+  // commands.md, A selection is one gesture, and each item lands on its own. A WriteRefused is the
+  // call itself refused, with nothing written.
   compile(plugins: readonly PluginAddress[]): Promise<CompileOutcome | WriteRefused>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
@@ -192,11 +191,9 @@ export interface MEditClient {
   clearFilter(): Promise<string | null>;
   getActiveFilter(): Promise<RecordFilter | null>;
 
-  // Subscribe by kind (ADR-0014) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
-  // The load-order snapshot (ADR-0013): every plugin in the instance, the active plugins in load
-  // order, and the plugins loaded with no line.
+  // ADR-0013's snapshot.
   putLoadOrder(
     plugins: LoadOrderPluginInput[], active: PluginAddress[], loadedWithNoLine: PluginAddress[],
     gameDirectory: string, instanceRoot: string, gameRelease: string, options?: LoadOrderOptions,

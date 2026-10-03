@@ -10,9 +10,8 @@ export function lockedRowUri(pluginFile: string): vscode.Uri {
   return vscode.Uri.from({ scheme: LOCKED_ROW_SCHEME, path: vscode.Uri.file(pluginFile).path });
 }
 
-/** Grays an implicit master's row as the reference tool does for a `forceLoaded` row (ADR-0013);
- *  `TreeItem` has no label-color property, so row coloring must be a
- *  `FileDecorationProvider`. */
+/** Grays an implicit master's row (plugins.md, A plugin the game loads with no line). `TreeItem`
+ *  has no label-color property, so row coloring must be a `FileDecorationProvider`. */
 export class ImplicitMasterDecorationProvider implements vscode.FileDecorationProvider {
   constructor(
     // The URIs of the locked rows the tree renders now, read at each call, so the grey follows

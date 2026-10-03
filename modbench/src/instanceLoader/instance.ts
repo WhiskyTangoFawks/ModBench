@@ -1,5 +1,4 @@
-// The Instance: one read model over the instance (ADR-0015), recomputed whole from the Instance
-// adapter's parsed reads.
+// The instance value (ADR-0015).
 
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import {
@@ -53,7 +52,7 @@ export interface InstanceValue {
   /** Every mod folder as the entry it holds, listed or not: what mod sync compares mod order
    *  with, and the new-empty-mod refusal's own input. Undefined when there is none to list. */
   readonly modFolders: readonly ModFolder[] | undefined;
-  /** The mods whose folder holds a repository (ADR-0007). */
+  /** The tracked mods (ADR-0007). */
   readonly trackedMods: ReadonlySet<string>;
   /** Every profile, the switch's choices. */
   readonly profiles: readonly string[];
@@ -88,7 +87,7 @@ export interface InstanceValue {
   /** The plugins the game loads with no line, in the order it loads them; undefined while the
    *  game folder's plugins cannot be listed. */
   readonly pluginsLoadedWithNoLine: readonly PluginAddress[] | undefined;
-  /** Each mod's conflict/override status, keyed by mod name — the Mods tree's badges (ADR-0015). */
+  /** Each mod's conflict/override status, keyed by mod name: the Mods tree's badges. */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
   readonly overwriteFileCount: number;

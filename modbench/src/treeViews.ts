@@ -155,7 +155,7 @@ export interface DownloadsViewDeps {
 }
 
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
- *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
+ *  Rows come from the Instance value alone (ADR-0015). */
 export function registerDownloadsView(
   { own, access, instance, reporter, ask, trash, install }: DownloadsViewDeps,
 ): {

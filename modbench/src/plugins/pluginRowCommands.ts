@@ -17,9 +17,9 @@ import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import { errorMessage } from '../ports/errorMessage';
 
-/** The Plugins tree's one progress surface (ADR-0002): a spinner over the view while the work
- *  runs, and the view's own message line. The composition root holds the `TreeView`, so it
- *  supplies both. */
+/** The Plugins tree's one progress surface (plugins.md, States, story 2): a spinner over the
+ *  view while the work runs, and the view's own message line. The composition root holds the
+ *  `TreeView`, so it supplies both. */
 export interface PluginsViewProgress {
   /** Runs `work` under the spinner, clearing the message on every exit path. */
   while: (work: () => Promise<void>) => Promise<void>;
@@ -27,7 +27,7 @@ export interface PluginsViewProgress {
   say: (message: string | undefined) => void;
 }
 
-// ADR-0012: the origin tells two plugins that share a filename apart.
+// ADR-0012.
 function rowName(row: PluginAddress): string {
   return `${row.name} (${row.origin})`;
 }
@@ -93,7 +93,7 @@ function pluginOriginOf(row: unknown): string | undefined {
 const PROVIDES_NO_PLUGIN = 'it provides no plugin';
 
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
-// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
+// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost, so this
 // runs under the Plugins-view progress indicator.
 async function trackMods(deps: TrackDeps, mods: readonly string[]): Promise<void> {
   const { progress, client, reporter, onTracked } = deps;
@@ -358,14 +358,13 @@ export interface TrackedRepositories {
   readonly client: Pick<MEditClient, 'getPlugins'>;
   readonly outputChannel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>;
   readonly setPluginRepositories: (repos: Map<string, MinimalRepository>) => void;
-  /** The Instance value's own two facts this needs, read fresh at call time (ADR-0007). */
+  /** The Instance value's own two facts this needs, read fresh at call time. */
   readonly trackedMods: () => ReadonlySet<string>;
   readonly modDirs: () => ReadonlyMap<string, string>;
 }
 
-// ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native Source
-// Control group. A logged no-op when `vscode.git` is unavailable: this only narrows the native UI,
-// never blocks reading or editing.
+// One `openRepository` per distinct tracked folder (ADR-0007). A logged no-op when `vscode.git` is
+// unavailable: this only narrows the native UI, never blocks reading or editing.
 async function registerHeldTrackedRepositories({
   client, outputChannel, setPluginRepositories, trackedMods, modDirs,
 }: TrackedRepositories): Promise<void> {

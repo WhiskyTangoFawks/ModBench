@@ -14,7 +14,7 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
   pluginsTree?: PluginsTreeProvider;
-  /** ADR-0013: the one path by which the Plugin load order reaches Editing. */
+  /** The one sender of ADR-0013's snapshot. */
   loadOrderSender?: LoadOrderSender;
   /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
    *  statement (`TreeView.message`, via `say`). */

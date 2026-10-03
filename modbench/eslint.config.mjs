@@ -144,8 +144,7 @@ export default defineConfig(
         },
     },
 
-    // ADR-0015: a write returns, and the watch brings its change back. Tests are
-    // out of scope: a test drives a write and then the watch's own re-read.
+    // ADR-0015. Tests are out of scope: a test drives a write and then the watch's own re-read.
     {
         files: ['src/**/*.ts'],
         ignores: ['src/**/*.test.ts', 'src/test/**'],

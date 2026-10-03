@@ -1,11 +1,10 @@
-// The plugin files the effective load order does not point at (ADR-0013): an overridden plugin in
-// an enabled mod, or any plugin in a disabled mod — neither is deployed into the game's view.
+// The plugin files the effective load order does not point at: an overridden plugin in an enabled
+// mod, or any plugin in a disabled mod. The snapshot names them too (ADR-0013).
 
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';
 import { isPluginFile } from '../instanceAdapter/instanceAdapter';
 
-/** A plugin file the load order does not hold, addressed the way the backend addresses every
- *  plugin: (origin, filename) plus the physical path to read it from (ADR-0012). */
+/** A plugin file the load order does not hold, named as the snapshot names a plugin (ADR-0013). */
 export interface PluginOutsideLoadOrder {
   name: string;
   path: string;
@@ -13,7 +12,7 @@ export interface PluginOutsideLoadOrder {
   origin: string;
 }
 
-/** The (origin, filename) pairs the editing backend already holds (ADR-0012). */
+/** A plugin the load order holds (ADR-0012). */
 export interface LoadedPlugin {
   name: string;
   origin: string;

@@ -42,9 +42,9 @@ type Scripted<T> = { value: T };
 type ScriptedAnswers = { [K in QueryMethod]: Scripted<Answer<K>>[] };
 type ScriptedResults = { [K in CommandMethod]: Scripted<Answer<K>>[] };
 
-/** The in-memory adapter (ADR-0002): a test scripts each answer/result by method name, drives
- *  notifications with `emit`, and reads every recorded call back. An unscripted query rejects,
- *  so a forgotten script fails loudly, not silently empty. */
+/** The in-memory adapter (target-architecture.d2, mEdit client): a test scripts each answer by
+ *  method name, drives notifications with `emit`, and reads every recorded call back. An
+ *  unscripted query rejects, so a forgotten script fails loudly, not silently empty. */
 export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 

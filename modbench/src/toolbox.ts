@@ -54,8 +54,7 @@ import { registerPluginEnableCommands } from './plugins/pluginParticipationComma
 import { pluginsKeyContext } from './plugins/gestureEntry';
 import { errorMessage } from './ports/errorMessage';
 
-// The port members every gesture, plugin sync and the launch in this file call — narrowed off
-// `MEditClient` (ADR-0002), never the controller or the repository.
+// The port members every gesture, plugin sync and the launch in this file call.
 export type ToolboxClient = Pick<MEditClient,
   'putLoadOrder' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin' | 'getLightPluginsSupported'
   | 'status' | 'start' | 'stop' | 'onStatusChanged' | 'onReconnected' | 'subscribe'>;
@@ -72,16 +71,15 @@ export interface ToolboxDeps {
   /** The malformed-plugin scan's Problems-panel collection. Held on the session so the teardown
    *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
-  /** The one status bar item, written from the reconcile's own outcome — never by the
-   *  controller, a lower layer that presents nothing (ADR-0014). */
+  /** The one status bar item, written from the reconcile's own outcome. */
   setStatusText: (text: string) => void;
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
   notifyConflictsComputed: () => void;
-  /** ADR-0019 surfacing: built per tag, so nothing below the entry point constructs an adapter
-   *  and every gesture still names itself in the log. */
+  /** The reporter (ADR-0019), built per tag so nothing below the entry point constructs an
+   *  adapter and every gesture names itself in the log. */
   reporterFor: (tag: string) => Reporter;
-  /** ADR-0019 surfacing: the one modal question every gesture below here asks through. */
+  /** The one modal question every gesture below here asks through (target-architecture.d2, Ports). */
   ask: AskQuestion;
   /** The system trash every gesture below here moves a file to. */
   trash: MoveToTrash;
@@ -196,8 +194,7 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporterFor: (tag: string) => Reporter;
   access: PluginsAccess;
-  /** ADR-0015: the tree's only row input — name, origin, slot, enabled and winning for every
-   *  plugin. */
+  /** The tree's only row input: name, origin, slot, enabled and winning for every plugin. */
   instance: Instance;
   /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
@@ -209,8 +206,7 @@ interface PluginListDeps {
   pluginSync: SyncMessage;
 }
 
-// ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
-// every badge from the facts the provider pulls itself.
+// The one Plugins tree (ADR-0017; target-architecture.d2, Plugins).
 function registerPluginListView(
   deps: PluginListDeps,
 ): { pluginsTree: PluginsTreeProvider; pluginListView: vscode.TreeView<PluginsTreeNode>; pluginsFilter: NameFilter } {
@@ -333,8 +329,8 @@ function narrateReconciles(own: Own, deps: ReconcileNarrationDeps): ReconcileNar
   return narrator;
 }
 
-// ADR-0013: instance commands hand the client the load order. What the reconcile does is the
-// narrator's to show; what the send itself answered is reported here.
+// Put load order (ADR-0013). What the reconcile does is the narrator's to show; what the send
+// itself answered is reported here.
 async function handleLoadOrder(
   outputChannel: vscode.LogOutputChannel, reporter: Reporter, narrator: ReconcileNarrator,
   command: () => Promise<PutLoadOrderResult>,
@@ -352,7 +348,7 @@ async function handleLoadOrder(
   await narrator.settled(put.outcome.status.version);
 }
 
-// ADR-0002: rows gain chevrons here — and *finish* gaining them here. The tree reads the
+// Rows gain chevrons here, and *finish* gaining them here. The tree reads the
 // backend's own plugin list itself; the failures `reportLoadOrderResult` already toasted ride
 // along rather than being re-derived.
 async function applyLoadOrderToTree(
@@ -383,7 +379,7 @@ async function applyLoadOrderToTree(
   );
 }
 
-// `loadOrderSender.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0013) —
+// `loadOrderSender.arm()` returns a pure check, since the client holds no VS Code type (ADR-0019),
 // so each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
   outputChannel.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
@@ -401,7 +397,7 @@ interface EnterEditingDeps {
   onConnect: () => Promise<void>;
 }
 
-// ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
+// Owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const { session, instance, sender, client, outputChannel, reporter, revealLog, onConnect } = deps;
@@ -463,7 +459,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // The one Instance adapter over the instance; every consumer reaches the instance through it.
   const adapter = mo2InstanceAdapter({ instanceRoot, gameDirectoryOverrides });
   const access = { instanceRoot, adapter };
-  // ADR-0015: the one Instance over the instance's files, recomputed through the Instance adapter.
+  // The instance value (ADR-0015).
   const instance = own(new Instance({
     adapter, window: vscode.window, log, logReadFailure: (line) => outputChannel.error(line),
   }));
@@ -477,11 +473,9 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
   void instance.refresh();
-  // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
-  // this provider builds no index and reads no disk of its own.
   const modListProvider = own(new ModListProvider({ instance, access, log: (line) => outputChannel.warn(`[modList] ${line}`) }));
   // Held on the session as well, because the teardown writers outside this file abandon the
-  // send in flight through it (ADR-0013).
+  // send in flight through it.
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
   const loadOrderReporter = reporterFor('loadOrder');
@@ -533,7 +527,7 @@ function buildInstanceSide(own: Own, instanceRoot: string, deps: ToolboxDeps): I
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
-  // ADR-0013: a landed Instance recompute and mEdit starting put the load order, never a gesture.
+  // commands.md, System commands, `modbench.instance.putLoadOrder`.
   const loadOrderPuts = registerLoadOrderPut(
     own, instance, client, putCurrentLoadOrder, outputChannel);
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
@@ -608,7 +602,7 @@ type OpenedFolder = { folder: 'instance'; instanceRoot: string } | { folder: 'no
 
 // Outside an instance only the Toolbox registers, row-less, and each view's `viewsWelcome` says
 // why. An instance whose files cannot be read is still an instance: its views show the error row
-// (ADR-0019).
+// (common.md, States, stories 2 and 4).
 function openedFolder(outputChannel: vscode.LogOutputChannel): OpenedFolder {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const folder = answerInstanceCheck(root, isMo2Instance);

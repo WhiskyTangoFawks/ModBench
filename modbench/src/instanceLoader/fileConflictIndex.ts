@@ -49,7 +49,7 @@ export class FileConflictLookup {
   }
 }
 
-/** The winner lookup minus its one mutator: a value is replaced whole, never patched (ADR-0015).
+/** The winner lookup minus its one mutator (ADR-0015).
  *  Every reader of the Instance's `files` field takes this. */
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
@@ -58,8 +58,8 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
-  /** Each disabled mod's own files, read in the same walk, outside conflict resolution
-   *  (ADR-0013). */
+  /** Each disabled mod's own files, read in the same walk, outside conflict resolution. The
+   *  snapshot names their plugins too (ADR-0013). */
   disabledModFiles: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
 

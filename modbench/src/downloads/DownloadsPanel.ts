@@ -113,7 +113,7 @@ export async function installDownloadedFile(
     deps.warnIfFomod(target.name, outcome.isFomod);
     downloadRefusal = outcome.downloadRefusal;
   } catch (err) {
-    // ADR-0019: explicit user action failed -> error notification + log.
+    // ADR-0019.
     reporter.report('error', `Failed to install "${name}".`, errorMessage(err));
     return false;
   }

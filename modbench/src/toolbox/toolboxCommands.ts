@@ -7,7 +7,7 @@ import type { Reporter } from '../ports/reporter';
 
 export interface ToolboxCommandDeps {
   access: ProfileAccess;
-  /** ADR-0015: the profiles and the active one come from the value. */
+  /** The profiles and the active one, from the instance value (ADR-0015). */
   instance: Pick<Instance, 'value'>;
   /** Modbench's own extension ID, which scopes the Settings editor to its settings. */
   extensionId: string;

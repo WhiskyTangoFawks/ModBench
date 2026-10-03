@@ -16,8 +16,8 @@ function sanitizeForPath(segment: string): string {
 }
 
 /** Deterministic per record, field and plugin, so re-opening the same cell reveals the same
- *  tab. `origin` is its own directory segment: two columns can share a filename and would
- *  otherwise alias onto one temp file (ADR-0012). */
+ *  tab. `origin` is its own directory segment, so two columns that share a filename
+ *  (ADR-0012) never alias onto one temp file. */
 export function extendedFieldFile(
   tempRoot: string, field: { recordLabel: string; fieldName: string; plugin: string; origin: string },
 ): { folder: string; file: string } {

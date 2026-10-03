@@ -7,8 +7,7 @@ import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages'
  *  inline and keyboard edits through the message router, the right-click menus straight from the
  *  command they invoke. */
 export interface RecordWriteDeps {
-  // ADR-0007: the single write path, the port's own verb. Injected rather than imported so this
-  // stays callable from a plain unit test.
+  // Injected rather than imported so this stays callable from a plain unit test.
   meditClient: Pick<MEditClient, 'editRecord'>;
   // The native Source Control panel does not pick up a field edit's working-tree change on its own.
   // The records and their badges are not the edit's to touch: they follow mEdit's changed rows.
@@ -18,8 +17,7 @@ export interface RecordWriteDeps {
 }
 
 /** An edit goes through the extension host because a refusal becomes a native notification
- *  (ADR-0019): a refusal a warning, a transport failure an error. Resolves the new FormKey an edit
- *  of the FormID landed under. */
+ *  (editor.md, Reporting, story 1). Resolves the new FormKey an edit of the FormID landed under. */
 export async function applyRecordEdit(
   deps: RecordWriteDeps, formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,
 ): Promise<string | undefined> {
