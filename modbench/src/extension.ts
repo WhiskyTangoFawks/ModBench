@@ -225,7 +225,7 @@ export function activate(context: vscode.ExtensionContext) {
     folder: toolbox.folder, instanceRead: toolbox.instanceRead,
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
-    pluginListView: session.pluginsTreeView, treeProvider,
+    pluginListView: session.pluginsTreeView,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
     client: meditClient, instance: toolbox.instance,
     // The record tab in focus reporting its focused cell, as its webview's `focusCell` does.

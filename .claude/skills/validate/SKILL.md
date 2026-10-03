@@ -9,7 +9,7 @@ The repo's gates: classify what changed, run the matching gates, fix failures, r
 
 ```bash
 git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
-git diff --name-only HEAD && git diff --name-only --cached
+git diff --name-only --no-renames "$(git merge-base main HEAD)" && git ls-files --others --exclude-standard
 ```
 
 The first line must print `current`: HEAD on a branch that contains `main`. A detached HEAD or a branch behind `main` gates a tree that will not land — stop and say so (merge `main` into the branch first; a detached HEAD is the user's to resolve).
@@ -25,11 +25,15 @@ Classify changed files → run matching gate (never review non-compiling code):
 
 A branch that matches several rows runs every flag they name: a `.cs` and a `.d2` change is `--backend --api-drift --docs`.
 
+`--backend` formats and builds the whole solution. It runs only the test projects that reference a changed project, directly or through other projects (`select_backend_tests.py` reads the csproj files). A change under `MEditService/` outside every project, such as `Directory.Build.props`, runs every test project. The architecture scans in `MEditService.Http.Tests` read every project's source, so they run beside any selection. Then `check_test_times.py` fails the gate for each test over its ceiling.
+
+`--frontend` runs its steps side by side (`frontend_gates.py`), and each step prints its whole output when it ends. `check_test_times.py` fails the gate for each unit test over its ceiling.
+
 `bash .claude/skills/validate/run-gates.sh` with no flags runs Gate 1 alone in seconds and exits 1 on failure; an orchestrator runs it on a branch before merging, because the editor-time hook does not fire on script-patched files. Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s `EXCLUDE_RE`): Vale over comments in `.cs`/`.ts`/`.tsx`/`.py`/`.mjs` and over markdown text (`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which reaches string literals but carries only the History rule (`.vale-raw.ini`); `comment-shape.py` for the doc-comment shape checks on `.cs`/`.ts`/`.tsx`; and the discipline's own tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
 
 `--api-drift` boots a fresh backend and fails if `modbench/src/wire/generated/api.ts` has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 
-The backend gates queue on a machine-wide flock, so a run can outlast a foreground command's 10-minute cap, and a subagent that ends its turn to wait has reported instead. Run `run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the verdict. Exit 3 means call it again.
+The backend and frontend gates each queue on machine-wide slots, so a run can outlast a foreground command's 10-minute cap, and a subagent that ends its turn to wait has reported instead. Run `run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the verdict. Exit 3 means call it again.
 
 Fix all failures, rerun.
 
