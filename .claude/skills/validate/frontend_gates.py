@@ -20,8 +20,8 @@ class Step(NamedTuple):
     after: Optional[str] = None
 
 
-# Lint reads only sources, so it runs beside the build. Integration waits on the build because
-# both write out/extension.js.
+# Lint reads only sources, so it runs beside the build. The tests wait on the build: they run only
+# on code that type-checks, and the build and integration both write out/extension.js.
 def steps(results: Path):
     return [
         Step('Gate 4: Frontend lint', ['npm', 'run', 'lint']),
@@ -35,8 +35,6 @@ def steps(results: Path):
 
 
 def run(steps, cwd: Path):
-    """Each step starts once the step it names after passed, or at once when it names none, and
-    prints its whole output under its header when it ends."""
     printing = threading.Lock()
 
     def one(step, after):

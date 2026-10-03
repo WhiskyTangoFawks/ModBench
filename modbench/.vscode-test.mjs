@@ -26,8 +26,8 @@ const workspace = (name, fixture) => {
   return folder;
 };
 
-// test-cli hands cachePath through to test-electron's download. One install serves every
-// worktree: LOCALAPPDATA on Windows, the XDG cache on Linux.
+// test-cli hands cachePath through to test-electron's download, so one install serves every
+// worktree.
 const shared = {
   version: '1.140.0',
   cachePath: path.join(process.env.LOCALAPPDATA ?? process.env.XDG_CACHE_HOME ?? path.join(homedir(), '.cache'), 'modbench', 'vscode-test'),
