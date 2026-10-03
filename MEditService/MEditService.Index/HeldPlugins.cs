@@ -228,6 +228,7 @@ internal sealed class HeldPlugins
             Path: plugin.Path,
             LoadOrderIndex: registration.LoadOrderIndex,
             IsLight: content.IsLight,
+            IsMedium: content.IsMedium,
             IsMaster: content.IsMaster,
             IsBlueprint: content.IsBlueprint,
             Masters: content.Masters,

@@ -21,33 +21,33 @@ public sealed class LoadOrderFormIdKeyOrderTests
     private static readonly FormKey InUnloaded = new(ModKey.FromFileName("Unloaded.esp"), 0x700);
     private static readonly FormKey InOtherUnloaded = new(ModKey.FromFileName("Other.esp"), 0x600);
 
-    private static IReadOnlyList<FieldDiff> ItemRows(ContainerEntry[] inLight, ContainerEntry[] inTop)
+    private static readonly PluginAddress MediumPlugin = new("Medium.esm", "Data");
+    private static readonly FormKey InMedium = new(ModKey.FromFileName(MediumPlugin.Name), 0x801);
+    private static readonly FormKey InLightBeyondItsSpace = new(ModKey.FromFileName(LightPlugin.Name), 0x1001);
+    private static readonly FormKey InMediumBeyondItsSpace = new(ModKey.FromFileName(MediumPlugin.Name), 0x10001);
+
+    private sealed record Placed(PluginAddress Plugin, bool Light, bool Medium, ContainerEntry[] Items);
+
+    private static CompareResult CompareOf(params Placed[] placed)
     {
-        var opened = new Dictionary<PluginAddress, PluginContent>
-        {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1),
-            [LightPlugin] = new(IsLight: true, IsMaster: true, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: 1),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name, LightPlugin.Name], RecordCount: 1),
-        };
-        var rows = new[]
-        {
-            Row(new Container(ContainerKey, Fallout4Release.Fallout4), BasePlugin, 0, isWinner: false),
-            Row(new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. inLight] }, LightPlugin, 1, isWinner: false),
-            Row(new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. inTop] }, TopPlugin, 2, isWinner: true),
-        };
-        var plugins = new[]
-        {
-            new LoadOrderEntry(BasePlugin.Name, BasePlugin.Name, "Data", 0, Enabled: true, Winning: true),
-            new LoadOrderEntry(LightPlugin.Name, LightPlugin.Name, "Data", 1, Enabled: true, Winning: true),
-            new LoadOrderEntry(TopPlugin.Name, TopPlugin.Name, "Data", 2, Enabled: true, Winning: true),
-        };
+        var opened = placed.ToDictionary(
+            p => p.Plugin,
+            p => new PluginContent(p.Light, IsMaster: p.Plugin.Name.EndsWith(".esm", StringComparison.Ordinal), IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: p.Medium));
+        var rows = placed.Select((p, slot) => Row(
+            new Container(ContainerKey, Fallout4Release.Fallout4) { Items = [.. p.Items] }, p.Plugin, slot, isWinner: slot == placed.Length - 1));
+        var plugins = placed.Select((p, slot) => new LoadOrderEntry(p.Plugin.Name, p.Plugin.Name, "Data", slot, Enabled: true, Winning: true));
         var service = new RecordQueryService(
-            new FakeIndex(new FakeReads(opened, rows)), FakeLoadOrder.Of(GameRelease.Fallout4, plugins),
+            new FakeIndex(new FakeReads(opened, [.. rows])), FakeLoadOrder.Of(GameRelease.Fallout4, [.. plugins]),
             SharedSchemaReflector.Instance, new ConflictClassifier());
-        var compare = service.GetCompare(ContainerKey.ToString())
+        return service.GetCompare(ContainerKey.ToString())
             ?? throw new InvalidOperationException($"Expected {ContainerKey} to resolve to a compare result.");
-        return compare.Diffs.Single(d => d.FieldName == "Items").Children ?? [];
     }
+
+    private static IReadOnlyList<FieldDiff> ItemRows(ContainerEntry[] inLight, ContainerEntry[] inTop) =>
+        ItemRows(new Placed(BasePlugin, false, false, []), new Placed(LightPlugin, true, false, inLight), new Placed(TopPlugin, false, false, inTop));
+
+    private static IReadOnlyList<FieldDiff> ItemRows(params Placed[] placed) =>
+        CompareOf(placed).Diffs.Single(d => d.FieldName == "Items").Children ?? [];
 
     private static FakeRow Row(Container record, PluginAddress plugin, int loadOrderIndex, bool isWinner) =>
         new(plugin, loadOrderIndex, isWinner, RealDocuments.Of(record, plugin, loadOrderIndex, isWinner, GameRelease.Fallout4, "cont", ["Items"]));
@@ -85,5 +85,38 @@ public sealed class LoadOrderFormIdKeyOrderTests
 
         var paired = rows.Single(r => r.Indexes?.ContainsKey(TopPlugin.Name) == true);
         Assert.Equal(1, paired.Indexes?[LightPlugin.Name]);
+    }
+
+    [Fact]
+    public void AMediumPluginHasItsOwnSpace_BetweenTheFullPluginsAndTheLightOnes()
+    {
+        var rows = ItemRows(
+            new Placed(BasePlugin, false, false, []), new Placed(MediumPlugin, false, true, []),
+            new Placed(LightPlugin, true, false, []), new Placed(TopPlugin, false, false, [Entry(InLight), Entry(InMedium), Entry(InTop), Entry(InBase)]));
+
+        Assert.Equal([InBase.ToString(), InTop.ToString(), InMedium.ToString(), InLight.ToString()], rows.Select(r => r.FieldName));
+    }
+
+    [Fact]
+    public void AKeyBeyondItsPluginsSpace_HasNoLoadOrderFormId_AndNeverTakesAnotherRecordsPlace()
+    {
+        var rows = ItemRows(
+            new Placed(BasePlugin, false, false, []), new Placed(MediumPlugin, false, true, []),
+            new Placed(LightPlugin, true, false, []),
+            new Placed(TopPlugin, false, false, [Entry(InMediumBeyondItsSpace), Entry(InLightBeyondItsSpace), Entry(InLight), Entry(InMedium)]));
+
+        Assert.Equal(
+            [InMedium.ToString(), InLight.ToString(), InLightBeyondItsSpace.ToString(), InMediumBeyondItsSpace.ToString()],
+            rows.Select(r => r.FieldName));
+    }
+
+    [Fact]
+    public void EachColumnsLoadIndex_CountsAmongItsOwnKind_AFullOneInHex_AMediumOneAfterFD_ALightOneAfterFE()
+    {
+        var compare = CompareOf(
+            new Placed(BasePlugin, false, false, []), new Placed(MediumPlugin, false, true, []),
+            new Placed(LightPlugin, true, false, []), new Placed(TopPlugin, false, false, []));
+
+        Assert.Equal(["00", "FD:00", "FE:000", "01"], compare.Overrides.Select(o => o.LoadIndex));
     }
 }

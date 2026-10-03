@@ -225,6 +225,20 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
+    public void GetRecords_FdIsTheMediumPluginsIndex_AndItsIdIsSixteenBits()
+    {
+        var names = new[] { "Base.esm", "Mid.esm", "Top.esp" };
+        var entries = names.Select((name, slot) => new LoadOrderEntry(name, name, "Data", slot, true, Winning: true)).ToList();
+        var opened = names.ToDictionary(
+            name => new PluginAddress(name, "Data"), name => new PluginContent(false, false, false, [], 0, IsMedium: name == "Mid.esm"));
+        var (manager, svc) = Build(new FakeFixtureData(Release, entries, opened, []));
+
+        svc.GetRecords(type: null, plugin: null, search: "FD001234", limit: 20, offset: 0);
+
+        Assert.Equal("001234:Mid.esm", ((FakeReads)manager.RequireReads()).LastSearch?.SearchFormKey);
+    }
+
+    [Fact]
     public void GetRecords_AFormIdNoActivePluginHoldsSearchesAsTyped()
     {
         _svc.GetRecords(type: null, plugin: null, search: "7F000800", limit: 20, offset: 0);

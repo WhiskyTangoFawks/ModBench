@@ -5,59 +5,83 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Queries;
 
 /// <summary>editor.md, A column's header: xEdit's load index, in hex. A plugin counts among the
-/// active plugins of its own kind, full or light; a light one's follows the light marker.</summary>
+/// active plugins of its own kind (full, medium or light), and its kind's marker leads its FormID.
+/// This is the one owner of a plugin's place and of the FormID that place makes.</summary>
 internal static class LoadIndex
 {
-    private static bool IsLight(PluginAddress key, IReadOnlyDictionary<PluginAddress, PluginContent> opened) =>
-        opened.TryGetValue(key, out var content) && content.IsLight;
+    private static MasterStyle StyleOf(PluginAddress key, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
+    {
+        if (!opened.TryGetValue(key, out var content)) return MasterStyle.Full;
+        if (content.IsMedium) return MasterStyle.Medium;
+        return content.IsLight ? MasterStyle.Small : MasterStyle.Full;
+    }
+
+    private static (string Name, MasterStyle Style, uint Place)[] Places(
+        LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
+    {
+        var next = new Dictionary<MasterStyle, uint>();
+        return [.. snapshot.Active.Select(active =>
+        {
+            var style = StyleOf(active.Key, opened);
+            var place = next.GetValueOrDefault(style);
+            next[style] = place + 1;
+            return (active.Name, style, place);
+        })];
+    }
 
     internal static string Of(
         PluginAddress plugin, int loadOrderIndex, LoadOrderSnapshot snapshot,
         IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
-        var light = IsLight(plugin, opened);
-        var place = snapshot.Active.Take(loadOrderIndex).Count(active => IsLight(active.Key, opened) == light);
-        return light ? $"{FormID.SmallMasterMarker:X2}:{place:X3}" : $"{place:X2}";
+        var style = StyleOf(plugin, opened);
+        var place = Places(snapshot, opened).Take(loadOrderIndex).Count(active => active.Style == style);
+        return style switch
+        {
+            MasterStyle.Small => $"{FormID.SmallMasterMarker:X2}:{place:X3}",
+            MasterStyle.Medium => $"{FormID.MediumMasterMarker:X2}:{place:X2}",
+            _ => $"{place:X2}",
+        };
     }
 
     /// <summary>xEdit's load-order FormID of a FormKey's text, by which it sorts a keyed array
-    /// (TwbFormIDDefFormater.ToSortKey); null where no active plugin has the FormKey's filename.</summary>
+    /// (TwbFormIDDefFormater.ToSortKey). Null where no active plugin has the FormKey's filename, and
+    /// where the ID does not fit its plugin's space: Mutagen would mask it into another record's FormID.</summary>
     internal static Func<string, uint?> FormIdsOf(
         LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
         // A FormKey names its plugin by filename alone; the snapshot holds one active plugin per name.
-        var slots = new Dictionary<string, (MasterStyle Style, uint Place)>(StringComparer.OrdinalIgnoreCase);
-        var places = new Dictionary<MasterStyle, uint>();
-        foreach (var active in snapshot.Active)
-        {
-            var style = IsLight(active.Key, opened) ? MasterStyle.Small : MasterStyle.Full;
-            var place = places.GetValueOrDefault(style);
-            places[style] = place + 1;
-            slots[active.Name] = (style, place);
-        }
+        var slots = Places(snapshot, opened).ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
         uint? FormIdOf(string text)
         {
             if (!FormKey.TryFactory(text, out var key)) return null;
             if (key.IsNull) return FormID.Null.Raw;
-            return slots.TryGetValue(key.ModKey.FileName.String, out var slot) ? FormID.Factory(slot.Style, slot.Place, key.ID).Raw : null;
+            if (!slots.TryGetValue(key.ModKey.FileName.String, out var slot) || key.ID > FormID.IdMask(slot.Style)) return null;
+            return FormID.Factory(slot.Style, slot.Place, key.ID).Raw;
         }
         return FormIdOf;
     }
 
-    /// <summary>The FormKey a FormID names: the inverse of <see cref="Of"/>, read from the active
+    /// <summary>The FormKey a FormID names: the inverse of <see cref="FormIdsOf"/>, read from the active
     /// plugins. Null when the text is no FormID or no active plugin holds that index.</summary>
     internal static FormKey? FormKeyOf(
         string text, LoadOrderSnapshot snapshot, IReadOnlyDictionary<PluginAddress, PluginContent> opened)
     {
         var digits = text.Trim();
         if (digits.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) digits = digits[2..];
-        if (digits.Length != 8 || !uint.TryParse(digits, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var formId))
+        if (digits.Length != 8 || !uint.TryParse(digits, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var raw))
             return null;
 
-        var light = formId >> 24 == FormID.SmallMasterMarker && snapshot.Active.Any(active => IsLight(active.Key, opened));
-        var place = (int)(light ? (formId >> 12) & 0xFFF : formId >> 24);
-        var id = formId & (light ? 0xFFFu : 0xFFFFFFu);
-        var holder = snapshot.Active.Where(active => IsLight(active.Key, opened) == light).ElementAtOrDefault(place);
-        return holder is null ? null : new FormKey(ModKey.FromFileName(holder.Key.Name), id);
+        var places = Places(snapshot, opened);
+        var formId = new FormID(raw);
+        var marker = raw >> 24;
+        MasterStyle? marked = marker switch
+        {
+            FormID.SmallMasterMarker => MasterStyle.Small,
+            FormID.MediumMasterMarker => MasterStyle.Medium,
+            _ => null,
+        };
+        var style = marked is { } named && places.Any(p => p.Style == named) ? named : MasterStyle.Full;
+        var holder = places.FirstOrDefault(p => p.Style == style && p.Place == formId.MasterIndex(style));
+        return holder.Name is null ? null : new FormKey(ModKey.FromFileName(holder.Name), formId.Id(style));
     }
 }
