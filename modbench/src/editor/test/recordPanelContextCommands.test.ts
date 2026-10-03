@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Captures every registerCommand(id, handler) so each row's handler can be invoked directly.
 const handlers = new Map<string, (ctx?: unknown, option?: unknown) => Promise<void> | void>();
 const registerCommand = vi.fn((command: string, handler: (ctx?: unknown, option?: unknown) => Promise<void> | void) => {
   handlers.set(command, handler);
@@ -18,8 +17,6 @@ vi.mock('vscode', () => ({
 
 import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 
-// Stubbed so the command's own wiring is what this file observes: which tab the gesture asks for,
-// and what its save writes. The tab's fs/chmod mechanics are extendedFieldEditor.test.ts's.
 const openExtendedFieldEditor =
   vi.fn<(params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps) => Promise<void>>();
 vi.mock('../extendedFieldEditor', () => ({
@@ -34,6 +31,9 @@ import { present } from '../../ports/present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); showInputBox.mockReset(); executeCommand.mockReset(); });
 
+const gateSendingEachWriteWhereItWasAddressed: RecordPanelContextCommandDeps['editGateOf'] =
+  () => async (address, write) => { await write(address.formKey); };
+
 function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
   const meditClient = new InMemoryMEditClient();
   meditClient.setCommandResult('editRecord', { applied: true });
@@ -47,8 +47,7 @@ function makeDeps(overrides: Partial<RecordPanelContextCommandDeps> = {}) {
     reporter: { report, landed: vi.fn(), insideDialog: vi.fn(), selectionOutcome: vi.fn() },
     fieldFile: () => ({ folder: '/tmp/does-not-open-here', file: '/tmp/does-not-open-here/field.txt' }),
     log: vi.fn(),
-    // The gate of the panels showing the record, sending each write where it was addressed.
-    editGateOf: () => async (address, write) => { await write(address.formKey); },
+    editGateOf: gateSendingEachWriteWhereItWasAddressed,
     focusedCell: () => undefined,
     ...overrides,
   };
@@ -61,9 +60,7 @@ function editRecordCalls(client: InMemoryMEditClient) {
   return client.calls.filter(c => c.method === 'editRecord');
 }
 
-// A recorded call carries only `unknown[]` — the envelope's own `value` is `unknown` on the wire
-// too (messages.ts), so a test reading one back narrows through this either way.
-function envelopeValue(args: unknown[]): string {
+function envelopeValueNarrowedFromUnknownCallArgs(args: unknown[]): string {
   const envelope = args[3];
   const value: unknown = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
   if (typeof value !== 'string') throw new Error('expected an editRecord envelope carrying a string value');
@@ -90,8 +87,6 @@ function elementContext(path: ArrayElementContext['path']): ArrayElementContext 
   };
 }
 
-// ADR-0007: the right-click gesture writes from the host, so the observable is the port call
-// — one envelope per gesture, never a message back into the panel.
 describe('right-click array ops write one envelope from the host', () => {
   it('Add lands an add envelope at a nested array\'s own path', async () => {
     const { deps, meditClient } = makeDeps();
@@ -154,9 +149,7 @@ describe('right-click array ops write one envelope from the host', () => {
     ]);
   });
 
-  // The webview posts what the user asked for; a move off either end is refused by name at the
-  // backend (ADR-0005), never silently dropped here.
-  it('Move Up on the first element still lands the move, to the position before it', async () => {
+  it('Move Up on the first element still lands the move, to the position before it, since the webview posts what the user asked for', async () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
@@ -198,9 +191,7 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 });
 
-// A right-click edit is an edit the panel makes, so it goes through that panel's gate: the gate
-// holds its reads, and sends the write to the FormKey the record is at now.
-describe('right-click edits go through the gate of the panels showing the record', () => {
+describe('right-click edits go through the gate of the panels showing the record, which holds its reads and sends the write to the FormKey the record is at now', () => {
   const movedGate = (gated: string[]): RecordPanelContextCommandDeps['editGateOf'] =>
     () => async (address, write) => { gated.push(address.formKey); await write('000900:Fallout4.esm'); };
 
@@ -216,7 +207,6 @@ describe('right-click edits go through the gate of the panels showing the record
     expect(editRecordCalls(meditClient).map(c => c.args[0])).toEqual(['000900:Fallout4.esm']);
   });
 
-  // The menu names its panel (the body's webview context), whichever panel was focused last.
   it('takes the gate of the panels showing the record it is addressed to', async () => {
     const asked: string[] = [];
     const { deps } = makeDeps({ editGateOf: address => { asked.push(address.formKey); return async (address, write) => { await write(address.formKey); }; } });
@@ -242,9 +232,7 @@ describe('right-click edits go through the gate of the panels showing the record
   });
 });
 
-// ADR-0018: right-click is the extended editor's only trigger, and the host opens the tab from the
-// context it is handed rather than asking the panel for anything.
-describe('the extended editor opens and saves from the host', () => {
+describe('the extended editor opens and saves from the host, from the context it is handed rather than asking the panel for anything', () => {
   function openedWith(): { params: OpenExtendedFieldEditorParams; deps: ExtendedFieldEditorDeps } {
     const [params, editorDeps] = present(openExtendedFieldEditor.mock.calls.at(-1), "the last openExtendedFieldEditor call");
     return { params, deps: editorDeps };
@@ -289,13 +277,11 @@ describe('the extended editor opens and saves from the host', () => {
     await openedWith().deps.onCommit('first save');
     await openedWith().deps.onCommit('second save');
 
-    expect(editRecordCalls(meditClient).map(c => envelopeValue(c.args))).toEqual(['first save', 'second save']);
+    expect(editRecordCalls(meditClient).map(c => envelopeValueNarrowedFromUnknownCallArgs(c.args))).toEqual(['first save', 'second save']);
   });
 });
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
-// in focus, which the palette never hands it.
-describe('a field gesture from the palette', () => {
+describe('a field gesture from the palette, which hands it no cell', () => {
   it('acts on the focused cell of the record tab in focus', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Keywords' }, { kind: 'index', index: 1 }];
     const { deps, meditClient } = makeDeps({ focusedCell: () => elementContext(path) });
@@ -315,8 +301,7 @@ describe('a field gesture from the palette', () => {
     expect(editRecordCalls(meditClient)).toEqual([]);
   });
 
-  // A string element of an array carries both sections, as its right-click does.
-  it('acts on a cell whose context carries its section beside another', async () => {
+  it('acts on a cell whose context carries its section beside another, as a string element of an array does', async () => {
     const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Names' }, { kind: 'index', index: 0 }];
     const { deps, meditClient } = makeDeps({
       focusedCell: () => ({ ...elementContext(path), webviewSection: 'arrayElement stringValue' }),
@@ -329,9 +314,7 @@ describe('a field gesture from the palette', () => {
   });
 });
 
-// commands.md, Record: the grid's edit and the palette fire one command. The grid names the column's
-// (origin, filename) as the Argument (ADR-0012, invariant 1).
-describe('modbench.record.editField', () => {
+describe('modbench.record.editField, one command for the grid\'s edit and the palette, the grid naming the column\'s (origin, filename) as the Argument', () => {
   const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Height' }];
   const envelope = { op: 'set' as const, path, value: 0.75 };
   const editField = () => present(handlers.get('modbench.record.editField'), 'the editField handler');
@@ -401,8 +384,7 @@ describe('modbench.record.editField', () => {
       expect(tellPanels.mock.calls).toEqual([[written], [refused]]);
     });
 
-    // common.md, Unconfirmed writes, story 6: only the disk can say what an edit with no answer did.
-    it('nothing more of an edit mEdit never answered', async () => {
+    it('nothing more of an edit mEdit never answered, since only the disk can say what it did', async () => {
       const { deps, meditClient, tellPanels } = makeDeps();
       meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
       registerRecordPanelContextCommands(deps);

@@ -10,16 +10,14 @@ vi.mock('vscode', () => ({
 
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 
-// Panel identity is an opaque token here — the tracker never touches WebviewPanel-specific
-// members (`.active`, `.onDidChangeViewState`), so tests use plain objects, no VS Code harness.
-function panel(): object {
+function opaquePanelToken(): object {
   return {};
 }
 
 describe('ActiveRecordTracker — Referenced By\'s "active record" input', () => {
   it('setActivePanel with the panel that is already active does not refire — avoids a redundant retarget/refetch when VS Code reports the same panel active twice', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
+    const a = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     tracker.setActivePanel(a);
     const handler = vi.fn();
@@ -30,7 +28,7 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('setFormKey on the active panel fires the new formKey', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
+    const a = opaquePanelToken();
     tracker.setActivePanel(a);
     const handler = vi.fn();
     tracker.onDidChangeActiveRecord(handler);
@@ -40,8 +38,8 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('setFormKey on a panel that is not active does not fire', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
-    const b = panel();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
     tracker.setActivePanel(a);
     const handler = vi.fn();
     tracker.onDidChangeActiveRecord(handler);
@@ -51,8 +49,8 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('switching the active panel fires with that panel\'s own tracked formKey', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
-    const b = panel();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     tracker.setFormKey(b, '000002:Fallout4.esm');
     const handler = vi.fn();
@@ -63,8 +61,8 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('switching to a panel with no tracked formKey yet fires undefined', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
-    const b = panel();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     const handler = vi.fn();
     tracker.onDidChangeActiveRecord(handler);
@@ -74,7 +72,7 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('removePanel on the active panel fires undefined — nothing else is active', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
+    const a = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     tracker.setActivePanel(a);
     const handler = vi.fn();
@@ -85,8 +83,8 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('removePanel on an inactive panel does not fire', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
-    const b = panel();
+    const a = opaquePanelToken();
+    const b = opaquePanelToken();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     tracker.setFormKey(b, '000002:Fallout4.esm');
     tracker.setActivePanel(a);
@@ -98,7 +96,7 @@ describe('ActiveRecordTracker — Referenced By\'s "active record" input', () =>
 
   it('current() reflects the latest state without needing a subscriber', () => {
     const tracker = new ActiveRecordTracker();
-    const a = panel();
+    const a = opaquePanelToken();
     expect(tracker.current()).toBeUndefined();
     tracker.setFormKey(a, '000001:Fallout4.esm');
     tracker.setActivePanel(a);

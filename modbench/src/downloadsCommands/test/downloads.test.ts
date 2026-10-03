@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
-// The adapter's watch is built on VS Code's file watcher, which these tests never start.
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -15,9 +14,7 @@ import { accessTo, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 import { assertSelectionOutcome } from '../../test/surfacingDoubles';
 import type { MoveToTrash } from '../../ports/trash';
 
-// expect.stringContaining's type is `any`, so this checks the refusal by hand instead of
-// embedding the matcher in a toEqual object.
-function assertRefusal(result: DownloadsCommandResult, expectedSubstring: string): void {
+function assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(result: DownloadsCommandResult, expectedSubstring: string): void {
   if (result.applied) throw new Error('expected a refusal, got applied:true');
   expect(result.refusal).toContain(expectedSubstring);
 }
@@ -72,7 +69,7 @@ describe('excludeDownload / includeDownload', () => {
   it('excluding a file gone from disk is refused, naming it, and writes it no metadata', async () => {
     const outcome = await excludeDownload(access, 'foo.7z');
 
-    assertRefusal(outcome, 'foo.7z');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(outcome, 'foo.7z');
     await expect(readFile(metaPath('foo.7z'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -81,21 +78,18 @@ describe('excludeDownload / includeDownload', () => {
 
     const outcome = await includeDownload(access, 'foo.7z');
 
-    assertRefusal(outcome, 'foo.7z');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(outcome, 'foo.7z');
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nremoved=true\r\n');
   });
 
-  it('refuses, never throws, when the metadata cannot be written', async () => {
+  it('refuses, never throws, when the metadata cannot be written, here for a directory where it belongs', async () => {
     await writeArchive('foo.7z');
-    // A directory where the metadata belongs: the write fails for a reason no caller can foresee.
     await mkdir(metaPath('foo.7z'));
 
-    assertRefusal(await excludeDownload(access, 'foo.7z'), 'EISDIR');
+    assertRefusalNarrowedByHandSinceExpectStringContainingIsTypedAny(await excludeDownload(access, 'foo.7z'), 'EISDIR');
   });
 
-  // Install's installed mark writes the same metadata; interleaved, the second writer would splice
-  // the text the first read, dropping the first key.
-  it('an exclude racing an installed mark leaves both marks set', async () => {
+  it('an exclude racing an installed mark leaves both marks set, rather than the second writer dropping the first key', async () => {
     await writeArchive('foo.7z');
 
     await Promise.all([excludeDownload(access, 'foo.7z'), access.adapter.markDownloadedFile('foo.7z', 'Installed')]);
@@ -168,9 +162,7 @@ describe('deleteDownloads', () => {
     expect(trashed).toEqual([file.path]);
   });
 
-  // The file is already gone once the metadata's trash is attempted, so this failure is not a
-  // refusal (ADR-0019: a landed gesture that would show something untrue is logged, not failed).
-  it('a metadata trash failure after the file landed reports the delete as done, naming the reason', async () => {
+  it('a metadata trash failure after the file landed reports the delete as done rather than refusing it, naming the reason', async () => {
     const file = await writeArchive('foo.7z');
     await writeFile(metaPath('foo.7z'), '[General]\r\n');
     const { trash, trashed } = recordingTrash((path) => (path === metaPath('foo.7z') ? new Error('EPERM') : undefined));
@@ -181,9 +173,7 @@ describe('deleteDownloads', () => {
     expect(trashed).toEqual([file.path, metaPath('foo.7z')]);
   });
 
-  // Rival: the metadata trashed at a path the command joins itself, so a downloads folder the
-  // settings move elsewhere is one the command never asks about.
-  it('hands the Instance adapter the metadata, by the file\'s name', async () => {
+  it('hands the Instance adapter the metadata by the file\'s name, not a path the command joins itself', async () => {
     const file = await writeArchive('foo.7z');
     const asked: string[] = [];
     const counted: DownloadsAccess = {

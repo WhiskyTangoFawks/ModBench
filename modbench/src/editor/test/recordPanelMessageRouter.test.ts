@@ -37,7 +37,6 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     channel: fakeChannel(),
     reporter: { insideDialog: vi.fn() },
     meditClient,
-    // Undefined by default: a message arriving with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     focusCell: vi.fn(),
     reply: vi.fn(),
@@ -48,10 +47,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
   };
 }
 
-// The record editor webview and the extension host are different processes, bridged
-// only by `postMessage` — this is the single dispatch point for every message the webview sends
-// up.
-describe('routeRecordPanelMessage', () => {
+describe('routeRecordPanelMessage, the dispatch point for what the webview posts to the extension host', () => {
   beforeEach(() => {
     executeCommand.mockReset();
     writeText.mockReset();
@@ -82,9 +78,7 @@ describe('routeRecordPanelMessage', () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  // Correctly discriminated (a real EDIT_FIELD), but formKey is the wrong type — parseWebviewToExtension's
-  // required-field check, not its discriminant switch.
-  it('a correctly-discriminated message with a malformed payload is also a no-op', async () => {
+  it('a correctly-discriminated message with a malformed payload, a formKey of the wrong type, is also a no-op', async () => {
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: 123, plugin: 'Mod.esp', origin: 'SomeMod', envelope: { op: 'set', path: [] } },
       makeDeps(),
@@ -94,8 +88,6 @@ describe('routeRecordPanelMessage', () => {
   });
 });
 
-// commands.md, Entry points are not gestures: a grid edit is an entry point to the command the
-// palette fires too, so the router writes nothing itself.
 describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   const envelope = {
     op: 'set' as const,
@@ -112,7 +104,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
 
   beforeEach(() => { executeCommand.mockReset(); });
 
-  it('fires modbench.record.editField with the column\'s (origin, filename), its panel and the envelope', async () => {
+  it('fires modbench.record.editField with the column\'s (origin, filename), its panel and the envelope, and writes nothing itself', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.record.editField', {
@@ -176,9 +168,7 @@ describe('routeRecordPanelMessage — the focused cell', () => {
   });
 });
 
-// ADR-0002 invariant 2: RecordPanelClient's own read, asked of the mEdit client through the host
-// rather than fetched by the webview itself.
-describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
+describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD, read through the mEdit client by the host rather than fetched by the webview', () => {
   const compare: CompareResult = { overrides: [], diffs: [], conflictAll: 'OnlyOne', recordTypeName: 'Activator' };
   const plugins = [pluginMetadataFixture({ name: 'A.esp', isImmutable: true })];
   const loadMessage = { type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' };
@@ -269,8 +259,6 @@ describe('routeRecordPanelMessage — REQUEST_RECORD_LOAD', () => {
     });
   });
 
-  // The rival: a client that fails the whole load when only the plugin list's own read fails,
-  // rather than degrading that one slice to null.
   it('degrades the plugin list to null, rather than failing the load, when only it fails', async () => {
     meditClient.setQueryAnswer('getComparison', compare);
     meditClient.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));

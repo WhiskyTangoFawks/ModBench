@@ -11,7 +11,6 @@ const npc: RecordAddress = { formKey: '000801:Source.esp', plugin: 'Source.esp',
 const faction: RecordAddress = { formKey: '000802:Source.esp', plugin: 'Source.esp', origin: 'SourceMod' };
 const elsewhere: RecordAddress = { formKey: '000803:Other.esp', plugin: 'Other.esp', origin: 'OtherMod' };
 
-// plugins.md, Pickers, Copy: a pick of the mode, then a pick of the destination.
 describe('the mode pick', () => {
   it('offers override and new, override first as xEdit\'s navigator does', () => {
     expect(COPY_MODE_ITEMS.map((item) => item.mode)).toEqual(['Override', 'New']);
@@ -27,8 +26,7 @@ describe('the destination pick', () => {
     plugin('Other.esp', 'OtherMod', 9),
   ];
 
-  // plugins.md, Menus and keys, story 4: an untracked plugin is no copy destination.
-  it('offers the tracked, editable plugins, each with its load position', () => {
+  it('offers the tracked, editable plugins, each with its load position, and not an untracked one', () => {
     expect(copyDestinationItems(plugins, 'New', [npc]).map(({ label, description }) => ({ label, description }))).toEqual([
       { label: 'Source.esp', description: '[3]' },
       { label: 'Patch.esp', description: '[5]' },
@@ -68,21 +66,18 @@ describe('heldCopies', () => {
     ]);
   });
 
-  // ADR-0012 invariant 1: a plugin of the same name in another mod is another plugin.
-  it('matches a destination by its origin as well as its name', () => {
+  it('matches a destination by its origin as well as its name, since a plugin of the same name in another mod is another plugin', () => {
     const holders = new Map([[npc.formKey, [{ name: 'Patch.esp', origin: 'SomeOtherMod' }]]]);
 
     expect(heldCopies([npc], [patch], holders)).toEqual([]);
   });
 
-  // As pluginAddressKey and mEdit compare them.
-  it('matches a destination by name and origin whatever their case', () => {
+  it('matches a destination by name and origin whatever their case, as mEdit compares them', () => {
     const holders = new Map([[npc.formKey, [{ name: 'PATCH.ESP', origin: 'patchmod' }]]]);
 
     expect(heldCopies([npc], [patch], holders)).toEqual([{ record: npc, destination: patch }]);
   });
 
-  // plugins.md, Pickers, Copy: a record's own plugin holds the record, not a copy of it.
   it('leaves out a record\'s own plugin, which holds no copy to replace', () => {
     const own = { name: 'Source.esp', origin: 'SourceMod' };
     const holders = new Map([[npc.formKey, [own]], [elsewhere.formKey, [own]]]);
@@ -91,8 +86,7 @@ describe('heldCopies', () => {
   });
 });
 
-// commands.md, Doing nothing is not an error: it writes nothing and says nothing.
-describe('copiesWritten', () => {
+describe('copiesWritten, leaving out a copy that would write nothing', () => {
   const own = { name: 'Source.esp', origin: 'SourceMod' };
   const patch = { name: 'Patch.esp', origin: 'PatchMod' };
 

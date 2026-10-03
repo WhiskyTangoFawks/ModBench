@@ -60,15 +60,13 @@ import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
-// The row the Instance would publish for this instance root: its two paths are what the panel
-// opens, so every gesture is driven by the same tree the test wrote.
-const node = (root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
+const node =(root: string, name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
   new DownloadNode(downloadRowFixture(name, row, root));
 
-// No installed mods by default, so `selectUpgradeCandidates` finds none and the pick never
-// shows — the shape every install test not about the pick itself relies on.
+const NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS: InstanceValue['mods'] = [];
+
 const fakeInstance = (
-  mods: InstanceValue['mods'] = [], downloads: readonly DownloadFile[] = [], gameName = 'Fallout 4',
+  mods: InstanceValue['mods'] = NO_INSTALLED_MODS_SO_THE_UPGRADE_PICK_NEVER_SHOWS, downloads: readonly DownloadFile[] = [], gameName = 'Fallout 4',
 ): Pick<Instance, 'value'> => ({
   value: instanceValueFixture({ mods, downloads: { kind: 'listed', rows: downloads }, gameName }),
 });
@@ -85,8 +83,6 @@ const fakeDownloadsProvider = (
   setSort: vi.fn(), setShowExcluded: vi.fn(), currentSort: vi.fn(() => currentSort),
 });
 
-// The composition root's answers, doubled: a new mod keeps the name install proposed, the FOMOD
-// notice is recorded rather than shown, and the failed-mark line lands on downloadsLogLines.
 const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDeps => ({
   nameNewMod: (defaultName: string) => Promise.resolve(defaultName),
   warnIfFomod: vi.fn(),
@@ -94,9 +90,7 @@ const installDeps = (over: Partial<DownloadInstallDeps> = {}): DownloadInstallDe
   ...over,
 });
 
-// What the composition root wires behind modbench.mod.install for a downloaded file; the command
-// itself belongs to Mods, which hands this flow the row.
-function registerInstall(
+function registerModInstallForDownloadedFile(
   access: ReturnType<typeof accessTo>, instance: Pick<Instance, 'value'>, reporter: ReturnType<typeof recordingReporter>,
   deps: DownloadInstallDeps,
 ): void {
@@ -104,13 +98,8 @@ function registerInstall(
     installDownloadedFile(downloaded.row, access, instance, reporter, deps));
 }
 
-// tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
-// if the test fails partway through (an inline rm() at the end of a test body
-// would be skipped by a failed assertion above it and leak the tmpdir).
-let instanceRoots: string[] = [];
+let instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem: string[] = [];
 
-// Stands in for the composition root's `(line) => outputChannel.warn(...)`: the one Output line a
-// failed installed mark writes, with no notification of its own.
 const marks = {
   markUnconfirmed: vi.fn(), forgetUnconfirmed: vi.fn(), markUnconfirmedDelete: vi.fn(), forgetUnconfirmedDelete: vi.fn(),
 };
@@ -119,8 +108,8 @@ let downloadsLogLines: string[] = [];
 const downloadsLog = (line: string): void => { downloadsLogLines.push(line); };
 
 afterEach(async () => {
-  await Promise.all(instanceRoots.map((root) => rm(root, { recursive: true, force: true })));
-  instanceRoots = [];
+  await Promise.all(instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.map((root) => rm(root, { recursive: true, force: true })));
+  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem = [];
   downloadsLogLines = [];
 });
 
@@ -128,7 +117,7 @@ async function makeInstanceRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'downloads-panel-'));
   await mkdir(join(root, 'downloads'), { recursive: true });
   await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout 4\r\n');
-  instanceRoots.push(root);
+  instanceRootsRemovedInAfterEachSoAFailedAssertionDoesNotLeakThem.push(root);
   return root;
 }
 
@@ -149,7 +138,6 @@ function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
   return present(call[0], "the call's first argument").fsPath;
 }
 
-// The composition root's trash, doubled: each call records the path it was handed.
 const trash = vi.fn<MoveToTrash>();
 const trashedPaths = (): string[] => trash.mock.calls.map(([path]) => path);
 
@@ -159,9 +147,7 @@ function invoke(commandId: string, ...args: unknown[]): unknown {
   return call[1](...args);
 }
 
-// Stands in for vscode.QuickPick with no VS Code host: listener registries the test triggers
-// directly, matching the real object's "calling .hide() also fires onDidHide".
-function makeFakeQuickPick<T>() {
+function makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<T>() {
   const acceptListeners: Array<() => void> = [];
   const hideListeners: Array<() => void> = [];
   const qp = {
@@ -184,13 +170,11 @@ function makeFakeQuickPick<T>() {
 
 const onDisk = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
 
-// ── registerDownloadsSingleRowCommands ──────────────────────────────────────
+const afterAMacrotaskNotAMicrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // View on Nexus is the mod's gesture, registered once for both views, so a second
-  // registration here would make activation throw.
   it('registers open and open .meta, and leaves install and view on Nexus to the mod', () => {
     registerDownloadsSingleRowCommands(recordingReporter(), () => []);
     expect(registerCommand.mock.calls.map((c) => c[0])).toEqual([
@@ -205,7 +189,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
@@ -220,7 +204,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
 
     await vi.waitFor(() => {
@@ -237,7 +221,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await writeMeta(root, 'foo.7z');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
 
     await vi.waitFor(() => {
@@ -248,16 +232,14 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(installFromArchive).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: the view marking the sidecar itself. Install owns that write, so a `.meta` the view
-  // touched would be a second writer of MO2's own file.
-  it('install: writes no sidecar of its own — the mark is install\'s', async () => {
+  it('install: writes no sidecar of its own, leaving the mark to install as the one writer of MO2\'s .meta', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
     const before = await readFile(meta, 'utf8');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
@@ -276,7 +258,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     });
     const report = recordingReporter();
 
-    registerInstall(accessTo(root), fakeInstance(), report, installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), report, installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(downloadsLogLines).toHaveLength(1));
@@ -296,10 +278,9 @@ describe('registerDownloadsSingleRowCommands', () => {
     let asked = false;
     const nameNewMod = () => { asked = true; return Promise.resolve(undefined); };
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ nameNewMod }));
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ nameNewMod }));
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
-    // The prompt's answer is what install waits on, so the refusal is ordered before any write.
     await vi.waitFor(() => expect(asked).toBe(true));
     expect(installFromArchive).not.toHaveBeenCalled();
     expect(await readFile(meta, 'utf8')).not.toContain('installed=true');
@@ -312,7 +293,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: false, refusal: 'boom' });
     const report = recordingReporter();
 
-    registerInstall(accessTo(root), fakeInstance(), report, installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), report, installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
@@ -326,7 +307,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: true });
     const warnIfFomod = vi.fn();
 
-    registerInstall(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
+    registerModInstallForDownloadedFile(accessTo(root), fakeInstance(), recordingReporter(), installDeps({ warnIfFomod }));
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(warnIfFomod).toHaveBeenCalledWith('foo', true));
@@ -402,28 +383,25 @@ describe('registerDownloadsSingleRowCommands', () => {
   });
 });
 
-// ── the upgrade pick (install on a download whose mod id is already installed) ──────────────
-
-// The row's own Nexus ids, as the Instance read them off the sidecar.
-const NEXUS_IDS = { modID: '111', fileID: '999' };
+const ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR = { modID: '111', fileID: '999' };
 
 interface FakeUpgradeItem { label: string; description?: string; choice: unknown }
 
 describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows one row per candidate — file-id match named and first — plus a trailing new-mod row', async () => {
+  it('shows one row per candidate — file-id match named and first — plus a trailing new-mod row, and pre-selects the file-id match', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([
       mod({ name: 'No Match', nexusId: '111', version: '1.0' }),
       mod({ name: 'The Match', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -432,7 +410,6 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
       { label: 'Install as a new mod…', choice: { kind: 'new' } },
     ]);
-    // Tier 1 present: the fileId match is pre-selected, not the tierless mod ahead of it in list order.
     expect(qp.activeItems).toEqual([{ label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } }]);
   });
 
@@ -442,11 +419,11 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
     ]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -462,11 +439,11 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
       mod({ name: 'By Name', nexusId: '111', version: '1.0', archiveFilename: 'foo.7z' }),
       mod({ name: 'By File Id', nexusId: '111', version: '2.0', installedFiles: [{ modid: '111', fileid: '999' }] }),
     ]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -477,18 +454,15 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     ]);
   });
 
-  // Neither tier: a mod shares only the Nexus mod id (still listed, tierless, per story 1) but
-  // "Install as a new mod…" — last in the list — is what is pre-selected, never the tierless mod
-  // ahead of it.
   it('pre-selects "Install as a new mod…" when neither tier matches, even with a tierless mod listed', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Some Mod', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -503,13 +477,13 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
     const nameNewMod = vi.fn();
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps({ nameNewMod }));
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps({ nameNewMod }));
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
 
@@ -526,12 +500,12 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, accept } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     accept({ label: 'Install as a new mod…', choice: { kind: 'new' } });
 
@@ -547,16 +521,14 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
-    // A macrotask boundary, not a microtask one: the resolved pick still has to unwind through
-    // pickUpgradeChoice's and installArchive's own awaits before the early return lands.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await afterAMacrotaskNotAMicrotask();
 
     expect(installFromArchive).not.toHaveBeenCalled();
   });
@@ -567,7 +539,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z'));
 
     await vi.waitFor(() => {
@@ -585,7 +557,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
     invoke('modbench.mod.install', node(root, 'foo.7z', { modID: '222' }));
 
     await vi.waitFor(() => {
@@ -597,19 +569,17 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     expect(createQuickPick).not.toHaveBeenCalled();
   });
 
-  // Case-folding through the pick, not only selectUpgradeCandidates' own pure test: the mod's
-  // installationFile and the download's filename differ only in case, and still win tier 2.
   it('matches an installationFile candidate through the pick with a differently-cased filename', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'Foo.7z');
     const instance = fakeInstance([
       mod({ name: 'Harder VATS', nexusId: '111', version: '1.0', archiveFilename: 'FOO.7Z' }),
     ]);
-    const { qp, escape } = makeFakeQuickPick<FakeUpgradeItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeUpgradeItem>();
     createQuickPick.mockReturnValue(qp);
 
-    registerInstall(accessTo(root), instance, recordingReporter(), installDeps());
-    invoke('modbench.mod.install', node(root, 'Foo.7z', NEXUS_IDS));
+    registerModInstallForDownloadedFile(accessTo(root), instance, recordingReporter(), installDeps());
+    invoke('modbench.mod.install', node(root, 'Foo.7z', ROW_NEXUS_IDS_READ_OFF_THE_SIDECAR));
     await vi.waitFor(() => expect(createQuickPick).toHaveBeenCalled());
     escape();
 
@@ -681,16 +651,14 @@ describe('registerDownloadsMultiRowCommands', () => {
     await invoke('modbench.downloadedFile.include', node(root, 'excluded.7z'), [node(root, 'excluded.7z'), node(root, 'already-visible.7z')]);
 
     expect(await readFile(excluded, 'utf8')).toContain('removed=false');
-    // Already visible by default: nothing to clear, so its `.meta` gains no `removed` line.
     expect(await readFile(already, 'utf8')).toBe('[General]\r\n');
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
-  it('exclude: a refused write is reported once as the selection outcome', async () => {
+  it('exclude: a refused write, from a stale row with no archive on disk, is reported once as the selection outcome', async () => {
     const root = await makeInstanceRoot();
     const report = recordingReporter();
 
-    // No archive on disk: the row is stale, so every name in the (one-item) selection refuses.
     registerDownloadsMultiRowCommands(accessTo(root), report, scriptedDialog(), trash, downloadsLog, () => [], marks);
     invoke('modbench.downloadedFile.exclude', node(root, 'foo.7z'));
 
@@ -776,12 +744,10 @@ describe('registerDownloadsMultiRowCommands', () => {
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
   });
 
-  // The negative case on a destructive operation — the single most valuable assertion in this
-  // group: declining the confirmation must trash nothing.
-  it('delete: on confirm-cancel, does not trash anything', async () => {
+  it('delete: when the user dismisses the confirmation instead of choosing Delete, does not trash anything', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
+    const ask = scriptedDialog(undefined);
 
     registerDownloadsMultiRowCommands(accessTo(root), recordingReporter(), ask, trash, downloadsLog, () => [], marks);
     await invoke('modbench.downloadedFile.delete', node(root, 'foo.7z'));
@@ -831,7 +797,6 @@ describe('registerDownloadsMultiRowCommands', () => {
   });
 });
 
-// ── modbench.downloadedFile.exclude / include over a selection ──────────────
 describe('modbench.downloadedFile.exclude / include — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -839,7 +804,6 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
-    // No archive for 'gone.7z': a stale row in the selection.
     const reporter = recordingReporter();
 
     registerDownloadsMultiRowCommands(accessTo(root), reporter, scriptedDialog(), trash, downloadsLog, () => [], marks);
@@ -899,7 +863,6 @@ describe('modbench.downloadedFile.exclude / include — a multi-name selection',
   });
 });
 
-// ── modbench.downloadedFile.delete over a selection ─────────────────────────
 describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => trash.mockReset());
@@ -981,8 +944,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
   });
 
-  // downloads.md, Pickers and confirmations, Delete: names the file (or the count), says trash,
-  // and says the installed mod is untouched.
   it('names the one file, says trash, and says the installed mod is untouched', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
@@ -1014,8 +975,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     expect(question).toMatch(/installed mod.*untouched/i);
   });
 
-  // The file itself always lands first (the corpus and unit-level tests pin the order); this is
-  // the view's own contract with the box: a `.meta` left behind is logged, never notified.
   it('a `.meta` left behind after the file landed is one Output line, no notification', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
@@ -1038,9 +997,7 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // VS Code invokes a keybinding's command with neither a clicked row nor a selection array, so
-  // the Delete key can only reach the current selection through this fallback.
-  it('with no clicked row and no selection array, deletes the view\'s own current selection', async () => {
+  it('with no clicked row and no selection array, as VS Code invokes a keybinding\'s command, deletes the view\'s own current selection', async () => {
     const root = await makeInstanceRoot();
     const a = await writeArchive(root, 'a.7z');
     const b = await writeArchive(root, 'b.7z');
@@ -1068,8 +1025,6 @@ describe('modbench.downloadedFile.delete — a multi-name selection', () => {
   });
 });
 
-// ── registerDownloadsSortCommand ─────────────────────────────────────────────
-
 interface FakeSortItem { label: string; column: string; descending: boolean }
 
 describe('registerDownloadsSortCommand', () => {
@@ -1082,7 +1037,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('applies the picked option to DownloadsProvider.setSort', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, accept } = makeFakeQuickPick<FakeSortItem>();
+    const { qp, accept } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1097,7 +1052,7 @@ describe('registerDownloadsSortCommand', () => {
 
   it('does nothing when Esc is pressed', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1109,10 +1064,9 @@ describe('registerDownloadsSortCommand', () => {
     expect(provider.setSort).not.toHaveBeenCalled();
   });
 
-  // downloads.md, Order and view state, story 2: "The pick marks the current sort."
   it('pre-selects the item matching the provider\'s current sort', async () => {
     const provider = fakeDownloadsProvider({ column: 'size', descending: false });
-    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1123,10 +1077,9 @@ describe('registerDownloadsSortCommand', () => {
     expect(qp.activeItems).toEqual([{ label: 'Size (Smallest First)', column: 'size', descending: false }]);
   });
 
-  // The spec default (Filetime, descending), pre-selected when the provider has never been resorted.
   it('pre-selects Filetime (Newest First) at the default sort', async () => {
     const provider = fakeDownloadsProvider();
-    const { qp, escape } = makeFakeQuickPick<FakeSortItem>();
+    const { qp, escape } = makeFakeQuickPickWhoseHideFiresOnDidHideAsTheRealOneDoes<FakeSortItem>();
     createQuickPick.mockReturnValue(qp);
 
     registerDownloadsSortCommand(provider);
@@ -1137,8 +1090,6 @@ describe('registerDownloadsSortCommand', () => {
     expect(qp.activeItems).toEqual([{ label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true }]);
   });
 });
-
-// ── registerDownloadsExcludedToggleCommands ────────────────────────────────────
 
 describe('registerDownloadsExcludedToggleCommands', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -1172,9 +1123,7 @@ describe('registerDownloadsExcludedToggleCommands', () => {
   });
 });
 
-// commands.md, The surface supplies the Argument: the palette hands a gesture no row, so each takes
-// the Downloads view's own selection.
-describe('the Downloads gestures from the palette act on the view\'s selection', () => {
+describe('the Downloads gestures from the palette, handed no row, act on the view\'s selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('open opens the one selected file', async () => {
