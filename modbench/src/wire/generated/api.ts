@@ -669,6 +669,7 @@ export interface components {
             isRecordFormKey: boolean;
             ignoredInConflicts: boolean;
             isVersionControlInfo1: boolean;
+            isEditorId: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

@@ -25,6 +25,16 @@ public sealed class FieldOrderSchemaTests
             .Select(pair => $"{where}: {pair.First} before {pair.Second}");
     }
 
+    [Theory]
+    [InlineData("weap")]
+    [InlineData("gmst")]
+    public void ARecordsFirstField_IsItsEditorID_AsItsFileHoldsItAfterTheHeader(string table)
+    {
+        var first = Schemas[table].RecordColumns.First(c => !c.Field.IsRecordHeaderMember && !c.Field.IsDiscriminator);
+
+        Assert.Equal("EditorID", first.Name);
+    }
+
     [Fact]
     public void EveryRecordsFields_AreInTheOrderItsFileHoldsThem_AsMutagensFieldIndexNumbersThem()
     {

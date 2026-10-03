@@ -132,7 +132,6 @@ internal sealed record RecordEmptying(long Flags, long Changed, bool Deletes, bo
         return schema.RecordColumns
             .Where(c => !c.Field.IsRecordHeaderMember && !c.Field.IsDiscriminator)
             .Select(c => c.PropertyName)
-            .Where(name => !children.Contains(name, StringComparer.Ordinal))
-            .Append(RecordMembers.EditorId);
+            .Where(name => !children.Contains(name, StringComparer.Ordinal));
     }
 }

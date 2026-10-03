@@ -2198,6 +2198,27 @@ describe('RecordPanel — the Record Header', () => {
     expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('VersionControl')], value: 7 });
   });
 
+  it('edits a Partial Form copy\'s EditorID, which the copy keeps', async () => {
+    vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
+    const editorIdMeta = fieldMeta({ name: 'EditorID', type: 'string', allowsNull: true, isEditorId: true });
+    const record = partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn();
+    const { container } = renderPanel({
+      ...record,
+      overrides: record.overrides.map(o => ({ ...o, fields: [{ metadata: editorIdMeta, value: 'Inside' }, ...o.fields] })),
+      diffs: [diffNode({ fieldName: 'EditorID', values: { 'MyMod.esp': 'Inside' }, winnerColumn: 'MyMod.esp' }), ...record.diffs],
+    }, { plugins: tracked });
+    await waitFor(() => screen.getByText('(Partial Form)'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const cell = cellOf(container, 'EditorID');
+    fireEvent.doubleClick(within(cell).getByText('Inside'));
+    const input = required(cell.querySelector('input'), 'the cell\'s input');
+    fireEvent.change(input, { target: { value: 'Renamed' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(lastPostedEnvelope(vscode.postMessage)).toEqual({ op: 'set', path: [member('EditorID')], value: 'Renamed' });
+  });
+
   it('reads a Partial Form copy\'s own field empty, opening no editor', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
     const { container } = renderPanel(partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn(), { plugins: tracked });

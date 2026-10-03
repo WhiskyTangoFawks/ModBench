@@ -20,6 +20,7 @@
         "Base": "084912:Fallout4.esm",
         "Comments": null,
         "Count": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -105,6 +106,7 @@
         "Base": "084912:Fallout4.esm",
         "Comments": null,
         "Count": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -192,6 +194,7 @@
         "Base": "084912:Fallout4.esm",
         "Comments": null,
         "Count": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -272,6 +275,7 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_AttackMarker_SentryBot",
         "Flags": [],
         "ForcedLocRefType": null,
         "FormKey": "24A313:Fallout4.esm",
@@ -357,6 +361,7 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_AttackMarker_Molerat",
         "Flags": [],
         "ForcedLocRefType": null,
         "FormKey": "24A314:Fallout4.esm",
@@ -442,6 +447,7 @@
         "AnimationSound": null,
         "Conditions": null,
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_AttackMarker_FeralGhoul",
         "Flags": [],
         "ForcedLocRefType": null,
         "FormKey": "24A315:Fallout4.esm",
@@ -561,6 +567,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "cc_Armor_Power_X01_Helm",
         "EquipmentType": null,
         "FormKey": "24A3FE:Fallout4.esm",
         "FormVersion": null,
@@ -833,6 +840,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "cc_Armor_Power_X01_LegLeft",
         "EquipmentType": null,
         "FormKey": "24A3FF:Fallout4.esm",
         "FormVersion": null,
@@ -1081,6 +1089,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "cc_Armor_Power_X01_LegRight",
         "EquipmentType": null,
         "FormKey": "24A400:Fallout4.esm",
         "FormVersion": null,
@@ -1761,6 +1770,7 @@
           3090262729,
           3190766461
         ],
+        "EditorID": null,
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
@@ -12192,6 +12202,7 @@
           3646541521,
           3883333036
         ],
+        "EditorID": null,
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
@@ -26248,6 +26259,7 @@
           2572799697,
           2809591212
         ],
+        "EditorID": null,
         "EncounterZone": null,
         "ExteriorLod": null,
         "FactionRank": null,
@@ -40896,6 +40908,7 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
+        "EditorID": null,
         "FormKey": "0048EB:Fallout4.esm",
         "FormVersion": 76,
         "Keyword": null,
@@ -50792,6 +50805,7 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
+        "EditorID": null,
         "FormKey": "0057DD:Fallout4.esm",
         "FormVersion": 42,
         "Keyword": null,
@@ -53786,6 +53800,7 @@
       "Fields": {
         "Branch": null,
         "Category": "Misc",
+        "EditorID": null,
         "FormKey": "00581D:Fallout4.esm",
         "FormVersion": 128,
         "Keyword": null,
@@ -55191,6 +55206,7 @@
       "EditorId": "DialogueDiamondCitySharedBranch",
       "Fields": {
         "Category": "Player",
+        "EditorID": "DialogueDiamondCitySharedBranch",
         "Flags": [
           "TopLevel"
         ],
@@ -55214,6 +55230,7 @@
       "EditorId": "DialogueGenericPlayerSharedQuestion",
       "Fields": {
         "Category": "Player",
+        "EditorID": "DialogueGenericPlayerSharedQuestion",
         "Flags": [
           "TopLevel"
         ],
@@ -55237,6 +55254,7 @@
       "EditorId": "DialogueConcordAreaSharedBranch",
       "Fields": {
         "Category": "Player",
+        "EditorID": "DialogueConcordAreaSharedBranch",
         "Flags": [
           "TopLevel"
         ],
@@ -55266,6 +55284,7 @@
           "Arrest": true,
           "AttackOnSight": true
         },
+        "EditorID": "CIS_CompanionInSceneFaction",
         "ExteriorJailMarker": null,
         "Flags": [
           "HiddenFromPC"
@@ -55311,6 +55330,7 @@
           "Arrest": true,
           "AttackOnSight": true
         },
+        "EditorID": "TunnelingRaceNoDirtFromFurniture",
         "ExteriorJailMarker": null,
         "Flags": null,
         "FollowerWaitMarker": null,
@@ -55347,6 +55367,7 @@
           "Arrest": true,
           "AttackOnSight": true
         },
+        "EditorID": "CC_PetDogFaction",
         "ExteriorJailMarker": null,
         "Flags": null,
         "FollowerWaitMarker": null,
@@ -55385,6 +55406,7 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
       "Fields": {
         "Data": 0.0,
+        "EditorID": "VRWorkshopShared_TutorialShown_VRWorkshop",
         "FormKey": "24A340:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55405,6 +55427,7 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
       "Fields": {
         "Data": 0.0,
+        "EditorID": "VRWorkshopShared_TutorialShown_VRAttackMarker",
         "FormKey": "24A341:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55425,6 +55448,7 @@
       "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
       "Fields": {
         "Data": 0.0,
+        "EditorID": "VRWorkshopShared_TutorialShown_VRPod",
         "FormKey": "24A342:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55452,6 +55476,7 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
+        "EditorID": null,
         "Flags": {
           "Flags": [
             "Random"
@@ -55512,6 +55537,7 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
+        "EditorID": null,
         "Flags": {
           "Flags": [
             "Random"
@@ -55572,6 +55598,7 @@
         "Challenge": null,
         "Conditions": null,
         "DialogGroup": "0EC527:Fallout4.esm",
+        "EditorID": null,
         "Flags": {
           "Flags": [
             "Random"
@@ -55631,6 +55658,7 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
+        "EditorID": "dn_HasPiggyBank",
         "FormKey": "24A403:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55654,6 +55682,7 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
+        "EditorID": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
         "FormKey": "24A405:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55680,6 +55709,7 @@
         "AttractionRule": null,
         "Color": "#00FFFFFF",
         "DisplayName": null,
+        "EditorID": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
         "FormKey": "24A406:Fallout4.esm",
         "FormVersion": null,
         "MajorRecordFlagsRaw": null,
@@ -55717,6 +55747,7 @@
           }
         ],
         "Destructible": null,
+        "EditorID": "shipment_Wood_250",
         "FeaturedItemMessage": null,
         "FormKey": "24A068:Fallout4.esm",
         "FormVersion": null,
@@ -55795,6 +55826,7 @@
           }
         ],
         "Destructible": null,
+        "EditorID": "shipment_Rubber_large",
         "FeaturedItemMessage": null,
         "FormKey": "24A069:Fallout4.esm",
         "FormVersion": null,
@@ -55873,6 +55905,7 @@
           }
         ],
         "Destructible": null,
+        "EditorID": "shipment_Ceramic_large",
         "FeaturedItemMessage": null,
         "FormKey": "24A06B:Fallout4.esm",
         "FormVersion": null,
@@ -55989,6 +56022,7 @@
         "DefaultTemplate": null,
         "Destructible": null,
         "DispositionBase": 35,
+        "EditorID": "EncRadRoachAmbushLegendary",
         "EnergyLevel": 75,
         "FaceMorphs": null,
         "FaceTintingLayers": null,
@@ -56259,6 +56293,7 @@
         "DefaultTemplate": "2499C7:Fallout4.esm",
         "Destructible": null,
         "DispositionBase": 35,
+        "EditorID": "LvlMutantHoundLegendary",
         "EnergyLevel": 50,
         "FaceMorphs": null,
         "FaceTintingLayers": null,
@@ -56467,6 +56502,7 @@
         "DefaultTemplate": "1628EF:Fallout4.esm",
         "Destructible": null,
         "DispositionBase": 35,
+        "EditorID": "VRWorkshopShared_LvlSynthCourser",
         "EnergyLevel": 50,
         "FaceMorphs": null,
         "FaceTintingLayers": null,
@@ -134897,6 +134933,7 @@
             "VersionControl": 270025
           }
         ],
+        "EditorID": "DialogueDiamondCity",
         "Filter": "Dialogue\\Diamond City\\",
         "FormKey": "003648:Fallout4.esm",
         "FormVersion": null,
@@ -157808,6 +157845,7 @@
             "VersionControl": 270078
           }
         ],
+        "EditorID": "DialogueGenericPlayer",
         "Filter": "Dialogue\\Generic\\",
         "FormKey": "0179EF:Fallout4.esm",
         "FormVersion": 122,
@@ -179662,6 +179700,7 @@
             "VersionControl": 6168310
           }
         ],
+        "EditorID": "DialogueConcordArea",
         "Filter": "Dialogue\\Concord\\",
         "FormKey": "0179F3:Fallout4.esm",
         "FormVersion": 130,
@@ -184389,6 +184428,7 @@
         },
         "DialogueQuest": "09B207:Fallout4.esm",
         "DispemberBloodArt": null,
+        "EditorID": "FeralGhoulGlowingRace",
         "EquipmentFlags": [
           "Shield",
           "Torch",
@@ -184699,6 +184739,7 @@
         },
         "DialogueQuest": null,
         "DispemberBloodArt": null,
+        "EditorID": "RaiderDogRace",
         "EquipmentFlags": [
           "Shield",
           "Torch",
@@ -185030,6 +185071,7 @@
         },
         "DialogueQuest": "0CFB1D:Fallout4.esm",
         "DispemberBloodArt": null,
+        "EditorID": "TurretWorkshopRace",
         "EquipmentFlags": [
           "Gun",
           "Spell",
@@ -185285,6 +185327,7 @@
         "CurrentZoneCell": null,
         "CurrentZoneReference": null,
         "DistantLodData": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -185376,6 +185419,7 @@
         "CurrentZoneCell": null,
         "CurrentZoneReference": null,
         "DistantLodData": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -185465,6 +185509,7 @@
         "CurrentZoneCell": null,
         "CurrentZoneReference": null,
         "DistantLodData": null,
+        "EditorID": null,
         "Emittance": null,
         "EnableParent": null,
         "EncounterZone": null,
@@ -185626,6 +185671,7 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": 650.0,
+        "EditorID": "ArturoGreetScene",
         "Flags": [
           "ShowAllText",
           "0x20",
@@ -185781,6 +185827,7 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": null,
+        "EditorID": "MyrnaGreetScene",
         "Flags": [
           "ShowAllText",
           "0x20",
@@ -185933,6 +185980,7 @@
         "CameraDistanceOverride": null,
         "Conditions": null,
         "DialogueDistanceOverride": null,
+        "EditorID": "NatGreetScene",
         "Flags": [
           "ShowAllText",
           "0x20",
@@ -186046,6 +186094,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_SuperSledge_NonPlayable",
         "EmbeddedWeaponMod": null,
         "EnchantmentAmount": null,
         "EquipSound": "2498AE:Fallout4.esm",
@@ -186272,6 +186321,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_AlienBlaster_NonPlayable",
         "EmbeddedWeaponMod": null,
         "EnchantmentAmount": 10000,
         "EquipSound": null,
@@ -186469,6 +186519,7 @@
           "Value": ""
         },
         "Destructible": null,
+        "EditorID": "VRWorkshopShared_GaussRifle_NonPlayable",
         "EmbeddedWeaponMod": null,
         "EnchantmentAmount": null,
         "EquipSound": null,
@@ -186736,6 +186787,7 @@
         "CloudModel": null,
         "DefaultLevelData": null,
         "DistantLodMultiplier": null,
+        "EditorID": "Commonwealth",
         "EncounterZone": null,
         "FixedDimensionsCenterCell": null,
         "Flags": null,

@@ -54,6 +54,12 @@ public sealed class SqlDoorSchemaTests : IDisposable
         Assert.Contains(Listing(), i => i.Plugin == BaseKey.Name);
     }
 
+    [Fact]
+    public void ARecordTypeView_ExposesTheEditorIdOnce_AsItsIdentityColumn()
+    {
+        Assert.ThrowsAny<Exception>(() => _index.SetFilter("SELECT form_key FROM npc_ WHERE \"EditorID\" = 'SharedNpc'", "filter.sql"));
+    }
+
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]

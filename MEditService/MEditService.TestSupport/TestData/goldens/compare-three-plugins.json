@@ -1,7 +1,7 @@
 {
   "conflicted-conditions": {
     "conflictAll": "Override",
-    "diffFieldCount": 6,
+    "diffFieldCount": 7,
     "diffs": [
       {
         "cellStates": {
@@ -381,6 +381,7 @@
           "CreatedObject": null,
           "CreatedObjectCounts": null,
           "Description": null,
+          "EditorID": "ConflictedRecipe",
           "FormKey": "000803:Base.esm",
           "FormVersion": null,
           "MajorRecordFlagsRaw": null,
@@ -426,6 +427,7 @@
           "CreatedObject": null,
           "CreatedObjectCounts": null,
           "Description": null,
+          "EditorID": "ConflictedRecipe",
           "FormKey": "000803:Base.esm",
           "FormVersion": null,
           "MajorRecordFlagsRaw": null,
@@ -451,7 +453,7 @@
   },
   "conflicted-npc": {
     "conflictAll": "Conflict",
-    "diffFieldCount": 9,
+    "diffFieldCount": 10,
     "diffs": [
       {
         "cellStates": {
@@ -571,6 +573,7 @@
           "DefaultTemplate": null,
           "Destructible": null,
           "DispositionBase": null,
+          "EditorID": "ConflictedNPC",
           "EnergyLevel": null,
           "FaceMorphs": null,
           "FaceTintingLayers": null,
@@ -682,6 +685,7 @@
           "DefaultTemplate": null,
           "Destructible": null,
           "DispositionBase": null,
+          "EditorID": "ConflictedNPC",
           "EnergyLevel": null,
           "FaceMorphs": null,
           "FaceTintingLayers": null,
@@ -793,6 +797,7 @@
           "DefaultTemplate": null,
           "Destructible": null,
           "DispositionBase": null,
+          "EditorID": "ConflictedNPC",
           "EnergyLevel": null,
           "FaceMorphs": null,
           "FaceTintingLayers": null,
@@ -875,7 +880,7 @@
   },
   "injected-npc": {
     "conflictAll": "OnlyOne",
-    "diffFieldCount": 7,
+    "diffFieldCount": 8,
     "diffs": [],
     "overrides": [
       {
@@ -911,6 +916,7 @@
           "DefaultTemplate": null,
           "Destructible": null,
           "DispositionBase": null,
+          "EditorID": "InjectedNPC",
           "EnergyLevel": null,
           "FaceMorphs": null,
           "FaceTintingLayers": null,
@@ -993,7 +999,7 @@
   },
   "sole-npc": {
     "conflictAll": "OnlyOne",
-    "diffFieldCount": 7,
+    "diffFieldCount": 8,
     "diffs": [],
     "overrides": [
       {
@@ -1029,6 +1035,7 @@
           "DefaultTemplate": null,
           "Destructible": null,
           "DispositionBase": null,
+          "EditorID": "SoleNPC",
           "EnergyLevel": null,
           "FaceMorphs": null,
           "FaceTintingLayers": null,
@@ -1108,7 +1115,7 @@
   },
   "unchanged-weapon": {
     "conflictAll": "NoConflict",
-    "diffFieldCount": 7,
+    "diffFieldCount": 8,
     "diffs": [],
     "overrides": [
       {
@@ -1139,6 +1146,7 @@
           "DamageTypes": null,
           "Description": null,
           "Destructible": null,
+          "EditorID": "UnchangedWeapon",
           "EmbeddedWeaponMod": null,
           "EnchantmentAmount": null,
           "EquipSound": null,
@@ -1228,6 +1236,7 @@
           "DamageTypes": null,
           "Description": null,
           "Destructible": null,
+          "EditorID": "UnchangedWeapon",
           "EmbeddedWeaponMod": null,
           "EnchantmentAmount": null,
           "EquipSound": null,

@@ -457,13 +457,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   };
   const headerRows = headerExpanded ? headerDiffs.flatMap(headerMemberRows) : [];
   // A Partial Form column's own fields are nulled by the classifier: none is absent by default,
-  // since the record's own fields are not there to be members of.
-  const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(
-    diff => buildRows(diff, fieldMetaMap[diff.fieldName], {
+  // since the record's own fields are not there to be members of. It keeps its EditorID.
+  const fieldRows = diffs.filter(d => !isHeaderMember(d)).flatMap(diff => {
+    const meta = fieldMetaMap[diff.fieldName];
+    const kept = meta?.isEditorId === true;
+    return buildRows(diff, meta, {
       path: [], rootField: diff.fieldName, rowKey: diff.fieldName, parent: null,
-      present: column => !partialFormColumns.has(column), editable: ownFieldEditableColumns, depth: 0,
-    }),
-  );
+      present: column => kept || !partialFormColumns.has(column),
+      editable: kept ? editableColumns : ownFieldEditableColumns, depth: 0,
+    });
+  });
 
   return (
     <div style={containerStyle}>
