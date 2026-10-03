@@ -13,7 +13,7 @@ Every other plugin editor writes the binary in place and leaves you with `.bak` 
 - **Compile** writes the binary from the source when you say so. The compiler refuses what it can't emit and reports the rest as Problems.
 - **The plugin stays what every tool sees.** The game, MO2 and xEdit load the plugin binary. Compile writes it from the source, which is the truth (ADR-0007). Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
-The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md) and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).
+The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md) and [ADR-0006](docs/adr/0006-a-tracked-plugins-truth-is-its-source.md).
 
 ## What works today
 

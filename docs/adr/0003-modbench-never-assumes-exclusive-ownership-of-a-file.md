@@ -14,5 +14,5 @@ Any tool or the user can change any file Modbench reads, at any moment ([princip
 - **Refuse every write to the mod until the user answers a question.** Modbench's part ends at the notice. A gate on every write stands between the user and the work ([principles](../principles.md), *Minimal by default*).
 - **Offer answers on the notice: commit to `main` as a new baseline, or apply to the working tree.** Each answer chains several steps that the user does with git.
 - **Watch every tracked file, not only the plugin.** Git already shows every tracked file except the binary.
-- **Git tracks the binary, with a diff driver that shows its records.** The plugin source is the one truth git versions ([ADR-0006](0006-decompilation-is-provably-faithful.md)).
+- **Git tracks the binary, with a diff driver that shows its records.** The plugin source is the one truth git versions ([ADR-0006](0006-a-tracked-plugins-truth-is-its-source.md)).
 - **Decompile an external change into the working tree at once.** Modbench would write the user's working tree unasked.

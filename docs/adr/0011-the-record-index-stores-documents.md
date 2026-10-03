@@ -1,6 +1,6 @@
 # The record index stores documents
 
-The record index holds every record as a document in one table: the record's source JSON, the same bytes as its source file ([ADR-0005](0005-the-document-is-the-record-model.md), [ADR-0006](0006-decompilation-is-provably-faithful.md)), beside its identity columns. No record type has a table of its own. The extracted index tables, form lookup, references and placement, are populated from the documents at ingest.
+The record index holds every record as a document in one table: the record's source JSON, the same bytes as its source file ([ADR-0005](0005-the-document-is-the-record-model.md), [ADR-0006](0006-a-tracked-plugins-truth-is-its-source.md)), beside its identity columns. No record type has a table of its own. The extracted index tables, form lookup, references and placement, are populated from the documents at ingest.
 
 ## Strategic invariants
 

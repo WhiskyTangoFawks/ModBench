@@ -1,6 +1,6 @@
 # The document is the record model
 
-A record is one JSON document, reflected from Mutagen's own record types ([principles](../principles.md), *Mutagen's data*). It is the only record model: on the wire, on disk ([ADR-0006](0006-decompilation-is-provably-faithful.md)) and in the record index ([ADR-0011](0011-the-record-index-stores-documents.md)). There is no DTO beside it, no parsed struct for a special concern and no new wire shape for a new concern: a concern that looks special is a field, with a field's gestures.
+A record is one JSON document, reflected from Mutagen's own record types ([principles](../principles.md), *Mutagen's data*). It is the only record model: on the wire, on disk ([ADR-0006](0006-a-tracked-plugins-truth-is-its-source.md)) and in the record index ([ADR-0011](0011-the-record-index-stores-documents.md)). There is no DTO beside it, no parsed struct for a special concern and no new wire shape for a new concern: a concern that looks special is a field, with a field's gestures.
 
 ## Consequences
 
