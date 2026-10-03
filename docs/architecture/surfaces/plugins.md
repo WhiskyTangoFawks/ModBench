@@ -47,7 +47,7 @@ A plugin's statuses follow. The first that holds, in this order, sets the icon:
 | Changed outside Modbench | it is tracked, and its bytes differ from what Modbench last wrote, or either cannot be read | `$(warning)` yellow | changed outside Modbench |
 | Malformed | its bytes depart from what the Creation Kit writes | `$(warning)` yellow | malformed |
 
-- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. *ADR-0012*
+- A master issue never disables the plugin or cascades to its dependants. The check box stays as I set it. *xedit.md, divergence 28*
 - Before the snapshot is indexed, a plugin shows no master status. That means not yet checked, not no issues.
 - A later snapshot keeps the last statuses until the new ones land.
 - A plugin that failed to read stays failed until its bytes change or I refresh.
