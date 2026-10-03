@@ -110,14 +110,19 @@ describe('a mod opens into its files as a folder tree (mods.md, The tree, story 
     ]);
   });
 
-  it('a folder with no files is a row with no expander, as a mod with none is', async () => {
+  it('an empty folder is a row with no expander, and a folder holding only an empty folder opens into it, as the Explorer\'s do', async () => {
     const provider = providerOver([mod('Armour')], { Armour: [file('Armour.esp')] }, [], {
-      byMod: { Armour: [{ relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false }] },
+      byMod: { Armour: [
+        { relativePath: 'empty', path: '/instance/mods/Armour/empty', excluded: false },
+        { relativePath: 'outer', path: '/instance/mods/Armour/outer', excluded: false },
+        { relativePath: 'outer/inner', path: '/instance/mods/Armour/outer/inner', excluded: false },
+      ] },
     });
     const children = await provider.getChildren(await rootOf(provider, ModNode, 'Armour'));
 
     expect(children.map((child) => [`${child.kind} ${labelOf(child)}`, child.collapsibleState]))
-      .toEqual([['folder empty', None], ['file Armour.esp', None]]);
+      .toEqual([['folder empty', None], ['folder outer', Collapsed], ['file Armour.esp', None]]);
+    expect(shown(await provider.getChildren(present(children[1], 'outer')))).toEqual(['folder inner']);
   });
 
   it('a disabled mod opens too', async () => {

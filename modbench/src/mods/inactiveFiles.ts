@@ -18,15 +18,14 @@ const sameOrigin = (a: FileOrigin, b: FileOrigin): boolean =>
 
 type FilesValue = Pick<InstanceValue, 'mods' | 'files' | 'filesByMod' | 'foldersByMod' | 'overwriteFiles' | 'overwriteFolders'>;
 
-// What keeps a file or a folder from the game, whatever wins its path.
-function whyWithheld(enabled: boolean, entry: OriginFolder): InactiveReason | undefined {
+function whyNotDeployed(enabled: boolean, entry: OriginFolder): InactiveReason | undefined {
   if (!enabled) return 'modDisabled';
   return entry.excluded ? 'excluded' : undefined;
 }
 
-function whyFile(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): InactiveReason | undefined {
+function whyFileNotGotten(value: FilesValue, origin: FileOrigin, enabled: boolean, file: OriginFile): InactiveReason | undefined {
   const winner = value.files.get(file.relativePath)?.winnerOrigin;
-  return whyWithheld(enabled, file) ?? (winner !== undefined && !sameOrigin(winner, origin) ? 'loses' : undefined);
+  return whyNotDeployed(enabled, file) ?? (winner !== undefined && !sameOrigin(winner, origin) ? 'loses' : undefined);
 }
 
 /** Each file and folder the game does not get, and why, by the URI of its row in the Mods tree and
@@ -46,8 +45,8 @@ export function inactiveFiles(value: FilesValue): ReadonlyMap<string, InactiveRe
     { origin: RUNTIME_OUTPUT, enabled: true, files: value.overwriteFiles, folders: value.overwriteFolders },
   ];
   for (const { origin, enabled, files, folders } of origins) {
-    for (const folder of folders) add(origin, folder, whyWithheld(enabled, folder));
-    for (const file of files) add(origin, file, whyFile(value, origin, enabled, file));
+    for (const folder of folders) add(origin, folder, whyNotDeployed(enabled, folder));
+    for (const file of files) add(origin, file, whyFileNotGotten(value, origin, enabled, file));
   }
   return reasons;
 }

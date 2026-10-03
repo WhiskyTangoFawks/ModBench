@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_NODE_KIND, type ModlistNode, type ModNode, type OverwriteNode, type SeparatorNode } from './ModListProvider';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import type { ModlistNode, ModNode, OverwriteNode, SeparatorNode } from './ModListProvider';
 import type { FileNode, FolderNode } from './modFiles';
 
 /** The rows a Mods gesture's Argument is taken from. */
@@ -49,7 +50,6 @@ type ArgumentRow = ModNode | SeparatorNode | OverwriteNode | FolderNode | FileNo
 type ArgumentKind = ArgumentRow['kind'];
 export type RowOf<K extends ArgumentKind> = Extract<ArgumentRow, { kind: K }>;
 
-/** Whether a value is a Mods row of one of the kinds given. */
 export const isRowOf = <K extends ArgumentKind>(kinds: readonly K[]) =>
   (row: unknown): row is RowOf<K> => isRow(row) && kinds.some((kind) => kind === row.kind);
 
@@ -60,9 +60,9 @@ export function singularArgument<K extends ArgumentKind>(entry: GestureEntry, ..
   return anchor !== undefined && isRowOf(kinds)(anchor) ? anchor : undefined;
 }
 
-/** Open folder's Argument. Its kinds are read at each call: this module and ModListProvider import
- *  each other, so a kind read at load can predate ModListProvider's. */
-export const openFolderArgument = (entry: GestureEntry) => singularArgument(entry, 'mod', OVERWRITE_NODE_KIND, 'folder', 'file');
+const OPEN_FOLDER_KINDS = ['mod', OVERWRITE_ORIGIN, 'folder', 'file'] as const;
+
+export const openFolderArgument = (entry: GestureEntry) => singularArgument(entry, ...OPEN_FOLDER_KINDS);
 
 /** Move's own Argument: one kind at a time, so a mixed selection narrows to the right-clicked or
  *  focused row's kind. For the catalog's own plural (commands.md, Argument: "the whole

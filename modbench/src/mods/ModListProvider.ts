@@ -16,10 +16,6 @@ export type SortDirection = 'losingAtTop' | 'winningAtTop';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-/** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
- *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
-export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
-
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
   if (typeof value !== 'object' || value === null || !('rows' in value) || !Array.isArray(value.rows)) return false;
@@ -199,13 +195,15 @@ export function modOfRow(value: unknown): string | undefined {
 }
 
 /** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
- *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
+ *  check box and no drag, and no resourceUri, which would let a file decoration tint its label.
+ *  Its kind and `contextValue`, which package.json's `when` clauses match on, are the name the
+ *  value gives the folder. */
 export class OverwriteNode extends vscode.TreeItem {
-  readonly kind = OVERWRITE_NODE_KIND;
+  readonly kind = OVERWRITE_ORIGIN;
   constructor(public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
     super('Overwrite', expanderOver(files));
     this.id = this.kind;
-    this.contextValue = OVERWRITE_NODE_KIND;
+    this.contextValue = OVERWRITE_ORIGIN;
     const fileCount = files.length;
     if (fileCount > 0) this.description = fileCount.toLocaleString();
     this.iconPath = fileCount > 0

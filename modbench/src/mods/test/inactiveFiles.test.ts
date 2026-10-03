@@ -13,14 +13,14 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import type { FileOrigin, InstanceValue, Mod, ModlistEntry, OriginFile, OriginFolder } from '../../instanceLoader/instance';
-import { buildFileConflictIndex } from '../../instanceLoader/fileConflictIndex';
+import { buildFileConflictIndex, modOrigin, RUNTIME_OUTPUT } from '../../instanceLoader/fileConflictIndex';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { accessTo } from '../../test/mo2/adapterOver';
 import { present } from '../../ports/present';
 import { ModListProvider, ModNode, type ModlistNode } from '../ModListProvider';
 import { fileRowUri } from '../modFiles';
-import { InactiveFileDecorationProvider, inactiveFiles } from '../inactiveFiles';
+import { GREY_INACTIVE_FILES_SETTING, InactiveFileDecorationProvider, inactiveFiles } from '../inactiveFiles';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 const file = (origin: string, relativePath: string, excluded = false): OriginFile => {
@@ -48,9 +48,6 @@ async function indexedValueOf(
     overwriteFiles: overwrite.files, overwriteFolders: overwrite.folders ?? [],
   });
 }
-
-const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
-const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
 
 const whyOf = (value: InstanceValue, origin: FileOrigin, relativePath: string) =>
   inactiveFiles(value).get(fileRowUri(origin, relativePath).toString());
@@ -119,8 +116,8 @@ describe('each file of a mod or Overwrite, active or inactive and why (mods.md, 
       files: [file('overwrite', 'a.log'), file('overwrite', 'b.log', true)],
     });
 
-    expect(whyOf(value, OVERWRITE, 'a.log')).toBeUndefined();
-    expect(whyOf(value, OVERWRITE, 'b.log')).toBe('excluded');
+    expect(whyOf(value, RUNTIME_OUTPUT, 'a.log')).toBeUndefined();
+    expect(whyOf(value, RUNTIME_OUTPUT, 'b.log')).toBe('excluded');
     expect(whyOf(value, modOrigin('A'), 'a.log')).toBe('loses');
   });
 
@@ -187,7 +184,7 @@ describe('the grey on a file the game does not get, in the Mods tree and the Exp
 
     configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === 'modbench.scriptsPath' });
     expect(fired).not.toHaveBeenCalled();
-    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === 'modbench.mods.greyInactiveFiles' });
+    configuration.onDidChangeConfiguration.fire({ affectsConfiguration: (key) => key === GREY_INACTIVE_FILES_SETTING });
     expect(fired).toHaveBeenCalledWith(undefined);
   });
 });

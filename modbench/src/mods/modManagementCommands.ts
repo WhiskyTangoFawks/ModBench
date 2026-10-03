@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { ModListProvider, OVERWRITE_NODE_KIND, type ModlistNode, type SortDirection } from './ModListProvider';
+import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
+import { ModListProvider, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
   isModsKeyArgs, isRowOf, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
   singularArgument, type GestureEntry, type RowOf,
@@ -328,7 +329,7 @@ function folderOf(
   const { overwriteDir, modDirs } = instance.value.paths;
   const uriOf = (path: string | undefined) => (path === undefined ? undefined : vscode.Uri.file(path));
   switch (node.kind) {
-    case OVERWRITE_NODE_KIND: return { name: 'Overwrite', folder: uriOf(overwriteDir) };
+    case OVERWRITE_ORIGIN: return { name: 'Overwrite', folder: uriOf(overwriteDir) };
     case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
     case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
     case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };

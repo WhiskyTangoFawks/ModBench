@@ -16,9 +16,8 @@ const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0
 const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
   collator.compare(a, b) || byCodeUnit(a, b);
 
-/** No expander on a row with no files under it. */
-export const expanderOver = (files: readonly OriginFile[]): vscode.TreeItemCollapsibleState =>
-  (files.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
+export const expanderOver = (children: readonly unknown[]): vscode.TreeItemCollapsibleState =>
+  (children.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
 
 /** The URI of a file's or folder's row: its origin, and the path in it. A mod's name holds no
  *  slash, so no two rows share one. */
@@ -44,7 +43,7 @@ export class FolderNode extends vscode.TreeItem {
     public readonly folders: readonly OriginFolder[],
     name: string,
   ) {
-    super(name, expanderOver(files));
+    super(name, expanderOver([...files, ...folders]));
     fileRow(this, parent, origin, name, folder.relativePath);
     this.contextValue = 'folder';
   }
