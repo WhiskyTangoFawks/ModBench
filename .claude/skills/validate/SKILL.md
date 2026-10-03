@@ -17,18 +17,18 @@ Merge current `main` into the branch first. The gates then test the tree that wi
 
 Run `bash .claude/skills/validate/run-gates.sh --detach`. Then run `run-gates.sh --wait` in the foreground until it prints a verdict. Exit 3 means wait again. Gates queue on machine-wide slots, so one run can outlast one foreground call. The runner reads the diff since `main`, and names each gate it runs and why.
 
-A red gate is yours to fix. A failure already on `main` is a defect that already landed. It is yours to fix for the same reason. Green means the code passes the gate as the gate stands. A change to a gate, a test's assertion or a time ceiling needs the maintainer's approval, as a suppression does.
+A red gate is yours to fix. A failure already on `main` is a defect that already landed. It is yours to fix for the same reason. A gate is code, and changing it is tactical. A change serves the gate's purpose: the gate still catches every defect it exists to catch.
 
 **Criterion:** the last run, on the tree you will commit, printed `All mechanical gates passed`.
 
 ## 2. Review
 
-An author cannot see its own blind spots. The work merges only after a separate agent reviews it. `/code-review` counts, because it reviews in fresh subagents. If the work has no review and your brief sets none ahead of the merge, run `/code-review main` now.
+The work merges only after a separate agent reviews it. `/code-review` counts, because it reviews in fresh subagents. If the work has no review and your brief sets none ahead of the merge, run `/code-review main` now.
 
 Sort each finding under root CLAUDE.md's chain of authority. Note why a finding is not real. A fix that changes logic sends you back to step 1.
 
-**Criterion:** a separate agent's review covers the work, every finding has a disposition, and the gates are green on the final tree.
+**Criterion:** a separate agent's review covers the work, or your brief sets one ahead of the merge. Every finding is sorted, and the gates are green on the final tree.
 
 ## Report
 
-Quote the verdict line. Name the gates that ran and why. List each finding with its disposition.
+Quote the verdict line. Name the gates that ran and why. List each finding and how you sorted it.

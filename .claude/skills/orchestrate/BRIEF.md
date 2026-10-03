@@ -14,7 +14,7 @@ A guard test is vacuous until you have watched it fail. For every slice that arr
 
 Your turn is your life. The final message of your turn is your report, and nothing you were waiting for arrives after it. Every wait is a foreground call: Bash with `run_in_background: false` and `timeout: 600000`, or Agent with `run_in_background: false`. Work that outlasts one call is detached and polled with further foreground calls, which is how `/validate` runs the gates.
 
-Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
+Findings are handled in two ways. A bug or debt that your ticket needs, or that sits in code you touched, gets fixed here. Anything you did not fix goes in the report as a finding, with what you observed. A red gate in a box another lane holds is such a finding. A ruled-out area is neither fixed nor reported. Stop at its edge and say so. The report is your only outlet, because the tracker belongs to the orchestrator.
 
 Root CLAUDE.md's chain of authority governs your work. Your report carries every break and every strategic question in its form.
 
