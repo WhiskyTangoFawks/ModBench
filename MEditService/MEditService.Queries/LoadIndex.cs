@@ -36,8 +36,8 @@ internal static class LoadIndex
         var place = Places(snapshot, opened).Take(loadOrderIndex).Count(active => active.Style == style);
         return style switch
         {
-            MasterStyle.Small => $"{FormID.SmallMasterMarker:X2}:{place:X3}",
-            MasterStyle.Medium => $"{FormID.MediumMasterMarker:X2}:{place:X2}",
+            MasterStyle.Small => $"{FormID.SmallMasterMarker:X2} {place:X3}",
+            MasterStyle.Medium => $"{FormID.MediumMasterMarker:X2} {place:X2}",
             _ => $"{place:X2}",
         };
     }

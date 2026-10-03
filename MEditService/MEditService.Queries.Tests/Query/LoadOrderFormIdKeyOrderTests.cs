@@ -117,6 +117,6 @@ public sealed class LoadOrderFormIdKeyOrderTests
             new Placed(BasePlugin, false, false, []), new Placed(MediumPlugin, false, true, []),
             new Placed(LightPlugin, true, false, []), new Placed(TopPlugin, false, false, []));
 
-        Assert.Equal(["00", "FD:00", "FE:000", "01"], compare.Overrides.Select(o => o.LoadIndex));
+        Assert.Equal(["00", "FD 00", "FE 000", "01"], compare.Overrides.Select(o => o.LoadIndex));
     }
 }

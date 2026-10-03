@@ -8,7 +8,7 @@ public sealed class PluginResponseTests
     private static PluginRow Row(bool isTracked = false, bool isBlueprint = false, int? loadOrderIndex = 0) =>
         new(new RegisteredPlugin("Fixture.esp", "FixtureMod", Path.Combine(Path.GetTempPath(), "no-such-mod", "Fixture.esp")),
             loadOrderIndex, IsImmutable: loadOrderIndex is null,
-            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1),
+            new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1, IsMedium: false),
             MasterIssues: [], HasMatchingRecords: true, HasParseFailure: false, IsTracked: isTracked);
 
     // ADR-0013 invariant 3: a plugin is in the load order exactly when the snapshot lists it as

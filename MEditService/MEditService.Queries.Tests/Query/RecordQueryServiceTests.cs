@@ -251,7 +251,7 @@ public sealed class RecordQueryServiceTests
     {
         var entries = plugins.Select((p, slot) => new LoadOrderEntry(p.Name, p.Name, "Data", slot, p.Active, Winning: true)).ToList();
         var opened = plugins.ToDictionary(
-            p => new PluginAddress(p.Name, "Data"), p => new PluginContent(p.Light, false, false, [], 0));
+            p => new PluginAddress(p.Name, "Data"), p => new PluginContent(p.Light, false, false, [], 0, IsMedium: false));
         return Build(new FakeFixtureData(Release, entries, opened, []));
     }
 
@@ -379,7 +379,7 @@ public sealed class RecordQueryServiceTests
 
         var compare = svc.GetCompare(npcKey.ToString());
 
-        Assert.Equal(["00", "FE:000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
+        Assert.Equal(["00", "FE 000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
     }
 
     // The record editor renders the column read-only from this member alone, so the compare wire
