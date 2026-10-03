@@ -26,51 +26,55 @@ public static class DocumentNodes
             ? a.GetDouble().CompareTo(b.GetDouble()) == 0
             : a.GetRawText() == b.GetRawText();
 
-    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(), with
-    // every keyed array in key order, as it aligns; and against an absent side, what the codec
-    // omits.
+    // Two columns spelling one value: the codec's own text, since JsonElement has no Equals(), as a
+    // compare reads it; and against an absent side, what the codec omits.
     public static bool SameNode(object? a, object? b, FieldMetadata shape, bool absentMeansDefault)
     {
         if (a is JsonElement ja && b is JsonElement jb)
-            return ja.GetRawText() == jb.GetRawText() || KeyOrderedText(ja, shape) == KeyOrderedText(jb, shape);
+            return ja.GetRawText() == jb.GetRawText() || ComparedText(ja, shape) == ComparedText(jb, shape);
         if (a is null && b is null) return true;
         if (a is null || b is null)
             return absentMeansDefault && (a ?? b) is JsonElement present && IsOmitted(present, shape);
         return Equals(a, b);
     }
 
-    /// <summary>The codec's text with every keyed array in extended-key order, so one value reads
-    /// alike whatever order its plugin holds its keyed arrays in.</summary>
-    public static string KeyOrderedText(JsonElement value, FieldMetadata meta)
-    {
-        var node = JsonNode.Parse(value.GetRawText());
-        SortKeyedArrays(node, meta);
-        return node?.ToJsonString() ?? "null";
-    }
+    /// <summary>The codec's text with every keyed array in extended-key order and every colour as it
+    /// reads, so one value reads alike whatever order holds its keyed arrays and whatever alpha a
+    /// colour holding none carries.</summary>
+    public static string ComparedText(JsonElement value, FieldMetadata meta) =>
+        AsCompared(JsonNode.Parse(value.GetRawText()), meta)?.ToJsonString() ?? "null";
 
-    // A stable sort by the extended key, so elements sharing it keep their turn, as they align.
-    private static void SortKeyedArrays(JsonNode? node, FieldMetadata meta)
+    private static JsonNode? AsCompared(JsonNode? node, FieldMetadata meta)
     {
-        if (node is JsonObject obj && meta.Fields is { } fields)
+        switch (node)
         {
-            foreach (var field in fields)
-            {
-                if (obj[field.Name] is { } child) SortKeyedArrays(child, VariantFor(field, obj));
-            }
-            return;
+            case JsonValue leaf when meta.Type == ColorReading.ApiType && leaf.TryGetValue<string>(out var text):
+                return JsonValue.Create(ColorReading.Of(text, meta.HoldsAlpha));
+            case JsonObject obj when meta.Fields is { } fields:
+                foreach (var field in fields)
+                {
+                    if (obj[field.Name] is { } child && AsCompared(child, VariantFor(field, obj)) is var read && read != child)
+                        obj[field.Name] = read;
+                }
+                return obj;
+            case JsonArray array when meta.ElementType is { } elementMeta:
+                var elements = array.ToList();
+                array.Clear();
+                var compared = elements.Select(element => AsCompared(element, elementMeta));
+                // A stable sort by the extended key, so elements sharing it keep their turn, as they align.
+                if (meta.KeyMembers != null) compared = compared.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order);
+                foreach (var element in compared.ToList()) array.Add(element);
+                return array;
+            default:
+                return node;
         }
-        if (node is not JsonArray array || meta.ElementType is not { } elementMeta) return;
-        foreach (var element in array) SortKeyedArrays(element, elementMeta);
-        if (meta.KeyMembers == null) return;
-        var ordered = array.OrderBy(element => ElementKey.SortKeyOf(element, meta), ElementKey.Order).ToList();
-        array.Clear();
-        foreach (var element in ordered) array.Add(element);
     }
 
     // What the codec omits: the declared default where the metadata spells one, else a zero number,
     // false, an empty list or object, and a link to nothing.
     private static bool IsOmitted(JsonElement value, FieldMetadata meta) => meta.Default is { } declared
         ? SameValue(value, JsonSerializer.SerializeToElement(declared))
+            || ComparedText(value, meta) == ComparedText(JsonSerializer.SerializeToElement(declared), meta)
         : value.ValueKind switch
         {
             JsonValueKind.Number => value.GetRawText().Trim('-', '0', '.') is "" or "e0",

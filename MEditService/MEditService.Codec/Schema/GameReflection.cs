@@ -1,12 +1,13 @@
 namespace MEditService.Codec.Schema;
 
 /// <summary>What one game category's assembly resolved to, handed to every walk: the getter
-/// type → table map every FormLink lookup needs, the game's annotations, and the codec's declared
-/// defaults.</summary>
+/// type → table map every FormLink lookup needs, the game's annotations, the codec's declared
+/// defaults, and which colours hold an alpha.</summary>
 internal sealed record GameReflection(
     IReadOnlyDictionary<Type, string> GetterTypeToTable,
     SchemaAnnotations Annotations,
-    DeclaredDefaults Defaults)
+    DeclaredDefaults Defaults,
+    HeldAlpha Alpha)
 {
     // Read once the whole schema is built, by the annotations that claim something about the walk.
     internal WalkObservations Observed { get; } = new();

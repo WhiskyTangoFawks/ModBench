@@ -24,9 +24,10 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
         return value === true ? 'True' : 'False';
       case 'string':
       case 'float':
+      case 'color':
+        return colorReading(toStr(value), meta.holdsAlpha);
       case 'enum':
       case 'hex':
-      case 'color':
       case 'vector':
         return toStr(value);
     }
@@ -35,7 +36,16 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
   return toStr(value);
 }
 
-const memberOf = (value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
+// The codec spells a color "#AARRGGBB", or "#RRGGBB" for an opaque one; it reads with its alpha
+// only where its binary form holds one (editor-fields.md, By type).
+function colorReading(text: string, holdsAlpha: boolean): string {
+  const hex = /^#?([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(text)?.[1]?.toUpperCase();
+  if (hex === undefined) return text;
+  const argb = hex.length === 6 ? `FF${hex}` : hex;
+  return `#${holdsAlpha ? argb : argb.slice(2)}`;
+}
+
+const memberOf =(value: unknown, meta: FieldMetadata) => meta.enumMembers.find(m => m.value === String(value));
 
 // Differs from the edit value only for an enum: a wire-token member shows its label, and a value
 // the enum does not name reads `<Unknown: n>`.

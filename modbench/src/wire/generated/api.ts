@@ -670,6 +670,7 @@ export interface components {
             ignoredInConflicts: boolean;
             isVersionControlInfo1: boolean;
             isEditorId: boolean;
+            holdsAlpha: boolean;
         };
         FieldValue: {
             metadata: components["schemas"]["FieldMetadata"];

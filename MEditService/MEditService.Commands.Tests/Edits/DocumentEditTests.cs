@@ -549,6 +549,17 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void AColorHoldingAlpha_TakesAnOpaqueAlpha_WhichTheCodecSpellsWithoutIt()
+    {
+        var formKey = _fixture.Seed(_keyword, "kywd");
+        var before = _fixture.Document(formKey);
+
+        var after = Applied(formKey, SetAt(Json("\"#FF102030\""), Member("Color")));
+
+        Assert.Equal(["Color: <absent> -> \"#102030\""], ConditionEditTests.DocumentDiff(before, after));
+    }
+
+    [Fact]
     public void ValueTheCodecDrops_IsRefusedNamingIt_NeverReportedAsSuccess()
     {
         var formKey = SeedNpc();

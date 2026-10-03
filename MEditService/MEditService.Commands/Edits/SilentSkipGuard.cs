@@ -74,8 +74,9 @@ internal static class SilentSkipGuard
         var (ws, ps) = (DocumentNodes.StringValueOf(w), DocumentNodes.StringValueOf(p));
         return meta?.Type switch
         {
-            ByteSliceHex.HexApiType or "color" => string.Equals(ws.TrimStart('#'), ps.TrimStart('#'), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(StripHexPrefix(ws), StripHexPrefix(ps), StringComparison.OrdinalIgnoreCase),
+            ByteSliceHex.HexApiType => string.Equals(StripHexPrefix(ws), StripHexPrefix(ps), StringComparison.OrdinalIgnoreCase),
+            ColorReading.ApiType => string.Equals(
+                ColorReading.Of(ws, meta.HoldsAlpha), ColorReading.Of(ps, meta.HoldsAlpha), StringComparison.OrdinalIgnoreCase),
             "formKey" => Mutagen.Bethesda.Plugins.FormKey.TryFactory(ws, out var wk) && Mutagen.Bethesda.Plugins.FormKey.TryFactory(ps, out var pk) && wk == pk,
             "vector" => Components(ws).SequenceEqual(Components(ps)),
             _ => string.Equals(ws, ps, StringComparison.Ordinal),
