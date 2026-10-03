@@ -156,7 +156,7 @@ public sealed class EveryReconcileValidatesTests : IDisposable
     }
 
     [Fact]
-    public void AnEqualSnapshot_ThatFindsNothingChanged_PublishesNothing()
+    public void AnEqualSnapshot_OfAPluginHeldWithAFailure_PublishesNothingWhileItsBytesStayTheSame()
     {
         File.WriteAllText(_untracked.Path, "not a plugin");
         Reconcile();

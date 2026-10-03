@@ -10,7 +10,7 @@ namespace MEditService.Index.Tests.Plugins;
 public sealed class LoadOrderLocalizedTests
 {
     [Fact]
-    public void Load_ALocalizedPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
+    public void Load_ALocalizedDataDirectoryPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
     {
         var holder = new LoadOrderHolder();
         FormKey doorFormKey = default;

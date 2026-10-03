@@ -28,13 +28,17 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
         CheckErrors = d.Fields.Where(f => f.CheckError != null).ToDictionary(f => f.Metadata.Name, f => f.CheckError),
     };
 
-    private IReadOnlyList<string> FormKeysOf(string type) =>
-        [.. _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0)).Items
-            .Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
+    private IReadOnlyList<string> LowestFormKeysOf(string type)
+    {
+        var page = _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0));
+        Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
+        return [.. page.Items.Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
+    }
 
     private object WholeListing(string type)
     {
         var page = _repo.Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
+        Assert.True(page.Total <= WholeType, $"'{type}' has {page.Total} records, more than the {WholeType} one page lists.");
         return new
         {
             page.Total,
@@ -47,7 +51,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     {
         var captured = Types.ToDictionary(
             type => type,
-            type => FormKeysOf(type)
+            type => LowestFormKeysOf(type)
                 .SelectMany(fk => _repo.GetDocument(fk, new PluginAddress(TestPluginName, Origin))
                     is not { } document ? [] : new[] { Project(document) })
                 .ToList());
@@ -75,8 +79,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     [Fact]
     public void SpatialReads_MatchGolden()
     {
-        var worldspaces = FormKeysOf("wrld");
-        var cells = FormKeysOf("cell");
+        var worldspaces = LowestFormKeysOf("wrld");
+        var cells = LowestFormKeysOf("cell");
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(
@@ -94,7 +98,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
                         Temporary = refs.Temporary.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
                     };
                 }),
-            Placements = FormKeysOf("refr").ToDictionary(
+            Placements = LowestFormKeysOf("refr").ToDictionary(
                 fk => fk, fk => _repo.GetPlacement(fk, new PluginAddress(TestPluginName, Origin))),
         };
 
@@ -104,7 +108,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture)
     [Fact]
     public void ReferencesAndResolution_MatchGolden()
     {
-        var allFormKeys = Types.SelectMany(FormKeysOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var allFormKeys = Types.SelectMany(LowestFormKeysOf).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         var captured = new
         {
             ReferencedBy = allFormKeys

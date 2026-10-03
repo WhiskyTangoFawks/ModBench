@@ -229,7 +229,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void Validate_WhenReapplyingTheFilterFaults_LogsAWarningNamingTheException()
+    public void Validate_WhenReapplyingTheFilterFaults_LogsAWarningNamingTheException_AndKeepsTheReindexedWrite()
     {
         var holder = new LoadOrderHolder();
         FormKey npcKey = default;
@@ -257,6 +257,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
                 e.Level == LogLevel.Warning
                 && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
                 && e.Message.Contains("NotANumber", StringComparison.Ordinal));
+            Assert.Contains(
+                manager.RequireReads().GetDocuments(new PluginAddress("Plugin.esp", "Data")),
+                d => d.EditorId == "NotANumber");
         }
     }
 

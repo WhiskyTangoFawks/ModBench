@@ -78,7 +78,7 @@ public sealed class SqlDoorSchemaTests : IDisposable
     [InlineData("records", true)]
     [InlineData("records_committed", false)]
     [InlineData("form_lookup", true)]
-    public void ARelation_ExposesLoadOrderIndex(string relation, bool holdsACleanPluginsRows)
+    public void ARelation_ExposesLoadOrderIndex_AndRecordsCommittedHoldsNoRowOfACleanPlugin(string relation, bool holdsACleanPluginsRows)
     {
         _index.SetFilter($"SELECT form_key FROM {relation} WHERE load_order_idx = 1", "filter.sql");
 

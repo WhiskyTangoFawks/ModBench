@@ -44,7 +44,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
             .Select(d => d.EditorId)];
 
     [Fact]
-    public void TwoInstancesOverOneGameDirectory_WithSameNamedModFolders_NeverSeeEachOthersRows()
+    public void TwoInstancesOverOneGameDirectory_WithSameNamedModFolders_NeverSeeEachOthersRows_OnTheWarmLoadToo()
     {
         var holder = new LoadOrderHolder();
         var gameDirectory = GameDirectory;

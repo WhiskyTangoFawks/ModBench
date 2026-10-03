@@ -23,7 +23,7 @@ public sealed class ProgressiveIndexingTests
             .BuildScattered();
 
     [Fact]
-    public async Task MidLoad_AnAlreadyIndexedPluginIsQueryable_WhileLaterPluginsAreStillLoading()
+    public async Task MidLoad_AnIndexedPluginIsQueryable_AndTheOneBeingIndexedReadsAbsent_WhileLaterPluginsAreStillLoading()
     {
         var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-queryable");
@@ -79,7 +79,7 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
-    public async Task Status_ReportsAPluginFailure_WhileTheLoadIsStillRunning()
+    public async Task Status_ReportsAPluginFailure_WhileTheLoadIsStillRunning_AndAfterItFinishes()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-progressive-failure")
@@ -196,7 +196,7 @@ public sealed class ProgressiveIndexingTests
     }
 
     [Fact]
-    public async Task ASecondLoadMidLoad_DrainsTheFirst_AndTheSurvivorIsWhollyTheSecond()
+    public async Task ASecondLoadMidLoad_DrainsTheFirst_ReconcilesInPlace_AndTheSurvivorIsWhollyTheSecond()
     {
         var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-supersede");

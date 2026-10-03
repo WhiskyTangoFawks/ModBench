@@ -27,8 +27,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     [Fact]
     public void TheSameRecordsExist_TrackedAndUntracked()
     {
-        var binary = AllFormKeys(fixture.FromBinary).ToHashSet(StringComparer.Ordinal);
-        var source = AllFormKeys(fixture.FromSource).ToHashSet(StringComparer.Ordinal);
+        var binary = AllFormKeysInOneUnpagedQuery(fixture.FromBinary).ToHashSet(StringComparer.Ordinal);
+        var source = AllFormKeysInOneUnpagedQuery(fixture.FromSource).ToHashSet(StringComparer.Ordinal);
 
         Assert.True(binary.Count > 2000, $"fixture looks wrong: only {binary.Count} records");
         Assert.Equal(binary.Count, source.Count);
@@ -79,7 +79,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     }
 
     [Fact]
-    public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked()
+    public void TheHeaderRow_IsByteIdentical_TrackedAndUntracked_AndToTheTreesOwnFile()
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(RealDataPlugin.PluginFileName));
 
@@ -122,7 +122,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
-    private List<string> AllFormKeys(Indexer index) =>
+    private List<string> AllFormKeysInOneUnpagedQuery(Indexer index) =>
         [.. index.RequireReads()
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];

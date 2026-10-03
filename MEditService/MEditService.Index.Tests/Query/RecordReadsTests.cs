@@ -249,7 +249,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecord_BitmaskField_AboveSafeInteger_SerializesAsDecimalString()
+    public void GetRecord_BitmaskField_AboveSafeInteger_SerializesAsMemberNames()
     {
         const long combined = 9007199254740993;
         FormKey raceFormKey = default;
@@ -414,7 +414,7 @@ public class RecordReadsTests(TestPluginFixture fixture)
     }
 
     [Fact]
-    public void GetRecords_WithPluginAndSearchFilter_AndFiltersApply()
+    public void GetRecords_WithPluginAndSearchFilter_AnUnknownPluginWithAMatchingSearchYieldsNothing()
     {
         using var index = LoadedIndex();
         var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));

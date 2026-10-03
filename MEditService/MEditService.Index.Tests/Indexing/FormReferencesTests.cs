@@ -461,7 +461,7 @@ public class FormReferencesTests
     }
 
     [Fact]
-    public void Index_QuestAliasScriptNestedStructMembers_AreWalkedToFullDepth()
+    public void Index_QuestAliasScriptNestedStructAndStructListMembers_AreWalkedToFullDepth()
     {
         FormKey nestedTarget = default, listTarget = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-nested")

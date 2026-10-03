@@ -92,7 +92,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void Disable_IsSqlOnly_AndTheOtherProviderWins()
+    public void Disable_IsSqlOnly_TheDisabledPluginIsReadNowhere_AndTheOtherProviderWins()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-disable");
@@ -116,7 +116,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void OverriddenPlugin_IsRegisteredBesideTheWinner_AndNeverWins()
+    public void OverriddenPlugin_IsRegisteredBesideTheWinner_NeverWins_AndReprioritisingFlipsTheWinnerSqlOnly()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-losing")
@@ -210,7 +210,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void FailedPlugin_IsAFailureOnTheRow_AndRecoversOnceItsBytesChange()
+    public void FailedPlugin_IsAFailureOnTheRow_IsNotReadAgainWhileItsBytesStay_AndRecoversOnceTheyChange()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-failed").WithPlugin("Good.esp").BuildScattered();

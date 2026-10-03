@@ -75,7 +75,7 @@ public sealed class ReconcileScatteredTests
     }
 
     [Fact]
-    public void Reconcile_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
+    public void Reconcile_OnePluginFailsToIndex_OthersStillLoad_AndTheFailureIsReportedWithoutListingItAsIndexed()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-index-failure")

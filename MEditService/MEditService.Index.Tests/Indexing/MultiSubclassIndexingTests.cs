@@ -74,6 +74,7 @@ public class MultiSubclassIndexingTests
         Assert.Equal(1.25f, Assert.IsType<JsonElement>(byEdid["TestGlobFloat"]).GetSingle());
         Assert.Equal(3, Assert.IsType<JsonElement>(byEdid["TestGlobShort"]).GetInt32());
         Assert.True(byEdid.ContainsKey("TestGlobBool"));
+        Assert.Null(byEdid["TestGlobBool"]);
     }
 
     [Fact]
