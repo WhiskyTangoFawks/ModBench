@@ -1,7 +1,7 @@
 // mods.md, A row, File and folder: a mod's or Overwrite's files, as a folder tree.
 
 import * as vscode from 'vscode';
-import type { FileOrigin, ModFile, OriginFolder } from '../instanceLoader/instance';
+import type { FileOrigin, OriginFile, OriginFolder } from '../instanceLoader/instance';
 import type { ModlistNode } from './ModListProvider';
 
 // Not `file:`: VS Code badges and tints a row whose resourceUri carries a diagnostic or another
@@ -16,6 +16,10 @@ const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0
 const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]): number =>
   collator.compare(a, b) || byCodeUnit(a, b);
 
+/** No expander on a row with no files under it. */
+export const expanderOver = (files: readonly OriginFile[]): vscode.TreeItemCollapsibleState =>
+  (files.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
+
 function fileRow(row: vscode.TreeItem, parent: ModlistNode, name: string, path: string): void {
   row.id = `${parent.id}/${name}`;
   row.resourceUri = vscode.Uri.from({ scheme: FILE_ROW_SCHEME, path: `/${row.id}` });
@@ -28,13 +32,12 @@ export class FolderNode extends vscode.TreeItem {
   constructor(
     public readonly parent: ModlistNode,
     public readonly origin: FileOrigin,
-    /** `path` is where the value says it sits; none when the value names none. */
-    public readonly folder: { readonly relativePath: string; readonly path: string | undefined },
-    public readonly files: readonly ModFile[],
+    public readonly folder: OriginFolder,
+    public readonly files: readonly OriginFile[],
     public readonly folders: readonly OriginFolder[],
     name: string,
   ) {
-    super(name, vscode.TreeItemCollapsibleState.Collapsed);
+    super(name, expanderOver(files));
     fileRow(this, parent, name, folder.relativePath);
     this.contextValue = 'folder';
   }
@@ -45,7 +48,7 @@ export class FileNode extends vscode.TreeItem {
   constructor(
     public readonly parent: ModlistNode,
     public readonly origin: FileOrigin,
-    public readonly file: ModFile,
+    public readonly file: OriginFile,
     name: string,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
@@ -76,15 +79,14 @@ function byLevel<T extends { readonly relativePath: string }>(entries: readonly 
 /** The folders, then the files, directly in `parent`, each by name. `files` and `folders` are
  *  those under it, and `path` is its own path in its mod, none for the mod or Overwrite itself. */
 export function filesIn(
-  parent: ModlistNode, origin: FileOrigin, files: readonly ModFile[], folders: readonly OriginFolder[], path?: string,
+  parent: ModlistNode, origin: FileOrigin, files: readonly OriginFile[], folders: readonly OriginFolder[], path?: string,
 ): (FolderNode | FileNode)[] {
   const prefix = path === undefined ? '' : `${path}/`;
   const ownFiles = byLevel(files, prefix);
   const ownFolders = byLevel(folders, prefix);
   return [
-    ...[...ownFiles.below].sort(byName).map(([name, under]) => new FolderNode(
-      parent, origin, { relativePath: prefix + name, path: ownFolders.here.get(name)?.path },
-      under, ownFolders.below.get(name) ?? [], name,
+    ...[...ownFolders.here].sort(byName).map(([name, folder]) => new FolderNode(
+      parent, origin, folder, ownFiles.below.get(name) ?? [], ownFolders.below.get(name) ?? [], name,
     )),
     ...[...ownFiles.here].sort(byName).map(([name, file]) => new FileNode(parent, origin, file, name)),
   ];

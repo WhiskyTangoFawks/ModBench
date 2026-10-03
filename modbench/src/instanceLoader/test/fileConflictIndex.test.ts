@@ -167,7 +167,7 @@ describe('buildFileConflictIndex — what the adapter answers: the walk is the a
 
   it('keeps each file where the adapter says it sits and is read from, and each folder where it sits', async () => {
     const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds' };
-    const folder = { relativePath: 'x', path: '/mods/ModA/x', sourcePath: '/mods/ModA/x' };
+    const folder = { relativePath: 'x', path: '/mods/ModA/x' };
     const index = await buildFileConflictIndex(
       [mod('ModA')], [], answering({ folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }), () => {},
     );

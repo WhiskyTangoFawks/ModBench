@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, ModFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
+import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
@@ -9,7 +9,7 @@ import { firstReadOf, type FirstRead } from '../drivingLib/instanceFirstRead';
 import { ErrorNode } from '../drivingLib/errorNode';
 import { dropMove, type DraggedRows } from './moveDrop';
 import { setModsEnabled as setModsEnabledCommand, type ModlistAccess } from '../modlist/modlist';
-import { filesIn, FileNode, FolderNode } from './modFiles';
+import { expanderOver, filesIn, FileNode, FolderNode } from './modFiles';
 
 /** CONTEXT.md, Sort direction: which end of mod order the view shows at the top. */
 export type SortDirection = 'losingAtTop' | 'winningAtTop';
@@ -21,9 +21,6 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
 
 const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
-
-const expanderOver = (files: readonly ModFile[]): vscode.TreeItemCollapsibleState =>
-  (files.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {
@@ -174,7 +171,7 @@ export class ModNode extends vscode.TreeItem {
   readonly nexusModId: string | undefined;
   constructor(
     public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts,
-    public readonly files: readonly ModFile[] = [],
+    public readonly files: readonly OriginFile[] = [],
     public readonly folders: readonly OriginFolder[] = [],
   ) {
     super(mod.name, expanderOver(files));
@@ -207,7 +204,7 @@ export function modOfRow(value: unknown): string | undefined {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(public readonly files: readonly ModFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
+  constructor(public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
     super('Overwrite', expanderOver(files));
     this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;

@@ -6,8 +6,6 @@ export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
 const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
 
-export type ModFile = OriginFile;
-
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
    *  case-variant paths resolve to one entry, kept at that casing rather than a folded one. */
@@ -64,7 +62,7 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each listed mod's own files, a disabled mod's too, so callers don't need a second
    *  filesystem walk. */
-  filesByMod: Map<string, readonly ModFile[]>;
+  filesByMod: Map<string, readonly OriginFile[]>;
   /** Each listed mod's folders, as `filesByMod` holds its files. */
   foldersByMod: Map<string, readonly OriginFolder[]>;
 }
@@ -92,7 +90,7 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
 // Output line.
 async function modListing(
   adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<{ files: readonly ModFile[]; folders: readonly OriginFolder[] }> {
+): Promise<{ files: readonly OriginFile[]; folders: readonly OriginFolder[] }> {
   const { files, folders, notes } = await adapter.originFiles(modOrigin(modName));
   for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
   return { files, folders };
@@ -105,7 +103,7 @@ export async function buildFileConflictIndex(
   log: (msg: string) => void,
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
-  const filesByMod = new Map<string, readonly ModFile[]>();
+  const filesByMod = new Map<string, readonly OriginFile[]>();
   const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');

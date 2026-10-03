@@ -46,7 +46,7 @@ import {
   type NexusModRow,
 } from '../modManagementCommands';
 import { ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
-import { MODS_KEY_ARGS } from '../gestureEntry';
+import { MODS_KEY_ARGS, modsKeyContext } from '../gestureEntry';
 import { FileNode, FolderNode } from '../modFiles';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
@@ -1104,6 +1104,10 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     expect(revealed()).toEqual([folder]);
   });
 
+  it('offers open folder on the one selected Overwrite row to the keys and the palette, with the Mods tree loaded before the gesture entry, as this file loads them', () => {
+    expect(modsKeyContext([new OverwriteNode([], 'MO2')], () => true).singleOpenFolderRow).toBe(true);
+  });
+
   it.each<[string, ModlistNode[]]>([
     ['several rows', [new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), new OverwriteNode([], 'MO2')]],
     ['a separator', [new SeparatorNode({ kind: 'separator', name: 'Group', enabled: true }, [])]],
@@ -1134,19 +1138,6 @@ describe('open folder: one command for a mod, the Overwrite row, a file and a fo
     await invoke('modbench.mod.openFolder');
 
     expect(revealed()).toEqual(['/instance/mods/My Mod/textures', '/instance/mods/My Mod/textures']);
-  });
-
-  it('refuses a folder the value names no path for, naming it by its path in its mod', async () => {
-    const reporter = recordingReporter();
-    const unnamed = new FolderNode(myMod, folder.origin, { relativePath: 'textures', path: undefined }, [linked], [], 'textures');
-
-    registerOpenFolderCommand(instance, reporter, () => []);
-    await invoke('modbench.mod.openFolder', unnamed);
-
-    expect(revealed()).toEqual([]);
-    expect(reporter.reports).toEqual([
-      { severity: 'error', message: 'Failed to open the folder of "textures".', detail: 'No folder holds it.' },
-    ]);
   });
 
   it('names the file by its path in its mod when its reveal fails', async () => {

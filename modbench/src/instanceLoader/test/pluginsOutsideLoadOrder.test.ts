@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { FileConflictLookup, type FileConflictIndex, type ModFile } from '../fileConflictIndex';
+import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
+import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
 import { findPluginsOutsideLoadOrder } from '../pluginsOutsideLoadOrder';
 
-function toFileMap(byMod: Record<string, string[]>): Map<string, ModFile[]> {
+function toFileMap(byMod: Record<string, string[]>): Map<string, OriginFile[]> {
   return new Map(
     Object.entries(byMod).map(([mod, paths]) => [
       mod,
@@ -24,6 +25,13 @@ describe('findPluginsOutsideLoadOrder — the plugin files the effective load or
     expect(found).toEqual([
       { name: 'Shared.esp', path: '/mods/Loser/Shared.esp', origin: 'Loser' },
     ]);
+  });
+
+  it('names a linked plugin by where it is read from, the link\'s target', () => {
+    const linked = { relativePath: 'Linked.esp', path: '/mods/ModA/Linked.esp', sourcePath: '/shared/Real.esp' };
+    const index: FileConflictIndex = { files: new FileConflictLookup(), filesByMod: new Map([['ModA', [linked]]]), foldersByMod: new Map() };
+
+    expect(findPluginsOutsideLoadOrder(index, [])).toEqual([{ name: 'Linked.esp', path: '/shared/Real.esp', origin: 'ModA' }]);
   });
 
   it('finds a plugin file the load order never names, including every plugin that shares its filename', () => {

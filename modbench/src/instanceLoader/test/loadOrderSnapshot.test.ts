@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import type { GameFolder, OriginFile, PluginEntry } from '../../instanceAdapter/instanceAdapter';
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
-import { FileConflictLookup, modOrigin, type FileConflictIndex, type ModFile } from '../fileConflictIndex';
+import { FileConflictLookup, modOrigin, type FileConflictIndex } from '../fileConflictIndex';
+import type { OriginFile } from '../../instanceAdapter/instanceAdapter';
 import {
   buildLoadOrderRows, loadOrderSnapshotOf, originFiles, originFolder, providedPluginsOf, resolvePluginPaths, type LoadOrderPlugin,
   type LoadOrderPluginLine, type PluginAddress,
@@ -15,7 +16,7 @@ type Provider = { winner: string; winnerMod: string; providers?: string[] };
 
 function index(
   files: Record<string, Provider>,
-  filesByMod: Record<string, ModFile[]> = {},
+  filesByMod: Record<string, OriginFile[]> = {},
 ): FileConflictIndex {
   const lookup = new FileConflictLookup();
   for (const [relativePath, { winner, winnerMod, providers }] of Object.entries(files)) {

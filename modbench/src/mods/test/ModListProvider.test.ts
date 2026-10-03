@@ -281,7 +281,10 @@ describe('a row\'s parent, which VS Code\'s reveal walks up through getParent an
 describe('a click on a separator, a mod, Overwrite or a folder only selects', () => {
   it('none of those rows carries a command', async () => {
     const entries = [mod('Nexus Mod', true, { nexusId: '42' }), sep('Section'), mod('Loose')];
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf(entries, { overwriteFiles: overwriteHolding(5) })) });
+    const provider = makeProvider([], { instance: new FakeInstance(instanceValueFixture({
+      ...valueOf(entries, { overwriteFiles: overwriteHolding(5) }),
+      overwriteFolders: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE' }],
+    })) });
     const roots = await provider.getChildren();
     const children = await Promise.all(roots.map((n) => provider.getChildren(n)));
     const rows = [...roots, ...children.flat()];

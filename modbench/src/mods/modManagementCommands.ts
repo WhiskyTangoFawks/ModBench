@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode, type ModlistNode, type SortDirection } from './ModListProvider';
+import { ModListProvider, OVERWRITE_NODE_KIND, type ModlistNode, type SortDirection } from './ModListProvider';
 import {
-  isModsKeyArgs, modsGestureEntry, pluralArgument, registerModsGesture, selectionArgument, singularArgument, type GestureEntry,
+  isModsKeyArgs, isRowOf, modsGestureEntry, openFolderArgument, pluralArgument, registerModsGesture, selectionArgument,
+  singularArgument, type GestureEntry, type RowOf,
 } from './gestureEntry';
 import type { Instance } from '../instanceLoader/instance';
-import { FileNode, FolderNode } from './modFiles';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { MoveToTrash } from '../ports/trash';
@@ -302,8 +302,8 @@ export function registerOpenFolderCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable {
   return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
-    const anchor = entry.clicked ?? entry.focused;
-    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode || anchor instanceof FolderNode || anchor instanceof FileNode)) return;
+    const anchor = openFolderArgument(entry);
+    if (anchor === undefined) return;
     const target = folderOf(instance, anchor);
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       if (target.folder === undefined) throw new Error('No folder holds it.');
@@ -323,7 +323,7 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 // The value's own path for each row, never a path joined here: the Instance adapter owns every
 // path function, and the value carries its answer.
 function folderOf(
-  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode | FolderNode | FileNode,
+  instance: Pick<Instance, 'value'>, node: NonNullable<ReturnType<typeof openFolderArgument>>,
 ): { name: string; folder: vscode.Uri | undefined } {
   const { overwriteDir, modDirs } = instance.value.paths;
   const uriOf = (path: string | undefined) => (path === undefined ? undefined : vscode.Uri.file(path));
@@ -355,13 +355,11 @@ export function registerViewOnNexusCommand(
   });
 }
 
-type CopyRow = ModNode | SeparatorNode | FolderNode | FileNode;
+const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
 
-function isCopyRow(node: unknown): node is CopyRow {
-  return node instanceof ModNode || node instanceof SeparatorNode || node instanceof FolderNode || node instanceof FileNode;
-}
+const isCopyRow = isRowOf(COPY_KINDS);
 
-function copyValueOf(row: CopyRow): string {
+function copyValueOf(row: RowOf<typeof COPY_KINDS[number]>): string {
   switch (row.kind) {
     case 'mod': return row.mod.name;
     case 'separator': return row.separator.name;
@@ -369,8 +367,6 @@ function copyValueOf(row: CopyRow): string {
     case 'file': return row.file.relativePath;
   }
 }
-
-const COPY_KINDS = ['mod', 'separator', 'folder', 'file'] as const;
 
 const copyValueLines = (entry: GestureEntry): string => selectionArgument(entry, ...COPY_KINDS).map(copyValueOf).join('\n');
 
