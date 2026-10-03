@@ -433,13 +433,30 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
     }
 
     [Fact]
+    public void SettingPartialForm_OnACellThatSaysNotWhereItSits_IsDecidedByTheMastersKind_NotANonMastersNearerOne()
+    {
+        Load(
+            (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
+            (Plugin("Stranger.esp", CellCopy(0, "Outside", also: cell =>
+            {
+                cell.Flags = 0;
+                cell.Grid = new CellGrid { Point = new P2Int(1, 2) };
+            })), false),
+            (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
+
+        var result = WriteFlags(TheCell, PartialForm);
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
     public void SettingPartialForm_OnACellThatSaysNotWhereItSits_WhenItsCopyToTheLeftCannotBeRead_IsRefusedNamingItsPlugin()
     {
         var middle = Plugin("Middle.esp", CellCopy(0, "Inside", 4f));
         Load(
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
-            (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" }))), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(new Cell(TheCell, Fallout4Release.Fallout4) { EditorID = "Inside" })))), true));
         _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(TheCell, PartialForm);
@@ -458,7 +475,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", CellCopy(0, "Inside")), false),
             (middle, true),
-            (Plugin("Override.esp", mod => mod.Cells.Records.Add(BlockOf(placing))), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", mod => mod.Cells.Records.Add(BlockOf(placing)))), true));
         _plugins.Respell(middle, TheCell, "cell", "\"WaterHeight\": 4.0", "\"WaterHeight\": \"deep\"");
 
         var result = WriteFlags(rock.FormKey, Persistent);
