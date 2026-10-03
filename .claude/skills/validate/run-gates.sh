@@ -27,19 +27,26 @@ GATE_NAME="gates.$(basename "$ROOT")"
 $WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
 $DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
-# Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
-# builds and boots a backend, and docs builds the backend tests, so each takes a slot too. -o keeps the lock out of
-# child processes, so a lingering build server cannot hold it. A waiter queues on the first slot
-# rather than whichever frees first, which costs a wait, never correctness.
-GATE_SLOTS=2
-if { $BACKEND || $API_DRIFT || $DOCS; } && [[ -z ${GATE_SLOT:-} ]]; then
-  for slot in $(seq 1 $GATE_SLOTS); do
-    GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${GATE_ARGS[@]}"
+# Runs a command in one of a machine-wide count of slots. -o keeps the lock out of child
+# processes, so a lingering build server cannot hold it. A waiter queues on the first slot rather
+# than whichever frees first, which costs a wait, never correctness.
+in_slot() {
+  local kind=$1 slots=$2 slot status
+  shift 2
+  for slot in $(seq 1 "$slots"); do
+    flock -n -E 99 -o "/tmp/medit-$kind-gate.$slot.lock" "$@"
     status=$?
-    [[ $status -ne 99 ]] && exit $status
+    [[ $status -ne 99 ]] && return $status
   done
-  echo "=== Waiting for a backend gate slot ==="
-  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.1.lock "$0" "${GATE_ARGS[@]}"
+  echo "=== Waiting for a $kind gate slot ==="
+  flock -o "/tmp/medit-$kind-gate.1.lock" "$@"
+}
+
+# Two backend gate runs per machine, measured: a third leaves no memory headroom. api-drift
+# builds and boots a backend, and docs builds the backend tests, so each takes a slot too.
+if { $BACKEND || $API_DRIFT || $DOCS; } && [[ -z ${GATE_SLOT:-} ]]; then
+  GATE_SLOT=held in_slot backend 2 "$0" "${GATE_ARGS[@]}"
+  exit
 fi
 
 echo "=== Gate 1: Comment discipline ==="
@@ -132,15 +139,10 @@ if $DOCS; then
   fi
 fi
 
-# flock on the integration step: its mock backend binds a fixed port (15172), so concurrent
-# frontend-only gate runs (a second worktree, a pipelined orchestrate slot) serialize on that step.
+# Two frontend gate runs per machine, measured: a run peaks near 3 GB, and a third slows the
+# slowest unit test past its ceiling.
 if $FRONTEND; then
-  echo "=== Gate 4: Frontend lint ==="
-  (cd "$ROOT/modbench" && npm run lint) && \
-  echo "=== Gate 5: Frontend build (type-check) ===" && \
-  (cd "$ROOT/modbench" && npm run build) && \
-  echo "=== Gate 6: Frontend tests ===" && \
-  (cd "$ROOT/modbench" && npm run test:unit && flock /tmp/modbench-itest.lock npm run test:integration) \
+  in_slot frontend 2 python3 "$ROOT/.claude/skills/validate/frontend_gates.py" "$ROOT" \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 
