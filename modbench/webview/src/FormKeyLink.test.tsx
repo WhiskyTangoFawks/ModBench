@@ -9,13 +9,13 @@ import type { FormKeyResolution } from './types';
 const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-describe('FormKeyLink — label is the composite "EditorID [FormKey]", never the EditorID alone, so the format a reference is chosen in and read back in agree',() => {
+describe('FormKeyLink — label is the composite "EditorID [FormKey]", never the EditorID alone, so the format a reference is chosen in and read back in agree', () => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
-  it('declares its own ellipsis truncation rather than relying on the cell to clip it, as a td\'s ellipsis never clips inside a button\'s text (happy-dom has no layout: only the declaration is checked)',() => {
+  it('declares its own ellipsis truncation rather than relying on the cell to clip it, as a td\'s ellipsis never clips inside a button\'s text (happy-dom has no layout: only the declaration is checked)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
     const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');
     expect(link.style.overflow).toBe('hidden');
@@ -40,7 +40,7 @@ describe('FormKeyLink — label is the composite "EditorID [FormKey]", never the
   });
 });
 
-describe('FormKeyLink — clicks, where go to record is the context menu\'s and the link carries no gesture of its own for Ctrl',() => {
+describe('FormKeyLink — clicks, where go to record is the context menu\'s and the link carries no gesture of its own for Ctrl', () => {
   it('a plain click is the caller\'s', () => {
     const onClick = vi.fn();
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onClick={onClick} />);

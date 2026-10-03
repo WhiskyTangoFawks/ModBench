@@ -59,7 +59,7 @@ const dataMeta = fieldMeta({
   ],
 });
 
-const leafTypedComparisonValueMeta: FieldMetadata = leaf('ComparisonValue', 'float', {
+const leafTypedComparisonValueMetaShapedAsItsFirstLeaf: FieldMetadata = leaf('ComparisonValue', 'float', {
   variants: { ConditionFloat: leaf('ComparisonValue', 'float'), ConditionGlobal: leaf('ComparisonValue', 'formKey') },
 });
 
@@ -80,7 +80,7 @@ const conditionsMeta = fieldMeta({
           { value: 'ParametersUseAliases', bitValue: '2', label: null },
         ],
       }),
-      leafTypedComparisonValueMeta,
+      leafTypedComparisonValueMetaShapedAsItsFirstLeaf,
       leaf('MutagenObjectType', 'enum', {
         displayLabel: 'Kind', isDiscriminator: true,
         enumMembers: [
@@ -130,12 +130,12 @@ function compareResult(
   };
 
   const resolutionsFor = (path: string[], index: number) => {
-    const resolutionEntriesAsTuples = columns
+    const resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload = columns
       .map(c => [c, at(c, index, path)] as const)
       .filter(([, v]) => typeof v === 'string' && resolutions[v])
       .map(([c, v]): [string, { state: 'ResolvedValidType'; recordType: null; editorId: string | undefined }] =>
         [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
-    return resolutionEntriesAsTuples.length > 0 ? Object.fromEntries(resolutionEntriesAsTuples) : undefined;
+    return resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload.length > 0 ? Object.fromEntries(resolutionEntriesAsTuplesSoFromEntriesAvoidsItsAnyOverload) : undefined;
   };
 
   const valuesFor = (path: string[], index: number) =>
@@ -419,7 +419,7 @@ describe('the table keys on the leaf type name: the discriminator\'s value where
     expect(summaryOf(0)).toBe('Subject.IsSneaking = 1.000000');
   });
 
-  it('a union whose own value names no leaf keys on nothing, not on the name the schema declares, which as a concrete base is a leaf name too',async () => {
+  it('a union whose own value names no leaf keys on nothing, not on the name the schema declares, which as a concrete base is a leaf name too', async () => {
     const declared: FieldMetadata = {
       ...conditionsMeta,
       elementType: { ...conditionsElementType, leafTypeName: 'ConditionFloat' },
@@ -491,7 +491,7 @@ describe('a condition shows one row per parameter slot in use', () => {
   });
 });
 
-describe('a governing member posts its own value and nothing else, the cascade being the writer\'s: the backend clears the slots the new value idles from the document it holds',() => {
+describe('a governing member posts its own value and nothing else, the cascade being the writer\'s: the backend clears the slots the new value idles from the document it holds', () => {
   it('changing Run On away from Reference posts one set of Run On', async () => {
     currentCompare = oneColumn([documentSpelledCondition({}, {
       RunOnType: 'Reference', Reference: '00000014:Fallout4.esm', Function: 'IsSneaking',
@@ -535,7 +535,7 @@ describe('a governing member posts its own value and nothing else, the cascade b
   });
 });
 
-describe('switching a condition\'s leaf, as Use Global is an ordinary discriminator switch: the Kind row\'s own set, which the backend turns into the leaf switch that keeps every member the two leaves share',() => {
+describe('switching a condition\'s leaf, as Use Global is an ordinary discriminator switch: the Kind row\'s own set, which the backend turns into the leaf switch that keeps every member the two leaves share', () => {
   it('posts one set of the discriminator member with the chosen leaf\'s wire value', async () => {
     currentCompare = oneColumn([documentSpelledCondition({}, { Function: 'IsSneaking' })]);
     renderPanel();
@@ -558,7 +558,7 @@ describe('switching a condition\'s leaf, as Use Global is an ordinary discrimina
   });
 });
 
-describe('a type-varying member takes its cell from each column\'s own leaf: ComparisonValue is a float under ConditionFloat, a GLOB link under ConditionGlobal',() => {
+describe('a type-varying member takes its cell from each column\'s own leaf: ComparisonValue is a float under ConditionFloat, a GLOB link under ConditionGlobal', () => {
   it('renders a number beside a resolved link on one row', async () => {
     currentCompare = compareResult({
       [PLUGIN]: [documentSpelledCondition({ ComparisonValue: 2.5 }, { Function: 'IsSneaking' })],
@@ -595,7 +595,7 @@ describe('the function picker comes from the schema', () => {
 });
 
 describe('a Run On label that contains spaces, which xEdit writes as the Run On prefix with its spaces stripped', () => {
-  const labelledRunOnType: FieldMetadata = {
+  const labelledRunOnTypeAsNoFallout4EnumReachesTheWebviewLabelled: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
       ...conditionsElementType,
@@ -615,7 +615,7 @@ describe('a Run On label that contains spaces, which xEdit writes as the Run On 
     const baseOverride = required(base.overrides[0], "oneColumn's sole override");
     currentCompare = {
       ...base,
-      overrides: [{ ...baseOverride, fields: [{ metadata: labelledRunOnType, value: [element] }] }],
+      overrides: [{ ...baseOverride, fields: [{ metadata: labelledRunOnTypeAsNoFallout4EnumReachesTheWebviewLabelled, value: [element] }] }],
     };
     renderPanel();
     await collapseConditions();

@@ -42,7 +42,7 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(/winner/);
   });
 
-  it('shows no origin on an expanded column, the origin sitting in the tooltip alone',() => {
+  it('shows no origin on an expanded column, the origin sitting in the tooltip alone', () => {
     const { header } = renderHeader();
     expect(header).not.toHaveTextContent('ModA');
   });
@@ -76,7 +76,7 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(displaced);
   });
 
-  it('holds no control, so nothing writes the Partial Form flag from here, even on a Partial Form column',() => {
+  it('holds no control, so nothing writes the Partial Form flag from here, even on a Partial Form column', () => {
     const { header } = renderHeader({ override: { isPartialForm: true } });
     expect(header.querySelector('input, button, select')).toBeNull();
   });
@@ -127,7 +127,7 @@ describe('PluginHeader', () => {
     expect(header.querySelector('[data-column-edge]')).toBeNull();
   });
 
-  it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on',() => {
+  it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on', () => {
     const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false));
     const { header } = renderHeader({}, { vscodeContext });
     expect(header).toHaveAttribute('data-vscode-context', vscodeContext);

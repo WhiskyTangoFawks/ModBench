@@ -9,7 +9,7 @@ import { fieldMeta } from './test/fixtures';
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
 
-describe('ScalarCell — the xEdit open gesture: a click focuses, it does not edit', () => {
+describe('ScalarCell — the xEdit open gesture', () => {
   it('the open trigger opens the editor', () => {
     render(<ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
 
@@ -120,7 +120,7 @@ describe('ScalarCell — committing', () => {
   });
 });
 
-describe('ScalarCell — string cell has no debounce: no left click waits to see whether a second is coming',() => {
+describe('ScalarCell — string cell has no debounce: no left click waits to see whether a second is coming', () => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
@@ -134,7 +134,7 @@ describe('ScalarCell — string cell has no debounce: no left click waits to see
   });
 });
 
-describe('ScalarCell — immutable string cell is unaffected by any left-click gesture, its only read path for a long value being the right-click menu',() => {
+describe('ScalarCell — immutable string cell is unaffected by any left-click gesture, its only read path for a long value being the right-click menu', () => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));
@@ -147,7 +147,7 @@ describe('ScalarCell — immutable string cell is unaffected by any left-click g
   });
 });
 
-describe('ScalarCell — a hex row edits as text because the schema says the field is hex, never because the value looks like hex',() => {
+describe('ScalarCell — a hex row edits as text because the schema says the field is hex, never because the value looks like hex', () => {
   const hexMeta = meta({ name: 'unknown3', type: 'hex' });
 
   it('edits as text and commits the typed hex verbatim', () => {
@@ -177,7 +177,7 @@ describe('ScalarCell — a hex row edits as text because the schema says the fie
   });
 });
 
-describe('ScalarCell — an enum whose values are wire tokens, as an abstract union\'s `MutagenObjectType` holds Mutagen class names, not words',() => {
+describe('ScalarCell — an enum whose values are wire tokens, as an abstract union\'s `MutagenObjectType` holds Mutagen class names, not words', () => {
   const kind = meta({
     name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
@@ -213,7 +213,7 @@ describe('ScalarCell — an enum whose values are wire tokens, as an abstract un
   });
 });
 
-describe('ScalarCell — a translated string, which the codec spells as an object whose `Value` is the text',() => {
+describe('ScalarCell — a translated string, which the codec spells as an object whose `Value` is the text', () => {
   const nameMeta = meta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
 

@@ -33,7 +33,7 @@ describe('FlagCell — the checkbox list is the cell: always visible, one checkb
     for (const m of flagMeta.enumMembers) expect(screen.getByText(m.value)).toBeInTheDocument();
   });
 
-  it('an absent value, which means default with no names set, renders the full list all-unchecked, never a placeholder',() => {
+  it('an absent value, which means default with no names set, renders the full list all-unchecked, never a placeholder', () => {
     render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
     for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
@@ -56,7 +56,7 @@ describe('FlagCell — collapsed row', () => {
 });
 
 describe('FlagCell — read-only column', () => {
-  it('renders the same checkbox list, not disabled, as nothing marks a read-only column\'s cells ahead of time',() => {
+  it('renders the same checkbox list, not disabled, as nothing marks a read-only column\'s cells ahead of time', () => {
     const { container } = render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
     expect(container.querySelectorAll('input:disabled')).toHaveLength(0);
@@ -72,7 +72,7 @@ describe('FlagCell — read-only column', () => {
   });
 });
 
-describe('FlagCell — editing commits the document\'s own spelling: the names now set, as an array',() => {
+describe('FlagCell — editing commits the document\'s own spelling: the names now set, as an array', () => {
   it('unchecking a name commits the array without it', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
@@ -94,7 +94,7 @@ describe('FlagCell — editing commits the document\'s own spelling: the names n
     expect(onCommit).toHaveBeenCalledWith(['A']);
   });
 
-  it('keeps a name the metadata does not list (a composite the enum declares) exactly where it was when another is toggled',() => {
+  it('keeps a name the metadata does not list (a composite the enum declares) exactly where it was when another is toggled', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['AB', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
     fireEvent.click(checkboxAt(3));

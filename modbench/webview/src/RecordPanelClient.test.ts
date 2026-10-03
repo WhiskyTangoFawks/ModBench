@@ -40,7 +40,7 @@ describe('RecordPanelClient.load', () => {
     expect(await promise).toMatchObject({ ok: true, result: null });
   });
 
-  it('returns a composite view on success, with immutableSet keyed by compound column identity, an origin-less entry being the elided Data origin',async () => {
+  it('returns a composite view on success, an origin-less entry keying immutableSet as the elided Data origin', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
       ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },

@@ -106,7 +106,7 @@ const fkCompareResult: CompareResult = compareResultFixture({
 });
 
 const overrideCompareResult: CompareResult = compareResultFixture({
-  conflictAll: 'Override',
+  conflictAll: 'Conflict',
   overrides: [
     compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master' }),
@@ -304,14 +304,14 @@ describe('RecordPanel', () => {
     expect(master.compareDocumentPosition(winner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('renders no Edit/View mode toggle, as editing affordances follow the column\'s plugin mutability, not a mode the user enters on every record navigation',async () => {
+  it('renders no Edit/View mode toggle, as editing affordances follow the column\'s plugin mutability, not a mode the user enters on every record navigation', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Name'));
     expect(screen.queryByText('Edit')).not.toBeInTheDocument();
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  it('a cell in an immutable column opens nothing when clicked, as nothing ever reaches a write from here',async () => {
+  it('a cell in an immutable column opens nothing when clicked, as nothing ever reaches a write from here', async () => {
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('Original Name'));
     fireEvent.click(screen.getByText('Original Name'));
@@ -324,7 +324,7 @@ describe('RecordPanel', () => {
 describe('RecordPanel — a column header', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('does not render origin inline, origin never being what the user reads',async () => {
+  it('does not render origin inline, origin never being what the user reads', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
@@ -366,12 +366,13 @@ describe('RecordPanel — column header native right-click menu', () => {
     ['an untracked', { isTracked: false, isImmutable: false }, false],
     ['a read-only', { isTracked: true, isImmutable: true }, false],
     ['an untracked read-only', { isTracked: false, isImmutable: true }, false],
-  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one, as track and decompile read the column\'s origin against the mods\' repositories, in the manifest',async (_what, facts, editable) => {
+  ])('the header of %s plugin says whether compile applies to it: on a tracked column, not on an untracked or a read-only one', async (_what, facts, editable) => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest = 'ModA';
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
       overrides: [compareOverride({
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest,
         isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
       })],
@@ -380,7 +381,7 @@ describe('RecordPanel — column header native right-click menu', () => {
         winnerColumn: 'MyMod.esp', cellStates: {},
       })],
     });
-    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: 'ModA', ...facts }] });
+    const { container } = renderPanel(compare, { plugins: [{ name: 'MyMod.esp', origin: originTrackAndDecompileReadAgainstTheModsRepositoriesInTheManifest, ...facts }] });
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
     await waitFor(() => {
@@ -389,7 +390,7 @@ describe('RecordPanel — column header native right-click menu', () => {
     });
   });
 
-  it('offers no compile on a column whose tracked state is unknown, as when /plugins fails a column is neither tracked nor untracked',async () => {
+  it('offers no compile on a column whose tracked state is unknown, as when /plugins fails a column is neither tracked nor untracked', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
@@ -449,7 +450,7 @@ describe('RecordPanel — a Partial Form column', () => {
     expect(screen.getByText('MyMod.esp').closest('th')).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
-  it('renders every cell of that column dimmed too, as one dimmed set reaches the header and every cell under it: a header-only rule would leave the cells at full weight once the non-sticky header scrolls away',async () => {
+  it('renders every cell of that column dimmed too, as one dimmed set reaches the header and every cell under it: a header-only rule would leave the cells at full weight once the non-sticky header scrolls away', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
@@ -461,7 +462,7 @@ describe('RecordPanel — a Partial Form column', () => {
     expect(cells[1]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
-  it('drops a diff node naming a member no override\'s schema declares, as the panel resolves every row\'s schema leaf itself and such a node has no shape to render against',async () => {
+  it('drops a diff node naming a member no override\'s schema declares, as the panel resolves every row\'s schema leaf itself and such a node has no shape to render against', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel({
       ...compareResult,
@@ -482,7 +483,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('control: a scalar cell in the identical tracked, editable column the flags cases use opens an editable input on double click',async () => {
+  it('control: a scalar cell in the identical tracked, editable column the flags cases use opens an editable input on double click', async () => {
     renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
 
@@ -503,7 +504,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
   });
 
-  it('reads a read-only column\u2019s flags as the editable column\u2019s do, as nothing marks its cells ahead of time, and writes nothing on a click',async () => {
+  it('reads a read-only column\u2019s flags as the editable column\u2019s do, as nothing marks its cells ahead of time, and writes nothing on a click', async () => {
     renderPanel(flagsCompareResult, { plugins: trackedMyModPluginsForTheRealEditableColumnsGate });
     await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(4));
     const [, masterCell, modCell] = Array.from(required(screen.getByText('Flags').closest('tr'), 'the Flags row').querySelectorAll('td'));
@@ -538,7 +539,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('applies green row background to a field whose own conflictAll is Override, each field\'s own diffs[].conflictAll driving its own row, never the record-wide CompareResult.conflictAll',async () => {
+  it('applies green row background to a field whose own conflictAll is Override, each field\'s own diffs[].conflictAll driving its own row, never the record-wide CompareResult.conflictAll', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
     await waitFor(() => screen.getByText('Name'));
@@ -749,7 +750,7 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('X')).toBeInTheDocument();
   });
 
-  it('child row for X shows each override\'s own sub-field value, the master\'s beside the override\'s: the delta struct expansion exists to show',async () => {
+  it('child row for X shows each override\'s own sub-field value, the master\'s beside the override\'s: the delta struct expansion exists to show', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('X'));
     expect(screen.getByText('15')).toBeInTheDocument();
@@ -943,7 +944,7 @@ describe('RecordPanel — a plugin mEdit cannot read', () => {
   });
 });
 
-describe('RecordPanel — incomplete-comparison banner',() => {
+describe('RecordPanel — incomplete-comparison banner', () => {
   const incompleteMessage = recordPanelIncompleteMessage(false);
   if (!incompleteMessage) throw new Error('expected a banner message when conflicts are not yet computed');
 
@@ -962,7 +963,7 @@ describe('RecordPanel — incomplete-comparison banner',() => {
     expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument();
   });
 
-  it('a panel already open when the sweep lands refetches and reflects settled data when CONFLICTS_COMPUTED arrives, not just clears its banner over stale content',async () => {
+  it('a panel already open when the sweep lands refetches and reflects settled data when CONFLICTS_COMPUTED arrives, not just clears its banner over stale content', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
@@ -983,7 +984,7 @@ describe('RecordPanel — incomplete-comparison banner',() => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it('does nothing when CONFLICTS_COMPUTED arrives before any record is loaded',() => {
+  it('does nothing when CONFLICTS_COMPUTED arrives before any record is loaded', () => {
     vi.stubGlobal('mEditFormKey', '');
     const load = vi.fn();
     renderPanel(compareResult, { load });
@@ -1171,7 +1172,7 @@ describe('RecordPanel — column collapse', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
-  it('clicking a plugin column header chip collapses that column, hiding its field values while the chip itself stays visible',async () => {
+  it('clicking a plugin column header chip collapses that column, hiding its field values while the chip itself stays visible', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
 
@@ -1216,7 +1217,7 @@ describe('RecordPanel — column collapse', () => {
   });
 });
 
-describe('RecordPanel — column widths: a column\'s header and every cell under it share one width',() => {
+describe('RecordPanel — column widths: a column\'s header and every cell under it share one width', () => {
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
@@ -1375,7 +1376,11 @@ const singleLeafAliasResult: CompareResult = compareResultFixture({
   })],
 });
 
-describe('RecordPanel — union element rows: two plugins can disagree on which leaf of an abstract union an element is, so the rows are both leaves\' members, which a member\'s `variants`, read through the element\'s discriminator, name', () => {
+const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
+
+describe('RecordPanel — union element rows:two plugins can disagree on which leaf of an abstract union an element is, so the rows are both leaves\' members, which a member\'s `variants`, read through the element\'s discriminator, name', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -1383,8 +1388,6 @@ describe('RecordPanel — union element rows: two plugins can disagree on which 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
-  const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
 
   function labelCell(label: string): HTMLElement {
     return required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('td'), `the '${label}' cell's td ancestor`);
@@ -1419,7 +1422,7 @@ describe('RecordPanel — union element rows: two plugins can disagree on which 
     expect(required(externalCells[2], "the 'external' row's third cell").textContent).toBe('{…}');
   });
 
-  it('shows no row for a member no plugin\'s leaf declares, an element\'s rows being the ones its own plugins carry rather than one per schema member, as the backend drops a member null in every column',async () => {
+  it('shows no row for a member no plugin\'s leaf declares, an element\'s rows being the ones its own plugins carry rather than one per schema member, as the backend drops a member null in every column', async () => {
     renderPanel(singleLeafAliasResult);
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('aliases'));
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('[0]'));
@@ -1485,7 +1488,7 @@ const unionTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
 ];
 
-describe('RecordPanel — an abstract union\'s leaf is an editable field, a Mutagen class name being a wire token the user is never shown: the panel displays the reflector\'s labels and posts the values',() => {
+describe('RecordPanel — an abstract union\'s leaf is an editable field, a Mutagen class name being a wire token the user is never shown: the panel displays the reflector\'s labels and posts the values', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -1515,7 +1518,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
     expect(options.map(o => o.textContent)).toEqual(['Npc Level', 'Pc Level Mult']);
   });
 
-  it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label, a discriminator switch being the Kind row\'s own set while the backend switches the leaf',async () => {
+  it('posts set of the discriminator member carrying the chosen leaf\'s own wire value, not its label, a discriminator switch being the Kind row\'s own set while the backend switches the leaf', async () => {
     await renderLevel();
     fireEvent.doubleClick(screen.getByText('Npc Level'));
     vi.mocked(vscode.postMessage).mockClear();
@@ -1537,7 +1540,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field, a Muta
   });
 });
 
-describe('RecordPanel — an absent member reads as its default, the document omitting a member equal to its default, while "—" is kept for a member whose metadata says null is a value',() => {
+describe('RecordPanel — an absent member reads as its default, the document omitting a member equal to its default, while "—" is kept for a member whose metadata says null is a value', () => {
   const statsMeta: FieldMetadata = fieldMeta({
     name: 'Stats', type: 'struct',
     fields: [
@@ -1571,9 +1574,6 @@ describe('RecordPanel — an absent member reads as its default, the document om
     })],
   });
 
-  const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
-  const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
-  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1607,7 +1607,7 @@ describe('RecordPanel — an absent member reads as its default, the document om
     expect(cellAt('Owner', 2).textContent).toBe('—');
   });
 
-  it('editing an absent int from its default posts one set with the typed value, the default being what the editor opens on so a value equal to it is no edit at all',async () => {
+  it('editing an absent int from its default posts one set with the typed value, the default being what the editor opens on so a value equal to it is no edit at all', async () => {
     await renderExpanded();
     vi.mocked(vscode.postMessage).mockClear();
     const cell = cellAt('Weight', 2);
@@ -1622,7 +1622,7 @@ describe('RecordPanel — an absent member reads as its default, the document om
   });
 });
 
-describe('RecordPanel — a member of an absent owner reads as nothing, not as zero: it is not absent-by-default, there being nothing for it to be a member of',() => {
+describe('RecordPanel — a member of an absent owner reads as nothing, not as zero: it is not absent-by-default, there being nothing for it to be a member of', () => {
   const boundsMeta: FieldMetadata = fieldMeta({
     name: 'Bounds', type: 'struct', allowsNull: true,
     fields: [fieldMeta({ name: 'X', type: 'int' })]});
@@ -1654,9 +1654,6 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
     ],
   });
 
-  const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
-  const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
-  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1680,14 +1677,14 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
     expect(cellAt('[1]', 2).textContent).toBe('');
   });
 
-  it('a Partial Form column\'s fields read as nothing, the classifier nulling every field so none is absent-by-default',async () => {
+  it('a Partial Form column\'s fields read as nothing, the classifier nulling every field so none is absent-by-default', async () => {
     renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => gridBodyRowsNotHeaderLoadIndexes().getByText('Name'));
     expect(cellAt('Name', 1).textContent).toBe('Original Name');
     expect(cellAt('Name', 2).textContent).toBe('');
   });
 
-  it('a Partial Form column\'s non-nullable struct field, whose absence would otherwise read as its default, reads as nothing, not as its default',async () => {
+  it('a Partial Form column\'s non-nullable struct field, whose absence would otherwise read as its default, reads as nothing, not as its default', async () => {
     const sizeMeta: FieldMetadata = fieldMeta({
       name: 'Size', type: 'struct', fields: [fieldMeta({ name: 'Width', type: 'int' })]});
     renderPanel(compareResultFixture({
@@ -1715,7 +1712,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing, not as z
   });
 });
 
-describe('RecordPanel — an absent non-nullable struct reads as its default members, as it has no "unset" so the column that omits it holds that struct at its defaults, member by member',() => {
+describe('RecordPanel — an absent non-nullable struct reads as its default members, as it has no "unset" so the column that omits it holds that struct at its defaults, member by member', () => {
   const sizeMeta: FieldMetadata = fieldMeta({
     name: 'Size', type: 'struct',
     fields: [
@@ -1742,9 +1739,6 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
     })],
   });
 
-  const gridBodyRowsNotHeaderLoadIndexes = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
-  const cellsOf = (label: string) => required(gridBodyRowsNotHeaderLoadIndexes().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
-  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1772,7 +1766,7 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
   });
 });
 
-describe('RecordPanel — a translated string leaf, whose document spelling is an object, posts its object so the codec receives what it wrote',() => {
+describe('RecordPanel — a translated string leaf, whose document spelling is an object, posts its object so the codec receives what it wrote', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
   const compare: CompareResult = compareResultFixture({
@@ -1802,7 +1796,7 @@ describe('RecordPanel — a translated string leaf, whose document spelling is a
 });
 
 
-describe('RecordPanel — a column whose record failed to parse stays in the grid rather than vanishing, showing what was stored and offering nothing that writes; both columns are tracked and mutable, so only the diagnosis can explain a read-only cell',() => {
+describe('RecordPanel — a column whose record failed to parse stays in the grid rather than vanishing, showing what was stored and offering nothing that writes; both columns are tracked and mutable, so only the diagnosis can explain a read-only cell', () => {
   const PARSE_DIAGNOSIS = 'the PERK entry point did not have expected parameter type flag';
 
   const keywordsMeta: FieldMetadata = fieldMeta({
@@ -1867,7 +1861,7 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('tells the host the focused cell\'s context when a cell takes the focus, as a field gesture from the palette acts on the focused cell and gets the context its right-click would hand the command',async () => {
+  it('tells the host the focused cell\'s context when a cell takes the focus, as a field gesture from the palette acts on the focused cell and gets the context its right-click would hand the command', async () => {
     renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Readable Name'));
     vi.mocked(vscode.postMessage).mockClear();
@@ -1883,7 +1877,7 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
       isRecord(c) && c.plugin === 'Good.esp' && String(c.webviewSection).split(' ').includes('stringValue'))).toBe(true));
   });
 
-  it('tells the host a cell was entered on a click, and not when a re-read changes its text, as a background re-read must not take the focus from the list the user is working in (copy value and the name filter act on the focused view)',async () => {
+  it('tells the host a cell was entered on a click, and not when a re-read changes its text, as a background re-read must not take the focus from the list the user is working in (copy value and the name filter act on the focused view)', async () => {
     const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
     const told = (): { context: unknown; entered: unknown }[] => vi.mocked(vscode.postMessage).mock.calls
       .map(([m]: unknown[]) => m)
@@ -1947,7 +1941,7 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     expect(container.querySelectorAll('[data-focused-cell]')).toHaveLength(1);
   });
 
-  it('offers no array right-click commands, where the readable column offers them, the array gestures being host commands gated on the row\'s own data-vscode-context',async () => {
+  it('offers no array right-click commands, where the readable column offers them, the array gestures being host commands gated on the row\'s own data-vscode-context', async () => {
     const { container } = renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Stored Name'));
 
@@ -1957,7 +1951,7 @@ describe('RecordPanel — a column whose record failed to parse stays in the gri
     expect(arraySections('Good.esp')).not.toEqual([]);
   });
 
-  it('marks the extended editor read-only on its string cells, where the readable column does not, Open in Editor… staying on a read-only column as the only way to read a long value in full',async () => {
+  it('marks the extended editor read-only on its string cells, where the readable column does not, Open in Editor… staying on a read-only column as the only way to read a long value in full', async () => {
     const { container } = renderPanel(compare, { plugins });
     await waitFor(() => screen.getByText('Stored Name'));
 
@@ -2184,7 +2178,7 @@ describe('RecordPanel — the Record Header', () => {
     expect(required(cell.querySelector('input'), 'the cell\'s input')).toHaveValue(33890154);
   });
 
-  const partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn =(): CompareResult => {
+  const partialFormCopyWithHeaderMembersAndNoFieldsOfItsOwn = (): CompareResult => {
     const record = native('000800:MyMod.esp', 'Inside');
     return {
       ...record,
@@ -2220,7 +2214,7 @@ describe('RecordPanel — the Record Header', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('offers the FormID no open-field-value menu, where a text field offers one, open field value being a text field\'s and the FormID reading as a reference',async () => {
+  it('offers the FormID no open-field-value menu, where a text field offers one, open field value being a text field\'s and the FormID reading as a reference', async () => {
     vi.stubGlobal('mEditFormKey', '000800:MyMod.esp');
     const { container } = renderPanel(native('000800:MyMod.esp', 'MovedNpc'), { plugins: tracked });
     await waitFor(() => screen.getByText('A Name'));
@@ -2231,7 +2225,7 @@ describe('RecordPanel — the Record Header', () => {
   });
 });
 
-describe('RecordPanel — a field the schema marks read-only, the reason coming from the field\'s own metadata with nothing in the panel deciding it',() => {
+describe('RecordPanel — a field the schema marks read-only, the reason coming from the field\'s own metadata with nothing in the panel deciding it', () => {
   const reason = 'a known upstream defect';
   const tracked = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true }];
   const lockedName = fieldMeta({ name: 'Name', type: 'string', readOnlyReason: reason });

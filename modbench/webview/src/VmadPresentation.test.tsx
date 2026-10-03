@@ -33,7 +33,7 @@ const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): Fi
   ...extra,
 });
 
-const leafTypedDataMeta: FieldMetadata = field('Data', 'bool', {
+const leafTypedDataMetaShapedAsItsFirstLeaf: FieldMetadata = field('Data', 'bool', {
   variants: {
     ScriptBoolProperty: field('Data', 'bool'),
     ScriptFloatProperty: field('Data', 'float'),
@@ -49,7 +49,7 @@ const propertyMeta = fieldMeta({
   fields: [
     field('Name', 'string'),
     field('Flags', 'flags', { enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
-    leafTypedDataMeta,
+    leafTypedDataMetaShapedAsItsFirstLeaf,
     field('Object', 'formKey'),
     field('Alias', 'int'),
     field('Objects', 'array', { isArray: true, elementType: objectBindingMeta('') }),
@@ -60,23 +60,25 @@ const propertyMeta = fieldMeta({
   ],
 });
 
+const FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS = { scripts: ['Name'], properties: ['Name'], aliases: ['Property.Alias'] };
+
 const scriptsMeta = fieldMeta({
   name: 'Scripts', type: 'array', isArray: true,
-  keyMembers: ['Name'],
+  keyMembers: FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.scripts,
   elementType: fieldMeta({
     name: '', type: 'struct',
     leafTypeName: 'ScriptEntry',
     fields: [
       field('Name', 'string'),
       field('Flags', 'enum', { enumMembers: [{ value: 'Local', bitValue: null, label: null }] }),
-      field('Properties', 'array', { isArray: true, keyMembers: ['Name'], elementType: propertyMeta }),
+      field('Properties', 'array', { isArray: true, keyMembers: FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.properties, elementType: propertyMeta }),
     ],
   }),
 });
 
 const aliasesMeta = fieldMeta({
   name: 'Aliases', type: 'array', isArray: true,
-  keyMembers: ['Property.Alias'],
+  keyMembers: FALLOUT4_VMAD_ANNOTATIONS_KEYED_ARRAYS.aliases,
   elementType: fieldMeta({
     name: '', type: 'struct',
     leafTypeName: 'QuestFragmentAlias',
@@ -446,7 +448,7 @@ describe('a row of a keyed array is identified by its key', () => {
   });
 });
 
-describe('a member the column\'s own leaf does not declare, as Data\'s shape varies by leaf and a leaf the variants do not name has no Data at all, not the base shape\'s default',() => {
+describe('a member the column\'s own leaf does not declare, as Data\'s shape varies by leaf and a leaf the variants do not name has no Data at all, not the base shape\'s default', () => {
   it('renders nothing in that column, beside the value the other column\'s leaf holds', async () => {
     currentCompare = compareResult({
       [PLUGIN]: [script('Guard', [documentSpelledProperty('Owner', 'ScriptIntProperty', { Data: 3 })])],

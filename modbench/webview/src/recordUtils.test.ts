@@ -37,7 +37,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   };
 }
 
-describe('buildColumns, one column per CompareOverride in the wire\'s own load order (master leftmost, winner rightmost, as in xEdit), trusted as sent rather than re-sorted',() => {
+describe('buildColumns, one column per CompareOverride in the wire\'s own load order (master leftmost, winner rightmost, as in xEdit), trusted as sent rather than re-sorted', () => {
   it('returns one column per override, in response order', () => {
     const cols = buildColumns([
       makeOverride('Fallout4.esm'),
@@ -47,7 +47,7 @@ describe('buildColumns, one column per CompareOverride in the wire\'s own load o
     expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
 
-  it('keys same-filename columns by the compound (plugin, origin) identity, minted here once for every consumer',() => {
+  it('keys same-filename columns by the compound (plugin, origin) identity, minted here once for every consumer', () => {
     const cols = buildColumns([
       makeOverride('Shared.esp', { origin: 'ModA' }),
       makeOverride('Shared.esp', { origin: 'ModB' }),
@@ -61,7 +61,7 @@ describe('buildColumns, one column per CompareOverride in the wire\'s own load o
   });
 });
 
-describe('isArrayElementHop, one rule, since the panel\'s handler wiring, the cell menu and the native menu all ask it',() => {
+describe('isArrayElementHop, one rule, since the panel\'s handler wiring, the cell menu and the native menu all ask it', () => {
   it('an array\'s element is one, at a position or at its index in each column', () => {
     expect(isArrayElementHop({ kind: 'index', index: 0 })).toBe(true);
     expect(isArrayElementHop({ kind: 'element', indexes: { 'A.esp': 0 }, keyed: false })).toBe(true);
@@ -73,7 +73,7 @@ describe('isArrayElementHop, one rule, since the panel\'s handler wiring, the ce
   });
 });
 
-describe('getAtPath, one recursive reader for a value at any depth along an envelope\'s hops',() => {
+describe('getAtPath, one recursive reader for a value at any depth along an envelope\'s hops', () => {
   it('returns the root itself for an empty path', () => {
     expect(getAtPath({ X: 1 }, [])).toEqual({ X: 1 });
   });
@@ -103,7 +103,7 @@ describe('getAtPath, one recursive reader for a value at any depth along an enve
   });
 });
 
-describe('arrayElementContext, whose `path` is the envelope\'s own wire path, never a bare scalar index, as an array nested inside a struct needs every hop',() => {
+describe('arrayElementContext, whose `path` is the envelope\'s own wire path, never a bare scalar index, as an array nested inside a struct needs every hop', () => {
   it('produces the data-vscode-context object for a middle element', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Items' }, { kind: 'index', index: 1 }];
     expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path, 3, false)).toEqual({
@@ -149,14 +149,14 @@ describe('arrayParentContext', () => {
     });
   });
 
-  it('carries every hop down to a nested array-parent cell, as its "Add" addresses the array itself, more hops than the record\'s own member',() => {
+  it('carries every hop down to a nested array-parent cell, as its "Add" addresses the array itself, more hops than the record\'s own member', () => {
     const path: PathHop[] = [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }];
     const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', path);
     expect(ctx.path).toEqual(path);
   });
 });
 
-describe('combineVscodeContexts, combining rather than picking one, as a row can be more than one structural-op target and both menus must be reachable from the same cell',() => {
+describe('combineVscodeContexts, combining rather than picking one, as a row can be more than one structural-op target and both menus must be reachable from the same cell', () => {
   const TAGS_PATH: PathHop[] = [{ kind: 'member', name: 'tags' }, { kind: 'index', index: 0 }];
 
   it('returns undefined when every context is absent', () => {
@@ -201,7 +201,7 @@ describe('combineVscodeContexts, combining rather than picking one, as a row can
   });
 });
 
-describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case',() => {
+describe('headerCellContext, unconditional on the column\'s read-only-ness, as copying from an immutable column is the headline use case', () => {
   it('identifies the header cell, carrying the column\'s own record identity', () => {
     expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', true)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
@@ -221,7 +221,7 @@ describe('headerCellContext, unconditional on the column\'s read-only-ness, as c
   });
 });
 
-describe('stringValueContext, the string-cell right-click menu\'s own identity and the extended editor\'s only trigger, since no left-click gesture reaches it',() => {
+describe('stringValueContext, the string-cell right-click menu\'s own identity and the extended editor\'s only trigger, since no left-click gesture reaches it', () => {
   const NAME_PATH: PathHop[] = [{ kind: 'member', name: 'Name' }];
 
   it('carries the cell\'s own identity, record label, current value and readOnly flag', () => {
@@ -247,7 +247,7 @@ describe('stringValueContext, the string-cell right-click menu\'s own identity a
     ).readOnly).toBe(true);
   });
 
-  it('carries every hop of a nested string leaf\'s wire path, so its set envelope lands at its own hops, not the member it sits under',() => {
+  it('carries every hop of a nested string leaf\'s wire path, so its set envelope lands at its own hops, not the member it sits under', () => {
     const path: PathHop[] = [
       { kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' },
       { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
@@ -295,7 +295,7 @@ describe('wirePath', () => {
   });
 });
 
-describe('metaAtPath, descending FieldMetadata itself, as a collapsed row\'s prose summary has only a path, never the row\'s own resolved metadata',() => {
+describe('metaAtPath, descending FieldMetadata itself, as a collapsed row\'s prose summary has only a path, never the row\'s own resolved metadata', () => {
   const idMeta = fieldMeta({ name: 'Id', type: 'string' });
   const weightMeta = fieldMeta({ name: 'Weight', type: 'int' });
   const entryMeta = fieldMeta({ name: '', type: 'struct', fields: [idMeta, weightMeta] });

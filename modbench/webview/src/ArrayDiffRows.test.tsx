@@ -24,14 +24,14 @@ const linkArrayMeta = fieldMeta({
   elementType: fieldMeta({ name: '', type: 'formKey' }),
 });
 
-const decoyFieldAheadOfTheArrayInEveryColumn =fieldMeta({ name: 'Level', type: 'int' });
+const decoyFieldAheadOfTheArrayInEveryColumn = fieldMeta({ name: 'Level', type: 'int' });
 
 const pluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true },
   { name: 'MyMod.esp' },
 ];
 
-const sequenceAlignedLinkArrayCompareResult:CompareResult = compareResultFixture({
+const sequenceAlignedLinkArrayCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
     compareOverride({
@@ -214,7 +214,7 @@ describe('RecordPanel — array child rows (in sequence)', () => {
     expect(screen.queryByText('{…}')).not.toBeInTheDocument();
   });
 
-  it('row [1] is empty, not a null link reading "—", for MyMod.esp, whose array has no such element',async () => {
+  it('row [1] is empty, not a null link reading "—", for MyMod.esp, whose array has no such element', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('[1]'));
     const cells = required(screen.getByText('[1]').closest('tr'), 'the [1] row').querySelectorAll('td');
@@ -370,7 +370,7 @@ describe('RecordPanel — array editing', () => {
     await waitFor(() => expect(lastToldElement(vscode.postMessage)).toMatchObject({ path: [member('Values'), at(2)], canMoveUp: true }));
   });
 
-  it('the first element tells the host it cannot move up, as VS Code moves a line: at the end of the array nothing happens',async () => {
+  it('the first element tells the host it cannot move up, as VS Code moves a line: at the end of the array nothing happens', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
     await waitFor(() => screen.getByText('[0]'));
@@ -483,7 +483,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     expect(lastEnvelope()).toEqual({ op: 'set', path: [member('ObjectBounds'), member('X1')], value: 7 });
   });
 
-  it('a member of a struct element inside a struct, as OMOD Properties[i].step sits two hops deep: every hop from the record down',async () => {
+  it('a member of a struct element inside a struct, as OMOD Properties[i].step sits two hops deep: every hop from the record down', async () => {
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -756,7 +756,7 @@ describe('RecordPanel — an element of an array without a key is addressed at i
 
 describe('RecordPanel — an element after a null slot is addressed at its own index', () => {
   const itemsMeta = fieldMeta({ name: 'Items', type: 'array', isArray: true, elementType: fieldMeta({ name: '', type: 'string' }) });
-  const sequenceAlignedWithNullSlot =compareResultFixture({
+  const sequenceAlignedWithNullSlot = compareResultFixture({
     overrides: [
       compareOverride({
         formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', editorId: 'TestNPC',

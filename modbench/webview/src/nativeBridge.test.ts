@@ -87,7 +87,7 @@ describe('pickFormKey', () => {
   });
 });
 
-describe('requestRecordLoad, whose request shape and reply unwrapping are its own',() => {
+describe('requestRecordLoad, whose request shape and reply unwrapping are its own', () => {
   function postedFormKeyRequestId(): string {
     const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
     if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) {

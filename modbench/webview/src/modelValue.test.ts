@@ -32,7 +32,7 @@ const arrayMeta = fieldMeta({
 const resolved: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'Dogmeat' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-describe('modelValue, the single definition of the string a cell\'s editor shows for every field type — scalar types', () => {
+describe('modelValue — scalar types, among the field types whose editor string it alone defines', () => {
   it('string: the string itself', () => {
     expect(modelValue('Dogmeat', strMeta)).toBe('Dogmeat');
   });
@@ -148,7 +148,7 @@ describe('modelValue — struct/array summary rows (JSON, not a prose summary)',
 });
 
 describe('modelValue — a type the wire sends that this union does not name', () => {
-  it('stringifies like every other scalar, rather than reading as unset, for a backend field type FieldType has not caught up with',() => {
+  it('stringifies like every other scalar, rather than reading as unset, for a backend field type FieldType has not caught up with', () => {
     const futureMeta: FieldMetadata = { ...fieldMeta({ name: 'Future', type: 'string' }), type: 'quaternion' };
     expect(modelValue(42, futureMeta)).toBe('42');
   });

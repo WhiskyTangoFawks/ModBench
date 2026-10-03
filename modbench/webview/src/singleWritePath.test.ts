@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('the record editor webview writes through exactly one message, EDIT_FIELD, from one module, so the grid and the palette share one write path', () => {
+describe('the record editor webview writes through exactly one message, EDIT_FIELD, from one module', () => {
   const dir = __dirname;
 
   const sources = fs.readdirSync(dir)

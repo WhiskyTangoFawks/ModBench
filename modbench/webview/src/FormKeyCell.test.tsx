@@ -34,7 +34,7 @@ describe('FormKeyCell — read-only column', () => {
   });
 });
 
-describe('FormKeyCell — immutable column opens nothing', () => {
+describe('FormKeyCell — immutable column opens nothing, leaving copy to Ctrl+C', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
@@ -81,7 +81,7 @@ describe('FormKeyCell — immutable column opens nothing', () => {
   });
 });
 
-describe('FormKeyCell — editable column', () => {
+describe('FormKeyCell — editable column, whose plain click opens the native QuickPick so selection and Ctrl+V are the platform\'s', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('shows "—" when value is null, not a picker button', () => {
@@ -101,7 +101,7 @@ describe('FormKeyCell — editable column', () => {
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
 
-  it('plain click on a cell with a value opens the picker seeded with the reference it replaces',() => {
+  it('plain click on a cell with a value opens the picker seeded with the reference it replaces', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
@@ -134,7 +134,7 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  it('seeds the picker with the composite label the cell displays, as the picker\'s input is a mutable column\'s only surface for copying it',() => {
+  it('seeds the picker with the composite label the cell displays, as the picker\'s input is a mutable column\'s only surface for copying it', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
@@ -148,7 +148,7 @@ describe('FormKeyCell — editable column', () => {
   });
 });
 
-describe('FormKeyCell — mutable column gates opening on the focus check, as ScalarCell and FlagCell do',() => {
+describe('FormKeyCell — mutable column gates opening on the focus check', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   it('the open trigger opens the picker on a cell with a value', () => {
@@ -177,7 +177,7 @@ describe('FormKeyCell — mutable column gates opening on the focus check, as Sc
 describe('FormKeyCell — resolution-driven label', () => {
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 
-  it('labels the link with the resolved EditorID [FormKey] composite, not the bare EditorID, as the grid\'s generic FormKey fields do',() => {
+  it('labels the link with the resolved EditorID [FormKey] composite, not the bare EditorID, as the grid\'s generic FormKey fields do', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onCommit={vi.fn()} resolution={validType} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
