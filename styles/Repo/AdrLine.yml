@@ -1,0 +1,10 @@
+extends: existence
+message: "Cite the ADR, never a line inside it: '%s'. Its decision is the authority (docs/adr/CLAUDE.md)."
+level: error
+ignorecase: true
+nonword: true
+scope:
+  - comment
+  - text
+raw:
+  - 'ADR-\d{4}\.\d|ADR-\d{4}(?:\]\([^)\s]*\))?(?:''s)?,?\s+(?:invariants?|inv\.|strategic invariants|derived tactical observations|consequences|(?:decisions?|points?|rules?)\s+\d)'

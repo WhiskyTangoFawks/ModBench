@@ -12,9 +12,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>ADR-0009 invariant 4: every reconcile validates every file, so a snapshot equal to the
-/// one held still finds what changed on disk since, and one that finds nothing publishes
-/// nothing.</summary>
 public sealed class EveryReconcileValidatesTests : IDisposable
 {
     private const string Untracked = "Untracked.esp";
@@ -250,8 +247,6 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Assert.NotEmpty(failing.RequireReads().GetDocuments(_untracked.KeyOf()));
     }
 
-    // ADR-0007 invariant 3: a mod gaining a repository moves which truth answers for its plugin,
-    // and nothing in the load order moves with it.
     [Fact]
     public async Task Subscribed_AnEqualSnapshotArriving_ReadsAPluginWhoseModGainedARepository_FromItsTree()
     {

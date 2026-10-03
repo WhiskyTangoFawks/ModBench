@@ -329,8 +329,6 @@ describe('a field gesture from the palette', () => {
   });
 });
 
-// commands.md, Record: the grid's edit and the palette fire one command. The grid names the column's
-// (origin, filename) as the Argument (ADR-0012, invariant 1).
 describe('modbench.record.editField', () => {
   const path: ArrayElementContext['path'] = [{ kind: 'member', name: 'Height' }];
   const envelope = { op: 'set' as const, path, value: 0.75 };

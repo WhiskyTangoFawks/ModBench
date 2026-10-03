@@ -146,8 +146,6 @@ describe('buildLoadOrderRows', () => {
     ]);
   });
 
-  // ADR-0013, invariant 2: a disabled mod's own plugin is still in the snapshot, with no slot and
-  // never winning — plugins.txt and mod order decide nothing about whether it is indexed.
   it('a disabled mod\'s own plugin is sent with no slot, not enabled, not winning', () => {
     const fakeIndex = index({}, {}, { Disabled: [{ relativePath: 'Off.esp', absolutePath: '/mods/Disabled/Off.esp' }] });
 
@@ -293,8 +291,6 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: '/game/Data', plugins: [sent(a), sent(stray)] });
   });
 
-  // ADR-0013 invariant 3: Mod Management alone decides the active plugins. The rivals: the value's
-  // row order standing in for the line order, and a disabled or overridden row slipping in.
   it('sends as active the winning plugin of each enabled line, in line order', () => {
     const first = row('first.esp', 'ModF', 0);
     const second = row('second.esp', 'ModS', 1);
@@ -305,8 +301,6 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshotOf([second, disabled, overridden, unlisted, first])?.active).toEqual([address(first), address(second)]);
   });
 
-  // ADR-0013, invariant 2 vs invariant 3: a disabled mod's plugin is named in `plugins` — the
-  // snapshot's every-plugin half — but never in `active`, since it never wins.
   it('sends a disabled mod\'s plugin in plugins, never in active', () => {
     const a = row('a.esp', 'ModA', 0);
     const disabledModPlugin = row('off.esp', 'ModOff', null, { enabled: false, winning: false });

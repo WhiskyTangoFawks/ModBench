@@ -358,9 +358,6 @@ describe('Instance — the value', () => {
     ]);
   });
 
-  // ADR-0013, invariant 2: the snapshot names every plugin in the instance, disabled mods'
-  // included. Rival: scoping the walk to enabled mods, which leaves a disabled mod's own plugin
-  // out of `plugins` entirely.
   it('carries a disabled mod\'s own plugin, with no slot, not enabled, not winning', async () => {
     const { root, instance } = realInstance();
     const path = await writeModFile(root, 'Harder VATS', 'Harder VATS.esp', 'disabled mod plugin');
@@ -1217,8 +1214,6 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
 
-  // ADR-0013 invariant 3: the game's masters come from the per-release table and its Creation Club
-  // plugins from the game folder's list, each only where the game can load it from.
   it('carries the plugins the game loads with no line: its masters, then its Creation Club plugins', async () => {
     const { root, instance, setResolver } = await minimalInstance();
     const gameRoot = join(root, 'Game');

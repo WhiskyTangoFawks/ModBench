@@ -263,7 +263,6 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
-    // ADR-0012 invariant 1: a filename alone names no one plugin, so none is guessed.
     it('refuses a record whose argument states no origin, naming it, and still deletes the rest', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });

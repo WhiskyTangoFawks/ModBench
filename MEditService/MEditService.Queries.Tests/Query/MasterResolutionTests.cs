@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
 
-// ADR-0012 invariant 4: an active plugin is flagged for each master in its header that is not
-// active, as MO2's PluginList::testMasters flags it. Driven through GetPlugins, the one public door.
 public class MasterResolutionTests
 {
     private static (LoadOrderEntry Registered, PluginContent? Content) Plugin(string name, params string[] masters) =>
@@ -81,7 +79,6 @@ public class MasterResolutionTests
         Assert.Empty(result);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — each plugin answers for its own masters.
     [Fact]
     public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
     {

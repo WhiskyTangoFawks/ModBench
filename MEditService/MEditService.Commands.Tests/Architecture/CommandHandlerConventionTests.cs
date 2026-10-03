@@ -4,9 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Commands.Tests.Architecture;
 
-/// <summary>The command convention, enforced rather than described (ADR-0014 invariant 3): one type
-/// per gesture, one public method, applied-or-refusal returned. No interface states it, because
-/// Track is asynchronous and the rest are not.</summary>
 public sealed class CommandHandlerConventionTests
 {
     // Each gesture's change appends its handler and the member its carrier answers with. Spelled
@@ -25,8 +22,6 @@ public sealed class CommandHandlerConventionTests
         (typeof(PutLoadOrderHandler), "Applied"),
     ];
 
-    // What the gestures answer and report through, each with its own refusal vocabulary. The carrier
-    // is the gesture's own (ADR-0014 invariant 4).
     private static readonly Type[] Carriers =
     [
         typeof(CompiledPlugin),
@@ -74,7 +69,7 @@ public sealed class CommandHandlerConventionTests
         Assert.True(
             LandedType(answer, landed) == typeof(bool),
             $"{answer.Name} has no public {landed} of type bool, so {handler.Name}'s carrier does " +
-            "not answer with it (ADR-0014 invariant 4).");
+            "not answer with it (ADR-0014).");
     }
 
     [Theory]

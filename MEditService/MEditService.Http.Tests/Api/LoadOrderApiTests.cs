@@ -34,7 +34,6 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(2, plugins.Count);
     }
 
-    // ADR-0013 invariant 3: which plugins are active is Mod Management's to state.
     [Fact]
     public async Task PutLoadOrder_WithNoActiveField_Returns400()
     {

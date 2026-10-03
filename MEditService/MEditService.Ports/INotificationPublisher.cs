@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Ports;
 
-/// <summary>ADR-0014 invariant 2: the notification channel's one publish surface. Who is
+/// <summary>ADR-0014: the notification channel's one publish surface. Who is
 /// listening — the SSE stream, a test recorder, nobody — is the adapter's business alone.</summary>
 public interface INotificationPublisher
 {
@@ -49,7 +49,7 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
 }
 
 /// <summary>At a snapshot: each tracked plugin whose bytes differ from what Modbench last wrote
-/// (ADR-0003 invariant 3). The mod's whole answer, so a plugin it leaves out matches; a mod whose
+/// (ADR-0003). The mod's whole answer, so a plugin it leaves out matches; a mod whose
 /// repository went names none.</summary>
 public sealed record ExternalChangeNotification(string Origin, IReadOnlyList<ChangedPlugin> Plugins)
     : Notification("external-change")

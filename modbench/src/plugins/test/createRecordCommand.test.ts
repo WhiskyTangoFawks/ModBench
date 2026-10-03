@@ -142,7 +142,6 @@ describe('modbench.record.create', () => {
     expect(reporter.reports).toEqual([]);
   });
 
-  // ADR-0012 invariant 1: the overridden plugin of the name is indexed too.
   it('creates in the group\'s own plugin of a shared filename', async () => {
     const { steps, create } = harness();
     const overriding = new RecordTypeNode('MyPatch.esp', recordTypeCountFixture({ type: 'npc_', count: 3, displayName: 'Non-Player Character' }), 'ModB', EDITABLE);

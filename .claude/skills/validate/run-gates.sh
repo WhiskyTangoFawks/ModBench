@@ -78,8 +78,8 @@ COMMENT_DOCS=$(tracked '*.md')
 MJS=$(tracked '*.mjs')
 RAW_FILES=$(printf '%s\n%s\n%s\n' "$COMMENT_CODE" "$MJS" "$(tracked '*.sh' '*.yml' '*.json' '*.csproj' '*.props')" | grep -v '^$')
 # Code gets two passes: comments as code, then the whole file as raw text, which reaches string
-# literals. History is left to the raw pass so a comment hit is reported once.
-NOT_RAW='.Name!="Repo.History"'
+# literals. History and AdrLine are left to the raw pass so a comment hit is reported once.
+NOT_RAW='.Name!="Repo.History" && .Name!="Repo.AdrLine"'
 COMMENT_OK=true
 VALE="$(bash "$ROOT/.claude/skills/validate/install-vale.sh")" || COMMENT_OK=false
 (cd "$ROOT" && echo "$COMMENT_DOCS" | xargs -d '\n' -r "$VALE" --config=.vale.ini) || COMMENT_OK=false

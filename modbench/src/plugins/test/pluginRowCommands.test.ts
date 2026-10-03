@@ -98,8 +98,6 @@ describe('modbench.mod.track', () => {
   const SECOND = { name: 'Second.esp', origin: 'ModA' };
   const OTHER = { name: 'Other.esp', origin: 'ModB' };
   const INSTANCE_PLUGINS = [FIRST, OTHER, { name: 'Loose.esp', origin: 'overwrite' }, SECOND];
-  // ADR-0007 invariant 7: each track call carries the upstream versions ModA records and ModB does
-  // not. The separator first, named like a mod, is the rival a lookup by name alone falls for.
   const INSTANCE_MODS: InstanceValue['mods'] = [
     { kind: 'separator', name: 'ModA', enabled: true },
     { kind: 'mod', name: 'ModA', enabled: true, version: '1.2.3' },

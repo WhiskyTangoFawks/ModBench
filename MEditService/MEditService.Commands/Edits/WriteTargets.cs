@@ -30,7 +30,7 @@ internal sealed class WriteTargets(
     internal readonly record struct EditTarget(
         GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, SourceRepository Repository);
 
-    // The working tree is the only thing asked (ADR-0015 invariant 5): a second edit builds on the
+    // The working tree is the only thing asked (ADR-0015): a second edit builds on the
     // first, and no document comes from the Index. The copy gestures read the source instead.
     internal RecordEditResult? ResolveEditTarget(PluginAddress plugin, string formKey, out EditTarget target)
     {
@@ -162,7 +162,7 @@ internal sealed class WriteTargets(
     }
 
     // Tracking is per mod folder and implies neither that the plugin is active nor that it is not
-    // (ADR-0012 invariant 5).
+    // (ADR-0012).
     private RecordEditResult? RefuseIfNotLoaded(PluginAddress plugin) =>
         loadOrder.Current.IsActive(plugin)
             ? null
@@ -182,7 +182,7 @@ internal sealed class WriteTargets(
                 // The palette entry verbatim; naming a command that does not exist is its own dead end.
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
-    // ADR-0012 invariant 2: the game's Data folder and Overwrite are both origins with no mod
+    // ADR-0012: the game's Data folder and Overwrite are both origins with no mod
     // folder, but neither one's way out is the other's.
     private static string NoModFolderMessage(PluginAddress plugin) =>
         PluginOrigin.IsOverwrite(plugin.Origin)
@@ -202,7 +202,7 @@ internal sealed class WriteTargets(
         internal IEnumerable<string> Taken => Effective.Concat(Head);
     }
 
-    // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
+    // Both refs from the tree alone (ADR-0015): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
     internal Allocator AllocatorOver(SourceRepository repository, PluginAddress plugin) =>
         AllocatorOver(
@@ -349,7 +349,7 @@ internal sealed class WriteTargets(
             : null;
     }
 
-    // Parse status is not a precondition (ADR-0015 invariant 5): the codec is asked at edit time, and
+    // Parse status is not a precondition (ADR-0015): the codec is asked at edit time, and
     // its own words are the reason.
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,

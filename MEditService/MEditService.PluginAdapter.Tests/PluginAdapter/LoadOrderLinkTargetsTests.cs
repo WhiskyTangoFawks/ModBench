@@ -5,8 +5,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-/// <summary>Where a link points, answered from the plugin files the load order loads (ADR-0005 rule
-/// 2): a link cache over those files, and nothing live crossing back out.</summary>
 public sealed class LoadOrderLinkTargetsTests
 {
     private const string BaseName = "LinkBase.esm";

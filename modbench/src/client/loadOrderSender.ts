@@ -11,7 +11,7 @@ export interface LoadOrderSnapshot {
   readonly gameRelease: string;
 }
 
-/** The port members the sender itself calls — narrowed off `MEditClient` (ADR-0014 invariant 2). */
+/** The port members the sender itself calls — narrowed off `MEditClient` (ADR-0014). */
 export type LoadOrderSendClient = Pick<MEditClient, 'putLoadOrder' | 'status' | 'onStatusChanged'>;
 
 /** ADR-0013: the one implementation of the Instance-to-mEdit arrow. The sequencing — connect

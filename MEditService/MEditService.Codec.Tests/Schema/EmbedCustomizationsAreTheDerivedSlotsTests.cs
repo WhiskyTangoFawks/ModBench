@@ -65,10 +65,10 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) =>
             EveryDerivedTypeRedeclares(((MemberExpression)field.Body).Member.Name)
                 ? this
-                : throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
+                : throw new NotSupportedException("Omit drops real data (ADR-0006).");
 
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
-            throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
+            throw new NotSupportedException("Omit drops real data (ADR-0006).");
 
         private static bool EveryDerivedTypeRedeclares(string member)
         {

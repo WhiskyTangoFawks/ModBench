@@ -3,9 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The repository is the only type naming a path under source (ADR-0014 invariant 5): the
-/// root folder, the door's file names and the JSON suffix are spelled in its own files and nowhere
-/// else.</summary>
 public sealed class SourcePathLiteralScanTests
 {
     // The layout tokens, as C# string literals. A glob like "*.json" is a search filter rather than a
@@ -105,8 +102,6 @@ public sealed class SourcePathLiteralScanTests
                 .Select(o => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {o.Literal}: {o.Count}"))
             .Order(StringComparer.Ordinal)];
 
-    // The same file name prefix elsewhere in the tree is not the repository: only Source itself is
-    // exempt (ADR-0014 invariant 5).
     private static bool IsRepositoryFile(string root, string file) =>
         Path.GetFileName(file).StartsWith(RepositoryFilePrefix, StringComparison.Ordinal)
         && Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')

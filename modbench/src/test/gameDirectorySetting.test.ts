@@ -1,5 +1,3 @@
-// ADR-0015 invariant 7: a watcher event, activation and refresh run the same whole recompute,
-// debounced once. An edited setting reaches the value as one of those refreshes.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   SETTING_SETTLE_MS, refreshOnGameDirectoryChange,

@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order
-/// value in, registrations and one sequence advance out, over a real DuckDB.</summary>
 public sealed class IndexerTests
 {
     private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
@@ -57,9 +55,6 @@ public sealed class IndexerTests
         return stack.Entries.Single(e => e.IsWinner).Plugin.Name;
     }
 
-    // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
-    // next snapshot here, so the plugins the Index has open still carry the old winner: an Indexer
-    // reading them answers B.esp.
     [Fact]
     public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromThePluginsItHasOpen()
     {

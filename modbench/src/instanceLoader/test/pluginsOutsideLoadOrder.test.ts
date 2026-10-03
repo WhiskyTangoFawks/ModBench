@@ -78,7 +78,6 @@ describe('findPluginsOutsideLoadOrder', () => {
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([]);
   });
 
-  // ADR-0013, invariant 2: a disabled mod's plugin is still indexed, outside the load order.
   it('finds a plugin file in a disabled mod', () => {
     const index = indexOf({}, { DisabledMod: ['Off.esp'] });
 

@@ -43,8 +43,6 @@ describe('buildFileConflictIndex', () => {
     expect(index.filesByMod.has('ModA')).toBe(false);
   });
 
-  // ADR-0013, invariant 2: the snapshot names every plugin, disabled mods' included, so their
-  // files are still read — into their own map, apart from conflict resolution.
   it('lists a disabled mod\'s own files under disabledModFiles', async () => {
     const index = await buildFileConflictIndex([mod('ModA', false), mod('ModB')], fixture, () => {});
     const modAFiles = index.disabledModFiles.get('ModA')?.map((f) => f.relativePath).sort();

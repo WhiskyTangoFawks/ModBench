@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
+/// <summary>ADR-0014: the Index's other half. Ingest, the registration sweep and the
 /// validation of every plugin, deciding nothing — the load order value answers which plugins are
 /// active, the schema where a field goes.</summary>
 public sealed class Indexer : IQueryIndex, IDisposable
@@ -27,7 +27,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private readonly TimeProvider _timeProvider;
     // Where a rebuild's refill runs; a test holds it back to order it against a reconcile.
     private readonly TaskScheduler _refillScheduler;
-    // ADR-0013 invariant 4: the one load order, the kernel's. The Indexer reads it for which plugins
+    // ADR-0013: the one load order, the kernel's. The Indexer reads it for which plugins
     // are active and for a plugin's mod folder; it never writes it and keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
@@ -51,7 +51,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     private long _version;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
-    /// project names the store, its factory or how a file is opened (ADR-0014 invariant 5).</summary>
+    /// project names the store, its factory or how a file is opened (ADR-0014).</summary>
     public Indexer(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
@@ -75,7 +75,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider);
     }
 
-    // ADR-0013 invariant 4: a plugin that failed to read stays a row in an error state until what it
+    // ADR-0013: a plugin that failed to read stays a row in an error state until what it
     // reads from changes. The state recorded alongside it is what changing detects.
     private readonly Dictionary<PluginAddress, FailedRead?> _failedReads = new(PluginAddress.Comparer);
 
@@ -140,7 +140,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
     /// <summary>Assembled from live state rather than cached, so it cannot drift from the reconcile
     /// it describes; failures come straight off the held plugins' own list rather than a second
-    /// place that could disagree (ADR-0013 invariant 4).</summary>
+    /// place that could disagree (ADR-0013).</summary>
     public LoadOrderStatus Status
     {
         get
@@ -171,14 +171,14 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0015 invariant 3: every site that changes what Status reports calls this after. _lock is
+    // ADR-0015: every site that changes what Status reports calls this after. _lock is
     // reentrant (see ReapplyFilter), so this is safe to call from inside a lock a caller already
     // holds.
     private void PublishStatus() => _notifications?.Publish(new LoadOrderStatusNotification(Status));
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
-    /// <summary>ADR-0015 invariant 3: everything projected inside the scope advances the sequence
+    /// <summary>ADR-0015: everything projected inside the scope advances the sequence
     /// once, when the outermost of any nested scopes closes. A no-op with no store held.</summary>
     public IDisposable BeginProjection()
     {
@@ -195,7 +195,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         else index.Announce(publish);
     }
 
-    // ADR-0015 invariant 3: a whole plugin re-derived or removed has too many rows to name, so the
+    // ADR-0015: a whole plugin re-derived or removed has too many rows to name, so the
     // announcement names the plugin and the sequence the store reached once the projection landed.
     private void AnnouncePluginChanged(IRecordIndex index, PluginAddress key) =>
         index.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, index.Sequence)));
@@ -220,8 +220,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0013 invariant 1's one verb, on the caller's thread, then every plugin validated
-    /// (ADR-0009 invariant 4). Every outcome becomes status data, published once
+    /// <summary>ADR-0013's one verb, on the caller's thread, then every plugin validated
+    /// (ADR-0009). Every outcome becomes status data, published once
     /// <paramref name="version"/> is answered; one that changes nothing publishes nothing.</summary>
     public void Reconcile(LoadOrderSnapshot snapshot, long version) => Reconcile(() => (snapshot, version));
 
@@ -339,7 +339,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0009 invariant 3.
+    // ADR-0009.
     // Published before any plugin is opened, which is what makes the reconcile progressive.
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
     {
@@ -427,7 +427,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         // A plugin in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
         var arriving = resolved.Where(r => !open.ContainsKey(r.Key) && !StillFailing(index, r.Key, r.Path)).ToList();
-        // ADR-0007 invariant 3: which truth a plugin reads is its folder's answer, and the stamp
+        // ADR-0007: which truth a plugin reads is its folder's answer, and the stamp
         // records the one its rows came from. Tracking and untracking move the first alone, and no
         // load-order difference above names them.
         var stampedFromSource = index.At(RecordRef.Effective).GetTrackedPlugins();
@@ -465,7 +465,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
 
         foreach (var key in moved)
         {
-            // ADR-0009 invariant 1: a reorder, an enable, a change of which plugin wins — all the
+            // ADR-0009: a reorder, an enable, a change of which plugin wins — all the
             // same SQL-only move: no re-read, no re-index, so it is safe to apply live and
             // unprompted.
             var metadata = held.Update(open[key], snapshot.RegistrationOf(key));
@@ -503,8 +503,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
-        // arrived earlier was browsable but its winner state was not yet decided (ADR-0013
-        // invariant 1).
+        // arrived earlier was browsable but its winner state was not yet decided (ADR-0013).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
         index.UpdateWinners(snapshot.Active);
@@ -638,8 +637,8 @@ public sealed class Indexer : IQueryIndex, IDisposable
         return repository.ChangesSince(key, since) is { Named: not null } tree ? new FailedRead(binary, tree) : null;
     }
 
-    // ADR-0009 invariant 4: a plugin the store has seen, still matching the disk, is registered, not
-    // indexed; ADR-0015 invariant 4 validates a tracked plugin by content on that same warm path.
+    // ADR-0009: a plugin the store has seen, still matching the disk, is registered, not
+    // indexed; ADR-0015 validates a tracked plugin by content on that same warm path.
     private void RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
@@ -697,7 +696,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         PublishStatus();
     }
 
-    // Where a plugin's records come from (ADR-0007 invariant 3): a tracked plugin's source tree,
+    // Where a plugin's records come from (ADR-0007): a tracked plugin's source tree,
     // the binary for everything else. Both branches end in the same Index call, keeping the read
     // model free of a dialect.
 
@@ -710,7 +709,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         HeldPlugins held, IRecordIndex index, PluginMetadata plugin,
         bool holdsTree, CancellationToken token)
     {
-        // One advance for the whole plugin, whichever door it came through (ADR-0015 invariant 3).
+        // One advance for the whole plugin, whichever door it came through (ADR-0015).
         using var _ = index.BeginProjection();
 
         if (!holdsTree)
@@ -759,7 +758,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             ?? throw new InvalidOperationException(
                 $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so its origin is neither the game's own Data directory nor Overwrite.");
 
-    // ADR-0005 invariant 2: the binary reaches the index as documents, through the adapter's own door,
+    // ADR-0005: the binary reaches the index as documents, through the adapter's own door,
     // never as a mod this side holds.
     private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
@@ -774,7 +773,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
             _schemaReflector.GetSchemas(gameRelease),
             new PluginStrings(LoadOrderSnapshot.FileFolderOf(plugin.Path), dataFolderPath));
 
-    // ADR-0015 invariant 4: validates every plugin held, by content, and repairs what differs.
+    // ADR-0015: validates every plugin held, by content, and repairs what differs.
     private void ValidateIndex(CancellationToken token)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
@@ -825,8 +824,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
                 return;
             }
 
-            // Gained records are refreshed by key so the rows that moved are named (ADR-0015,
-            // invariant 3).
+            // Gained records are refreshed by key so the rows that moved are named (ADR-0015).
             if (report.NeedsRebuild && report.ChangedKeys.Count > 0 && modFolder is { } folder)
             {
                 RefreshByKeysOrReadWhole(index, key, folder, report.ChangedKeys);
@@ -908,12 +906,12 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0013 invariant 3: the sweep is handed who competes, the active plugins the kernel's load
+    // ADR-0013: the sweep is handed who competes, the active plugins the kernel's load
     // order holds. Read whole, not per plugin.
     private IReadOnlyList<RegisteredPlugin> Active() => _holder.Current.Active;
 
     // Which truth it reads is the plugin's: an untracked plugin from its binary, a tracked plugin
-    // from its source tree (ADR-0007 invariant 3), because reading a tracked plugin's binary would
+    // from its source tree (ADR-0007), because reading a tracked plugin's binary would
     // discard uncommitted edits.
     private void ReindexHeldPlugin(PluginAddress key)
     {
@@ -922,7 +920,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldPlugin(key);
-        // ADR-0015 invariant 3: a whole plugin re-derived is one projection, so it is one advance
+        // ADR-0015: a whole plugin re-derived is one projection, so it is one advance
         // whichever branch below runs.
         using var projection = index.BeginProjection();
 
@@ -1114,7 +1112,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0009 invariant 5: drops the index file, floors its sequence at what this process
+    /// <summary>ADR-0009: drops the index file, floors its sequence at what this process
     /// handed out, and returns the refill against the load order held, run off the caller's thread.
     /// </summary>
     public Task RebuildStore(GameRelease gameRelease, string instanceRoot)
@@ -1129,7 +1127,7 @@ public sealed class Indexer : IQueryIndex, IDisposable
     }
 
     /// <summary>Reconciles every arrival of the load order, changed or not, on a thread of its own
-    /// (ADR-0013 invariant 1): the snapshot held when it runs, so an overtaken arrival reconciles
+    /// (ADR-0013): the snapshot held when it runs, so an overtaken arrival reconciles
     /// the newer.</summary>
     public void Subscribe() => _holder.Arrived += OnArrived;
 

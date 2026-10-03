@@ -86,8 +86,6 @@ public sealed class LoadOrderHolderTests
         Assert.True(secondSeen);
     }
 
-    // ADR-0013 invariant 1: every recompute sends the snapshot, changed or not, because the snapshot
-    // is also the signal that a file may have changed. The version moves only with the load order.
     [Fact]
     public void Apply_ASnapshotEqualToTheCurrentOne_Arrives_WithTheCurrentVersion()
     {

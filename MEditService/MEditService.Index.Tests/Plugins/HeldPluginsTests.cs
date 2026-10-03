@@ -20,8 +20,6 @@ public sealed class HeldPluginsTests
 
     // ── Open ────────────────────────────────────────────────────────────────────
 
-    // ADR-0013 invariant 3: the game's master arrives in the snapshot, active and first, as Mod
-    // Management sends it.
     [Fact]
     public void Open_TheGamesMasterSentFirst_LoadsBeforeTheUserPlugin()
     {

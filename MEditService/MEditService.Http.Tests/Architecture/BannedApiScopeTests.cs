@@ -4,14 +4,8 @@ using Microsoft.CodeAnalysis;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>RS0030 is error everywhere. BannedSymbols.txt (time, blocking waits) binds
-/// unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 invariant 2) binds by name the seven production
-/// boxes that must never hold a live Mutagen object.</summary>
 public sealed class BannedApiScopeTests
 {
-    // Directory.Build.props sets MutagenBanIncluded for exactly these seven projects — Codec and
-    // PluginAdapter are production too, excluded because their game assembly reference already
-    // holds ADR-0005 invariant 2 for them.
     private static readonly string[] MutagenBanProductionProjects =
     [
         "MEditService.Commands",
@@ -143,8 +137,6 @@ public sealed class BannedApiScopeTests
                 && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
                 && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
 
-    // ADR-0005 invariant 2: only these two boxes call the codec's whole-mod doors, and the package
-    // edge holds the rule for them — neither belongs among the banned-file seven.
     [Fact]
     public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
     {

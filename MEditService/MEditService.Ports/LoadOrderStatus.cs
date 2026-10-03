@@ -19,7 +19,7 @@ public enum LoadOrderState
     /// <summary>Every plugin has been indexed and the winner sweep has run.</summary>
     Ready,
 
-    /// <summary>ADR-0009 point 5: another Modbench window holds this instance's index file.
+    /// <summary>ADR-0009: another Modbench window holds this instance's index file.
     /// <see cref="LoadOrderStatus.Message"/> names it; nothing here is held.</summary>
     HeldElsewhere,
 
@@ -40,7 +40,7 @@ public sealed record LoadOrderStatus(
     LoadOrderState State,
     // Every plugin the snapshot holds, which the reconcile indexes.
     int TotalPlugins,
-    // The plugins the game loads, which every read of a record sees (ADR-0009 invariant 1).
+    // The plugins the game loads, which every read of a record sees (ADR-0009).
     int ActivePlugins,
     IReadOnlyList<IndexedPlugin> IndexedPlugins,
     bool ConflictsComputed,

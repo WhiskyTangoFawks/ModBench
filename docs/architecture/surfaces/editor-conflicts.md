@@ -1,6 +1,6 @@
 # Editor: conflict colours
 
-The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md), invariant 3; [the conflict-model notes](../../research/xedit-conflict-model.md)). mEdit classifies; the panel only draws what it is given ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md), invariant 6). Where the panel departs from xEdit, [xedit.md](../../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
+The record panel colours each row and each cell by the record order conflict it shows, so a conflict reads at a glance instead of by diffing each value. The classification is xEdit's two-axis model ([ADR-0018](../../adr/0018-xedit-is-the-reference-for-record-editing.md); [the conflict-model notes](../../research/xedit-conflict-model.md)). mEdit classifies; the panel only draws what it is given ([ADR-0005](../../adr/0005-the-document-is-the-record-model.md)). Where the panel departs from xEdit, [xedit.md](../../out-of-scope/xedit.md) says why. The rows, columns and cells are [editor.md](editor.md)'s.
 
 Each story cites its source. A story with no source is owned here.
 
@@ -19,7 +19,7 @@ The axes are independent. A Conflict row can hold a Master cell and a ConflictWi
 | Override | green | copies change the field, and none disagrees with another |
 | Conflict | orange | copies disagree on the field |
 
-*ADR-0018, invariant 3; xedit.md, divergence 4*
+*ADR-0018; xedit.md, divergence 4*
 
 As a user, I want:
 
@@ -37,7 +37,7 @@ As a user, I want:
 | ConflictWins | orange | default | disagrees with another copy, and wins |
 | ConflictLoses | red | red | disagrees with another copy, and loses |
 
-*ADR-0018, invariant 3*
+*ADR-0018*
 
 As a user, I want:
 

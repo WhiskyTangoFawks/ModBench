@@ -338,7 +338,6 @@ describe('RecordPanel', () => {
 describe('RecordPanel — a column header', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // ADR-0012 invariant 3: origin is never what the user reads.
   it('does not render origin inline', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);

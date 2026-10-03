@@ -370,7 +370,6 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    // ADR-0013 invariant 3: Mod Management takes the Creation Club plugins from the game folder.
     describe('the game folder\'s Creation Club list', () => {
       let game: string;
 

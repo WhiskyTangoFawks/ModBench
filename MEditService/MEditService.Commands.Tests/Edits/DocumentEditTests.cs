@@ -493,8 +493,6 @@ public sealed class DocumentEditTests : IDisposable
         Assert.Equal(before, _fixture.Document(formKey));
     }
 
-    // Shape is the codec's and nothing else is (ADR-0015 invariant 5): what a FormKey points at is
-    // not a fact the document carries, so the edit lands and the read side reports it.
     [Theory]
     [InlineData("ABCDEF:Nowhere.esp")]
     [InlineData("kywd")]

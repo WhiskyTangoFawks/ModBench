@@ -1,5 +1,3 @@
-// A file the Downloads view read of its own is a second generation of a row the Instance's value
-// already holds (ADR-0015 invariant 6); a file it wrote skipped the commands box.
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -21,8 +21,6 @@ describe('the focused cell message', () => {
   });
 });
 
-// The record panel's own read, asked of the host rather than fetched by the webview itself
-// (ADR-0002 invariant 2: nothing outside the client names the port).
 describe('the record load request and its answer', () => {
   it('carries the formKey and the requestId that pairs the reply', () => {
     expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' }))

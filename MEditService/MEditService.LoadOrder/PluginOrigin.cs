@@ -9,8 +9,8 @@ public static class PluginOrigin
     /// with an MO2 mod folder name: those live under `mods/`, never `Data`.</summary>
     public const string DataDirectory = "Data";
 
-    /// <summary>The other reserved origin (ADR-0012 invariant 1): the files outside every mod,
-    /// not a mod's folder itself (invariant 2).</summary>
+    /// <summary>The other reserved origin (ADR-0012): the files outside every mod,
+    /// not a mod's folder itself.</summary>
     public const string Overwrite = "overwrite";
 
     /// <summary>Whether origin is the reserved value above, compared as the load order compares

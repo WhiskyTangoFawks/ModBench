@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0009 invariant 1: a file changing and the active plugins changing are two events. A
-/// tracked plugin the game does not load answers no read, and its rows still follow its file.</summary>
 public sealed class InactivePluginProjectionTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;

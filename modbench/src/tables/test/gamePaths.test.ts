@@ -107,8 +107,6 @@ describe('dataFolderFile', () => {
   });
 });
 
-// ADR-0013 invariant 3: Mod Management takes the game's masters from this table. Each release's
-// list is Mutagen's Implicits.Listings, in the order the game loads them.
 describe('gameMastersOf', () => {
   it('answers the game\'s masters, in the order the game loads them', () => {
     expect(gameMastersOf('Fallout4')).toEqual([

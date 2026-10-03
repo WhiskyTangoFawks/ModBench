@@ -183,8 +183,6 @@ public class RegistrationScopingTests
         Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
     }
 
-    // ADR-0009 invariant 1: a plugin in the snapshot that the game does not load is still indexed,
-    // and no read of a record sees it.
     [Fact]
     public void APluginThatIsNotActive_AnswersNoReadOfARecord()
     {

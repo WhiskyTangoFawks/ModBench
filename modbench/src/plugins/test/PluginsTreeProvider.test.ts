@@ -515,8 +515,6 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 });
 
-// plugins.md, A row, Identity; ADR-0012, invariant 1: VS Code keeps a row's expansion and
-// selection across a rebuild by its identity.
 describe('PluginsTreeProvider — a plugin row is identified by its kind and (origin, filename)', () => {
   const idsOf = async (tree: PluginsTreeProvider): Promise<(string | undefined)[]> =>
     (await tree.getChildren()).map((row) => row.id);
@@ -699,8 +697,6 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], drop: { kind: 'before', name: 'D.esp' } }]);
   });
 
-  // ADR-0015 invariant 2: the rows change when the watch reads plugins.txt back, never on the
-  // drop's own say-so.
   it('a drop refreshes nothing after its write', async () => {
     const { fired } = await drag(new FakeSource(), ['A.esp'], 'D.esp');
     expect(fired).toBe(false);
@@ -968,7 +964,6 @@ describe('PluginsTreeProvider — a drop keeps master and blueprint order', () =
     expect(reports).toEqual([]);
   });
 
-  // ADR-0012 invariant 1: another plugin of the same name is not this line's plugin.
   it('fires the move when mEdit holds the dependant\'s name only from another origin', async () => {
     const { calls } = await dropAfterReconcile(
       ['A.esp'], node('D.esp'), heldAll({ 'B.esp': { origin: 'OtherMod', masters: ['A.esp'] } }));
@@ -1103,7 +1098,6 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   const lockedRowOf = async (tree: PluginsTreeProvider) =>
     present((await tree.getChildren()).find((n) => n instanceof ImplicitMasterNode), 'the locked row');
 
-  // ADR-0012 invariant 1: the row's own file, by (origin, filename), never the winning copy's.
   it('resolves a plugin row to its own plugin\'s file, by origin and file name', async () => {
     const { tree } = makeTree([
       plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', path: '/data/mods/Winner/Base.esp', winning: true }),
@@ -1143,8 +1137,6 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
   });
 });
 
-// The plugins the game loads with no line render as forced-on rows ahead of plugins.txt lines.
-// The instance value names them (ADR-0013 invariant 3); this tree only places them.
 describe('PluginsTreeProvider — implicit master rows', () => {
   // The Instance adapter's answer, which the tree takes rather than builds.
   const ADAPTER_ANSWER = (name: string) => `/adapter/Data/${name}`;
@@ -1616,8 +1608,6 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(await h.tree.getChildren()).toEqual(before);
   });
 
-  // ADR-0012 invariant 1: two plugins that share a filename are never one plugin.
-  // Both orders of mEdit's answer, so neither plugin's facts can win by arriving last.
   it.each([
     ['after', [held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true }), held('Shared.esp', { origin: 'ModB' })]],
     ['before', [held('Shared.esp', { origin: 'ModB' }), held('Shared.esp', { origin: 'ModA', isImmutable: true, isTracked: true })]],
@@ -1679,8 +1669,6 @@ describe('PluginsTreeProvider — the conditions a record row reads are its plug
     expect(client.calls.filter((c) => c.method === 'getRecords')).toHaveLength(reads);
   });
 
-  // ADR-0012 invariant 1: a locked row is the plugin its origin names, which lockedOriginOf gives
-  // it, never whichever plugin of its file name mEdit listed last. Both orders of mEdit's answer.
   const DATA_COPY = held('Fallout4.esm', { origin: 'Data', isImmutable: true });
   const MOD_COPY = held('Fallout4.esm', { origin: 'ModA', isTracked: true });
   const lockedTree = (modCopyWins: boolean) => makeTree(
@@ -1799,8 +1787,6 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
   });
 });
 
-// plugins.md, States 4; ADR-0009 point 5: `heldElsewhere` overrides every row; `failed` only a
-// row this reload never reached, held rows staying browsable.
 describe("PluginsTreeProvider — the load order's own refusal", () => {
   const heldElsewhere = { kind: 'heldElsewhere' as const, message: 'another Modbench window holds this instance' };
   const failed = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };
@@ -1910,8 +1896,6 @@ describe("PluginsTreeProvider — the load order's own refusal", () => {
   });
 });
 
-// plugins.md, States 3: mEdit confirmed unreachable — the same Disconnected/Stopped the status
-// bar reads (ADR-0002 invariant 2), wired in directly rather than inferred from a failed read.
 describe('PluginsTreeProvider — applyBackendUnreachable', () => {
   it('names the reason on a row, before any reconcile has landed', async () => {
     const h = makeTree([A_ROW()]);
@@ -2009,8 +1993,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toEqual([]);
   });
 
-  // ADR-0012 invariant 1: a locked row reads its own copy's answer, the copy lockedOriginOf names,
-  // never whichever copy of the name mEdit listed last. Both orders of mEdit's answer.
   const ownCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'Data', hasMatchingRecords: matches });
   const modCopy = (matches: boolean) => held('Fallout4.esm', { origin: 'ModA', hasMatchingRecords: matches });
   it.each([
@@ -2145,8 +2127,6 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
-  // ADR-0015 invariant 3: mEdit's published rows re-read the facts at any moment, a reconcile's
-  // hand-off in flight included, and that hand-off is the only thing that says which plugins mEdit holds.
   it('a fact re-read during a reconcile hand-off leaves the hand-off standing', async () => {
     const h = makeTree([A_ROW()]);
     let resolveSlow!: (plugins: PluginMetadata[]) => void;
@@ -2183,8 +2163,6 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(expectInstanceOf(children[0], RecordTypeNode).description).toBe('5');
   });
 
-  // ADR-0012 invariant 1: the overridden plugin of the name is indexed too, so a filename alone
-  // could read either.
   it('reads the row\'s own plugin of a shared filename, and every row beneath it carries that plugin', async () => {
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
@@ -3132,7 +3110,6 @@ describe('PluginsTreeProvider — changed outside Modbench', () => {
     expect(item.tooltip).toBe('A.esp\nSomeMod');
   });
 
-  // ADR-0012 invariant 1: the same file name in another mod is another plugin.
   it('leaves the same file name in another mod alone', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
@@ -3339,7 +3316,6 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect(item.tooltip).toBe('Shared.esp\nModA');
   });
 
-  // ADR-0012 invariant 1: the other plugin of the name being held says nothing of this one.
   it('expands the row as still indexing while only the other plugin has landed', async () => {
     const h = makeTree([SHARED_ROW()]);
     h.tree.applyIndexed([{ name: 'Shared.esp', origin: 'ModB' }], []);
@@ -3382,7 +3358,6 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     expect((await rowItem(h)).tooltip).toContain('AMaster.esm');
   });
 
-  // ADR-0012 invariant 1: another plugin of the name is another plugin, so its facts are not this row's.
   it('states nothing of another plugin of the name when the row origin matches no plugin the answer names', async () => {
     const h = makeTree([plugin({ name: 'A.esp', slot: 0, origin: 'RenamedMod' })]);
     await reconcile(h, [held('A.esp', {

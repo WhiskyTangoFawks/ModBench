@@ -14,7 +14,7 @@ Each story cites its source. A story with no source is owned here.
 
 ## Opening
 
-The record tab is a VS Code editor, and each record has its own address. Preview, pinning, Go Back and Go Forward, the recent editors, reopening a closed tab, and restoring the tabs after a reload behave as they do for any file. *VS Code; ADR-0018, invariant 1*
+The record tab is a VS Code editor, and each record has its own address. Preview, pinning, Go Back and Go Forward, the recent editors, reopening a closed tab, and restoring the tabs after a reload behave as they do for any file. *VS Code; ADR-0018*
 
 As a user, I want:
 
@@ -34,7 +34,7 @@ One line above the grid: the record type as xEdit names it, then `EditorID [Form
 
 As a user, I want:
 
-1. Record Header as the grid's first row, as in xEdit. Its rows are the header members Mutagen reads for the game, such as Record Flags, FormID and Form Version, in xEdit's order and under xEdit's labels. Each edits as any field does. *xEdit; ADR-0005, invariant 1; xedit.md, divergence 18*
+1. Record Header as the grid's first row, as in xEdit. Its rows are the header members Mutagen reads for the game, such as Record Flags, FormID and Form Version, in xEdit's order and under xEdit's labels. Each edits as any field does. *xEdit; ADR-0005; xedit.md, divergence 18*
 2. The FormID to show and take the FormKey. A plugin header's FormID is read-only, and an override's is refused, naming its master, where the record is native. *xedit.md, divergences 9 and 16*
 
 ## Columns
@@ -42,7 +42,7 @@ As a user, I want:
 As a user, I want:
 
 1. One column for each active plugin that holds the record, in plugin order: the record's master on the left, the winning copy on the right. *xEdit; ADR-0012*
-2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. *ADR-0012, invariant 5*
+2. A plugin that is not active not to be a column: an overridden plugin, a disabled plugin, or a plugin in a disabled mod. *ADR-0012*
 3. To collapse a column to a narrow strip by clicking its header, and to restore it the same way.
 4. A cell in a column that cannot be edited to open no editor, as in xEdit. Nothing marks its cells ahead of time. Its header says why. *xEdit; ADR-0018*
 5. Each column sized to fit, and its edge to drag to resize it.
@@ -52,19 +52,19 @@ As a user, I want:
 
 | Part | What it shows | Source |
 |---|---|---|
-| Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, and its file name. | xEdit; ADR-0012, invariant 3 |
+| Label | `[XX] File name`: the plugin's load index, in hex, `[FE:XXX]` for a light plugin, and its file name. | xEdit; ADR-0012 |
 | Status | the column's status, from the table below | ruling |
 | Colour | the column's worst cell colour | [editor-conflicts.md](editor-conflicts.md) |
-| Tooltip | the file name, the origin, and the status's reason in a sentence | ADR-0012, invariant 3 |
+| Tooltip | the file name, the origin, and the status's reason in a sentence | ADR-0012 |
 
 | Status | When | The tooltip says | Source |
 |---|---|---|---|
-| `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005, invariant 5 |
+| `(parse failure)` | mEdit could not read this copy of the record. The column shows what could be stored. | the diagnosis | ADR-0005 |
 | `(read-only)` | the plugin is the game's own, a DLC's or a Creation Club plugin | that the game's plugins are not edited | ruling |
 | `(in Overwrite)` | the plugin is in Overwrite | that Overwrite is not a mod, and a plugin moved into a mod can be tracked | ruling |
-| `(untracked)` | the plugin is not tracked | that Track, or decompile in a tracked mod, in this header's menu, makes it editable | ADR-0007, invariant 1 |
+| `(untracked)` | the plugin is not tracked | that Track, or decompile in a tracked mod, in this header's menu, makes it editable | ADR-0007 |
 | `(Partial Form)` | this copy carries only its children, and the game ignores its own fields | that the game ignores this copy's own fields | xEdit; [editor-fields.md](editor-fields.md) |
-| `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007, invariants 4 and 5 |
+| `(tracked)` | the plugin is tracked | that an edit lands in the mod's working tree, for review in Source Control | ADR-0007 |
 
 A column shows one status, the first in this table that applies. A Partial Form column is dimmed, header and cells alike, so it reads as outside the conflict after the header scrolls away.
 
@@ -79,7 +79,7 @@ As a user, I want:
 
 ## The focused cell
 
-The grid has one focused cell, and the keyboard acts on it. There is no selection of several cells and no text selection. *xEdit; ADR-0018, invariant 3*
+The grid has one focused cell, and the keyboard acts on it. There is no selection of several cells and no text selection. *xEdit; ADR-0018*
 
 As a user, I want:
 
@@ -107,10 +107,10 @@ As a user, I want:
 As a user, I want:
 
 1. Before the record's first read lands, an empty panel, so "not read yet" never reads as "no fields". *common, States, story 1*
-2. When the first read fails, in place of the grid, "Failed to load:" and the reason, and a line in the Output. No notification. The next good read replaces it. *common, States, story 2; ADR-0019, invariant 2*
-3. While mEdit is still indexing plugins, a message above the grid: "This record's comparison is not complete: the colours are not final." It goes by itself once they are, and the grid reads again. *ADR-0019, invariant 1*
+2. When the first read fails, in place of the grid, "Failed to load:" and the reason, and a line in the Output. No notification. The next good read replaces it. *common, States, story 2; ADR-0019*
+3. While mEdit is still indexing plugins, a message above the grid: "This record's comparison is not complete: the colours are not final." It goes by itself once they are, and the grid reads again. *ADR-0019*
 4. When a record the tab showed is gone from every plugin, the panel to say the record is gone, naming it, in place of the grid.
-5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the scroll stay. *ADR-0015, invariant 3*
+5. The panel to read the record again when mEdit reports it changed, from an edit of mine or from any other tool, and not before. The rows I expanded, the columns I collapsed, the focus and the scroll stay. *ADR-0015*
 6. While mEdit cannot read a plugin the panel shows, the message above the grid saying "Showing the last good read:" and the reason. *common, States, story 6*
 
 ## Menus and keys
@@ -136,7 +136,7 @@ As a user, I want:
 By [common.md](common.md#reporting). As a user, I want:
 
 1. A refused edit to raise a notification that says why and names the field. The cell shows mEdit's value again. *common, Unconfirmed writes, story 6*
-2. A failed copy to the clipboard to say so. *ADR-0019, invariant 2*
+2. A failed copy to the clipboard to say so. *ADR-0019*
 
 ## Test seam
 

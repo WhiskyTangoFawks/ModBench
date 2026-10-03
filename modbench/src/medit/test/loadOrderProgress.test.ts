@@ -45,8 +45,6 @@ describe('makeReconcileProgressHandler', () => {
   });
 });
 
-// ADR-0009 point 5; ADR-0019: the put's own outcome answers applied regardless of what the Index
-// found, so a tick carrying either refusal is the only place it ever reaches the extension.
 describe('reportIndexRefusal', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, holdsNone: false, failures: [], version: 1, ...over });

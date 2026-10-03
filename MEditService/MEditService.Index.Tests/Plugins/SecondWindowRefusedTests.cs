@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0009 invariant 5: a DuckDB file admits one writing process and Modbench runs one service per
-// window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
     private static Indexer MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);

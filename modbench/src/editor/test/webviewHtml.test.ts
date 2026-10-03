@@ -40,8 +40,6 @@ describe('buildWebviewHtml', () => {
     expect(nonce1).not.toBe(nonce2);
   });
 
-  // ADR-0002 invariant 2: nothing outside the mEdit client names the port. The record panel now
-  // reads through its host, so the webview never learns the backend's port at all.
   it('names no backend port, and no connect-src to localhost', () => {
     const html = buildWebviewHtml(BASE_PARAMS);
     expect(html).not.toContain('mEditBackendPort');

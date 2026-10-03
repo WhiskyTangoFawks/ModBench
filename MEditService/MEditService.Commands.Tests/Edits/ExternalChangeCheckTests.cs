@@ -10,9 +10,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Each time the snapshot arrives (ADR-0003 invariant 3): each tracked plugin's bytes against
-/// what Modbench last wrote, and the mod's untracked plugins, told through the port and kept
-/// nowhere.</summary>
 public sealed class ExternalChangeCheckTests : IDisposable
 {
     private const string PluginName = "Test.esp";
@@ -106,8 +103,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal([new ChangedPlugin(PluginName, null)], TheExternalChange().Plugins);
     }
 
-    // ADR-0003, Derived tactical observations: a missing ref counts as a change, and Modbench never
-    // guesses.
     [Fact]
     public void ASnapshot_NamesATrackedPlugin_WhoseLastWriteIsGone()
     {
@@ -231,7 +226,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // ADR-0003 invariant 3: Modbench keeps nothing about the change.
     [Fact]
     public void ASnapshot_WritesNothing_IntoTheMod()
     {
@@ -247,8 +241,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(before, FilesUnder(ModFolder));
     }
 
-    // ADR-0015 invariant 2: a restart and a live change are one call, so over the same bytes they
-    // tell the same.
     [Fact]
     public void ASecondSnapshot_OverTheSameBytes_TellsTheSame()
     {
@@ -309,7 +301,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(TheExternalChange().Plugins);
     }
 
-    // ADR-0003 invariant 3: once the new binary has landed, it alone is what Modbench last wrote.
     [Fact]
     public async Task ASnapshot_NamesAPlugin_WhoseBinaryWasPutBackToTheOneBeforeALandedCompile()
     {

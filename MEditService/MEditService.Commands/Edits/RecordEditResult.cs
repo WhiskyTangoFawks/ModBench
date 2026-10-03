@@ -15,7 +15,7 @@ public enum RecordEditRefusal
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
     PluginHasNoModFolder,
 
-    /// <summary>The game does not load the plugin (ADR-0012 invariant 5); the way out is enabling its
+    /// <summary>The game does not load the plugin (ADR-0012); the way out is enabling its
     /// line or moving its mod toward the winning end.</summary>
     PluginNotActive,
 

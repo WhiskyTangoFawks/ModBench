@@ -72,7 +72,6 @@ describe('noticeExternalChanges — a plugin changed outside Modbench', () => {
     expect(reporter.reports).toHaveLength(2);
   });
 
-  // ADR-0012 invariant 1: the same file name in another mod is another plugin.
   it('tells each mod apart, the same file name included', () => {
     const { client, reporter } = noticing();
     client.emit(settled('ModA', ['A.esp', 'aa']));

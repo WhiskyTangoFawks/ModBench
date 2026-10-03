@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014 invariant 3: the Index as Queries, its only reader, sees it — the reads, the
+/// <summary>ADR-0014: the Index as Queries, its only reader, sees it — the reads, the
 /// status, the sequence and the filter, plus setting and clearing the filter and the rebuild
 /// (target-architecture.d2 medit_core.queries).</summary>
 public interface IQueryIndex
@@ -18,7 +18,7 @@ public interface IQueryIndex
     /// holds it because the rows it prunes are the Index's.</summary>
     (string Sql, string Source)? ActiveFilter { get; }
 
-    /// <summary>ADR-0015 invariant 3: how far the projection has landed. 0 with no store held.
+    /// <summary>ADR-0015: how far the projection has landed. 0 with no store held.
     /// </summary>
     long Sequence { get; }
 

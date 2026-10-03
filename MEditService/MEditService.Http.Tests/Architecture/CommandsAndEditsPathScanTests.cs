@@ -3,8 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A path names the Source repository (ADR-0014.5); a plugin's bytes name the Plugin
-/// adapter (ADR-0005.2). Commands and Edits ask one of those layers instead.</summary>
 public sealed class CommandsAndEditsPathScanTests
 {
     // Neither a member named Path nor a type ending in Path (RelativePath, FieldPath) is a BCL call,

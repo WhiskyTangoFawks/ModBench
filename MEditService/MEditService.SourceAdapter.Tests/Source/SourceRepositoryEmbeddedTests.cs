@@ -13,9 +13,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The repository's document verbs for the records no path names: a container's own
-/// directory, and a child inlined in another document. Turning an identity into a path is its work
-/// alone (ADR-0014 invariant 5).</summary>
 public sealed class SourceRepositoryEmbeddedTests : IDisposable
 {
     private const string PluginName = "Embedded.esp";

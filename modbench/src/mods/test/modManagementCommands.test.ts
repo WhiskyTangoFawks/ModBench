@@ -536,8 +536,6 @@ describe('rename separator takes its separator through the gesture entry', () =>
     }
   });
 
-  // mods.md, Rename separator: a line in mod order is a separator whose folder may be gone, named
-  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
   it('refuses in the prompt a name a separator with no folder has, in any case, and takes its own', async () => {
     const root = await instanceHolding([], [
       { kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' },
@@ -682,8 +680,6 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     }
   });
 
-  // mods.md, Add separator: a line in mod order is a separator whose folder may be gone, named
-  // without case (ADR-0017, invariant 5). Rivals: asking the folders alone, or an exact match.
   it('refuses in the prompt a name a separator with no folder has, in any case', async () => {
     const root = await instanceHolding([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
     try {

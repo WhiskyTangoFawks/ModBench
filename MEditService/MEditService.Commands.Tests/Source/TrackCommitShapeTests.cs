@@ -15,8 +15,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>What <c>git log</c> on <c>main</c> shows after Track of a plugin or a selection, through
-/// the Commands box over a fixture mod folder and real git (ADR-0007 invariants 2 and 6).</summary>
 public sealed class TrackCommitShapeTests : IDisposable
 {
     private const string ModName = "TwoPluginMod";

@@ -154,7 +154,6 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    // ---- parse status is the codec's, asked at edit time (ADR-0015 invariant 5) ----
 
     [Fact]
     public void EditField_OfADocumentTheCodecCannotRead_RefusesWithTheCodecsOwnMessage()

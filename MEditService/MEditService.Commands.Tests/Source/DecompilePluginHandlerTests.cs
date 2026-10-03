@@ -61,8 +61,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Equal(["?? plugin-source/Second.esp/"], Git("status", "--porcelain").Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    // ADR-0003 invariant 3: the bytes decompiled are the bytes Modbench last related to the source, so
-    // they read as unchanged.
     [Fact]
     public async Task Decompile_ParksThePluginsBytes_AsTheOnesItsSourceWasMadeFrom()
     {
@@ -116,8 +114,6 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Equal((new PluginAddress("NoSuch.esp", TrackedModName), DecompileRefusal.PluginNotLoaded), (refused.Plugin, refused.Refusal));
     }
 
-    // ADR-0006 decision 2: a plugin that does not survive its own source is refused, and the source it
-    // had stays as it was.
     [Fact]
     public async Task Decompile_OfAPluginThatFailsItsRoundTripGate_RefusesIt_AndLeavesItsSourceAsItWas()
     {

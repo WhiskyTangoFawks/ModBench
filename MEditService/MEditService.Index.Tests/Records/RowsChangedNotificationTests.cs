@@ -7,9 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0014 invariant 2, the in-memory adapter: the Index verbs the write API reaches
-/// publish rows-changed through the port with no HTTP or SSE stream involved, proving the port —
-/// not the transport — is the seam.</summary>
 public sealed class RowsChangedNotificationTests
 {
     [Fact]
@@ -59,8 +56,6 @@ public sealed class RowsChangedNotificationTests
         Assert.Null(index.RequireReads().GetDocument(formKey, entry.KeyOf()));
     }
 
-    // The tree gained a record, as an edit of a FormID or a create leaves it: read again whole, and
-    // named by the rows that moved (ADR-0015, invariant 3), never by the plugin.
     [Fact]
     public void RefreshKeys_ForAKeyNeitherRefHolds_NamesItAndEveryRowThatMoved_AndNoOtherRow()
     {

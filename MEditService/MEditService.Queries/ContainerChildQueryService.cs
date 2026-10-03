@@ -27,7 +27,7 @@ public sealed class ContainerChildQueryService(
         ["Responses"] = "info",
     };
 
-    // ADR-0012 invariant 1: a plugin is (origin, filename) together — the caller that names
+    // ADR-0012: a plugin is (origin, filename) together — the caller that names
     // `plugin` (a tree row built from one) always knows which origin it means.
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string origin)
     {

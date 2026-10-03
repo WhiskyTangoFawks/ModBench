@@ -102,8 +102,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Contains("NoSuch.esp", refused.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    // Decompile's working-tree write reaches the answers at the next snapshot. The new bytes alone do
-    // not: a tracked plugin reads from its source (ADR-0007 invariant 3).
     [Fact]
     public async Task DecompilingATrackedPluginWhoseBytesChanged_AnswersItApplied_AndItsNewSourceReachesTheAnswers()
     {

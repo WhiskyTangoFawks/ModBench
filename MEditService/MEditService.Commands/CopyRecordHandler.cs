@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The Copy gesture's handler (ADR-0014 invariant 3): each record into each destination,
+/// <summary>The Copy gesture's handler (ADR-0014): each record into each destination,
 /// in the mode picked, as xEdit's Copy as Override Into… and Copy as New Record Into… do.</summary>
 public sealed class CopyRecordHandler
 {

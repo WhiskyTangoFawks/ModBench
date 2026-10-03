@@ -333,7 +333,7 @@ public static class PluginEndpoints
     }
 }
 
-/// <summary>The origin and the file name are the plugin (ADR-0012 invariant 1); the folder is where
+/// <summary>The origin and the file name are the plugin (ADR-0012); the folder is where
 /// the instance holds that origin's files.</summary>
 public record CreatePluginRequest(string Origin, string Name, string Folder);
 
@@ -349,15 +349,15 @@ public record PluginAddressRefusal(PluginAddress Plugin, TrackRefusal Refusal, s
 public record TrackRequest(
     IReadOnlyList<PluginAddress> Plugins, string Preset, IReadOnlyDictionary<string, string> UpstreamVersionByOrigin);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
 public record TrackResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<PluginAddressRefusal> Refused);
 
 public record DecompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
 public record DecompileResponse(IReadOnlyList<PluginAddress> Applied, IReadOnlyList<DecompileRefused> Refused);
 
 public record CompileRequest(IReadOnlyList<PluginAddress> Plugins);
 
-/// <summary>Applied or refusal, per plugin (ADR-0019 invariant 4), never the status of the call.</summary>
+/// <summary>Applied or refusal, per plugin (ADR-0019), never the status of the call.</summary>
 public record CompileResponse(IReadOnlyList<CompiledPlugin> Applied, IReadOnlyList<CompileRefused> Refused);

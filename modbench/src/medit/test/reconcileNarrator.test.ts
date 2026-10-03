@@ -123,8 +123,6 @@ describe('the reconcile narrator', () => {
     expect(deps.applyRefused).toHaveBeenCalledWith(refusal);
   });
 
-  // The two refusal kinds carry different row-level scope (ADR-0009 point 5) — the narrator
-  // passes the kind through untouched rather than collapsing both into one shape.
   it('hands a Failed refusal to the tree with its own kind, not relabeled as heldElsewhere', async () => {
     const { deps, narrator } = narrated();
     const refusal = { kind: 'failed' as const, message: 'the reconcile threw something unexpected' };

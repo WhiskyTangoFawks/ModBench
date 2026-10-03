@@ -2,8 +2,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.LoadOrder.Tests.Plugins;
 
-// ADR-0013 invariant 3 on the immutable value the shared kernel holds: Mod Management decides the
-// active plugins, and the value carries that decision. No DuckDB and no disk.
 public sealed class LoadOrderTests
 {
     private const string Data = @"C:\Games\Fallout4\Data";
@@ -46,7 +44,6 @@ public sealed class LoadOrderTests
         Assert.Equal(2, order.LoadOrderIndex(c.Key));
     }
 
-    // ADR-0012 invariant 1: two plugins share a filename, and only the one listed is active.
     [Fact]
     public void OfTwoPluginsOfOneFilename_OnlyTheOneListedAsActive_IsActive()
     {
@@ -77,8 +74,6 @@ public sealed class LoadOrderTests
         Assert.Throws<ArgumentException>(() => Order(plugins, plugins));
     }
 
-    // ADR-0012 invariant 5 and editor.md's read-only status: a plugin the game does not load, and one
-    // loaded with no line (the game's own, a DLC's or a Creation Club plugin), is never edited.
     [Fact]
     public void IsImmutable_OnAnInactivePluginOrOneLoadedWithNoLine_AndOnlyThere()
     {
@@ -207,8 +202,6 @@ public sealed class LoadOrderTests
         Assert.Null(order.Plugin(new PluginAddress("A.esp", "ModC")));
     }
 
-    // ADR-0012 invariant 2: the game's Data folder and Overwrite are origins, not mods — neither
-    // one is a folder a repository can live in.
     [Fact]
     public void ModFolderOf_OnDataDirectoryOrOverwrite_IsNull()
     {

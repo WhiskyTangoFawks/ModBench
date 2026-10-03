@@ -198,7 +198,6 @@ describe('the check box and the unconfirmed marks', () => {
   });
 });
 
-// plugins.md, The view; ADR-0015 invariant 2: the rows follow the Instance loader's next value.
 describe('a check-box enable and the Plugins rows', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });

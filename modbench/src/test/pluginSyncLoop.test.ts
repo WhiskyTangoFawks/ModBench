@@ -405,8 +405,6 @@ describe('registerPluginSync — the game folder not found', () => {
   });
 });
 
-// ADR-0013 invariant 3: Mod Management reads the plugins the game loads with no line itself, so
-// plugin sync waits on nothing but the value.
 describe('registerPluginSync — every value', () => {
   // Rival: waiting for mEdit to attach before the first run.
   it('runs on every value that lands, from the first', async () => {

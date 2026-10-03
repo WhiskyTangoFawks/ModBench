@@ -68,7 +68,6 @@ describe('heldCopies', () => {
     ]);
   });
 
-  // ADR-0012 invariant 1: a plugin of the same name in another mod is another plugin.
   it('matches a destination by its origin as well as its name', () => {
     const holders = new Map([[npc.formKey, [{ name: 'Patch.esp', origin: 'SomeOtherMod' }]]]);
 

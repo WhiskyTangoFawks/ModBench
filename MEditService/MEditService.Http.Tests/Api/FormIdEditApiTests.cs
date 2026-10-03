@@ -72,8 +72,6 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         Assert.Equal(newFormKey, DocumentNodes.StringValueOf((await edited.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey")));
         await _client.NextSnapshot(fx, Origin);
 
-        // ADR-0015, invariant 3: the rows that changed are named, the old FormKey's and the new
-        // one's.
         var named = (await stream.EventsUntil("rows-changed", e => KeysOf(e).Contains(newFormKey)))
             .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(oldFormKey, named);

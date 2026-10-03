@@ -3,8 +3,6 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { present } from '../ports/present';
 
-// ADR-0015 invariant 2: commands write and forget. One reading the Instance makes the read model
-// an input to the write side, and a write's own effect comes back to it twice.
 
 // One directory per command box the zoom-out draws in the Modbench core band and the code builds.
 const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install'];

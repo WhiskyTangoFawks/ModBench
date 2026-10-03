@@ -59,7 +59,7 @@ public sealed class RecordQueryService(
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
         // A plugin filter with no origin would match every plugin sharing that filename; an origin
-        // with no plugin filter names half an identity the same way (ADR-0012 invariant 1).
+        // with no plugin filter names half an identity the same way (ADR-0012).
         if (RecordFilterGuard.NamesOnlyPluginOrOnlyOrigin(plugin, origin))
             throw new ArgumentException("A plugin filter requires its origin, and an origin requires a plugin.");
 

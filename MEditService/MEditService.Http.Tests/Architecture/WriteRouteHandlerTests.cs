@@ -6,9 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>Every write route reaches a handler named for its gesture, and the handlers and the
-/// gestures are one set (ADR-0014 invariant 3). No route is excused, so a gesture written inline in
-/// its endpoint fails here.</summary>
 public sealed class WriteRouteHandlerTests
 {
     // The wire door for each gesture, and the type behind it. Spelled rather than derived, so a
@@ -81,8 +78,6 @@ public sealed class WriteRouteHandlerTests
         Assert.Equal(gestures, Routes.Select(route => route.Handler).OrderBy(type => type.Name, StringComparer.Ordinal));
     }
 
-    // The carriers the gestures answer with share this namespace (ADR-0014 invariant 4), and only a
-    // handler is routed. CommandHandlerConventionTests is what holds the namespace to those two.
     private static bool IsHandler(Type type) =>
         type.Namespace == CommandsNamespace && type.Name.EndsWith("Handler", StringComparison.Ordinal);
 

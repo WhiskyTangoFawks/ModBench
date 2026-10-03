@@ -3,7 +3,7 @@ import type { MEditClient } from '../client';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
 // A whole refresh() per record change: the tree has no per-row identity to check the event
-// against (ADR-0015 invariant 3). The plugin facts too, as a changed record can start or stop
+// against (ADR-0015). The plugin facts too, as a changed record can start or stop
 // matching the record filter.
 export function subscribeTreeToNotifications(
   client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void }, refreshPluginFacts: () => void,

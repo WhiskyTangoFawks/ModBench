@@ -5,7 +5,7 @@ import { noRereadAfterWrite, WRITES, VIEW_REREADS } from '../../eslint-rules/noR
 const MESSAGE =
   'A write writes its file and returns. A view changes only when the watch reads the file back: the '
   + "Instance loader's next value for the instance's files, mEdit's published rows for plugin source. "
-  + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015 invariant 2).';
+  + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015).';
 
 function lint(code: string): Linter.LintMessage[] {
   const linter = new Linter();

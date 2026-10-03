@@ -1,4 +1,4 @@
-// ADR-0015 invariant 2: a command writes a system of record and returns, and the watcher brings
+// ADR-0015: a command writes a system of record and returns, and the watcher brings
 // the change back. A function that makes a write re-reads no view.
 
 /** @import { Rule, SourceCode } from 'eslint' */
@@ -7,7 +7,7 @@
 export const REREAD_AFTER_WRITE_MESSAGE =
     'A write writes its file and returns. A view changes only when the watch reads the file back: the '
     + "Instance loader's next value for the instance's files, mEdit's published rows for plugin source. "
-    + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015 invariant 2).';
+    + 'A write path never refreshes or invalidates a view, landed or failed (ADR-0015).';
 
 // Every call that writes a system of record from a view's gesture, by the name it is called under.
 export const WRITES = new Set([
@@ -123,7 +123,7 @@ export const noRereadAfterWrite = {
     meta: {
         type: 'problem',
         docs: {
-            description: 'A function that makes a write never re-reads a view (ADR-0015 invariant 2).',
+            description: 'A function that makes a write never re-reads a view (ADR-0015).',
         },
         schema: [],
         messages: { reread: REREAD_AFTER_WRITE_MESSAGE },

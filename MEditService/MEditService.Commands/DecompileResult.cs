@@ -17,7 +17,7 @@ public enum DecompileRefusal
     /// way out is Track.</summary>
     NotInTrackedMod,
 
-    /// <summary>ADR-0006 decision 2's gate: the plugin does not survive its own source, or cannot be
+    /// <summary>ADR-0006's gate: the plugin does not survive its own source, or cannot be
     /// read or deep-parsed at all.</summary>
     RoundTripFailed,
 
@@ -39,7 +39,7 @@ public sealed record DecompileRefused(PluginAddress Plugin, DecompileRefusal Ref
 /// <summary>A cause no plugin of the selection escapes, found before any write.</summary>
 public sealed record DecompileSelectionRefusal(DecompileRefusal Refusal, string Message);
 
-/// <summary>Decompile over a selection answers per plugin (ADR-0019 invariant 4), except for a cause
+/// <summary>Decompile over a selection answers per plugin (ADR-0019), except for a cause
 /// no plugin escapes: <see cref="SelectionRefusal"/> names it, and nothing was written.</summary>
 public sealed class DecompileSelectionResult
 {

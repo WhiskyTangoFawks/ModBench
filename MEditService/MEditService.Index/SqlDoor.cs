@@ -3,7 +3,7 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0009 invariant 1: a filter is one SELECT over the public relations of <c>main</c>,
+/// <summary>ADR-0009: a filter is one SELECT over the public relations of <c>main</c>,
 /// which see only the active plugins. DuckDB's own parse says what else it would read.</summary>
 internal static class SqlDoor
 {

@@ -108,8 +108,6 @@ public sealed class PluginDiagnosisRowTests : IDisposable
         Assert.Empty(reopened.RequireReads().GetPluginDiagnoses());
     }
 
-    // Registered answers, unregistered answers nothing (ADR-0009 invariant 1): the row is scoped
-    // like every other.
     [Fact]
     public void ADiagnosisRow_OfAPluginTheSnapshotStoppedNaming_AnswersNothing()
     {

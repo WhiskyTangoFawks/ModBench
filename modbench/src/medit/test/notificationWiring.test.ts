@@ -92,8 +92,6 @@ describe('subscribeRecordPanelsToNotifications', () => {
 });
 
 describe('subscribeTreeToNotifications', () => {
-  // ADR-0015 invariant 3: a record written from Plugins, by hand or by another tool reaches the view
-  // here, the records and the plugin facts a record filter's match reads alike.
   it('re-reads the records and the plugin facts on rows-changed', () => {
     const client = new InMemoryMEditClient();
     const tree = { refresh: vi.fn() };

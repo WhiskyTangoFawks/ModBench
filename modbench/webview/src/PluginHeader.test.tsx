@@ -43,7 +43,6 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(/winner/);
   });
 
-  // ADR-0012, invariant 3: the origin sits in the tooltip alone.
   it('shows no origin on an expanded column', () => {
     const { header } = renderHeader();
     expect(header).not.toHaveTextContent('ModA');

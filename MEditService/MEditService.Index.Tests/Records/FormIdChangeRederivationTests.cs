@@ -9,9 +9,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>A FormID edit writes trees and nothing else (ADR-0015 invariant 2): container_child, placement and
-/// cell_location rows are the Index's own re-derivation, driven here through RefreshKeys and
-/// ReindexPlugin, the write side's signals for it.</summary>
 public sealed class FormIdChangeRederivationTests : IDisposable
 {
     private readonly IndexedContainerMod _mod = new();

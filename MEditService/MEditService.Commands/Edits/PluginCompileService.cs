@@ -146,7 +146,7 @@ public sealed class PluginCompileService(
     private sealed record Content(
         IReadOnlyList<SourceRecord> Records, IReadOnlyList<string> Masters, IReadOnlyCollection<string> Links);
 
-    // ADR-0015 invariant 1: the write side never reads the Index, so the masters content requires
+    // ADR-0015: the write side never reads the Index, so the masters content requires
     // (ADR-0008) come from the records here, through the collector and the schema.
     private Content ContentFacts(CompiledTree tree, PluginAddress plugin, LoadOrderSnapshot loadOrder)
     {
@@ -184,7 +184,7 @@ public sealed class PluginCompileService(
         return new Content(records, InLoadOrderOrder(masters, loadOrder), links);
     }
 
-    // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
+    // ADR-0007: a dangling link is emittable, so compile writes the plugin and reports
     // it afterwards, answered by the files the game loads with the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
         Content content, PluginAddress plugin, RegisteredPlugin registered, LoadOrderSnapshot loadOrder,

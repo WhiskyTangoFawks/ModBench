@@ -22,8 +22,6 @@ public sealed class QueriesScanTests
         ("System.IO", @"\bSystem\.IO\b"),
     ];
 
-    // ADR-0014 invariant 1: the core knows no path and no byte format. Queries hide the Index's
-    // reads, so a disk read here answers from a file the Index never saw.
     [Fact]
     public void Queries_NameNoFileSystem()
     {
@@ -36,7 +34,7 @@ public sealed class QueriesScanTests
         Assert.True(
             named.Count == 0,
             "A query reads the disk. Queries hide the Index's reads and reach no system of record "
-            + "(ADR-0014 invariant 1), so the answer comes from a row:\n"
+            + "(ADR-0014), so the answer comes from a row:\n"
             + string.Join("\n", named));
     }
 

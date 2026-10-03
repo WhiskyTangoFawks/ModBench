@@ -4,9 +4,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>ADR-0005 invariant 2: the game-concrete namespaces are the codec's and the Plugin adapter's
-/// alone. The banned-API analyzer holds the live-object namespaces; this scan holds the per-game
-/// ones.</summary>
 public sealed class GameNamespaceScanTests
 {
     // Read off the pinned assembly, so a game Mutagen adds is scanned for without an edit here.

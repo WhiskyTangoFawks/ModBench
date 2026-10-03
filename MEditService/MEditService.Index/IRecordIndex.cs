@@ -20,12 +20,12 @@ internal interface IRecordIndex : IDisposable
 
     void Initialize(GameRelease release);
 
-    /// <summary>ADR-0015 invariant 3: one monotonic counter, advanced in the same transaction as
+    /// <summary>ADR-0015: one monotonic counter, advanced in the same transaction as
     /// any row change — ingest, a working-tree push, a registration or a winner sweep. Zero until
     /// the first change lands.</summary>
     long Sequence { get; }
 
-    /// <summary>ADR-0015 invariant 3: everything projected inside the scope advances
+    /// <summary>ADR-0015: everything projected inside the scope advances
     /// <see cref="Sequence"/> once, when the outermost scope closes, so a whole-plugin projection
     /// and a snapshot's validation are each one advance. Nested scopes count.</summary>
     IDisposable BeginProjection();
@@ -35,7 +35,7 @@ internal interface IRecordIndex : IDisposable
     void Announce(Action publish);
 
     /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
-    /// hash and diagnosis (ADR-0009 invariant 4); a null path claims no file backs the rows.</summary>
+    /// hash and diagnosis (ADR-0009); a null path claims no file backs the rows.</summary>
     void Index(IPluginDocuments documents, Registration registration, PluginAddress key, string? filePath, DerivedFrom derivedFrom);
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
@@ -91,12 +91,12 @@ internal interface IRecordIndex : IDisposable
     /// no <c>form_key</c> column.</summary>
     void SetFilter(string? sql);
 
-    /// <summary>ADR-0015 invariant 3: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
+    /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at
     /// both refs from the Source repository, idempotent by content. A key held at neither ref
     /// re-derives the whole plugin.</summary>
     void RefreshByKeys(PluginAddress key, string modFolder, IReadOnlyList<string> formKeys);
 
-    /// <summary>ADR-0015 invariant 4: compares <paramref name="key"/>'s rows against the system of
+    /// <summary>ADR-0015: compares <paramref name="key"/>'s rows against the system of
     /// record they came from — source documents at both refs when <paramref name="modFolder"/> holds
     /// its tree, the binary otherwise — and refreshes what differs.</summary>
     ValidationReport Validate(PluginAddress key, string? modFolder);

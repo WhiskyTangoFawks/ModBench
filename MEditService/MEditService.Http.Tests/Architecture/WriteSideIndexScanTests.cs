@@ -6,8 +6,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The write side names no Index type (ADR-0015 invariants 1, 2, 3 and 5): it writes
-/// source text, and what the Index holds is asked for on the read side.</summary>
 public sealed class WriteSideIndexScanTests
 {
     // The store and its factory, the read surface, the ref enum, the Index, the query surface, the
@@ -110,8 +108,6 @@ public sealed class WriteSideIndexScanTests
     // a handler is the write side reading its own effect through the API.
     private const string EndpointRoot = "MEditService.Http/Endpoints";
 
-    // The rebuild's refusal is the Index's own exception, and it crosses Queries' RebuildStore
-    // unchanged (ADR-0009 invariant 5), so no signature carries it.
     private static readonly string[] IndexTypesQueriesThrow = ["IndexHeldElsewhereException"];
 
     // Read off the assemblies, so a type the Index adds is forbidden the day it lands. What a query
@@ -151,8 +147,8 @@ public sealed class WriteSideIndexScanTests
         Assert.True(
             named.Count == 0,
             "An endpoint names an Index type no query service hands it. A route takes a gesture's "
-            + "handler or a query service: Queries are the only readers of the read model (ADR-0014 "
-            + "invariant 3), and no arrow runs from the HTTP endpoints to the Index:\n"
+            + "handler or a query service: Queries are the only readers of the read model (ADR-0014), "
+            + "and no arrow runs from the HTTP endpoints to the Index:\n"
             + string.Join("\n", named));
     }
 

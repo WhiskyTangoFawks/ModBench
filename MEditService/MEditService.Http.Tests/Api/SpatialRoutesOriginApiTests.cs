@@ -93,8 +93,6 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         Assert.Empty((await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModA")).EnumerateArray());
     }
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
-    // filename, so the route refuses rather than picking the load order's winner for it.
     [Fact]
     public async Task GetWorldspaces_OmittedOrigin_ReturnsBadRequest()
     {

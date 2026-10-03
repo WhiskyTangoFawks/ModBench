@@ -218,7 +218,7 @@ interface PluginFacts {
   order?: PluginOrderFacts;
 }
 
-// ADR-0012 invariant 1: plugin identity is origin plus filename, so every fact is filed and read
+// ADR-0012: plugin identity is origin plus filename, so every fact is filed and read
 // under both.
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
@@ -248,7 +248,7 @@ type RowDecoration = {
 };
 
 // plugins.md, States 3-4: what a row not resolved by the load order shows. `everyRow`: a second
-// window (ADR-0009 point 5). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
+// window (ADR-0009). `unheldRow`: mEdit unreachable, or a `Failed` reconcile.
 type ExpansionOverride = { scope: 'everyRow' | 'unheldRow'; message: string };
 
 // plugins.md, A row: the five statuses, in the order that sets the icon. `words` is the
@@ -564,7 +564,7 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The row's own file, by its (origin, filename) (ADR-0012 invariant 1), or the game folder's copy
+  /** The row's own file, by its (origin, filename) (ADR-0012), or the game folder's copy
    *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
     const name = pluginFileOf(row);
@@ -667,7 +667,7 @@ export class PluginsTreeProvider
   }
 
   private buildRows(): PluginListNode[] {
-    // ADR-0013 invariant 3: Mod Management names the plugins the game loads with no line. While it
+    // ADR-0013: Mod Management names the plugins the game loads with no line. While it
     // cannot, a plugins.txt line for one renders as an ordinary row, which is what the file says.
     const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
     const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
@@ -852,7 +852,7 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** ADR-0009 point 5; plugins.md, States 4: the load order's own refusal. `heldElsewhere`
+  /** ADR-0009; plugins.md, States 4: the load order's own refusal. `heldElsewhere`
    *  overrides every row; `failed` only a row this reload never reached. */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
@@ -861,7 +861,7 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** ADR-0002 invariant 2; plugins.md, States 3: mEdit confirmed unreachable — the status bar's
+  /** ADR-0002; plugins.md, States 3: mEdit confirmed unreachable — the status bar's
    *  own Disconnected/Stopped, not Connecting. Named on a row not yet held; never downgrades an
    *  `everyRow` refusal already in force. */
   applyBackendUnreachable(reason: string): void {
@@ -1014,7 +1014,7 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0012 invariant 1: only the line's own plugin, by its origin; another plugin of the name
+  // ADR-0012: only the line's own plugin, by its origin; another plugin of the name
   // is not it.
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));

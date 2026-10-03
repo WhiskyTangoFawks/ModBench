@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>Validate's tracked half (ADR-0015 invariant 4): a plugin's rows against the source
+/// <summary>Validate's tracked half (ADR-0015): a plugin's rows against the source
 /// documents they came from, by content. A collaborator of <see cref="DuckDbRecordIndex"/>, which
 /// owns every transaction, so the repairs go through its verbs.</summary>
 internal sealed class SourceValidation(
@@ -108,7 +108,7 @@ internal sealed class SourceValidation(
         if (gained.Count > 0) return new ValidationReport(gained, NeedsRebuild: true, failures);
 
         // A held record with no document here is refreshed by key, which reads it again, so the
-        // rows-changed it publishes names it (ADR-0015 invariant 3).
+        // rows-changed it publishes names it (ADR-0015).
         var deleted = treeFullyRead ? held.Keys.Except(onDisk.Keys, StringComparer.Ordinal).ToList() : [];
         if (deleted.Count > 0)
         {
@@ -116,8 +116,8 @@ internal sealed class SourceValidation(
             foreach (var formKey in deleted) held.Remove(formKey);
         }
 
-        // The tree files the records the rows hold, so from here the plugin loads from it (ADR-0007
-        // invariant 3): a plugin tracked after it was indexed needs no more than the stamp.
+        // The tree files the records the rows hold, so from here the plugin loads from it (ADR-0007):
+        // a plugin tracked after it was indexed needs no more than the stamp.
         if (treeFullyRead) index.RestampDerivation(key, DerivedFrom.SourceTree);
 
         // A set, not a list: a document that disagrees at both refs is one drifted document and one

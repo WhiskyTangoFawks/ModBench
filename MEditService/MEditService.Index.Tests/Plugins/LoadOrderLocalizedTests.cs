@@ -48,8 +48,6 @@ public sealed class LoadOrderLocalizedTests
         }
     }
 
-    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, but its own Strings folder is real —
-    // unlike Data, ModFolderOf's null must not send this read chasing a fallback that has none.
     [Fact]
     public void Load_ALocalizedOverwritePlugin_ReadsItsOwnStrings_NotTheGamesDataFolder()
     {

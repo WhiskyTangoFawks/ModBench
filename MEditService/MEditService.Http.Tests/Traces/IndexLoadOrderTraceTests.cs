@@ -39,8 +39,6 @@ public sealed class IndexLoadOrderTraceTests : HostedTests
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
-    // ADR-0013 invariant 1: an identical snapshot does nothing. Every reconcile ends by publishing
-    // its status, so a reconcile the identical PUT started would publish before the moved one opens.
     [Fact]
     public async Task PuttingTheLoadOrderHeld_AnswersItsVersion_AndStartsNoReconcile()
     {

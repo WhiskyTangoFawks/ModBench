@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0015 invariant 3: the Index is the one announcer. Every landing it owns publishes exactly
-// once through its own announce door, carrying the sequence the store reached.
 public sealed class IndexAnnouncementTests : IDisposable
 {
     private const string PluginName = "Watched.esp";

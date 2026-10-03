@@ -4,9 +4,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>An overridden plugin is read-only (ADR-0012 invariant 5), refused through the real host
-/// before any source write. The same write against the winning plugin of the same name lands.
-/// </summary>
 public sealed class OverriddenPluginRefusalApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";

@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Queries;
 
-// ADR-0012 invariant 4: only a plugin's own declared masters are consulted, never a master's
+// ADR-0012: only a plugin's own declared masters are consulted, never a master's
 // masters, because a master issue never cascades.
 internal static class MasterResolution
 {

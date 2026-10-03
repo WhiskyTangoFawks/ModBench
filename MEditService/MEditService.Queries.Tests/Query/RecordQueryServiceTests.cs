@@ -80,8 +80,6 @@ public sealed class RecordQueryServiceTests
         Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).HasParseFailure);
     }
 
-    // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
-    // from is the Index's answer. Keyed by plugin, never by filename.
     [Fact]
     public void GetPlugins_MarksOnlyThePluginsTheIndexDerivedFromASourceTree()
     {
@@ -255,7 +253,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(expected, recordTypes.OrderBy(t => t, StringComparer.Ordinal));
     }
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that filename.
     [Fact]
     public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException()
     {
@@ -454,7 +451,6 @@ public sealed class RecordQueryServiceTests
         Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
     }
 
-    // ADR-0012 invariant 2: Overwrite is a reserved origin, not a mod, compared ignoring case.
     [Theory]
     [InlineData("overwrite")]
     [InlineData("Overwrite")]
@@ -1075,7 +1071,6 @@ public sealed class RecordQueryServiceTests
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }
 
-    // --- the load order's status and the projection's sequence (ADR-0013, ADR-0015 invariant 3) ---
 
     [Fact]
     public void GetStatus_IsTheIndexsStatus()

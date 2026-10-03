@@ -101,8 +101,6 @@ const MOCK_PLUGINS: MockPlugin[] = [
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', inLoadOrder: true, isImmutable: true }),
-  // ADR-0012 invariant 4: a plugin the backend flags with a master that is not active. Every other
-  // entry carries an empty `masterIssues`, which is what the backend sends when every master is active.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', inLoadOrder: true,
     masterIssues: ['Ghost.esm'],
@@ -166,8 +164,6 @@ function releasePut(): void {
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
 
-// ADR-0014 invariant 2: the mock's SSE half. Pushed only where the real backend would publish
-// (the PUT /load-order handler below), never on connect, which would reach no listener yet.
 const sseClients: http.ServerResponse[] = [];
 
 function writeSseFrame(res: http.ServerResponse, kind: string, payload: Record<string, unknown>): void {
@@ -867,8 +863,6 @@ function takeFromTrash(original: string, before: ReadonlySet<string>): number {
   return taken;
 }
 
-// ADR-0015 invariant 2: the gesture writes modlist.txt and returns, and the view follows the value
-// the watch lands, as it would a change from MO2.
 describe('A Mods gesture\'s write reaches the Mods view through the watch alone', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const modlistPath = root ? path.join(root, 'profiles', 'Default', 'modlist.txt') : '';
@@ -1191,9 +1185,6 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
 
 // ── Notification stream lifecycle is gated on the backend ────────────────────
 
-// ADR-0014 invariant 2: every notification kind rides this one stream, proven once here.
-// Placed first — the suite activates once — so "no connection before launch" is provable only
-// at the one point in the run where that is still true.
 describe('Notification stream connects only while the backend is up', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let gameDir = '';
@@ -1242,8 +1233,6 @@ describe('Notification stream connects only while the backend is up', () => {
 
 // ── The game-directory setting is a recompute trigger ────────────────────────
 
-// ADR-0015 invariant 7: a watcher event, activation and refresh run the same whole recompute.
-// The Instance watches files only, so the root turns an edited setting into that recompute.
 describe('The game-directory setting reaches the Instance as a recompute', () => {
   let gameDir = '';
 
@@ -1509,8 +1498,6 @@ describe('Plugin load-order rows expand into records', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // ADR-0013 invariant 3: Mod Management takes the game's masters from the per-release table,
-  // each only where the game folder holds it.
   it('renders the game\'s master the game folder holds, ahead of the plugins.txt rows', async () => {
     const tree = pluginsTree();
     const master = path.join(gameDir, 'Data', 'Fallout4.esm');
@@ -1783,7 +1770,6 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     assert.ok(putCount() >= before + 1, 'a plugins.txt change must send a fresh snapshot, not merely re-render the tree');
   });
 
-  // ADR-0013, invariant 1: the snapshot at every recompute, changed or not.
   it('a plugins.txt write that leaves the load order equal puts it again', async () => {
     const sent = putLoadOrders.length;
     const order = swapped ? ['MissingMaster.esp', 'TestMod.esp'] : ['TestMod.esp', 'MissingMaster.esp'];
@@ -1942,7 +1928,6 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
   });
   after(() => resetMockBackend());
 
-  // ADR-0013, invariant 1: the re-read is a recompute, and every recompute puts the snapshot.
   it('POSTs /index/rebuild, then PUTs the load order the re-read built', async () => {
     await vscode.commands.executeCommand('modbench.instance.refresh');
 
@@ -1952,8 +1937,6 @@ describe('Refresh rebuilds the index, then re-reads the instance', () => {
       () => requestLog.slice(rebuilt).includes('PUT /load-order') ? true : undefined);
   });
 
-  // toolbox.md, Reporting story 1; ADR-0009 invariant 5: the toast is the spec's own words,
-  // naming this instance — never the backend's raw 423 detail.
   it('reports the second-window refusal in toolbox.md\'s words, naming this instance', async () => {
     rebuildIndexShouldFail = true;
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

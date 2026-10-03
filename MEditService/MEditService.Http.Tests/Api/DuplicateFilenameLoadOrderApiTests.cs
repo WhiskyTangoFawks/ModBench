@@ -87,8 +87,6 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         [.. (await _client.GetFromJsonAsync<JsonElement>($"/records?plugin=Shared.esp&origin={origin}&type=npc_&limit=10"))
             .GetProperty("items").EnumerateArray().Select(r => r.GetProperty("editorId").GetString())];
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
-    // filename, so both routes refuse rather than picking one of the two plugins for it.
     [Fact]
     public async Task BrowsingByPluginWithoutOrigin_ReturnsBadRequest()
     {

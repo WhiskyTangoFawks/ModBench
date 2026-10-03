@@ -13,9 +13,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Link validation is compile's, against the plugin files the game loads and the plugin
-/// just compiled (ADR-0007 invariant 4): the binary is written either way and a broken link is a
-/// diagnostic.</summary>
 public sealed class PluginCompileServiceLinkTests : IDisposable
 {
     private const string HostName = "LinkHost.esp";

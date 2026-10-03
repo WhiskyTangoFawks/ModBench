@@ -5,9 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>A plugin with no plugins.txt line, or on a disabled one, is not active and so read-only
-/// (ADR-0012 invariant 5); Overwrite is refused earlier still, for having no mod folder
-/// (invariant 2).</summary>
 public sealed class UnlistedPluginRefusalApiTests : HostedTests
 {
     private const string UnlistedPlugin = "Unlisted.esp";

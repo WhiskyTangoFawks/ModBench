@@ -175,9 +175,6 @@ public sealed class WarmReconcileTests
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
-    // A tracked plugin's truth is its source tree (ADR-0007/0042), so persistence must never override
-    // the working tree. ADR-0015 invariant 4: the load validates by content, so an unmoved tree costs
-    // a register and a comparison.
     [Fact]
     public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
     {

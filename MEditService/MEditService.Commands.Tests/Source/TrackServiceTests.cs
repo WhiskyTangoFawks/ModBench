@@ -237,8 +237,6 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no repository for Track to
-    // put a baseline into.
     [Fact]
     public async Task TrackAsync_WithOnlyAnOverwriteOriginPlugin_RefusesWithoutInitializingARepository()
     {
@@ -364,9 +362,6 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0006 invariant 2: the gate runs at Track over every record of the plugin. A wrapper that
-    // deserializes for real but counts its calls is what shows the gate genuinely ran, which Track
-    // merely succeeding would not.
     [Fact]
     public async Task TrackAsync_RealLoadOrder_RunsTheRoundTripGateForRealBeforeSucceeding()
     {
@@ -404,8 +399,6 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0006 invariant 2: a plugin that does not round-trip is refused, with the failing record
-    // named.
     [Fact]
     public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {

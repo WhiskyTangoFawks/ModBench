@@ -72,9 +72,6 @@ describe('toLoadOrderStatus', () => {
     expect(tick('Reconciling').holdsNone).toBe(false);
   });
 
-  // The wire's `state` survives only as `refusal.kind` (ADR-0009 point 5): a caller tells
-  // "another window has this instance open" apart from "the reconcile hit something unknown"
-  // only through this field, never by re-deriving it.
   it('carries a heldElsewhere refusal for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',

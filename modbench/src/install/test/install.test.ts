@@ -84,8 +84,6 @@ function runnerFor(payloadRoot = 'Wrapper'): Runner {
   };
 }
 
-// ADR-0007 invariant 5: git on PATH is a product requirement. Isolated from the machine's own
-// global/system config, so a host core.autocrlf or commit.gpgsign never reaches these commits.
 const EMPTY_GLOBAL_GITCONFIG = join(mkdtempSync(join(tmpdir(), 'medit-git-config-')), 'gitconfig');
 writeFileSync(EMPTY_GLOBAL_GITCONFIG, '');
 const GIT_ENV = {

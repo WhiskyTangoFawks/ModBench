@@ -6,9 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Which truth a plugin's rows came from changes under the Index (ADR-0007 invariant 3), so
-/// tracked-ness moves with it: an indexed plugin gains a repository, a tracked plugin loses one
-/// (ADR-0003).</summary>
 public sealed class TrackedPluginDerivationTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";

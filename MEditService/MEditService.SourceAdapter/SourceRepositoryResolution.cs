@@ -339,7 +339,7 @@ public sealed partial class SourceRepository
                 .Any(key => key.InAnEmbedSlot && key.FormKey.Equals(formKey, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
-    /// holds it. Only the repository reads block directories back (ADR-0014 invariant 5). A
+    /// holds it. Only the repository reads block directories back (ADR-0014). A
     /// worldspace document declaring no FormKey throws.</summary>
     public CellPlacement? CellPlacementOf(PluginAddress plugin, RecordIdentity identity)
     {

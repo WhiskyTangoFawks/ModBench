@@ -290,8 +290,6 @@ describe('registerCreatePluginCommand', () => {
     ]);
   });
 
-  // ADR-0007, invariant 2: create writes only the file and returns; the new row arrives with the
-  // Instance loader's next value, once the watch sees the file, never from the command itself.
   it('refreshes nothing once the plugin lands, and the rows show it when the next instance value arrives', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('createPlugin', { name: 'MyPatch.esp', origin: 'overwrite', path: '/instance/overwrite/MyPatch.esp' });

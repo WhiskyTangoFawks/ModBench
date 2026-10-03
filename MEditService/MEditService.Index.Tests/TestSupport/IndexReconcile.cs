@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Index.Tests;
 
 /// <summary>A snapshot built as Mod Management sends one: every plugin, and the active plugins in
-/// load order (ADR-0013 invariant 3).</summary>
+/// load order (ADR-0013).</summary>
 internal static class IndexReconcile
 {
     internal static LoadOrderHolder Reconcile(

@@ -371,7 +371,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(read).toHaveLength(1);
   });
 
-  // ADR-0015 invariant 3: mEdit's published rows reach the badge through the next read.
   it('names the rows again, with mEdit\'s new state, when a refresh makes the group read again', async () => {
     const record = makeRecord(0, 'None');
     const repo = makeClient({ records: { items: [record], total: 1 } });
@@ -387,7 +386,6 @@ describe('onDidReadRecords / workingTreeStateOf', () => {
     expect(provider.workingTreeStateOf(recordResourceUri(record.plugin, 'Data', record.formKey))).toBe('Modified');
   });
 
-  // ADR-0015 invariant 3: a read answered before mEdit's rows changed is not the rows' state now.
   it('drops a read that was in flight when a refresh came, and names only the read that follows it', async () => {
     const record = makeRecord(0, 'None');
     const repo = makeClient();

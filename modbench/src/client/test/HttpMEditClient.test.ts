@@ -99,8 +99,6 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-// ADR-0014 invariant 2: the notification stream follows the status, and only this module drives
-// it — scripted here through the injected `fetch`, the same seam production wires to `undici`.
 describe('HttpMEditClient — the notification stream follows the status', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); });
@@ -509,8 +507,6 @@ describe('HttpMEditClient — the not-OK response text', () => {
   });
 });
 
-// ADR-0009 invariant 5: a 423 is refused by name, apart from every other failure — the rival is
-// a client that folds it into the same generic-failure shape every other non-ok response gets.
 describe('HttpMEditClient — rebuildIndex', () => {
   it('POSTs the instance root and game release, and resolves rebuilt on success', async () => {
     const fetch = vi.fn((_req: Request) => Promise.resolve(new Response(null, { status: 204 })));
@@ -696,8 +692,6 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await expect(load).resolves.toMatchObject({ outcome: 'applied', status: { version: 1 } });
   });
 
-  // ADR-0013 invariant 1: a snapshot identical to the one held reconciles nothing and publishes no
-  // tick, so its answer is the version already Ready.
   it('answers a PUT whose version is already Ready from the process\'s own status, with no tick', async () => {
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],

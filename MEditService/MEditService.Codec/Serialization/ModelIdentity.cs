@@ -9,7 +9,7 @@ using Noggog;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>ADR-0006 decision 2's amendment: the round-trip verdict is model identity via Mutagen's
+/// <summary>ADR-0006's amendment: the round-trip verdict is model identity via Mutagen's
 /// generated equality mask, walked by reflection rather than its ToString(), which omits inherited
 /// members. Bare Equals has false negatives.</summary>
 public static class ModelIdentity
@@ -243,7 +243,7 @@ public static class ModelIdentity
 
     // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
     // zeroed, and a worldspace's block levels in one canonical order, since the tree carries none
-    // (ADR-0006 decision 4).
+    // (ADR-0006).
     private static IMajorRecordGetter NormalizeEncoding(IMajorRecordGetter record)
     {
         switch (record)

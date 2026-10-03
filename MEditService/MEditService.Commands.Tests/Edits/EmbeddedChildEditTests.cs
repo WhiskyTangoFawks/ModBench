@@ -211,9 +211,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsRecordNotFound()
     {
-        // Branch one: no document of its own, and no other record's document carries it. An interior
-        // cell removed from disk by something outside Modbench is exactly that, and the tree is the
-        // only thing asked (ADR-0015 invariant 5).
         var embedCellFile = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         Directory.Delete(Path.GetDirectoryName(embedCellFile)
             ?? throw new InvalidOperationException($"Expected '{embedCellFile}' to have a parent directory."), recursive: true);
@@ -313,8 +310,6 @@ public sealed class EmbeddedChildEditTests : IDisposable
             Assert.Equal(newFile, _fixture.SourceFileContaining(child));
     }
 
-    // The refusal names the document the gesture resolved (ADR-0015 invariant 5): an empty path would
-    // send the author looking for a file with no name.
     [Fact]
     public void EditingAnEmbeddedChild_WhoseOwnerTheTreeNoLongerHolds_RefusesNamingTheDocument()
     {

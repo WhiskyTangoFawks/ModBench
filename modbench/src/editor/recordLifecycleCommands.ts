@@ -51,7 +51,7 @@ function askToDelete(labels: readonly string[], ask: AskQuestion): PromiseLike<s
   );
 }
 
-// ADR-0012 invariant 1: a filename alone names no one plugin, so an argument that states no
+// ADR-0012: a filename alone names no one plugin, so an argument that states no
 // origin is refused rather than resolved.
 const NO_ORIGIN = 'it states no origin';
 

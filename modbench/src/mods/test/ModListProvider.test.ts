@@ -402,8 +402,6 @@ describe('ModListProvider', () => {
     expect(modOfRow(undefined)).toBeUndefined();
   });
 
-  // ADR-0015 invariant 2: the watch brings the landed write back, as it would MO2's. The check
-  // box reaches the same command a context-menu click or key does — one mod, through the entry.
   it('setModEnabled calls the setModsEnabled command with the access, active profile and one-mod selection, and fires no refresh', async () => {
     const access = accessTo(INSTANCE_ROOT);
     const provider = new ModListProvider({ instance: new FakeInstance(valueOf([mod('A')])), access, log: () => undefined });
@@ -704,8 +702,6 @@ describe('ModListProvider', () => {
       expect(executeCommand).not.toHaveBeenCalled();
     });
 
-    // A drop moves no row on screen by itself: the watch brings the write back (ADR-0015
-    // invariant 2).
     it('a drop asks for no refresh', async () => {
       const provider = makeProvider(dndEntries);
       await shownRows(provider);

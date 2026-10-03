@@ -115,7 +115,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
-    // ADR-0009 invariant 5: the rebuild's whole job on an already-opened index — construction
+    // ADR-0009: the rebuild's whole job on an already-opened index — construction
     // already refused (IndexHeldElsewhereException) if another process held the file, so nothing
     // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
@@ -296,7 +296,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0013 invariant 3: replaced whole, never diffed. Mod Management decided which plugins are
+    // ADR-0013: replaced whole, never diffed. Mod Management decided which plugins are
     // active; nothing here re-asks it.
     private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
@@ -366,7 +366,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0015 invariant 3: after the commit, so a subscriber re-reading on receipt sees the rows
+        // ADR-0015: after the commit, so a subscriber re-reading on receipt sees the rows
         // this names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
@@ -422,7 +422,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var projection = BeginProjection();
 
         // The tree is what these rows are re-derived from, so it is what the plugin is derived from
-        // (ADR-0007 invariant 3), bytes moved or not: a plugin tracked after indexing arrives here
+        // (ADR-0007), bytes moved or not: a plugin tracked after indexing arrives here
         // still stamped from its binary.
         if (SourceRepository.HoldsTreeFor(modFolder, key.Name))
             _store.RestampDerivation(key, DerivedFrom.SourceTree);
@@ -479,7 +479,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
-    // A file changing is its own event (ADR-0009 invariant 1), so the projection reads the plugin's
+    // A file changing is its own event (ADR-0009), so the projection reads the plugin's
     // rows whether it is active or not.
     private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
     {
@@ -525,7 +525,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         var after = EffectiveContentHashes(key);
 
-        // ADR-0015 invariant 3: the keys asked about, and every row the tree read again moved, gone
+        // ADR-0015: the keys asked about, and every row the tree read again moved, gone
         // or gained, at the sequence it landed on.
         var moved = before.Keys.Union(after.Keys, StringComparer.Ordinal)
             .Where(formKey => !before.TryGetValue(formKey, out var was) || !after.TryGetValue(formKey, out var now) || was != now);
@@ -601,7 +601,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // Reached only for a plugin no repository holds, so rows stamped from a source tree came from
-        // one destroyed outside Modbench (ADR-0007 invariant 2), which the caller re-derives.
+        // one destroyed outside Modbench (ADR-0007), which the caller re-derives.
         if (_store.DerivationOf(key) == DerivedFrom.SourceTree)
             return new ValidationReport([], NeedsRebuild: true, []);
 
@@ -1203,7 +1203,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
         // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
-        // This builder doesn't enforce invariant 1 itself; every live caller already passes both or
+        // This builder doesn't enforce (origin, filename) identity itself; every live caller already passes both or
         // neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,

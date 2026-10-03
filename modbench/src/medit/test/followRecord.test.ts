@@ -171,8 +171,6 @@ describe('EditsInFlight', () => {
     expect(loadsOf(panel)).toEqual([{ type: 'conflictsComputed' }]);
   });
 
-  // ADR-0012 invariant 1: an edit of the FormID moves the record in the one plugin it was made in.
-  // The override in another plugin, and the other plugin named Mod.esp, stay under the old FormKey.
   describe('a write addressed to the old FormKey', () => {
     const sentTo = async (edits: EditsInFlight<ReturnType<typeof fakePanel>>, panel: ReturnType<typeof fakePanel>,
       address: typeof EDITED, gate = edits.gate(panel)) => {

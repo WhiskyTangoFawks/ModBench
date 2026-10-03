@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Commands;
 
-/// <summary>The Delete gesture's handler (ADR-0014 invariant 3): a working-tree deletion, gone at
+/// <summary>The Delete gesture's handler (ADR-0014): a working-tree deletion, gone at
 /// Effective, still served at Head until compiled. No reference cascade — a dangling FormLink
 /// surfaces as an ordinary compile diagnostic (ADR-0007).</summary>
 public sealed class DeleteRecordHandler
@@ -21,7 +21,7 @@ public sealed class DeleteRecordHandler
 
     /// <summary>Each record is deleted or refused on its own; git missing refuses the whole selection
     /// once, before any record. Throws <see cref="NoLoadOrderException"/> when no load order is held
-    /// (ADR-0013 invariant 4).</summary>
+    /// (ADR-0013).</summary>
     public PerRecordResult DeleteRecords(IReadOnlyList<RecordAt> records)
     {
         _loadOrder.Require();

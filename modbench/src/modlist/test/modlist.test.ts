@@ -1380,8 +1380,6 @@ describe('a mod sync between a separator gesture\'s folder and its line', () => 
   });
 });
 
-// ADR-0015 invariant 1: a command never reads the Instance, the read model built only by watching.
-// src/test/commandInstanceScan.test.ts scans every command box too; this is this file's own guard.
 describe('modlist commands never import the Instance', () => {
   it('names no import from ../instanceLoader and no `Instance` identifier', () => {
     const path = join(__dirname, '..', 'modlist.ts');

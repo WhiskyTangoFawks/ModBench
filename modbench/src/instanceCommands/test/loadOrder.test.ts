@@ -106,8 +106,6 @@ describe('refresh', () => {
     expect(result).toEqual({ applied: true });
   });
 
-  // ADR-0009 invariant 5: held-elsewhere is refused by name, apart from every other failure — the
-  // rival is a refresh that folds it into the same generic refusal every other failure gets.
   it('sends nothing and reports held-elsewhere apart from every other refusal', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });

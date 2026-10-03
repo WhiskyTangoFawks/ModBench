@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 namespace MEditService.Index;
 
 /// <summary>Every read the index answers, at the caller's <see cref="RecordRef"/>. A read of a
-/// record sees only the active plugins (ADR-0009 invariant 1); a plugin's own facts answer while
+/// record sees only the active plugins (ADR-0009); a plugin's own facts answer while
 /// the snapshot names it.</summary>
 public interface IRecordReads
 {

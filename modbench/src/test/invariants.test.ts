@@ -61,9 +61,6 @@ describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
   });
 });
 
-// A verb is an exported function whose signature answers with a result — `applied` inline, one
-// of the named `…Result` types every gesture returns (ADR-0015 invariant 2), or a selection's
-// outcome.
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
     .filter((m) => /applied|Result>|SelectionOutcome</.test(present(m[2], "the function body between signature and opening brace")))

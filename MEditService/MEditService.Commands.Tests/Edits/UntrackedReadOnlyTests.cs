@@ -68,8 +68,6 @@ public sealed class UntrackedReadOnlyTests
         Assert.Contains("patch", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no mod folder either — the
-    // same refusal as a Data-directory master, but "author a patch" is not this one's way out.
     [Fact]
     public void EditingAPluginInOverwrite_IsRefused_NamingOverwriteAsAnOriginNotAMod()
     {

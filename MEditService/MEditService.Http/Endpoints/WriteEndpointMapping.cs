@@ -117,7 +117,7 @@ internal static class WriteEndpointMapping
     /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>
     internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
-    /// <summary>ADR-0015 invariant 2: no Index gate here. A record gesture writes its system of
+    /// <summary>ADR-0015: no Index gate here. A record gesture writes its system of
     /// record and returns, and the Index serializes its own projections afterwards, so a source
     /// write never queues behind one and never answers "busy".</summary>
     internal static IResult Execute(

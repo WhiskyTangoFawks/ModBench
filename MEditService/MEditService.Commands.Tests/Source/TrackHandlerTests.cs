@@ -9,9 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>The Track gesture's door takes the plugins, the preset and the upstream versions; the
-/// load order it tracks against is the holder's, read here and never handed in (ADR-0013 invariant
-/// 4).</summary>
 public sealed class TrackHandlerTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";

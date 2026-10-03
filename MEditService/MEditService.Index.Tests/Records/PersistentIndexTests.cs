@@ -218,8 +218,6 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
-    // DuckDB.NET shares one database instance per path in a process, so a second open here joins
-    // the first rather than contending; the cross-process refusal (ADR-0009 invariant 5) is out of reach.
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {

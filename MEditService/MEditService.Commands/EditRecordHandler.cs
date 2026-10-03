@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0014 invariant 3). The target and the pre-write gate are
+/// <summary>The Edit gesture's handler (ADR-0014). The target and the pre-write gate are
 /// <see cref="WriteTargets"/>'s, so nothing here re-derives one.</summary>
 public sealed class EditRecordHandler
 {

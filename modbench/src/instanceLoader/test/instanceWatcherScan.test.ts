@@ -1,5 +1,3 @@
-// ADR-0015 invariant 7: the Instance adapter owns the watch. A view or command wiring its own watcher
-// would duplicate the recompute trigger instead of reading the Instance's value.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';

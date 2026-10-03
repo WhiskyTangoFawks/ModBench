@@ -66,8 +66,6 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Empty(Diagnose([Row(master, Short)], master));
     }
 
-    // ADR-0012 invariant 1: a filename compares ignoring case, so a second file whose name differs
-    // only in case, as a case-sensitive filesystem holds one, is the same plugin loaded with no line.
     [Fact]
     public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase()
     {
@@ -115,7 +113,6 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Empty(Diagnose([Row(gone, Short)], held));
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — origin tells two plugins of one apart.
     [Fact]
     public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins()
     {

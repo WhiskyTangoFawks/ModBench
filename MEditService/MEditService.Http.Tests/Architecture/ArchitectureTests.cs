@@ -124,8 +124,6 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013 invariant 1: the put-load-order handler is the only writer, the Index's own
-    // subscription the only reconciler — a second of either makes the Index's Status lie.
     [Fact]
     public void LoadOrder_IsWrittenOnlyByPutLoadOrder_AndReconciledOnlyByTheIndex()
     {
@@ -153,8 +151,6 @@ public sealed class ArchitectureTests
 
     private const string LoadOrderFolder = "MEditService.LoadOrder";
 
-    // ADR-0013 invariant 4: the load order value is built from what Mod Management sent. An
-    // adapter type here is a disk read on its construction path.
     [Fact]
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
     {
@@ -234,9 +230,6 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0014 invariant 3: Queries are the only readers of the read model, so a member of
-    // IQueryIndex no query service calls is a widening nobody asked for — every implementer
-    // pays for it.
     [Fact]
     public void TheIndexInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
@@ -254,9 +247,6 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
-    // answer to "which plugin wins". As a parameter it is the snapshot going in, the allowed
-    // direction.
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
@@ -298,8 +288,6 @@ public sealed class ArchitectureTests
     private static bool IsALoadOrder(Type? type) =>
         type is not null && (type == typeof(LoadOrderSnapshot) || type == typeof(LoadOrderHolder));
 
-    // ADR-0013 invariant 3: Mod Management alone decides the active plugins, so Editing spells the
-    // rule nowhere — enabled, winning, and named by a plugins.txt line.
     [Fact]
     public void TheActivePluginRule_IsSpelledNowhereInProduction()
     {
@@ -334,8 +322,6 @@ public sealed class ArchitectureTests
     // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
-    // ADR-0005 invariant 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
-    // where the replace-by-rename discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {

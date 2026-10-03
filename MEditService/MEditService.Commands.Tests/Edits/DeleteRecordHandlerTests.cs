@@ -222,7 +222,6 @@ public sealed class DeleteRecordHandlerTests
             mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
     }
 
-    // ADR-0015 invariant 2: the next snapshot is how the deletion reaches the views.
     [Fact]
     public void DeleteRecords_PublishesNothing()
     {

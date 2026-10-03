@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0015 invariant 3: the Index's one projection verb, over a tracked tree another tool
-/// has moved under it — the cases the sequence tests do not reach.</summary>
 public sealed class RefreshByKeysTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;

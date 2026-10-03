@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>ADR-0015 invariant 2: a write reaches the Index through the Indexer, never a push, so
+/// <summary>ADR-0015: a write reaches the Index through the Indexer, never a push, so
 /// a test that writes and then reads asks for the projection first: the next snapshot, which has no
 /// timer in it.</summary>
 internal static class ProjectedReads

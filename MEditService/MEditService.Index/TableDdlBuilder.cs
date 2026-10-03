@@ -13,7 +13,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     // writer and every projection read names `mirror.`, and a write against a view fails loudly.
     internal const string MirrorSchema = "mirror";
 
-    // ADR-0012 invariant 1 and Mutagen's ModKey: a plugin's filename compares ignoring case, and so
+    // ADR-0012 and Mutagen's ModKey: a plugin's filename compares ignoring case, and so
     // does a FormKey, which names its plugin by filename.
     internal const string FilenameIdentity = "COLLATE NOCASE";
 
@@ -56,7 +56,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// Registration is visibility (ADR-0009): every registered view joins it.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>ADR-0013 invariant 3: the active plugins, who compete for winner, each with its load
+    /// <summary>ADR-0013: the active plugins, who compete for winner, each with its load
     /// index so the sweep can order by it. Load-order-owned state, so it lives in <c>main</c>.</summary>
     internal const string ActiveRelation = "active_plugins";
 
@@ -95,7 +95,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateHeadView(connection);
     }
 
-    // ADR-0015 invariant 3: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
+    // ADR-0015: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional,
     // and this count must roll back with the rows it describes. The seed is a no-op past the first
     // open.
     private static void CreateSequenceTable(DuckDBConnection connection)
@@ -122,7 +122,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
         """;
 
-    // ADR-0009 invariant 1: every read of a record sees only the active plugins, the SQL door
+    // ADR-0009: every read of a record sees only the active plugins, the SQL door
     // included, through this one predicate. A registration's load index is null when the plugin is
     // not active (ADR-0013).
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>

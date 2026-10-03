@@ -28,7 +28,7 @@ describe('recordUri / formKeyOfRecordUri', () => {
     expect(formKeyOfRecordUri(uri)).toBe('Weird/Plugin.esp:000001');
   });
 
-  it('gives one header FormKey from two origins two URIs (ADR-0012, invariant 1)', () => {
+  it('gives one header FormKey from two origins two URIs (ADR-0012)', () => {
     const header = '000000:MyPatch.esp';
     expect(recordUri({ formKey: header, origin: 'ModA' })).not.toEqual(recordUri({ formKey: header, origin: 'ModB' }));
   });

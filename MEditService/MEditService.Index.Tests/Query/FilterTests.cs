@@ -140,8 +140,6 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.Contains(new PluginAddress(TestPluginFixture.PluginName, "Data"), plugins);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — a match in one plugin is not a match
-    // in another plugin of the same name.
     [Fact]
     public void GetPluginsWithMatchingRecords_TwoPluginsOfOneName_AnswersThePluginThatMatches()
     {

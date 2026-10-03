@@ -43,7 +43,6 @@ describe('trackedFoldersOf', () => {
     expect(folders).toEqual(new Map([[pluginAddressKey('Tracked.esp', 'TrackedMod'), '/mods/TrackedMod']]));
   });
 
-  // ADR-0012 invariant 1: two plugins that share a filename each have their own folder.
   it('keeps two same-name plugins from different mods apart', () => {
     const plugins = [
       makePlugin({ path: '/mods/ModA/Shared.esp', origin: 'ModA' }),
