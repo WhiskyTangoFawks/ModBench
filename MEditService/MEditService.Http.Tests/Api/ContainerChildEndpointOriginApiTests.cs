@@ -27,7 +27,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         return quest.FormKey.ToString();
     }
 
-    private static (ScatteredFixtureData Fx, string QuestFk) BuildTwoPlugins()
+    private static (ScatteredFixtureData Fx, string QuestFk) BuildTwoPluginsUnderRealModFolderOrigins()
     {
         string? questFk = null;
         var fx = new PluginFixtureBuilder("api-container-child-origin")
@@ -56,7 +56,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     [Fact]
     public async Task GetContainerChildren_ExplicitOrigin_ReturnsThatPluginsOwnChildren()
     {
-        var (fx, questFk) = BuildTwoPlugins();
+        var (fx, questFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(questFk);
@@ -71,7 +71,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     [Fact]
     public async Task GetContainerChildren_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, questFk) = BuildTwoPlugins();
+        var (fx, questFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(questFk);

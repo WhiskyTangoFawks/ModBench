@@ -21,7 +21,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
     [Fact]
     public async Task GetCompare_TwoModOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
-        Action<Fallout4Mod> configure = mod =>
+        Action<Fallout4Mod> configurePerkWithAScriptAdapterAndTopLevelConditions = mod =>
         {
             var perk = mod.Perks.AddNew("SharedPerk");
 
@@ -58,7 +58,7 @@ public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
             });
         };
         _fixture = new PluginFixtureBuilder("compare-column-keys")
-            .WithPlugin("Shared.esp", configure, origin: "ModA")
+            .WithPlugin("Shared.esp", configurePerkWithAScriptAdapterAndTopLevelConditions, origin: "ModA")
             .WithPlugin("Patch.esp", (mod, masters) => mod.Perks.GetOrAddAsOverride(masters[0].Perks.Single()), origin: "ModB")
             .BuildScattered();
         (await Client.PutLoadOrder(_fixture)).EnsureSuccessStatusCode();

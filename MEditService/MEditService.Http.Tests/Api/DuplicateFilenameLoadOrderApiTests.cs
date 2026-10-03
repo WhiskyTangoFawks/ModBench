@@ -15,7 +15,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 {
     private readonly HttpClient _client = loaded.Client;
 
-    private static ScatteredFixtureData BuildTwoPluginsSharingAFilenameAndAFormKey() =>
+    private static ScatteredFixtureData BuildTwoPluginsSharingAFilenameAndAFormKeyUnderRealModFolderOrigins() =>
         new PluginFixtureBuilder("api-duplicate-filename")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
@@ -45,7 +45,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     [InlineData("ModB", "FromModB")]
     public async Task EachPlugin_ReadsItsOwnRecordsWhileItWins(string winner, string editorId)
     {
-        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKey();
+        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKeyUnderRealModFolderOrigins();
         await PutBothPlugins(fx);
         await PutBothPlugins(fx, winner);
 
@@ -59,7 +59,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     [Fact]
     public async Task BrowsingByOrigin_ReturnsThatPluginsOwnRecordsAndCounts()
     {
-        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKey();
+        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKeyUnderRealModFolderOrigins();
         await PutBothPlugins(fx);
         Assert.Empty(await NpcEditorIds("ModB"));
 
@@ -77,7 +77,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     [Fact]
     public async Task BrowsingByPluginWithoutOrigin_ReturnsBadRequest()
     {
-        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKey();
+        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKeyUnderRealModFolderOrigins();
         await PutBothPlugins(fx);
 
         var records = await _client.GetAsync("/records?plugin=Shared.esp&type=npc_&limit=10");
@@ -94,7 +94,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     [Fact]
     public async Task OverriddenPlugin_IsNotACompareColumn_AndTheRecordClassifiesOnlyOne()
     {
-        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKey();
+        using var fx = BuildTwoPluginsSharingAFilenameAndAFormKeyUnderRealModFolderOrigins();
         await PutBothPlugins(fx);
 
         var compare = await _client.GetFromJsonAsync<JsonElement>(

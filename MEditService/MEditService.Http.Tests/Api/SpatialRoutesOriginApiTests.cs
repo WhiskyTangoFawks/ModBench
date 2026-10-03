@@ -38,7 +38,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         return (wrld.FormKey.ToString(), extCell.FormKey.ToString());
     }
 
-    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoPlugins()
+    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoPluginsUnderRealModFolderOrigins()
     {
         string? worldspaceFk = null;
         string? cellFk = null;
@@ -76,7 +76,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatPluginsOwnWorldspaces()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
 
@@ -88,7 +88,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaces_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
 
@@ -99,7 +99,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatPluginsOwnCells()
     {
-        var (fx, worldspaceFk, _) = BuildTwoPlugins();
+        var (fx, worldspaceFk, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
@@ -114,7 +114,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaceBlocks_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, worldspaceFk, _) = BuildTwoPlugins();
+        var (fx, worldspaceFk, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
@@ -126,7 +126,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetCellChildRecords_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs()
     {
-        var (fx, _, cellFk) = BuildTwoPlugins();
+        var (fx, _, cellFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(cellFk);
@@ -140,7 +140,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetCellChildRecords_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, cellFk) = BuildTwoPlugins();
+        var (fx, _, cellFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(cellFk);
@@ -152,7 +152,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatPluginsOwnInteriorCells()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
 
@@ -164,7 +164,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetInteriorCells_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
 
