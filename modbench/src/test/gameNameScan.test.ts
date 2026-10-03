@@ -20,7 +20,8 @@ const SCRIPT_EXTENDER_TOKENS = ['f4se', 'skse', 'obse', 'fnvse', 'nvse'];
 
 const releasesOfTable = (): string[] => {
   const table = /const GAME_PATHS[^=]*= \{\n([\s\S]*?)\n\};/.exec(readFileSync(join(SRC, 'tables', 'gamePaths.ts'), 'utf8'));
-  return [...present(table, 'the GAME_PATHS table in gamePaths.ts')[1].matchAll(/^ {2}(\w+): \{/gm)].map((m) => present(m[1], 'a release key'));
+  const body = present(table?.[1], 'the GAME_PATHS table in gamePaths.ts');
+  return [...body.matchAll(/^ {2}(\w+): \{/gm)].map((m) => present(m[1], 'a release key'));
 };
 const KNOWN_RELEASES = releasesOfTable();
 
