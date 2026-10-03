@@ -14,6 +14,7 @@ internal static class OpenedPlugins
         return (
             new PluginContent(
                 IsLight: PluginFlagPredicates.IsLight(mod, pluginName),
+                IsMedium: PluginFlagPredicates.IsMedium(mod, pluginName),
                 IsMaster: PluginFlagPredicates.IsMaster(mod, pluginName),
                 IsBlueprint: isBlueprint,
                 Masters: [.. mod.MasterReferences.Select(reference => reference.Master.FileName.ToString())],
