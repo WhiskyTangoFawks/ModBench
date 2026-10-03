@@ -102,8 +102,10 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
             (middle, true),
-            (Plugin("Override.esp", NpcCopy(Deleted, formVersion: 131)), true));
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
         _plugins.Respell(middle, TheNpc, "npc_", "\"FormVersion\": 120,", "");
+        _plugins.Respell(Edited, TheNpc, "npc_", "\"IsDeleted\": true,", "\"IsDeleted\": true, \"FormVersion\": 140,");
+        Assert.Contains("FormVersion", _plugins.Text(Edited, TheNpc));
 
         var undeleted = Written(TheNpc, 0);
 

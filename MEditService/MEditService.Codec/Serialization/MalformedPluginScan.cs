@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Codec.Schema;
 
 namespace MEditService.Codec.Serialization;
 
@@ -7,8 +8,6 @@ namespace MEditService.Codec.Serialization;
 /// reference's comments.</summary>
 public static class MalformedPluginScan
 {
-    private const uint CompressedFlag = 0x00040000;
-
     // (record type, subrecord) → the payload size the CK always writes; a shorter one is zero-padded, losslessly.
     private static readonly Dictionary<(string RecordType, string Sig), int> FixedSizeTable = new()
     {
@@ -73,7 +72,7 @@ public static class MalformedPluginScan
             try
             {
                 data = pluginBytes.AsSpan(record.DataStart, Math.Min(record.DataLen, pluginBytes.Length - record.DataStart)).ToArray();
-                if ((record.Flags & CompressedFlag) != 0) data = PluginBinaryWalk.Inflate(data);
+                if ((record.Flags & CompressedFlag.Bit) != 0) data = PluginBinaryWalk.Inflate(data);
             }
             catch (InvalidDataException)
             {

@@ -23,7 +23,6 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
         var flags = write.Next;
         if (makesPartialForm) flags &= ~DeletedFlag.Bit;
         else if (deletes && partialFormable) flags &= ~PartialFormFlag.Bit;
-        if (deletes || makesPartialForm) flags &= ~CompressedBit;
         var clears = !deletes && (write.Held & ~flags & EmptyingBits(schema)) != 0;
         var deletesBeforeMakingPartialForm = makesPartialForm && write.Sets(DeletedFlag.Bit);
         var refills = clears || deletesBeforeMakingPartialForm;
@@ -94,32 +93,29 @@ internal sealed record RecordEmptying(long Flags, bool Deletes, bool MakesPartia
     private static RecordEditResult Cannot(string spelled, string why) =>
         RecordEditResult.RefusedAt(RecordEditRefusal.CannotBePartialForm, spelled, $"'{spelled}': {why}. Nothing was written.");
 
-    /// <summary>The Record Flags the write leaves: a refill's are its copy to the left's.</summary>
-    internal JsonElement FlagsWith(LeftCopy? copyOnTheLeft)
+    /// <summary>xEdit's AssignInternal copies the left copy's flags; Delete and MakePartialForm clear Compressed.</summary>
+    internal JsonElement FlagsWith(JsonObject? left)
     {
-        if (Left(copyOnTheLeft) is not { } left) return JsonSerializer.SerializeToElement(Flags);
-        var held = RecordFlagsWrite.HeldBy(left);
-        return JsonSerializer.SerializeToElement(MakesPartialForm ? (held | PartialFormFlag.Bit) & ~CompressedBit : held);
+        var flags = Flags;
+        if (left != null) flags = RecordFlagsWrite.HeldBy(left);
+        if (left != null && MakesPartialForm) flags |= PartialFormFlag.Bit;
+        if (Deletes || MakesPartialForm) flags &= ~CompressedFlag.Bit;
+        return JsonSerializer.SerializeToElement(flags);
     }
 
-    internal void Apply(JsonObject record, RecordTableSchema schema, LeftCopy? copyOnTheLeft)
+    internal void Apply(JsonObject record, RecordTableSchema schema, JsonObject? left)
     {
-        var left = Left(copyOnTheLeft);
         foreach (var member in OwnFields(schema))
         {
             var fromTheLeft = Refills && (!MakesPartialForm || member == RecordMembers.EditorId);
             if (fromTheLeft && left?[member] is { } value) record[member] = value.DeepClone();
             else if (fromTheLeft || Deletes || member != RecordMembers.EditorId) record.Remove(member);
         }
-        if (left?[FormVersion] is { } formVersion) record[FormVersion] = formVersion.DeepClone();
-        else if (left != null) record.Remove(FormVersion);
+        if (left?[RecordMembers.FormVersion] is { } formVersion) record[RecordMembers.FormVersion] = formVersion.DeepClone();
+        else if (left != null) record.Remove(RecordMembers.FormVersion);
     }
 
-    private const string FormVersion = "FormVersion";
-
-    private const long CompressedBit = 0x0004_0000;
-
-    private JsonObject? Left(LeftCopy? copyOnTheLeft) =>
+    internal JsonObject? LeftOf(LeftCopy? copyOnTheLeft) =>
         Refills && copyOnTheLeft?.FoundText is { } text ? JsonNode.Parse(text) as JsonObject : null;
 
     private static IEnumerable<string> OwnFields(RecordTableSchema schema)
