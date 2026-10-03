@@ -5,8 +5,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>An array op reconstructs the whole list from the column's own extracted value, so any
-/// member the schema does not carry is silently dropped from every element the op rewrites.</summary>
 public sealed class ByteSliceArrayOpEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -19,9 +17,6 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private const string DebrisEditorId = "FixtureDebris";
 
-    // The two blobs are deliberately different lengths: a nested length gate reading the pre-write
-    // element at its own index would refuse the reorder below, since an array op rewrites the whole
-    // list.
     private static readonly string[] TwoModels =
     [
         """{"Percentage": 50, "ModelFilename": "First.nif", "TextureFileHashes": "0x1122"}""",

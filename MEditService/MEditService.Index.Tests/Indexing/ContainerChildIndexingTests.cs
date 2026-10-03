@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
-/// <summary>Slots already answered by the placement reads must not get a second, competing copy
-/// among the container children.</summary>
 public sealed class ContainerChildIndexingTests : IDisposable
 {
     private static readonly PluginAddress Key = new("Dialogue.esp", "Data");
@@ -99,8 +97,6 @@ public sealed class ContainerChildIndexingTests : IDisposable
         Assert.Contains((_landscapeFk, "Landscape", 0), rows);
     }
 
-    // The placement reads already answer Persistent/Temporary/TopCell/SubCells, so the container
-    // children must never carry a second, competing copy of those slots.
     [Fact]
     public void Index_DoesNotDuplicate_RelationshipsAlreadyCoveredByPlacementReads()
     {

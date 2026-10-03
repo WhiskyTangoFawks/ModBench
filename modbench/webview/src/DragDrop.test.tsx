@@ -68,9 +68,9 @@ const plugins = [
   { name: 'MyMod.esp', isTracked: true },
 ];
 
-// Columns: the label is 0, Fallout4.esm 1, MyMod.esp 2.
-const MASTER = 1;
-const MOD = 2;
+const LABEL_COLUMN = 0;
+const MASTER = LABEL_COLUMN + 1;
+const MOD = MASTER + 1;
 
 async function cellOf(rowLabel: string, column: number, occurrence = 0): Promise<HTMLElement> {
   await waitFor(() => screen.getAllByText(rowLabel, { exact: true }));
@@ -156,7 +156,6 @@ describe('RecordPanel — drag and drop', () => {
     });
   });
 
-  // The column holds no element on that row, so there is no element there to write.
   it('an element dropped on its own row in a column that lacks it changes nothing', async () => {
     const { landed } = drag(await cellOf('[1]', MASTER), await cellOf('[1]', MOD));
 

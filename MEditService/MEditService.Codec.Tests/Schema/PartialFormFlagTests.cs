@@ -30,10 +30,8 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsSet(cell));
     }
 
-    // Bit 14 carries unrelated meanings on a record type that declares no 'Partial Form' header
-    // flag, so a type without IsPartialFormable must not have it misread as one.
     [Fact]
-    public void IsSet_NonPartialFormableTypeWithSameBitSet_ReturnsFalse()
+    public void IsSet_NonPartialFormableTypeWithSameBitSet_ReturnsFalse_BecauseBit14CarriesUnrelatedMeaningsOnATypeThatDeclaresNoPartialFormFlag()
     {
         var mod = MakeMod();
         var npc = mod.Npcs.AddNew("SomeNpc");

@@ -1,7 +1,5 @@
 namespace MEditService.Ports.Tests.Plugins;
 
-// A reason built from a bare ex.Message loses the cause whenever Mutagen wraps a parse error inside
-// an outer "failed to read" exception.
 public sealed class PluginLoadFailureReasonTests
 {
     [Fact]

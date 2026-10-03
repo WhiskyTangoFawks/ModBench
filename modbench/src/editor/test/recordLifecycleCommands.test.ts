@@ -3,9 +3,6 @@ import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 interface PickItem { label: string; description?: string; mode?: string; plugin?: { name: string } }
 type ShowQuickPick = (items: readonly PickItem[], options?: { canPickMany?: boolean }) => Promise<unknown>;
 
-// Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
-// same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
-// The three message APIs are absent, so a reintroduced direct call throws.
 const { handlers, registerCommand, executeCommand, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<void> | void>();
   return {
@@ -37,15 +34,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// A RecordNode-shaped tree row and its plain-identity equivalent — what `modbench.record.delete`
-// and `.copy` must both resolve to the same call from.
 const RECORD_NODE = {
   kind: 'record', origin: 'ModA',
   record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null },
 };
 const RECORD_IDENTITY = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
 
-// What the gesture tells the view's marks, in order (common.md, Unconfirmed writes).
 function recordingMarks(): { marks: RecordWriteMarks; told: string[] } {
   const told: string[] = [];
   const named = (records: readonly RecordAddress[]) => records.map((r) => `${r.formKey} ${r.origin}`).join(', ');
@@ -78,9 +72,7 @@ describe('recordArgument — structural, not node-typed', () => {
     expect(recordArgument(RECORD_IDENTITY)).toEqual({ formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: undefined });
   });
 
-  // plugins.md, Menus and keys: delete and copy are on worldspace, cell and placed-reference rows,
-  // each of which states its record's FormKey and EditorID beside its plugin.
-  it.each(['worldspace', 'cell', 'placed'])('reads a %s row that states its record', (kind) => {
+  it.each(['worldspace', 'cell', 'placed'])('reads a %s row that states its record\'s FormKey and EditorID beside its plugin', (kind) => {
     expect(recordArgument({ kind, formKey: '000802:MyPatch.esp', editorId: 'Here', plugin: 'MyPatch.esp', origin: 'ModA' }))
       .toEqual({ formKey: '000802:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA', editorId: 'Here' });
   });
@@ -100,9 +92,7 @@ describe('registerRecordLifecycleCommands', () => {
     return { reporter, ask, told };
   }
 
-  // commands.md, The surface supplies the Argument: the palette hands the gesture no row, so it
-  // takes the Plugins selection.
-  describe('from the palette', () => {
+  describe('from the palette, handed no row, taking the Plugins selection', () => {
     afterEach(() => { viewSelection = []; });
 
     it('delete removes the selected records, asking once', async () => {
@@ -119,9 +109,7 @@ describe('registerRecordLifecycleCommands', () => {
     });
   });
 
-  // A key cannot name its view: Delete in a view deletes that view's own selection, whichever view
-  // was selected in last.
-  describe('a view\'s Delete key', () => {
+  describe('a view\'s Delete key, which cannot name its view', () => {
     const PLUGINS_ROW = { kind: 'record', origin: 'ModA', record: { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', editorId: null } };
     const HOLDER_ROW = { formKey: '000900:Other.esp', plugin: 'Other.esp', origin: 'ModB', editorId: 'Held' };
 
@@ -232,8 +220,7 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
-    // The rival: deleting whatever the dialog answered would make the native cancel delete the selection.
-    it('deletes nothing and says nothing when the confirmation is cancelled', async () => {
+    it('deletes nothing and says nothing when the confirmation is cancelled, rather than deleting whatever the dialog answered', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST, SECOND], refused: [] });
       const { reporter } = invoke(client, undefined);
@@ -263,7 +250,7 @@ describe('registerRecordLifecycleCommands', () => {
       }]);
     });
 
-    it('refuses a record whose argument states no origin, naming it, and still deletes the rest', async () => {
+    it('refuses a record whose argument states no origin, naming it, since a filename alone names no one plugin, and still deletes the rest', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { landed: [FIRST], refused: [] });
       const { reporter } = invoke(client, 'Delete');
@@ -301,7 +288,6 @@ describe('registerRecordLifecycleCommands', () => {
       ]);
     });
 
-    // common.md, Unconfirmed writes, story 2: each deleted record's row keeps its place, marked.
     it('marks the records before the write, then tells the marks which landed', async () => {
       const client = new InMemoryMEditClient();
       const { told } = invoke(client, 'Delete');
@@ -330,8 +316,7 @@ describe('registerRecordLifecycleCommands', () => {
       expect(told).toEqual(['deleting 000802:MyPatch.esp ModA (SecondNpc is 000802:MyPatch.esp)', 'deleted ']);
     });
 
-    // common.md, Unconfirmed writes, story 6: only the disk can say what a call with no answer did.
-    it('tells the marks a call mEdit never answered, and reports it as before', async () => {
+    it('tells the marks a call mEdit never answered, since only the disk can say what it did, and reports it as before', async () => {
       const client = new InMemoryMEditClient();
       client.setCommandResult('deleteRecords', { refused: true, unanswered: true, message: 'Could not delete 1 record — socket hang up' });
       const { told, reporter } = invoke(client, 'Delete');
@@ -346,9 +331,7 @@ describe('registerRecordLifecycleCommands', () => {
   });
 });
 
-// plugins.md, Copy, story 1; commands.md, `copy`: one command over the selection, the mode
-// picked, then the destinations.
-describe('modbench.record.copy', () => {
+describe('modbench.record.copy, one command over the selection: the mode picked, then the destinations', () => {
   const SOURCE = { formKey: '000801:MyPatch.esp', plugin: 'MyPatch.esp', origin: 'ModA' };
   const SECOND_NODE = {
     kind: 'record', origin: 'ModA',
@@ -361,8 +344,7 @@ describe('modbench.record.copy', () => {
 
   let viewSelection: readonly unknown[] = [];
   afterEach(() => { viewSelection = []; });
-  // A pick a test leaves unanswered must not answer the next test's.
-  beforeEach(() => { showQuickPick.mockReset(); });
+  beforeEach(function dropUnansweredPicksSoTheyDoNotAnswerTheNextTest() { showQuickPick.mockReset(); });
 
   function invoke(client: InMemoryMEditClient, ...answers: readonly (string | undefined)[]) {
     const reporter = recordingReporter();
@@ -383,7 +365,6 @@ describe('modbench.record.copy', () => {
     ]);
   }
 
-  // The two picks, answered in order: the mode by its item, the destinations by their names.
   function pick(mode: 'Override' | 'New' | undefined, picked?: readonly { name: string; origin: string }[]) {
     showQuickPick.mockImplementationOnce((items) =>
       Promise.resolve(items.find((item) => item.mode === mode)));
@@ -462,7 +443,6 @@ describe('modbench.record.copy', () => {
       .toEqual(['MyPatch.esp [2]', 'Patch.esp [4]', 'Other.esp [6]']);
   });
 
-  // commands.md, Esc changes nothing: no write and no message.
   it.each([
     ['the mode', () => { pick(undefined); }],
     ['the destinations', () => { pick('New', undefined); }],
@@ -480,8 +460,7 @@ describe('modbench.record.copy', () => {
     expect(reporter.landings).toEqual([]);
   });
 
-  // commands.md, Confirm what destroys: once for the whole selection.
-  it('asks once to replace every copy the picked destinations already hold, then copies with replace', async () => {
+  it('asks once, for the whole selection, to replace every copy the picked destinations already hold, then copies with replace', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     client.setQueryAnswerOnce('getRecordHolders', [{ name: 'MyPatch.esp', origin: 'ModA' }, PATCH]);
@@ -531,8 +510,7 @@ describe('modbench.record.copy', () => {
     expect(copyCalls(client)).toEqual([[[SOURCE], 'Override', [PATCH], false]]);
   });
 
-  // plugins.md, Pickers, Copy: a record's own plugin holds the record, not a copy to replace.
-  it('asks nothing of a record\'s own plugin picked for a mixed selection, and says nothing of it', async () => {
+  it('asks nothing of a record\'s own plugin picked for a mixed selection, which holds the record and no copy to replace, and says nothing of it', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);
     const elsewhere = { formKey: '000900:Patch.esp', plugin: 'Patch.esp', origin: 'PatchMod' };
@@ -649,7 +627,6 @@ describe('modbench.record.copy', () => {
     expect(showQuickPick).toHaveBeenCalledOnce();
   });
 
-  // common.md, Unconfirmed writes, story 2: each destination's row carries the mark.
   it('marks each copy it writes before the write, then tells the marks which landed and under what FormKey', async () => {
     const client = new InMemoryMEditClient();
     destinations(client);

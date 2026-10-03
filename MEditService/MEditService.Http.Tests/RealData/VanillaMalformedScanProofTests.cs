@@ -4,9 +4,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 namespace MEditService.Http.Tests.RealData;
 
-/// <summary>Scanning the shipped game's plugins must produce zero diagnoses: "malformed" means departing
-/// from what the Creation Kit writes, so a vanilla hit is a false positive and the fix is tightening the
-/// table.</summary>
 public sealed class VanillaMalformedScanProofTests
 {
     [SmokeFact("run the vanilla-proof scan")]

@@ -10,8 +10,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Read back by property name, not position: a script's properties are a keyed array
-/// stored in name order rather than payload order.</summary>
 public sealed class ConcreteBaseUnionEditTests : IDisposable
 {
     private readonly ScriptedNpcFixture _fixture = new();
@@ -20,8 +18,6 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // The adapter under test, spelled once: only the property's leaf changes between the two
-    // writes, the way the editor's own resend does — Data rides along into the second write.
     private static JsonElement Adapter(string leaf) => Json($$"""
         {"Version": 6, "ObjectFormat": 2, "Scripts": [
           {"Name": "TestScript", "Flags": "Local", "Properties": [
@@ -50,13 +46,10 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         Assert.Equal("ScriptFloatProperty", switched.GetProperty("MutagenObjectType").GetString());
         Assert.Equal("Switched", switched.GetProperty("Name").GetString());
         Assert.Equal("Removed", switched.GetProperty("Flags").GetString());
-        // Data is one member across the leaves, so the value posted with the switch lands as the
-        // incoming leaf's own Data, converted to its type.
         Assert.Equal(42f, switched.GetProperty("Data").GetSingle());
         Assert.Equal(before["Sibling"].GetRawText(), after["Sibling"].GetRawText());
     }
 
-    // The base leaf declares no Data, so the discriminator gesture's cascade drops it.
     [Fact]
     public void SwitchingToTheBaseLeaf_BuildsABareScriptProperty()
     {
@@ -103,8 +96,8 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
         private const string PluginName = "ScriptedNpc701.esp";
         private const string Origin = "ScriptedNpc701Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-701-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-701-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-701-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-701-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -146,15 +139,8 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

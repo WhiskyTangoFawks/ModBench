@@ -3,8 +3,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.PluginAdapter.Tests.PluginAdapter;
 
-/// <summary>Whether a registered plugin's file opens for the read that follows, asked of real files.
-/// Another tool owns them too, so the answer is about this moment and no other.</summary>
 public sealed class PluginReadabilityTests : IDisposable
 {
     private const string PluginName = "Readable.esp";
@@ -36,8 +34,6 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.True(Adapter.CanRead(new ModPath(path)));
     }
 
-    // The case the load-time check exists for: a file another process holds against readers. The
-    // handle is open for the whole assertion, so the answer is ordered by the handle, not by a wait.
     [Fact]
     public void CanRead_WhileAnotherHandleDeniesSharing_IsFalse()
     {
@@ -57,8 +53,6 @@ public sealed class PluginReadabilityTests : IDisposable
         Assert.True(Adapter.CanRead(new ModPath(PluginPath)));
     }
 
-    // A directory at the plugin's path is not a plugin that reads: the probe answers false rather
-    // than throwing something the caller has no branch for.
     [Fact]
     public void CanRead_ForADirectoryAtThePluginsPath_IsFalse()
     {

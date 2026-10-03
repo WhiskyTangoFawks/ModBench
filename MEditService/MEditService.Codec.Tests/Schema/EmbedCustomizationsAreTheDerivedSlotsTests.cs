@@ -6,24 +6,18 @@ using Mutagen.Bethesda.Serialization.Customizations;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>The embed customizations and the derived slots are one set, compared by replaying each
-/// customization against a recording builder. A customization the derivation does not name would put
-/// a child in a document no edit can reach.</summary>
 public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 {
     [Fact]
-    public void TheCustomizationsEmbedExactlyTheDerivedSlots()
+    public void TheCustomizationsEmbedExactlyTheDerivedSlots_BecauseACustomizationTheDerivationDoesNotNamePutsAChildInADocumentNoEditCanReach()
     {
-        var customized = Replay().Order().ToList();
+        var customized = ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder().Order().ToList();
 
-        // A build with no customization discovered would agree with an empty derivation.
-        Assert.NotEmpty(customized);
+        Assert.True(customized.Count > 0, "Expected the replay to discover customizations; an empty replay would agree with an empty derivation.");
         Assert.Equal(ContainerChildFields.EmbeddedSlotsFor(GameCategory.Fallout4).Order().ToList(), customized);
     }
 
-    // Every ICustomize<T> in the serialization folder, played back through a builder that records the
-    // member each EmbedRecordsInSameFile names.
-    private static IEnumerable<(string ParentType, string Slot)> Replay()
+    private static IEnumerable<(string ParentType, string Slot)> ReplayEveryCustomizeOfTheSerializationFolderThroughARecordingBuilder()
     {
         foreach (var found in typeof(ContainerChildFields).Assembly.GetTypes()
                      .Where(type => type is { IsClass: true, IsAbstract: false })

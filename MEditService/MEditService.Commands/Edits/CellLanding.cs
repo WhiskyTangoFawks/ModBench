@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Commands.Edits;
 
 /// <summary>A placed record moving into another cell of its worldspace, through one source transaction. A
-/// cell the plugin lacks is copied in from its nearest copy to the left, or created, as xEdit's Add does.</summary>
+/// cell the plugin lacks is copied in from the nearest of its masters to hold it, or created, as xEdit's Add does.</summary>
 internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, SchemaReflector schemaReflector, ILogger logger)
 {
     // The cell document that takes the record in, and where a new one goes.
@@ -110,11 +110,14 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         var worldspace = Parsed(document.Body, move.Worldspace);
         Step<JsonObject> cell = worldspace[PlacedCell.WorldspacePersistentCellMember] is JsonObject held
             ? new Step<JsonObject>.Done(held)
-            : CopiedOrNew(
+            : MastersOf(move)
+                .Then(masters => CopiedOrNew(
                     move,
-                    targets.NearestCopyToTheLeft(move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject),
+                    targets.NearestCopyToTheLeft(
+                        move.Plugin, move.Worldspace, copy => copy[PlacedCell.WorldspacePersistentCellMember] is JsonObject,
+                        among: masters),
                     copy => Parsed(copy, move.Worldspace)[PlacedCell.WorldspacePersistentCellMember],
-                    PersistentFlag.Bit, (0, 0))
+                    PersistentFlag.Bit, (0, 0)))
                 .Then<JsonObject>(copied =>
                 {
                     worldspace[PlacedCell.WorldspacePersistentCellMember] = copied;
@@ -134,20 +137,23 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         if (move.Repository.CellAt(move.Plugin, move.Worldspace, grid.X, grid.Y) is { } held)
             return new Step<Landed>.Done(IntoHeldCell(move, held, record));
 
-        var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y);
-        if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
-            && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+        return MastersOf(move).Then(masters =>
         {
-            return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
-        }
+            var left = targets.NearestCellToTheLeft(move.Plugin, move.Worldspace, grid.X, grid.Y, masters);
+            if (left.FoundText is { } copy && FormKeyOf(Parsed(copy, move.Worldspace)) is var copied
+                && move.Repository.IdentityOf(move.Plugin, copied, schemaReflector.GetSchemas(move.Release)) is not null)
+            {
+                return new Step<Landed>.Done(IntoHeldCell(move, copied, record));
+            }
 
-        return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
-        {
-            TakeIn(cell, PersistentFlag.TemporaryGroup, record);
-            var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
-            return new Step<Landed>.Done(new(
-                new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
-                CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+            return CopiedOrNew(move, left, copy => JsonNode.Parse(copy), 0, (grid.X, grid.Y)).Then<Landed>(cell =>
+            {
+                TakeIn(cell, PersistentFlag.TemporaryGroup, record);
+                var text = codec.RoundTrip(cell.ToJsonString(), move.Release, move.CellType);
+                return new Step<Landed>.Done(new(
+                    new SourceDocument(FormKeyOf(cell), move.CellType, WriteTargets.EditorIdOf(text), text),
+                    CellPlacement.AtGrid(move.Worldspace, grid.X, grid.Y)));
+            });
         });
     }
 
@@ -162,17 +168,35 @@ internal sealed class CellLanding(WriteTargets targets, RecordTextCodec codec, S
         return new(Document(identity, codec.RoundTrip(cell.ToJsonString(), move.Release, identity.RecordType)), null);
     }
 
-    // The own fields of the nearest copy to the left, as an override, or else a new cell native to the plugin.
+    // xEdit's Add copies a cell in only from the plugin's masters (AllVisibleForFile), which for a tracked
+    // plugin are what its working tree requires (ADR-0008). An unreadable document refuses.
+    private Step<IReadOnlySet<string>> MastersOf(Move move)
+    {
+        try
+        {
+            return new Step<IReadOnlySet<string>>.Done(
+                RequiredMasters.InTheTree(move.Repository, move.Plugin, schemaReflector.GetSchemas(move.Release)));
+        }
+        catch (UnreadableSourceDocumentException ex)
+        {
+            return new Step<IReadOnlySet<string>>.Refused(RecordEditResult.RefusedAt(
+                RecordEditRefusal.RecordParseFailed, move.Spelled,
+                $"'{move.Spelled}': the cell {move.Moved.FormKey} moves into comes only from a master of {move.Plugin.Name}, " +
+                $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written."));
+        }
+    }
+
+    // The own fields of the nearest master's copy, as an override, or else a new cell native to the plugin.
     private Step<JsonObject> CopiedOrNew(Move move, LeftCopy left, Func<string, JsonNode?> cellIn, long flags, (int X, int Y) grid)
     {
         switch (left)
         {
             case LeftCopy.Unreadable unreadable:
                 return new Step<JsonObject>.Refused(unreadable.Refusal(
-                    move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from its nearest copy to the left"));
+                    move.Spelled, $"the cell {move.Moved.FormKey} moves into is copied in from the nearest of {move.Plugin.Name}'s masters to hold it"));
             case LeftCopy.Found found:
                 var copy = cellIn(found.Text)?.ToJsonString()
-                    ?? throw new InvalidOperationException($"The copy to the left of {move.Plugin.Name} holds no cell where it was found.");
+                    ?? throw new InvalidOperationException($"The copy of a master of {move.Plugin.Name} holds no cell where it was found.");
                 return new Step<JsonObject>.Done(
                     Parsed(ContainerDocumentEdits.WithoutChildren(codec, copy, move.Release, move.CellType), move.Worldspace));
         }

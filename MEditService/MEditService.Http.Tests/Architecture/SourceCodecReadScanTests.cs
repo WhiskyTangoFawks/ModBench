@@ -5,9 +5,7 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class SourceCodecReadScanTests
 {
-    // RecordTextCodec's members, minus BlankDocument, plus the bare type name: holding an instance
-    // reaches every member without naming one. The lookahead excludes BlankDocument's own calls.
-    private static readonly (string Name, Regex Pattern)[] ForbiddenMembers =
+    private static readonly (string Name, Regex Pattern)[] ForbiddenMembersAndTheBareTypeName =
     [
         ("RecordTextCodec", new Regex(@"\bRecordTextCodec\b(?!\s*\.\s*BlankDocument\b)", RegexOptions.Compiled)),
         ("RoundTrip", new Regex(@"\bRoundTrip\b", RegexOptions.Compiled)),
@@ -40,8 +38,6 @@ public sealed class SourceCodecReadScanTests
             + string.Join("\n", counts));
     }
 
-    // Zero references found and zero files walked read the same: this is what tells them
-    // apart, so a ScannedRoots typo that scans nothing cannot pass by matching nothing.
     [Fact]
     public void TheScan_WalksMoreThanFifteenProductionFiles()
     {
@@ -96,7 +92,7 @@ public sealed class SourceCodecReadScanTests
         scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))));
 
     private static IEnumerable<(string Name, int Count)> Occurrences(string text) =>
-        ForbiddenMembers
+        ForbiddenMembersAndTheBareTypeName
             .Select(member => (member.Name, Count: member.Pattern.Count(text)))
             .Where(o => o.Count > 0);
 }

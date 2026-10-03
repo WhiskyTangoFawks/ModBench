@@ -40,7 +40,6 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: a refresh per event, which runs one whole recompute per keystroke of a pasted path.
   it('coalesces a burst of edits into one refresh', async () => {
     vi.useFakeTimers();
     const config = fakeConfigChange();
@@ -58,8 +57,6 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: refreshing on every configuration change, which recomputes the whole MO2 side on an
-  // unrelated editor setting.
   it('ignores a change to any other setting', async () => {
     vi.useFakeTimers();
     const config = fakeConfigChange();
@@ -72,7 +69,6 @@ describe('the game-directory setting reaches the Instance as one refresh', () =>
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  // Rival: a settle left armed past teardown, firing a recompute into a disposed Instance.
   it('disposes both the subscription and a settle still in flight', async () => {
     vi.useFakeTimers();
     const config = fakeConfigChange();

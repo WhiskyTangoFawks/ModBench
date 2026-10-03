@@ -12,12 +12,9 @@ public class FilterTests(TestPluginFixture fixture)
 
     private Indexer LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
-    // --- SetFilter: validation ---
-
     [Fact]
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
     {
-        // A filter projecting extra columns beyond form_key is accepted and still filters.
         using var index = LoadedIndex();
         var reads = index.RequireReads();
         var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
@@ -46,8 +43,6 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.ThrowsAny<Exception>(() => index.SetFilter("NOT VALID SQL!!!", "filter.sql"));
     }
 
-    // --- SetFilter: filter injection into Search ---
-
     [Fact]
     public void GetRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
     {
@@ -56,7 +51,6 @@ public class FilterTests(TestPluginFixture fixture)
         var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
-        // filter to first record only
         var firstFormKey = all.Items[0].FormKey;
         index.SetFilter($"SELECT '{firstFormKey}' AS form_key", "filter.sql");
 
@@ -109,8 +103,6 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
 
-    // --- SetFilter: filter injection into GetRecordTypeCounts ---
-
     [Fact]
     public void CountRecordsForPlugin_WithActiveFilter_CountsOnlyMatching()
     {
@@ -123,8 +115,6 @@ public class FilterTests(TestPluginFixture fixture)
 
         Assert.Equal(1, reads.CountOf(new PluginAddress(TestPluginFixture.PluginName, "Data"), "NPC_"));
     }
-
-    // --- GetPluginsWithMatchingRecords ---
 
     [Fact]
     public void GetPluginsWithMatchingRecords_WithActiveFilter_ReturnsPluginWithMatches()

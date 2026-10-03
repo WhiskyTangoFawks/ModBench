@@ -13,8 +13,6 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A link to a record embedded in another plugin's container: a container's child is a
-/// record of the binary, so the link cache names it and compile must not call the link broken.</summary>
 public sealed class CompileEmbeddedTargetTests : IDisposable
 {
     private const string TargetName = "EmbeddedTarget.esp";
@@ -22,8 +20,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private const string ReferrerName = "EmbeddedReferrer.esp";
     private const string ReferrerOrigin = "EmbeddedReferrerMod";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-embedded-target-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-embedded-target-game-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-embedded-target-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-embedded-target-game-");
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
@@ -90,19 +88,10 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_instanceRoot);
-        TryDelete(_gameDirectory);
+        _instanceRoot.Dispose();
+        _gameDirectory.Dispose();
     }
 
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
-
-    // The target's own file carries the record and the link cache names it from there, so a
-    // "could not be resolved" diagnostic would be false.
     [Fact]
     public async Task Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
@@ -113,8 +102,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0013: a registered plugin the game does not load is not where the link points, so its file
-    // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
@@ -129,8 +116,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
-    // The same load order, asked the way compile asks: the silence above is the link resolving, not
-    // a record nothing can name.
     [Fact]
     public void TheTargetsFile_CarriesTheEmbeddedRecord_AndTheLinkCacheNamesIt()
     {

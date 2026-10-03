@@ -26,9 +26,6 @@ function reference(overrides: Partial<ReferenceResult> & { formKey: string }): R
   };
 }
 
-// A test that forgets to script `getReferences` gets the in-memory adapter's own loud rejection
-// — the same shape a real backend failure produces once caught below — so no separate "ok: false"
-// script is needed.
 function rowsChanged(): NotificationEvent {
   return { kind: 'rows-changed', plugin: '', origin: '', keys: [], sequence: 0 };
 }

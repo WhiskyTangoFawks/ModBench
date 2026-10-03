@@ -11,30 +11,23 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>One batch of puts and removes across two tracked mod folders: either every tree takes it,
-/// or every tree goes back (ADR-0007).</summary>
 public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _firstFolder = Directory.CreateTempSubdirectory("medit-batch-a-").FullName;
-    private readonly string _secondFolder = Directory.CreateTempSubdirectory("medit-batch-b-").FullName;
+    private readonly ScratchDirectory _firstFolder = new("medit-batch-a-");
+    private readonly ScratchDirectory _secondFolder = new("medit-batch-b-");
 
     public void Dispose()
     {
-        foreach (var folder in new[] { _firstFolder, _secondFolder })
-        {
-            try { Directory.Delete(folder, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-        }
+        _firstFolder.Dispose();
+        _secondFolder.Dispose();
     }
 
     private static string BodyOf(string pluginName, string editorId) =>
         $"{{\n  \"FormKey\": \"000800:{pluginName}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
-    // Spelled from the fixture's own constants rather than asked of the repository: Track needs the
-    // path to seed the pristine commit before any repository exists to ask.
-    private static string OriginalNpcPath(string pluginName) =>
+    private static string OriginalNpcPathSpelledBeforeAnyRepositoryExistsToAsk(string pluginName) =>
         Path.Combine("plugin-source", pluginName, "Npcs", $"Original - 000800_{pluginName}.json");
 
     private static SourceRepository Track(string modFolder, string pluginName, params TreeFile[] alsoWrite)
@@ -42,16 +35,14 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         PluginBaselines.Track(
             modFolder, SourcePreset.Edits,
             [
-                new TreeFile(OriginalNpcPath(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
+                new TreeFile(OriginalNpcPathSpelledBeforeAnyRepositoryExistsToAsk(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
             ]);
         return SourceRepository.Open(modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
     }
 
-    // A worldspace with an exterior cell beneath it: the one shape whose removal takes a whole
-    // subtree rather than a file.
-    private static (TreeFile[] Files, FormKey Cell) ContainerFiles(string pluginName)
+    private static (TreeFile[] Files, FormKey Cell) WorldspaceWithAnExteriorCellBeneathWhoseRemovalTakesASubtreeNotAFile(string pluginName)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         var cell = new Cell(mod) { EditorID = "ExteriorCell", WaterHeight = 50f };
@@ -90,11 +81,9 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
             first, firstPlugin,
             new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
 
-        // The second repository's write dies where a real one can: the record has no group folder of
-        // its own and no document carries it, so the tree has nowhere to put it.
-        Assert.ThrowsAny<Exception>(() => transaction.Put(
-            second, secondPlugin,
-            new SourceDocument("00FFFF:Second.esp", "refr", "Nowhere", BodyOf("Second.esp", "Nowhere"))));
+        var recordWithNoGroupFolderAndNoDocumentCarryingIt =
+            new SourceDocument("00FFFF:Second.esp", "refr", "Nowhere", BodyOf("Second.esp", "Nowhere"));
+        Assert.ThrowsAny<Exception>(() => transaction.Put(second, secondPlugin, recordWithNoGroupFolderAndNoDocumentCarryingIt));
 
         Assert.Empty(transaction.Rollback());
         Assert.Equal(beforeFirst, TreeSnapshot.Of(_firstFolder));
@@ -124,9 +113,9 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     }
 
     [Fact]
-    public void ABatchAskedToRemoveAContainer_RefusesBeforeTouchingTheTree()
+    public void ABatchAskedToRemoveAContainer_RefusesBeforeTouchingTheTree_ForKeepingOnlyItsOwnDocumentWouldLoseEverythingBeneath()
     {
-        var (files, cell) = ContainerFiles("First.esp");
+        var (files, cell) = WorldspaceWithAnExteriorCellBeneathWhoseRemovalTakesASubtreeNotAFile("First.esp");
         var repository = Track(_firstFolder, "First.esp", files);
         var plugin = new PluginAddress("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
@@ -135,17 +124,13 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var refusal = Assert.Throws<NotSupportedException>(
             () => transaction.Remove(repository, plugin, new RecordIdentity(cell.ToString(), "cell", "ExteriorCell")));
 
-        // The cell's directory carries its placed reference: a batch that kept only the cell's own
-        // document would restore the record and lose everything beneath it.
         Assert.Contains(cell.ToString(), refusal.Message, StringComparison.Ordinal);
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 
-    // The put the repository would answer by minting a directory and the block levels above it —
-    // more than the one document's bytes a batch entry holds.
     [Fact]
-    public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree()
+    public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree_ForMintingItsDirectoriesIsMoreThanTheOneDocumentsBytesABatchEntryHolds()
     {
         var repository = Track(_firstFolder, "First.esp");
         var plugin = new PluginAddress("First.esp", "FirstMod");
@@ -169,10 +154,9 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var before = TreeSnapshot.Of(_firstFolder);
 
         var transaction = new SourceRepository.SourceTransaction();
-        // A sibling in the group folder Track already made, so nothing here mints a directory.
-        transaction.Put(
-            repository, plugin,
-            new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}"));
+        var siblingInTheGroupFolderTrackAlreadyMade =
+            new SourceDocument("000900:First.esp", "npc_", "Sibling", "{\n  \"FormKey\": \"000900:First.esp\"\n}");
+        transaction.Put(repository, plugin, siblingInTheGroupFolderTrackAlreadyMade);
         Assert.Equal(
             SourceRemoval.Removed,
             transaction.Remove(repository, plugin, new RecordIdentity("000800:First.esp", "npc_", "Original")));

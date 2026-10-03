@@ -55,8 +55,7 @@ describe('put load order', () => {
     });
   });
 
-  // Rival: looking the release up from the game's name here, beside the Instance adapter's answer.
-  it('sends the release the value holds', async () => {
+  it('sends the release the value holds, not one looked up from the game\'s name beside the Instance adapter\'s answer', async () => {
     const client = attachedClient();
 
     await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameRelease: 'Fallout4VR' });
@@ -64,8 +63,7 @@ describe('put load order', () => {
     expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[5])).toEqual(['Fallout4VR']);
   });
 
-  // A guessed release would answer about another game; the name is refused visibly instead.
-  it('sends the game as the instance names it when the value holds no release', async () => {
+  it('sends the game as the instance names it when the value holds no release, so a guessed release does not answer about another game and the name is refused visibly', async () => {
     const client = attachedClient();
 
     await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, gameName: 'Morrowind', gameRelease: undefined });
@@ -73,9 +71,7 @@ describe('put load order', () => {
     expect(client.calls.filter((c) => c.method === 'putLoadOrder').map((c) => c.args[5])).toEqual(['Morrowind']);
   });
 
-  // common.md, States, story 5: without the game's masters the snapshot would be wrong, so mEdit
-  // keeps what it holds.
-  it('sends nothing while the game folder\'s plugins cannot be listed', async () => {
+  it('sends nothing while the game folder\'s plugins cannot be listed, since without the game\'s masters the snapshot would be wrong and mEdit keeps what it holds', async () => {
     const client = attachedClient();
 
     const result = await putLoadOrder(createLoadOrderSender(client), '/instance', { ...VALUE, pluginsLoadedWithNoLine: undefined });
@@ -95,8 +91,7 @@ describe('put load order', () => {
 });
 
 describe('refresh', () => {
-  // commands.md, `refresh`: mEdit reads every plugin again against the load order it holds.
-  it('rebuilds the index for the instance and sends nothing', async () => {
+  it('rebuilds the index for the instance, so mEdit reads every plugin again against the load order it holds, and sends nothing', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: true });
 
@@ -106,7 +101,7 @@ describe('refresh', () => {
     expect(result).toEqual({ applied: true });
   });
 
-  it('sends nothing and reports held-elsewhere apart from every other refusal', async () => {
+  it('sends nothing and reports held-elsewhere by name, apart from the generic refusal every other failure gets', async () => {
     const client = attachedClient();
     client.setCommandResult('rebuildIndex', { rebuilt: false, heldElsewhere: true });
 

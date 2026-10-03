@@ -1,6 +1,3 @@
-// A folder dropped in has no modlist line and a hand-deleted folder leaves its line behind; a
-// landed Instance value is what runs the mod sync that settles both.
-
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -36,7 +33,6 @@ const watcherFor = (glob: string): FakeWatcher => {
   return present(found[0], 'the sole watcher registered for this glob');
 };
 
-// How a test learns a recompute landed: no sleep and no poll.
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
   if (instance.sequence > sequence) return Promise.resolve(instance.value);
   return new Promise((resolve) => {
@@ -52,7 +48,7 @@ const modlistText = (root: string): Promise<string> => readFile(join(root, DEFAU
 
 const channelDouble = () => ({ error: vi.fn(), info: vi.fn() });
 
-async function wiredInstance(): Promise<{
+async function settledWiredInstance(): Promise<{
   root: string;
   instance: Instance;
   channel: ReturnType<typeof channelDouble>;
@@ -70,7 +66,6 @@ async function wiredInstance(): Promise<{
   instances.push(instance);
   const channel = channelDouble();
   const syncs: Promise<ModSyncResult>[] = [];
-  // What the trigger handed the command, so a test can hold it against the value's own field.
   const handed: (readonly ModFolder[] | undefined)[] = [];
   const trigger = registerModSync(instance, (value) => {
     handed.push(value.modFolders);
@@ -78,9 +73,6 @@ async function wiredInstance(): Promise<{
     syncs.push(run);
     return run;
   }, channel);
-  // The fixture ships "DragIn Manual Extract" unlisted and "[NODELETE] Radfall" folderless;
-  // settle both before a test takes its own baseline, or the fixture's mismatch reads as the
-  // test's effect.
   await instance.refresh();
   await trigger.settled();
   channel.info.mockClear();
@@ -88,10 +80,8 @@ async function wiredInstance(): Promise<{
 }
 
 describe('registerModSync — driven by the Instance value', () => {
-  // Rival: dropping the sync trigger, or keying it off a watcher of its own instead of the landed
-  // value. Nothing else writes the line, so the folder stays unlisted forever.
   it('adds a line for a mod folder dropped in, off the Instance value alone', async () => {
-    const { root, instance, syncs } = await wiredInstance();
+    const { root, instance, syncs } = await settledWiredInstance();
     const before = instance.sequence;
     await mkdir(join(root, 'mods', MOD));
     await writeFile(join(root, 'mods', MOD, 'Installed.esp'), 'plugin bytes');
@@ -105,7 +95,7 @@ describe('registerModSync — driven by the Instance value', () => {
   });
 
   it('drops the line of a folder deleted by hand, off the Instance value alone', async () => {
-    const { root, instance, syncs } = await wiredInstance();
+    const { root, instance, syncs } = await settledWiredInstance();
     const before = instance.sequence;
     await rm(join(root, 'mods', 'Harder VATS'), { recursive: true, force: true });
 
@@ -116,9 +106,8 @@ describe('registerModSync — driven by the Instance value', () => {
     expect(await modlistText(root)).not.toContain('Harder VATS');
   });
 
-  // Rival: the value reading a missing mods/ as no folders, which empties modlist.txt.
   it('leaves modlist.txt as it is, and says why in one Output line, when mods/ goes missing', async () => {
-    const { root, instance, channel, syncs } = await wiredInstance();
+    const { root, instance, channel, syncs } = await settledWiredInstance();
     const settled = await modlistText(root);
     const before = instance.sequence;
     await rm(join(root, 'mods'), { recursive: true, force: true });
@@ -132,10 +121,8 @@ describe('registerModSync — driven by the Instance value', () => {
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('there is no folder for mods'));
   });
 
-  // The folders come off the value, so the command never lists mods/.
-  // Rival: a trigger that lists the directory itself and hands that instead.
   it('hands the command the value\'s own mod folders, not a listing of its own', async () => {
-    const { root, instance, handed, syncs } = await wiredInstance();
+    const { root, instance, handed, syncs } = await settledWiredInstance();
     const before = instance.sequence;
     await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
 
@@ -147,10 +134,8 @@ describe('registerModSync — driven by the Instance value', () => {
     expect(value.modFolders?.map((f) => f.name)).toContain('Hand Extracted Mod');
   });
 
-  // Rival: a sync that writes on every landed value, which a plugins.txt edit would turn into a
-  // modlist.txt write and a loop.
   it('a further landed value once disk and modlist.txt agree writes nothing and logs nothing', async () => {
-    const { root, instance, channel, syncs } = await wiredInstance();
+    const { root, instance, channel, syncs } = await settledWiredInstance();
     const settled = await modlistText(root);
     const before = instance.sequence;
 
@@ -180,7 +165,6 @@ function fakeInstance(value = FAKE_VALUE): Pick<Instance, 'subscribe' | 'value'>
   };
 }
 
-// Each fire runs the next outcome in turn, and waits for that run alone.
 function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
   const instance = fakeInstance();
   const channel = channelDouble();
@@ -202,9 +186,7 @@ function fired(...outcomes: (() => Promise<ModSyncResult>)[]) {
 const refused = (refusal: string) => () => Promise.resolve<ModSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<ModSyncResult>({ applied: true, added: [], dropped: [] });
 
-// How a caller learns a run has told what it did: no sleep and no poll.
 describe('registerModSync — settled', () => {
-  // Rival: resolving once the command answers, before the trigger has written its Output line.
   it('resolves once every run begun has written its Output', async () => {
     const instance = fakeInstance();
     const channel = channelDouble();
@@ -243,7 +225,6 @@ describe('registerModSync — outcome handling', () => {
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: the mod-order file's name spelled here, which names MO2's file over another manager's.
   it('names the file mod order is kept in as the value names it', async () => {
     const instance = fakeInstance(instanceValueFixture({ managerNames: { manager: 'Another Manager', modOrderFile: 'order.txt' } }));
     const channel = channelDouble();
@@ -255,7 +236,6 @@ describe('registerModSync — outcome handling', () => {
     expect(channel.info).toHaveBeenCalledWith(expect.stringContaining('1 order.txt line(s)'));
   });
 
-  // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.
   it('says a thrown sync error the same way', async () => {
     const { channel, trigger, fire } = fired(() => Promise.reject(new Error('disk unplugged')));
     await fire();
@@ -264,7 +244,6 @@ describe('registerModSync — outcome handling', () => {
     expect(trigger.message()).toContain('disk unplugged');
   });
 
-  // Rival: report every refused run, which fills the Output with one line per recompute.
   it('reports the same refusal once, however many values repeat it', async () => {
     const { channel, messageChanged, fire } = fired(refused('gone'), refused('gone'), refused('gone'));
     await fire();
@@ -275,7 +254,6 @@ describe('registerModSync — outcome handling', () => {
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: report only the first refusal, so a new cause keeps showing the old one.
   it('reports again when the reason changes', async () => {
     const { channel, trigger, fire } = fired(refused('first cause'), refused('second cause'));
     await fire();
@@ -286,7 +264,6 @@ describe('registerModSync — outcome handling', () => {
     expect(trigger.message()).toContain('second cause');
   });
 
-  // Rival: a message line that outlives its failure.
   it('clears the message line when the command next lands, and reports a recurrence again', async () => {
     const { channel, trigger, messageChanged, fire } = fired(refused('gone'), landed, refused('gone'));
     await fire();
@@ -300,7 +277,6 @@ describe('registerModSync — outcome handling', () => {
     expect(trigger.message()).toContain('gone');
   });
 
-  // Rival: every answer settles the line, so an older run answering last hides the newer failure.
   it('the latest value decides the message line, whichever run answers last', async () => {
     let answerOlder!: (outcome: ModSyncResult) => void;
     const older = new Promise<ModSyncResult>((resolve) => { answerOlder = resolve; });

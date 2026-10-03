@@ -71,7 +71,7 @@ public sealed class EditRecordHandler
         // comes back intact.
         var text = document.Body;
         IReadOnlyList<PathHop> prefix = [];
-        LeftCopy? cellCopyOnTheLeft = null;
+        string? cellToLookUp = null;
         if (unit.IsEmbedded)
         {
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
@@ -91,16 +91,36 @@ public sealed class EditRecordHandler
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
             prefix = found;
-            if (CellGroupMove.CellToLookUp(root, prefix, envelope) is { } cellFormKey)
-                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellFormKey, PlacedCell.Says);
+            cellToLookUp = CellGroupMove.CellToLookUp(root, prefix, envelope);
         }
 
-        if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
-            cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
+        cellToLookUp = RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) ?? cellToLookUp;
+        var refills = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema);
 
-        var refillCopyOnTheLeft = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema)
-            ? _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema))
-            : null;
+        LeftCopy? cellCopyOnTheLeft = null;
+        LeftCopy? refillCopyOnTheLeft = null;
+        if (cellToLookUp is not null || refills)
+        {
+            IReadOnlySet<string> masters;
+            try
+            {
+                masters = RequiredMasters.InTheTree(repository, plugin, schemas);
+            }
+            catch (UnreadableSourceDocumentException ex)
+            {
+                return RecordEditResult.RefusedAt(
+                    RecordEditRefusal.RecordParseFailed, spelled,
+                    $"'{spelled}': the copy of {formKey} read to its left comes only from a master of {plugin.Name}, " +
+                    $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
+            }
+            if (cellToLookUp is not null)
+                cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, cellToLookUp, PlacedCell.Says, among: masters);
+            if (refills)
+            {
+                refillCopyOnTheLeft = _targets.NearestCopyToTheLeft(
+                    plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema), masters);
+            }
+        }
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))

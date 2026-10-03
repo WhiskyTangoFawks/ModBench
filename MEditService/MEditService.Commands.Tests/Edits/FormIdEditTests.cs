@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>What an edit of a record's FormID does to the working trees: its document moves to the
-/// new FormKey and nothing else changes. The Index's answer afterwards is the Index suite's.</summary>
 public sealed class FormIdEditTests
 {
     private const string FreeFormKey = "000F00:Fixture.esp";

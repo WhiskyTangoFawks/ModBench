@@ -3,9 +3,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>The Source repository is entered through its interface (ADR-0007): git and the layout
-/// are named nowhere else. Its own project is the whole of the inside; every other project is a
-/// caller.</summary>
 public sealed class SourceRepositoryInterfaceScanTests
 {
     private static readonly string[] ProductionRoots =
@@ -15,8 +12,6 @@ public sealed class SourceRepositoryInterfaceScanTests
 
     private const string RepositoryRoot = "MEditService.SourceAdapter";
 
-    // The git CLI and the object name it prints, the unit a path resolves to and the resolver
-    // answering one, the tree reader, the writer, then the verbs beneath the documents.
     private static readonly string[] HiddenMechanism =
     [
         "GitCli", "GitBlobHash", "SourceUnit", "Locate", "SourceTreeDocuments",
@@ -41,7 +36,6 @@ public sealed class SourceRepositoryInterfaceScanTests
             + string.Join("\n", named));
     }
 
-    // An empty finding and a mis-typed root read the same; this is what tells them apart.
     [Fact]
     public void TheScan_ReadsTheRepositoryItselfAndNamesItsOwnMechanism()
     {
@@ -68,8 +62,6 @@ public sealed class SourceRepositoryInterfaceScanTests
             .Where(file => !file.StartsWith(repository, StringComparison.Ordinal))];
     }
 
-    // A count per file and needle, not a line number: a reference is the unit of work, and a line
-    // number would fail the gate for any unrelated edit above one.
     private static List<string> Sites(string root, IEnumerable<string> files, string[] needles) =>
         [.. files
             .SelectMany(file => needles

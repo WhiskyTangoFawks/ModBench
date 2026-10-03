@@ -12,16 +12,11 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The container spike's three container shapes, compiled and re-imported. Nothing
-/// here asserts child ordering, on purpose: the real-fixture gates cover it, and this fixture only
-/// ever needed the child set.</summary>
 public sealed class PluginCompileServiceContainerTests : IDisposable
 {
     private const string PluginName = "ContainerCompile.esp";
     private const string Origin = "ContainerCompileMod";
 
-    // Header fields with values nothing derives — a compile that emitted a fresh header instead of the
-    // tree's own root RecordData.json would leave both null.
     private const string HeaderAuthor = "CompileHeaderAuthor";
     private const string HeaderDescription = "Header carried from the source tree.";
     private const string TopicC1EditorId = "TopicC1";
@@ -30,8 +25,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private const string QuestRecordType = "quest";
 
-    private readonly string _modFolder;
-    private readonly string _gameDirectory;
+    private readonly ScratchDirectory _modFolder = new("medit-container-compile-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-container-compile-game-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(PluginName, Origin);
 
@@ -48,23 +43,14 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     public PluginCompileServiceContainerTests()
     {
-        _modFolder = Directory.CreateTempSubdirectory("medit-container-compile-").FullName;
-        _gameDirectory = Directory.CreateTempSubdirectory("medit-container-compile-game-").FullName;
-
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.ModHeader.Author = HeaderAuthor;
         mod.ModHeader.Description = HeaderDescription;
 
-        // ── Defect shape 1: two cells in ONE sub-block, each with children. Under the per-record path
-        //
-        // both cells' children landed in one field-name-keyed directory and each cell read back the
-        // union.
         var cellA = new Cell(mod) { EditorID = "CellA", WaterHeight = 1f };
         cellA.Persistent.Add(new PlacedObject(mod) { EditorID = "A_Persist", Position = new P3Float(1f, 1f, 1f) });
         var cellATemporaryRef = new PlacedObject(mod) { EditorID = "A_Temp", Position = new P3Float(2f, 2f, 2f) };
-        // A deliberately dangling Base, inside this plugin's own FormID space so it needs no master:
-        // semantic breakage that compiles with a diagnostic rather than refusing.
         cellATemporaryRef.Base.SetTo(FormKey.Factory($"FFFFFF:{PluginName}"));
         cellA.Temporary.Add(cellATemporaryRef);
         var cellB = new Cell(mod) { EditorID = "CellB", WaterHeight = 2f };
@@ -78,7 +64,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
 
-        // ── Defect shape 2: the worldspace's whole exterior XY hierarchy, plus its TopCell.
         var worldspace = new Worldspace(mod) { EditorID = "CompileWorld" };
         var topCell = new Cell(mod) { EditorID = "WorldTopCell", WaterHeight = 3f };
         topCell.Temporary.Add(new PlacedObject(mod) { EditorID = "Top_Temp", Position = new P3Float(5f, 5f, 5f) });
@@ -103,7 +88,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         worldspace.SubCells.Add(worldBlock);
         mod.Worldspaces.Add(worldspace);
 
-        // ── The spike's third probe: two quests, each with its own dialogue, all inline.
         var questA = new Quest(mod) { EditorID = "QuestA" };
         var topicA = new DialogTopic(mod) { EditorID = "TopicA" };
         topicA.Responses.Add(new DialogResponses(mod) { EditorID = "ResponseA" });
@@ -117,7 +101,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         questB.DialogTopics.Add(topicB);
         mod.Quests.Add(questB);
 
-        // Three topics in one slot, so a delete of the middle one has an order to keep.
         var questC = new Quest(mod) { EditorID = "QuestC" };
         var topicC2 = new DialogTopic(mod) { EditorID = TopicC2EditorId };
         questC.DialogTopics.Add(new DialogTopic(mod) { EditorID = TopicC1EditorId });
@@ -138,15 +121,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 
     private PluginCompileService CompileService() => CompileServices.Over(_loadOrder);

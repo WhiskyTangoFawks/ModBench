@@ -8,7 +8,7 @@ const pickRecord = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 vi.mock('../recordPicker', () => ({ pickRecord: (...args: unknown[]) => pickRecord(...args) }));
 
 vi.mock('vscode', () => ({
-  EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { /* no listeners */ } dispose() { /* nothing held */ } },
+  EventEmitter: class { event = () => ({ dispose: () => undefined }); fire() { return undefined; } dispose() { return undefined; } },
   Uri: { from: (parts: { path: string }) => parts.path, joinPath: vi.fn() },
   ViewColumn: { Active: -1, One: 1, Beside: -2 },
   commands: {

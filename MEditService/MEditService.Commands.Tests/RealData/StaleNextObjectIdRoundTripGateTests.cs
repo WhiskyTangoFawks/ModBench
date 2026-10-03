@@ -14,19 +14,16 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>Nothing in-game reads <c>HEDR.NextObjectID</c>/<c>NumRecords</c> and authoring tools
-/// leave them stale, so fidelity means the stored value verbatim. Real plugins, since the
-/// Mutagen-written fixture cannot show it.</summary>
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    public static TheoryData<string, uint, uint> Fixtures => new()
+    public static TheoryData<string, uint, uint> RealFixturesBecauseMutagenWritesAFreshHeaderByDefault => new()
     {
         { "LitR - Settings Holotapes Sorting.esp", 2, 16 },
         { "RecruitSierra.esl", 17098, 148 },
         { "Hitech Trashcans to BOS.esp", 43, 150 },
     };
 
-    public static TheoryData<string> TrackAndCompileFixtures => new()
+    public static TheoryData<string> TrackAndCompileRealFixtures => new()
     {
         "LitR - Settings Holotapes Sorting.esp",
         "RecruitSierra.esl",
@@ -36,8 +33,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
     [Theory]
-    [MemberData(nameof(Fixtures))]
-    public async Task Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecords(
+    [MemberData(nameof(RealFixturesBecauseMutagenWritesAFreshHeaderByDefault))]
+    public async Task Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecordsVerbatim_SinceNothingInGameReadsThemAndAuthoringToolsLeaveThemStale(
         string fileName, uint storedNextObjectId, uint storedNumRecords)
     {
         using var scratch = new TrackedScratch(fileName);
@@ -49,7 +46,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileFixtures))]
+    [MemberData(nameof(TrackAndCompileRealFixtures))]
     public async Task Track_OfARealPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
@@ -60,7 +57,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileFixtures))]
+    [MemberData(nameof(TrackAndCompileRealFixtures))]
     public async Task Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
@@ -109,15 +106,13 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
     }
 
-    // Empty master stubs: compile orders the master list from the load order (ADR-0008), which needs
-    // the names present, not their content.
     private sealed class TrackedScratch : IDisposable
     {
         internal LoadOrderHolder Holder { get; } = new();
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-stale-header-game-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-stale-header-game-");
         private readonly LoadOrderSnapshot _loadOrder;
 
-        public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-stale-header-").FullName;
+        public ScratchDirectory ModFolder { get; } = new("medit-stale-header-");
         public string PluginPath { get; }
         public PluginAddress Plugin { get; }
 
@@ -127,20 +122,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             File.Copy(FixturePath(fileName), PluginPath);
             Plugin = new PluginAddress(fileName, "FixtureMod");
 
-            var inputs = new List<LoadOrderEntry>();
-            using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName(fileName), PluginPath), Fallout4Release.Fallout4))
-            {
-                foreach (var master in overlay.ModHeader.MasterReferences)
-                {
-                    var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
-                    new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
-                }
-            }
-            inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
-
-            _loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+            _loadOrder = EmptyMasterStubs.LoadOrderOver(PluginPath, Plugin.Origin, _gameDirectory);
             Holder.Apply(_loadOrder);
         }
 
@@ -155,8 +137,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         public void Dispose()
         {
-            try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
-            try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+            ModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

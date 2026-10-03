@@ -3,16 +3,13 @@ using MEditService.TestSupport;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>Each case renames rather than deletes: a delete would tear down the row's own
-/// placement and cell-location rows, and the committed document would have no entry to hang
-/// off.</summary>
 public sealed class RecordRefDivergenceCellReadsTests : IDisposable
 {
     private readonly IndexedContainerMod _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private void RenameInTheWorkingTree(string formKey, string from, string to)
+    private void RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(string formKey, string from, string to)
     {
         var before = _fixture.Reads.DocumentOf(formKey, _fixture.Plugin).BodyOf();
         _fixture.Index.Project(_fixture.Entry, [(formKey, before.Replace(from, to, StringComparison.Ordinal))]);
@@ -22,7 +19,7 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
     public void AWorldspaceCellRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
     {
         var topCell = _fixture.TopCell;
-        RenameInTheWorkingTree(topCell, ContainerModPlugin.TopCellEditorId, "RenamedTopCell");
+        RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(topCell, ContainerModPlugin.TopCellEditorId, "RenamedTopCell");
 
         var effective = _fixture.Reads.GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace)
             .Single(c => c.FormKey == topCell);
@@ -37,7 +34,7 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
     public void AnInteriorCellRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
     {
         var cell = _fixture.Cell;
-        RenameInTheWorkingTree(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
+        RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(cell, ContainerModPlugin.CellEditorId, "RenamedCell");
 
         var effective = _fixture.Reads.GetInteriorCells(_fixture.Plugin).Single(c => c.FormKey == cell);
         var head = _fixture.Reads.HeadDocument(cell, _fixture.Plugin);
@@ -51,7 +48,7 @@ public sealed class RecordRefDivergenceCellReadsTests : IDisposable
     public void APlacedReferenceRenamedInTheWorkingTree_KeepsItsCommittedEditorId_BesideTheNewOne()
     {
         var temporaryRef = _fixture.TemporaryRef;
-        RenameInTheWorkingTree(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
+        RenameRatherThanDeleteBecauseADeleteTearsDownPlacementAndCellLocationRows(temporaryRef, ContainerModPlugin.TemporaryRefEditorId, "RenamedTempRef");
 
         var effective = _fixture.Reads.GetCellChildRecords(_fixture.Plugin, _fixture.EmbedCell)
             .Temporary.Single(p => p.FormKey == temporaryRef);

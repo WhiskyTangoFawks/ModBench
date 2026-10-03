@@ -12,8 +12,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A record the codec cannot read would land as a stub of its FormKey and EditorID rather
-/// than the record. Both copies refuse it with the reader's own diagnosis.</summary>
 public sealed class ParseFailedCopyRefusalTests : IDisposable
 {
     private const string UnreadablePerk = "0000EF:SKI_PlasmaAutocannon.esp";
@@ -68,8 +66,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         Assert.NotNull(_mod.DestinationDocument(result.NewFormKey.Require()));
     }
 
-    // The source stays untracked, so the copy reads it through the Plugin adapter — the one door a
-    // record with no source text has.
     private sealed class ParseFailedCopyFixture : IDisposable
     {
         private const string SourcePluginName = "SKI_PlasmaAutocannon.esp";
@@ -77,9 +73,9 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         private const string DestinationPluginName = "Destination.esp";
         private const string DestinationOrigin = "DestinationMod";
 
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-copyfail-game-").FullName;
-        private readonly string _sourceModFolder = Directory.CreateTempSubdirectory("medit-copyfail-source-").FullName;
-        private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copyfail-dest-").FullName;
+        private readonly ScratchDirectory _gameDirectory = new("medit-copyfail-game-");
+        private readonly ScratchDirectory _sourceModFolder = new("medit-copyfail-source-");
+        private readonly ScratchDirectory _destinationModFolder = new("medit-copyfail-dest-");
         private readonly string _sourcePath;
 
         public PluginAddress SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
@@ -92,7 +88,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             _sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
             File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", SourcePluginName), _sourcePath);
 
-            // The reader needs the fixture's declared masters present, not their content.
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(SourcePluginName), _sourcePath), Fallout4Release.Fallout4))
@@ -106,7 +101,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             }
             inputs.Add(new LoadOrderEntry(SourcePluginName, _sourcePath, SourceOrigin, inputs.Count, Enabled: true, Winning: true));
 
-            // Last, so the copy is never an underride of the plugin it copies from.
             var destinationPath = Path.Combine(_destinationModFolder, DestinationPluginName);
             var destination = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
             destination.Npcs.AddNew("DestinationNpc");
@@ -148,24 +142,13 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_sourceModFolder);
-            TryDelete(_destinationModFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        // A tracked mod folder's .git objects are read-only on some filesystems, and a test failing
-        // on cleanup would mask the assertion that already ran.
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _sourceModFolder.Dispose();
+            _destinationModFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }
 
-/// <summary>A dialog topic's responses are inside its own document, so a response the codec cannot
-/// read makes the topic unreadable too: the copy refuses before the quest chain is minted.</summary>
 public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
 {
     private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
@@ -188,10 +171,8 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
-        // The reader's own words, not ours: the codec is the only thing that can say why.
         Assert.Contains("Unable to cast", result.Message, StringComparison.Ordinal);
         Assert.Empty(_mod.DestinationGitStatus());
-        // The auto-created parent quest override is the first thing the copy would land.
         Assert.Null(_mod.Document(_mod.DestinationPlugin, _mod.Quest.ToString()));
     }
 }

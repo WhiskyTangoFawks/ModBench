@@ -8,9 +8,6 @@ using Xunit.Abstractions;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Whole-document equality means nothing unless the codec is a fixed point: deserializing
-/// a stored document and serializing it again gives the same bytes, over every record of the real
-/// plugin rather than a curated few.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutputHelper output)
 {
@@ -20,8 +17,6 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var documents = IndexFiles.Rows(fixture.InstanceRoot, "SELECT record_type, form_key, editor_id, body FROM records");
 
-        // The plugin's own record count, so a fixture that stopped being indexed cannot pass this
-        // over an empty list.
         Assert.True(documents.Count > 3000,
             $"Expected the whole cut-down plugin to be indexed; got {documents.Count} documents.");
 
@@ -75,8 +70,6 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
         return "no line differs";
     }
 
-    // A ModHeader is not an IMajorRecordGetter, so the per-record codec has no path to it; the
-    // whole-mod door is the codec that owns the header, and the fixed point is the same claim.
     private static Task<string> RoundTripHeader(string stored) =>
         Task.FromResult(Encoding.UTF8.GetString(
             HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(stored)))));

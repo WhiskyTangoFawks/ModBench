@@ -8,8 +8,8 @@ namespace MEditService.Codec.Schema;
 public readonly record struct FormReference(string TargetFormKey, string FieldPath);
 
 /// <summary>Which FormKeys a document references, answered by the schema for its record type
-/// (ADR-0014). Over the document and the schema alone: no index, no plugin, no path
-/// on disk.</summary>
+/// (target-architecture.d2 medit_kernel.codec). Over the document and the schema alone: no index,
+/// no plugin, no path on disk.</summary>
 public static class FormReferences
 {
     /// <summary>Every link the document holds, in the schema's column order. A target named at two

@@ -14,7 +14,7 @@ public sealed class TrackHandlerTests : IDisposable
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-track-handler-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-track-handler-");
     private readonly LoadOrderHolder _holder = new();
     private readonly string _modFolder;
 
@@ -34,22 +34,10 @@ public sealed class TrackHandlerTests : IDisposable
 
     private LoadOrderSnapshot Snapshot { get; }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_instanceRoot, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A temp tree another process still holds outlives the test; nothing here depends on it.
-        }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 
-    // The 503 the endpoint maps. A door reading the holder's Current instead would refuse with
-    // NoPluginWithOrigin, which says the mod is missing rather than the load order.
     [Fact]
-    public async Task Track_WithNoLoadOrderHeld_ThrowsNoLoadOrder()
+    public async Task Track_WithNoLoadOrderHeld_ThrowsNoLoadOrder_RatherThanRefusingNoPluginWithOrigin()
     {
         var handler = TestEditService.TrackHandler(_holder);
 

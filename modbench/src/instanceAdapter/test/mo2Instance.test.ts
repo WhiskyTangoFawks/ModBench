@@ -7,8 +7,6 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fak
 import { present } from '../../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
-// Passthrough, so a test can hold a folder's move back, remove a folder mid-walk, or fail a link's
-// stat with an error other than ENOENT: chmod denies nothing when the runner is root.
 const real = vi.hoisted(() => ({
   rename: undefined as typeof import('node:fs/promises').rename | undefined,
   stat: undefined as typeof import('node:fs/promises').stat | undefined,
@@ -91,8 +89,7 @@ describe('the MO2 Instance adapter', () => {
       expect(adapter.names).toEqual({ manager: 'MO2', modOrderFile: 'modlist.txt' });
     });
 
-    // Rival: a release guessed from the name, which has the backend answer about another game.
-    it('answers no release for a game the tables hold none for', async () => {
+    it('answers no release for a game the tables hold none for, not one guessed from the name, which has the backend answer about another game', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Morrowind\r\nselected_profile=@ByteArray(Default)\r\n');
 
       const settings = await adapter.settings();
@@ -144,8 +141,7 @@ describe('the MO2 Instance adapter', () => {
       expect(byName.get('manual.zip')?.metaPath).toBe(join(root, 'downloads', 'manual.zip.meta'));
     });
 
-    // Rival: empty metadata read as none, so a file whose metadata is there to open shows none.
-    it('answers metadata that is there but empty as metadata', async () => {
+    it('answers metadata that is there but empty as metadata, so a file whose metadata is there to open does not show none', async () => {
       await writeFile(join(root, 'downloads', 'manual.zip'), 'zip');
       await writeFile(join(root, 'downloads', 'manual.zip.meta'), '');
 
@@ -162,9 +158,7 @@ describe('the MO2 Instance adapter', () => {
         .toEqual({ kind: 'listed', downloadsDir: join(root, 'downloads'), files: undefined });
     });
 
-    // Rival: each answer reading the settings again, so a rewrite between two answers lands two
-    // generations in one value.
-    it('answers where the downloads are from the same read the profile came from', async () => {
+    it('answers where the downloads are from the same read the profile came from, so a rewrite between two answers does not land two generations in one value', async () => {
       const settings = await adapter.settings();
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=@ByteArray(Default)\r\n'
         + '[Settings]\r\ndownload_directory=@ByteArray(elsewhere)\r\n');
@@ -197,8 +191,7 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    // Rival: an exact match, which reads a line another tool recased as no entry.
-    it('answers the entry of a kind mod order lists, matched as MO2 matches names, or none', async () => {
+    it('answers the entry of a kind mod order lists, matched as MO2 matches names, or none, so a line another tool recased is not read as no entry', async () => {
       expect(await adapter.orderEntry('Default', { kind: 'mod', name: 'harder vats' })).toMatchObject({ kind: 'mod', name: 'Harder VATS' });
       expect(await adapter.orderEntry('Default', { kind: 'separator', name: ' unassigned (modlist development). ' }))
         .toMatchObject({ kind: 'separator', name: 'Unassigned (Modlist Development)' });
@@ -221,8 +214,7 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.modMeta('DragIn Manual Extract')).toEqual({});
     });
 
-    // Rival: any failure read as no meta, which publishes an unreadable meta as an empty one.
-    it('rejects a meta that is there but cannot be read', async () => {
+    it('rejects a meta that is there but cannot be read, not publishing an unreadable meta as an empty one', async () => {
       await mkdir(join(root, 'mods', 'DragIn Manual Extract', 'meta.ini'));
 
       await expect(adapter.modMeta('DragIn Manual Extract')).rejects.toThrow(/EISDIR/);
@@ -241,8 +233,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    // Rival: the reserved overwrite name answered as a mod, which mod sync would then list.
-    it('answers no entry for a folder named as the reserved overwrite folder', async () => {
+    it('answers no entry for a folder named as the reserved overwrite folder, which mod sync would otherwise list as a mod', async () => {
       await mkdir(join(root, 'mods', 'Overwrite'));
 
       expect((await adapter.modFolders())?.all.map((f) => f.name)).not.toContain('Overwrite');
@@ -280,9 +271,8 @@ describe('the MO2 Instance adapter', () => {
       it('is listed when an upgrade has cleared the mod\'s old contents and holds only its extraction', async () => {
         const extraction = await adapter.extractUpgrade('Harder VATS');
         const folder = join(root, 'mods', 'Harder VATS');
-        for (const entry of await readdir(folder)) {
-          if (join(folder, entry) !== extraction.path) await rm(join(folder, entry), { recursive: true });
-        }
+        const outsideTheExtraction = (await readdir(folder)).filter((entry) => join(folder, entry) !== extraction.path);
+        await Promise.all(outsideTheExtraction.map((entry) => rm(join(folder, entry), { recursive: true })));
 
         expect(await listed()).toContain('Harder VATS');
       });
@@ -370,7 +360,7 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    describe('the game folder\'s Creation Club list', () => {
+    describe('the game folder\'s Creation Club list, where Mod Management takes the Creation Club plugins from', () => {
       let game: string;
 
       beforeEach(async () => {
@@ -412,15 +402,13 @@ describe('the MO2 Instance adapter', () => {
 
     const live = (): FakeWatcher[] => watchers.filter((w) => !w.disposed);
 
-    // `heardAs` stands in for a path the matcher here reads differently than VS Code's does.
-    const fire = (base: string, relative: string, heardAs = relative): boolean => {
-      const watcher = live().find((w) => w.base === base && matchesGlob(heardAs, w.pattern));
+    const fire = (base: string, relative: string, heardAsByVsCodesMatcher = relative): boolean => {
+      const watcher = live().find((w) => w.base === base && matchesGlob(heardAsByVsCodesMatcher, w.pattern));
       watcher?.fireChange(join(base, relative));
       return watcher !== undefined;
     };
 
-    // Rival: a watch that hears one kind of event, so a deleted mod folder is never heard.
-    it('hears a file created, changed or deleted alike', () => {
+    it('hears a file created, changed or deleted alike, so a deleted mod folder is heard', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
       const mods = live().find((w) => w.base === root && matchesGlob('mods/A/x.esp', w.pattern));
@@ -450,10 +438,12 @@ describe('the MO2 Instance adapter', () => {
       let signals = 0;
       adapterAt(root).subscribe(() => { signals++; });
 
-      for (const relative of [
+      const watchedPaths = [
         'profiles/Default/modlist.txt', 'profiles/Secondary/plugins.txt', 'ModOrganizer.ini',
         'mods/Harder VATS/Textures/a.dds', 'overwrite/F4SE/Plugins/x.ini',
-      ]) expect(fire(root, relative), relative).toBe(true);
+      ];
+      const pathsHeardByNoWatcher = watchedPaths.filter((relative) => !fire(root, relative));
+      expect(pathsHeardByNoWatcher).toEqual([]);
       expect(fire(root, 'profiles/Default/other.txt')).toBe(false);
       expect(signals).toBe(5);
     });
@@ -478,9 +468,8 @@ describe('the MO2 Instance adapter', () => {
       expect(signals).toBe(1);
     });
 
-    // Rival: every path under a mod heard alike, so git's own bookkeeping reads as a change.
     it.each(['index', 'objects/ab/cdef', 'logs/HEAD', 'ORIG_HEAD', 'FETCH_HEAD', 'HEAD.lock'])(
-      'hears nothing of .git/%s in a mod\'s git repository', (inside) => {
+      'hears nothing of .git/%s in a mod\'s git repository, git\'s own bookkeeping not reading as a change', (inside) => {
         let signals = 0;
         adapterAt(root).subscribe(() => { signals++; });
 
@@ -488,9 +477,7 @@ describe('the MO2 Instance adapter', () => {
         expect(signals).toBe(0);
       });
 
-    // Rival: the downloads folder watched where the instance began, so a download landing in the
-    // folder the settings name now is never heard.
-    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves', async () => {
+    it('follows the downloads folder the last read of the settings resolved, signalling once when it moves, not the one where the instance began, so a download landing in the folder the settings name now is heard', async () => {
       let signals = 0;
       const watched = adapterAt(root);
       watched.subscribe(() => { signals++; });
@@ -508,8 +495,7 @@ describe('the MO2 Instance adapter', () => {
       expect(fire(join(root, 'Elsewhere'), 'new.7z')).toBe(true);
     });
 
-    // Rival: a glob of one case, which misses a plugin whose extension another tool wrote in capitals.
-    it('follows the plugins at the root of the game folder\'s Data folder, in any case', async () => {
+    it('follows the plugins at the root of the game folder\'s Data folder, in any case, as another tool may write a plugin\'s extension in capitals', async () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-game-'));
       try {
         await mkdir(join(game, 'Data'));
@@ -518,15 +504,15 @@ describe('the MO2 Instance adapter', () => {
 
         await (await watched.settings()).gameFolder();
 
-        for (const name of ['Fallout4.esm', 'Patch.ESP', 'cc.Esl']) expect(fire(join(game, 'Data'), name), name).toBe(true);
+        const pluginsHeardByNoWatcher = ['Fallout4.esm', 'Patch.ESP', 'cc.Esl'].filter((name) => !fire(join(game, 'Data'), name));
+        expect(pluginsHeardByNoWatcher).toEqual([]);
         expect(fire(join(game, 'Data'), 'readme.txt')).toBe(false);
       } finally {
         await rm(game, { recursive: true, force: true });
       }
     });
 
-    // Rival: the Data folder followed alone, so a changed Creation Club list waits for the next focus.
-    it('follows the release\'s Creation Club list at the game folder\'s root', async () => {
+    it('follows the release\'s Creation Club list at the game folder\'s root, so a changed list does not wait for the next focus', async () => {
       const game = await mkdtemp(join(tmpdir(), 'mo2-instance-watch-ccc-'));
       try {
         await mkdir(join(game, 'Data'));
@@ -563,16 +549,13 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.entryFolder({ kind: 'separator', name: 'Harder VATS' })).toBeUndefined();
     });
 
-    // MO2 knows a mod by its folder's name, and a folder named for a separator holds that
-    // separator. Rival: matching the kind first, so the name reads as free.
-    it('answers a mod named as a separator\'s folder with that separator\'s folder', async () => {
+    it('answers a mod named as a separator\'s folder with that separator\'s folder, MO2 knowing a mod by its folder\'s name and a folder named for a separator holding that separator', async () => {
       expect(await adapter.entryFolder({ kind: 'mod', name: 'unassigned (modlist development)_SEPARATOR' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
     });
 
-    // A separator is named as MO2 names its folder, so a name asked for loosely finds it too.
-    it('finds a separator\'s folder by the name MO2 would give it', async () => {
+    it('finds a separator\'s folder by the name MO2 would give it, so a name asked for loosely finds it too', async () => {
       expect(await adapter.entryFolder({ kind: 'separator', name: '  unassigned  (Modlist Development)..' })).toMatchObject({
         kind: 'separator', name: 'Unassigned (Modlist Development)',
       });
@@ -641,9 +624,7 @@ describe('the MO2 Instance adapter', () => {
         expect(paths).not.toContain('PLUGIN-SOURCE/stray.json');
       });
 
-      // Rival: hiding a folder merely named "source". Skyrim SE's Creation Kit ships script sources
-      // at a release's own root Source/ — ordinary content, not the plugin's tracked source.
-      it('keeps a root Source folder: it is ordinary content, not the plugin source root', async () => {
+      it('keeps a root Source folder: it is ordinary content, not the plugin source root, as Skyrim SE\'s Creation Kit ships script sources at a release\'s own root Source/', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await mkdir(join(folder, 'Source'), { recursive: true });
         await writeFile(join(folder, 'Source', 'Script.psc'), '');
@@ -676,7 +657,7 @@ describe('the MO2 Instance adapter', () => {
         expect(files.notes.join('\n')).toMatch(/cycle.*loop/);
       });
 
-      it('rejects when a link\'s target cannot be checked for a reason other than its absence', async () => {
+      it('rejects when a link\'s target cannot be checked for a reason other than its absence, simulated through a mocked stat as chmod denies nothing when the runner is root', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         await symlink(join(root, 'whatever.dds'), join(folder, 'restricted.dds'));
         vi.mocked(stat).mockImplementation(async (path, ...rest) => {
@@ -687,8 +668,7 @@ describe('the MO2 Instance adapter', () => {
         await expect(adapter.originFiles(mod('Harder VATS'))).rejects.toThrow(/permission denied/);
       });
 
-      // mkfifo is POSIX, so Windows has no FIFO to build.
-      it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file', async () => {
+      it.skipIf(process.platform === 'win32')('notes a FIFO and a link to one, and answers neither as a file, built with the POSIX mkfifo that Windows lacks', async () => {
         const folder = join(root, 'mods', 'Pipes');
         await mkdir(folder);
         execFileSync('mkfifo', [join(folder, 'pipe')]);
@@ -722,12 +702,10 @@ describe('the MO2 Instance adapter', () => {
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
       });
 
-      // Rival: one catch around the whole walk, which reads a folder removed mid-walk as an empty
-      // origin.
       it.each([
         ['the overwrite folder', { kind: 'runtimeOutput' as const }, 'overwrite', 'F4SE/Plugins/SomePlugin.log'],
         ['a mod\'s folder', mod('Harder VATS'), join('mods', 'Harder VATS'), 'Kept.esp'],
-      ])('skips a subfolder of %s removed mid-walk, and notes it', async (_, origin, folder, kept) => {
+      ])('skips a subfolder of %s removed mid-walk, and notes it, not reading the origin as empty through one catch around the whole walk', async (_, origin, folder, kept) => {
         await writeFile(join(root, folder, 'Kept.esp'), '');
         await mkdir(join(root, folder, 'Gone'));
         await writeFile(join(root, folder, 'Gone', 'Lost.esp'), '');
@@ -743,8 +721,7 @@ describe('the MO2 Instance adapter', () => {
         expect(files.notes).toEqual([expect.stringMatching(/Gone/)]);
       });
 
-      // Rival: skipping a link in overwrite/ with no word, which drops its file from the picture.
-      it('notes a link in the overwrite folder, which it does not follow', async () => {
+      it('notes a link in the overwrite folder, which it does not follow, rather than skipping it with no word and dropping its file from the picture', async () => {
         const target = join(root, 'elsewhere.esp');
         await writeFile(target, '');
         await symlink(target, join(root, 'overwrite', 'Linked.esp'));
@@ -762,9 +739,8 @@ describe('the MO2 Instance adapter', () => {
       });
     });
 
-    // ADR-0007: tracked is the presence of `.git` in the mod's folder.
     describe('a mod\'s repository', () => {
-      it('answers tracked for a mod whose folder holds one, and not for a mod whose folder holds none', async () => {
+      it('answers tracked for a mod whose folder holds a `.git`, tracked being its presence there, and not for a mod whose folder holds none', async () => {
         await mkdir(join(root, 'mods', 'Harder VATS', '.git'));
 
         expect([await adapter.modTracked('Harder VATS'), await adapter.modTracked('Unofficial Fallout 4 Patch')]).toEqual([true, false]);
@@ -780,12 +756,10 @@ describe('the MO2 Instance adapter', () => {
       await expect(adapter.createModFolder('../escape')).rejects.toThrow(/Not a valid mod name/);
     });
 
-    // Rival: making the folder whatever is there, which adopts another mod's folder, or a
-    // separator's, in silence.
     it.each([
       ['a mod\'s, in another case', 'harder vats', 'Harder VATS'],
       ['a separator\'s, whose name it decodes to', 'unassigned (modlist development)_SEPARATOR', 'Unassigned (Modlist Development)_separator'],
-    ])('refuses a folder already there as %s, naming it', async (_, mod, folder) => {
+    ])('refuses a folder already there as %s, naming it, never adopting another mod\'s folder or a separator\'s in silence', async (_, mod, folder) => {
       const before = await snapshotTree(root);
 
       await expect(adapter.createModFolder(mod)).rejects.toThrow(`The folder "${join(root, 'mods', folder)}" is in the way`);
@@ -903,8 +877,6 @@ describe('the MO2 Instance adapter', () => {
       expect((await stat(join(root, DEFAULT_MODLIST))).mtimeMs).toBe(mtime);
     });
 
-    // Rival for each: a splice that finds no line to change and leaves the text as it was, so the
-    // change is dropped in silence.
     it.each<[string, ModOrderChange]>([
       ['enable', { kind: 'enable', mod: 'No Such Mod', enabled: true }],
       ['moveMods', { kind: 'moveMods', mods: ['No Such Mod'], place: { kind: 'modOrder' }, end: 'winning' }],
@@ -914,7 +886,7 @@ describe('the MO2 Instance adapter', () => {
       ['renameSeparator onto a listed separator', {
         kind: 'renameSeparator', from: 'Unassigned (Modlist Development)', to: 'Radfall - All-In-One Survival Overhaul',
       }],
-    ])('rejects %s naming an entry that is not there, or adding a separator that is, and writes nothing', async (_, bad) => {
+    ])('rejects %s naming an entry that is not there, or adding a separator that is, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
       const before = await text(root, DEFAULT_MODLIST);
 
       await expect(change([{ kind: 'enable', mod: 'Harder VATS', enabled: true }, bad])).rejects.toThrow(/modlist/);
@@ -922,14 +894,12 @@ describe('the MO2 Instance adapter', () => {
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
 
-    // An entry already added, or already dropped, is already as the change would leave it. Rival:
-    // rejecting it, which fails a gesture that raced mod sync to the same line.
     it.each<[string, ModOrderChange]>([
       ['adding a mod listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'mod', name: 'HARDER VATS' } }],
       ['adding a separator listed in another case', { kind: 'addAtWinningEnd', entry: { kind: 'separator', name: 'radfall - all-in-one survival overhaul' } }],
       ['dropping a mod not listed', { kind: 'dropMod', mod: 'No Such Mod' }],
       ['dropping a separator not listed', { kind: 'dropSeparator', separator: 'No Such Sep' }],
-    ])('writes nothing for %s, and says so', async (_, already) => {
+    ])('writes nothing for %s, and says so, the entry already being as the change would leave it, so a gesture that raced mod sync to the same line does not fail', async (_, already) => {
       const before = await text(root, DEFAULT_MODLIST);
 
       expect(await change([already])).toEqual({ wrote: false });
@@ -937,9 +907,7 @@ describe('the MO2 Instance adapter', () => {
       expect(await text(root, DEFAULT_MODLIST)).toBe(before);
     });
 
-    // Rival: the order read before the change queues behind one already in flight, so the second
-    // decides from an order the first is about to replace.
-    it('decides each change from the order the change before it left', async () => {
+    it('decides each change from the order the change before it left, not an order read before queueing behind one in flight', async () => {
       const seenBySecond: string[][] = [];
 
       await Promise.all([
@@ -956,9 +924,7 @@ describe('the MO2 Instance adapter', () => {
     describe('a failed change writes nothing', () => {
       const modlist = (): string => join(root, DEFAULT_MODLIST);
 
-      // Rival: the line written before the folder moves, so a folder that cannot move leaves the
-      // line renamed over a folder of the old name.
-      it('leaves line and folder as they were when the folder cannot be renamed', async () => {
+      it('leaves line and folder as they were when the folder cannot be renamed, the line not written before the folder moves', async () => {
         const before = await text(root, DEFAULT_MODLIST);
         await mkdir(join(separatorFolder('Core Mods'), 'occupied'), { recursive: true });
 
@@ -969,9 +935,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
       });
 
-      // Rival: no check for a folder already there, so on Linux a rename onto an empty one replaces
-      // it in silence, where Windows refuses.
-      it('refuses a rename onto a folder already there, listed or not, before anything moves', async () => {
+      it('refuses a rename onto a folder already there, listed or not, before anything moves, as on Linux a rename onto an empty folder would replace it in silence where Windows refuses', async () => {
         const before = await text(root, DEFAULT_MODLIST);
         await mkdir(separatorFolder('Core Mods'));
 
@@ -992,9 +956,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Unassigned (Modlist Development)'))).toBe(true);
       });
 
-      // Rival: a folder already there adopted as the new separator's own, and then taken away as
-      // one it made if the line cannot be written.
-      it('refuses adding a separator whose folder is already there', async () => {
+      it('refuses adding a separator whose folder is already there, not adopting it as its own and taking it away as one it made if the line cannot be written', async () => {
         const before = await text(root, DEFAULT_MODLIST);
         await mkdir(separatorFolder('Orphan'));
         await writeFile(join(separatorFolder('Orphan'), 'kept.txt'), '');
@@ -1005,8 +967,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(separatorFolder('Orphan'), 'kept.txt'))).toBe(true);
       });
 
-      // Rival: no undo, so a line that cannot be written leaves the folder renamed alone.
-      it('puts the folder back when the renamed line cannot be written', async () => {
+      it('puts the folder back when the renamed line cannot be written, not leaving the folder renamed alone', async () => {
         const before = await text(root, DEFAULT_MODLIST);
         await chmod(modlist(), 0o444);
         try {
@@ -1032,9 +993,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('New Separator'))).toBe(false);
       });
 
-      // Rival: the undos run oldest first, so a separator added and then renamed in one change leaves
-      // its first folder behind.
-      it('puts every folder back newest first', async () => {
+      it('puts every folder back newest first, so a separator added and then renamed in one change leaves no first folder behind', async () => {
         await chmod(modlist(), 0o444);
         try {
           await expect(change([
@@ -1049,8 +1008,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('Briefer'))).toBe(false);
       });
 
-      // Rival: the undos stop at the first that fails, so an older move is never put back.
-      it('tries every put-back when one fails, and names each failure', async () => {
+      it('tries every put-back when one fails, and names each failure, so an older move is still put back', async () => {
         await mkdir(separatorFolder('Radfall - All-In-One Survival Overhaul'));
         const blocked = separatorFolder('Second');
         vi.mocked(fsRename).mockImplementation((from, to) =>
@@ -1069,9 +1027,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(separatorFolder('First'))).toBe(false);
       });
 
-      // Rival: the put-back run after the lock is let go, so a change queued behind this one reads
-      // the folders while the moved one is still out of place.
-      it('holds the lock until every folder is back', async () => {
+      it('holds the lock until every folder is back, so a change queued behind this one never reads the folders while the moved one is out of place', async () => {
         const moved = separatorFolder('Core Mods');
         let open = (): void => undefined;
         const gate = new Promise<void>((resolve) => { open = resolve; });
@@ -1119,7 +1075,6 @@ describe('the MO2 Instance adapter', () => {
         await expect(change([bad])).rejects.toThrow(/already in modlist/);
       });
 
-      // A separator's name is the one MO2 gives its folder (mods.md, Add separator).
       it('names a separator as MO2 names its folder, and refuses a name with nothing of it left', async () => {
         await change([{ kind: 'addSeparator', separator: '  Core:  Mods.  ', afterIndex: -1 }]);
 
@@ -1166,8 +1121,7 @@ describe('the MO2 Instance adapter', () => {
       expect(seen).toEqual([(await adapter.pluginOrder('Default')).map((p) => p.name)]);
     });
 
-    // ADR-0012: a filename compares as the game compares it, ignoring case.
-    it('finds each plugin a change names in any case, and writes it as plugin order lists it', async () => {
+    it('finds each plugin a change names in any case, and writes it as plugin order lists it, a filename comparing as the game compares it, ignoring case', async () => {
       await change([
         { kind: 'enable', plugin: 'tracked patch mod.esp', enabled: false },
         { kind: 'move', plugins: ['CCSBJFO4003-GRENADE.ESL'], toIndex: 0 },
@@ -1181,9 +1135,7 @@ describe('the MO2 Instance adapter', () => {
       ]);
     });
 
-    // commands.md, Principles: doing nothing is not an error. Rival: rejecting it, which fails a
-    // gesture that raced plugin sync to the same line.
-    it('writes nothing to add a plugin plugin order already lists in another case', async () => {
+    it('writes nothing to add a plugin plugin order already lists in another case, doing nothing not being an error so a gesture that raced plugin sync to the same line does not fail', async () => {
       const before = await adapter.pluginOrder('Default');
 
       expect(await change([{ kind: 'add', plugin: 'TRACKED PATCH MOD.ESP' }])).toEqual({ wrote: false });
@@ -1194,12 +1146,11 @@ describe('the MO2 Instance adapter', () => {
       expect(await change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: true }])).toEqual({ wrote: false });
     });
 
-    // Rival for each: a splice that finds no line to change and leaves the text as it was.
     it.each<[string, PluginOrderChange]>([
       ['enable', { kind: 'enable', plugin: 'No Such.esp', enabled: true }],
       ['move', { kind: 'move', plugins: ['No Such.esp'], toIndex: 0 }],
       ['drop', { kind: 'drop', plugin: 'No Such.esp' }],
-    ])('rejects %s naming a plugin that is not there, and writes nothing', async (_, bad) => {
+    ])('rejects %s naming a plugin that is not there, and writes nothing, not leaving the text as it was and dropping the change in silence', async (_, bad) => {
       const before = await text(root, DEFAULT_PLUGINS);
 
       await expect(change([{ kind: 'enable', plugin: 'Tracked Patch Mod.esp', enabled: false }, bad]))
@@ -1238,15 +1189,13 @@ describe('the MO2 Instance adapter', () => {
       expect(await metaOf(DOWNLOAD)).toMatch(/removed=false/);
     });
 
-    // Rival: including writes its key whatever the file says, so a file at rest gains metadata.
-    it('writes no metadata for a file already included', async () => {
+    it('writes no metadata for a file already included, so a file at rest does not gain metadata', async () => {
       expect(await adapter.markDownloadedFile('manual.zip', 'Included')).toEqual({ gone: false, wrote: false });
 
       expect(await isThere(join(downloads(), 'manual.zip.meta'))).toBe(false);
     });
 
-    // A metadata file beside no downloaded file is one MO2 never writes.
-    it('marks nothing for a downloaded file that is gone', async () => {
+    it('marks nothing for a downloaded file that is gone, as MO2 never writes a metadata file beside no downloaded file', async () => {
       expect(await adapter.markDownloadedFile('gone.zip', 'Installed')).toEqual({ gone: true });
 
       expect(await isThere(join(downloads(), 'gone.zip.meta'))).toBe(false);
@@ -1257,17 +1206,13 @@ describe('the MO2 Instance adapter', () => {
       expect(await adapter.downloadedFileAt(join(root, 'manual.zip'))).toBeUndefined();
     });
 
-    // Rival: fall back to the default downloads folder. Off Windows, a D: folder cannot be resolved;
-    // on Windows it is resolved, and elsewhere: either way the default folder's file is none.
-    it('names no downloaded file where the settings name another downloads folder', async () => {
+    it('names no downloaded file where the settings name another downloads folder, never falling back to the default downloads folder, whether the D: folder resolves (on Windows) or not (elsewhere)', async () => {
       await writeFile(join(root, INI), (await text(root, INI)).replace('language=en', 'language=en\ndownload_directory=D:\\Elsewhere'));
 
       expect(await adapter.downloadedFileAt(join(downloads(), 'manual.zip'))).toBeUndefined();
     });
 
-    // Rival: sweep only when the metadata is there. A crash during a first write leaves its temp
-    // beside no metadata at all.
-    it('sweeps its own leftover temp write when it trashes metadata, even for a file with none', async () => {
+    it('sweeps its own leftover temp write when it trashes metadata, even for a file with none, as a crash during a first write leaves its temp beside no metadata at all', async () => {
       const leftover = join(downloads(), 'manual.zip.meta.0123456789ab.tmp');
       await writeFile(leftover, 'half written');
 
@@ -1397,10 +1342,8 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(folder(), 'plugin-source', 'kept'))).toBe(true);
       });
 
-      // Rival: a case-sensitive match. On Windows `Plugin-Source` is the kept `plugin-source`, and
-      // the move onto it fails part way; elsewhere it lands beside it and drops out of the mod's files.
       it.each(['.git', '.gitignore', 'plugin-source', 'Plugin-Source', '.GITIGNORE'])(
-        'refuses a release holding %s, naming it, before anything is removed',
+        'refuses a release holding %s, naming it, before anything is removed, matched case-insensitively as on Windows Plugin-Source is the kept plugin-source and the move onto it would fail part way while elsewhere it lands beside it and drops out of the mod\'s files',
         async (entry) => {
           await mkdir(join(extraction.path, entry));
 
@@ -1411,9 +1354,7 @@ describe('the MO2 Instance adapter', () => {
         },
       );
 
-      // Rival: refuse only an entry the folder already has, so a first upgrade plants one that
-      // every later upgrade then refuses.
-      it('refuses a release holding a repository or plugin source entry the folder has none of', async () => {
+      it('refuses a release holding a repository or plugin source entry the folder has none of, so a first upgrade does not plant one that every later upgrade then refuses', async () => {
         await rm(join(folder(), 'plugin-source'), { recursive: true });
         await mkdir(join(extraction.path, 'plugin-source'));
 
@@ -1422,9 +1363,7 @@ describe('the MO2 Instance adapter', () => {
         expect(await isThere(join(folder(), 'Old.esp'))).toBe(true);
       });
 
-      // Rival: refusing a release for holding a folder merely named "source". Skyrim SE's Creation
-      // Kit ships script sources at a release's own root Source/ — ordinary content, not a collision.
-      it.each(['Source', 'source'])('does not refuse a release holding a root %s folder', async (entry) => {
+      it.each(['Source', 'source'])('does not refuse a release holding a root %s folder, Skyrim SE\'s Creation Kit shipping script sources at a release\'s own root Source/ — ordinary content, not a collision', async (entry) => {
         await mkdir(join(extraction.path, entry));
 
         expect(await extraction.land(extraction.path, { gameName: 'Fallout4' })).toEqual({ refused: false });
@@ -1449,9 +1388,7 @@ describe('the MO2 Instance adapter', () => {
         await expect(adapter.extractUpgrade('No Such Mod')).rejects.toThrow(/No folder holds/);
       });
 
-      // Rival: the meta read after the release's entries land, so a release shipping its own meta
-      // replaces the keys the mod had.
-      it('sets the keys over the meta the mod had before its contents went', async () => {
+      it('sets the keys over the meta the mod had before its contents went, not over one a release ships, which would replace the keys the mod had', async () => {
         await writeFile(join(extraction.path, 'meta.ini'), 'shipped=true\r\n');
 
         await extraction.land(extraction.path, { gameName: 'Fallout4', version: '2.2' });
@@ -1473,8 +1410,7 @@ describe('the MO2 Instance adapter', () => {
       expect((await adapter.settings()).profile).toBe('Secondary');
     });
 
-    // Rival: the profile written whatever the settings say, which rewrites an unwrapped value.
-    it('writes nothing when the profile is already selected', async () => {
+    it('writes nothing when the profile is already selected, not rewriting an unwrapped value', async () => {
       await writeFile(join(root, INI), '[General]\r\ngameName=Fallout 4\r\nselected_profile=Default\r\n');
       const before = await text(root, INI);
 
@@ -1533,7 +1469,7 @@ describe('isMo2Instance', () => {
     expect(isMo2Instance(join(root, 'does-not-exist'))).toBe(false);
   });
 
-  it('does not read modlist.txt content — a corrupt-but-present instance still reads true (ADR-0019 boundary)', async () => {
+  it('does not read modlist.txt content — a corrupt-but-present instance still reads true', async () => {
     await layInstance();
     await mkdir(join(root, 'profiles', 'Default'));
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');

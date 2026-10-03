@@ -31,8 +31,6 @@ public sealed class RowsChangedNotificationTests
         Assert.Equal(index.Sequence, notification.Sequence);
     }
 
-    // Where a deletion lands when git could not name its key: a document no commit filed, or a tree
-    // read whole.
     [Fact]
     public void ValidatingAPluginWhoseDocumentWasDeleted_PublishesRowsChangedNamingTheRecord_AndReadsLoseIt()
     {
@@ -45,7 +43,8 @@ public sealed class RowsChangedNotificationTests
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
         var formKey = npc.ToString();
-        File.Delete(entry.SourceFileOf(index.RequireReads().DocumentOf(formKey, entry.KeyOf())));
+        var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.RequireReads().DocumentOf(formKey, entry.KeyOf()));
+        File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
 
         index.NextSnapshot();
 
@@ -62,7 +61,7 @@ public sealed class RowsChangedNotificationTests
         var (fixture, entry, notifications, index, moved, still) = TwoNpcs("rows-changed-gained");
         using var _ = fixture;
         using var __ = index;
-        var gained = GainARecord(entry, index, moved.ToString());
+        var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
         entry.HandEdit(index.RequireReads().DocumentOf(moved.ToString(), entry.KeyOf()), "\"MovedNpc\"", "\"EditedNpc\"");
 
         index.NextSnapshot();
@@ -76,15 +75,13 @@ public sealed class RowsChangedNotificationTests
         Assert.NotNull(index.RequireReads().GetDocument(gained, entry.KeyOf()));
     }
 
-    // Where a gained record lands when git could not name its key: a new document no commit filed.
-    // The validate re-derives the plugin whole, and still names the rows.
     [Fact]
-    public void ValidatingAPluginThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
+    public void ValidatingAPluginThatGainedADocumentNoCommitFiled_PublishesRowsChangedNamingIt_NotPluginChanged()
     {
         var (fixture, entry, notifications, index, moved, _) = TwoNpcs("rows-changed-validate-gained");
         using var __ = fixture;
         using var ___ = index;
-        var gained = GainARecord(entry, index, moved.ToString());
+        var gained = GainACopyOfARecordUnderAFormKeyNeitherRefHolds(entry, index, moved.ToString());
 
         index.NextSnapshot();
 
@@ -111,9 +108,7 @@ public sealed class RowsChangedNotificationTests
         return (fixture, fixture.Plugins.Single(), notifications, index, moved, still);
     }
 
-    // A copy of an existing document under a FormKey neither ref holds, put the way the write side
-    // puts one.
-    private static string GainARecord(LoadOrderEntry entry, Indexer index, string template)
+    private static string GainACopyOfARecordUnderAFormKeyNeitherRefHolds(LoadOrderEntry entry, Indexer index, string template)
     {
         var gained = $"000F00:{entry.Name}";
         var document = index.RequireReads().DocumentOf(template, entry.KeyOf());
@@ -124,20 +119,16 @@ public sealed class RowsChangedNotificationTests
         return gained;
     }
 
-    // A container's document is one row plus every embedded child's, so naming only the key the
-    // Indexer was handed leaves a panel open on a placed reference with nothing to re-read on.
     [Fact]
-    public void ProjectingAContainersDocument_NamesTheContainerAndEveryEmbeddedChildWhoseRowsChanged()
+    public void ProjectingAContainersDocument_NamesTheContainerAndTheEmbeddedChildWhoseRowsChanged_AndNotTheUntouchedSibling()
     {
         var notifications = new InMemoryNotificationPublisher();
         using var fixture = new IndexedContainerMod(notifications);
 
-        // A hand edit to a child inside its owner's document: the child has no file of its own, and
-        // the Indexer is asked about the owner alone.
-        var document = fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
+        var ownersDocumentHoldingTheChildWithNoFileOfItsOwn = fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
         File.WriteAllText(
-            document,
-            File.ReadAllText(document).Replace(
+            ownersDocumentHoldingTheChildWithNoFileOfItsOwn,
+            File.ReadAllText(ownersDocumentHoldingTheChildWithNoFileOfItsOwn).Replace(
                 $"\"{ContainerModPlugin.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
         fixture.Index.NextSnapshot();
@@ -145,8 +136,6 @@ public sealed class RowsChangedNotificationTests
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(fixture.EmbedCell, rowsChanged.Keys);
         Assert.Contains(fixture.TemporaryRef, rowsChanged.Keys);
-        // The sibling nobody touched is not named: a notification that names every child of every
-        // refreshed container is a broadcast again.
         Assert.DoesNotContain(fixture.PersistentRef, rowsChanged.Keys);
     }
 }

@@ -12,40 +12,35 @@ const report = (plugin: string, origin: string, text: string): PluginDiagnosisRe
   plugin, origin, anchor: null, defectClass: 'fixed-size-subrecord-short', tail: null, message: 'm', text,
 });
 
-// [uri.fsPath, diagnostics] pairs, in insertion order — the shape every assertion below reads.
-function entriesOf(collection: FakeDiagnosticCollection) {
+function entriesAsFsPathAndDiagnosticsInInsertionOrder(collection: FakeDiagnosticCollection) {
   return [...collection].map(([uri, diagnostics]) => [uri.fsPath, diagnostics] as const);
 }
 
-// Stands in for the Instance value's own answer: the folder each origin's plugins sit in.
 const originFolderFrom = (folders: Record<string, string>): OriginFolder => (origin) => folders[origin];
 
 describe('publishPluginWarnings', () => {
-  it('targets the plugin binary itself (pre-Track) and carries the refusal wording verbatim', () => {
+  it('targets the plugin binary itself (pre-Track), carries the refusal wording verbatim, and warns rather than errors since a Malformed plugin still loads and plays', () => {
     const collection = new FakeDiagnosticCollection();
 
     publishPluginWarnings(collection, originFolderFrom({ 'TS Mod': '/instance/mods/TS Mod' }), [
       report('TrueStorms.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
     ]);
 
-    const [path, list] = present(entriesOf(collection)[0], 'the sole published diagnostic-collection entry');
+    const [path, list] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole published diagnostic-collection entry');
     expect(path).toBe('/instance/mods/TS Mod/TrueStorms.esp');
-    const [diagnostic] = list;
-    if (!diagnostic) throw new Error('the sole diagnostic published for TrueStorms.esp');
+    const diagnostic = present(list[0], 'the sole diagnostic published for TrueStorms.esp');
     expect(diagnostic.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
-    expect(diagnostic.severity).toBe(1); // Warning — a Malformed plugin still loads and plays
+    expect(diagnostic.severity).toBe(DiagnosticSeverity.Warning);
   });
 
-  // Rival: `mods/<origin>`, which put an overwrite plugin's Problems entry on a path that
-  // does not exist.
-  it('targets the overwrite folder for an overwrite-origin plugin', () => {
+  it('targets the overwrite folder for an overwrite-origin plugin, not the mods/overwrite path that does not exist', () => {
     const collection = new FakeDiagnosticCollection();
 
     publishPluginWarnings(collection, originFolderFrom({ overwrite: '/instance/overwrite' }), [
       report('Stray.esp', 'overwrite', 'bad'),
     ]);
 
-    expect(entriesOf(collection).map(([path]) => path)).toEqual(['/instance/overwrite/Stray.esp']);
+    expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/instance/overwrite/Stray.esp']);
   });
 
   it('publishes nothing for an origin the value has no folder for', () => {
@@ -54,7 +49,7 @@ describe('publishPluginWarnings', () => {
 
     publishPluginWarnings(collection, originFolderFrom({}), [report('Ghost.esp', 'Gone', 'bad')]);
 
-    expect(entriesOf(collection)).toEqual([]);
+    expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)).toEqual([]);
     expect(clear).toHaveBeenCalledTimes(1);
   });
 
@@ -67,7 +62,7 @@ describe('publishPluginWarnings', () => {
     publishPluginWarnings(collection, originFolder, [report('B.esp', 'M', 'new')]);
 
     expect(clear).toHaveBeenCalledTimes(2);
-    expect(entriesOf(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
+    expect(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection).map(([path]) => path)).toEqual(['/i/mods/M/B.esp']);
   });
 
   it('groups several diagnoses on one plugin under one file entry', () => {
@@ -77,7 +72,7 @@ describe('publishPluginWarnings', () => {
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'),
     ]);
 
-    const [, groupedDiagnostics] = present(entriesOf(collection)[0], 'the sole grouped diagnostic-collection entry');
+    const [, groupedDiagnostics] = present(entriesAsFsPathAndDiagnosticsInInsertionOrder(collection)[0], 'the sole grouped diagnostic-collection entry');
     expect(groupedDiagnostics.map((d) => d.message)).toEqual(['first', 'second']);
   });
 });

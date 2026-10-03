@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- A kernel box references nothing above it; the port's payloads name the snapshot (ADR-0014). -->
+    <!-- The port's payloads name the snapshot (target-architecture.d2 medit_kernel). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
   </ItemGroup>
 

@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The tree's dirt as DirtOf sees it: which record an unstaged edit moved, and what a git
-/// path under the plugin's own tree that names no record defers to (ADR-0003).</summary>
 public sealed class SourceRepositoryDirtOfTests : IDisposable
 {
     private const string PluginName = "Test.esp";
@@ -22,22 +20,16 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "TestMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    // Spelled from the fixture's own constants rather than asked of the repository, matching
-    // SourceRepositoryReadAllTests: Track needs it before any repository exists to ask.
-    private static readonly string NpcRelativePath =
+    private static readonly string NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk =
         Path.Combine("plugin-source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-dirtof-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-dirtof-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository Tracked(params TreeFile[] extraFiles)
     {
-        var files = new[] { new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
+        var files = new[] { new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody)) }.Concat(extraFiles).ToArray();
         PluginBaselines.Track(
             _modFolder, SourcePreset.Edits, files);
         return SourceRepository.Open(_modFolder, Release)
@@ -45,13 +37,11 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
-    public void DirtOf_ReportsAnUnstagedEdit_ToAFileTrackAlreadyCommitted()
+    public void DirtOf_ReportsAnUnstagedEditNeverGitAdded_ToAFileTrackAlreadyCommitted()
     {
         var repository = Tracked();
 
-        // Plain unstaged edit — never `git add`ed. Put and a hand edit alike never stage, so a
-        // rival that only checked the git index would report this clean.
-        File.WriteAllText(Path.Combine(_modFolder, NpcRelativePath), EditedBody);
+        File.WriteAllText(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk), EditedBody);
 
         var dirt = repository.DirtOf(Plugin);
 
@@ -63,16 +53,15 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.False(dirt.NeedsStructuralPass);
     }
 
-    // A rename's old path rides a bare token with no status code; read as an entry (entry[3..]),
-    // losing three characters must land exactly on the real root.
     [Fact]
-    public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile()
+    public void DirtOf_OfAStagedRenameOutOfAFolderNamedLikeTheTree_FindsNothingToReconcile_GuardingAgainstARenamesBareOldPathTokenReturningWhichNoRenamesTurnsOff()
     {
         var rootSegment = SourceRepository.RootFor(PluginName).Split(Path.DirectorySeparatorChar)[0];
-        var lookalikeFolderName = "xyz" + rootSegment;
+        const int widthOfThePorcelainStatusCodeAnEntryParseDrops = 3;
+        var lookalikeFolderName = new string('x', widthOfThePorcelainStatusCodeAnEntryParseDrops) + rootSegment;
         var oldFolder = Directory.CreateDirectory(Path.Combine(_modFolder, lookalikeFolderName, PluginName)).FullName;
         File.WriteAllText(Path.Combine(oldFolder, "notes.txt"), "notes");
-        PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))]);
+        PluginBaselines.Track(_modFolder, SourcePreset.Everything, [new TreeFile(NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk, Encoding.UTF8.GetBytes(NpcBody))]);
         var repository = SourceRepository.Open(_modFolder, Release)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv", $"{lookalikeFolderName}/{PluginName}/notes.txt", "notes.txt");
@@ -89,7 +78,7 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         var repository = Tracked();
         var renamed = Path.Combine("plugin-source", PluginName, "Npcs", $"Renamed - 000800_{PluginName}.json");
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, "mv",
-            NpcRelativePath.Replace('\\', '/'), renamed.Replace('\\', '/'));
+            NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk.Replace('\\', '/'), renamed.Replace('\\', '/'));
 
         var dirt = repository.DirtOf(Plugin);
 
@@ -131,7 +120,7 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     {
         var repository = Tracked();
 
-        File.Delete(Path.Combine(_modFolder, NpcRelativePath));
+        File.Delete(Path.Combine(_modFolder, NpcRelativePathSpelledBeforeAnyRepositoryExistsToAsk));
 
         var dirt = repository.DirtOf(Plugin);
 
@@ -142,16 +131,13 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.Equal(NpcBody, only.CommittedText);
     }
 
-    // The ordinary shape of a create: Put never runs git add, so the file is untracked and no ref
-    // holds its text yet.
     [Fact]
-    public void DirtOf_ADocumentNoRefHolds_NamesItWithNoCommittedText()
+    public void DirtOf_AnUntrackedDocumentNoRefHolds_NamesItWithNoCommittedText()
     {
         var repository = Tracked();
-        // The Npcs folder Track already committed NpcRelativePath under, so no directory is minted.
-        var createdPath = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000900_{PluginName}.json");
+        var untrackedFileStandingInForAPutWhichNeverRunsGitAdd = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000900_{PluginName}.json");
         File.WriteAllText(
-            Path.Combine(_modFolder, createdPath), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Created\"}}");
+            Path.Combine(_modFolder, untrackedFileStandingInForAPutWhichNeverRunsGitAdd), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Created\"}}");
 
         var dirt = repository.DirtOf(Plugin);
 
@@ -162,10 +148,8 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.Null(only.CommittedText);
     }
 
-    // The header's key is computed, never read off the document, so RecordData.json is the one
-    // path DirtOf resolves to a record despite carrying no FormKey of its own.
     [Fact]
-    public void DirtOf_ForTheHeadersOwnRecordDataJson_NamesItsComputedFormKey()
+    public void DirtOf_ForTheHeadersOwnRecordDataJson_NamesItsComputedFormKey_ThoughTheDocumentCarriesNoFormKey()
     {
         var headerPath = Path.Combine("plugin-source", PluginName, "RecordData.json");
         var repository = Tracked(new TreeFile(headerPath, "{\"MasterReferences\": []}"u8.ToArray()));
@@ -181,23 +165,29 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.False(dirt.NeedsStructuralPass);
     }
 
-    // The rival: skip the structural-pass fallback and every one of these shapes reads as a clean
-    // tree instead of one that needs a whole-tree compare.
     [Theory]
-    // Too few path segments — the flat shape is at least four: plugin-source/<plugin>/<folder>/<file>.json.
     [InlineData("plugin-source/Test.esp/000800.json")]
-    // Last segment missing the load-bearing ".json" suffix.
+    [InlineData("plugin-source/Test.esp/NotRecordData.json")]
+    public void DirtOf_APathTooShortForAFlatRecordAndNotLiterallyTheHeadersRecordDataJson_DefersToTheStructuralPass_NeverAsARecord(
+        string relativePath) => AssertDefersToTheStructuralPass(relativePath);
+
+    [Theory]
     [InlineData("plugin-source/Test.esp/Npcs/000800.txt")]
     [InlineData("plugin-source/Test.esp/Npcs/000800")]
-    // The whole-mod door's own header/group files, at the wrong depth — never a flat record's own file.
+    public void DirtOf_APathMissingTheJsonSuffix_DefersToTheStructuralPass_NeverAsARecord(
+        string relativePath) => AssertDefersToTheStructuralPass(relativePath);
+
+    [Theory]
     [InlineData("plugin-source/Test.esp/Npcs/RecordData.json")]
     [InlineData("plugin-source/Test.esp/Cells/GroupRecordData.json")]
-    // A folder this game's schema has no group for at all.
-    [InlineData("plugin-source/Test.esp/NotARealFolder/000800.json")]
-    // Three segments but not literally RecordData.json — must not be mistaken for the header.
-    [InlineData("plugin-source/Test.esp/NotRecordData.json")]
-    public void DirtOf_APathUnderThePluginsTreeThatFailsToParse_DefersToTheStructuralPass_NeverAsARecord(
-        string relativePath)
+    public void DirtOf_AWholeModDoorHeaderOrGroupFileAtTheWrongDepth_DefersToTheStructuralPass_NeverAsARecord(
+        string relativePath) => AssertDefersToTheStructuralPass(relativePath);
+
+    [Fact]
+    public void DirtOf_APathUnderAFolderTheGamesSchemaHasNoGroupFor_DefersToTheStructuralPass_NeverAsARecord() =>
+        AssertDefersToTheStructuralPass("plugin-source/Test.esp/NotARealFolder/000800.json");
+
+    private void AssertDefersToTheStructuralPass(string relativePath)
     {
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
         var repository = Tracked(new TreeFile(normalized, "{}"u8.ToArray()));
@@ -210,10 +200,8 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.True(dirt.NeedsStructuralPass);
     }
 
-    // An abstract group element reads as ambiguous, the same policy as the whole-mod door's own
-    // discriminator: the path alone cannot say which concrete type the folder holds.
     [Fact]
-    public void DirtOf_ForAPathUnderAnAmbiguousGroupsFolder_DefersToTheStructuralPass()
+    public void DirtOf_ForAPathUnderAnAmbiguousGroupsFolder_DefersToTheStructuralPass_ForThePathAloneCannotSayWhichConcreteTypeTheFolderHolds()
     {
         var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
@@ -228,14 +216,15 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
         Assert.True(dirt.NeedsStructuralPass);
     }
 
-    // Outside this plugin's own tree entirely: not even a candidate for the structural pass, which
-    // only ever fires under the plugin's own root.
-    [Theory]
-    // No "plugin-source" root at all: the plugin would sit directly at the mod folder's own root.
-    [InlineData("Test.esp/Npcs/000800.json")]
-    // A root segment present, but not the literal name "plugin-source".
-    [InlineData("NotPluginSource/Test.esp/Npcs/000800.json")]
-    public void DirtOf_APathOutsideThePluginsTree_IsIgnoredEntirely(string relativePath)
+    [Fact]
+    public void DirtOf_APathWithNoPluginSourceRootAtAll_IsIgnoredEntirely_NotEvenACandidateForTheStructuralPass() =>
+        AssertIgnoredEntirely("Test.esp/Npcs/000800.json");
+
+    [Fact]
+    public void DirtOf_APathUnderARootSegmentThatIsNotLiterallyPluginSource_IsIgnoredEntirely_NotEvenACandidateForTheStructuralPass() =>
+        AssertIgnoredEntirely("NotPluginSource/Test.esp/Npcs/000800.json");
+
+    private void AssertIgnoredEntirely(string relativePath)
     {
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
         var repository = Tracked();

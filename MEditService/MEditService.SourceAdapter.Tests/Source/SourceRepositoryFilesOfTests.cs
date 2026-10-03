@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>A plugin's whole source as the carrier Track hands in — relative path and bytes — at the
-/// working tree or at a named ref. What compile takes instead of a directory.</summary>
 public sealed class SourceRepositoryFilesOfTests : IDisposable
 {
     private const string PluginName = "FilesOf.esp";
@@ -18,10 +16,8 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FilesOfMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-filesof-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-filesof-");
 
-    // Tracked with the header alone, then the NPC written through the repository's own door so its
-    // file lands where the tree's placement puts it, and committed: both refs then hold the tree.
     public SourceRepositoryFilesOfTests()
     {
         PluginBaselines.Track(
@@ -29,15 +25,16 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
             SourcePreset.Edits,
             [new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), "{\"MasterReferences\": []}"u8.ToArray())]);
         Repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
+        CommitSoBothRefsHoldTheTree();
+    }
+
+    private void CommitSoBothRefsHoldTheTree()
+    {
         Git("add", "-A");
         Git("commit", "-q", "-m", "the fixture's npc");
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string Git(params string[] args) =>
         GitProbe.Run(Path.Combine(_modFolder, ".git"), _modFolder, args);
@@ -68,10 +65,8 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         Assert.Equal(File.ReadAllBytes(NpcFullPath), npc.Content);
     }
 
-    // One repository spans a write and the reads around it, so the file memo a write leaves behind
-    // would answer about the tree as it stood.
     [Fact]
-    public void FilesOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands()
+    public void FilesOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands_NotFromAMemoOfBeforeTheWrite()
     {
         var repository = Repository;
         var before = repository.FilesOf(Plugin).Files.Count;
@@ -85,10 +80,8 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         Assert.Equal(before + 1, repository.FilesOf(Plugin).Files.Count);
     }
 
-    // Half a tree is the one answer that must not escape: a caller cannot tell it from a smaller tree,
-    // and compiling it writes a binary missing records.
     [Fact]
-    public void FilesOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles()
+    public void FilesOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles_NotHalfATreeACallerTakesForASmallerOne()
     {
         var npcRelativePath = NpcRelativePath;
         using var held = new FileStream(NpcFullPath, FileMode.Open, FileAccess.Read, FileShare.None);

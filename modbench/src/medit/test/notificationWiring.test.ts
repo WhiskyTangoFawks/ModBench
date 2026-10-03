@@ -23,9 +23,7 @@ function fakePanel(): { webview: { postMessage: ReturnType<typeof vi.fn> } } {
   return { webview: { postMessage: vi.fn() } };
 }
 
-// A bare stand-in for Editor's `ActiveRecordTracker` — this suite pins the wiring's own exports,
-// which take the tracker structurally (just `formKeyOf`).
-function fakeActiveRecordTracker() {
+function fakeActiveRecordTrackerOfJustFormKeyOf() {
   const formKeys = new Map<unknown, string>();
   return {
     setFormKey(panel: unknown, formKey: string) { formKeys.set(panel, formKey); },
@@ -33,17 +31,16 @@ function fakeActiveRecordTracker() {
   };
 }
 
-// A gate holding no read: no edit is in flight in this suite.
-const holdsNothing = { holds: () => false, waitingFor: () => undefined, release: () => false };
+const gateHoldingNoReadSinceNoEditIsInFlight = {holds: () => false, waitingFor: () => undefined, release: () => false };
 
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
     const recordPanels = new Set([panel]);
-    const tracker = fakeActiveRecordTracker();
+    const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
 
     client.emit(rowsChanged(['000001:Test.esp']));
 
@@ -54,9 +51,9 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
     const recordPanels = new Set([panel]);
-    const tracker = fakeActiveRecordTracker();
+    const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
 
     client.emit(rowsChanged(['000002:Other.esp']));
 
@@ -67,9 +64,9 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
     const recordPanels = new Set([panel]);
-    const tracker = fakeActiveRecordTracker();
+    const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
+    subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
 
     client.emit(pluginChanged());
 
@@ -80,9 +77,9 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
     const recordPanels = new Set([panel]);
-    const tracker = fakeActiveRecordTracker();
+    const tracker = fakeActiveRecordTrackerOfJustFormKeyOf();
     tracker.setFormKey(panel, '000001:Test.esp');
-    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker, holdsNothing);
+    const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker, gateHoldingNoReadSinceNoEditIsInFlight);
 
     unsubscribe();
     client.emit(rowsChanged(['000001:Test.esp']));
@@ -92,7 +89,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
 });
 
 describe('subscribeTreeToNotifications', () => {
-  it('re-reads the records and the plugin facts on rows-changed', () => {
+  it('re-reads the records and the plugin facts a record filter\'s match reads on rows-changed', () => {
     const client = new InMemoryMEditClient();
     const tree = { refresh: vi.fn() };
     const refreshPluginFacts = vi.fn();

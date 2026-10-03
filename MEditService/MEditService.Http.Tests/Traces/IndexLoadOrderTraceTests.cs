@@ -6,9 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>index-load-order: the snapshot arrives, the Indexer reconciles it against what the
-/// plugins actually hold, and the Store announces what changed — so the client sees status, then
-/// a rows-changed push, then its own re-read.</summary>
 public sealed class IndexLoadOrderTraceTests : HostedTests
 {
     private const string Plugin = "Projected.esp";

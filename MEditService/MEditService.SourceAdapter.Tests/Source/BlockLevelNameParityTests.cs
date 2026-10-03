@@ -7,9 +7,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Track writes a block level's directory through the whole-mod serializer and a put places
-/// one from the repository's own spelling; a tree the two spell differently holds two directories
-/// for one block.</summary>
 public sealed class BlockLevelNameParityTests
 {
     private const GameRelease Release = GameRelease.Fallout4;

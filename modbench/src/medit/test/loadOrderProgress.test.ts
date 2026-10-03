@@ -2,10 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { makeReconcileProgressHandler, reportIndexRefusal } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../../client';
 
-// Applying a tick re-renders the whole tree, and PluginTreeProvider.getPluginChildren is
-// uncached, so re-applying an unchanged tick every 500ms would re-fetch record types for every
-// expanded row — a request storm for no visible change.
-describe('makeReconcileProgressHandler', () => {
+describe('makeReconcileProgressHandler, applying a tick only when it landed something new, since applying re-renders the whole tree and re-fetches record types for an expanded row', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 3, activePlugins: 3, indexedPlugins: [], conflictsComputed: false, holdsNone: false, failures: [], version: 1, ...over });
 
@@ -32,9 +29,7 @@ describe('makeReconcileProgressHandler', () => {
     expect(applyLoadOrder).toHaveBeenCalledTimes(1);
   });
 
-  // A failure can arrive without the indexed set growing — a plugin that failed to index is never
-  // added to it, so counting only plugins would leave that row undecorated until the load ended.
-  it('applies a tick that landed a failure even though no new plugin was indexed', () => {
+  it('applies a tick that landed a failure even though no new plugin was indexed, since a plugin that failed to index is never added to the indexed set', () => {
     const { applyLoadOrder, onProgress } = handler();
 
     onProgress(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }));
@@ -45,7 +40,7 @@ describe('makeReconcileProgressHandler', () => {
   });
 });
 
-describe('reportIndexRefusal', () => {
+describe('reportIndexRefusal, where a refusal reaches the extension since the put\'s own outcome answers applied regardless of what the Index found', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 0, activePlugins: 0, indexedPlugins: [], conflictsComputed: false, holdsNone: false, failures: [], version: 1, ...over });
 
@@ -71,8 +66,7 @@ describe('reportIndexRefusal', () => {
     expect(setStatusText).toHaveBeenCalledWith('$(error) mEdit: the reconcile threw something unexpected');
   });
 
-  // The rival: showing it on every ordinary tick, not only the one carrying a refusal.
-  it('shows nothing, and answers false, for a tick with no refusal message', () => {
+  it('shows nothing, and answers false, for an ordinary tick with no refusal message', () => {
     const setStatusText = vi.fn();
 
     const refused = reportIndexRefusal(status({ indexedPlugins: [{ name: 'A.esp', origin: 'SomeMod' }] }), { setStatusText });

@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-/// <summary>The same seam over a tracked mod: what the sequence and the rows-changed port answer
-/// while the projections that move a working tree are in flight.</summary>
 public sealed class TrackedProjectionTests : IDisposable
 {
     private const string NpcEditorId = "FixtureNpc";
@@ -49,8 +47,6 @@ public sealed class TrackedProjectionTests : IDisposable
     [Fact]
     public async Task ATrackedPluginReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
-        // Dirty, so the head reconcile has baselines to write: a clean tree short-circuits it and
-        // would leave the multi-advance case untested.
         RenameByHand(_npc, NpcEditorId, "RenamedByHand");
         PluginBinaries.Touch(_mod.Path);
         var before = _index.Sequence;
@@ -83,9 +79,6 @@ public sealed class TrackedProjectionTests : IDisposable
         var before = _index.Sequence;
         var announced = new ConcurrentBag<long>();
 
-        // The two projections overlap without nesting — the first opens before the second and closes
-        // before it — while every store call stays strictly ordered, since one connection is one
-        // writer.
         using var firstOpen = new ManualResetEventSlim();
         using var secondOpen = new ManualResetEventSlim();
         using var firstClosed = new ManualResetEventSlim();

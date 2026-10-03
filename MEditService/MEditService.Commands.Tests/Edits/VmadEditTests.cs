@@ -11,8 +11,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Each gesture is diffed member by member before and after, so one that quietly rewrote
-/// another member fails naming it.</summary>
 public sealed class VmadEditTests : IDisposable
 {
     private readonly VmadFixture _fixture = new();
@@ -29,7 +27,6 @@ public sealed class VmadEditTests : IDisposable
     private RecordEditResult Edit(FormKey record, RecordEditEnvelope envelope) =>
         _fixture.Service().Edit(_fixture.Plugin, record.ToString(), envelope);
 
-    // Every gesture here sits under the adapter column.
     private static PathHop[] Under(params PathHop[] hops) => [Member(Field), .. hops];
 
     private static JsonArray Scripts(JsonNode adapter) => adapter["Scripts"].Require().AsArray();
@@ -79,8 +76,6 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Npc));
     }
 
-    // ── scripts ──────────────────────────────────────────────────────────────
-
     [Fact]
     public void AddingAScript_AppendsIt_AndTouchesNothingElse()
     {
@@ -128,8 +123,6 @@ public sealed class VmadEditTests : IDisposable
             ["VirtualMachineAdapter.Scripts[1].Name: \"Alpha\" -> \"Zulu\""],
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
     }
-
-    // ── properties ───────────────────────────────────────────────────────────
 
     [Fact]
     public void AddingAProperty_AppendsIt()
@@ -186,8 +179,6 @@ public sealed class VmadEditTests : IDisposable
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
     }
 
-    // ── a scalar-array property's own elements ───────────────────────────────
-
     [Theory]
     [InlineData(RecordEditEnvelope.Add, new[] { "a", "b", "" })]
     [InlineData(RecordEditEnvelope.Remove, new[] { "a" })]
@@ -195,7 +186,6 @@ public sealed class VmadEditTests : IDisposable
     public void ScalarArrayPropertyElementOps_RewriteThatArrayAlone(string op, string[] expected)
     {
         var before = _fixture.Body(_fixture.Npc);
-        // add addresses the array; the other two address one of its elements.
         var array = Under(Member("Scripts"), At(1), Member("Properties"), At(0), Member("Data"));
         var envelope = op switch
         {
@@ -213,8 +203,6 @@ public sealed class VmadEditTests : IDisposable
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[1].Properties[0].Data[", d, StringComparison.Ordinal));
     }
-
-    // ── struct members and array-of-struct instances ─────────────────────────
 
     [Fact]
     public void EditingAStructMember_ChangesThatMemberAndNothingElse()
@@ -252,15 +240,12 @@ public sealed class VmadEditTests : IDisposable
         var result = Edit(_fixture.Npc, adapter);
 
         Assert.True(result.Applied, result.Message);
-        // One difference, and it is the whole new instance: nothing else in the record moved.
         var added = Assert.Single(ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)));
         Assert.StartsWith(
             "VirtualMachineAdapter.Scripts[1].Properties[3].Structs[1]: <absent> -> ",
             added, StringComparison.Ordinal);
         Assert.Contains("\"Weight\"", added, StringComparison.Ordinal);
     }
-
-    // ── a quest's alias scripts and fragments ────────────────────────────────
 
     [Fact]
     public void EditingAnAliasScriptProperty_ChangesThatMemberAndNothingElse()
@@ -353,7 +338,6 @@ public sealed class VmadEditTests : IDisposable
             d => Assert.StartsWith("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties", d, StringComparison.Ordinal));
     }
 
-    // Absent means default (ADR-0005): a null set clears the member, and the document loses it.
     [Fact]
     public void NullingAStructTheRecordCarries_ClearsItAndTouchesNothingElse()
     {
@@ -446,8 +430,8 @@ public sealed class VmadEditTests : IDisposable
         private const string PluginName = "Vmad694.esp";
         private const string Origin = "Vmad694Mod";
 
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-694-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-694-game-").FullName;
+        private readonly ScratchDirectory _modFolder = new("medit-694-mod-");
+        private readonly ScratchDirectory _gameDirectory = new("medit-694-game-");
 
         public PluginAddress Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
@@ -465,7 +449,6 @@ public sealed class VmadEditTests : IDisposable
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
             var npc = mod.Npcs.AddNew("Vmad694Npc");
-            // Out of key order, and written straight to binary rather than through the write path.
             var adapter = new VirtualMachineAdapter { Version = 6, ObjectFormat = 2 };
             adapter.Scripts.Add(new ScriptEntry { Name = "Beta", Flags = ScriptEntry.Flag.Local });
             adapter.Scripts.Add(AlphaScript());
@@ -497,7 +480,6 @@ public sealed class VmadEditTests : IDisposable
             quest.VirtualMachineAdapter = questAdapter;
             Quest = quest.FormKey;
 
-            // A PERK fragment array keys on a single member (its index) rather than QUST's pair.
             var perk = mod.Perks.AddNew("Vmad694Perk");
             var perkAdapter = new PerkAdapter { Version = 6, ObjectFormat = 2 };
             var perkFragments = new PerkScriptFragments();
@@ -507,8 +489,6 @@ public sealed class VmadEditTests : IDisposable
             perk.VirtualMachineAdapter = perkAdapter;
             Perk = perk.FormKey;
 
-            // A scene phase fragment's key is its phase index then its phase flag (xEdit's
-            // wbStructSK([1, 0])), so two fragments can share an index.
             var scene = new Scene(mod.GetNextFormKey("Vmad694Scene"), Fallout4Release.Fallout4) { EditorID = "Vmad694Scene" };
             quest.Scenes.Add(scene);
             var sceneAdapter = new SceneAdapter { Version = 6, ObjectFormat = 2 };
@@ -533,8 +513,6 @@ public sealed class VmadEditTests : IDisposable
             EditHandler = TestEditService.EditHandler(holder);
         }
 
-        // Alpha's properties are out of key order too, and cover every shape a gesture below
-        // reaches: a scalar, a scalar array, a struct and an array of structs.
         private static ScriptEntry AlphaScript()
         {
             var script = new ScriptEntry { Name = "Alpha", Flags = ScriptEntry.Flag.Local };
@@ -571,15 +549,8 @@ public sealed class VmadEditTests : IDisposable
 
         public void Dispose()
         {
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
+            _modFolder.Dispose();
+            _gameDirectory.Dispose();
         }
     }
 }

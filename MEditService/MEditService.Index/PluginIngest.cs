@@ -35,7 +35,7 @@ internal sealed class PluginIngest
         List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
         string? EditorId, string? ParseDiagnosis);
 
-    // ADR-0007: a re-index replaces its own rows, the header's included. Called before
+    // ADR-0009: a re-index replaces its own rows, the header's included. Called before
     // DuckDbRecordIndex.Index creates the appender rather than resting on an unverified assumption
     // about how an appender behaves relative to a later delete.
     public void DeletePriorDocuments(string plugin, string origin)
@@ -48,9 +48,8 @@ internal sealed class PluginIngest
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
-    // ADR-0007: one row per document, from the one stream that carries them. The appender is opened
-    // once per Index() call because `records` is one table spanning every type. DeletePriorDocuments
-    // must run first.
+    // ADR-0011, from the one stream that carries the documents. The appender is opened once per
+    // Index() call because `records` spans every type. DeletePriorDocuments must run first.
     public IndexTiming IndexPlugin(
         IPluginDocuments documents, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
@@ -79,7 +78,7 @@ internal sealed class PluginIngest
         WritePlacement(plugin, origin, placementRows, cellLocationRows);
 
         // Before the form_lookup flush, so the header's row and lookup row go through the same two
-        // flushes as every record's (ADR-0005: one lookup row per record row, by construction).
+        // flushes as every record's: one lookup row per record row, by construction.
         if (schemas.ContainsKey(PluginHeader.RecordType))
             lookupRows.Add(HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender));
 
@@ -91,8 +90,8 @@ internal sealed class PluginIngest
                 AppendFormReference(refAppender, r, plugin, origin);
         }
 
-        // ADR-0005: one form_lookup row per indexed record, populated in this same pass — no
-        // second indexing pass over the plugin.
+        // ADR-0011: one form_lookup row per indexed record, with no second indexing pass over the
+        // plugin.
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         if (lookupRows.Count > 0)
         {
@@ -226,9 +225,9 @@ internal sealed class PluginIngest
         var root = parsed.RootElement;
         var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
 
-        // ADR-0005: where a cell sits and what a container holds come from the GRUP hierarchy, so a
-        // container whose document the codec refused still lists and still holds its children. A
-        // refused cell loses only its grid.
+        // ADR-0005: where a cell sits and what a container holds come from the GRUP
+        // hierarchy, so a container whose document the codec refused still lists and still holds
+        // its children. A refused cell loses only its grid.
         var refused = document.ParseDiagnosis is not null;
         JsonElement? carried = refused ? null : root;
         var containerType = _containers.ContainerTypeOf(document.RecordType);
@@ -300,7 +299,7 @@ internal sealed class PluginIngest
         row.EndRow();
     }
 
-    // ADR-0005: the worldspace-tree side tables, from the rows the document pass derived.
+    // The worldspace-tree side tables (ADR-0011).
     private void WritePlacement(
         string plugin, string origin,
         List<PlacementRow> placementRows, List<CellLocationRow> cellLocationRows)
@@ -372,9 +371,7 @@ internal sealed class PluginIngest
         DuckDbSql.ExecuteFor(_connection,
             "DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2", plugin, origin);
 
-    // ADR-0012: scoped to (plugin, origin) together — reindexing one origin's plugin
-    // must never delete another origin's rows for the same filename. Every reindexed table
-    // goes through this.
+    // ADR-0012. Every reindexed table goes through this.
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin) =>
         DuckDbSql.ExecuteFor(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
 

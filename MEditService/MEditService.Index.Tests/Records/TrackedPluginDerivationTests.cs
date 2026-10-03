@@ -26,7 +26,7 @@ public sealed class TrackedPluginDerivationTests : IDisposable
         _mod = _fixture.Plugins.Single();
         _npc = npc.ToString();
         _index = Indexes.Open(_holder);
-        Reconcile();
+        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
     }
 
     public void Dispose()
@@ -35,20 +35,18 @@ public sealed class TrackedPluginDerivationTests : IDisposable
         _fixture.Dispose();
     }
 
-    private void Reconcile() =>
+    private void ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved() =>
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
     private bool ReadsAsTracked() => _index.RequireReads().GetTrackedPlugins().Contains(_mod.KeyOf());
 
-    // The snapshot is the one it already holds: nothing in the load order moved, only which truth
-    // the plugin's folder offers.
     [Fact]
     public void APluginTrackedAfterItWasIndexed_ReadsAsTracked_AfterTheNextSnapshot()
     {
         Assert.False(ReadsAsTracked());
         TrackedMods.Track(_mod, _fixture.GameDirectory);
 
-        Reconcile();
+        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
 
         Assert.True(ReadsAsTracked());
     }
@@ -57,11 +55,11 @@ public sealed class TrackedPluginDerivationTests : IDisposable
     public void ATrackedPluginWhoseRepositoryWentAway_ReadsAsUntracked_AfterTheNextSnapshot()
     {
         TrackedMods.Track(_mod, _fixture.GameDirectory);
-        Reconcile();
+        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
         Assert.True(ReadsAsTracked());
 
         Directory.Delete(Path.Combine(_mod.ModFolderOf(), ".git"), recursive: true);
-        Reconcile();
+        ReconcileTheSnapshotAlreadyHeldSinceOnlyThePluginsFolderMoved();
 
         Assert.False(ReadsAsTracked());
     }

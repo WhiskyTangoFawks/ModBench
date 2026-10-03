@@ -15,8 +15,8 @@ namespace MEditService.Codec.Serialization;
 /// <summary>A cell the mod holds, where its GRUP hierarchy puts it.</summary>
 internal readonly record struct HeldCell(CellStructure Structure, object Cell);
 
-/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The one place a
-/// getter becomes text, so every caller downstream of it holds documents.</summary>
+/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The
+/// one place a getter becomes text, so every caller downstream of it holds documents.</summary>
 public static class ModDocuments
 {
     /// <summary><paramref name="open"/> is disposed with the result, so a caller that opened the
@@ -121,8 +121,7 @@ internal sealed class MutagenModDocuments(
         }
     }
 
-    // Attached whether or not the codec read the record: a record the codec refuses still belongs
-    // somewhere and still holds what it holds (ADR-0005).
+    // Attached whether or not the codec read the record (ADR-0005).
     private PluginDocument WithGrupFacts(PluginDocument document, IMajorRecordGetter record) =>
         document with
         {
@@ -139,8 +138,8 @@ internal sealed class MutagenModDocuments(
         catch (Exception ex) when (ex is not OutOfMemoryException) { return null; }
     }
 
-    // ADR-0005: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no
-    // document carries. Reflects on Mutagen's property names, the same across every game.
+    // plugins.md, The tree, story 6: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords
+    // flattens away and no document carries. Reflects on Mutagen's property names, the same across every game.
     internal static Dictionary<string, HeldCell> CellsIn(IModGetter mod)
     {
         var cells = new Dictionary<string, HeldCell>(StringComparer.Ordinal);

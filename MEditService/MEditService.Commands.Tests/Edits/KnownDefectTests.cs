@@ -10,8 +10,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A member a KnownDefects row governs: the schema names it and says why it is read-only,
-/// and every path reaching it is refused by name rather than written.</summary>
 public sealed class KnownDefectTests : IDisposable
 {
     private readonly DocumentEditFixture _fixture = new();
@@ -27,7 +25,6 @@ public sealed class KnownDefectTests : IDisposable
         Scenes.RecordColumns.Single(c => c.Name == "Actions").Field.ElementSpec.Require().SubFields.Require()
             .Single(f => f.Name == "Type");
 
-    // A Scene has no file of its own; it exists only embedded in a Quest's document.
     private string OneSceneWithAnAction()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);

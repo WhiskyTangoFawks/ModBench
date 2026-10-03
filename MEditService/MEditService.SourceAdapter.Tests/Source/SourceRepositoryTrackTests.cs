@@ -4,16 +4,15 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Against a real git repo in a scratch mod folder, never a mocked git (ADR-0007).</summary>
 public sealed class SourceRepositoryTrackTests : IDisposable
 {
     private const string ModName = "SomeMod";
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-track-").FullName;
+    private readonly ScratchDirectory _root = new("medit-track-");
     private readonly string _modFolder;
 
     public SourceRepositoryTrackTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     [Fact]
     public void Track_CommitsEveryPristineFileToMain_WithItsExactBytes()

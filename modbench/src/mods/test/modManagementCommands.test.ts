@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, MarkdownString, uriFile } from '../../test/vscodeMock';
 
-// Narrow enough for what these tests read back off a call: the prompt text and its own
-// validateInput, the one seam a prompt-refusal test can reach without a real VS Code window.
-interface InputBoxOptionsDouble {
+interface InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   prompt?: string;
   value?: string;
   placeHolder?: string;
@@ -14,8 +12,8 @@ const { registerCommand, executeCommand, showOpenDialog, showInputBox, showQuick
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   executeCommand: vi.fn((_command: string, _uri?: { fsPath: string }) => Promise.resolve()),
   showOpenDialog: vi.fn(),
-  showInputBox: vi.fn<(options?: InputBoxOptionsDouble) => Promise<string | undefined>>(),
-  showQuickPick: vi.fn(),
+  showInputBox: vi.fn<(options?: InputBoxOptionsDoubleOfJustPromptAndValidateInput) => Promise<string | undefined>>(),
+  showQuickPick: vi.fn<(items: readonly { label: string }[]) => Promise<unknown>>(),
   openExternal: vi.fn(),
 }));
 
@@ -64,7 +62,6 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(call[1](...args));
 }
 
-// The access a gesture hands its command, so a test can see it arrive.
 const access = accessTo('/instance');
 const shapeMarks = {
   markMoved: vi.fn(), markRemoved: vi.fn(), markCreatedMod: vi.fn(), markAddedSeparator: vi.fn(), forgetUnconfirmedShape: vi.fn(),
@@ -78,8 +75,7 @@ describe('the sort direction', () => {
     .filter((c) => c[0] === 'setContext' && (c as unknown[])[1] === 'modbench.mod.winningAtTop')
     .map((c) => (c as unknown[])[2]);
 
-  // A context key outlives an extension host restart; the provider's direction does not.
-  it('starts losing at the top, and the title-bar icon agrees', () => {
+  it('starts losing at the top, and the title-bar icon agrees, since a context key outlives an extension host restart and the provider\'s direction does not', () => {
     const setViewDirection = vi.fn();
     registerModListCoreCommands({ setViewDirection });
 
@@ -122,9 +118,8 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
       registerCreateEmptyModCommand(accessTo(root), instance, recordingReporter(), shapeMarks);
       await invoke('modbench.mod.createEmpty');
 
-      const [options] = showInputBox.mock.calls[0] ?? [];
-      const validateInput = options?.validateInput;
-      if (!validateInput) throw new Error('expected validateInput on the input box options');
+      const [options] = present(showInputBox.mock.calls[0], 'the one showInputBox call');
+      const validateInput = present(options?.validateInput, 'validateInput on the input box options');
       expect(await validateInput('Harder VATS')).toMatch(/"Harder VATS" already exists/);
       expect(await validateInput('A New Name')).toBeUndefined();
     } finally {
@@ -159,8 +154,7 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
     }]);
   });
 
-  // Rival: the mod-order file's name spelled here, which names MO2's file over another manager's.
-  it('names the file mod order is kept in as the value names it', async () => {
+  it('names the file mod order is kept in as the value names it, not MO2\'s modlist.txt over another manager\'s', async () => {
     showInputBox.mockResolvedValueOnce('New Mod');
     createEmptyMod.mockResolvedValueOnce({ applied: true, wrote: false, lineRefusal: 'disk full' });
     const reporter = recordingReporter();
@@ -188,8 +182,6 @@ describe('modbench.mod.createEmpty: the prompt refuses in install\'s own words',
   });
 });
 
-
-// ADR-0019's dialog and reporting seams.
 describe('registerModContextCommands: modbench.mod.uninstall over the selection', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -338,7 +330,6 @@ describe('registerModContextCommands: modbench.mod.uninstall over the selection'
   });
 });
 
-// mods.md, Delete separator: one confirmation for the selection that says the mods stay.
 describe('modbench.separator.delete: the whole selection of separators, asked once', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -470,9 +461,7 @@ describe('modbench.separator.delete: the whole selection of separators, asked on
 
 const CLASH = 'A separator with this name already exists';
 
-// An instance whose folder for mods holds these folders, as another tool left them.
-// Its mod order lists `entries`, written through the adapter.
-async function instanceHolding(
+async function instanceWithFoldersLeftByAnotherToolAndModOrderListing(
   folders: readonly string[], entries: readonly { kind: 'mod' | 'separator'; name: string }[] = [],
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'mod-folders-'));
@@ -484,8 +473,7 @@ async function instanceHolding(
   return root;
 }
 
-// The prompt's own options off the one showInputBox call a gesture made.
-function promptOptions(): InputBoxOptionsDouble {
+function optionsOfTheOneShowInputBoxCall(): InputBoxOptionsDoubleOfJustPromptAndValidateInput {
   const [call] = showInputBox.mock.calls;
   return present(call?.[0], 'the options of the one prompt the gesture opened');
 }
@@ -513,21 +501,19 @@ describe('rename separator takes its separator through the gesture entry', () =>
     registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupA, groupB], separatorMarks);
     await invoke('modbench.separator.rename', groupB, [groupA, groupB]);
 
-    expect(promptOptions()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
+    expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ prompt: 'Rename separator', value: 'Group B' });
     expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
-  // MO2 keys separators by name without case (modinfo.cpp, FileNameComparator). Rival: an exact
-  // match, letting two separators share a folder, or refusing a case-only rename.
-  it('refuses in the prompt a name another separator\'s folder holds, and takes its own name or a mod\'s', async () => {
-    const root = await instanceHolding(['Group A_separator', 'Group B_separator', 'Mod A']);
+  it('refuses in the prompt a name another separator\'s folder holds, in any case (MO2 keys separators by name without case), and takes its own name or a mod\'s', async () => {
+    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Group A_separator', 'Group B_separator', 'Mod A']);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
       registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.rename', groupB);
 
-      const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
+      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
       expect(await validate('group a')).toBe(CLASH);
       expect(await validate('GROUP B')).toBeUndefined();
       expect(await validate('Mod A')).toBeUndefined();
@@ -536,8 +522,8 @@ describe('rename separator takes its separator through the gesture entry', () =>
     }
   });
 
-  it('refuses in the prompt a name a separator with no folder has, in any case, and takes its own', async () => {
-    const root = await instanceHolding([], [
+  it('refuses in the prompt a name a separator with no folder has, in any case, since a line in mod order is a separator whose folder may be gone, and takes its own', async () => {
+    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing([], [
       { kind: 'separator', name: 'Group A' }, { kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group B' },
     ]);
     try {
@@ -546,7 +532,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
       registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.rename', groupB);
 
-      const validate = present(promptOptions().validateInput, 'the rename prompt\'s validateInput');
+      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the rename prompt\'s validateInput');
       expect(await validate('group a')).toBe(CLASH);
       expect(await validate('GROUP B')).toBeUndefined();
       expect(await validate('Mod A')).toBeUndefined();
@@ -625,7 +611,7 @@ describe('rename separator takes its separator through the gesture entry', () =>
     registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [groupB], separatorMarks);
     await invoke('modbench.separator.rename', ...args);
 
-    expect(promptOptions()).toMatchObject({ value: 'Group B' });
+    expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ value: 'Group B' });
     expect(renameSeparator.mock.calls).toEqual([[access, 'Default', 'Group B', 'Renamed']]);
   });
 
@@ -658,19 +644,19 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     registerSeparatorCommands(access, instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [otherMod, modA], separatorMarks);
     await invoke('modbench.separator.add', modA, [otherMod, modA]);
 
-    expect(promptOptions()).toMatchObject({ prompt: 'Separator name', placeHolder: 'My Group' });
+    expect(optionsOfTheOneShowInputBoxCall()).toMatchObject({ prompt: 'Separator name', placeHolder: 'My Group' });
     expect(insertSeparator.mock.calls).toEqual([[access, 'Default', 'New Section', { kind: 'mod', name: 'Mod A' }]]);
   });
 
   it('refuses in the prompt a name another separator\'s folder holds, as MO2 would name it, and takes a mod\'s', async () => {
-    const root = await instanceHolding(['Group A_separator', 'Mod A']);
+    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing(['Group A_separator', 'Mod A']);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
       registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.add', modA);
 
-      const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
+      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
       expect(await validate('Group A')).toBe(CLASH);
       expect(await validate(' Group A. ')).toBe(CLASH);
       expect(await validate('Mod A')).toBeUndefined();
@@ -680,15 +666,15 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
     }
   });
 
-  it('refuses in the prompt a name a separator with no folder has, in any case', async () => {
-    const root = await instanceHolding([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
+  it('refuses in the prompt a name a separator with no folder has, in any case, since a line in mod order is a separator whose folder may be gone', async () => {
+    const root = await instanceWithFoldersLeftByAnotherToolAndModOrderListing([], [{ kind: 'mod', name: 'Mod A' }, { kind: 'separator', name: 'Group A' }]);
     try {
       showInputBox.mockResolvedValueOnce(undefined);
 
       registerSeparatorCommands(accessTo(root), instance, recordingReporter(), scriptedDialog(), vi.fn(), () => [], separatorMarks);
       await invoke('modbench.separator.add', modA);
 
-      const validate = present(promptOptions().validateInput, 'the add prompt\'s validateInput');
+      const validate = present(optionsOfTheOneShowInputBoxCall().validateInput, 'the add prompt\'s validateInput');
       expect(await validate('group a')).toBe(CLASH);
       expect(await validate('Mod A')).toBeUndefined();
     } finally {
@@ -755,8 +741,6 @@ describe('add separator: one command for a mod anchor and a separator anchor', (
   });
 });
 
-// Which command the menu offers, by row state, is package.json's own `when` clause (mods.md,
-// Menus and keys, story 3); these tests pin what each command does once invoked.
 describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one command per direction', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -877,9 +861,7 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
     }]);
   });
 
-  // A cause no mod can escape (an unreadable modlist.txt) refuses the whole selection once,
-  // before any write — the Core box's own `applied: false`, not a per-item SelectionOutcome.
-  it('reports a global refusal once, naming no mod, when the whole selection cannot proceed', async () => {
+  it('reports a global refusal once, naming no mod, when a cause no mod can escape, an unreadable modlist.txt, stops the whole selection before any write', async () => {
     setModsEnabled.mockResolvedValue({ applied: false, refusal: 'ENOENT: modlist.txt' });
     const reporter = recordingReporter();
 
@@ -895,7 +877,6 @@ describe('modbench.mod.enable / modbench.mod.disable: the whole selection, one c
 describe('modbench.mod.move: the selection of mods or of separators, to a picked place', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // modlist.txt order, winning first: Group A holds Mod A, Group B holds Mod B, Mod C is ungrouped.
   const instance = {
     value: instanceValueFixture({
       activeProfile: 'Default',
@@ -914,13 +895,11 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   const groupB = new SeparatorNode({ kind: 'separator', name: 'Group B', enabled: true }, []);
   const losingAtTop = { selection: () => [], direction: () => 'losingAtTop' as const };
   const pickedLabels = (): string[] => {
-    const items: unknown = showQuickPick.mock.calls[0]?.[0];
-    if (!Array.isArray(items)) return [];
-    return items.map((item: unknown) =>
-      (typeof item === 'object' && item !== null && 'label' in item ? String(item.label) : ''));
+    const [items] = present(showQuickPick.mock.calls[0], 'the one showQuickPick call');
+    return items.map((item) => item.label);
   };
   const pickLabelled = (label: string) => showQuickPick.mockImplementationOnce(
-    (items: { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
+    (items: readonly { label: string }[]) => Promise.resolve(items.find((i) => i.label === label)));
 
   it('right-clicked on a mod in a mixed selection, moves only the mods to the picked separator', async () => {
     pickLabelled('Group B');
@@ -1082,9 +1061,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     expect(revealed()).toEqual(['/instance/mods/My Mod']);
   });
 
-  // commands.md, A gone object is refused. Rival: returning in silence, which leaves the user
-  // clicking a menu item that does nothing.
-  it('refuses a mod no folder holds, naming it', async () => {
+  it('refuses a mod no folder holds, naming it, rather than returning in silence', async () => {
     const reporter = recordingReporter();
 
     registerOpenFolderCommand(instance, reporter, () => []);
@@ -1096,8 +1073,7 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     ]);
   });
 
-  // Rival: revealing an empty path while the value names no overwrite folder yet.
-  it('refuses the Overwrite row while the value names no folder for it', async () => {
+  it('refuses the Overwrite row while the value names no folder for it, rather than revealing an empty path', async () => {
     const reporter = recordingReporter();
     const unread = { value: instanceValueFixture({ paths: { ...instance.value.paths, overwriteDir: undefined } }) };
 
@@ -1117,11 +1093,10 @@ describe('open folder: one command for a mod and for the Overwrite row', () => {
     expect(revealed()).toEqual(['/instance/overwrite']);
   });
 
-  // commands.md, The surface supplies the Argument: a palette entry hands the gesture no row.
   it.each<[string, ModlistNode, string]>([
     ['mod', new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), '/instance/mods/My Mod'],
     ['Overwrite', new OverwriteNode(3, 'MO2'), '/instance/overwrite'],
-  ])('reveals the one selected %s row\'s folder from the palette', async (_kind, selected, folder) => {
+  ])('reveals the one selected %s row\'s folder from the palette, which hands the gesture no row', async (_kind, selected, folder) => {
     registerOpenFolderCommand(instance, recordingReporter(), () => [selected]);
     await invoke('modbench.mod.openFolder');
 
@@ -1156,7 +1131,6 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
 
   const instance = { value: instanceValueFixture({ nexusSlug: 'skyrimspecialedition' }) };
   const opened = (): string[] => openExternal.mock.calls.map((c) => String(c[0]));
-  // A downloaded file row adapts itself to the gesture's Argument; the row is Downloads' own.
   const downloadedFileRow = (nexusModId?: string): NexusModRow => ({ nexusModId });
 
   it('opens the mod\'s Nexus page from a mod row', async () => {
@@ -1208,9 +1182,7 @@ describe('view on Nexus: one command for a mod and for a downloaded file', () =>
   });
 });
 
-// mods.md, Menus and keys, story 5: copy value copies each selected mod's or separator's name,
-// one per line — Mods' own text for the catalog's one copy value id.
-describe('modsCopyValueText', () => {
+describe('modsCopyValueText, copying each selected mod\'s or separator\'s name, one per line', () => {
   const alpha = new ModNode({ kind: 'mod', name: 'Alpha', enabled: true });
   const groupA = new SeparatorNode({ kind: 'separator', name: 'Group A', enabled: true }, []);
   const beta = new ModNode({ kind: 'mod', name: 'Beta', enabled: true });
@@ -1260,7 +1232,7 @@ describe('modsCopyValueText', () => {
   });
 });
 
-describe('shape gestures mark what they change before the write (common.md, Unconfirmed writes, story 2)', () => {
+describe('shape gestures mark what they change before the write', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     for (const fn of Object.values(shapeMarks)) fn.mockReset();

@@ -28,9 +28,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private const string FilterHolders = "_filter_holders";
     private const string FilterMatches = "_filter";
 
-    // ADR-0007: the per-record source codec. Constructed rather than injected: it is stateless apart
-    // from static reflection caches, and every construction site would otherwise learn a dependency
-    // it has no say in.
+    // Constructed rather than injected: it is stateless apart from static reflection caches, and
+    // every construction site would otherwise learn a dependency it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     // Connection forwards to Store rather than being held here, so a rebuild that reassigns its
@@ -61,8 +60,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly TableDdlBuilder _ddlBuilder;
     private bool _recordTypeViewsCreated;
 
-    // ADR-0014: null in every test that does not care, so this stays additive over the 55 direct
-    // constructions across the suite.
+    // Null in every test that does not care.
     private readonly INotificationPublisher? _notifications;
 
     public DuckDbRecordIndex(
@@ -80,7 +78,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _store = new Store(logger, databasePath, timeProvider);
     }
 
-    // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0011).
+    // ADR-0011.
     internal void CreateRecordTypeViews()
     {
         if (_recordTypeViewsCreated) return;
@@ -145,8 +143,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
     public void Announce(Action publish) => _store.Announce(publish);
 
-    // ADR-0012: origin is threaded into every per-plugin delete/upsert/append so a plugin is
-    // identified by (origin, plugin) together, never filename alone.
+    // ADR-0012.
     private void Index(
         IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath,
         DerivedFrom derivedFrom)
@@ -296,8 +293,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0013: replaced whole, never diffed. Mod Management decided which plugins are
-    // active; nothing here re-asks it.
+    // Replaced whole, never diffed (ADR-0013).
     private void ReplaceActive(IReadOnlyList<RegisteredPlugin> active)
     {
         Execute($"DELETE FROM {TableDdlBuilder.ActiveRelation}");
@@ -319,7 +315,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
         // Effective, one relation: the header is an ordinary `records` row, swept here by
-        // construction. form_lookup gets no branch: ADR-0005 keeps one lookup row per Effective
+        // construction. form_lookup gets no branch: ingest keeps one lookup row per Effective
         // record row, so `records`' winners are form_lookup's.
         InsertWinners(RecordRef.Effective, "SELECT form_key, plugin, origin FROM mirror.records");
 
@@ -479,8 +475,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
-    // A file changing is its own event (ADR-0009), so the projection reads the plugin's
-    // rows whether it is active or not.
+    // The projection reads the plugin's rows whether it is active or not (ADR-0009).
     private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -580,8 +575,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
-    // ADR-0009's load-time check, asked of one plugin: the stored hash against the bytes on disk. A
-    // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
+    // ADR-0009, asked of one plugin. A binary has no smaller unit, so a mismatch is a
+    // rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(PluginAddress key)
     {
         // Nothing vouches for these rows (an in-memory mod, or a tracked plugin whose folder went
@@ -1113,9 +1108,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             using var connection = owner.OpenRead();
 
-            // ADR-0007: the placed ref's base form comes out of the document rather than a `base`
-            // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
-            // base reads NULL.
+            // ADR-0011: the placed ref's base form comes out of the document rather than a
+            // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
+            // with no base reads NULL.
             var typeList = string.Join(", ", cellChildTypes.Select(t => $"'{t}'"));
 
             using var cmd = connection.CreateCommand();
@@ -1123,7 +1118,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
                        json_extract_string(r.body, '$.Base'), r.parse_diagnosis IS NOT NULL, {FullNameOf("r")},
                        r.parse_diagnosis,
-                       -- ADR-0012: the reference's own plugin's copy of its base, else the winning copy.
+                       -- The base record's EditorID (plugins.md, Record). Its copy in the reference's own plugin, else the winning copy.
                        (SELECT b.editor_id FROM {records} b
                         WHERE b.form_key = json_extract_string(r.body, '$.Base')
                         ORDER BY (b.plugin = r.plugin AND b.origin = r.origin) DESC, b.is_winner DESC, b.plugin, b.origin
@@ -1202,9 +1197,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         private static string FullNameOf(string alias) =>
             $"NULLIF({TranslatedStringSql.Resolved($"{alias}.body", "$.Name")}, '')";
 
-        // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
-        // This builder doesn't enforce (origin, filename) identity itself; every live caller already passes both or
-        // neither.
+        // The callers hold ADR-0012, not this builder: RecordQueryService's
+        // RecordFilterGuard refuses a plugin without its origin, and every other caller passes both
+        // or neither.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, string? filterCondition = null, string? origin = null,
             IReadOnlyList<string>? recordTypes = null, string? groupCondition = null, string? searchFormKey = null)
@@ -1273,8 +1268,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         private static List<ReferenceRow> GetReferences(DuckDBConnection connection, string targetFormKey)
         {
-            // ADR-0007: WorkingTreeOverlay keeps form_references rewritten as the working tree
-            // changes, so this already sees every edit without applying anything itself.
+            // WorkingTreeOverlay keeps form_references rewritten as the working tree changes, so this
+            // already sees every edit without applying anything itself.
             const string sql = """
                 SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
                 FROM form_references fr
@@ -1301,7 +1296,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return results;
         }
 
-        // ── Worldspace tree reads (ADR-0005) ────────────────────────────────────────
+        // ── Worldspace tree reads (plugins.md, The tree, story 6) ───────────────────
 
         private static PlacementRow? GetPlacement(DuckDBConnection connection, string formKey, string plugin, string origin)
         {

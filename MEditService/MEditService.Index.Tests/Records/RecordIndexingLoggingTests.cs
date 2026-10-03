@@ -7,9 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Records;
 
-// A per-plugin summary line duplicates the progress milestone the reconcile logs at Info, so it
-// logs at Debug and per-record processing logs at Trace. Only log level and content are asserted
-// here; RecordReadsTests covers whether the rows land.
 public sealed class RecordIndexingLoggingTests : IDisposable
 {
     private readonly FormKey _npcFormKey;

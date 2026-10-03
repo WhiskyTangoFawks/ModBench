@@ -22,11 +22,8 @@ import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import type { DownloadFile, DownloadRow, InstanceValue } from '../../instanceLoader/instance';
 import { present } from '../../ports/present';
 
-// The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
-const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
+const rowNamesOfDownloadNodes = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
 
-// The Instance's own row: the two paths it carries are what a view opens, so the fixture names
-// them exactly as a recompute over `/instance` would.
 const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
   const base: DownloadRow = {
     name: 'foo.zip',
@@ -45,24 +42,20 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadFile => {
   };
 };
 
-// Only `.downloads` is ever read by the row provider — the rest of InstanceValue is other
-// views' territory this ticket does not touch.
 function valueOf(downloads: DownloadFile[]): InstanceValue {
   return instanceValueFixture({ downloads: { kind: 'listed', rows: downloads } });
 }
 
-// The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
-// compatible with `Instance` without ever constructing one (ADR-0015's watcher is Instance's
-// concern, not this provider's).
+const SEQUENCE_ALREADY_LOADED = 1;
+const SEQUENCE_NOT_READ_YET = 0;
+
 class FakeInstance {
   value: InstanceValue;
-  // Defaults to 1 ("already loaded") so every existing fixture-based test needs no opinion on
-  // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
   readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
   private failureListeners: (() => void)[] = [];
-  constructor(initial: InstanceValue, sequence = 1) {
+  constructor(initial: InstanceValue, sequence = SEQUENCE_ALREADY_LOADED) {
     this.value = initial;
     this.sequence = sequence;
   }
@@ -70,8 +63,6 @@ class FakeInstance {
     this.subscribers.push(subscriber);
     return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
   }
-  // Simulates a landed recompute: publishes to every live subscriber, the way Instance's own
-  // watcher-driven recompute does.
   publish(value: InstanceValue): void {
     this.value = value;
     this.readFailure = undefined;
@@ -82,22 +73,18 @@ class FakeInstance {
     this.failureListeners.push(listener);
     return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
   }
-  // Simulates a recompute that threw: the value and sequence stay put, and the reason is held.
   fail(reason: string): void {
     this.readFailure = reason;
     for (const listener of [...this.failureListeners]) listener();
   }
 }
 
-// A hang must fail on an explicit assertion, not the test runner's own timeout.
-const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+const explicitFailureIfNotSettledWithin = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
 ]);
 
-// Never created on disk. If DownloadsProvider ever fell back to its own scan, every test here
-// would see an empty/ENOENT result instead of the fixture rows below.
-const makeProvider = (
+const makeProviderOverRowsNeverOnDisk = (
   downloads: DownloadFile[],
   extra: Partial<{ instance: FakeInstance; log: (line: string) => void }> = {},
 ): DownloadsProvider => {
@@ -105,8 +92,6 @@ const makeProvider = (
   const options: DownloadsProviderOptions = { instance, log: extra.log ?? (() => undefined) };
   return new DownloadsProvider(options);
 };
-
-// ── DownloadNode field construction ─────────────────────────────────────────
 
 describe('DownloadNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
@@ -117,7 +102,7 @@ describe('DownloadNode', () => {
 
   it('is a flat leaf row (no children)', () => {
     const node = new DownloadNode(row());
-    expect(node.collapsibleState).toBe(0); // TreeItemCollapsibleState.None
+    expect(node.collapsibleState).toBe(TreeItemCollapsibleState.None);
   });
 
   describe('status icon + colour', () => {
@@ -206,130 +191,118 @@ describe('DownloadNode', () => {
     expect(new DownloadNode(r).row).toBe(r);
   });
 
-  // View on Nexus takes a mod row and a downloaded file row alike, each carrying its Nexus mod id.
   it('carries its sidecar\'s modID as the Nexus mod id view on Nexus opens, and none without one', () => {
     expect(new DownloadNode(row({ modID: '123' })).nexusModId).toBe('123');
     expect(new DownloadNode(row()).nexusModId).toBeUndefined();
   });
 });
 
-// ── DownloadsProvider — rows come from the Instance value ──────────────────
-
 describe('DownloadsProvider — rows come from the Instance value', () => {
   it('builds one node per Instance row, default-sorted filetime descending', async () => {
-    const provider = makeProvider([
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'old.zip', mtimeMs: 1000 }),
       row({ name: 'new.zip', mtimeMs: 2000 }),
     ]);
-    expect(rowNames(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['new.zip', 'old.zip']);
   });
 
   it('narrows to rows whose label contains the filter text, case-insensitively', async () => {
-    const provider = makeProvider([
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' }),
       row({ name: 'WeaponPack.zip', displayName: 'WeaponPack.zip' }),
     ]);
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack.zip']);
   });
 
-  // downloads.md, Order and view state, story 4, and common.md, The name filter, story 2: the
-  // filter matches the label. The file name below has no "armor" in it, so matching on `name`
-  // would drop this row.
-  it('narrows by the label, not the raw filename', async () => {
-    const provider = makeProvider([
+  it('narrows by the label, not the raw filename, which has no "armor" in it', async () => {
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'file-one.zip', displayName: 'Armor Pack' }),
       row({ name: 'file-two.zip', displayName: 'Weapon Pack' }),
     ]);
     await provider.getChildren();
     provider.setFilter('armor');
 
-    expect(rowNames(await provider.getChildren())).toEqual(['file-one.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['file-one.zip']);
   });
 
-  // The filter is render-only: it narrows already-built rows and never re-pulls the Instance
-  // value, so clearing it must show the stale cache, not a fresh read.
-  it('restores the cached rows when the filter is cleared, without re-pulling the Instance value', async () => {
+  it('restores the cached rows when the filter is cleared, showing the stale cache rather than re-pulling the Instance value', async () => {
     const instance = new FakeInstance(valueOf([
       row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' }),
       row({ name: 'WeaponPack.zip', displayName: 'WeaponPack.zip' }),
     ]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     await provider.getChildren();
     provider.setFilter('armor');
     await provider.getChildren();
 
-    instance.value = valueOf([row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' })]); // no publish(), no invalidate()
+    instance.value = valueOf([row({ name: 'ArmorPack.zip', displayName: 'ArmorPack.zip' })]);
     provider.setFilter('');
 
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
   });
 
   it('excludes excluded rows by default (Show excluded off)', async () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
-    expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('returns no children when the Instance value has no downloads', async () => {
-    const provider = makeProvider([]);
+    const provider = makeProviderOverRowsNeverOnDisk([]);
     expect(await provider.getChildren()).toEqual([]);
   });
 
   it('a non-root element (a download row) has no children of its own', async () => {
-    const provider = makeProvider([row({ name: 'foo.zip' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'foo.zip' })]);
     const [node] = await provider.getChildren();
     expect(await provider.getChildren(node)).toEqual([]);
   });
 });
 
-// downloads.md, "Which files are rows", story 2: only the files install can take are rows, by
-// install's own extension list.
 describe('DownloadsProvider — only the files install can take are rows', () => {
-  // The view's own filter, defense in depth beside buildDownloadRows already folding a sidecar
-  // into its file's row rather than giving it one of its own.
-  it('keeps the archive; a readme, a subfolder, an .unfinished file and a stray .meta are not rows', async () => {
-    const provider = makeProvider([
+  it('keeps the archive and drops a listed readme, subfolder, .unfinished file and stray .meta', async () => {
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'ArmorPack-1-0.zip' }),
       row({ name: 'ReadMe.txt' }),
-      row({ name: 'Textures' }), // a subfolder: no extension of its own
+      row({ name: 'Textures' }),
       row({ name: 'ArmorPack-1-0.rar.unfinished' }),
       row({ name: 'ArmorPack-1-0.zip.meta' }),
     ]);
-    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack-1-0.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack-1-0.zip']);
   });
 
   it('compares the extension case-insensitively', async () => {
-    const provider = makeProvider([row({ name: 'ArmorPack-1-0.ZIP' })]);
-    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack-1-0.ZIP']);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'ArmorPack-1-0.ZIP' })]);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['ArmorPack-1-0.ZIP']);
   });
 
   it('keeps every extension install can extract', async () => {
-    const provider = makeProvider([
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'a.zip' }), row({ name: 'b.7z' }), row({ name: 'c.rar' }),
     ]);
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.7z', 'c.rar'].sort());
+    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.7z', 'c.rar'].sort());
   });
 });
 
 describe('setShowExcluded', () => {
   it('includes excluded rows alongside visible ones when turned on', async () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['excluded.zip', 'visible.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['excluded.zip', 'visible.zip']);
   });
 
   it('excludes excluded rows again once turned back off', async () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
     await provider.getChildren();
     provider.setShowExcluded(false);
-    expect(rowNames(await provider.getChildren())).toEqual(['visible.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['visible.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
-    const provider = makeProvider([]);
+    const provider = makeProviderOverRowsNeverOnDisk([]);
     await provider.getChildren();
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
@@ -340,27 +313,25 @@ describe('setShowExcluded', () => {
 
 describe('setSort', () => {
   it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
-    const provider = makeProvider([
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'banana.zip', displayName: 'banana.zip' }),
       row({ name: 'apple.zip', displayName: 'apple.zip' }),
     ]);
     provider.setSort('name', false);
-    expect(rowNames(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['apple.zip', 'banana.zip']);
   });
 
-  // The file names sort opposite the labels, so a sort keyed on `name` instead of `displayName`
-  // returns the wrong order.
-  it('sorts by the label, not the raw filename', async () => {
-    const provider = makeProvider([
+  it('sorts by the label, not the raw filename, which sorts the opposite way', async () => {
+    const provider = makeProviderOverRowsNeverOnDisk([
       row({ name: 'z-file.zip', displayName: 'Apple' }),
       row({ name: 'a-file.zip', displayName: 'Banana' }),
     ]);
     provider.setSort('name', false);
-    expect(rowNames(await provider.getChildren())).toEqual(['z-file.zip', 'a-file.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['z-file.zip', 'a-file.zip']);
   });
 
   it('re-renders: fires onDidChangeTreeData', async () => {
-    const provider = makeProvider([]);
+    const provider = makeProviderOverRowsNeverOnDisk([]);
     await provider.getChildren();
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
@@ -369,62 +340,58 @@ describe('setSort', () => {
   });
 });
 
-// downloads.md, Order and view state, story 2: "The pick marks the current sort." The sort
-// command reads this to pre-select its active item.
 describe('currentSort', () => {
   it('starts at the spec default: Filetime, descending', () => {
-    expect(makeProvider([]).currentSort()).toEqual({ column: 'mtimeMs', descending: true });
+    expect(makeProviderOverRowsNeverOnDisk([]).currentSort()).toEqual({ column: 'mtimeMs', descending: true });
   });
 
   it('reflects the last setSort call', () => {
-    const provider = makeProvider([]);
+    const provider = makeProviderOverRowsNeverOnDisk([]);
     provider.setSort('name', false);
     expect(provider.currentSort()).toEqual({ column: 'name', descending: false });
   });
 });
 
-// downloads.md, States, story 2: distinct from "no downloads yet" — files exist, but every one
-// is currently hidden by Show excluded being off.
-describe('allExcluded', () => {
+describe('allExcluded, distinct from no downloads: files exist but every one is hidden by Show excluded being off', () => {
   it('is false with no downloads at all', () => {
-    expect(makeProvider([]).allExcluded()).toBe(false);
+    expect(makeProviderOverRowsNeverOnDisk([]).allExcluded()).toBe(false);
   });
 
   it('is false when at least one row is not excluded', () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     expect(provider.allExcluded()).toBe(false);
   });
 
   it('is true when every row is excluded and Show excluded is off', () => {
-    const provider = makeProvider([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
     expect(provider.allExcluded()).toBe(true);
   });
 
   it('is false once Show excluded is turned on, even with every row excluded', () => {
-    const provider = makeProvider([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.zip', excluded: true }), row({ name: 'b.zip', excluded: true })]);
     provider.setShowExcluded(true);
     expect(provider.allExcluded()).toBe(false);
   });
 
   it('ignores a non-archive file when deciding whether every archive is excluded', () => {
-    const provider = makeProvider([row({ name: 'readme.txt', excluded: false })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'readme.txt', excluded: false })]);
     expect(provider.allExcluded()).toBe(false);
   });
 });
 
 describe('excludedNames', () => {
   it('is empty before any render', () => {
-    expect(makeProvider([]).excludedNames()).toEqual(new Set());
+    expect(makeProviderOverRowsNeverOnDisk([]).excludedNames()).toEqual(new Set());
   });
 
   it('is empty while Show excluded is off, even with excluded rows in the value', async () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true })]);
     await provider.getChildren();
     expect(provider.excludedNames()).toEqual(new Set());
   });
 
   it('lists excluded row names once Show excluded is on and the tree has rendered', async () => {
-    const provider = makeProvider([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'excluded.zip', excluded: true }), row({ name: 'visible.zip' })]);
     provider.setShowExcluded(true);
     await provider.getChildren();
     expect(provider.excludedNames()).toEqual(new Set(['excluded.zip']));
@@ -434,25 +401,23 @@ describe('excludedNames', () => {
 describe('invalidate', () => {
   it('clears the cache, re-pulls the current Instance value, and fires onDidChangeTreeData', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'old.zip' })]));
-    const provider = makeProvider([], { instance });
-    expect(rowNames(await provider.getChildren())).toEqual(['old.zip']);
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['old.zip']);
 
-    instance.value = valueOf([row({ name: 'old.zip' }), row({ name: 'new.zip' })]); // no publish()
+    instance.value = valueOf([row({ name: 'old.zip' }), row({ name: 'new.zip' })]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.invalidate();
 
     expect(fired).toBe(true);
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['new.zip', 'old.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['new.zip', 'old.zip']);
   });
 });
-
-// ── DownloadsProvider — the Instance is the only way in ────────────────────
 
 describe('DownloadsProvider — reacts to the Instance, never scans on its own', () => {
   it('says it shows the last good read, with the reason, when a later read fails, and not once a read lands', () => {
     const instance = new FakeInstance(valueOf([]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     const fired: unknown[] = [];
     provider.onDidChangeTreeData((e) => fired.push(e));
 
@@ -464,8 +429,6 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     expect(provider.viewMessage()).toBeUndefined();
   });
 
-  // The empty value before the first read is "not read yet", never "no downloads": a render asked
-  // for before the read, and awaited after it, shows the rows that read lands.
   it('renders no rows before the first read, and the read\'s rows once it lands', async () => {
     await withUnreadCorpusInstance(async (instance) => {
       const provider = new DownloadsProvider({ instance, log: () => undefined });
@@ -473,20 +436,18 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
       const pending = provider.getChildren();
       await instance.refresh();
 
-      expect(rowNames(await pending)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
+      expect(rowNamesOfDownloadNodes(await pending)).toEqual(['Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z']);
       provider.dispose();
     });
   });
 
-  // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever (ADR-0019).
-  it('settles a failed first read on the one error row naming the reason, then renders rows when a value lands', async () => {
-    const instance = new FakeInstance(valueOf([]), 0);
-    const provider = makeProvider([], { instance });
+  it('settles a failed first read, rather than spinning forever, on the one error row naming the reason, then renders rows when a value lands', async () => {
+    const instance = new FakeInstance(valueOf([]), SEQUENCE_NOT_READ_YET);
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
 
     const pending = provider.getChildren();
     instance.fail('ENOENT: no such file or directory, open modlist.txt');
-    const rows = await within(pending, 500);
+    const rows = await explicitFailureIfNotSettledWithin(pending, 500);
 
     expect(rows).toHaveLength(1);
     const error = expectInstanceOf(rows[0], ErrorNode);
@@ -495,68 +456,62 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     expect(error.iconPath).toEqual(new ThemeIcon('error'));
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
-    const after = await within(provider.getChildren(), 500);
+    const after = await explicitFailureIfNotSettledWithin(provider.getChildren(), 500);
 
-    expect(rowNames(after)).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadNodes(after)).toEqual(['a.zip']);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {
-    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 1) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance: new FakeInstance(valueOf([]), 1) });
     expect(await provider.getChildren()).toEqual([]);
   });
 
-  // Guards against a provider that subscribes but drops the callback: a first-render-only
-  // assertion would pass that rival, so this renders once, waits a macrotask past a second
-  // landed value, and only then re-reads.
-  it('re-renders when the Instance publishes a new landed value, past a macrotask boundary', async () => {
+  it('re-renders when the Instance publishes a new landed value, read again a macrotask after the publish', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-    const provider = makeProvider([], { instance });
-    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
 
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNames(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren()).sort()).toEqual(['a.zip', 'b.zip']);
   });
 
   it('dispose() disposes the Instance subscription: a publish afterward leaves the cache untouched', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     await provider.getChildren();
 
     provider.dispose();
     instance.publish(valueOf([row({ name: 'a.zip' }), row({ name: 'b.zip' })]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 
   it('a file appearing on disk changes nothing until the Instance publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
     try {
       const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-      const provider = makeProvider([], { instance });
-      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+      const provider = makeProviderOverRowsNeverOnDisk([], { instance });
+      expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
 
-      await writeFile(join(root, 'b.zip'), 'data'); // never reaches the Instance in this test
+      await writeFile(join(root, 'b.zip'), 'data');
 
-      expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+      expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 });
 
-// A folder Modbench cannot resolve is not the folder MO2 names (downloads.md, Which files are
-// rows, story 1): the shared "Failed to load:" state (common.md, States, story 2), scoped to this
-// view alone.
-describe('DownloadsProvider — the configured downloads folder could not be resolved', () => {
+describe('DownloadsProvider — a configured downloads folder Modbench cannot resolve shows the "Failed to load:" state', () => {
   const REASON = 'download_directory "D:\\Games\\downloads" could not be resolved: '
     + "Cannot translate Wine drive letter 'D:' in 'D:\\Games\\downloads': only Z: and C: are translated";
   const unresolvedValue = () => instanceValueFixture({ downloads: { kind: 'unresolved', reason: REASON } });
 
   it('renders one error row naming the reason, even though the instance read itself landed', async () => {
-    const provider = makeProvider([], { instance: new FakeInstance(unresolvedValue(), 1) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance: new FakeInstance(unresolvedValue(), 1) });
 
     const rows = await provider.getChildren();
 
@@ -566,12 +521,10 @@ describe('DownloadsProvider — the configured downloads folder could not be res
     expect(error.tooltip).toBe(REASON);
   });
 
-  // Rival: the row provider falling back to whatever rows happened to be cached or the value
-  // otherwise carries, rather than the dedicated unresolved state.
-  it('never renders a download row while unresolved, whatever rows a stale cache might hold', async () => {
+  it('renders only the error row while unresolved, not the a.zip row a stale cache holds', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.zip' })]));
-    const provider = makeProvider([], { instance });
-    await provider.getChildren(); // caches the 'a.zip' row
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
+    await provider.getChildren();
 
     instance.publish(unresolvedValue());
     const rows = await provider.getChildren();
@@ -581,18 +534,18 @@ describe('DownloadsProvider — the configured downloads folder could not be res
   });
 
   it('allExcluded is false while unresolved — there are no rows to be all-excluded', () => {
-    const provider = makeProvider([], { instance: new FakeInstance(unresolvedValue(), 1) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance: new FakeInstance(unresolvedValue(), 1) });
     expect(provider.allExcluded()).toBe(false);
   });
 
   it('renders rows again once a later recompute resolves the folder', async () => {
     const instance = new FakeInstance(unresolvedValue(), 1);
-    const provider = makeProvider([], { instance });
-    expect(await provider.getChildren()).toHaveLength(1); // the error row
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
+    expect(await provider.getChildren()).toHaveLength(1);
 
     instance.publish(valueOf([row({ name: 'a.zip' })]));
 
-    expect(rowNames(await provider.getChildren())).toEqual(['a.zip']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['a.zip']);
   });
 });
 
@@ -605,7 +558,7 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
   const spinning = (node: DownloadNode) => node.iconPath instanceof ThemeIcon && node.iconPath.id === 'sync~spin';
 
   it('keeps an excluded row in a list that hides excluded rows, showing its new state at once, and marks it after a delay', async () => {
-    const provider = makeProvider([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
 
     provider.markUnconfirmed('a.7z', true);
 
@@ -626,19 +579,19 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
   it('the row leaves the list once the disk confirms the exclusion, silently', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
     const logged: string[] = [];
-    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmed('a.7z', true);
     vi.advanceTimersByTime(1000);
 
     instance.publish(valueOf([row({ name: 'a.7z', excluded: true }), row({ name: 'b.7z' })]));
 
-    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['b.7z']);
     expect(logged).toEqual([]);
   });
 
   it('keeps the row and the mark through a pre-write value, and the row leaves on the confirming one', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     provider.markUnconfirmed('a.7z', true);
     vi.advanceTimersByTime(1000);
 
@@ -652,7 +605,7 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
   it('shows the disk\'s value and logs one line once a second landed value still differs', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
     const logged: string[] = [];
-    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmed('a.7z', true);
     vi.advanceTimersByTime(1000);
 
@@ -667,7 +620,7 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
 
   it('stays while the disk cannot be read', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     provider.markUnconfirmed('a.7z', true);
     vi.advanceTimersByTime(1000);
 
@@ -677,7 +630,7 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
   });
 
   it('an include shows the row not excluded, marked, while show excluded is on', async () => {
-    const provider = makeProvider([row({ name: 'a.7z', excluded: true })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.7z', excluded: true })]);
     provider.setShowExcluded(true);
 
     provider.markUnconfirmed('a.7z', false);
@@ -690,7 +643,7 @@ describe('DownloadsProvider — an unconfirmed exclude or include (common.md, Un
   });
 
   it('a write forgotten shows the disk\'s value at once, with no mark', async () => {
-    const provider = makeProvider([row({ name: 'a.7z' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.7z' })]);
     provider.markUnconfirmed('a.7z', true);
 
     provider.forgetUnconfirmed('a.7z');
@@ -709,7 +662,7 @@ describe('DownloadsProvider — a file that vanishes while its write is unconfir
   it('keeps the mark through one landed value without it, then logs one line', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
     const logged: string[] = [];
-    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmed('a.7z', true);
     vi.advanceTimersByTime(1000);
 
@@ -718,7 +671,7 @@ describe('DownloadsProvider — a file that vanishes while its write is unconfir
     instance.publish(valueOf([row({ name: 'b.7z' })]));
 
     expect(logged).toEqual(['"a.7z" was written excluded, and it is gone from the disk.']);
-    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['b.7z']);
   });
 });
 
@@ -731,7 +684,7 @@ describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed wr
   const spinning = (node: DownloadNode) => node.iconPath instanceof ThemeIcon && node.iconPath.id === 'sync~spin';
 
   it('keeps the row where it is, and marks it only after a delay', async () => {
-    const provider = makeProvider([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.7z' }), row({ name: 'b.7z' })]);
 
     provider.markUnconfirmedDelete('a.7z');
     const [first, second] = await rows(provider);
@@ -748,7 +701,7 @@ describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed wr
   it('the row leaves once the disk omits it, silently, and keeps the mark through a value that lists it', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' }), row({ name: 'b.7z' })]));
     const logged: string[] = [];
-    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmedDelete('a.7z');
     vi.advanceTimersByTime(1000);
 
@@ -756,14 +709,14 @@ describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed wr
     expect(spinning(present((await rows(provider))[0], 'a.7z'))).toBe(true);
 
     instance.publish(valueOf([row({ name: 'b.7z' })]));
-    expect(rowNames(await provider.getChildren())).toEqual(['b.7z']);
+    expect(rowNamesOfDownloadNodes(await provider.getChildren())).toEqual(['b.7z']);
     expect(logged).toEqual([]);
   });
 
   it('shows the disk\'s row unmarked and logs one line once a second landed value still lists it', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
     const logged: string[] = [];
-    const provider = makeProvider([], { instance, log: (line) => logged.push(line) });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance, log: (line) => logged.push(line) });
     provider.markUnconfirmedDelete('a.7z');
     vi.advanceTimersByTime(1000);
 
@@ -776,7 +729,7 @@ describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed wr
 
   it('stays while the disk cannot be read', async () => {
     const instance = new FakeInstance(valueOf([row({ name: 'a.7z' })]));
-    const provider = makeProvider([], { instance });
+    const provider = makeProviderOverRowsNeverOnDisk([], { instance });
     provider.markUnconfirmedDelete('a.7z');
     vi.advanceTimersByTime(1000);
 
@@ -786,7 +739,7 @@ describe('DownloadsProvider — an unconfirmed delete (common.md, Unconfirmed wr
   });
 
   it('a delete forgotten never shows the mark', async () => {
-    const provider = makeProvider([row({ name: 'a.7z' })]);
+    const provider = makeProviderOverRowsNeverOnDisk([row({ name: 'a.7z' })]);
     provider.markUnconfirmedDelete('a.7z');
 
     provider.forgetUnconfirmedDelete('a.7z');

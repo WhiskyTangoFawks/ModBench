@@ -9,19 +9,14 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Records;
 
-// ADR-0009: registration is visibility. A plugin the snapshot stops naming keeps its rows and
-// answers nothing anywhere; naming it again makes them answer with no re-read.
 public class RegistrationScopingTests
 {
     private static readonly PluginAddress AlphaKey = new("Alpha.esp", "ModA");
     private static readonly PluginAddress BetaKey = new("Beta.esp", "ModB");
 
-    // Every kind of row the index extracts, so every read path has something to not answer with. Beta
-    // additionally overrides Alpha's Npc, so the override stack and the contested-FormKey read have a
-    // Beta entry to lose.
-    private sealed class Fixture : IDisposable
+    private sealed class FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc : IDisposable
     {
-        public Fixture(string prefix)
+        public FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc(string prefix)
         {
             string sharedNpcFk = "";
             (string, string, string, string, string, string, string) betaKeys = ("", "", "", "", "", "", "");
@@ -43,11 +38,10 @@ public class RegistrationScopingTests
             Index = Indexes.Open(Holder, Opens);
             Index.Reconcile(Holder, Plugins.GameDirectory, Plugins.Plugins, GameRelease.Fallout4);
 
-            // +1 for the plugin header's own document: it is not an IMajorRecordGetter, so
-            // EnumerateMajorRecords cannot count it. This is a row count, not a record count.
             using var beta = Fallout4Mod.CreateFromBinaryOverlay(
                 Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path, Fallout4Release.Fallout4);
-            BetaRowCount = beta.EnumerateMajorRecords().Count() + 1;
+            const int theHeaderDocumentEnumerateMajorRecordsCannotCountBecauseItIsNotAMajorRecordGetter = 1;
+            BetaRowCount = beta.EnumerateMajorRecords().Count() + theHeaderDocumentEnumerateMajorRecordsCannotCountBecauseItIsNotAMajorRecordGetter;
         }
 
         public ScatteredFixtureData Plugins { get; }
@@ -114,7 +108,7 @@ public class RegistrationScopingTests
             placed.FormKey.ToString(), quest.FormKey.ToString(), topic.FormKey.ToString());
     }
 
-    private static Fixture Build(string prefix) => new(prefix);
+    private static FixtureWithEveryKindOfExtractedRowAndBetaOverridingAlphasNpc Build(string prefix) => new(prefix);
 
     [Fact]
     public void Unregister_LeavesRowsInPlace_AndNoReadAnswersForThePlugin()
@@ -122,7 +116,6 @@ public class RegistrationScopingTests
         using var fx = Build("registration-unregister");
         var reads = fx.Reads;
 
-        // Premise: registered, everything answers — otherwise the emptiness below proves nothing.
         Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
         var initialSharedStack = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(initialSharedStack);
@@ -131,11 +124,8 @@ public class RegistrationScopingTests
         Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
 
-        // Unregistered, not unindexed: Register_AfterUnregister_AnswersAgainWithoutReindex is the
-        // rows' own witness.
         fx.Reconcile(fx.WithoutBeta);
 
-        // Documents.
         Assert.Null(reads.GetDocument(fx.BetaNpcFk));
         Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
         Assert.Empty(reads.GetDocuments(BetaKey));
@@ -149,13 +139,11 @@ public class RegistrationScopingTests
         Assert.NotNull(sharedDocument);
         Assert.Equal(AlphaKey.Name, sharedDocument.Plugin.Name);
 
-        // Listings and counts.
         Assert.Empty(reads.Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
         Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
         Assert.Empty(reads.GetNativeFormKeys(BetaKey));
 
-        // Extracted tables.
         Assert.Null(reads.Resolve(fx.BetaNpcFk));
         Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
         Assert.Empty(reads.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
@@ -168,9 +156,9 @@ public class RegistrationScopingTests
         Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
         Assert.Null(reads.GetContainerParent(BetaKey, fx.BetaTopicFk));
 
-        // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either. The
-        // shared NPC's FormKey sits in both plugins, so a leaked Beta row would surface Alpha's copy.
-        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'", "filter.sql");
+        var filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy =
+            $"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'";
+        fx.Index.SetFilter(filterNamingBetaWhereTheSharedNpcFormKeySitsInBothPluginsSoALeakedRowWouldSurfaceAlphasCopy, "filter.sql");
         Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
         Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
         fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'", "filter.sql");
@@ -178,7 +166,6 @@ public class RegistrationScopingTests
         Assert.Contains(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
         fx.Index.ClearFilter();
 
-        // Alpha, still registered, is untouched by its neighbour's unregistration.
         Assert.NotEmpty(reads.GetDocuments(AlphaKey));
         Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
     }
@@ -207,8 +194,6 @@ public class RegistrationScopingTests
         Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }
 
-    // The SQL door reads the same relations: a filter naming any of them meets none of Beta's rows.
-    // Each relation is proved to hold a Beta row before Beta stops being active.
     [Fact]
     public void APluginThatIsNotActive_IsInNoRelationTheSqlDoorReads()
     {
@@ -229,9 +214,8 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.WithBetaDisabled);
 
         Assert.All(relations, relation => Assert.False(HoldsBeta(relation), relation));
-        // Beta is untracked, so it has no committed copy to lose; the mirror holds every plugin's
-        // rows, and the door refuses it.
-        Assert.False(HoldsBeta("records_committed"));
+        const string recordsCommittedWhichBetaNeverHeldBecauseItIsUntracked = "records_committed";
+        Assert.False(HoldsBeta(recordsCommittedWhichBetaNeverHeldBecauseItIsUntracked));
         Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records WHERE plugin = '{BetaKey.Name}'"));
         Assert.False(fx.Index.Accepts($"SELECT form_key FROM mirror.records_committed WHERE plugin = '{BetaKey.Name}'"));
     }
@@ -262,10 +246,8 @@ public class RegistrationScopingTests
         Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }
 
-    // Unindex is the file-gone verb: the inverse of indexing, rows and registration alike, so the
-    // plugin's return is a fresh read of the binary.
     [Fact]
-    public async Task Unindex_RemovesTheRowsThemselves()
+    public async Task AFileThatWentAway_ReadsNothing_AndItsReturnWithNewBytesIsOpenedOnce()
     {
         using var fx = Build("registration-unindex");
         var betaPath = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path;

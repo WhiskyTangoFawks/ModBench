@@ -9,8 +9,6 @@ import type { GameFolder, InstanceAdapter } from '../../instanceAdapter/instance
 import { GAME_FOLDER_NOT_FOUND } from '../../test/mo2/gameFolderNotFound';
 
 vi.mock('vscode', () => fakeVscodeModule());
-// Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
-// chmod-based permission denial is silently bypassed when the runner is root.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, readdir: vi.fn(actual.readdir) };
@@ -32,7 +30,6 @@ const DATA_FOLDER = '/game/Data';
 
 type ResolveGameFolder = () => Promise<GameFolder>;
 
-// The Instance adapter's own answer is doubled: where the game is is its question, not the Instance's.
 const resolvesDataFolder: ResolveGameFolder = () =>
   Promise.resolve({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
 const resolvesNotFound: ResolveGameFolder = () => Promise.resolve(GAME_FOLDER_NOT_FOUND);
@@ -41,7 +38,6 @@ interface Hooks {
   resolveGameFolder?: ResolveGameFolder;
 }
 
-// Counts the adapter's reads of the settings, the one read a recompute starts from.
 function countingSettings(adapter: InstanceAdapter, reads: { count: number }): InstanceAdapter {
   return { ...adapter, settings: () => { reads.count++; return adapter.settings(); } };
 }
@@ -73,8 +69,6 @@ function realInstance(hooks: Hooks = {}): {
   };
 }
 
-// The adapter's signal and the window's state, fired by the test: the watch behind the signal is
-// the adapter's, and its own suite tests it. The window starts focused.
 function signalledInstance(): {
   instance: Instance; signal: () => void; windowState: (state: WindowState) => void;
   listeners: ReadonlySet<unknown>; windowListeners: ReadonlySet<unknown>;
@@ -114,7 +108,6 @@ function signalledInstance(): {
   };
 }
 
-// VS Code's window state: `active` moves when a focused window goes idle or comes back from idle.
 interface WindowState {
   focused: boolean;
   active: boolean;
@@ -129,8 +122,6 @@ async function writeModFile(root: string, modName: string, relativePath: string,
   return path;
 }
 
-// How a test learns a recompute landed: no sleep and no poll — the value that arrives past
-// `sequence`, or the current one when it is already past.
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
   if (instance.sequence > sequence) return Promise.resolve(instance.value);
   return new Promise((resolve) => {
@@ -142,22 +133,15 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
   });
 }
 
-// The first read has the adapter follow the downloads folder, which signals once for the gap before
-// its watch can fire; a refresh absorbs that armed read, so none lands behind a later step, however
-// slowly that step runs.
-async function readToRest(instance: Instance): Promise<void> {
+async function readUntilNoArmedReadIsLeft(instance: Instance): Promise<void> {
   await instance.refresh();
   await instance.refresh();
 }
 
-// The Instance's settle waits run on a fake clock the test advances, while setImmediate stays
-// real, so the file system still answers and a test can yield to it.
-const fakeSettleClock = (): void => {
+const fakeSettleClockLeavingSetImmediateReal = (): void => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 };
 
-// Yields until a settle wait is armed on the fake clock: the read has reached it, whatever the
-// machine's load. A read that never reaches one fails here, not in the runner's timeout.
 const SETTLE_WAIT_DEADLINE_MS = 5_000;
 
 async function settleWaitArmed(): Promise<void> {
@@ -170,7 +154,6 @@ async function settleWaitArmed(): Promise<void> {
 
 const TIMED_OUT = Symbol('timed out waiting for a recompute');
 
-// A missing trigger must fail on an explicit assertion, not the test runner's own timeout.
 function pastSequenceWithin(instance: Instance, sequence: number, ms: number): Promise<InstanceValue | typeof TIMED_OUT> {
   return Promise.race([
     pastSequence(instance, sequence),
@@ -184,7 +167,6 @@ const watcherFor = (glob: string): FakeWatcher => {
   return present(found[0], `the sole watcher for ${glob}`);
 };
 
-// MO2, xEdit or the user rewriting a file's bytes, with Modbench none the wiser.
 async function rewriteOutsideModbench(path: string, from: string, to: string): Promise<void> {
   const text = await readFile(path, 'utf8');
   expect(text).toContain(from);
@@ -196,9 +178,7 @@ const enableHarderVatsOutsideModbench = (root: string): Promise<void> =>
 
 const isEnabled = (value: InstanceValue, name: string) => value.mods.find((m) => m.name === name)?.enabled;
 
-// Every existing test builds a real, resolvable instance root, so its downloads are always
-// listed; only the dedicated unresolved tests above name that kind directly.
-const downloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
+const listedDownloadsOf = (value: InstanceValue) => (value.downloads.kind === 'listed' ? value.downloads.rows : []);
 
 describe('Instance — the value', () => {
   it('starts empty at sequence 0, before anything has been read', () => {
@@ -242,12 +222,9 @@ describe('Instance — the value', () => {
       version: '2.1.5.0',
       archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
     });
-    // "Harder VATS" ships modid=0 with blank version/installationFile.
     expect(byName.get('Harder VATS')).toEqual({ kind: 'mod', name: 'Harder VATS', enabled: false });
   });
 
-  // A real mod folder can share a separator's bare display name; the separator entry must never
-  // pick up that folder's meta.ini fields.
   it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
     const { root, instance } = realInstance();
     await writeModFile(root, 'Unassigned (Modlist Development)', 'meta.ini', '[General]\r\nmodid=555\r\nversion=9.9.9\r\n');
@@ -258,9 +235,7 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
-  // mods.md, Mod menu: track is offered on a mod with no repository, which only the mod's folder
-  // says (ADR-0007).
-  it('carries each mod whose folder holds a repository as tracked, and no other', async () => {
+  it('carries each mod whose folder holds a repository as tracked, and no other, the mod\'s folder alone saying whether track is offered', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'mods', 'Harder VATS', '.git'), { recursive: true });
 
@@ -269,9 +244,7 @@ describe('Instance — the value', () => {
     expect([...instance.value.trackedMods]).toEqual(['Harder VATS']);
   });
 
-  // The Mods tree renders `mods` alone, so a folder with no line reaches the value on a field
-  // of its own or mod sync never hears of it.
-  it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod', async () => {
+  it('carries a folder under mods with no line for the active profile as a mod folder, never as a mod, so mod sync hears of it though the Mods tree renders `mods` alone', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
 
@@ -281,9 +254,7 @@ describe('Instance — the value', () => {
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
   });
 
-  // MO2 lists a linked mod folder as a mod (modinfo.cpp, QDir::Dirs without NoSymLinks). Rival: only
-  // a real directory counts, so mod sync never hears of a symlinked mod.
-  it('carries a mod folder that is a link to a folder, and not a link to a file', async () => {
+  it('carries a mod folder that is a link to a folder, as MO2 lists it (modinfo.cpp, QDir::Dirs without NoSymLinks), and not a link to a file', async () => {
     const { root, instance } = realInstance();
     const target = await mkdtemp(join(tmpdir(), 'linked-mod-'));
     try {
@@ -300,9 +271,7 @@ describe('Instance — the value', () => {
     }
   });
 
-  // MO2 skips a link it cannot follow. Rivals: failing the whole recompute on it, which stalls the
-  // instance; or a line per recompute, which every watched change would repeat.
-  it('skips a mod folder link whose target cannot be checked, and tells it once', async () => {
+  it('skips a mod folder link whose target cannot be checked as MO2 does, without failing the recompute, and tells it once rather than on every watched change', async () => {
     const { root, instance, logs, readFailureLines } = realInstance();
     await mkdir(join(root, 'mods', 'Real Mod'));
     await symlink(join(root, 'mods', 'Loop'), join(root, 'mods', 'Loop'));
@@ -316,9 +285,7 @@ describe('Instance — the value', () => {
     expect(logs.filter((line) => line.includes('Loop'))).toHaveLength(1);
   });
 
-  // Only a directory can be a mod folder: a stray archive or Thumbs.db dropped into mods/ must
-  // never earn a modlist line.
-  it('never carries a stray file directly under mods as a mod folder', async () => {
+  it('never carries a stray file such as Thumbs.db directly under mods as a mod folder, only a directory being one', async () => {
     const { root, instance } = realInstance();
     await writeFile(join(root, 'mods', 'Thumbs.db'), '');
 
@@ -338,7 +305,6 @@ describe('Instance — the value', () => {
     const entry = instance.value.files.get('textures/shared.dds');
     expect(entry?.winner).toBe(winner);
     expect(entry?.winnerMod).toBe(NONO);
-    // "Harder VATS" is disabled, so it is not even a contender.
     expect(entry?.providers).toEqual([NONO, 'Unofficial Fallout 4 Patch']);
     expect(instance.value.filesByMod.get('Harder VATS')).toBeUndefined();
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
@@ -358,7 +324,7 @@ describe('Instance — the value', () => {
     ]);
   });
 
-  it('carries a disabled mod\'s own plugin, with no slot, not enabled, not winning', async () => {
+  it('carries a disabled mod\'s own plugin, with no slot, not enabled, not winning, so the snapshot names plugins of disabled mods too', async () => {
     const { root, instance } = realInstance();
     const path = await writeModFile(root, 'Harder VATS', 'Harder VATS.esp', 'disabled mod plugin');
 
@@ -440,33 +406,30 @@ describe('Instance — built by watching', () => {
     expect([listeners.size, windowListeners.size]).toEqual([0, 0]);
   });
 
-  it('recomputes once for a burst of the adapter\'s signals', async () => {
+  it('recomputes once for a burst of the adapter\'s signals, a per-signal recompute landing five more', async () => {
     const { instance, signal } = signalledInstance();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClock();
+    fakeSettleClockLeavingSetImmediateReal();
     try {
       for (let i = 0; i < 6; i++) signal();
       await vi.advanceTimersByTimeAsync(1000);
     } finally {
       vi.useRealTimers();
     }
-    // Chains behind anything the burst still had queued, so a per-signal recompute would be
-    // counted here rather than landing after the assertion.
     await instance.refresh();
 
-    // The burst's one recompute, plus this refresh — a per-signal recompute would land five more.
-    expect(instance.sequence).toBe(before + 2);
+    const oneRecomputeForTheBurstAndOneForThisRefresh = 2;
+    expect(instance.sequence).toBe(before + oneRecomputeForTheBurstAndOneForThisRefresh);
   });
 
-  // ADR-0015: focus is the one signal no watcher can lose.
-  it('recomputes when the window regains focus, and not when it loses it', async () => {
+  it('recomputes when the window regains focus, and not when it loses it, focus being the one signal no watcher can lose', async () => {
     const { instance, windowState } = signalledInstance();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClock();
+    fakeSettleClockLeavingSetImmediateReal();
     try {
       windowState({ focused: false, active: false });
       await vi.advanceTimersByTimeAsync(1000);
@@ -482,12 +445,12 @@ describe('Instance — built by watching', () => {
     }
   });
 
-  it('recomputes nothing while the window keeps its focus', async () => {
+  it('recomputes nothing while the window keeps its focus, `active` moving as VS Code reports a focused window going idle or coming back from idle', async () => {
     const { instance, windowState } = signalledInstance();
     await instance.refresh();
     const before = instance.sequence;
 
-    fakeSettleClock();
+    fakeSettleClockLeavingSetImmediateReal();
     try {
       windowState({ focused: true, active: false });
       windowState({ focused: true, active: true });
@@ -500,24 +463,24 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(before + 1);
   });
 
-  it('settles the window regaining focus with the adapter\'s signals, into one recompute', async () => {
+  it('settles the window regaining focus with the adapter\'s signals, into one recompute, the focus restarting the settle the signal began', async () => {
     const { instance, signal, windowState } = signalledInstance();
     await instance.refresh();
     windowState({ focused: false, active: false });
     const before = instance.sequence;
 
-    fakeSettleClock();
+    const msWhereTheSignalsOwnSettleHasRunOut = 150;
+    fakeSettleClockLeavingSetImmediateReal();
     try {
       signal();
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
       windowState({ focused: true, active: true });
-      await vi.advanceTimersByTimeAsync(150); // the signal's own settle has run out here
+      await vi.advanceTimersByTimeAsync(msWhereTheSignalsOwnSettleHasRunOut);
       await instance.refresh();
     } finally {
       vi.useRealTimers();
     }
 
-    // The focus restarted the settle, so this refresh is the burst's one recompute.
     expect(instance.sequence).toBe(before + 1);
   });
 
@@ -526,11 +489,12 @@ describe('Instance — built by watching', () => {
     await instance.refresh();
     const before = instance.sequence;
 
+    const msWhereAWaitLeftArmedWouldFire = 1000;
     vi.useFakeTimers();
     try {
       signal();
       await instance.refresh();
-      await vi.advanceTimersByTimeAsync(1000); // a wait left armed would fire here
+      await vi.advanceTimersByTimeAsync(msWhereAWaitLeftArmedWouldFire);
     } finally {
       vi.useRealTimers();
     }
@@ -539,14 +503,11 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(before + 2);
   });
 
-  // A watcher just bound is not yet armed at the OS level; a file landing in that gap fires no
-  // watcher event (never fired here) — only the adapter's signal on following the folder can
-  // catch it.
-  it('catches a file written in the gap before the just-bound downloads watcher can arm', async () => {
+  it('catches a file written in the gap before the just-bound downloads watcher can arm, which fires no watcher event, only the adapter\'s signal on following the folder catching it', async () => {
     const { root, instance } = realInstance();
-    fakeSettleClock();
+    fakeSettleClockLeavingSetImmediateReal();
     try {
-      await instance.refresh(); // the adapter follows the downloads folder for the first time
+      await instance.refresh();
       const before = instance.sequence;
 
       await writeFile(join(root, 'downloads', 'RaceCondition.7z'), 'bytes');
@@ -560,9 +521,7 @@ describe('Instance — built by watching', () => {
     }
   });
 
-  // An untranslatable download_directory must not fail the whole recompute — Mods and Plugins do
-  // not depend on downloads/, so a folder Modbench cannot resolve loses only the downloads rows.
-  it('lands mods and plugins even when download_directory names an untranslatable drive letter', async () => {
+  it('lands mods and plugins even when download_directory names an untranslatable drive letter, losing only the downloads rows', async () => {
     const { root, instance } = realInstance();
     await instance.refresh();
     const before = instance.sequence;
@@ -580,14 +539,12 @@ describe('Instance — built by watching', () => {
     expect(instance.value.downloads.reason).toMatch(/download_directory/);
   });
 
-  // Rival: falling back to the default downloads/ folder's own contents, which downloads.md,
-  // story 1 forbids — nothing there may leak into rows, or be watched, while unresolved.
-  it('lists and watches nothing from the default downloads/ folder while download_directory is unresolved', async () => {
+  it('lists, watches and exposes as paths.downloadsDir nothing from the default downloads/ folder while download_directory is unresolved, which downloads.md story 1 forbids', async () => {
     const { root, instance } = realInstance();
     await mkdir(join(root, 'downloads'), { recursive: true });
     await writeFile(join(root, 'downloads', 'RealArchive.7z'), 'bytes');
     await instance.refresh();
-    expect(downloadsOf(instance.value)).toContainEqual(expect.objectContaining({ name: 'RealArchive.7z' }));
+    expect(listedDownloadsOf(instance.value)).toContainEqual(expect.objectContaining({ name: 'RealArchive.7z' }));
     const iniPath = join(root, 'ModOrganizer.ini');
     const originalIni = await readFile(iniPath, 'utf8');
 
@@ -596,14 +553,12 @@ describe('Instance — built by watching', () => {
 
     expect(instance.value.downloads).toMatchObject({ kind: 'unresolved' });
     expect(watchers.filter((w) => w.base === join(root, 'downloads') && !w.disposed)).toHaveLength(0);
-    // paths.downloadsDir reaches uninstall, install and the Explorer dimming independently of
-    // the Downloads view's own rows, so it must carry no default-folder guess either.
     expect(instance.value.paths.downloadsDir).toBeUndefined();
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
     const before = instance.sequence;
 
@@ -619,11 +574,11 @@ describe('Instance — built by watching', () => {
 describe('Instance — a value that survives a bad read', () => {
   it('keeps the previous value and logs when a file is half-written', async () => {
     const { root, instance, readFailureLines } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
 
-    await writeFile(join(root, 'ModOrganizer.ini'), ''); // MO2 mid-rewrite
+    await writeFile(join(root, 'ModOrganizer.ini'), '');
     await instance.refresh();
 
     expect(instance.value).toBe(value);
@@ -634,12 +589,12 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
     const { root, instance, readFailureLines } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
 
     await rm(join(root, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
-    await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini')); // present but unreadable (EISDIR)
+    await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini'));
     await instance.refresh();
 
     expect(instance.value).toBe(value);
@@ -647,12 +602,12 @@ describe('Instance — a value that survives a bad read', () => {
     expect(readFailureLines).toHaveLength(1);
   });
 
-  it('keeps the value when a folder inside overwrite/ is unreadable — never silently a smaller count', async () => {
+  it('keeps the value when a folder inside overwrite/ is unreadable, simulated through a mocked readdir as chmod denial is bypassed when the runner is root — never silently a smaller count', async () => {
     const { root, instance, readFailureLines } = realInstance();
     const nested = join(root, 'overwrite', 'SKSE');
     await mkdir(nested, { recursive: true });
     await writeFile(join(nested, 'skse.log'), '');
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
 
@@ -672,13 +627,11 @@ describe('Instance — a value that survives a bad read', () => {
     expect(readFailureLines).toHaveLength(1);
   });
 
-  // The failure a tree hears about before anything has landed, so its first render can settle on
-  // an error node instead of a spinner that never ends (ADR-0019).
-  it('reports a failed first read to failure subscribers, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
+  it('reports a failed first read to failure subscribers, so a tree can settle on an error node instead of a spinner that never ends, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
     const { root, instance } = realInstance();
     const ini = join(root, 'ModOrganizer.ini');
     const complete = await readFile(ini, 'utf8');
-    await writeFile(ini, ''); // unreadable before anything has landed
+    await writeFile(ini, '');
     const failures: (string | undefined)[] = [];
     const landed: number[] = [];
     instance.onReadFailure(() => failures.push(instance.readFailure));
@@ -700,8 +653,7 @@ describe('Instance — a value that survives a bad read', () => {
     expect(failures).toHaveLength(1);
   });
 
-  // A gesture that asked for the read reports on that read, never an earlier one's failure.
-  it('answers a refresh with its own read\'s failure, and with none once that read lands', async () => {
+  it('answers a refresh with its own read\'s failure, never an earlier one\'s, and with none once that read lands', async () => {
     const { root, instance } = realInstance();
     const ini = join(root, 'ModOrganizer.ini');
     const complete = await readFile(ini, 'utf8');
@@ -719,7 +671,7 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('reports a failure after a value has landed, keeping that value', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
     const failures: (string | undefined)[] = [];
@@ -734,18 +686,17 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.readFailure).toBe(failures[0]);
   });
 
-  it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
+  it('keeps the mods when modlist.txt reads as empty mid-write, waiting to re-read before believing it, and logs', async () => {
     const { root, instance, logs } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.value.mods;
     const path = join(root, DEFAULT_MODLIST);
     const complete = await readFile(path, 'utf8');
 
-    fakeSettleClock();
+    fakeSettleClockLeavingSetImmediateReal();
     try {
-      await writeFile(path, ''); // MO2 has truncated the file and not yet written it
+      await writeFile(path, '');
       const recompute = instance.refresh();
-      // The first read has seen the truncation and waits to re-read before believing it.
       await settleWaitArmed();
       await writeFile(path, complete);
       await vi.advanceTimersByTimeAsync(1000);
@@ -760,10 +711,10 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
 
-    await writeFile(join(root, DEFAULT_MODLIST), ''); // every mod really is gone
+    await writeFile(join(root, DEFAULT_MODLIST), '');
     await instance.refresh();
 
     expect(instance.value.mods).toEqual([]);
@@ -788,11 +739,11 @@ describe('Instance — a value that survives a bad read', () => {
 
   it('corrects the value on refresh after a watcher event that never arrived', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
 
     await enableHarderVatsOutsideModbench(root);
-    expect(isEnabled(instance.value, 'Harder VATS')).toBe(false); // the event was suppressed
+    expect(isEnabled(instance.value, 'Harder VATS')).toBe(false);
 
     await instance.refresh();
 
@@ -811,7 +762,7 @@ describe('Instance — downloads, profile and game directory', () => {
 
     await instance.refresh();
 
-    expect(downloadsOf(instance.value)).toContainEqual(
+    expect(listedDownloadsOf(instance.value)).toContainEqual(
       expect.objectContaining({
         name: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
         status: 'Installed',
@@ -825,12 +776,10 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
   });
 
-  // The fixture's sidecar claims `installed=true`, and only the Unofficial Patch mod's own
-  // meta.ini makes that claim true. Rival: reading Status off the sidecar alone.
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
     const { root, instance } = realInstance();
     const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
-    const statusOf = () => downloadsOf(instance.value).find((d) => d.name === archive)?.status;
+    const statusOf = () => listedDownloadsOf(instance.value).find((d) => d.name === archive)?.status;
     await instance.refresh();
     expect(statusOf()).toBe('Installed');
 
@@ -850,19 +799,17 @@ describe('Instance — downloads, profile and game directory', () => {
 
     expect(instance.value.mods.map((m) => m.name)).not.toContain('Off Profile Mod');
     expect(instance.value.modFolders?.map((f) => f.name)).toContain('Off Profile Mod');
-    const download = downloadsOf(instance.value).find((d) => d.name === 'Off-Profile-1.7z');
+    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Off-Profile-1.7z');
     expect(download?.status).toBe('Installed');
   });
 
-  // Same rule as the active-profile "Harder VATS" case above: only ENOENT reads as empty, so an
-  // off-profile folder's own unreadable meta.ini still fails the whole recompute.
-  it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable', async () => {
+  it('keeps the value when an off-profile mod\'s meta.ini is present but unreadable, only ENOENT reading as empty', async () => {
     const { root, instance, readFailureLines } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
 
-    await mkdir(join(root, 'mods', 'Off Profile Mod', 'meta.ini'), { recursive: true }); // present but unreadable (EISDIR)
+    await mkdir(join(root, 'mods', 'Off Profile Mod', 'meta.ini'), { recursive: true });
     await instance.refresh();
 
     expect(instance.value).toBe(value);
@@ -881,11 +828,9 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.activeProfile).toBe('Secondary');
   });
 
-  // A switch rewrites ModOrganizer.ini and nothing else, so without a watcher on that file the
-  // value keeps naming the old profile until some unrelated file happens to change.
-  it('follows a profile switch on its own watcher, with no refresh asked for', async () => {
+  it('follows a profile switch on its own watcher, with no refresh asked for, as a switch rewrites only ModOrganizer.ini', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
 
     await switchToSecondaryOutsideModbench(root);
@@ -896,12 +841,10 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.activeProfile).toBe('Secondary');
   });
 
-  // The empty value already has empty `downloads`, so the assertion alone cannot tell a
-  // tolerated absence from a swallowed throw — the sequence bump proves the recompute landed.
   it('yields a value with no downloads, rather than a failure, when downloads/ is absent', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
-    expect(downloadsOf(instance.value).length).toBeGreaterThan(0); // the fixture starts with one
+    await readUntilNoArmedReadIsLeft(instance);
+    expect(listedDownloadsOf(instance.value).length).toBeGreaterThan(0);
     const before = instance.sequence;
 
     await rm(join(root, 'downloads'), { recursive: true, force: true });
@@ -911,11 +854,9 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.downloads).toEqual({ kind: 'listed', rows: [] });
   });
 
-  // A workspace before its first install has no mods/, and the sequence bump proves the
-  // recompute landed. Absent is not empty: mod sync would drop every line against an empty list.
-  it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent', async () => {
+  it('yields a value whose mod folders are unknown, rather than a failure, when mods/ is absent, as absent is not empty and mod sync would drop every line against an empty list', async () => {
     const { root, instance } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     expect(instance.value.modFolders?.length).toBeGreaterThan(0);
     const before = instance.sequence;
 
@@ -926,8 +867,6 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.modFolders).toBeUndefined();
   });
 
-  // The empty value already reads as not found, so a prior found refresh plus the sequence bump
-  // prove a landed value rather than a swallowed failure.
   it('lands a value carrying the game folder not found, with each place looked, rather than a failure', async () => {
     const { instance, setResolver, readFailureLines } = realInstance();
     await instance.refresh();
@@ -944,11 +883,9 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.mods.length).toBeGreaterThan(0);
   });
 
-  // Rival: a configuration naming no game read as the game folder not found, which a missing
-  // gameName also leaves Steam nothing to go on for.
-  it('fails the read, keeping the last value, when the configuration names no game', async () => {
+  it('fails the read, keeping the last value, when the configuration names no game, rather than reading as the game folder not found', async () => {
     const { root, instance, readFailureLines } = realInstance();
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const before = instance.sequence;
     const ini = join(root, 'ModOrganizer.ini');
     await writeFile(ini, (await readFile(ini, 'utf8')).replace(/gameName=.*\r?\n/, ''));
@@ -960,15 +897,10 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(readFailureLines).toHaveLength(1);
   });
 
-  // A mod- or overwrite-provided row keeps its real path; a listed name only Data/ could provide
-  // still gets a row — existence, slot and enabled come from plugins.txt alone — with `path:
-  // undefined` rather than a guess or a drop.
-  it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only', async () => {
+  it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only with no path rather than a guess or a drop, a mod-provided row keeping its real path', async () => {
     const { instance, setResolver } = realInstance();
     await instance.refresh();
     const withGameDirectory = instance.value.plugins;
-    // Sanity: the fixture has at least one Data-folder-only listed plugin today, so its path is
-    // resolved through the game directory this test is about to take away.
     const dataOnlyBefore = withGameDirectory.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
     expect(dataOnlyBefore?.origin).toBe('Data');
     expect(dataOnlyBefore?.path).toEqual(expect.any(String));
@@ -979,13 +911,13 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
 
     const modProvided = instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp');
-    expect(modProvided).toEqual(modProvidedBefore); // unaffected — a mod winner needs no game directory
+    expect(modProvided).toEqual(modProvidedBefore);
     const dataOnly = instance.value.plugins.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
-    expect(dataOnly).toBeDefined(); // the row survives — this is the bug this test guards
+    expect(dataOnly).toBeDefined();
     expect(dataOnly?.slot).toBe(dataOnlyBefore?.slot);
     expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
     expect(dataOnly?.origin).toBe('Data');
-    expect(dataOnly?.path).toBeUndefined(); // no Data/ to resolve it against — not a guess
+    expect(dataOnly?.path).toBeUndefined();
   });
 
   it('recomputes with the game directory the resolver now answers, yielding a new value and sequence', async () => {
@@ -1001,9 +933,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.gameFolder).toEqual({ kind: 'found', root: explicitDir, dataFolder: join(explicitDir, 'Data') });
   });
 
-  // Rival: a recompute reading the settings again for the game or the downloads, landing one value
-  // built from two reads.
-  it('reads the settings once per recompute', async () => {
+  it('reads the settings once per recompute, landing one value built from one read rather than from two', async () => {
     const { instance, settingsReads } = realInstance();
 
     await instance.refresh();
@@ -1011,8 +941,6 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(settingsReads.count).toBe(1);
   });
 
-  // Rival: re-reading the ini for the game release, landing one value holding two generations
-  // of the file. The resolver fires mid-recompute, after the read this value is built from.
   it('builds one value from one generation of the ini, even when it is rewritten mid-recompute', async () => {
     const { root, instance, setResolver } = realInstance();
     await instance.refresh();
@@ -1027,7 +955,6 @@ describe('Instance — downloads, profile and game directory', () => {
     await instance.refresh();
 
     expect(instance.value.gameName).toBe(beforeName);
-    // Positive control: the rewrite is real, and the next recompute does read it.
     setResolver(resolvesNotFound);
     await instance.refresh();
     expect(instance.value.gameName).toBe('Rewritten Mid Recompute');
@@ -1043,13 +970,12 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(paths.downloadsDir).toBe(join(root, 'downloads'));
     const first = present(mods.find((m) => m.kind === 'mod'), 'the fixture\'s first mod');
     expect(paths.modDirs.get(first.name)).toBe(join(root, 'mods', first.name));
-    // The fixture lists "[NODELETE] Radfall" with no folder under mods/.
-    expect(paths.modDirs.has('[NODELETE] Radfall')).toBe(false);
+    const modListedWithNoFolderUnderMods = '[NODELETE] Radfall';
+    expect(paths.modDirs.has(modListedWithNoFolderUnderMods)).toBe(false);
     expect(paths.modDirs.size).toBe(mods.filter((m) => m.kind === 'mod').length - 1);
   });
 
-  // Rival: names the value spells itself, which names one manager over any other's instance.
-  it('names the mod manager and its mod-order file as the adapter does, before the first read too', () => {
+  it('names the mod manager and its mod-order file as the adapter does rather than as the value spells them, before the first read too', () => {
     const adapter = { ...adapterOver('/an/instance', { gameFolder: resolvesNotFound }), names: { manager: 'Another Manager', modOrderFile: 'order.txt' } };
     const instance = new Instance({ window: STEADY_WINDOW, adapter, log: () => {}, logReadFailure: () => {} });
     instances.push(instance);
@@ -1057,9 +983,7 @@ describe('Instance — downloads, profile and game directory', () => {
     expect(instance.value.managerNames).toEqual({ manager: 'Another Manager', modOrderFile: 'order.txt' });
   });
 
-  // Rival: a path the Instance joins itself, where the adapter alone knows where the instance
-  // keeps its folders.
-  it('names no folder before the first read lands', () => {
+  it('names no folder before the first read lands, the adapter alone knowing where the instance keeps its folders', () => {
     const instance = new Instance({
       window: STEADY_WINDOW,
       adapter: adapterOver('/an/instance', { gameFolder: resolvesNotFound }),
@@ -1072,9 +996,7 @@ describe('Instance — downloads, profile and game directory', () => {
   });
 });
 
-// A bespoke minimal instance (not the corpus clone), so a mod's declared masters are exactly
-// what the test wrote — real xEdit-produced corpus bytes carry unknown master lists of their own.
-async function minimalInstance(): Promise<{
+async function minimalInstanceWithoutCorpusMasters(): Promise<{
   root: string; instance: Instance; logs: string[]; readFailureLines: string[];
   setResolver: (resolve: ResolveGameFolder) => void;
 }> {
@@ -1100,7 +1022,7 @@ async function minimalInstance(): Promise<{
 
 describe('Instance — per-mod status and the overwrite count', () => {
   it('carries the overwrite/ folder\'s file count, recursive', async () => {
-    const { root, instance } = await minimalInstance();
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await instance.refresh();
     expect(instance.value.overwriteFileCount).toBe(0);
 
@@ -1112,24 +1034,20 @@ describe('Instance — per-mod status and the overwrite count', () => {
   });
 });
 
-// A profile listing no mod folder isolates the mods/ listing: nothing else in the recompute
-// opens a path under it, so only its own failure can fail the read.
-describe('Instance — listing mods/', () => {
+describe('Instance — listing mods/, on a profile listing no mod folder so only its own failure can fail the read', () => {
   const separatorOnly = async (root: string): Promise<void> => {
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '-Section_separator\n');
   };
 
-  // Only ENOENT is "no mods/ yet". A listing that fails for any other reason must not read as
-  // "every folder has its line": the value stands until a read succeeds (ADR-0015).
-  it('keeps the value when mods/ is present but cannot be listed', async () => {
-    const { root, instance, readFailureLines } = await minimalInstance();
+  it('keeps the value when mods/ is present but cannot be listed, as only ENOENT is "no mods/ yet" and any other failure must not read as every folder having its line', async () => {
+    const { root, instance, readFailureLines } = await minimalInstanceWithoutCorpusMasters();
     await separatorOnly(root);
-    await readToRest(instance);
+    await readUntilNoArmedReadIsLeft(instance);
     const value = instance.value;
     const before = instance.sequence;
 
     await rm(join(root, 'mods'), { recursive: true, force: true });
-    await writeFile(join(root, 'mods'), 'not a directory'); // present but unlistable (ENOTDIR)
+    await writeFile(join(root, 'mods'), 'not a directory');
     await instance.refresh();
 
     expect(instance.value).toBe(value);
@@ -1138,9 +1056,8 @@ describe('Instance — listing mods/', () => {
     expect(readFailureLines).toHaveLength(1);
   });
 
-  // The other half, on the same isolated tree: ENOENT alone is tolerated, and the value lands.
-  it('lands a value whose mod folders are unknown when mods/ is absent entirely', async () => {
-    const { root, instance } = await minimalInstance();
+  it('lands a value whose mod folders are unknown when mods/ is absent entirely, ENOENT alone being tolerated', async () => {
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await separatorOnly(root);
     await rm(join(root, 'mods'), { recursive: true, force: true });
 
@@ -1162,7 +1079,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('names every folder under mods/, listed or not', async () => {
-    const { root, instance } = await minimalInstance();
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await mkdir(join(root, 'mods', 'Unlisted Folder'), { recursive: true });
 
     await instance.refresh();
@@ -1170,10 +1087,8 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(present(instance.value.modFolders, 'the listed mods/ folders').map((f) => f.name).sort()).toEqual(['Consumer', 'Unlisted Folder']);
   });
 
-  // Rival: a listed mod matched to its folder by exact name, where the mod manager matches names
-  // by its own rule.
-  it('carries the folder of a listed mod whose line names it in another case', async () => {
-    const { root, instance } = await minimalInstance();
+  it('carries the folder of a listed mod whose line names it in another case, as the mod manager matches names by its own rule rather than by exact name', async () => {
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+consumer\n');
 
     await instance.refresh();
@@ -1182,7 +1097,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it("carries the game Data folder's root plugins, case-folded, and nothing below it", async () => {
-    const { root, instance, setResolver } = await minimalInstance();
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const dataFolder = join(root, 'Game', 'Data');
     await mkdir(join(dataFolder, 'Textures'), { recursive: true });
     await writeFile(join(dataFolder, 'Fallout4.ESM'), '');
@@ -1198,10 +1113,8 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect([...(listed.kind === 'listed' ? listed.names : [])].sort()).toEqual(['fallout4.esm']);
   });
 
-  // A folder nobody could read is its own answer, not an empty one: pruning plugins.txt against
-  // an empty set would delete every line, and the command refuses on this instead.
-  it('tells an unresolved game directory from a folder that resolved and could not be read', async () => {
-    const { instance, logs, setResolver } = await minimalInstance();
+  it('tells an unresolved game directory from a folder that resolved and could not be read, an unreadable folder not being an empty set that would prune every plugins.txt line', async () => {
+    const { instance, logs, setResolver } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
     expect(instance.value.dataFolderPlugins).toEqual({ kind: 'unresolved' });
@@ -1214,8 +1127,8 @@ describe('Instance — what a command is handed instead of probing for it', () =
     expect(logs.filter((m) => m.includes('Data folder could not be listed'))).toHaveLength(1);
   });
 
-  it('carries the plugins the game loads with no line: its masters, then its Creation Club plugins', async () => {
-    const { root, instance, setResolver } = await minimalInstance();
+  it('carries the plugins the game loads with no line: its masters from the per-release table, then its Creation Club plugins from the game folder\'s list, each only where the game can load it from', async () => {
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const gameRoot = join(root, 'Game');
     const dataFolder = join(gameRoot, 'Data');
     await mkdir(dataFolder, { recursive: true });
@@ -1230,7 +1143,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('carries a game master an enabled mod provides where the game folder holds none', async () => {
-    const { root, instance, setResolver } = await minimalInstance();
+    const { root, instance, setResolver } = await minimalInstanceWithoutCorpusMasters();
     const dataFolder = join(root, 'Game', 'Data');
     await mkdir(dataFolder, { recursive: true });
     await writeFile(join(root, 'mods', 'Consumer', 'DLCCoast.esm'), '');
@@ -1242,7 +1155,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
   });
 
   it('carries no answer while the game folder is not found', async () => {
-    const { instance } = await minimalInstance();
+    const { instance } = await minimalInstanceWithoutCorpusMasters();
 
     await instance.refresh();
 
@@ -1252,7 +1165,7 @@ describe('Instance — what a command is handed instead of probing for it', () =
 
 describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
   it('carries a download row\'s fileID from its sidecar and a mod\'s installedFiles pairs from meta.ini', async () => {
-    const { root, instance } = await minimalInstance();
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await mkdir(join(root, 'downloads'), { recursive: true });
     await writeFile(join(root, 'downloads', 'Consumer-1-2-3.7z'), 'archive bytes');
     await writeFile(
@@ -1266,7 +1179,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
 
     await instance.refresh();
 
-    const download = downloadsOf(instance.value).find((d) => d.name === 'Consumer-1-2-3.7z');
+    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Consumer-1-2-3.7z');
     expect(download?.fileID).toBe('2000');
 
     const mod = instance.value.mods.find((m) => m.name === 'Consumer');
@@ -1274,7 +1187,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
   });
 
   it('carries no fileID on a download row whose sidecar has none, and no installedFiles on a mod with no meta.ini section', async () => {
-    const { root, instance } = await minimalInstance();
+    const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await mkdir(join(root, 'downloads'), { recursive: true });
     await writeFile(join(root, 'downloads', 'Plain-1.7z'), 'archive bytes');
     await writeFile(join(root, 'downloads', 'Plain-1.7z.meta'), '[General]\r\nmodID=1000\r\n');
@@ -1282,7 +1195,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
 
     await instance.refresh();
 
-    const download = downloadsOf(instance.value).find((d) => d.name === 'Plain-1.7z');
+    const download = listedDownloadsOf(instance.value).find((d) => d.name === 'Plain-1.7z');
     expect(download?.fileID).toBeUndefined();
 
     const mod = instance.value.mods.find((m) => m.name === 'Consumer');

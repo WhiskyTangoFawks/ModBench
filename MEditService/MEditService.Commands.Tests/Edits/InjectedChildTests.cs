@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Track and Compile of each plugin land only that plugin's own children in its own
-/// compiled binary; the merged cross-plugin winner view belongs to the Index and Queries.</summary>
 public sealed class InjectedChildTests : IDisposable
 {
     public static TheoryData<string> Injections =>
@@ -28,7 +26,7 @@ public sealed class InjectedChildTests : IDisposable
     private const string InjectorPluginName = "InjectionInjector.esp";
     private const string InjectorOrigin = "InjectionInjectorMod";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-injection-instance-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-injection-instance-");
     private readonly string _baseModFolder;
     private readonly string _injectorModFolder;
     private readonly string _gameDirectory;
@@ -64,7 +62,6 @@ public sealed class InjectedChildTests : IDisposable
 
         var injectorPath = Path.Combine(_injectorModFolder, InjectorPluginName);
         var injectorMod = new Fallout4Mod(ModKey.FromFileName(InjectorPluginName), Fallout4Release.Fallout4);
-        // The override carries the base's own FormKey (ADR-0008: masters are lifecycle-derived).
         var questOverride = new Quest(_quest, Fallout4Release.Fallout4) { EditorID = "BaseQuest" };
         var topicOverride = new DialogTopic(_baseTopic, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
         var injectedResponse = new DialogResponses(injectorMod) { EditorID = "InjectedResponse" };
@@ -135,15 +132,9 @@ public sealed class InjectedChildTests : IDisposable
             new ModPath(ModKey.FromFileName(plugin.Name), Path.Combine(modFolder, plugin.Name)), GameRelease.Fallout4);
     }
 
-    // Mutagen's own descent, so a case is a container FormKey and a child FormKey and nothing else.
     private static IEnumerable<FormKey> ChildrenOf(IModGetter mod, FormKey container) =>
         mod.EnumerateMajorRecords().Single(r => r.FormKey == container)
             .EnumerateMajorRecords().Select(r => r.FormKey);
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 }

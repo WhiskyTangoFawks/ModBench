@@ -54,8 +54,7 @@ internal sealed record SchemaAnnotations(
     // Shapes the walk reaches and could present, but nobody has decided a presentation for, by CLR
     // name (a generic by its definition's). Each reason says what a future ticket would decide.
     Dictionary<string, string> RefusedShapes,
-    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0018). A label,
-    // never a value: the document is the model, so nothing here changes what is written.
+    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0005).
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, string>> EnumMemberLabels,
     // Upstream Mutagen defects, each with an effect the schema and the write path honour. A defect
     // identified only by an exception message is a plugin diagnosis, not a row here.
@@ -71,9 +70,6 @@ internal sealed record SchemaAnnotations(
     // FormLinks Mutagen types non-nullable that the game's format leaves unset as a matter of course,
     // so an unset one is a value, not a dangling reference. The CLR type cannot answer this.
     HashSet<(string TypeName, string MemberName)> PermittedNullFormLinks,
-    // The Color fields xEdit renders with an Alpha leaf (wbByteRGBA). A property of the field, not
-    // the type, and every row is one Mutagen also writes the alpha byte for, so no alpha edit is lost.
-    HashSet<(string TypeName, string MemberName)> AlphaBearingColorFields,
     // Plugin header members the document never spells but one flag of a flags member says: the ESL
     // flag. Flag names the backing enum's member.
     Dictionary<(string TypeName, string MemberName), (string BackingMember, string Flag)> SyntheticFlagMembers,
@@ -145,7 +141,7 @@ internal sealed record SchemaAnnotations(
         new(modHeaderGetter, "FormVersion", "Form Version"),
         new(modHeaderGetter, "Version2", "Version Control Info 2"),
         new(modHeaderGetter, "Author"),
-        // Content-derived at compile time (ADR-0008).
+        // ADR-0008.
         new(modHeaderGetter, PluginHeader.MastersFieldName, ReadOnlyReason: "masters are wholly content-derived at compile time"),
     ];
 
@@ -186,16 +182,6 @@ internal sealed record SchemaAnnotations(
         KeyValuePair.Create("TimeOnly", "TimeOnly — 4 fields; candidate atomic value, presentation undecided"),
         KeyValuePair.Create("RecordType",
             "Mutagen RecordType signature — 7 fields; candidate atomic value, presentation undecided"),
-    ];
-
-    // wbByteRGBA at KYWD, LCRT, AACT and LCTN in wbDefinitionsFO4.pas, likewise in Skyrim and
-    // Starfield, and ColorBinaryType.Alpha on the Mutagen side.
-    private static readonly (string, string)[] RgbaColorFields =
-    [
-        ("IKeywordGetter", "Color"),
-        ("ILocationReferenceTypeGetter", "Color"),
-        ("IActionRecordGetter", "Color"),
-        ("ILocationGetter", "Color"),
     ];
 
     // wbFileHeader in wbDefinitionsFO4.pas spells the master and light-master bits ESM and ESL.
@@ -268,7 +254,6 @@ internal sealed record SchemaAnnotations(
             ExtendedKeys: Fallout4KeyedArrayAnnotations.ExtendedKeys.ToDictionary(
                 r => (r.TypeName, r.MemberName), r => (IReadOnlyList<string>)r.ExtendedKeyMembers),
             PermittedNullFormLinks: [.. Fallout4VmadAnnotations.PermittedNullFormLinks],
-            AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: new()
             {
                 [("IFallout4ModHeaderGetter", "IsSmallMaster")] = ("Flags", "Small"),
@@ -309,7 +294,6 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
             RecordHeaderMembers:
             [
@@ -353,7 +337,6 @@ internal sealed record SchemaAnnotations(
             KeyedArrays: [],
             ExtendedKeys: [],
             PermittedNullFormLinks: [],
-            AlphaBearingColorFields: [.. RgbaColorFields],
             SyntheticFlagMembers: [],
             RecordHeaderMembers:
             [
@@ -396,7 +379,6 @@ internal sealed record SchemaAnnotations(
     public bool IsEmptySubSchemaType(Type getterInterface) => EmptySubSchemaTypes.Contains(getterInterface.Name);
     public bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type.FullName ?? type.Name);
     public string? RefusedShapeReason(Type shape) => RefusedShapes.GetValueOrDefault(ShapeName(shape));
-    public bool HasAlphaLeaf(PropertyInfo prop) => AlphaBearingColorFields.Contains(Key(prop));
     public bool IsPermittedNullFormLink(PropertyInfo prop) => PermittedNullFormLinks.Contains(Key(prop));
     public IReadOnlyDictionary<string, string>? EnumLabelsFor(PropertyInfo prop) =>
         EnumMemberLabels.GetValueOrDefault(Key(prop));
@@ -614,18 +596,6 @@ internal sealed record SchemaAnnotations(
         }
     }
 
-    // An alpha leaf is a leaf of a Color; on anything else the row names a leaf nothing builds.
-    private IEnumerable<string> UnresolvedAlphaFields(ILookup<string, Type> typesByName)
-    {
-        foreach (var entry in AlphaBearingColorFields.Order())
-        {
-            if (Property(typesByName, entry) is not { } prop) continue;
-            var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-            if (core != typeof(System.Drawing.Color))
-                yield return $"{nameof(AlphaBearingColorFields)}: {entry.TypeName}.{entry.MemberName} is no Color ({core.Name})";
-        }
-    }
-
     private static PropertyInfo? Property(ILookup<string, Type> typesByName, (string TypeName, string MemberName) entry) =>
         typesByName[entry.TypeName]
             .SelectMany(ReflectedTypes.GetAllInterfaceProperties)
@@ -685,8 +655,6 @@ internal sealed record SchemaAnnotations(
             .. UnresolvedMembers(typesByName, nameof(EnumMemberLabels), EnumMemberLabels.Keys),
             .. UnresolvedEnumLabels(typesByName),
             .. UnresolvedMembers(typesByName, nameof(KnownDefects), KnownDefects.Select(d => (d.TypeName, d.MemberName))),
-            .. UnresolvedMembers(typesByName, nameof(AlphaBearingColorFields), AlphaBearingColorFields),
-            .. UnresolvedAlphaFields(typesByName),
             .. UnresolvedMembers(typesByName, nameof(PermittedNullFormLinks), PermittedNullFormLinks),
             .. UnresolvedPermittedNullLinks(typesByName),
             .. UnresolvedMembers(typesByName, nameof(SiblingsInUse), SiblingsInUse.Keys),

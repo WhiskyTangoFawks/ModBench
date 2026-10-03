@@ -40,7 +40,7 @@ describe('buildWebviewHtml', () => {
     expect(nonce1).not.toBe(nonce2);
   });
 
-  it('names no backend port, and no connect-src to localhost', () => {
+  it('names no backend port, and no connect-src to localhost, since the webview reads through its host', () => {
     const html = buildWebviewHtml(BASE_PARAMS);
     expect(html).not.toContain('mEditBackendPort');
     expect(html).not.toMatch(/connect-src[^;]*localhost/);

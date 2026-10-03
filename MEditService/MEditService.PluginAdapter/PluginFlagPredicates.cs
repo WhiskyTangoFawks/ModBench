@@ -23,6 +23,12 @@ public static class PluginFlagPredicates
     public static bool IsLight(IModFlagsGetter mod, string fileName) =>
         mod.IsSmallMaster || fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Mutagen's <c>MasterStyle.Medium</c>, read off the flags without
+    /// <c>GetMasterStyle</c>, which throws on a header that is both light and medium. Such a plugin
+    /// counts as light, the style Mutagen checks first.</summary>
+    public static bool IsMedium(IModFlagsGetter mod, string fileName) =>
+        mod.CanBeMediumMaster && mod.IsMediumMaster && !IsLight(mod, fileName);
+
     public static bool IsMaster(IModFlagsGetter mod, string fileName) =>
         mod.IsMaster || fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase);
 

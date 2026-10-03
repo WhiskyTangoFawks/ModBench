@@ -79,8 +79,8 @@ public sealed class Fallout4KeyedArrayCompareTests
         }).ToArray();
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: Records.Length),
-            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: Records.Length),
+            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: Records.Length, IsMedium: false),
+            [TopPlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [BasePlugin.Name], RecordCount: Records.Length, IsMedium: false),
         };
         var plugins = new[]
         {

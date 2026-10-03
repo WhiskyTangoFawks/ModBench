@@ -62,9 +62,8 @@ public sealed class LoadOrderTests
         Assert.Throws<ArgumentException>(() => Order([Registered("A.esp", "ModA")], Registered("B.esp", "ModB")));
     }
 
-    // ADR-0012: the game loads one file per name.
     [Fact]
-    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins()
+    public void TwoActivePluginsOfOneFilename_AreRefused_NamingBothOrigins_BecauseTheGameLoadsOneFilePerName()
     {
         RegisteredPlugin[] plugins = [Registered("A.esp", "ModA"), Registered("A.esp", "ModB")];
 
@@ -88,10 +87,8 @@ public sealed class LoadOrderTests
         Assert.True(order.IsImmutable(inactive.Key));
     }
 
-    // Where the file sits decides nothing: a mod's cleaned copy of the game's master is still the
-    // game's own.
     [Fact]
-    public void AModsCleanedMaster_LoadedWithNoLine_IsImmutable()
+    public void AModsCleanedMaster_LoadedWithNoLine_IsImmutable_WhereverTheFileSits()
     {
         var cleaned = Registered("DLCCoast.esm", "CleanedMasters");
 

@@ -1,11 +1,9 @@
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The whole taxonomy, on the tree a put leaves behind: a flat record is a file in its
-/// group folder, a container a directory, a Cell a directory under a block pair — inside the
-/// worldspace's when exterior.</summary>
 public sealed class SourceRepositoryPlacementTests : IDisposable
 {
     private const GameRelease Release = GameRelease.Fallout4;
@@ -14,19 +12,15 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
 
     private static readonly PluginAddress Key = new(Plugin, "VendorMod");
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-placement-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-placement-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
-    // Over rather than Open: placement is a document verb, and a tree with no .git answers every one
-    // of them.
+    private SourceRepository RepositoryOverATreeWithNoGit => SourceRepository.Over(_modFolder, Release);
+
     private IReadOnlyList<string> TreeAfterPutting(string recordType, string? editorId, string formKey = FormKey)
     {
-        SourceRepository.Over(_modFolder, Release)
+        RepositoryOverATreeWithNoGit
             .Put(Key, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId)));
 
         return Documents();
@@ -38,9 +32,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             .Order(StringComparer.Ordinal)
             .ToList();
 
-    // Spelled out rather than asked of the repository: these are the paths the layout promises, and
-    // asking would only echo the rule under test back at it.
-    private static string Under(params string[] segments) => Path.Combine(["plugin-source", Plugin, .. segments]);
+    private static string SpelledOutPathUnder(params string[] segments) => Path.Combine(["plugin-source", Plugin, .. segments]);
 
     private static string Body(string formKey, string? editorId) =>
         editorId == null
@@ -51,7 +43,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void AFlatRecord_LandsAsAFileInItsGroupFolder()
     {
         Assert.Equal(
-            [Under("Npcs", "SomeNpc - 000800_Vendor.esp.json")],
+            [SpelledOutPathUnder("Npcs", "SomeNpc - 000800_Vendor.esp.json")],
             TreeAfterPutting("npc_", "SomeNpc"));
     }
 
@@ -59,7 +51,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void AQuest_LandsAsAFileInItsGroupFolder()
     {
         Assert.Equal(
-            [Under("Quests", "SomeQuest - 000800_Vendor.esp.json")],
+            [SpelledOutPathUnder("Quests", "SomeQuest - 000800_Vendor.esp.json")],
             TreeAfterPutting("Quest", "SomeQuest"));
     }
 
@@ -67,7 +59,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void ADirectoryPerRecordContainer_LandsAsADirectoryInItsGroupFolder()
     {
         Assert.Equal(
-            [Under("Worldspaces", "SomeWorld - 000800_Vendor.esp", "RecordData.json")],
+            [SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp", "RecordData.json")],
             TreeAfterPutting("wrld", "SomeWorld"));
     }
 
@@ -76,26 +68,24 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     {
         Assert.Equal(
             [
-                Under("Cells", "0", "0", "GroupRecordData.json"),
-                Under("Cells", "0", "0", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
-                Under("Cells", "0", "GroupRecordData.json"),
-                Under("Cells", "GroupRecordData.json"),
+                SpelledOutPathUnder("Cells", "0", "0", "GroupRecordData.json"),
+                SpelledOutPathUnder("Cells", "0", "0", "SomeCell - 000800_Vendor.esp", "RecordData.json"),
+                SpelledOutPathUnder("Cells", "0", "GroupRecordData.json"),
+                SpelledOutPathUnder("Cells", "GroupRecordData.json"),
             ],
             TreeAfterPutting("cell", "SomeCell"));
     }
 
-    // The second cell reuses the first's bucket rather than minting a second: interior block numbers
-    // carry no gameplay meaning, so one bucket per plugin is as true as any other.
     [Fact]
-    public void AnInteriorCell_LandsInTheBlockBucketThePluginAlreadyHas()
+    public void AnInteriorCell_LandsInTheBlockBucketThePluginAlreadyHas_ForInteriorBlockNumbersCarryNoGameplayMeaning()
     {
         TreeAfterPutting("cell", "SomeCell");
         Directory.Move(
-            Path.Combine(_modFolder, Under("Cells", "0")),
-            Path.Combine(_modFolder, Under("Cells", "7")));
+            Path.Combine(_modFolder, SpelledOutPathUnder("Cells", "0")),
+            Path.Combine(_modFolder, SpelledOutPathUnder("Cells", "7")));
 
         Assert.Contains(
-            Under("Cells", "7", "0", "OtherCell - 000801_Vendor.esp", "RecordData.json"),
+            SpelledOutPathUnder("Cells", "7", "0", "OtherCell - 000801_Vendor.esp", "RecordData.json"),
             TreeAfterPutting("cell", "OtherCell", formKey: "000801:Vendor.esp"));
     }
 
@@ -103,7 +93,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void ARecordWithNoEditorId_IsNamedByItsFormKeyAlone()
     {
         Assert.Equal(
-            [Under("Npcs", "000800_Vendor.esp.json")],
+            [SpelledOutPathUnder("Npcs", "000800_Vendor.esp.json")],
             TreeAfterPutting("npc_", editorId: null));
     }
 
@@ -116,7 +106,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     private IReadOnlyList<string> TreeAfterPuttingExteriorCell(
         CellPlacement placement, string? editorId = "SomeCell", string formKey = CellFormKey)
     {
-        SourceRepository.Over(_modFolder, Release)
+        RepositoryOverATreeWithNoGit
             .Put(Key, new SourceDocument(formKey, "cell", editorId, Body(formKey, editorId)), placement);
 
         return Documents();
@@ -128,7 +118,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void AnExteriorCell_LandsUnderTwoBlockLevelsInsideItsWorldspacesOwnDirectory()
     {
         TreeAfterPutting("wrld", "SomeWorld");
-        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
 
         Assert.Equal(
             new[]
@@ -146,7 +136,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     {
         TreeAfterPutting("wrld", "SomeWorld");
         TreeAfterPuttingExteriorCell(Somewhere);
-        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
 
         Assert.Equal(
             "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3\n}",
@@ -162,7 +152,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         TreeAfterPutting("wrld", "SomeWorld");
 
         Assert.Contains(
-            Under(
+            SpelledOutPathUnder(
                 "Worldspaces", "SomeWorld - 000800_Vendor.esp", "-7, 11", "4, -3",
                 "SomeCell - 000801_Vendor.esp", "RecordData.json"),
             TreeAfterPuttingExteriorCell(
@@ -173,7 +163,7 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void ABlockLevelTheTreeAlreadyHolds_KeepsItsOwnDocument()
     {
         TreeAfterPutting("wrld", "SomeWorld");
-        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
         var standing = Path.Combine(worldspace, "3, -2", "GroupRecordData.json");
         const string HandWritten = "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3,\n  \"Timestamp\": 7\n}";
 
@@ -189,14 +179,14 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     public void ASecondExteriorCell_LandsInsideTheStandingWorldspace_AndLeavesItsOwnDocumentAlone()
     {
         TreeAfterPutting("wrld", "SomeWorld");
-        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var worldspace = SpelledOutPathUnder("Worldspaces", "SomeWorld - 000800_Vendor.esp");
         var before = Text(Path.Combine(worldspace, "RecordData.json"));
 
         TreeAfterPuttingExteriorCell(Somewhere);
         var tree = TreeAfterPuttingExteriorCell(Somewhere, "OtherCell", "000802:Vendor.esp");
 
         Assert.Equal(before, Text(Path.Combine(worldspace, "RecordData.json")));
-        Assert.Single(Directory.EnumerateDirectories(Path.Combine(_modFolder, Under("Worldspaces"))));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(_modFolder, SpelledOutPathUnder("Worldspaces"))));
         Assert.Contains(
             Path.Combine(worldspace, "3, -2", "0, -1", "OtherCell - 000802_Vendor.esp", "RecordData.json"), tree);
         Assert.Contains(
@@ -212,10 +202,8 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Empty(Documents());
     }
 
-    // A child has no document of its own, so a put with no container to splice it into has nowhere to
-    // write and says so rather than inventing a file.
     [Fact]
-    public void AnEmbeddedChild_HasNoPlaceOfItsOwn()
+    public void AnEmbeddedChild_PutWithNoContainerToSpliceItInto_HasNoPlaceOfItsOwn_AndInventsNoFile()
     {
         var refused = Assert.Throws<InvalidOperationException>(
             () => TreeAfterPutting("dial", "SomeTopic", formKey: "000801:Vendor.esp"));

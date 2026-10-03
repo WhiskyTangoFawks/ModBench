@@ -32,8 +32,8 @@ public sealed class RecordHeaderCompareTests
         };
         var opened = new Dictionary<PluginAddress, PluginContent>
         {
-            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1),
-            [OverridePlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 1),
+            [BasePlugin] = new(IsLight: false, IsMaster: true, IsBlueprint: false, Masters: [], RecordCount: 1, IsMedium: false),
+            [OverridePlugin] = new(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: ["Base.esm"], RecordCount: 1, IsMedium: false),
         };
         var holder = FakeLoadOrder.Of(Release,
             new LoadOrderEntry("Base.esm", "Base.esm", "Data", 0, Enabled: true, Winning: true),

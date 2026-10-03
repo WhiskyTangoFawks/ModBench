@@ -5,9 +5,7 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class SourcePathLiteralScanTests
 {
-    // The layout tokens, as C# string literals. A glob like "*.json" is a search filter rather than a
-    // layout token and does not match: the needle carries the opening quote.
-    private static readonly string[] Literals =
+    private static readonly string[] LayoutLiteralsWithTheirQuotes =
         ["\"plugin-source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
          "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
@@ -16,7 +14,6 @@ public sealed class SourcePathLiteralScanTests
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
          "MEditService.Queries", "MEditService.SourceAdapter"];
 
-    // The repository's own files: the partials of SourceRepository — only inside Source itself.
     private const string RepositoryFilePrefix = "SourceRepository";
     private const string RepositoryFolder = "MEditService.SourceAdapter";
 
@@ -50,7 +47,6 @@ public sealed class SourcePathLiteralScanTests
                 "var tree = Path.Combine(modFolder, \"plugin-source\", plugin);\n"
                 + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
             File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"plugin-source\";");
-            // The same file name prefix, outside Source: not the repository, so it is counted.
             File.WriteAllText(
                 Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"plugin-source\";");
 
@@ -92,8 +88,6 @@ public sealed class SourcePathLiteralScanTests
             + string.Join("\n", unmatched));
     }
 
-    // A count, not a line number: a literal is the unit of work, and a line number would fail the gate
-    // for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
@@ -108,7 +102,7 @@ public sealed class SourcePathLiteralScanTests
             .StartsWith(RepositoryFolder + "/", StringComparison.Ordinal);
 
     private static IEnumerable<(string Literal, int Count)> Occurrences(string text) =>
-        Literals
+        LayoutLiteralsWithTheirQuotes
             .Select(literal => (Literal: literal, Count: Regex.Count(text, Regex.Escape(literal))))
             .Where(o => o.Count > 0);
 }

@@ -1,7 +1,6 @@
 namespace MEditService.Index;
 
-// Origin (ADR-0012): additive alongside Plugin; without it two same-filename plugins listed
-// together are indistinguishable rows.
+// ADR-0012.
 public record RecordSummary(
     string FormKey,
     string Plugin,

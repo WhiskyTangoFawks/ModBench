@@ -10,23 +10,19 @@ namespace MEditService.Index.Tests.Records;
 
 public sealed class PersistentIndexTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), $"medit-index-{Guid.NewGuid():N}");
+    private readonly ScratchDirectory _root = new("medit-index-");
     private readonly string _gameDirectory;
     private readonly string _instanceRoot;
 
     public PersistentIndexTests()
     {
-        _gameDirectory = Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
-        _instanceRoot = Directory.CreateDirectory(Path.Combine(_root, "instance")).FullName;
+        _gameDirectory = Directory.CreateDirectory(Path.Combine(_root.Path, "GameDir")).FullName;
+        _instanceRoot = Directory.CreateDirectory(Path.Combine(_root.Path, "instance")).FullName;
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
-    }
+    public void Dispose() => _root.Dispose();
 
-    // Writes a real plugin file holding one Npc with the given EditorID into its own mod folder.
-    private LoadOrderEntry WritePlugin(string name, string editorId, int slot)
+    private LoadOrderEntry WriteARealPluginHoldingOneNpcIntoItsOwnModFolder(string name, string editorId, int slot)
     {
         var origin = Path.GetFileNameWithoutExtension(name) + "Mod";
         var folder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", origin)).FullName;
@@ -59,12 +55,10 @@ public sealed class PersistentIndexTests : IDisposable
 
     private Launch Launched(IReadOnlyList<LoadOrderEntry> plugins) => new(_gameDirectory, _instanceRoot, plugins);
 
-    // Rows the previous launch indexed are still there and the plugin answers reads again on nothing
-    // more than a registration: no plugin is opened in this test's second half at all.
     [Fact]
     public void ReopeningTheSameFile_KeepsTheRows_AndRegisterAloneMakesThemAnswer()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using (Launched([alpha])) { }
 
         using var second = Launched([alpha]);
@@ -73,13 +67,11 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
-    // ADR-0013: the registrations a file carries are the last known load order, kept on open so a
-    // restart with an identical snapshot costs nothing; the first reconcile corrects them.
     [Fact]
     public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
-        var beta = WritePlugin("Beta.esp", "NpcBeta", 1);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
         using (Launched([alpha, beta])) { }
 
         using var second = Launched([beta]);
@@ -88,20 +80,17 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.Empty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
 
-        // Alpha's rows outlived its registration: naming it again costs no open.
         second.Dispose();
-        using var third = Launched([alpha, beta]);
-        Assert.Equal(0, third.Opens.OpenedTotal);
-        Assert.NotEmpty(third.Index.RequireReads().GetDocuments(alpha.KeyOf()));
+        using var thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration = Launched([alpha, beta]);
+        Assert.Equal(0, thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Opens.OpenedTotal);
+        Assert.NotEmpty(thirdNamingAlphaAgainAfterItsRowsOutlivedItsRegistration.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
-    // Content, never clock: the changed plugin is re-read on the next launch, and its neighbour,
-    // untouched, keeps everything.
     [Fact]
     public void APluginWhoseBytesChangedBetweenOpens_IsTheOnlyOneDropped()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
-        var beta = WritePlugin("Beta.esp", "NpcBeta", 1);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
         using (Launched([alpha, beta])) { }
 
         var changed = new Fallout4Mod(ModKey.FromFileName("Alpha.esp"), Fallout4Release.Fallout4);
@@ -116,12 +105,10 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.Contains(reads.GetDocuments(beta.KeyOf()), d => d.EditorId == "NpcBeta");
     }
 
-    // A rewrite that lands the identical bytes is not a change at all — the same "by content" rule
-    // read from the other side, and what stops a mod manager's touch costing a re-index.
     [Fact]
     public void APluginRewrittenWithIdenticalBytes_IsNotDropped()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using (Launched([alpha])) { }
 
         var bytes = File.ReadAllBytes(alpha.Path);
@@ -133,11 +120,10 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }
 
-    // The index holds exactly what exists: a file that is gone takes its rows with it.
     [Fact]
     public void APluginDeletedBetweenOpens_HasItsRowsRemoved()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using (Launched([alpha])) { }
 
         File.Delete(alpha.Path);
@@ -147,24 +133,15 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.Contains(second.Index.Status.Failures, f => f.Name == "Alpha.esp");
     }
 
-    // A codec or schema change invalidates the whole file, not the rows of one plugin: the
-    // stored documents are that version's output and there is no partial answer to give.
     [Fact]
     public void AFileWrittenUnderAnotherVersion_RebuildsFromScratch()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
-        var beta = WritePlugin("Beta.esp", "NpcBeta", 1);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
+        var beta = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Beta.esp", "NpcBeta", 1);
         using (Launched([alpha, beta])) { }
 
-        // The other-build actor: the file aged the way a real codec or reflector change would age it,
-        // there being no other way to write rows under a version this build cannot produce.
-        using (var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}"))
-        {
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "UPDATE mirror.index_version SET value = 'written-by-another-build'";
-            cmd.ExecuteNonQuery();
-        }
+        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(
+            "UPDATE mirror.index_version SET value = 'written-by-another-build'");
 
         using var second = Launched([alpha, beta]);
         Assert.Equal(["Alpha.esp", "Beta.esp"], second.Opens.Opened);
@@ -172,26 +149,28 @@ public sealed class PersistentIndexTests : IDisposable
         Assert.NotEmpty(second.Index.RequireReads().GetDocuments(beta.KeyOf()));
     }
 
-    // A file holding no indexed plugin still carries the version its tables were built under.
     [Fact]
     public void AFileWrittenUnderAnotherVersion_HoldingNoIndexedPlugin_RebuildsFromScratch()
     {
         using (Launched([])) { }
 
-        using (var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}"))
-        {
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = """
-                UPDATE mirror.index_version SET value = 'written-by-another-build';
-                CREATE TABLE mirror.left_by_another_build (value INTEGER);
-                """;
-            cmd.ExecuteNonQuery();
-        }
+        AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce("""
+            UPDATE mirror.index_version SET value = 'written-by-another-build';
+            CREATE TABLE mirror.left_by_another_build (value INTEGER);
+            """);
 
         using (Launched([])) { }
 
         Assert.False(TableExists("left_by_another_build"));
+    }
+
+    private void AgeTheFileWithSqlSinceNoOtherWayWritesRowsUnderAVersionThisBuildCannotProduce(string sql)
+    {
+        using var connection = new DuckDBConnection($"Data Source={IndexFiles.In(_instanceRoot)}");
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
     }
 
     private bool TableExists(string name)
@@ -203,12 +182,10 @@ public sealed class PersistentIndexTests : IDisposable
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;
     }
 
-    // A file DuckDB cannot open at all — a storage-format change on upgrade, a truncated
-    // write — is derived state worth exactly one cold load, so it is rebuilt rather than fatal.
     [Fact]
     public void AFileThatCannotBeOpened_RebuildsFromScratch()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using (Launched([alpha])) { }
 
         File.WriteAllText(IndexFiles.In(_instanceRoot), "this is not a DuckDB database");
@@ -221,10 +198,11 @@ public sealed class PersistentIndexTests : IDisposable
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {
-        var alpha = WritePlugin("Alpha.esp", "NpcAlpha", 0);
+        var alpha = WriteARealPluginHoldingOneNpcIntoItsOwnModFolder("Alpha.esp", "NpcAlpha", 0);
         using var holder = Launched([alpha]);
 
-        Launched([alpha]).Dispose();
+        var secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess = Launched([alpha]);
+        secondIndexJoiningTheFirstBecauseDuckDbNetSharesOneDatabaseInstancePerPathInAProcess.Dispose();
 
         Assert.NotEmpty(holder.Index.RequireReads().GetDocuments(alpha.KeyOf()));
     }

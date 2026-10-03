@@ -14,9 +14,6 @@ public sealed class CopyAsOverrideTests
         var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        // Not NewFormKey: an override echoes the caller's own FormKey rather than minting one
-        // (RecordEditResult's own doc comment), so success here carries no new FormKey at all —
-        // the same "success, nothing new" shape DeleteRecord's own result uses.
         Assert.Null(result.NewFormKey);
 
         var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
@@ -26,12 +23,9 @@ public sealed class CopyAsOverrideTests
         Assert.NotNull(document);
         Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
 
-        // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
-    // A tracked source reads its current file, proven by mutating the file on disk after the load
-    // order has been taken and observing the copy carry the mutated bytes.
     [Fact]
     public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentFileBytes()
     {
@@ -48,8 +42,6 @@ public sealed class CopyAsOverrideTests
         Assert.Contains("MutatedOnDisk", File.ReadAllText(destinationFile), StringComparison.Ordinal);
     }
 
-    // The whole point of the untracked branch: the text is the codec's, so an untracked source's copy
-    // is byte-identical to the text the tracked one would have written for the same record.
     [Fact]
     public void CopyRecordAsOverride_FromAnUntrackedSource_WritesTheSameTextATrackedSourceWould()
     {
@@ -68,8 +60,6 @@ public sealed class CopyAsOverrideTests
                 untracked.SourceFileFor(untracked.DestinationPlugin, untracked.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId)));
     }
 
-    // Held at Head is held: a record the destination committed and then deleted in its working tree
-    // is still in the compiled plugin, and a replacement has no document to replace.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

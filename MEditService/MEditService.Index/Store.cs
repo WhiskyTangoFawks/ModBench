@@ -22,7 +22,7 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
-    // One per Store, so an open hashes every file (ADR-0009).
+    // One per Store (ADR-0009).
     private readonly PluginFileHashes _hashes;
 
     public DuckDBConnection Connection { get; private set; }
@@ -36,8 +36,7 @@ internal sealed class Store : IDisposable
         Connection = Open();
     }
 
-    // Rebuilds from scratch if the file cannot be opened at all (ADR-0009): the index is
-    // derived state and losing it costs one cold load, so a rebuild beats refusing to start.
+    // ADR-0009.
     private DuckDBConnection Open()
     {
         if (_databasePath == null)
@@ -134,8 +133,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    // ADR-0009: a codec or schema version change invalidates the whole file, and there is no
-    // in-place migration: the file is deleted and reopened empty, costing one cold load.
+    // ADR-0009, with no in-place migration.
     private void DiscardFileWrittenUnderAnotherVersion(string indexVersion)
     {
         if (_databasePath == null) return;
@@ -200,9 +198,8 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009: validity is by content, and an open hashes every file, since MO2, xEdit
-    /// and the user all write these files. Registrations are not cleared (ADR-0013); the first
-    /// reconcile corrects them.</summary>
+    /// <summary>ADR-0009. Registrations are not cleared (ADR-0013, Derived tactical
+    /// observations).</summary>
     public List<PluginAddress> ValidateAgainstDisk()
     {
         var stale = new List<PluginAddress>();

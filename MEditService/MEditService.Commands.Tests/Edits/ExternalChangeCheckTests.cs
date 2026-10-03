@@ -16,26 +16,20 @@ public sealed class ExternalChangeCheckTests : IDisposable
     private const string Origin = "TestMod";
 
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-external-change-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-external-change-");
 
     private readonly Lazy<PutLoadOrderHandler> _handler;
 
     public ExternalChangeCheckTests() =>
         _handler = new(() => TestEditService.PutLoadOrderHandler(new LoadOrderHolder(), notifications: _notifications));
 
-    // The snapshot arriving, as the put-load-order door takes it.
     private void Put(LoadOrderSnapshot snapshot) =>
         Assert.True(_handler.Value.Put(snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease,
             snapshot.Plugins, [.. snapshot.Active.Select(p => p.Key)], [.. snapshot.LoadedWithNoLine.Select(p => p.Key)]).Applied);
 
     private string ModFolder => Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_instanceRoot, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _instanceRoot.Dispose();
 
     private LoadOrderSnapshot WithPlugins(params (string Name, byte[] Bytes)[] plugins)
     {
@@ -47,10 +41,8 @@ public sealed class ExternalChangeCheckTests : IDisposable
 
     private static string Sha256(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    // The commit trailers spell a hash upper-cased.
     private static string TrailerHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
-    // Track as the Source adapter records it: a baseline whose trailer names the bytes it was taken from.
     private void Track(params (string Plugin, byte[] Bytes)[] plugins) =>
         SourceRepository.Track(ModFolder, SourcePreset.Edits, [.. plugins.Select(p => (
             (IReadOnlyList<TreeFile>)[new TreeFile($"plugin-source/{p.Plugin}/npc_/{p.Plugin}/000001.json", "{}"u8.ToArray())],
@@ -131,7 +123,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(["Untracked.esp"], untracked.Plugins);
     }
 
-    // Git shows every tracked file but the binary, so a snapshot compares the binaries alone.
     [Fact]
     public void ASnapshot_NamesNoPlugin_ForAChangedTrackedFileOrMetaIni()
     {
@@ -158,8 +149,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Empty(_notifications.Notifications);
     }
 
-    // plugins.md, A row: "changed outside Modbench" needs the plugin tracked, so a mod whose
-    // repository went clears what the last snapshot named.
     [Fact]
     public void ASnapshot_NamesNoPlugin_OfAModWhoseRepositoryWent()
     {
@@ -211,7 +200,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal([PluginName], notice.Plugins.Select(p => p.Name));
     }
 
-    // The game's own Data folder is no mod, so a repository there tracks nothing.
     [Fact]
     public void ASnapshot_TellsNothing_OfARepositoryInTheDataFolder()
     {
@@ -258,7 +246,6 @@ public sealed class ExternalChangeCheckTests : IDisposable
         Assert.Equal(notices[0].Plugins, notices[1].Plugins);
     }
 
-    // plugins.md, Compile, story 5: a compile records what it writes before it writes it.
     [Fact]
     public void ASnapshot_NamesNoPlugin_WhenAnInterruptedCompileLeftTheOldBinary()
     {

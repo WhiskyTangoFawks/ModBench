@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -16,8 +17,6 @@ public sealed class ModelIdentityTests
     {
         var (original, recompiled, originalBytes, rewrittenBytes) = await ParseWriteAndReparse("RecruitSierra.esl");
 
-        // The rival, applied and observed: this fixture's own rewrite really does change its bytes —
-        // otherwise this test would pass vacuously regardless of which verdict ModelIdentity computes.
         Assert.False(originalBytes.AsSpan().SequenceEqual(rewrittenBytes),
             "RecruitSierra.esl's rewrite does not change bytes — this test does not exercise the byte-changing rewrite it depends on.");
 
@@ -88,7 +87,7 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
-    public void FindFirst_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull()
+    public void FindFirst_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull_BecauseBlockSubBlockAndCellOrderIsEncodingTheTreeCarriesNoneSoTheReadersDirectoryEnumerationDecidesIt()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -129,10 +128,8 @@ public sealed class ModelIdentityTests
         Assert.Contains("Point", divergence.Description);
     }
 
-    // The one thing the worldspace's own comparison guards that the per-record walk does not: which
-    // block a cell sits under.
     [Fact]
-    public void FindFirst_WhenACellSitsUnderAnotherBlockCoordinate_NamesIt()
+    public void FindFirst_WhenACellSitsUnderAnotherBlockCoordinate_NamesIt_TheOneThingTheWorldspacesOwnComparisonGuardsThatThePerRecordWalkDoesNot()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
@@ -253,13 +250,8 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
-    // ── The comparison door must not inherit the generated comparers' lies ──
-    //
-    // Mutagen's Equals and GetEqualsMask each miss real divergence and the pin stays 0.53.1, so the
-    // verdict may never depend on them alone.
-
     [Fact]
-    public void FindFirst_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence()
+    public void FindFirst_WhenOnlyAGenderedItemSubFieldDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var armor = mod.Armors.AddNew("GenderedArmor");
@@ -282,7 +274,7 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
-    public void FindFirst_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence()
+    public void FindFirst_WhenOnlyAPackageDataIntValueDiffers_ReportsTheDivergence_BecauseMutagensEqualsAndGetEqualsMaskEachMissRealDivergenceAt0531SoTheVerdictMayNeverDependOnThemAlone()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var package = mod.Packages.AddNew("IntPackage");
@@ -300,11 +292,8 @@ public sealed class ModelIdentityTests
         Assert.Contains("field 'Data[0].Data' changed", divergence.Description, StringComparison.Ordinal);
     }
 
-    // The dictionary tolerance's boundary: NpcMorph's elements are exactly {Key, Value} but Npc.Morphs
-    // is an ordered list, so a reorder is a real content change and must be refused rather than
-    // forgiven as dictionary enumeration order.
     [Fact]
-    public void FindFirst_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence()
+    public void FindFirst_WhenAnOrderedKeyValueShapedListIsReordered_ReportsTheDivergence_BecauseNpcMorphsIsAnOrderedListSoAReorderIsARealContentChangeNotDictionaryEnumerationOrderEvenThoughNpcMorphIsExactlyKeyAndValue()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("MorphNpc");
@@ -372,46 +361,32 @@ public sealed class ModelIdentityTests
 
     private static async Task<Fallout4Mod> WriteAndReparse(Fallout4Mod mod)
     {
-        var scratch = Directory.CreateTempSubdirectory("medit-modelidentity-").FullName;
-        try
-        {
-            var path = Path.Combine(scratch, mod.ModKey.FileName);
-            await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
-            return Fallout4Mod.CreateFromBinary(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
-        }
-        finally
-        {
-            Directory.Delete(scratch, recursive: true);
-        }
+        using var scratch = new ScratchDirectory("medit-modelidentity-");
+        var path = Path.Combine(scratch.Path, mod.ModKey.FileName);
+        await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
+        return Fallout4Mod.CreateFromBinary(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
     }
 
     internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>
         ParseWriteAndReparse(string fileName)
     {
-        var scratch = Directory.CreateTempSubdirectory("medit-modelidentity-").FullName;
-        try
-        {
-            var original = Fallout4Mod.CreateFromBinary(
-                new ModPath(ModKey.FromFileName(fileName), FixturePath(fileName)), Fallout4Release.Fallout4);
+        using var scratch = new ScratchDirectory("medit-modelidentity-");
+        var original = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(fileName), FixturePath(fileName)), Fallout4Release.Fallout4);
 
-            var rewrittenPath = Path.Combine(scratch, fileName);
-            await original.BeginWrite
-                .ToPath(rewrittenPath)
-                .WithLoadOrderFromHeaderMasters()
-                .WithNoDataFolder()
-                .NoNextFormIDProcessing()
-                .WithRecordCount(RecordCountOption.NoCheck)
-                .WriteAsync();
+        var rewrittenPath = Path.Combine(scratch.Path, fileName);
+        await original.BeginWrite
+            .ToPath(rewrittenPath)
+            .WithLoadOrderFromHeaderMasters()
+            .WithNoDataFolder()
+            .NoNextFormIDProcessing()
+            .WithRecordCount(RecordCountOption.NoCheck)
+            .WriteAsync();
 
-            var recompiled = Fallout4Mod.CreateFromBinary(
-                new ModPath(ModKey.FromFileName(fileName), rewrittenPath), Fallout4Release.Fallout4);
-            var originalBytes = await File.ReadAllBytesAsync(FixturePath(fileName));
-            var rewrittenBytes = await File.ReadAllBytesAsync(rewrittenPath);
-            return (original, recompiled, originalBytes, rewrittenBytes);
-        }
-        finally
-        {
-            Directory.Delete(scratch, recursive: true);
-        }
+        var recompiled = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(fileName), rewrittenPath), Fallout4Release.Fallout4);
+        var originalBytes = await File.ReadAllBytesAsync(FixturePath(fileName));
+        var rewrittenBytes = await File.ReadAllBytesAsync(rewrittenPath);
+        return (original, recompiled, originalBytes, rewrittenBytes);
     }
 }

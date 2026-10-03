@@ -15,9 +15,6 @@ public class PluginFixtureBuilderTests
         Assert.True(File.Exists(Path.Combine(data.DataFolder, "TestPlugin.esp")));
     }
 
-    // The ordered explicit list is the load order — there is no plugins.txt path left for a
-    // fixture to write one for. `listed` is what puts a plugin in that list; `enabled` is the `*`
-    // prefix.
     [Fact]
     public void Build_PutsAListedPluginInTheLoadOrder_Active()
     {

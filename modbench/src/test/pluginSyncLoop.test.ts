@@ -36,7 +36,6 @@ const watcherFor = (glob: string): FakeWatcher => {
   return present(found[0], `the sole watcher for "${glob}"`);
 };
 
-// How a test learns a recompute landed: no sleep and no poll.
 function pastSequence(instance: Instance, sequence: number): Promise<InstanceValue> {
   if (instance.sequence > sequence) return Promise.resolve(instance.value);
   return new Promise((resolve) => {
@@ -74,8 +73,6 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   await writeFile(join(root, 'ModOrganizer.ini'), INI.replace('Fallout 4', gameName));
   await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
-  // Both profiles start already matching disk, so the sync never writes either of them and
-  // a changed file can only be the gesture's own.
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
@@ -88,7 +85,6 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   instances.push(instance);
 
   const syncs: Promise<PluginSyncResult>[] = [];
-  // What each run was handed of the plugins the game loads with no line.
   const loadedWithNoLine: (readonly string[] | undefined)[] = [];
   registerPluginSync(instance, (value) => {
     const args = pluginSyncArguments(value);
@@ -104,15 +100,13 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   return { root, instance, syncs, loadedWithNoLine, plugins: () => pluginsOf(PROFILE), pluginsOf };
 }
 
-// Drives the loop the way the platform does: a plugins.txt write comes back as the watcher event
-// that recomputes the Instance, which runs the sync again.
 async function driveToQuiescence(
   instance: Instance, syncs: Promise<PluginSyncResult>[], maxRounds: number,
 ): Promise<{ writes: number; quiescent: boolean }> {
   let writes = 0;
   for (let round = 0; round < maxRounds; round++) {
     const landed = await pastSequenceWithin(instance, instance.sequence, 5000);
-    if (landed === TIMED_OUT) return { writes, quiescent: true }; // no recompute left to run
+    if (landed === TIMED_OUT) return { writes, quiescent: true };
     const result = present(
       await syncs[syncs.length - 1],
       'the most recently issued sync result',
@@ -152,8 +146,6 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     expect(await plugins()).toBe('*Base.esp\r\n');
   });
 
-  // Rival: hand the run no Data-folder presence. Nothing is then prunable, so the dead line
-  // below stays and the DLC line survives for the wrong reason.
   it('prunes against the Data-folder presence the value carries, keeping what Data provides', async () => {
     const { root, instance, syncs, plugins } = await wiredInstance();
     await writeFile(join(root, 'Game', 'Data', 'DLCCoast.esm'), 'vanilla');
@@ -166,10 +158,7 @@ describe('plugin sync and the Instance close a loop that settles', () => {
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 
-  // The game's masters are per release, and only the Instance knows which game this is. A run
-  // handed a hardcoded list would judge the lines against another install.
-  it('hands each run the plugins the game the Instance read loads with no line', async () => {
-    // Deliberately not Fallout 4: a run that hardcoded the fixture's usual game would pass.
+  it('hands each run the no-line plugins of the game the Instance read, not the fixture\'s usual Fallout 4', async () => {
     const { root, instance, syncs, loadedWithNoLine } = await wiredInstance('Skyrim Special Edition');
     await writeFile(join(root, 'Game', 'Data', 'Skyrim.esm'), 'vanilla');
 
@@ -180,11 +169,8 @@ describe('plugin sync and the Instance close a loop that settles', () => {
   });
 });
 
-// common.md, States, story 5: the game folder not found is told once, the same way everywhere.
-// Every Instance-driven writer to the Output is wired onto one channel, as the root wires them.
 describe('the game folder not found, across the whole instance', () => {
-  // Rival: plugin sync refusing with its own reason, a second Output line for the same cause.
-  it('is exactly one Output line, however many values land', async () => {
+  it('is exactly one Output line from every Instance-driven writer, however many values land', async () => {
     const root = await mkdtemp(join(tmpdir(), 'game-not-found-'));
     roots.push(root);
     await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
@@ -193,7 +179,6 @@ describe('the game folder not found, across the whole instance', () => {
     await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
     await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
     await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
-    // Every level of the one Output channel, in the order written.
     const output: string[] = [];
     const write = (line: string): void => { output.push(line); };
     const channel = { error: write, warn: write, info: write };
@@ -227,8 +212,6 @@ describe('the game folder not found, across the whole instance', () => {
   });
 });
 
-// A gesture writes `profiles/<profile>/plugins.txt` for the profile the Instance last landed, so
-// a value that missed a switch would silently edit the profile the user just left.
 describe('a gesture writes the profile the Instance last landed', () => {
   it('lands on the new profile after a switch, with no refresh asked for', async () => {
     const { root, instance, pluginsOf } = await wiredInstance();
@@ -239,7 +222,6 @@ describe('a gesture writes the profile the Instance last landed', () => {
     watcherFor('ModOrganizer.ini').fireChange();
     expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
 
-    // Exactly what the composition root binds enable/disable to.
     const result = await setPluginsEnabled(accessTo(root), instance.value.activeProfile, ['Base.esp'], false);
 
     expect(result).toEqual({ applied: true, outcome: { landed: ['Base.esp'], refused: [] } });
@@ -248,7 +230,6 @@ describe('a gesture writes the profile the Instance last landed', () => {
   });
 });
 
-// The Instance as the trigger reads it: each landed value handed on.
 function fired(...outcomes: (() => Promise<PluginSyncResult>)[]) {
   return firedAnswering((_profile, call) => present(outcomes[call], 'an outcome for this run')());
 }
@@ -289,9 +270,7 @@ const toldAsInstanceState = () => Promise.resolve<PluginSyncResult>({ applied: f
 const refused = (refusal: string) => () => Promise.resolve<PluginSyncResult>({ applied: false, refusal });
 const landed = () => Promise.resolve<PluginSyncResult>({ applied: true, wrote: false, added: [], dropped: [] });
 
-// How a caller learns a run has told what it did: no sleep and no poll.
 describe('registerPluginSync — settled', () => {
-  // Rival: resolving once the command answers, before the trigger has written its Output line.
   it('resolves once every run begun has written its Output', async () => {
     let land = (): void => {};
     const instance = {
@@ -344,7 +323,6 @@ describe('registerPluginSync — outcome handling', () => {
     expect(messageChanged).toHaveBeenCalledTimes(1);
   });
 
-  // Rival: `void run(...)` with no catch, which leaves the rejection unhandled and the Output silent.
   it('says a thrown sync error the same way', async () => {
     const { channel, trigger, land } = fired(() => Promise.reject(new Error('disk unplugged')));
     await land();
@@ -353,7 +331,6 @@ describe('registerPluginSync — outcome handling', () => {
     expect(trigger.message()).toContain('disk unplugged');
   });
 
-  // Rival: log every refused run, which fills the Output with one line per recompute.
   it('reports the same refusal once, and clears the message line when a run lands', async () => {
     const reason = OTHER_REASON;
     const { channel, trigger, land } = fired(refused(reason), refused(reason), landed);
@@ -365,7 +342,6 @@ describe('registerPluginSync — outcome handling', () => {
     expect(trigger.message()).toBeUndefined();
   });
 
-  // Rival: report only the first refusal, so a Data folder listed since keeps showing the listing.
   it('reports again when the reason changes', async () => {
     const { channel, trigger, messageChanged, land } = fired(
       refused(DATA_UNLISTABLE), refused(OTHER_REASON));
@@ -379,10 +355,7 @@ describe('registerPluginSync — outcome handling', () => {
   });
 });
 
-// plugins.md, Reporting, story 2: a game folder that is not found writes nothing, and is told
-// once, as the instance's state (common.md, States, story 5).
 describe('registerPluginSync — the game folder not found', () => {
-  // Rival: report it as the command's own refusal, a second telling beside the instance's state.
   it('reports nothing of its own: no Output line and no message line', async () => {
     const { channel, trigger, messageChanged, land } = fired(toldAsInstanceState);
     await land();
@@ -393,8 +366,6 @@ describe('registerPluginSync — the game folder not found', () => {
     expect(messageChanged).not.toHaveBeenCalled();
   });
 
-  // Rival: leave the standing refusal alone, so the message line keeps a cause plugin sync no
-  // longer has beside the instance's own.
   it('takes its own standing refusal off the message line', async () => {
     const { trigger, land } = fired(refused(DATA_UNLISTABLE), toldAsInstanceState);
     await land();
@@ -406,7 +377,6 @@ describe('registerPluginSync — the game folder not found', () => {
 });
 
 describe('registerPluginSync — every value', () => {
-  // Rival: waiting for mEdit to attach before the first run.
   it('runs on every value that lands, from the first', async () => {
     const { profiles, land } = fired(landed, landed);
 
@@ -417,8 +387,6 @@ describe('registerPluginSync — every value', () => {
   });
 });
 
-// commands.md, The system commands: plugin sync's Argument is the instance value, projected here
-// once for the command and every test that runs it.
 describe('pluginSyncArguments', () => {
   it('hands plugin sync the active profile, the plugins the instance provides, the Data folder and the plugins the game loads with no line', () => {
     const value = instanceValueFixture({

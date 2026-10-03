@@ -17,8 +17,6 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     public void AFilterThatReachesPastThePublicRelations_IsRefused(string sql) =>
         Assert.False(fixture.Index.Accepts(sql));
 
-    // The refusals above are this theory's positive control: a door that refused everything would
-    // pass them too.
     [Theory]
     [InlineData("SELECT form_key FROM records")]
     [InlineData("SELECT form_key FROM main.npc_")]

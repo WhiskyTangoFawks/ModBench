@@ -3,24 +3,21 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Each plugin lands or is refused on its own, with no rollback beyond git's: a refused
-/// plugin leaves nothing of its own, and the commits around it stand (plugins.md, Track, story 5).
-/// </summary>
 public sealed class SourceRepositoryTrackCleanupTests : IDisposable
 {
     private const string ModName = "SomeMod";
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-track-cleanup-").FullName;
+    private readonly ScratchDirectory _root = new("medit-track-cleanup-");
     private readonly string _modFolder;
 
     public SourceRepositoryTrackCleanupTests() => _modFolder = Directory.CreateDirectory(Path.Combine(_root, ModName)).FullName;
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     [Fact]
     public void Track_APluginWhoseFilesCannotAllBeWritten_IsRefused_LeavingNoneOfItsFiles_WhileThePluginsAroundItLand()
     {
         var refused = SourceRepository.Track(
-            _modFolder, SourcePreset.Edits, [Baseline("A.esp"), UnwritableBaseline("Bad.esp"), Baseline("C.esp")]);
+            _modFolder, SourcePreset.Edits, [Baseline("A.esp"), BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies("Bad.esp"), Baseline("C.esp")]);
 
         Assert.Equal(["Bad.esp"], refused.Select(r => r.Plugin));
         Assert.Equal(["Track SomeMod", "Track A.esp", "Track C.esp"], SubjectsOnMain());
@@ -30,8 +27,6 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal(string.Empty, Git("status", "--porcelain"));
     }
 
-    // ADR-0003: a failed first Track leaves a .git with no main behind, and nothing but Track itself
-    // recovers from that without a hand delete.
     [Fact]
     public void Track_AfterAFailedTrackOfTheModsOwnFiles_IsNotTracked_AndTrackingAgainCreatesTheRepository()
     {
@@ -58,7 +53,6 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
-    // ADR-0003: a repository with history but no main is someone else's; Track throws before writing.
     [Fact]
     public void Track_IntoARepositoryWithHistoryButNoMain_ThrowsAndChangesNothingOfIt()
     {
@@ -82,9 +76,7 @@ public sealed class SourceRepositoryTrackCleanupTests : IDisposable
     private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) Baseline(string plugin) =>
         ([new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())], new BaselineTrailers(plugin, null, null));
 
-    // The first file lands where the second needs a directory, so the write fails after some of the
-    // plugin's files are already on disk.
-    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) UnwritableBaseline(string plugin) =>
+    private static (IReadOnlyList<TreeFile> Files, BaselineTrailers Trailers) BaselineWhoseSecondFileNeedsADirectoryTheFirstFileOccupies(string plugin) =>
         ([
             new TreeFile($"plugin-source/{plugin}/npc_", "{}"u8.ToArray()),
             new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()),

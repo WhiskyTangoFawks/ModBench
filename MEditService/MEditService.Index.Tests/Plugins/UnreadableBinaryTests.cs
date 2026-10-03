@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// plugins.md, A row, Plugin, "Failed to read": a binary that cannot be read fails its own plugin,
-// and is read again once its bytes change, never on a snapshot that merely names it again.
 public sealed class UnreadableBinaryTests : IDisposable
 {
     private readonly LoadOrderHolder _holder = new();
@@ -53,7 +51,6 @@ public sealed class UnreadableBinaryTests : IDisposable
     private void Reconcile(params LoadOrderEntry[] entries) =>
         _index.Reconcile(_holder, _gameDirectory, entries, GameRelease.Fallout4, _instanceRoot);
 
-    // A tracked plugin whose repository went reads its binary now, and that binary does not read.
     private void UntrackedOverAnUnreadableBinary()
     {
         WriteValidPlugin(_pluginPath);
@@ -67,8 +64,6 @@ public sealed class UnreadableBinaryTests : IDisposable
         Reconcile(Entry, OtherEntry);
     }
 
-    // plugins.md, A row, Plugin: "Failed to read" is the plugin's own status; story 6's failed
-    // index is for a failure of the index itself.
     [Fact]
     public void AReDerivationThatCannotReadTheBinary_FailsThatPluginAlone_AndTheRestLand()
     {
@@ -103,8 +98,6 @@ public sealed class UnreadableBinaryTests : IDisposable
         Assert.Contains(_index.RequireReads().GetDocuments(_key), d => d.EditorId == "FreshlyAppearedNpc");
     }
 
-    // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it
-    // already was — ADR-0019 bans a failure a subscriber has no way to learn about.
     [Fact]
     public void ABinaryThatStillFailsToOpen_OnceItsBytesChange_PublishesStatus()
     {

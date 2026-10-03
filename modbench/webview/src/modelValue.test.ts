@@ -3,9 +3,6 @@ import { copiedText, displayValue, modelValue, pastedValue } from './modelValue'
 import type { FieldMetadata, FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
-// ADR-0018: modelValue is the single definition of the string a cell's editor shows for every
-// field type, checked here independently of the leaf components' own logic.
-
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });
 const intMeta = fieldMeta({ name: 'Level', type: 'int' });
 const floatMeta = fieldMeta({ name: 'Weight', type: 'float' });
@@ -35,7 +32,7 @@ const arrayMeta = fieldMeta({
 const resolved: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'Dogmeat' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-describe('modelValue — scalar types', () => {
+describe('modelValue — scalar types, among the field types whose editor string it alone defines', () => {
   it('string: the string itself', () => {
     expect(modelValue('Dogmeat', strMeta)).toBe('Dogmeat');
   });
@@ -75,7 +72,6 @@ describe('modelValue — flags', () => {
     expect(modelValue(null, flagMeta)).toBe('');
   });
 
-  // A name the metadata does not list is still what the document says.
   it('a name outside the metadata\'s members reads as itself', () => {
     expect(modelValue(['AB'], flagMeta)).toBe('AB');
   });
@@ -152,9 +148,7 @@ describe('modelValue — struct/array summary rows (JSON, not a prose summary)',
 });
 
 describe('modelValue — a type the wire sends that this union does not name', () => {
-  // FieldMetadata.type is the wire's own plain string (types.ts) — a backend field type
-  // FieldType has not caught up with still reaches here.
-  it('stringifies like every other scalar, rather than reading as unset', () => {
+  it('stringifies like every other scalar, rather than reading as unset, for a backend field type FieldType has not caught up with', () => {
     const futureMeta: FieldMetadata = { ...fieldMeta({ name: 'Future', type: 'string' }), type: 'quaternion' };
     expect(modelValue(42, futureMeta)).toBe('42');
   });

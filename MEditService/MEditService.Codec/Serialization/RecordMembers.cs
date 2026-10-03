@@ -11,4 +11,9 @@ public static class RecordMembers
     public const string EditorId = "EditorID";
 
     public const string FormVersion = nameof(IMajorRecordGetter.FormVersion);
+
+    public const string VersionControlInfo1 = nameof(IMajorRecordGetter.VersionControl);
+
+    // Each game from Fallout 3 on declares it on its own major record base, so no shared getter names it.
+    public const string VersionControlInfo2 = "Version2";
 }

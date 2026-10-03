@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,9 +12,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The repository edits an embedded child by splicing its owner's text. The oracle is a
-/// member no record type declares: the codec drops one on a round trip, so a document still
-/// carrying it was never deserialized.</summary>
 public sealed class EmbeddedChildSpliceTests : IDisposable
 {
     private const string PluginName = "Splice.esp";
@@ -21,7 +19,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "SpliceMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-splice-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-splice-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -55,12 +53,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
             _modFolder, SourcePreset.Edits, PristineFiles());
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private TreeFile[] PristineFiles() =>
     [
@@ -88,8 +81,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 
     private string FullPath(string relativePath) => Path.Combine(_modFolder, relativePath);
 
-    // Hand-edited into the file: no writer of ours produces a member the schema does not declare.
-    private void AddDroppedMemberBeside(string relativePath, string anchor)
+    private void HandEditDroppedMemberBeside(string relativePath, string anchor)
     {
         var text = File.ReadAllText(FullPath(relativePath));
         var line = text.Split('\n').First(l => l.Contains(anchor, StringComparison.Ordinal));
@@ -102,7 +94,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     [Fact]
     public void Get_OfAnEmbeddedChild_CarriesAMemberOfTheChildTheCodecWouldDrop()
     {
-        AddDroppedMemberBeside(CellPath, "\"PersistRef\"");
+        HandEditDroppedMemberBeside(CellPath, "\"PersistRef\"");
 
         var body = Repository.Get(Plugin, Identity(_persistentRef, "refr"))?.Body;
 
@@ -121,14 +113,14 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         var after = File.ReadAllText(FullPath(CellPath));
         Assert.NotEqual(before, after);
         Assert.Equal(
-            WithoutTheObjectHolding(before, _persistentRef.FormKey.ToString()),
-            WithoutTheObjectHolding(after, _persistentRef.FormKey.ToString()));
+            WithoutTheBraceMatchedObjectHolding(before, _persistentRef.FormKey.ToString()),
+            WithoutTheBraceMatchedObjectHolding(after, _persistentRef.FormKey.ToString()));
     }
 
     [Fact]
     public void Put_OfAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
     {
-        AddDroppedMemberBeside(CellPath, "\"WaterHeight\"");
+        HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
 
         PutRenamedPersistentRef();
 
@@ -201,7 +193,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     [Fact]
     public void Remove_OfAnEmbeddedChild_KeepsAMemberOfTheOwnerTheCodecWouldDrop()
     {
-        AddDroppedMemberBeside(CellPath, "\"WaterHeight\"");
+        HandEditDroppedMemberBeside(CellPath, "\"WaterHeight\"");
 
         Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_persistentRef, "refr")));
 
@@ -213,7 +205,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         Assert.Equal(SourceRemoval.Removed, Repository.Remove(Plugin, Identity(_response, "info")));
 
-        AssertSpelledAsTheCodecWould(QuestPath, "quest");
+        AssertTheCompileGateWouldNotRespell(QuestPath, "quest");
     }
 
     [Fact]
@@ -221,7 +213,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     {
         PutRenamedPersistentRef();
 
-        AssertSpelledAsTheCodecWould(CellPath, "cell");
+        AssertTheCompileGateWouldNotRespell(CellPath, "cell");
     }
 
     [Fact]
@@ -239,17 +231,13 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         Assert.Contains("\"TempRef\"", cellText, StringComparison.Ordinal);
     }
 
-    // The gate a compile puts the tree through: a document the codec would respell is one the splice
-    // wrote in a spelling of its own.
-    private void AssertSpelledAsTheCodecWould(string relativePath, string recordType)
+    private void AssertTheCompileGateWouldNotRespell(string relativePath, string recordType)
     {
         var text = File.ReadAllText(FullPath(relativePath));
         Assert.Equal(_codec.RoundTrip(text, Release, recordType), text);
     }
 
-    // A brace-matched cut of the object naming the FormKey, so what remains is every byte the write
-    // was not asked to touch.
-    private static string WithoutTheObjectHolding(string text, string formKey)
+    private static string WithoutTheBraceMatchedObjectHolding(string text, string formKey)
     {
         var start = text.LastIndexOf('{', text.IndexOf(formKey, StringComparison.Ordinal));
         var depth = 0;

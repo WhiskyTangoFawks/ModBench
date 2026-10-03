@@ -2,11 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 import { findPluginsOutsideLoadOrder } from '../pluginsOutsideLoadOrder';
 
-// The plugin files the effective load order does not point at (ADR-0013): an overridden plugin,
-// or a file plugins.txt never names.
-
-// Discovery reads filesByMod and disabledModFiles only; the load-order set is passed in already
-// resolved.
 function toFileMap(byMod: Record<string, string[]>): Map<string, { relativePath: string; absolutePath: string }[]> {
   return new Map(
     Object.entries(byMod).map(([mod, paths]) => [
@@ -20,7 +15,7 @@ function indexOf(filesByMod: Record<string, string[]>, disabledModFiles: Record<
   return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod), disabledModFiles: toFileMap(disabledModFiles) };
 }
 
-describe('findPluginsOutsideLoadOrder', () => {
+describe('findPluginsOutsideLoadOrder — the plugin files the effective load order does not point at: an overridden plugin, or a file plugins.txt never names', () => {
   it('finds the plugin a winning mod overrides', () => {
     const index = indexOf({ Winner: ['Shared.esp'], Loser: ['Shared.esp'] });
 
@@ -45,9 +40,7 @@ describe('findPluginsOutsideLoadOrder', () => {
     expect(findPluginsOutsideLoadOrder(index, [{ name: 'Loaded.esp', origin: 'ModA' }])).toEqual([]);
   });
 
-  it('ignores non-plugin files and nested files sharing a plugin name', () => {
-    // Root-level only, mirroring rootLevelWinners' own reasoning: plugins live at a mod's root, so
-    // a nested file with a plugin's name is not a plugin.
+  it('ignores non-plugin files and nested files sharing a plugin name, plugins living at a mod\'s root only', () => {
     const index = indexOf({ ModA: ['readme.txt', 'Textures/Foo.dds', 'scripts/Nested.esp'] });
 
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([]);
@@ -59,8 +52,7 @@ describe('findPluginsOutsideLoadOrder', () => {
     expect(findPluginsOutsideLoadOrder(index, [{ name: 'mixed.esp', origin: 'moda' }])).toEqual([]);
   });
 
-  // Rival: a key joining the two halves with a character a Linux folder or file name may hold.
-  it('never mistakes one (origin, filename) pair for another whose halves join to the same text', () => {
+  it('never mistakes one (origin, filename) pair for another whose halves join to the same text, with a character a Linux folder or file name may hold', () => {
     const index = indexOf({ 'A|B': ['C.esp'] });
 
     expect(findPluginsOutsideLoadOrder(index, [{ name: 'B|C.esp', origin: 'A' }]).map((p) => p.origin)).toEqual(['A|B']);
@@ -78,7 +70,7 @@ describe('findPluginsOutsideLoadOrder', () => {
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([]);
   });
 
-  it('finds a plugin file in a disabled mod', () => {
+  it('finds a plugin file in a disabled mod, still indexed though outside the load order', () => {
     const index = indexOf({}, { DisabledMod: ['Off.esp'] });
 
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([

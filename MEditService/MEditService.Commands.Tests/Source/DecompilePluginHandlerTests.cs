@@ -12,13 +12,11 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>commands.md, <c>decompile</c>: each plugin's bytes read into its plugin source, in the
-/// working tree of the checked-out branch, committing nothing — over a fixture mod and real git.</summary>
 public sealed class DecompilePluginHandlerTests : IDisposable
 {
     private const string TrackedModName = "TrackedMod";
     private const string UntrackedModName = "UntrackedMod";
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-decompile-").FullName;
+    private readonly ScratchDirectory _root = new("medit-decompile-");
     private readonly string _trackedMod;
     private readonly string _untrackedMod;
     private readonly LoadOrderHolder _holder = new();
@@ -43,7 +41,7 @@ public sealed class DecompilePluginHandlerTests : IDisposable
         Assert.Equal([Tracked("First.esp")], tracked.Landed);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     [Fact]
     public async Task Decompile_OfAnUntrackedPluginInATrackedMod_WritesItsSourceToTheWorkingTree_AndCommitsNothing()
@@ -71,10 +69,8 @@ public sealed class DecompilePluginHandlerTests : IDisposable
             SourceRepository.ParkedCompileBinarySha256s(_trackedMod, "Second.esp"));
     }
 
-    // plugins.md, Decompile: it replaces the source in the working tree from the bytes, a hand edit
-    // and a document the bytes do not hold included.
     [Fact]
-    public async Task Decompile_OfATrackedPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold()
+    public async Task Decompile_OfATrackedPlugin_ReplacesItsSourceInTheWorkingTree_WithWhatItsBytesHold_DiscardingHandEditsAndStrayDocuments()
     {
         var stray = Path.Combine(SourceRepository.RootIn(_trackedMod, "First.esp"), "Stray.json");
         File.WriteAllText(stray, "{}");

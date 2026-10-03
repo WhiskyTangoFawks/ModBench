@@ -7,7 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// ADR-0005: every indexed record resolves by FormKey, the plugin header included.
 public class FormLookupTests
 {
     [Fact]
@@ -27,13 +26,10 @@ public class FormLookupTests
         Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npc.ToString()));
         Assert.Equal(new RecordLookupEntry("race", "TestRace01"), reads.Resolve(race.ToString()));
 
-        // ...and the header's is a real, resolvable entry rather than filler: this is what lets Open
-        // Header's synthetic FormKey resolve like every other one.
         var header = reads.Resolve(PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp")));
         Assert.NotNull(header);
         Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
         Assert.Null(header.Value.EditorId);
-        // One lookup per document, the header among them.
         Assert.Equal(3, reads.GetDocuments(new PluginAddress("Lookup.esp", "Data")).Count);
     }
 

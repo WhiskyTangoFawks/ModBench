@@ -22,8 +22,6 @@ const page = (formKeys: readonly string[]) => ({
   items: formKeys.map((formKey) => recordSummaryFixture({ formKey, plugin: NPCS.plugin.name })), total: formKeys.length,
 });
 
-// mEdit as the selection reads it: the group's records, and among them the ones the record filter
-// shows.
 function harness(shown: (formKey: string) => boolean = () => true) {
   const stream = new InMemoryMEditClient();
   const group = { records: [OLD] as string[], failure: undefined as Error | undefined };
@@ -55,8 +53,6 @@ const OPEN_NEW = ['modbench.record.open', { formKey: NEW }];
 
 beforeEach(() => { executeCommand.mockReset(); });
 
-// plugins.md, Pickers, Create record, story 1: the new record is selected and opens in the record
-// panel. The view finds it from the watch, and uses no result of create.
 describe('createdRecordSelection', () => {
   it('selects the record its group newly lists at the plugin\'s next change, then opens it as a click does', async () => {
     const { stream, group, selection, revealed, settle, opened } = harness();
@@ -106,7 +102,6 @@ describe('createdRecordSelection', () => {
     expect(opened()).toEqual([OPEN_NEW]);
   });
 
-  // Never silently wrong: a change the watch brings first is not the new record.
   it.each([['of another type', OTHER_TYPE], ['of this type that the filter hides', HIDDEN]])(
     'opens nothing for a changed record %s while a record filter is in force', async (_what, changed) => {
       const { stream, group, selection, settle, opened } = harness((formKey) => formKey === OLD);

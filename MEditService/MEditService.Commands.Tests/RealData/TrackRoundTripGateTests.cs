@@ -13,35 +13,29 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
     private static JsonNode RequireNode(JsonNode? node, string what) =>
         node ?? throw new InvalidOperationException($"Expected {what} to be present.");
 
+    private const string CellRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix =
+        @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$";
+
+    private const string WorldspaceRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix =
+        @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$";
+
     private static string FormKeyOf(JsonNode? recordNode) =>
         RequireNode(recordNode, "a record node")[nameof(IMajorRecordGetter.FormKey)] is { } formKeyNode
             ? formKeyNode.GetValue<string>()
             : throw new InvalidOperationException("Expected a FormKey member.");
 
-    // This class's fixture is the only one with real populated cells and worldspaces; the flat two-NPC
-    // fixture structurally cannot exercise this. Key paths by pattern rather than a hardcoded block
-    // number this test cannot verify independently.
     [Fact]
-    public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
+    public void Track_OfTheRealFixtureHoldingCellsAndWorldspaces_WritesTheSourceContainerLayout()
     {
         var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
             .ToList();
         Assert.NotEmpty(allFiles);
 
-        // Block and sub-block GRUP directories are the library's own directory layout too, so each
-        // numeric segment carries an optional "[N] " prefix ahead of the block number. That prefix is
-        // what the pattern allows for, not a coordinate.
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
-
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, CellRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, WorldspaceRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix));
     }
 
-    // Order is the document's list order, transitively: a quest's document holds its topics, branches
-    // and scenes in the binary's order, each topic its responses, and none has a file or a directory
-    // anywhere.
     [Fact]
     public void Track_OfTheRealFixture_WritesEveryQuestDescendantInlineInItsQuestsDocument_InTheBinarysOrder()
     {
@@ -55,58 +49,53 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
         Assert.Contains(quests, q => q.Scenes.Count >= 1);
 
         var documents = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories).ToList();
-        foreach (var slot in new[] { nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses) })
-        {
-            Assert.DoesNotContain(
-                Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
-                d => Path.GetFileName(d) == slot);
-        }
+        string[] questDescendantSlots =
+            [nameof(Quest.DialogTopics), nameof(Quest.DialogBranches), nameof(Quest.Scenes), nameof(DialogTopic.Responses)];
+        Assert.DoesNotContain(
+            Directory.EnumerateDirectories(fixture.SourceRoot, "*", SearchOption.AllDirectories),
+            d => questDescendantSlots.Contains(Path.GetFileName(d)));
 
-        foreach (var quest in quests)
-        {
-            var parsed = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))
-                ?? throw new InvalidOperationException($"Expected {quest.FormKey}'s document to parse as JSON.");
-            var root = parsed.AsObject();
+        var questDocuments = quests
+            .Select(quest => (Quest: quest, Root: RequireNode(
+                JsonNode.Parse(File.ReadAllText(TheSingleDocumentCarrying(documents, quest.FormKey.ToString()))),
+                $"{quest.FormKey}'s document").AsObject()))
+            .ToList();
 
-            foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
-                     {
-                         (nameof(Quest.DialogTopics), quest.DialogTopics),
-                         (nameof(Quest.DialogBranches), quest.DialogBranches),
-                         (nameof(Quest.Scenes), quest.Scenes),
-                     })
+        var slotCases = questDocuments
+            .SelectMany(document => new (string Slot, IEnumerable<IMajorRecordGetter> Children)[]
             {
-                var expected = children.Select(c => c.FormKey.ToString()).ToList();
-                foreach (var child in expected)
-                    Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child));
-                if (expected.Count == 0)
-                {
-                    Assert.Null(root[slot]);
-                    continue;
-                }
-                Assert.Equal(
-                    expected,
-                    RequireNode(root[slot], slot).AsArray().Select(FormKeyOf));
-            }
+                (nameof(Quest.DialogTopics), document.Quest.DialogTopics),
+                (nameof(Quest.DialogBranches), document.Quest.DialogBranches),
+                (nameof(Quest.Scenes), document.Quest.Scenes),
+            }.Select(slot => (document.Root, slot.Slot, Expected: slot.Children.Select(c => c.FormKey.ToString()).ToList())))
+            .ToList();
+        Assert.All(
+            slotCases.SelectMany(slotCase => slotCase.Expected),
+            child => Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child)));
+        Assert.All(slotCases, slotCase => Assert.Equal(slotCase.Expected.Count == 0, slotCase.Root[slotCase.Slot] is null));
+        Assert.All(
+            slotCases.Where(slotCase => slotCase.Expected.Count > 0),
+            slotCase => Assert.Equal(
+                slotCase.Expected,
+                RequireNode(slotCase.Root[slotCase.Slot], slotCase.Slot).AsArray().Select(FormKeyOf)));
 
-            foreach (var topic in quest.DialogTopics)
-            {
-                foreach (var response in topic.Responses)
-                {
-                    Assert.Null(SourceRepository.PathCarrying(
-                        documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString()));
-                }
-                var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
-                    .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
-                    ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
-                Assert.Equal(
-                    topic.Responses.Select(r => r.FormKey.ToString()),
-                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
-            }
-        }
+        var topicCases = questDocuments
+            .SelectMany(document => document.Quest.DialogTopics.Select(topic => (document.Root, Topic: topic)))
+            .ToList();
+        Assert.All(
+            topicCases.SelectMany(topicCase => topicCase.Topic.Responses),
+            response => Assert.Null(SourceRepository.PathCarrying(
+                documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString())));
+        Assert.All(topicCases, topicCase =>
+        {
+            var inline = RequireNode(topicCase.Root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
+                .Single(t => FormKeyOf(t) == topicCase.Topic.FormKey.ToString());
+            Assert.Equal(
+                topicCase.Topic.Responses.Select(r => r.FormKey.ToString()),
+                inline?[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
+        });
     }
 
-    // GroupRecordData.json is the library's own metadata file for a group or block level, written
-    // only for non-default metadata. None is minted for a flat group to carry its order.
     [Fact]
     public void Track_OfTheRealFixture_WritesOnlyTheGroupDocumentsTheLibraryWrites()
     {
@@ -121,20 +110,19 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());
-        foreach (var (path, bytes) in libraryGroupDocuments)
-            Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
+        Assert.All(
+            libraryGroupDocuments,
+            document => Assert.True(
+                document.Value.AsSpan().SequenceEqual(trackedGroupDocuments[document.Key]),
+                $"{document.Key} is not the library's own document."));
     }
 
-    // The layout is the repository's, so which file holds a record is asked of it rather than
-    // spelled here. Asked one path at a time, so Single still fails a tree holding two.
-    internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
+    internal static string TheSingleDocumentCarrying(IReadOnlyList<string> documents, string formKey) =>
         documents.Single(
             f => SourceRepository.PathCarrying([f], CutDownPluginFixture.PluginFileName, formKey) != null);
 
-    // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
-    // would pass whether or not the field was suppressed.
     [Fact]
-    public void Track_OfTheRealFixture_WritesCellTimestampData()
+    public void Track_OfTheRealFixture_WritesTheNonZeroTimestampsOfCell03C0F0()
     {
         var cellFile = Directory.EnumerateFiles(fixture.SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => f.Contains("03C0F0", StringComparison.Ordinal));
@@ -144,15 +132,12 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
         Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
     }
 
-    // This response because its condition Unknown1 is a real non-default pad from Fallout4.esm, so a
-    // missing-field bug cannot pass by writing a coincidental zero.
     [Fact]
-    public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
+    public void Track_OfTheRealFixture_WritesTheNonDefaultConditionUnknown1PadOfAFallout4EsmResponseAndHeaderStats()
     {
-        // Inline in its topic's document, so the topic's text is where the pad has to appear.
-        var topicText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
+        var topicDocumentText = File.ReadAllText(Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains("\"FormKey\": \"01AACD:Fallout4.esm\"", StringComparison.Ordinal)));
-        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicText, StringComparison.Ordinal);
+        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", topicDocumentText, StringComparison.Ordinal);
 
         var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
         Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);

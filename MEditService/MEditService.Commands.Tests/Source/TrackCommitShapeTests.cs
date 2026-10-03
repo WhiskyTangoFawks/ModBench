@@ -18,7 +18,7 @@ namespace MEditService.Commands.Tests.Source;
 public sealed class TrackCommitShapeTests : IDisposable
 {
     private const string ModName = "TwoPluginMod";
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-track-shape-").FullName;
+    private readonly ScratchDirectory _root = new("medit-track-shape-");
     private readonly string _modFolder;
     private readonly string _gameDir;
 
@@ -28,13 +28,13 @@ public sealed class TrackCommitShapeTests : IDisposable
         _gameDir = Directory.CreateDirectory(Path.Combine(_root, "game")).FullName;
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     [Fact]
     public async Task Track_OfBothPluginsOfAMod_CommitsTheModsOwnFiles_ThenEachPluginOnItsOwn()
     {
-        var first = WritePlugin("First.esp", "FirstNpc");
-        var second = WritePlugin("Second.esp", "SecondNpc");
+        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var result = await Track(UpstreamVersion("1.2.3"), "First.esp", "Second.esp");
 
@@ -42,10 +42,10 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.Equal(["Track TwoPluginMod", "Track First.esp 1.2.3", "Track Second.esp 1.2.3"], SubjectsOnMain());
         Assert.Equal(
             $"Plugin: First.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {first}\n",
-            TrailersOf("main~1"));
+            TrailersAsGitsOwnParserReads("main~1"));
         Assert.Equal(
             $"Plugin: Second.esp\nUpstream-Version: 1.2.3\nBinary-SHA256: {second}\n",
-            TrailersOf("main"));
+            TrailersAsGitsOwnParserReads("main"));
         Assert.Equal("main", Git("symbolic-ref", "--short", "HEAD").Trim());
     }
 
@@ -53,22 +53,22 @@ public sealed class TrackCommitShapeTests : IDisposable
     public async Task Track_WithNoUpstreamVersionInTheRequest_LeavesItOutOfEverySubjectAndTrailer_WhateverTheModFolderHolds()
     {
         File.WriteAllText(Path.Combine(_modFolder, "meta.ini"), "[General]\nversion=9.9.9\n");
-        var first = WritePlugin("First.esp", "FirstNpc");
-        var second = WritePlugin("Second.esp", "SecondNpc");
+        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var result = await Track("First.esp", "Second.esp");
 
         Assert.Empty(result.Refused);
         Assert.Equal(["Track TwoPluginMod", "Track First.esp", "Track Second.esp"], SubjectsOnMain());
-        Assert.Equal($"Plugin: First.esp\nBinary-SHA256: {first}\n", TrailersOf("main~1"));
-        Assert.Equal($"Plugin: Second.esp\nBinary-SHA256: {second}\n", TrailersOf("main"));
+        Assert.Equal($"Plugin: First.esp\nBinary-SHA256: {first}\n", TrailersAsGitsOwnParserReads("main~1"));
+        Assert.Equal($"Plugin: Second.esp\nBinary-SHA256: {second}\n", TrailersAsGitsOwnParserReads("main"));
     }
 
     [Fact]
     public async Task Track_ParksEachPluginsLastCompileRef_AtItsOwnBaselineCommit()
     {
-        var first = WritePlugin("First.esp", "FirstNpc");
-        var second = WritePlugin("Second.esp", "SecondNpc");
+        var first = WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        var second = WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         await Track("First.esp", "Second.esp");
 
@@ -81,8 +81,8 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfOnePluginInAModWithTwo_LeavesTheOtherUntracked()
     {
-        WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var result = await Track("First.esp");
 
@@ -95,8 +95,8 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfAPluginInAModThatAlreadyHasARepository_RefusesIt_PointingAtDecompile_AndCommitsNothing()
     {
-        WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
         await Track("First.esp");
         var mainBefore = Git("rev-parse", "refs/heads/main");
 
@@ -111,11 +111,10 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(_modFolder, SourceRepository.RootFor("Second.esp"))));
     }
 
-    // ADR-0003: a repository with history but no main is someone else's, and Track writes nothing to it.
     [Fact]
     public async Task Track_IntoAModWhoseRepositoryHasHistoryButNoMain_RefusesThePlugin_AndChangesNothingOfTheRepository()
     {
-        WritePlugin("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
         Git("init", "-q", "-b", "master");
         File.WriteAllText(Path.Combine(_modFolder, ".gitignore"), "theirs\n");
         Git("add", ".gitignore");
@@ -138,9 +137,9 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfASelectionWhereOnePluginFailsItsRoundTripGate_CommitsTheOthers_AndRefusesItOnceWithItsReason()
     {
-        WritePlugin("First.esp", "FirstNpc");
-        WritePlugin("Second.esp", "SecondNpc");
-        WritePlugin("Third.esp", "ThirdNpc");
+        WritePluginReturningItsBinarySha256("First.esp", "FirstNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("Third.esp", "ThirdNpc");
 
         var result = await Track(new RoundTripFailsFor("Second.esp"), "First.esp", "Second.esp", "Third.esp");
 
@@ -156,7 +155,7 @@ public sealed class TrackCommitShapeTests : IDisposable
     [Fact]
     public async Task Track_OfASelectionWhereEveryPluginIsRefused_CreatesNoRepository()
     {
-        WritePlugin("Second.esp", "SecondNpc");
+        WritePluginReturningItsBinarySha256("Second.esp", "SecondNpc");
 
         var result = await Track(new RoundTripFailsFor("Second.esp"), "Second.esp");
 
@@ -166,8 +165,6 @@ public sealed class TrackCommitShapeTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_modFolder, ".gitignore")));
     }
 
-    // The real adapter for every plugin but one, whose recompiled tree comes back with its NPC's
-    // EditorID changed: a codec defect no real codec has.
     private sealed class RoundTripFailsFor(string plugin) : ReadOnlyPluginAdapter
     {
         public override Task WriteFromTreeAsync(
@@ -184,8 +181,7 @@ public sealed class TrackCommitShapeTests : IDisposable
         }
     }
 
-    // The binary's own SHA-256, computed here from the bytes on disk.
-    private string WritePlugin(string name, string editorId)
+    private string WritePluginReturningItsBinarySha256(string name, string editorId)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         mod.Npcs.AddNew(editorId);
@@ -223,7 +219,6 @@ public sealed class TrackCommitShapeTests : IDisposable
     private string[] SubjectsOnMain() =>
         Git("log", "--reverse", "--format=%s", "refs/heads/main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-    // git's own trailer parser, so a block git would not read as trailers does not pass.
-    private string TrailersOf(string revision) =>
+    private string TrailersAsGitsOwnParserReads(string revision) =>
         Git("show", "-s", "--format=%(trailers:only,unfold)", revision).TrimEnd('\n') + "\n";
 }

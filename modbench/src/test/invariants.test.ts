@@ -3,13 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { present } from '../ports/present';
 
-// Rules a compiling change can break silently, checked as source text like contextBoundary.test.ts.
-
 const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
-// ADR-0017: a write verb is a surgical edit of one MO2 text file, and the corpus tests are what
-// prove it touched nothing else. A verb without one is unproven.
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = [
     'downloadsCommands/downloads.ts', 'install/installedMark.ts', 'modlist/modlist.ts',
@@ -31,8 +27,6 @@ describe('every MO2 text-file write command has a corpus test', () => {
   });
 });
 
-// The zoom-out draws exclude, include and delete as the downloads commands box: install's
-// interface is a new mod or an upgrade, and the installed mark it hides.
 describe('install holds only install', () => {
   const installFiles = readdirSync(join(SRC, 'install')).filter((f) => f.endsWith('.ts'));
 
@@ -42,9 +36,6 @@ describe('install holds only install', () => {
   });
 });
 
-// The Instance adapter hides the manager's file formats and their splices (target-architecture.d2):
-// a verb that marks a downloaded file hands the adapter its edit, and never splices the `.meta`
-// itself.
 describe('only the Instance adapter touches a downloaded file\'s .meta', () => {
   const importsTheSidecarPath = (source: string): boolean =>
     [...source.matchAll(/import\s*\{([^}]*)\}\s*from/g)].some((m) => /\bdownloadSidecarFile\b/.test(m[1] ?? ''));
@@ -67,8 +58,6 @@ function commandVerbs(source: string): string[] {
     .map((m) => present(m[1], "the exported function's name"));
 }
 
-// `createTreeView` has no declarative contribution, so the call sites are the seam for a tree's
-// options.
 describe('the createTreeView sites', () => {
   const sites = sourceFiles().flatMap((f) => treeViewOptions(read(f)));
 
@@ -79,14 +68,11 @@ describe('the createTreeView sites', () => {
     ]);
   });
 
-  // commands.md, Chrome: Collapse All is on trees only, never on a flat list.
   it('collapse-all views are the trees: Mods, the merged Plugins tree and Referenced By', () => {
     const collapsible = new Set(sites.filter((s) => /showCollapseAll:\s*true/.test(s.options)).map((s) => s.id));
     expect([...collapsible].sort()).toEqual(['modbench.modList', 'modbench.pluginListTree', 'modbench.referencedByTree']);
   });
 
-  // common.md, A view, story 6: every list selects several rows. The Toolbox is a readout, where
-  // selecting several rows means nothing (toolbox.md).
   it('every view but the Toolbox selects several rows', () => {
     const singleSelect = sites.filter((s) => !/canSelectMany:\s*true/.test(s.options)).map((s) => s.id);
     expect(singleSelect).toEqual(['modbench.toolbox']);
@@ -98,7 +84,6 @@ describe('the createTreeView sites', () => {
   });
 });
 
-// ADR-0017: read-only-for-editing is a tooltip; a contextValue for it would grow a second menu.
 describe('no contextValue encodes read-only', () => {
   it.each(sourceFiles())('%s', (file) => {
     expect(readOnlyContextValues(read(file))).toEqual([]);

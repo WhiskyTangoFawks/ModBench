@@ -11,10 +11,6 @@ import {
 type LoadOrderPluginRow = LoadOrderPlugin | LoadOrderPluginLine;
 import { present } from '../../ports/present';
 
-// Origins are asserted against their literal reserved values, not the constants the module uses
-// to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
-// would pass even if its value changed.
-
 type Provider = { winner: string; winnerMod: string; providers?: string[] };
 
 function index(
@@ -36,10 +32,9 @@ const OVERWRITE = join('/instance', 'overwrite');
 const lines = (order: string[], enabled: string[] = order): PluginEntry[] =>
   order.map((name) => ({ name, enabled: enabled.includes(name) }));
 
-// A file the game wrote at run time, as the adapter lists it.
 const runtimeOutput = (relativePath: string): OriginFile => ({ relativePath, path: join(OVERWRITE, ...relativePath.split('/')) });
 
-describe('buildLoadOrderRows', () => {
+describe('buildLoadOrderRows, its origins asserted as the literal reserved values of the wire contract rather than the constants the module produces them from', () => {
   it('a mod-provided listed plugin is the winning plugin at its plugins.txt slot, with that mod as origin', () => {
     const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
 
@@ -66,9 +61,6 @@ describe('buildLoadOrderRows', () => {
     ]);
   });
 
-  // ADR-0013: the overridden plugin is in the snapshot too — at the name's slot, carrying the
-  // line's own `*`, and not winning. Editing registers it beside the winner; only the winner
-  // participates.
   it('an overridden plugin of a listed name is sent at that slot, enabled as its line says, not winning', () => {
     const fakeIndex = index(
       { 'Shared.esp': { winner: '/mods/A/Shared.esp', winnerMod: 'A', providers: ['A', 'B'] } },
@@ -193,8 +185,7 @@ describe('originFolder', () => {
     expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
   });
 
-  // The reserved origins are the rival the guess `mods/<origin>` got wrong (ADR-0012).
-  it('answers the overwrite origin with the overwrite directory, never a folder under mods/', () => {
+  it('answers the overwrite origin with the overwrite directory, a reserved origin never a folder under mods/', () => {
     const rows = [row('overwrite', join('/instance', 'overwrite', 'Stray.esp'))];
 
     expect(originFolder(rows, 'overwrite')).toBe(join('/instance', 'overwrite'));
@@ -223,9 +214,7 @@ describe('originFolder', () => {
   });
 });
 
-// What plugin sync is handed instead of walking mods/ a second time: the Mod override
-// order's own answer, already resolved on the value.
-describe('providedPluginsOf', () => {
+describe('providedPluginsOf, what plugin sync is handed instead of walking mods/ a second time', () => {
   const row = (
     name: string, origin: string, path: string | undefined, winning = true,
   ) => ({ name, path, origin, slot: null, enabled: false, winning });
@@ -236,9 +225,7 @@ describe('providedPluginsOf', () => {
     expect(providedPluginsOf(rows)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
   });
 
-  // The overwrite-wins rule is spelled once, where the rows are built: the overridden mod plugin of
-  // a name overwrite/ also provides must not be the name's answer here.
-  it('answers a contested name with the winning plugin alone', () => {
+  it('answers a contested name with the winning plugin alone, not the overridden mod plugin of a name overwrite/ also provides', () => {
     const rows = [
       row('A.esp', 'overwrite', join('/instance', 'overwrite', 'A.esp')),
       row('A.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'A.esp'), false),
@@ -247,8 +234,7 @@ describe('providedPluginsOf', () => {
     expect(providedPluginsOf(rows)).toEqual(new Map([['a.esp', 'A.esp']]));
   });
 
-  // Data is presence, never provision: the instance did not supply it, so it is no append source.
-  it('leaves out a Data-folder plugin and a line with no plugin file at all', () => {
+  it('leaves out a Data-folder plugin, presence not provision so no append source, and a line with no plugin file at all', () => {
     const rows = [row('Fallout4.esm', 'Data', join('/game', 'Data', 'Fallout4.esm')), row('Ghost.esp', 'Data', undefined)];
 
     expect(providedPluginsOf(rows)).toEqual(new Map());
@@ -261,8 +247,7 @@ describe('providedPluginsOf', () => {
   });
 });
 
-// ADR-0013: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
-describe('loadOrderSnapshotOf', () => {
+describe('loadOrderSnapshotOf, the snapshot the sync PUTs, read straight from the value rather than a fresh walk', () => {
   const GAME_FOLDER = { kind: 'found', root: '/game', dataFolder: '/game/Data' } as const;
   const NOT_FOUND = { kind: 'notFound', looked: [], setting: 'modbench.mods.gameDirectory' } as const;
   const row = (name: string, origin: string, slot: number | null, facts: Partial<LoadOrderPlugin> = {}): LoadOrderPlugin =>
@@ -273,8 +258,7 @@ describe('loadOrderSnapshotOf', () => {
     loadOrderSnapshotOf({ plugins, gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine });
   const inGameFolder = (name: string): PluginAddress => ({ name, origin: 'Data' });
 
-  // principles.md, Never silently wrong: a snapshot lacking the game's masters is not sent.
-  it('is undefined — no put at all — while the game folder\'s plugins cannot be listed', () => {
+  it('is undefined — no put at all — while the game folder\'s plugins cannot be listed, as a snapshot lacking the game\'s masters is not sent', () => {
     expect(loadOrderSnapshotOf({ plugins: [row('a.esp', 'ModA', 0)], gameFolder: GAME_FOLDER, pluginsLoadedWithNoLine: undefined }))
       .toBeUndefined();
   });
@@ -291,7 +275,7 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshotOf([a, stray])).toMatchObject({ dataFolder: '/game/Data', plugins: [sent(a), sent(stray)] });
   });
 
-  it('sends as active the winning plugin of each enabled line, in line order', () => {
+  it('sends as active the winning plugin of each enabled line, in line order rather than the value\'s row order, with no disabled or overridden row slipping in', () => {
     const first = row('first.esp', 'ModF', 0);
     const second = row('second.esp', 'ModS', 1);
     const disabled = row('disabled.esp', 'ModD', 2, { enabled: false });
@@ -301,7 +285,7 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshotOf([second, disabled, overridden, unlisted, first])?.active).toEqual([address(first), address(second)]);
   });
 
-  it('sends a disabled mod\'s plugin in plugins, never in active', () => {
+  it('sends a disabled mod\'s plugin in plugins, never in active, since it never wins', () => {
     const a = row('a.esp', 'ModA', 0);
     const disabledModPlugin = row('off.esp', 'ModOff', null, { enabled: false, winning: false });
 
@@ -323,8 +307,7 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshot?.loadedWithNoLine).toEqual([{ name: 'Master.esm', origin: 'Data' }, { name: 'cc.esl', origin: 'Data' }]);
   });
 
-  // The file the game reads is the one the Mod override order resolves the name to.
-  it('sends a plugin the game loads with no line as the mod that provides it, once', () => {
+  it('sends a plugin the game loads with no line as the mod the Mod override order resolves its name to, once', () => {
     const provided = row('Master.esm', 'ModM', null, { enabled: false });
 
     const snapshot = snapshotOf([provided], [address(provided)]);
@@ -334,8 +317,7 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshot?.plugins).toEqual([sent(provided)]);
   });
 
-  // The game loads it first whatever its line says, and one file is never active twice.
-  it('places a plugin the game loads with no line once, first, when a line names it too', () => {
+  it('places a plugin the game loads with no line once, first whatever its line says, when a line names it too', () => {
     const a = row('a.esp', 'ModA', 0);
     const lined = { ...row('master.esm', 'Data', 1, { enabled: false }), path: join('/game/Data', 'master.esm') };
 
@@ -345,7 +327,6 @@ describe('loadOrderSnapshotOf', () => {
     expect(snapshot?.plugins.filter((p) => p.name.toLowerCase() === 'master.esm')).toHaveLength(1);
   });
 
-  // Rival: casting the union blind and sending `path: undefined` to the backend.
   it('omits a line-only row rather than sending it with path: undefined', () => {
     const a = row('a.esp', 'ModA', 0);
     const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };

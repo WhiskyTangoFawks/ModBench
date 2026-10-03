@@ -43,12 +43,11 @@ internal interface IRecordIndex : IDisposable
     /// switch is cheap (ADR-0009).</summary>
     string? IndexedContentHash(PluginAddress key);
 
-    /// <summary>The hash of the file at <paramref name="path"/> now, kept without a read while its
-    /// stamp holds (ADR-0009). Null when the file cannot be read.</summary>
+    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0009, Derived tactical
+    /// observations). Null when the file cannot be read.</summary>
     string? FileContentHash(string path);
 
-    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009:
-    /// the file-gone verb — never the meaning of a plugin leaving the load order, which is
+    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009's file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
     void Unindex(PluginAddress key);
 
@@ -72,8 +71,8 @@ internal interface IRecordIndex : IDisposable
     void UpdateWinners(IReadOnlyList<RegisteredPlugin> active);
 
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
-    /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0007). Records the
-    /// plugin does not hold are skipped.</summary>
+    /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0007).
+    /// Records the plugin does not hold are skipped.</summary>
     void SetCommittedBaseline(PluginAddress key, IReadOnlyList<(string FormKey, string Body)> baselines);
 
     /// <summary>These already-ingested records exist at no committed ref. Needed because
@@ -87,8 +86,8 @@ internal interface IRecordIndex : IDisposable
     void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
-    /// clears both), the one door SQL crosses this seam through (ADR-0007). Throws if the SQL returns
-    /// no <c>form_key</c> column.</summary>
+    /// clears both), the one door SQL crosses this seam through (ADR-0011). Throws if
+    /// the SQL returns no <c>form_key</c> column.</summary>
     void SetFilter(string? sql);
 
     /// <summary>ADR-0015: the one projection verb. Re-derives <paramref name="formKeys"/>' rows at

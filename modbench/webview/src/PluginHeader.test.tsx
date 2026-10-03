@@ -35,7 +35,6 @@ function renderHeader(facts: Facts = {}, props: Partial<React.ComponentProps<typ
   return { header, onToggleCollapse, onResize };
 }
 
-// editor.md, A column's header.
 describe('PluginHeader', () => {
   it('labels the column `[XX] File name`, and says nothing of the winner', () => {
     const { header } = renderHeader();
@@ -43,12 +42,11 @@ describe('PluginHeader', () => {
     expect(header).not.toHaveTextContent(/winner/);
   });
 
-  it('shows no origin on an expanded column', () => {
+  it('shows no origin on an expanded column, the origin sitting in the tooltip alone', () => {
     const { header } = renderHeader();
     expect(header).not.toHaveTextContent('ModA');
   });
 
-  // The Status table, its "When" and "The tooltip says" columns; the Tooltip row.
   it.each<[string, Facts, string, string]>([
     ['a copy mEdit could not read', { override: { parseDiagnosis: DIAGNOSIS } }, '(parse failure)', DIAGNOSIS],
     ['the game’s own plugin', { isImmutable: true }, '(read-only)', 'The game’s plugins are not edited.'],
@@ -66,27 +64,23 @@ describe('PluginHeader', () => {
     expect(header).toHaveAttribute('title', `MyMod.esp\nModA\n${reason}`);
   });
 
-  // "A column shows one status, the first in this table that applies."
   it.each<[string, Facts, string, string]>([
     ['parse failure over read-only', { override: { parseDiagnosis: DIAGNOSIS }, isImmutable: true }, '(parse failure)', '(read-only)'],
     ['read-only over in Overwrite', { override: { isInOverwrite: true }, isImmutable: true }, '(read-only)', '(in Overwrite)'],
     ['in Overwrite over untracked', { override: { isInOverwrite: true }, isTracked: false }, '(in Overwrite)', '(untracked)'],
     ['untracked over Partial Form', { override: { isPartialForm: true }, isTracked: false }, '(untracked)', '(Partial Form)'],
     ['Partial Form over tracked', { override: { isPartialForm: true } }, '(Partial Form)', '(tracked)'],
-  ])('shows %s', (_case, facts, shown, displaced) => {
+  ])('a column shows one status, the first that applies: %s', (_case, facts, shown, displaced) => {
     const { header } = renderHeader(facts);
     expect(header).toHaveTextContent(shown);
     expect(header).not.toHaveTextContent(displaced);
   });
 
-  // editor.md, The header... "It holds no controls"; a column's header holds none either, so
-  // nothing writes the Partial Form flag from here.
-  it('holds no control, not even on a Partial Form column', () => {
+  it('holds no control, so nothing writes the Partial Form flag from here, even on a Partial Form column', () => {
     const { header } = renderHeader({ override: { isPartialForm: true } });
     expect(header.querySelector('input, button, select')).toBeNull();
   });
 
-  // Columns, story 3.
   it('toggles its column’s collapse on a click anywhere on it', () => {
     const { header, onToggleCollapse } = renderHeader();
     fireEvent.click(header);
@@ -99,7 +93,6 @@ describe('PluginHeader', () => {
     expect(header).toHaveTextContent(/^\[01\] MyMod\.esp$/);
   });
 
-  // Columns, story 5.
   it('resizes its column by the drag of its edge, and does not collapse it', async () => {
     const { header, onToggleCollapse, onResize } = renderHeader();
     vi.spyOn(header, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 20));
@@ -134,9 +127,7 @@ describe('PluginHeader', () => {
     expect(header.querySelector('[data-column-edge]')).toBeNull();
   });
 
-  // The copy commands live on the header's native right-click menu, so the only thing to assert is
-  // the `data-vscode-context` payload they are gated on, anywhere a right click lands.
-  it('carries the context its menu reads on the whole header cell', () => {
+  it('carries on the whole header cell the data-vscode-context payload its native right-click menu gates the copy commands on', () => {
     const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'ModA', false));
     const { header } = renderHeader({}, { vscodeContext });
     expect(header).toHaveAttribute('data-vscode-context', vscodeContext);

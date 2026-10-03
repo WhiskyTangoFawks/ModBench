@@ -23,7 +23,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
 
     private static readonly PluginAddress OtherCase = new("CASED.ESP", "casedmod");
 
-    // The rival this pins: the record struct's own equality, which is case-sensitive.
     [Fact]
     public void TheOpenedPlugins_AnswerTheSamePlugin_WhateverTheCase()
     {

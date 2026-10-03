@@ -14,7 +14,7 @@ using Noggog.IO;
 
 namespace MEditService.Codec.Serialization;
 
-/// <summary>ADR-0007's per-record codec: one record to one file, never a whole plugin. Takes
+/// <summary>The per-record codec, never a whole plugin (ADR-0006). Takes
 /// IMajorRecordGetter rather than the generated serializer's narrower interface, because
 /// reflection needs only runtime assignability.</summary>
 public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
@@ -43,9 +43,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
         Encoding.UTF8.GetString(SerializeToBytes(record, gameRelease));
 
-    /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem: the
-    /// index stores a document byte-identical to the source file (ADR-0007), and indexing produces
-    /// millions, so a temp-file round trip is not an option.</summary>
+    /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem
+    /// (ADR-0011): indexing produces millions, so a temp-file round trip is not an option.</summary>
     public byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
     {
         // No directory: nothing here writes a file, so there is nothing to resolve against.
@@ -99,9 +98,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
         // Resolved first on both branches so an unsupported type fails with this class's named exception.
         var generated = FindGeneratedSerializationType(record.GetType());
-        // ADR-0007's discriminator policy: a path-ambiguous record dispatches through the game's
-        // abstract serializer, whose SerializeWithCheck writes MutagenObjectType ahead of the
-        // fields, and every other record carries none.
+        // A path-ambiguous record dispatches through the game's abstract serializer, whose
+        // SerializeWithCheck writes MutagenObjectType ahead of the fields, and every other record
+        // carries none.
         var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
             ? ResolveCheckedSerializeMethod(gameRelease)
             : ResolveConcreteSerializeMethod(generated);

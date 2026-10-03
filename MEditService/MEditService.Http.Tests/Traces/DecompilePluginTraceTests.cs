@@ -7,9 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>decompile-plugin, fired by track into a new repository and by decompile into a tracked
-/// mod's working tree: each plugin applied or refused on its own, and the source reaching the
-/// answers.</summary>
 public sealed class DecompilePluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
@@ -44,8 +41,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
             "track-progress", e => e.GetProperty("trackProgress").GetProperty("phase").GetString() == "Idle");
         Assert.Contains(progress, e => e.GetProperty("trackProgress").GetProperty("origin").GetString() == Origin);
 
-        // Editing is what Track is for, and an edit is refused on a plugin no repository holds, so
-        // an applied edit is the tracked repository answering.
         var edit = await Client.Edit(await Client.FirstFormKey(Plugin, Origin), Plugin, Origin, "HeightMax", 0.75);
         edit.EnsureSuccessStatusCode();
         Assert.True((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
@@ -148,8 +143,6 @@ public sealed class DecompilePluginTraceTests : HostedTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // The hand-off: the next snapshot, the same load order, finds the source tree Track wrote, and
-    // the Indexer reads the plugin's documents from then on.
     [Fact]
     public async Task AfterTrack_TheNextSnapshotReportsThePluginTracked()
     {

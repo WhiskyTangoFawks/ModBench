@@ -3,12 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { present } from '../ports/present';
 
-// One directory per command box the zoom-out draws in the Modbench core band and the code builds.
 const COMMAND_BOXES = ['modlist', 'pluginsCommands', 'instanceCommands', 'downloadsCommands', 'install'];
 
-// A type the value carries arrives as an argument, so naming one is not reading the model.
 const READ_MODEL_MODULE = join('instanceLoader', 'instance');
-// `Instance` alone is prose a comment may use; these two are only ever the type.
 const READ_MODEL_NAMES = ['InstanceValue', 'InstanceView'];
 
 const readModelIn = (source: string): string[] => [
@@ -45,21 +42,16 @@ describe('commands never read the Instance', () => {
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: a command handed the Instance's value instead of walking disk itself.
   it('flags a module that imports the read model, by module and by name alike', () => {
     expect(readModelIn("import type { InstanceValue } from '../instanceLoader/instance';\n"))
       .toEqual([join('..', 'instanceLoader', 'instance'), 'InstanceValue']);
   });
 
-  // Rival: a rule so broad that every module of the Instance's box reads as the read model —
-  // a command IS handed the winners, as an argument whose type it has to name.
   it('leaves a type the value carries alone, taken from the box beside the read model', () => {
     expect(readModelIn("import type { FileWinners } from '../instanceLoader/fileConflictIndex';\n")).toEqual([]);
   });
 });
 
-// The value carries the merged view, so a command is handed the winners it needs. One walking
-// mods/ itself doubles the recompute's walk and re-spells overwrite-wins.
 const WALKERS = ['buildFileConflictIndex', 'overwriteDir'];
 
 const walkersIn = (source: string): string[] =>
@@ -75,16 +67,12 @@ describe('commands never walk the instance', () => {
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: plugin sync rebuilding the index and re-reading overwrite/
-  // instead of taking the value's winners as an argument.
   it('flags a module that builds the index or reads overwrite/ itself', () => {
     const planted = "const index = await buildFileConflictIndex(entries, root, log);\nawait readdir(overwriteDir(root));\n";
     expect(walkersIn(planted)).toEqual(['buildFileConflictIndex', 'overwriteDir']);
   });
 });
 
-// The same rule for the rest of a command's inputs: the profiles, the Data folder's plugins and
-// the game name are fields of the value, and the caller reads each off it.
 const PROBES = ['listProfiles', 'profilesDir', 'readGameName', 'rootLevelPlugins'];
 
 const probesIn = (source: string): string[] =>
@@ -100,8 +88,6 @@ describe('a command probes the instance for none of its own inputs', () => {
     expect(offenders).toEqual({});
   });
 
-  // Rival: the profile switch listing `profiles/` itself, and install re-opening
-  // ModOrganizer.ini for `gameName`, both of which the value already answers.
   it('flags each probe wherever it is planted', () => {
     expect(probesIn('const all = await listProfiles(root);\n')).toEqual(['listProfiles']);
     expect(probesIn('const gameName = readGameName(await get(settingsFile(instanceRoot)));\n'))

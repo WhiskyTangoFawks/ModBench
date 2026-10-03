@@ -1,7 +1,5 @@
 namespace MEditService.Http.Tests.TestSupport;
 
-/// <summary>A class whose subject is the running service: one host, one client for it, and the
-/// restart that proves what a process boundary carries.</summary>
 public abstract class HostedTests : IDisposable
 {
     private MEditHost _app;
@@ -16,22 +14,16 @@ public abstract class HostedTests : IDisposable
 
     protected IServiceProvider Services => _app.Services;
 
-    private readonly List<IDisposable> _owned = [];
+    private readonly List<IDisposable> _fixturesDisposedAfterTheHostStops = [];
 
-    // A subclass that needs a differently-shaped host (one that collects its own log output, for
-    // instance) overrides this so Restart() rebuilds that same shape, not a bare one.
     protected virtual MEditHost CreateHost() => new();
 
-    // A test-local fixture, disposed after the host rather than by its own "using": the host's
-    // reconcile may still be reading its .git tree.
     protected T Owned<T>(T fixture) where T : IDisposable
     {
-        _owned.Add(fixture);
+        _fixturesDisposedAfterTheHostStops.Add(fixture);
         return fixture;
     }
 
-    // Stop the service and start it again: the same files on disk, a new process, nothing carried
-    // over in memory.
     protected void Restart()
     {
         StopTheService();
@@ -39,11 +31,8 @@ public abstract class HostedTests : IDisposable
         Client = _app.CreateClient();
     }
 
-    // What the subclass built on disk, disposed after the host that was reading it.
     protected virtual void DisposeFixtures() { }
 
-    // The entry point's own RunAsync disposes the host too, and whichever disposal comes second
-    // returns at once; the Index's Dispose returns only once no reconcile is still reading.
     private void StopTheService()
     {
         Client.Dispose();
@@ -53,7 +42,7 @@ public abstract class HostedTests : IDisposable
     public void Dispose()
     {
         StopTheService();
-        foreach (var fixture in _owned) fixture.Dispose();
+        foreach (var fixture in _fixturesDisposedAfterTheHostStops) fixture.Dispose();
         DisposeFixtures();
         GC.SuppressFinalize(this);
     }

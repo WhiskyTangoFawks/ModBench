@@ -19,7 +19,7 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
     private const int PartialForm = 0x4000;
     private const string OverrideOrigin = "OverrideMod";
 
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-partial-left-").FullName;
+    private readonly ScratchDirectory _root = new("medit-partial-left-");
     private readonly PluginAddress _override = new("Override.esp", OverrideOrigin);
     private readonly FormKey _cell;
     private readonly EditRecordHandler _handler;
@@ -56,7 +56,7 @@ public sealed class PartialFormCellCopyToTheLeftTests : IDisposable
         _handler = TestEditService.EditHandler(holder);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     private static CellBlock InteriorBlockHolding(Cell cell)
     {

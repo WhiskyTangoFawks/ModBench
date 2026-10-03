@@ -6,10 +6,7 @@ namespace MEditService.Commands.Tests.Architecture;
 
 public sealed class CommandHandlerConventionTests
 {
-    // Each gesture's change appends its handler and the member its carrier answers with. Spelled
-    // rather than nameof, so a carrier that stops answering fails here rather than following a
-    // rename.
-    private static readonly (Type Handler, string Landed)[] Handlers =
+    private static readonly (Type Handler, string LandedMemberSpelledNotNameof)[] Handlers =
     [
         (typeof(EditRecordHandler), "Applied"),
         (typeof(DeleteRecordHandler), "AllApplied"),
@@ -46,13 +43,13 @@ public sealed class CommandHandlerConventionTests
     public static IEnumerable<object[]> EveryHandler => Handlers.Select(entry => new object[] { entry.Handler });
 
     public static IEnumerable<object[]> EveryAnswer =>
-        Handlers.Select(entry => new object[] { entry.Handler, entry.Landed });
+        Handlers.Select(entry => new object[] { entry.Handler, entry.LandedMemberSpelledNotNameof });
 
     [Theory]
     [MemberData(nameof(EveryHandler))]
     public void AHandler_OffersTheGestureAndNothingElse(Type handler)
     {
-        var gestures = GestureMethods(handler);
+        var gestures = DeclaredMethodsNotRequiredByAnInterface(handler);
 
         Assert.True(
             gestures.Length == 1,
@@ -64,12 +61,12 @@ public sealed class CommandHandlerConventionTests
     [MemberData(nameof(EveryAnswer))]
     public void AHandler_AnswersWhetherTheWriteLanded(Type handler, string landed)
     {
-        var answer = Answered(GestureMethods(handler).Single().ReturnType);
+        var answer = AnswerCarrierUnwrappingTask(DeclaredMethodsNotRequiredByAnInterface(handler).Single().ReturnType);
 
         Assert.True(
             LandedType(answer, landed) == typeof(bool),
             $"{answer.Name} has no public {landed} of type bool, so {handler.Name}'s carrier does " +
-            "not answer with it (ADR-0014).");
+            "not answer with it.");
     }
 
     [Theory]
@@ -89,10 +86,8 @@ public sealed class CommandHandlerConventionTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == handler);
     }
 
-    // IDisposable on one handler is neither of the things ruling 2 forbids; an interface two
-    // handlers share is the shared handler interface by another name.
     [Fact]
-    public void NoInterface_IsSharedAcrossHandlers()
+    public void NoInterfaceIsSharedByTwoHandlers()
     {
         var shared = Handlers
             .SelectMany(entry => entry.Handler.GetInterfaces().Distinct())
@@ -115,9 +110,7 @@ public sealed class CommandHandlerConventionTests
             found);
     }
 
-    // Declared only, so the members every object has are not the gesture, and minus what an
-    // interface asks for, so implementing one is not a second gesture.
-    private static MethodInfo[] GestureMethods(Type handler)
+    private static MethodInfo[] DeclaredMethodsNotRequiredByAnInterface(Type handler)
     {
         var required = handler.GetInterfaces()
             .SelectMany(contract => handler.GetInterfaceMap(contract).TargetMethods)
@@ -128,16 +121,12 @@ public sealed class CommandHandlerConventionTests
             .ToArray();
     }
 
-    // A property, a field or a parameterless method: which of the three a gesture's own carrier
-    // uses is its business, and the entry above names the member either way.
     private static Type? LandedType(Type answer, string member) =>
         answer.GetProperty(member, BindingFlags.Public | BindingFlags.Instance)?.PropertyType
         ?? answer.GetField(member, BindingFlags.Public | BindingFlags.Instance)?.FieldType
         ?? answer.GetMethod(member, BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes)?.ReturnType;
 
-    // Track's answer arrives later rather than in a different shape, so the task is unwrapped and
-    // the carrier inside it is what the convention asks about.
-    private static Type Answered(Type returned) =>
+    private static Type AnswerCarrierUnwrappingTask(Type returned) =>
         returned.IsGenericType && returned.GetGenericTypeDefinition() == typeof(Task<>)
             ? returned.GetGenericArguments()[0]
             : returned;

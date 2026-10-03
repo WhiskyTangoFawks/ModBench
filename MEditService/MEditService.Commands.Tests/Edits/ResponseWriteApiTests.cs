@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A response lives inline in its topic's document, so every gesture on one patches that
-/// document at the response's element only, and compile keeps the document's order.</summary>
 public sealed class ResponseWriteApiTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -23,7 +21,6 @@ public sealed class ResponseWriteApiTests : IDisposable
 
     private string TopicFile => _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId);
 
-    // The topic document's own Responses array, in document order — the only order a response has.
     private IReadOnlyList<string> ResponseFormKeys()
     {
         using var topic = JsonDocument.Parse(_fixture.Document(_fixture.DialogTopic.ToString()).Require().Body);
@@ -114,8 +111,6 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString()).Require().Body);
     }
 
-    // The container rule's mint: the destination lacks the topic and the quest, so both land bare
-    // and Partial Form, with the response inline in the topic's document.
     [Fact]
     public async Task CopyingAResponseAsOverride_IntoAPluginLackingItsTopic_MintsABarePartialFormTopicWithTheResponseInline()
     {

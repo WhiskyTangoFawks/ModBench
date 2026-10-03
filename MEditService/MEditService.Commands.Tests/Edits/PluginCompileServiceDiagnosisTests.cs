@@ -2,9 +2,6 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Forged corruption, as in <c>BinaryRoundTripGateTests</c>: no real tracked-source
-/// corruption exists to lift into TestData. A corrupt FormKey in source JSON throws
-/// <c>FilePathedException</c> wrapping <see cref="ArgumentException"/>, not <c>RecordException</c>.</summary>
 public sealed class PluginCompileServiceDiagnosisTests : IDisposable
 {
     private readonly CompileFixture _mod = new();
@@ -27,8 +24,6 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         Assert.Contains("Re-Track to regenerate the source.", result.RefusalReason);
     }
 
-    // Mod-folder relative, so the named file joins straight onto the mod folder for the Problems
-    // panel, whichever source the compile read.
     [Fact]
     public async Task Compile_WhenTheWorkingTreeHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
     {

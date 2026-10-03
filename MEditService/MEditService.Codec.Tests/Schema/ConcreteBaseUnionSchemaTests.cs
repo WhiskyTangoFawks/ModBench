@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Tests.Indexing;
 
-/// <summary>A concrete Loqui base with subclasses in the same assembly (ScriptProperty and its
-/// fourteen leaves) is a union like an abstract one, with the base itself as one more leaf.</summary>
 public sealed class ConcreteBaseUnionSchemaTests
 {
     private static ColumnSpec NpcAdapterColumn(SchemaReflector reflector) =>
@@ -116,10 +114,8 @@ public sealed class ConcreteBaseUnionSchemaTests
         Assert.Equal("0x0102", layers[1].GetProperty("AlphaLayerData").GetString());
     }
 
-    // The pin is asserted so a Mutagen bump that changes the concrete-base census fails here, where
-    // each ruling can be revisited, rather than silently widening the schema.
     [Fact]
-    public void ConcreteBasesWithSubclasses_InThePinnedFallout4Assembly_AreExactlyTheRuledOnSix()
+    public void ConcreteBasesWithSubclasses_InThePinnedFallout4Assembly_AreExactlyTheRuledOnSix_SoAMutagenBumpChangingTheCensusFailsHereWhereEachRulingCanBeRevisited()
     {
         var assembly = typeof(Fallout4Mod).Assembly;
         var version = assembly.GetName().Version

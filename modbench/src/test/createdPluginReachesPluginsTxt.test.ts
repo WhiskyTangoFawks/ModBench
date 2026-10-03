@@ -1,5 +1,3 @@
-// create-plugin, Hand-off: the create writes only the file, in the folder the place names. The
-// next instance value carries it, and plugin sync gives it its line at the end, disabled.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,8 +14,6 @@ import { accessTo, adapterOver, NO_DOWNLOADS, STEADY_WINDOW } from './mo2/adapte
 
 const PROFILE = 'Default';
 
-// The two origins this suite picks always resolve to a folder; a `lost` answer here means the
-// fixture broke, never a real case for the test to branch on.
 function folderOf(place: PlaceFolder): string {
   if ('folder' in place) return place.folder;
   throw new Error(`Expected the value to name a folder, not ${JSON.stringify(place)}.`);

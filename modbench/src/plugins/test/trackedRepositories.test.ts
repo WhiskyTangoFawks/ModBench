@@ -5,7 +5,6 @@ import {
 } from '../trackedRepositories';
 import type { PluginMetadata } from '../../client';
 
-// The Instance value's own two facts, doubled.
 const modDirsOf = (byOrigin: Record<string, string>): ReadonlyMap<string, string> => new Map(Object.entries(byOrigin));
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
@@ -27,14 +26,10 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
   };
 }
 
-// ── trackedFoldersOf ────────────────────────────────────────────────────
-
 describe('trackedFoldersOf', () => {
   it('answers the folder of a tracked origin, and none for its untracked sibling', () => {
     const plugins = [
       makePlugin({ path: '/mods/TrackedMod/Tracked.esp', origin: 'TrackedMod' }),
-      // Positive control, checked through the identical function call: the untracked sibling
-      // must be absent, proving the tracked one's presence means something.
       makePlugin({ path: '/mods/UntrackedMod/Untracked.esp', origin: 'UntrackedMod' }),
     ];
 
@@ -58,8 +53,6 @@ describe('trackedFoldersOf', () => {
   });
 });
 
-// ── registerTrackedRepositories (no duplicate SCM registration) ─────────────
-
 describe('registerTrackedRepositories', () => {
   it('calls openRepository exactly once per distinct mod folder', async () => {
     const openRepository = vi.fn().mockResolvedValue(undefined);
@@ -71,17 +64,14 @@ describe('registerTrackedRepositories', () => {
     expect(openRepository).toHaveBeenCalledWith('/mods/B');
   });
 
-  it('never calls openRepository twice for the same folder', async () => {
+  it('never calls openRepository twice for a folder handed twice', async () => {
     const openRepository = vi.fn().mockResolvedValue(undefined);
 
-    // The caller hands one folder per tracked plugin, so two plugins sharing a folder hand it twice.
     await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/A']);
 
     expect(openRepository).toHaveBeenCalledTimes(1);
   });
 
-  // The returned repository handles are what extension.ts keeps around to prompt a
-  // post-edit Source Control status refresh — discarding them would leave nothing to refresh.
   it('resolves to a Map of folder to the repository openRepository returned', async () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
@@ -92,9 +82,7 @@ describe('registerTrackedRepositories', () => {
     expect(repositories).toEqual(new Map([['/mods/A', repoA], ['/mods/B', repoB]]));
   });
 
-  it('omits a folder whose openRepository call resolved null', async () => {
-    // The real `vscode.git` API's own `openRepository` return type is `Repository | null` — a
-    // null here must not become a null-valued map entry a later `.status()` call would crash on.
+  it('omits a folder whose openRepository call resolved null, leaving no null-valued entry', async () => {
     const openRepository = vi.fn().mockResolvedValue(null);
 
     const repositories = await registerTrackedRepositories(openRepository, ['/mods/A']);
@@ -102,8 +90,6 @@ describe('registerTrackedRepositories', () => {
     expect(repositories.size).toBe(0);
   });
 });
-
-// ── pluginRepositoriesOf (extension.ts carries no business logic) ──────────────────────────────
 
 describe('pluginRepositoriesOf', () => {
   it('maps each plugin to the repository resolved for its tracked folder', () => {
@@ -127,8 +113,6 @@ describe('pluginRepositoriesOf', () => {
   });
 
   it('omits a plugin whose folder has no entry in folderRepositories', () => {
-    // A folder whose openRepository call declined (registerTrackedRepositories already dropped it
-    // from the map) — never a null-valued entry a later `.status()` call would crash on.
     const folders = new Map([[pluginAddressKey('U.esp', 'Declined'), '/mods/Declined']]);
 
     expect(pluginRepositoriesOf(folders, new Map()).size).toBe(0);

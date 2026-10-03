@@ -12,9 +12,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A member the union's leaves shape differently is written through the leaf the
-/// document names, a record-level scalar and an OMOD property value alike; the result is the
-/// codec's own document (ADR-0005).</summary>
 public sealed class UnionVariantEditTests : IDisposable
 {
     private readonly DocumentEditFixture _fixture = new();

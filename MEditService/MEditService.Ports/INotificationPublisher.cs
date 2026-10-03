@@ -2,15 +2,14 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Ports;
 
-/// <summary>ADR-0014: the notification channel's one publish surface. Who is
-/// listening — the SSE stream, a test recorder, nobody — is the adapter's business alone.</summary>
+/// <summary>ADR-0014's publish port.</summary>
 public interface INotificationPublisher
 {
     void Publish(Notification notification);
 }
 
-/// <summary>One of the notification kinds ADR-0014 names. Kind is both the SSE event name and the
-/// wire discriminator.</summary>
+/// <summary>One of the notification kinds the Ports box names (target-architecture.d2
+/// medit_kernel.ports). Kind is both the SSE event name and the wire discriminator.</summary>
 public abstract record Notification(string Kind)
 {
     /// <summary>The one wire shape every kind serializes to.</summary>
@@ -25,8 +24,8 @@ public sealed record RowsChangedNotification(PluginAddress Plugin, IReadOnlyList
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, Keys, Sequence);
 }
 
-/// <summary>A validation re-derived or removed a whole plugin (ADR-0009) — too many rows to name, so
-/// this names the plugin instead.</summary>
+/// <summary>A validation re-derived or removed a whole plugin (ADR-0009) — too many
+/// rows to name, so this names the plugin instead.</summary>
 public sealed record PluginChangedNotification(PluginAddress Plugin, long Sequence)
     : Notification("plugin-changed")
 {

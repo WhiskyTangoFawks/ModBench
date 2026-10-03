@@ -10,18 +10,12 @@ using Noggog;
 
 namespace MEditService.Http.Tests.Api;
 
-// ADR-0012 for the spatial routes, over a load order really holding two files of one filename.
-// Real mod-folder origins: ColumnKey.Of elides PluginOrigin.DataDirectory, so a default-origin
-// fixture passes whether or not the routes honour origin.
 public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both plugins build in the same order from a fresh Fallout4Mod against the same ModKey, so
-    // they land on identical FormKeys: one captured FormKey addresses both plugins' routes,
-    // distinguished only by `origin`.
-    private static (string WorldspaceFk, string CellFk) ConfigurePlugin(Fallout4Mod mod, string tag)
+    private static (string WorldspaceFk, string CellFk) ConfigurePluginWithFormKeysIdenticalAcrossPlugins(Fallout4Mod mod, string tag)
     {
         var wrld = mod.Worldspaces.AddNew($"World{tag}");
         var extCell = new Cell(mod) { EditorID = $"Cell{tag}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
@@ -44,29 +38,27 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         return (wrld.FormKey.ToString(), extCell.FormKey.ToString());
     }
 
-    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoPlugins()
+    private static (ScatteredFixtureData Fx, string WorldspaceFk, string CellFk) BuildTwoPluginsUnderRealModFolderOrigins()
     {
         string? worldspaceFk = null;
         string? cellFk = null;
         var fx = new PluginFixtureBuilder("api-spatial-origin")
-            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModB"), origin: "ModB")
             .WithPlugin("Shared.esp", mod =>
             {
-                var (wrld, cell) = ConfigurePlugin(mod, "ModA");
+                var (wrld, cell) = ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModA");
                 worldspaceFk = wrld;
                 cellFk = cell;
             }, origin: "ModA")
             .BuildScattered();
         return (
             fx,
-            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the worldspace FormKey."),
-            cellFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have set the cell FormKey."));
+            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have set the worldspace FormKey."),
+            cellFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have set the cell FormKey."));
     }
 
     private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
-        // only the winning, enabled, listed one is active, and only it is read.
         var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
@@ -84,7 +76,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaces_ExplicitOrigin_ReturnsThatPluginsOwnWorldspaces()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
 
@@ -96,7 +88,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaces_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
 
@@ -107,7 +99,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaceBlocks_ExplicitOrigin_ReturnsThatPluginsOwnCells()
     {
-        var (fx, worldspaceFk, _) = BuildTwoPlugins();
+        var (fx, worldspaceFk, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
@@ -122,7 +114,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetWorldspaceBlocks_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, worldspaceFk, _) = BuildTwoPlugins();
+        var (fx, worldspaceFk, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
@@ -134,7 +126,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetCellChildRecords_ExplicitOrigin_ReturnsThatPluginsOwnPlacedRefs()
     {
-        var (fx, _, cellFk) = BuildTwoPlugins();
+        var (fx, _, cellFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(cellFk);
@@ -148,7 +140,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetCellChildRecords_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, cellFk) = BuildTwoPlugins();
+        var (fx, _, cellFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(cellFk);
@@ -160,7 +152,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetInteriorCells_ExplicitOrigin_ReturnsThatPluginsOwnInteriorCells()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
 
@@ -172,7 +164,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     [Fact]
     public async Task GetInteriorCells_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, _, _) = BuildTwoPlugins();
+        var (fx, _, _) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
 
@@ -180,8 +172,6 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await AssertOriginRequiredProblem(omitted);
     }
 
-    // A 400 alone doesn't say why: some other cause could return the same status, so the problem
-    // detail itself is the assertion that this is the origin guard and not a stray 400 elsewhere.
     private static async Task AssertOriginRequiredProblem(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

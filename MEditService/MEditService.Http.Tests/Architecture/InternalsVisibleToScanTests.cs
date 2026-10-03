@@ -4,9 +4,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>A box's interface is its test surface: the captions in
-/// docs/architecture/target-architecture.d2 are the interfaces, so no production project lets any
-/// assembly past one.</summary>
 public sealed class InternalsVisibleToScanTests
 {
     [Fact]

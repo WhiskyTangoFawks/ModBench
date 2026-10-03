@@ -9,11 +9,10 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// A GRUP signature backed by several concrete subclasses, discriminated per record rather than per
-// table, must not take its schema from whichever subclass discovery enumerates first: that leaves
-// every record of any other subclass indexed with no value.
 public class MultiSubclassIndexingTests
 {
+    private const ushort LastFormVersionTheParserReadsADmgtAsIndexed = 77;
+
     private static Dictionary<string, object?> FieldByEditorId(IRecordReads reads, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -38,9 +37,6 @@ public class MultiSubclassIndexingTests
     [Fact]
     public void Index_Gmst_AllSubclasses_DataColumnRoundTripsForEveryType()
     {
-        // All four asserted in one test deliberately: the defect is invisible if only the
-        // discovery-winning subclass (today GameSettingBool for FO4, by CLR reflection order — not
-        // something to rely on) is checked.
         using var fixture = new PluginFixtureBuilder("gmst-subclasses")
             .WithPlugin("Gmst263.esp", mod =>
             {
@@ -56,17 +52,13 @@ public class MultiSubclassIndexingTests
         Assert.Equal(4, byEdid.Count);
         Assert.Equal(42, byEdid["iTest"].GetInt32());
         Assert.Equal(3.5f, byEdid["fTest"].GetSingle());
-        // A game setting's string is a translated string, which the codec spells as an object.
         Assert.Equal("hello", byEdid["sTest"].GetProperty("Value").GetString());
         Assert.True(byEdid["bTest"].GetBoolean());
     }
 
     [Fact]
-    public void Index_Glob_AllSubclasses_DataColumnRoundTripsForEveryType()
+    public void Index_Glob_EverySubclassLands_AndOnlyGlobalBoolsDataIsLostInTheBinary()
     {
-        // Global is the same shape as GMST (GlobalInt/Float/Short/Bool, all GLOB, each with its
-        // own Data type) and is covered by the same table-agnostic mechanism, not a glob-specific
-        // code path — asserted rather than presumed.
         using var fixture = new PluginFixtureBuilder("glob-subclasses")
             .WithPlugin("Glob263.esp", mod =>
             {
@@ -83,16 +75,12 @@ public class MultiSubclassIndexingTests
         Assert.Equal(7, Assert.IsType<JsonElement>(byEdid["TestGlobInt"]).GetInt32());
         Assert.Equal(1.25f, Assert.IsType<JsonElement>(byEdid["TestGlobFloat"]).GetSingle());
         Assert.Equal(3, Assert.IsType<JsonElement>(byEdid["TestGlobShort"]).GetInt32());
-        // Mutagen writes a GlobalBool's FLTV as one byte, so its value does not survive the binary;
-        // the record still lands as its own subclass, with the null the overlay reads.
-        Assert.True(byEdid.ContainsKey("TestGlobBool"));
+        Assert.Null(byEdid["TestGlobBool"]);
     }
 
     [Fact]
     public void Index_Omod_AllSubclasses_PropertiesColumnRoundTripsForEveryType()
     {
-        // The same defect for OMOD's five concrete subclasses, in one real reconcile-to-read round
-        // trip. It is invisible if only the discovery-winning subclass is checked.
         using var fixture = new PluginFixtureBuilder("omod-subclasses")
             .WithPlugin("Omod339.esp", mod =>
             {
@@ -131,8 +119,6 @@ public class MultiSubclassIndexingTests
     [Fact]
     public void Index_Dmgt_BothSubclasses_EachReadsItsOwnShapeThroughTheOneDamageTypesColumn()
     {
-        // DamageType and DamageTypeIndexed declare DamageTypes with different element shapes: one
-        // column, one variant per record class, each record's document read as its own class.
         using var fixture = new PluginFixtureBuilder("dmgt-subclasses")
             .WithPlugin("DmgtSplit339.esp", mod =>
             {
@@ -143,8 +129,7 @@ public class MultiSubclassIndexingTests
                     Spell = new FormLink<ISpellGetter>(FormKey.Factory("000002:Test.esp")),
                 });
                 mod.DamageTypes.Add(structShaped);
-                // Below form version 78 the binary parser reads a DMGT as the indexed shape.
-                var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { FormVersion = 77, DamageTypes = new ExtendedList<uint> { 7, 11 } };
+                var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { FormVersion = LastFormVersionTheParserReadsADmgtAsIndexed, DamageTypes = new ExtendedList<uint> { 7, 11 } };
                 mod.DamageTypes.Add(scalarShaped);
             })
             .Build();

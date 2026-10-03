@@ -8,9 +8,6 @@ namespace MEditService.Http.Tests.Architecture;
 
 public sealed class WriteRouteHandlerTests
 {
-    // The wire door for each gesture, and the type behind it. Spelled rather than derived, so a
-    // route that stops reaching its handler fails here rather than following the change. Internal:
-    // WriteRouteSeamTests checks its own route set against this one.
     internal static readonly (string Method, string Pattern, Type Handler)[] Routes =
     [
         ("POST", "/records/{formKey}/edit", typeof(EditRecordHandler)),
@@ -26,9 +23,7 @@ public sealed class WriteRouteHandlerTests
 
     private const string CommandsNamespace = "MEditService.Commands";
 
-    // The two prefixes the record and plugin gestures live under. A mutating route under either is a
-    // write route whether or not anyone gave it a handler.
-    private static readonly string[] GesturePrefixes = ["/records", "/plugins"];
+    private static readonly string[] PrefixesWhoseMutatingRoutesAreWriteRoutes = ["/records", "/plugins"];
 
     public static IEnumerable<object[]> EveryRoute =>
         Routes.Select(route => new object[] { route.Method, route.Pattern, route.Handler });
@@ -37,7 +32,7 @@ public sealed class WriteRouteHandlerTests
     [MemberData(nameof(EveryRoute))]
     public void AWriteRoute_ReachesItsOwnHandler(string method, string pattern, Type handler)
     {
-        var mapped = Mapped().SingleOrDefault(route => route.Method == method && route.Pattern == pattern);
+        var mapped = MappedByTheHost().SingleOrDefault(route => route.Method == method && route.Pattern == pattern);
 
         Assert.True(mapped.Pattern != null, $"{method} {pattern} is not mapped.");
         Assert.Equal([handler], mapped.Handlers);
@@ -47,7 +42,7 @@ public sealed class WriteRouteHandlerTests
     [MemberData(nameof(EveryRoute))]
     public void AWriteRoute_IsNamedForTheGestureItsHandlerIs(string method, string pattern, Type handler)
     {
-        var mapped = Mapped().Single(route => route.Method == method && route.Pattern == pattern);
+        var mapped = MappedByTheHost().Single(route => route.Method == method && route.Pattern == pattern);
 
         Assert.Equal(handler.Name, mapped.Name + "Handler");
     }
@@ -55,10 +50,10 @@ public sealed class WriteRouteHandlerTests
     [Fact]
     public void EveryWriteRoute_IsOneThisSuiteNames()
     {
-        var writes = Mapped()
+        var writes = MappedByTheHost()
             .Where(route => route.Handlers.Count > 0
                 || (route.Method != "GET"
-                    && Array.Exists(GesturePrefixes, prefix =>
+                    && Array.Exists(PrefixesWhoseMutatingRoutesAreWriteRoutes, prefix =>
                         route.Pattern.StartsWith(prefix, StringComparison.Ordinal))))
             .Select(route => $"{route.Method} {route.Pattern}")
             .Order(StringComparer.Ordinal);
@@ -84,9 +79,7 @@ public sealed class WriteRouteHandlerTests
     private readonly record struct MappedRoute(
         string Method, string Pattern, string? Name, IReadOnlyList<Type> Handlers);
 
-    // The routes the host maps, not the ones a file lists: an endpoint's own delegate says which
-    // handler it takes, and a route with none says so by taking nothing.
-    private static List<MappedRoute> Mapped()
+    private static List<MappedRoute> MappedByTheHost()
     {
         using var app = new MEditHost();
 

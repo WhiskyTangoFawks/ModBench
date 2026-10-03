@@ -5,9 +5,8 @@ using MEditService.Codec.Schema;
 
 namespace MEditService.Index;
 
-/// <summary>One <c>json_extract</c> view per record type over <c>records</c>, for the SQL door only
-/// (ADR-0007). Scalar leaves only, decided by <see cref="ColumnSpec.IsViewable"/>: no column over
-/// one with broken semantics.</summary>
+/// <summary>ADR-0011.<see cref="ColumnSpec.IsViewable"/> decides a scalar leaf: no
+/// column over one with broken semantics.</summary>
 internal static class RecordViewBuilder
 {
     internal static void CreateViews(DuckDBConnection connection, IReadOnlyDictionary<string, RecordTableSchema> schemas)

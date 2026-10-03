@@ -5,8 +5,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>Every struct names the Loqui/CLR class it is, out of the same vocabulary a union's
-/// discriminator values come from.</summary>
 public class LeafTypeNameSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -49,11 +47,8 @@ public class LeafTypeNameSchemaTests
             Element(Member(scriptProperty, "Objects")).LeafTypeName);
     }
 
-    // A union element names its own base class and still carries its discriminator: the two are
-    // different facts about the same object (which class the schema declares, which class the
-    // value is), so neither displaces the other.
     [Fact]
-    public void UnionArrayElement_NamesItsBaseClass_AndKeepsItsDiscriminator()
+    public void UnionArrayElement_NamesItsBaseClass_AndKeepsItsDiscriminator_BecauseTheSchemaDeclaredClassAndTheValuesClassAreDifferentFacts()
     {
         var element = Element(Column("acti", "Conditions"));
 
@@ -63,23 +58,16 @@ public class LeafTypeNameSchemaTests
         Assert.Contains(fields, f => f.IsDiscriminator);
     }
 
-    // The completeness half: naming three structs by hand proves nothing about the rest of the
-    // schema, and an element the walk builds without a name is exactly the gap this closes.
     [Fact]
-    public void EveryStructInTheSchema_NamesItsType() =>
+    public void EveryStructInTheSchema_NamesItsType_BecauseNamingAFewByHandProvesNothingAboutAnElementTheWalkBuildsWithoutAName() =>
         Assert.Empty(PathsWhere(m => m.Type == "struct" && string.IsNullOrEmpty(m.LeafTypeName)));
 
-    // The other half of the same rule: a scalar is not a struct and names no type, so the field
-    // stays the answer to one question rather than a second copy of `Type`.
     [Fact]
-    public void NothingButAStruct_NamesAType() =>
+    public void NothingButAStruct_NamesAType_SoLeafTypeNameStaysTheAnswerToOneQuestionNotASecondCopyOfType() =>
         Assert.Empty(PathsWhere(m => m.Type != "struct" && m.LeafTypeName != null));
 
-    // What is named is the class, never the getter interface the walk reached it through: a leaf's
-    // name must be drawn from the same vocabulary a union's discriminator values are, or the two key
-    // the presentation table differently.
     [Fact]
-    public void NoStructIsNamedByItsGetterInterface() =>
+    public void NoStructIsNamedByItsGetterInterface_BecauseALeafNameIsDrawnFromTheSameVocabularyAsAUnionsDiscriminatorValuesOrTheTwoKeyThePresentationTableDifferently() =>
         Assert.Empty(PathsWhere(m => m.LeafTypeName?.EndsWith("Getter", StringComparison.Ordinal) == true));
 
     private static List<string> PathsWhere(Func<FieldMetadata, bool> predicate) =>

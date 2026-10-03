@@ -14,8 +14,7 @@ const NO_DETECTORS: GameDetectors = {
   winePrefix: () => Promise.resolve(null),
 };
 
-// The corpus's own game, so the tables answer with real Steam facts and autodetection runs.
-const iniOf = (gamePath?: string): string =>
+const iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts = (gamePath?: string): string =>
   `[General]\r\ngameName=Fallout 4\r\n${gamePath === undefined ? '' : `gamePath=@ByteArray(${gamePath})\r\n`}`;
 
 const SETTING_PLACE = 'the game folder setting, modbench.mods.gameDirectory';
@@ -31,9 +30,7 @@ describe('normalizeGamePath', () => {
     expect(await normalizeGamePath('C:\\Games\\Fallout4', 'win32', noDetectPrefix)).toBe('C:\\Games\\Fallout4');
   });
 
-  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped)', async () => {
-    // Unlike Windows, a colon elsewhere in a path is legal on Linux (e.g. a mod folder someone
-    // named literally "A:B") — an unanchored strip would corrupt it.
+  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped), a colon elsewhere in a path being legal on Linux — a folder named literally "A:B" — and an unanchored strip corrupting it', async () => {
     const path = '/home/user/mods/A:B/Fallout4';
     expect(await normalizeGamePath(path, 'linux', noDetectPrefix)).toBe(path);
   });
@@ -91,7 +88,7 @@ describe('the game directory resolver', () => {
   it('resolves an explicit modbench.mods.gameDirectory setting directly', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOf());
+    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -99,7 +96,7 @@ describe('the game directory resolver', () => {
   it('trims whitespace accidentally pasted around an explicit setting value', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: `  ${gameRoot}  ` })(iniOf());
+    const resolved = await resolverWith({ gameDirectory: `  ${gameRoot}  ` })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -107,20 +104,19 @@ describe('the game directory resolver', () => {
   it('reads a setting left at its empty default as unset, not as an empty path', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: '   ' })(iniOf(gameRoot));
+    const resolved = await resolverWith({ gameDirectory: '   ' })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
 
     expect(resolved).toMatchObject({ root: gameRoot });
   });
 
-  // Rival: falling through to the ini gamePath, which resolves a folder the user did not name.
-  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder', async () => {
+  it('answers not found, naming only the setting, when the explicit setting has no Data/ subfolder, not falling through to the ini gamePath, which would resolve a folder the user did not name', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const gameRoot = join(dir, 'Stock Game Folder');
-    await mkdir(gameRoot, { recursive: true }); // no Data/ underneath
+    await mkdir(gameRoot, { recursive: true });
     const iniGameRoot = await gameFolder();
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOf(iniGameRoot));
+    const resolved = await resolverWith({ gameDirectory: gameRoot })(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(iniGameRoot));
 
     expect(resolved).toEqual({
       kind: 'notFound',
@@ -132,17 +128,16 @@ describe('the game directory resolver', () => {
   it('falls back to the ini gamePath of the text it was handed when the setting is unset', async () => {
     const gameRoot = await gameFolder();
 
-    const resolved = await resolverWith()(iniOf(gameRoot));
+    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
   it('normalizes a Z:-drive ini gamePath, as MO2 under Proton writes it, to its POSIX path', async () => {
     const gameRoot = await gameFolder();
-    // MO2 under Proton stores the path as a Wine Z: drive with backslashes.
     const winePath = 'Z:' + gameRoot.replaceAll('/', '\\');
 
-    const resolved = await resolverWith()(iniOf(winePath));
+    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(winePath));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -154,7 +149,7 @@ describe('the game directory resolver', () => {
     await mkdir(join(gameRoot, 'Data'), { recursive: true });
     const detectors: GameDetectors = { paths: () => Promise.resolve(null), winePrefix: () => Promise.resolve(prefixDir) };
 
-    const resolved = await resolverWith({}, detectors)(iniOf('C:\\Games\\Fallout4'));
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
 
     expect(resolved).toMatchObject({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
@@ -165,7 +160,7 @@ describe('the game directory resolver', () => {
       winePrefix: () => Promise.resolve(null),
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOf('C:\\Games\\Fallout4'));
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts('C:\\Games\\Fallout4'));
 
     expect(resolved).toMatchObject({
       kind: 'notFound',
@@ -182,7 +177,7 @@ describe('the game directory resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOf());
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
 
     expect(resolved).toEqual({ kind: 'found', root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
@@ -191,19 +186,19 @@ describe('the game directory resolver', () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     dirs.push(dir);
     const staleGameRoot = join(dir, 'Stale Game Folder');
-    await mkdir(staleGameRoot, { recursive: true }); // no Data/ underneath — a broken/moved install
+    await mkdir(staleGameRoot, { recursive: true });
     const detectors: GameDetectors = {
       paths: () => Promise.resolve({ dataFolder: '/steam/Fallout 4/Data' }),
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOf(staleGameRoot));
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
 
     expect(resolved).toMatchObject({ root: '/steam/Fallout 4', dataFolder: '/steam/Fallout 4/Data' });
   });
 
   it('answers not found, naming each place looked, when nothing resolves — setting unset, no gamePath, autodetect finds nothing', async () => {
-    expect(await resolverWith()(iniOf())).toEqual({
+    expect(await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts())).toEqual({
       kind: 'notFound',
       setting: 'modbench.mods.gameDirectory',
       looked: [
@@ -220,7 +215,7 @@ describe('the game directory resolver', () => {
     const staleGameRoot = join(dir, 'Stale Game Folder');
     await mkdir(staleGameRoot, { recursive: true });
 
-    const resolved = await resolverWith()(iniOf(staleGameRoot));
+    const resolved = await resolverWith()(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(staleGameRoot));
 
     expect(resolved).toMatchObject({
       kind: 'notFound',
@@ -251,9 +246,7 @@ describe('the game directory resolver', () => {
     expect(asked).toBe(false);
   });
 
-  // Rival: detecting up front on every branch, which reads Steam's library file (and spawns
-  // `reg query` on Windows) on every recompute, even when the setting or the ini already answered.
-  it('asks Steam nothing when the setting answers the root', async () => {
+  it('asks Steam nothing when the setting answers the root, not detecting up front on every branch, which reads Steam\'s library file (and spawns `reg query` on Windows) on every recompute', async () => {
     const gameRoot = await gameFolder();
     let asked = 0;
     const detectors: GameDetectors = {
@@ -261,7 +254,7 @@ describe('the game directory resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOf());
+    const resolved = await resolverWith({ gameDirectory: gameRoot }, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts());
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);
@@ -275,7 +268,7 @@ describe('the game directory resolver', () => {
       winePrefix: noDetectPrefix,
     };
 
-    const resolved = await resolverWith({}, detectors)(iniOf(gameRoot));
+    const resolved = await resolverWith({}, detectors)(iniOfTheCorpusGameSoTheTablesAnswerRealSteamFacts(gameRoot));
 
     expect(resolved).toEqual({ kind: 'found', root: gameRoot, dataFolder: join(gameRoot, 'Data') });
     expect(asked).toBe(0);

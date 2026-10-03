@@ -13,7 +13,7 @@ public sealed class PluginPortSurfaceTests
     [Fact]
     public void ThePort_HandsNoLiveMutagenObjectOutOrTakesOneIn()
     {
-        var offenders = LiveObjectsOn(typeof(IPluginAdapter));
+        var offenders = LiveObjectsOnThePortAndBehindItsReturnedValues(typeof(IPluginAdapter));
 
         Assert.True(
             offenders.Count == 0,
@@ -30,19 +30,16 @@ public sealed class PluginPortSurfaceTests
             ["IPlantedPort.CreateEmpty: Mutagen.Bethesda.Plugins.Records.IMod",
              "IPlantedPort.Open: IPlantedHandle.Getter: Mutagen.Bethesda.Plugins.Records.IModGetter",
              "IPlantedPort.Write(plugin): Mutagen.Bethesda.Plugins.Records.IMod"],
-            LiveObjectsOn(typeof(IPlantedPort)).Order(StringComparer.Ordinal));
+            LiveObjectsOnThePortAndBehindItsReturnedValues(typeof(IPlantedPort)).Order(StringComparer.Ordinal));
     }
 
     [Fact]
     public void ThePortScan_LeavesIdentityAndTheReleaseAlone()
     {
-        Assert.Empty(LiveObjectsOn(typeof(IIdentityOnlyPort)));
+        Assert.Empty(LiveObjectsOnThePortAndBehindItsReturnedValues(typeof(IIdentityOnlyPort)));
     }
 
-    // A value the port returns is part of the port, so the walk goes one level past its own
-    // signature. A collaborator handed in — the codec — is another box's door, and live objects are
-    // that box's business.
-    private static List<string> LiveObjectsOn(Type port)
+    private static List<string> LiveObjectsOnThePortAndBehindItsReturnedValues(Type port)
     {
         var offenders = new List<string>();
         foreach (var method in port.GetMethods())
@@ -54,15 +51,13 @@ public sealed class PluginPortSurfaceTests
             if (IsLiveObject(method.ReturnType))
                 offenders.Add($"{port.Name}.{method.Name}: {method.ReturnType.FullName}");
             else
-                offenders.AddRange(LiveObjectsBehind(method.ReturnType).Select(m => $"{port.Name}.{method.Name}: {m}"));
+                offenders.AddRange(LiveObjectsBehindThisSolutionsOwnTypes(method.ReturnType).Select(m => $"{port.Name}.{method.Name}: {m}"));
         }
         return offenders;
     }
 
-    // Only this solution's own types are walked into: a framework type's members are not the port's
-    // vocabulary.
-    private static IEnumerable<string> LiveObjectsBehind(Type type) =>
-        Unwrap(type)
+    private static IEnumerable<string> LiveObjectsBehindThisSolutionsOwnTypes(Type type) =>
+        TheTypeAndEveryTypeArgumentInsideIt(type)
             .Where(t => t.Assembly == typeof(IPluginAdapter).Assembly
                 || t.Assembly == typeof(PluginPortSurfaceTests).Assembly)
             .SelectMany(t => t.GetProperties().Select(p => (Member: $"{t.Name}.{p.Name}", Type: p.PropertyType))
@@ -72,12 +67,11 @@ public sealed class PluginPortSurfaceTests
             .Select(member => $"{member.Member}: {member.Type.FullName}")
             .Distinct(StringComparer.Ordinal);
 
-    // A Task<T>, a tuple or a collection is a wrapper, not the answer: what travels is its argument.
-    private static IEnumerable<Type> Unwrap(Type type) =>
-        type.IsGenericType ? type.GetGenericArguments().SelectMany(Unwrap).Append(type) : [type];
+    private static IEnumerable<Type> TheTypeAndEveryTypeArgumentInsideIt(Type type) =>
+        type.IsGenericType ? type.GetGenericArguments().SelectMany(TheTypeAndEveryTypeArgumentInsideIt).Append(type) : [type];
 
     private static bool IsLiveObject(Type type) =>
-        Unwrap(type).Any(t => LiveObjectNamespaces.Contains(t.Namespace, StringComparer.Ordinal));
+        TheTypeAndEveryTypeArgumentInsideIt(type).Any(t => LiveObjectNamespaces.Contains(t.Namespace, StringComparer.Ordinal));
 
     private interface IPlantedHandle
     {

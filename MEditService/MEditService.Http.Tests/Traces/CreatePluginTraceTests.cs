@@ -9,8 +9,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>create-plugin: the new file's header flags, records and masters, or the refusal and no
-/// file. Nothing else on disk or in the held snapshot changes.</summary>
 public sealed class CreatePluginTraceTests : HostedTests
 {
     private const string Origin = "PickedMod";
@@ -27,9 +25,7 @@ public sealed class CreatePluginTraceTests : HostedTests
     private static Task<HttpResponseMessage> Create(HttpClient client, string name, string folder) =>
         client.PostAsJsonAsync("/plugins/create", new { origin = Origin, name, folder });
 
-    // Read off the host's own holder: the Index reconciles a change later, so no read over the wire
-    // shows one at once.
-    private (LoadOrderSnapshot Snapshot, long Version) Held()
+    private (LoadOrderSnapshot Snapshot, long Version) HeldReadOffTheHostsOwnHolder()
     {
         var holder = Services.GetRequiredService<LoadOrderHolder>();
         return (holder.Current, holder.Version);
@@ -42,14 +38,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var folder = OtherTool.ModFolderOf(fx, Origin);
         OtherTool.WritesTheFile(Path.Combine(folder, "Occupied.esp"), "not a plugin");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = Held();
+        var held = HeldReadOffTheHostsOwnHolder();
 
         var created = await Create(Client, "Occupied.esp", folder);
 
         Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
         Assert.Equal("FileExists", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, Held());
+        Assert.Equal(held, HeldReadOffTheHostsOwnHolder());
     }
 
     [Fact]
@@ -58,14 +54,14 @@ public sealed class CreatePluginTraceTests : HostedTests
         var fx = Owned(await Loaded());
         var gone = Path.Combine(fx.Root, "GoneMod");
         var disk = TreeSnapshot.Of(fx.Root);
-        var held = Held();
+        var held = HeldReadOffTheHostsOwnHolder();
 
         var created = await Create(Client, "Created.esp", gone);
 
         Assert.Equal(HttpStatusCode.NotFound, created.StatusCode);
         Assert.Equal("FolderGone", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("refusal").GetString());
         Assert.Equal(disk, TreeSnapshot.Of(fx.Root));
-        Assert.Equal(held, Held());
+        Assert.Equal(held, HeldReadOffTheHostsOwnHolder());
     }
 
     [Fact]

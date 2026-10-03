@@ -16,15 +16,10 @@ public sealed class FormIdChangeRederivationTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    // The container_child mechanism (navmesh/landscape), not the placement one (Temporary/Persistent
-    // refs already answer through GetPlacement) — read off the live rows rather than adding a new
-    // FormKey to the shared fixture.
-    private string NavmeshKey =>
+    private string EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows =>
         Reads.GetContainerChildren(_mod.Plugin, _mod.EmbedCell).Single(c => c.SlotName == "NavigationMeshes").ChildFormKey;
 
-    // A record's own document under a new FormKey: put the new key, remove the old, then name both keys to
-    // RefreshKeys — the same two-sided write a real FormID edit makes.
-    private void ChangeFormId(string oldFormKey, string newFormKey, string newBody)
+    private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
     {
         var repository = TrackedMods.RepositoryOf(_mod.Entry);
         var current = Reads.DocumentOf(oldFormKey, _mod.Plugin);
@@ -37,22 +32,20 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     public void ChangingTheFormIdOfAContainersOwnRecord_RepointsItsChildrensRows_AndTheOldKeyAnswersNothing()
     {
         var oldCellKey = _mod.EmbedCell;
-        var navmesh = NavmeshKey;
+        var navmesh = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
         const string newCellKey = "F00010:ContainerFixture.esp";
         var before = Reads.DocumentOf(oldCellKey, _mod.Plugin).BodyOf();
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
-        Assert.NotEqual(before, newBody); // the fixture body really does carry the key being changed
+        Assert.NotEqual(before, newBody);
 
-        ChangeFormId(oldCellKey, newCellKey, newBody);
+        ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(oldCellKey, newCellKey, newBody);
 
-        // The container's own children follow it to the new key.
         Assert.Contains(Reads.GetContainerChildren(_mod.Plugin, newCellKey), c => c.ChildFormKey == navmesh);
         var navmeshParent = Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, navmesh));
         Assert.Equal(newCellKey, navmeshParent.ParentFormKey);
         var placement = Assert.NotNull(Reads.GetPlacement(_mod.TemporaryRef, _mod.Plugin));
         Assert.Equal(newCellKey, placement.ParentCell);
 
-        // The old key answers nothing: no document, no children, no placement under it.
         Assert.Null(Reads.GetDocument(oldCellKey, _mod.Plugin));
         Assert.Empty(Reads.GetContainerChildren(_mod.Plugin, oldCellKey));
     }
@@ -61,7 +54,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
     {
         var cellKey = _mod.EmbedCell;
-        var oldNavmeshKey = NavmeshKey;
+        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
         const string newNavmeshKey = "F00011:ContainerFixture.esp";
         var before = Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, oldNavmeshKey));
         var document = Reads.DocumentOf(cellKey, _mod.Plugin);
@@ -77,28 +70,22 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Equal(before.SlotIndex, after.SlotIndex);
     }
 
-    // The rival this pins for both tests above: without RefreshKeys naming the changed key, the
-    // stale row from before the FormID edit is exactly what stays.
     [Fact]
-    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithNoRefreshKeysCall_LeavesTheStaleRowInPlace()
+    public void ChangingTheFormIdOfAnEmbeddedNavigationMesh_WithoutTheNextSnapshotsValidation_LeavesTheStaleRowInPlace()
     {
         var cellKey = _mod.EmbedCell;
-        var oldNavmeshKey = NavmeshKey;
+        var oldNavmeshKey = EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows;
         const string newNavmeshKey = "F00012:ContainerFixture.esp";
         var document = Reads.DocumentOf(cellKey, _mod.Plugin);
         var newBody = document.BodyOf().Replace(oldNavmeshKey, newNavmeshKey, StringComparison.Ordinal);
 
-        // Put only — the next snapshot's validation, deliberately skipped.
         TrackedMods.RepositoryOf(_mod.Entry).Put(_mod.Plugin, new SourceDocument(cellKey, document.RecordType, document.EditorId, newBody));
 
         Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, oldNavmeshKey));
         Assert.Null(Reads.GetContainerParent(_mod.Plugin, newNavmeshKey));
     }
 
-    // A worldspace's exterior cell is a nested directory-per-record child (unlike a navmesh,
-    // embedded inline): the FormID edit is SourceTransaction's public Move of the whole subtree, then
-    // a Put fixing the moved document's own FormKey text.
-    private static void ChangeWorldspaceFormId(WorldspaceFixture fixture, string newWorldspaceKey)
+    private static void MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(OneExteriorCellWorldspaceFixture fixture, string newWorldspaceKey)
     {
         var repository = TrackedMods.RepositoryOf(fixture.Entry);
         var current = fixture.Reads.DocumentOf(fixture.Worldspace, fixture.Plugin);
@@ -113,20 +100,22 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         transaction.Put(repository, fixture.Plugin, new SourceDocument(newWorldspaceKey, current.RecordType, current.EditorId, correctedBody));
     }
 
-    // cell_location.ParentWorldspace is derived by walking the whole Worldspaces/blocks/sub-blocks
-    // tree top-down (SourceTreeDocuments), which RefreshKeys' narrow per-record re-parse does not
-    // do; ReindexPlugin re-derives the plugin whole from source.
+    private static void RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(OneExteriorCellWorldspaceFixture fixture)
+    {
+        PluginBinaries.Touch(fixture.Entry.Path);
+        Assert.True(fixture.Index.Revalidate());
+    }
+
     [Fact]
     public async Task ChangingTheFormIdOfAWorldspace_RepointsItsExteriorCellsCellLocationRow_AndTheOldKeyAnswersNothing()
     {
-        using var fixture = new WorldspaceFixture();
+        using var fixture = new OneExteriorCellWorldspaceFixture();
         var before = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(fixture.Worldspace, before.ParentWorldspace);
         const string newWorldspaceKey = "F00020:WorldspaceFormId.esp";
 
-        ChangeWorldspaceFormId(fixture, newWorldspaceKey);
-        PluginBinaries.Touch(fixture.Entry.Path);
-        Assert.True(fixture.Index.Revalidate());
+        MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(fixture, newWorldspaceKey);
+        RederiveTheWholePluginBecauseParentWorldspaceIsDerivedByWalkingTheWholeBlockTree(fixture);
 
         var after = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(newWorldspaceKey, after.ParentWorldspace);
@@ -134,28 +123,22 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         Assert.Empty(fixture.Reads.GetWorldspaceCells(fixture.Plugin, fixture.Worldspace));
     }
 
-    // The rival this pins: without ReindexPlugin (or an equivalent whole-plugin re-derivation), the
-    // exterior cell's row is exactly the stale one from before the move.
     [Fact]
-    public void ChangingTheFormIdOfAWorldspace_WithNoReindexCall_LeavesItsCellLocationRowStale()
+    public void ChangingTheFormIdOfAWorldspace_WithoutRevalidation_LeavesItsCellLocationRowStale()
     {
-        using var fixture = new WorldspaceFixture();
+        using var fixture = new OneExteriorCellWorldspaceFixture();
         const string newWorldspaceKey = "F00021:WorldspaceFormId.esp";
 
-        ChangeWorldspaceFormId(fixture, newWorldspaceKey);
+        MoveTheWorldspaceSubtreeThenPutItsCorrectedFormKeyText(fixture, newWorldspaceKey);
 
         var stale = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(fixture.Worldspace, stale.ParentWorldspace);
     }
 
-    // A worldspace with one exterior cell — the shape ContainerMod does not build (its own
-    // worldspace holds only a top cell).
-    private sealed class WorldspaceFixture : IDisposable
+    private sealed class OneExteriorCellWorldspaceFixture : IDisposable
     {
         private const string PluginName = "WorldspaceFormId.esp";
-        // Not the default Data origin: Track (and so a source tree to change a FormID against) only
-        // applies to a plugin that names its own mod folder (LoadOrderSnapshot.ModFolderOf).
-        private const string Origin = "WorldspaceFormIdMod";
+        private const string OriginNamingItsOwnModFolderBecauseTrackAppliesToNothingElse = "WorldspaceFormIdMod";
         private readonly ScatteredFixtureData _fixture;
 
         public LoadOrderEntry Entry { get; }
@@ -165,7 +148,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         public string Worldspace { get; }
         public string ExteriorCell { get; }
 
-        public WorldspaceFixture()
+        public OneExteriorCellWorldspaceFixture()
         {
             FormKey worldspace = default, exteriorCell = default;
             _fixture = new PluginFixtureBuilder("worldspace-formid")
@@ -180,7 +163,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
                     world.SubCells.Add(block);
                     mod.Worldspaces.Add(world);
                     (worldspace, exteriorCell) = (world.FormKey, ext.FormKey);
-                }, origin: Origin)
+                }, origin: OriginNamingItsOwnModFolderBecauseTrackAppliesToNothingElse)
                 .BuildScattered()
                 .Tracked();
             Entry = _fixture.Plugins.Single();

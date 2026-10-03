@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// makeReporter is the ADR-0019 surfacing reporter (log always, toast on warning/error), pulled
-// out of extension.ts — which imports the real 'vscode' module — so its severity→level dispatch
-// has a real seam.
 const { showErrorMessage, showWarningMessage, showInformationMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
@@ -13,16 +10,14 @@ vi.mock('vscode', () => ({ window: { showErrorMessage, showWarningMessage, showI
 import { makeReporter } from '../reporter';
 import type { SelectionOutcome } from '../ports/selectionOutcome';
 
-// Every level a real LogOutputChannel offers, not just the two the parameter type admits, so a
-// test can assert a landing wrote *nothing* rather than only that it skipped warn and error.
-function fakeChannel() {
+function fakeChannelOfEveryLevel() {
   return {
     trace: vi.fn(), debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
     append: vi.fn(), appendLine: vi.fn(),
   };
 }
 
-function channelWrites(channel: ReturnType<typeof fakeChannel>): unknown[][] {
+function channelWrites(channel: ReturnType<typeof fakeChannelOfEveryLevel>): unknown[][] {
   return Object.values(channel).flatMap((spy) => spy.mock.calls);
 }
 
@@ -30,7 +25,7 @@ describe('makeReporter', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('logs an error severity to the channel\'s .error() and shows an error toast saying why', () => {
-    const channel = fakeChannel();
+    const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'deploy').report('error', 'Deploy failed.', 'disk full');
     expect(channel.error).toHaveBeenCalledWith('[deploy] error: Deploy failed. — disk full');
     expect(channel.warn).not.toHaveBeenCalled();
@@ -38,14 +33,14 @@ describe('makeReporter', () => {
   });
 
   it('shows a warning toast saying why when the warning carries a reason', () => {
-    const channel = fakeChannel();
+    const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'install').report('warning', 'Installed, but not recorded.', 'meta locked');
     expect(channel.warn).toHaveBeenCalledWith('[install] warning: Installed, but not recorded. — meta locked');
     expect(showWarningMessage).toHaveBeenCalledWith('Modbench: Installed, but not recorded. — meta locked');
   });
 
   it('logs a warning severity to the channel\'s .warn() and shows a warning toast', () => {
-    const channel = fakeChannel();
+    const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'modList').report('warning', 'Could not read the mod list.');
     expect(channel.warn).toHaveBeenCalledWith('[modList] warning: Could not read the mod list.');
     expect(channel.error).not.toHaveBeenCalled();
@@ -53,7 +48,7 @@ describe('makeReporter', () => {
   });
 
   it('shows a landed gesture as an information toast and writes nothing to the log', () => {
-    const channel = fakeChannel();
+    const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'deploy').landed('Mods deployed.');
     expect(showInformationMessage).toHaveBeenCalledWith('Modbench: Mods deployed.');
     expect(channelWrites(channel)).toEqual([]);
@@ -62,7 +57,7 @@ describe('makeReporter', () => {
   });
 
   it('writes a failure inside a dialog to the Output, what and why, and shows no notification', () => {
-    const channel = fakeChannel();
+    const channel = fakeChannelOfEveryLevel();
     makeReporter(channel, 'recordLifecycle').insideDialog('warning', 'Could not fetch a suggested FormKey.', 'backend down');
     expect(channelWrites(channel)).toEqual([
       ['[recordLifecycle] warning: Could not fetch a suggested FormKey. — backend down'],
@@ -78,7 +73,7 @@ describe('makeReporter', () => {
     const nameOf = (d: Download) => d.name;
 
     it('reports two refusals among three landings as one error toast naming each and why, and one Output line', () => {
-      const channel = fakeChannel();
+      const channel = fakeChannelOfEveryLevel();
       const outcome: SelectionOutcome<Download> = {
         landed: [download('A.7z'), download('B.7z'), download('C.7z')],
         refused: [
@@ -100,7 +95,7 @@ describe('makeReporter', () => {
     });
 
     it('raises no failure notification and writes nothing for a fully landed outcome', () => {
-      const channel = fakeChannel();
+      const channel = fakeChannelOfEveryLevel();
 
       makeReporter(channel, 'downloads.delete').selectionOutcome(
         'Could not delete any download.', { landed: [download('A.7z'), download('B.7z')], refused: [] }, nameOf);

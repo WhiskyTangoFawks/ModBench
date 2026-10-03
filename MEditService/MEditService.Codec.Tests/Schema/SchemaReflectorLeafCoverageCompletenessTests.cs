@@ -10,41 +10,44 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.Indexing;
 
-/// <summary>Re-derives "is this property in the schema" from Mutagen's reflection rather than the
-/// reflector's classification, to whatever depth the record graph goes, and accepts no gap.</summary>
 public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
     private const GameCategory Category = GameCategory.Fallout4;
 
-    // The EditorID the write path owns, and the GRUP timestamps, never per-record data at any depth.
-    // A hand-kept copy by name rather than a reference, so a drift fails as a loud false-positive gap.
-    private static readonly HashSet<string> BaseSkip = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud = new(StringComparer.Ordinal)
     {
         "EditorID", "Timestamp", "TemporaryTimestamp", "PersistentTimestamp",
     };
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
-    // Named here rather than left as an incidental byproduct, so a byproduct type quietly changing
-    // shape does not go unnoticed. Owner is a schema-registered getter interface name; the nested list
-    // below holds subrecords embedded inside other record types.
-    private static readonly (string Owner, string Property)[] CoveredAbstractUnions =
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] MandatoryAbstractUnionsANpcLevelAndAQuestAlias =
     [
-        ("INpcGetter", "Level"),                    // ANpcLevel: NpcLevel / PcLevelMult — mandatory
-        ("IQuestGetter", "Aliases"),                 // AQuestAlias: QuestReferenceAlias / QuestLocationAlias / QuestCollectionAlias — mandatory
-        ("IBookGetter", "Teaches"),                  // BookTeachTarget
-        ("IColorRecordGetter", "Data"),              // AColorRecordData
-        ("IHolotapeGetter", "Data"),                 // AHolotapeData
-        ("ISoundDescriptorGetter", "Data"),          // ASoundDescriptor
-        ("IPerkGetter", "Effects"),                  // APerkEffect / APerkEntryPointEffect (two-level chain)
-        ("IMagicEffectGetter", "Archetype"),         // AMagicEffectArchetype
-        ("IAudioEffectChainGetter", "Effects"),      // AAudioEffect
+        ("INpcGetter", "Level"),
+        ("IQuestGetter", "Aliases"),
     ];
 
-    private static readonly (string Owner, string Property)[] CoveredNestedAbstractUnions =
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect =
     [
-        ("INavmeshGeometryGetter", "Parent"),        // ANavmeshParent
-        ("ILocationTargetRadiusGetter", "Target"),   // ALocationTarget
+        ("IPerkGetter", "Effects"),
+    ];
+
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed =
+    [
+        .. MandatoryAbstractUnionsANpcLevelAndAQuestAlias,
+        .. TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect,
+        ("IBookGetter", "Teaches"),
+        ("IColorRecordGetter", "Data"),
+        ("IHolotapeGetter", "Data"),
+        ("ISoundDescriptorGetter", "Data"),
+        ("IMagicEffectGetter", "Archetype"),
+        ("IAudioEffectChainGetter", "Effects"),
+    ];
+
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes =
+    [
+        ("INavmeshGeometryGetter", "Parent"),
+        ("ILocationTargetRadiusGetter", "Target"),
     ];
 
     [Fact]
@@ -53,7 +56,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
         var regressed = new List<string>();
-        foreach (var (owner, property) in CoveredAbstractUnions)
+        foreach (var (owner, property) in CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed)
         {
             var schema = schemas.Values.SingleOrDefault(s => s.RecordType.Name == owner);
             if (schema == null) { regressed.Add($"{owner} (schema not found)"); continue; }
@@ -63,10 +66,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                 column == null ? null : column.Field.IsArray ? column.Field.ElementSpec?.SubFields : column.Field.SubFields);
         }
 
-        // The nested set: found one level inside whichever record's own column reaches this getter
-        // type, mirroring EveryStructOrArrayColumns_...'s own NestedGetterType walk rather than a
-        // second, bespoke lookup.
-        foreach (var (owner, property) in CoveredNestedAbstractUnions)
+        foreach (var (owner, property) in CoveredNestedAbstractUnionsOfSubrecordsEmbeddedInsideOtherRecordTypes)
         {
             IReadOnlyList<SubFieldSpec>? found = null;
             foreach (var schema in schemas.Values)
@@ -77,11 +77,10 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
                     if (nestedFields == null) continue;
                     var match = nestedFields.SingleOrDefault(f => f.Name == property);
                     if (match == null) continue;
-                    // Confirm this column's own nested type is really `owner`, not a same-named
-                    // property on some unrelated struct — cheap enough: re-derive via NestedGetterType.
-                    var ownProp = DirectDataProperties(schema.RecordType, BaseSkip)
+                    var ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct = DirectDataProperties(schema.RecordType, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud)
                         .FirstOrDefault(p => p.Name == column.PropertyName);
-                    if (ownProp == null || NestedGetterType(ownProp.PropertyType)?.Name != owner) continue;
+                    if (ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct == null
+                        || NestedGetterType(ownPropWhoseNestedTypeIsReDerivedToExcludeASameNamedPropertyOnAnUnrelatedStruct.PropertyType)?.Name != owner) continue;
                     found = match.SubFields;
                     break;
                 }
@@ -92,7 +91,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         }
 
         Assert.True(regressed.Count == 0,
-            $"An abstract-union field CoveredAbstractUnions/CoveredNestedAbstractUnions names as " +
+            $"An abstract-union field the covered abstract-union lists name as " +
             $"covered regressed: {string.Join(", ", regressed)}. Either the general mechanism no " +
             "longer reaches it, or it was never actually covered and this list is wrong — " +
             "investigate, don't just remove it.");
@@ -110,21 +109,20 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     }
 
     [Fact]
-    public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded()
+    public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded_ReDerivedFromMutagensReflectionNotTheReflectorsClassificationAcceptingNoGap()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
-        // Or this is the winner-only sweep it replaced, and a sibling's own members go unasked for.
-        Assert.Contains(schemas.Values, s => OwnersOf(s).Count > 1);
+        Assert.True(schemas.Values.Any(s => OwnersOf(s).Count > 1),
+            "Expected a table with several sibling owners; otherwise this is the winner-only sweep it replaced and a sibling's own members go unasked for.");
 
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
-            // ModHeader is never an IMajorRecordGetter — no CLR getter type of its own for this sweep to walk.
-            if (schema.IsHeader) continue;
+            if (HasNoClrGetterTypeBecauseModHeaderIsNeverAnIMajorRecordGetter(schema)) continue;
 
             foreach (var owner in OwnersOf(schema))
             {
-                foreach (var prop in DirectDataProperties(owner, BaseSkip))
+                foreach (var prop in DirectDataProperties(owner, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud))
                 {
                     if (schema.RecordColumns.Any(c => c.PropertyName == prop.Name || c.Aliases.Contains(prop.Name))) continue;
                     gaps.Add($"{owner.Name}.{prop.Name} (missing from '{schema.TableName}' entirely)");
@@ -138,20 +136,20 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     }
 
     [Fact]
-    public void EveryPropertyBelowEveryColumn_IsRepresentedOrExplicitlyExcluded()
+    public void EveryPropertyBelowEveryColumn_IsRepresentedOrExplicitlyExcluded_AtWhateverDepthTheRecordGraphGoes()
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
         var gaps = new List<string>();
         foreach (var schema in schemas.Values)
         {
-            if (schema.IsHeader) continue;
+            if (HasNoClrGetterTypeBecauseModHeaderIsNeverAnIMajorRecordGetter(schema)) continue;
 
-            var ownProperties = OwnersOf(schema).SelectMany(o => DirectDataProperties(o, BaseSkip)).ToList();
+            var ownProperties = OwnersOf(schema).SelectMany(o => DirectDataProperties(o, HandKeptSkipOfEditorIdTheWritePathOwnsAndGrupTimestampsSoADriftFailsLoud)).ToList();
             foreach (var column in schema.RecordColumns)
             {
                 foreach (var ownerProp in ownProperties.Where(p => p.Name == column.PropertyName))
-                    Descend(gaps, $"{schema.TableName}.{column.PropertyName}", ownerProp.PropertyType, column.Field, []);
+                    DescendEveryMemberBelowOneColumnStoppingOnReenteringATypeWhichIsThisTestsOwnCycleRule(gaps, $"{schema.TableName}.{column.PropertyName}", ownerProp.PropertyType, column.Field, []);
             }
         }
 
@@ -160,19 +158,18 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             "Every member is represented, so a gap here is a defect, not a deferral.");
     }
 
-    // Every member of every type reachable below one column, to whatever depth the record graph
-    // goes. Stops on re-entering a type, which is this test's own cycle rule.
-    private static void Descend(
+    private static bool HasNoClrGetterTypeBecauseModHeaderIsNeverAnIMajorRecordGetter(RecordTableSchema schema) => schema.IsHeader;
+
+    private static void DescendEveryMemberBelowOneColumnStoppingOnReenteringATypeWhichIsThisTestsOwnCycleRule(
         List<string> gaps, string path, Type propertyType, SubFieldSpec field, ImmutableHashSet<Type> visited)
     {
-        // A member a known defect governs is named and deliberately not expanded; naming it is what
-        // this sweep asks of the schema.
-        if (field.ReadOnlyReason != null) return;
+        var aMemberAKnownDefectGovernsIsNamedAndDeliberatelyNotExpanded = field.ReadOnlyReason != null;
+        if (aMemberAKnownDefectGovernsIsNamedAndDeliberatelyNotExpanded) return;
         if (NestedGetterType(propertyType) is not { } nestedType) return;
-        // A vector is one text leaf the codec spells itself ("x, y, z"), so it has no members to reach.
-        if (IsVectorStructType(nestedType) || visited.Contains(nestedType)) return;
+        var aVectorIsOneTextLeafTheCodecSpellsItselfSoHasNoMembersToReach = IsVectorStructType(nestedType);
+        if (aVectorIsOneTextLeafTheCodecSpellsItselfSoHasNoMembersToReach || visited.Contains(nestedType)) return;
 
-        var subFields = SubFieldsOf(field);
+        var subFields = SubFieldsOfItsOwnItsElementAndEachLeafVariantSinceAMemberTheLeavesShapeDifferentlyHasNoSingleList(field);
         foreach (var nestedProp in DirectDataProperties(nestedType, LoquiSkipProps))
         {
             var reached = subFields.Where(f => f.Name == nestedProp.Name).ToList();
@@ -183,21 +180,17 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             }
 
             foreach (var child in reached)
-                Descend(gaps, $"{path}.{nestedProp.Name}", nestedProp.PropertyType, child, visited.Add(nestedType));
+                DescendEveryMemberBelowOneColumnStoppingOnReenteringATypeWhichIsThisTestsOwnCycleRule(gaps, $"{path}.{nestedProp.Name}", nestedProp.PropertyType, child, visited.Add(nestedType));
         }
     }
 
-    // A field's members wherever it carries them: its own, its element's, and each leaf variant's,
-    // since a member the leaves shape differently has no single sub-field list.
-    private static IReadOnlyList<SubFieldSpec> SubFieldsOf(SubFieldSpec field)
+    private static IReadOnlyList<SubFieldSpec> SubFieldsOfItsOwnItsElementAndEachLeafVariantSinceAMemberTheLeavesShapeDifferentlyHasNoSingleList(SubFieldSpec field)
     {
         var shapes = field.Variants?.Values.Prepend(field) ?? [field];
         return [.. shapes.SelectMany(s => s.SubFields ?? s.ElementSpec?.SubFields ?? [])];
     }
 
-    // Every getter interface the game registers under one GRUP signature. A table's columns are the
-    // union of its siblings', so a sweep keyed to the discovery winner alone would miss the rest.
-    private static readonly ILookup<string, Type> SiblingsBySignature =
+    private static readonly ILookup<string, Type> EveryGetterInterfaceUnderOneGrupSignatureBecauseATablesColumnsAreTheUnionOfItsSiblingsSoADiscoveryWinnerSweepMissesTheRest =
         typeof(INpcGetter).Assembly.GetTypes()
             .Where(t => t is { IsAbstract: false, IsInterface: false }
                 && typeof(IFallout4MajorRecordGetter).IsAssignableFrom(t))
@@ -221,23 +214,19 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             ?? throw new InvalidOperationException($"Expected getter type 'I{concreteClass.Name}Getter' to exist.");
 
     private static IReadOnlyList<Type> OwnersOf(RecordTableSchema schema) =>
-        SiblingsBySignature[schema.TableName] is var siblings && siblings.Any()
+        EveryGetterInterfaceUnderOneGrupSignatureBecauseATablesColumnsAreTheUnionOfItsSiblingsSoADiscoveryWinnerSweepMissesTheRest[schema.TableName] is var siblings && siblings.Any()
             ? [.. siblings]
             : [schema.RecordType];
 
-    // The same interface-hierarchy walk SchemaReflector's GetAllInterfaceProperties does, re-derived
-    // here because it is private.
     private static IEnumerable<PropertyInfo> DirectDataProperties(Type type, HashSet<string> skip)
     {
         return type.GetInterfaces().Append(type)
             .SelectMany(i => i.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            .Where(p => !skip.Contains(p.Name) && IsRecognizedShape(p.PropertyType))
+            .Where(p => !skip.Contains(p.Name) && IsAShapeSchemaReflectorsDispatchRecognizesReDerivedNotCalledInto(p.PropertyType))
             .GroupBy(p => p.Name, StringComparer.Ordinal)
             .Select(g => g.First());
     }
 
-    // A property's nested getter type, one level in. Null for a plain scalar, enum, FormLink or
-    // translated-string leaf and for a list of one of those: nothing to walk further into.
     private static Type? NestedGetterType(Type propertyType)
     {
         var core = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
@@ -248,15 +237,12 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         return IsVectorStructType(core) ? core : null;
     }
 
-    // This class's own scope boundary (see the class doc comment): a shape SchemaReflector's
-    // dispatch already recognizes somewhere (ClassifyLeaf's four leaf kinds, IsListType,
-    // IsLoquiInterface, IsVectorStructType) — independently re-derived, not called into.
-    private static bool IsRecognizedShape(Type propertyType)
+    private static bool IsAShapeSchemaReflectorsDispatchRecognizesReDerivedNotCalledInto(Type propertyType)
     {
         var core = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
         if (core.IsGenericType && core.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
             core = core.GetGenericArguments()[0];
-        return PrimitiveTypes.Contains(core)
+        return PrimitiveTypesMirroringLeafClassificationPrimitiveMapKeys.Contains(core)
             || typeof(ITranslatedStringGetter).IsAssignableFrom(core)
             || core.IsEnum
             || IsFormLink(core)
@@ -264,8 +250,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             || IsVectorStructType(core);
     }
 
-    // Mirrors LeafClassification.PrimitiveMap's key set.
-    private static readonly HashSet<Type> PrimitiveTypes =
+    private static readonly HashSet<Type> PrimitiveTypesMirroringLeafClassificationPrimitiveMapKeys =
     [
         typeof(bool), typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
         typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(string),
@@ -277,15 +262,13 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         type.IsInterface && !IsFormLink(type)
         && type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    // Mirrors ReflectedTypes.VectorStructTypes: every Noggog vector struct actually reachable in FO4's
-    // schema graph, verified by grepping references/Mutagen. The siblings left out (P2Double,
-    // P3Double, P3Int, the wrapper types) have zero usages in FO4's record graph.
-    private static readonly HashSet<Type> VectorStructTypes =
+    private static readonly HashSet<Type> VectorStructTypesMirroringSchemaAnnotationsVectorStructTypesInEveryGameOmittingP2DoubleP3DoubleP3IntAndTheWrapperTypesWhichHaveZeroUsagesInFo4 =
     [
         typeof(P3Int16), typeof(P3Float),
         typeof(P2Int), typeof(P2UInt8), typeof(P2Int16),
         typeof(P3UInt8), typeof(P3UInt16), typeof(P2Float),
     ];
 
-    private static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
+    private static bool IsVectorStructType(Type type) =>
+        VectorStructTypesMirroringSchemaAnnotationsVectorStructTypesInEveryGameOmittingP2DoubleP3DoubleP3IntAndTheWrapperTypesWhichHaveZeroUsagesInFo4.Contains(type);
 }

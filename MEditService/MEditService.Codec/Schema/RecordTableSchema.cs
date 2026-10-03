@@ -4,9 +4,9 @@ namespace MEditService.Codec.Schema;
 /// <summary>A member the document never spells: the flag FlagName of the flags member at BackingPath.</summary>
 public sealed record SyntheticBit(string BackingPath, string FlagName);
 
-/// <summary>One column of a record table: the member's own spec, plus the database facts a
-/// generated view (ADR-0007) needs on top of it. A column refuses writes only by naming
-/// ReadOnlyReason; the codec decides the rest.</summary>
+/// <summary>One column of a record table: the member's own spec, plus what a generated view
+/// (ADR-0011) needs. A column refuses writes only by naming ReadOnlyReason; the codec
+/// decides the rest.</summary>
 public sealed record ColumnSpec(
     SubFieldSpec Field,
     // The JSON path from the document root, dotted where the document nests the member (the

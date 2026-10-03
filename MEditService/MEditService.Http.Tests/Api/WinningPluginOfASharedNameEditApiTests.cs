@@ -4,20 +4,16 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class OverriddenPluginRefusalApiTests : HostedTests
+public sealed class WinningPluginOfASharedNameEditApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";
     private const string WinningOrigin = "WinningMod";
     private const string OverriddenOrigin = "OverriddenMod";
 
-    // No read sees a plugin the game does not load, so the overridden NPC's FormKey is the
-    // builder's.
-    private string _overriddenNpc = "";
-
     private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = new PluginFixtureBuilder("api-overridden-plugin")
-            .WithPlugin(PluginName, mod => _overriddenNpc = mod.Npcs.AddNew("OverriddenNpc").FormKey.ToString(), origin: OverriddenOrigin)
+            .WithPlugin(PluginName, mod => mod.Npcs.AddNew("OverriddenNpc"), origin: OverriddenOrigin)
             .WithPlugin(PluginName, mod => mod.Npcs.AddNew("WinningNpc"), origin: WinningOrigin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();

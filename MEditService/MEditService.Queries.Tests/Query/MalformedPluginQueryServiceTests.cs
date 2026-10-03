@@ -8,9 +8,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
 
-/// <summary>A diagnosis is a row the Index projected when it hashed the binary; this service joins
-/// those rows to the load order, which says which plugins an edit can reach and in what order they
-/// are read.</summary>
 public sealed class MalformedPluginQueryServiceTests
 {
     private const string Malformed = "LitR - TrueStorms.esp";
@@ -48,18 +45,14 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Equal("fixed-size-subrecord-short", report.DefectClass);
         Assert.Equal("repairable (lossless)", report.Tail);
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", report.Message);
-        // Verbatim PluginDiagnosis.Describe(): the Problems panel and the Track refusal must never
-        // develop separate vocabularies.
         Assert.Equal(
             "REGN 001D2AF4 (DowntownRegion) — fixed-size-subrecord-short, repairable (lossless): "
             + "RDAT is 6 bytes; a REGN RDAT is always 8",
             report.Text);
     }
 
-    // The plugins loaded with no line are the proof set the tables were built from, so a hit there is
-    // a table bug. The Index stamps every plugin it hashes, so the load order drops these.
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginLoadedWithNoLine_AreNeverReported()
+    public void GetLoadOrderDiagnoses_RowsOfAPluginLoadedWithNoLine_AreNeverReported_ForThoseAreTheProofSetTheTablesWereBuiltFrom()
     {
         var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
 
@@ -67,7 +60,7 @@ public sealed class MalformedPluginQueryServiceTests
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase()
+    public void GetLoadOrderDiagnoses_APluginLoadedWithNoLine_IsMatchedIgnoringCase_ForACaseSensitiveFilesystemCanHoldASecondFileDifferingOnlyInCase()
     {
         var upper = Plugin("FALLOUT4.ESM", origin: "CleanedMasters", enabled: false);
         var master = Plugin("Fallout4.esm", origin: "CleanedMasters") with { LoadedWithNoLine = true };
@@ -75,31 +68,26 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Empty(Diagnose([Row(upper, Short), Row(master, Trailing)], upper, master));
     }
 
-    // Where the file sits decides nothing: a user's plugin placed in the game folder is the user's.
     [Fact]
-    public void GetLoadOrderDiagnoses_RowsOfAUserPluginInTheGameFolder_AreReported()
+    public void GetLoadOrderDiagnoses_RowsOfAUserPluginInTheGameFolder_AreReported_ForWhereTheFileSitsDecidesNothing()
     {
         var placed = Plugin(Malformed, origin: PluginOrigin.DataDirectory);
 
         Assert.Equal(PluginOrigin.DataDirectory, Assert.Single(Diagnose([Row(placed, Short)], placed)).Origin);
     }
 
-    // plugins.md, A row: a malformed plugin is one whose bytes depart from what the Creation Kit
-    // writes, active or not.
     [Theory]
     [InlineData(null, true)]
     [InlineData(0, false)]
-    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreReported(int? slot, bool enabled)
+    public void GetLoadOrderDiagnoses_RowsOfAPluginThatIsNotActive_AreReported_ForMalformedMeansBytesDepartingFromWhatTheCreationKitWritesActiveOrNot(int? slot, bool enabled)
     {
         var inactive = Plugin(Malformed, slot: slot, enabled: enabled);
 
         Assert.Equal("SomeMod", Assert.Single(Diagnose([Row(inactive, Short)], inactive)).Origin);
     }
 
-    // A plugin the Index never opened stamps no rows, and neither does a clean one; a plugin that
-    // failed to load says so through LoadOrderStatus.Failures.
     [Fact]
-    public void GetLoadOrderDiagnoses_APluginWithNoRows_IsNotReported()
+    public void GetLoadOrderDiagnoses_APluginWithNoRows_IsNotReported_ForTheIndexStampsNoRowsOnANeverOpenedOrCleanPlugin()
     {
         Assert.Empty(Diagnose([], Plugin("Clean.esp")));
     }
@@ -114,7 +102,7 @@ public sealed class MalformedPluginQueryServiceTests
     }
 
     [Fact]
-    public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins()
+    public void GetLoadOrderDiagnoses_TwoPluginsOfOneName_ReportAgainstTheirOwnOrigins_ForAFilenameIsNotAnIdentity()
     {
         var winner = Plugin(Malformed, origin: "WinningMod");
         var overridden = Plugin(Malformed, origin: "LosingMod", winning: false);
@@ -124,10 +112,8 @@ public sealed class MalformedPluginQueryServiceTests
         Assert.Equal("LosingMod", Assert.Single(reports).Origin);
     }
 
-    // The load order is the order, a plugin that is not active after every active one, and within
-    // one plugin the rows keep the order the binary proved them in.
     [Fact]
-    public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrderThenByRecordOrder()
+    public void GetLoadOrderDiagnoses_AreOrderedByTheLoadOrder_InactiveAfterEveryActiveOne_ThenByTheRecordOrderTheBinaryProvedThem()
     {
         var disabled = Plugin("Disabled.esp", origin: "DisabledMod", slot: 0, enabled: false);
         var second = Plugin("Second.esp", origin: "SecondMod", slot: 2);
@@ -142,11 +128,8 @@ public sealed class MalformedPluginQueryServiceTests
             reports.Select(r => (r.Plugin, r.DefectClass)));
     }
 
-    // MEditService/CLAUDE.md: a whole-plugin-set derivation gates on Status, because a plugin the
-    // projection has not reached has no rows yet and would read clean. GetPlugins answers its own
-    // whole-set fact the same way while reconciling.
     [Fact]
-    public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing()
+    public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing_ForAPluginTheProjectionHasNotReachedHasNoRowsYetAndWouldReadClean()
     {
         var plugin = Plugin(Malformed);
         var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent>(), []) { Diagnoses = [Row(plugin, Short)] };

@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension, parseExtensionToWebview } from '../messages';
 
-// commands.md, Record: a field gesture from the palette acts on the focused cell of the record tab
-// in focus, so the panel says which cell that is, as the context its menu would hand the command.
-describe('the focused cell message', () => {
+describe('the focused cell message that tells the host which cell a palette field gesture acts on, as the context its menu would hand the command', () => {
   it('carries the focused cell\'s context, or null when no cell is focused', () => {
     const context = { webviewSection: 'arrayElement', formKey: '000001:A.esp', path: [] };
     expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.FOCUS_CELL, context, entered: true }))
@@ -21,7 +19,7 @@ describe('the focused cell message', () => {
   });
 });
 
-describe('the record load request and its answer', () => {
+describe('the record load request the webview asks of the host, because nothing outside the client names the port, and its answer', () => {
   it('carries the formKey and the requestId that pairs the reply', () => {
     expect(parseWebviewToExtension({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' }))
       .toEqual({ type: WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD, requestId: 'r1', formKey: '000001:A.esp' });

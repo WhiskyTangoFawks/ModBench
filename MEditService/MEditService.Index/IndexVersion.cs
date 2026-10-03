@@ -5,9 +5,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>The shape a persistent file's rows were written under (ADR-0009); a mismatch at open
-/// rebuilds the whole file. Four parts: format version, game release, Mutagen assembly version,
-/// and a digest of the reflected schema.</summary>
+/// <summary>The shape a persistent file's rows were written under (ADR-0009). Four
+/// parts: format version, game release, Mutagen assembly version, and a digest of the reflected
+/// schema.</summary>
 internal static class IndexVersion
 {
     // Bump on any change to TableDdlBuilder's fixed tables or the codec's conventions: CREATE TABLE

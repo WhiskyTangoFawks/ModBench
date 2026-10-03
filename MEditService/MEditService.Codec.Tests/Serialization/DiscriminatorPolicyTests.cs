@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>A discriminator is written only when the group element type is abstract (ADR-0007); otherwise
-/// the type identity is the index's <c>record_type</c>.</summary>
 public sealed class DiscriminatorPolicyTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Discriminator.esp"), Fallout4Release.Fallout4);
@@ -34,7 +32,7 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void DeserializeFromBytes_ForAWeaponDocument_ReconstitutesFromRecordType()
+    public void DeserializeFromBytes_ForAWeaponDocument_ReconstitutesFromRecordType_BecauseAConcreteElementTypeWritesNoDiscriminatorAndItsIdentityIsTheIndexsRecordType()
     {
         var codec = Codec();
         var bytes = codec.SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
@@ -47,7 +45,7 @@ public sealed class DiscriminatorPolicyTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAGlobalFloat_KeepsTheDiscriminator()
+    public void SerializeToBytes_ForAGlobalFloat_KeepsTheDiscriminator_BecauseADiscriminatorIsWrittenOnlyWhenTheGroupElementTypeIsAbstract()
     {
         var bytes = Codec().SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);
 
@@ -55,13 +53,11 @@ public sealed class DiscriminatorPolicyTests
         Assert.Equal("GlobalFloat", doc.RootElement.GetProperty(Discriminator).GetString());
     }
 
-    // The two spellings record_type can carry — the GRUP signature ingest stores, and the lowercased
-    // CLR name Track's source path falls back to — must both route to the discriminated deserializer.
     [Theory]
     [InlineData("glob")]
     [InlineData("globalfloat")]
     [InlineData(null)]
-    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat(string? recordType)
+    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
     {
         var codec = Codec();
         var bytes = codec.SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);

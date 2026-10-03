@@ -8,9 +8,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Edits the FormID of a record fresh off <c>CreateRecord</c>, still working-tree-only
-/// <c>Added</c>: that is the shape that reproduces the stale-record bug; an already committed
-/// record would not exercise it.</summary>
 public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -57,8 +54,6 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
         created.EnsureSuccessStatusCode();
         var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
 
-        // ADR-0014: the create wrote the source tree and returned; the edit below resolves its
-        // target through the Index, so it waits for the next snapshot's projection of that write.
         await _client.NextSnapshot(fx, Origin);
         await Wire.Eventually(
             async () => (await _client.GetAsync(new Uri($"/records/{Uri.EscapeDataString(oldFormKey)}", UriKind.Relative))).IsSuccessStatusCode,
@@ -76,26 +71,22 @@ public sealed class FormIdEditApiTests(LoadedApiFixture<TestPluginFixture> loade
             .SelectMany(KeysOf).ToHashSet(StringComparer.Ordinal);
         Assert.Contains(oldFormKey, named);
 
-        // ADR-0014: the edit's create and delete land in one validation, and that is one advance,
-        // so one await is the whole wait — no poll for an end state.
         Assert.True(await ProjectionLanded(beforeEdit), "the record under its new FormKey never reached the index");
 
-        // The old FormKey's point-read refuses rather than serving stale data.
         var stale = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
         Assert.Equal(HttpStatusCode.NotFound, stale.StatusCode);
 
-        // The old FormKey is gone from the plugin's listing, and the new one is present.
         var formKeys = await NpcFormKeys();
         Assert.DoesNotContain(oldFormKey, formKeys);
         Assert.Contains(newFormKey, formKeys);
     }
 
-    // Validation runs on the service's own thread, so the bound is generous; a sleep would be a guess
-    // either way.
+    private const int GenerousTimeoutForValidationOnTheServicesOwnThreadMs = 20000;
+
     private async Task<bool> ProjectionLanded(long before)
     {
         var response = await _client.GetAsync(
-            new Uri($"/load-order/sequence/await?atLeast={before + 1}&timeoutMs=20000", UriKind.Relative));
+            new Uri($"/load-order/sequence/await?atLeast={before + 1}&timeoutMs={GenerousTimeoutForValidationOnTheServicesOwnThreadMs}", UriKind.Relative));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("reached").GetBoolean();
     }

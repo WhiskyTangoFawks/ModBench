@@ -7,8 +7,6 @@ namespace MEditService.Queries.Tests.Query;
 
 public class WorldspaceQueryServiceTests
 {
-    // A repository stub returning a fixed set of cell-location rows, exercising the service's
-    // block / sub-block grouping logic.
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
@@ -20,9 +18,6 @@ public class WorldspaceQueryServiceTests
             return cells;
         }
 
-        // Capture the origin each method actually resolved (or was explicitly given)
-        // and passed down, so the plumbing (not just the repository-level filter) is verified
-        // independently of DuckDB.
         public string? LastSearchOrigin { get; private set; }
         public string? LastGetWorldspaceCellsOrigin { get; private set; }
         public string? LastGetInteriorCellsOrigin { get; private set; }
@@ -88,10 +83,8 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void GetWorldspaceBlocks_SortsBlocksAndSubBlocksAscendingByXThenY()
+    public void GetWorldspaceBlocks_SortsBlocksAndSubBlocksAscendingByXThenY_KeepingTwoBlocksSharingXApartByY()
     {
-        // Scrambled input across two blocks sharing X=0 but differing in Y, plus a separate X=1 block, so
-        // BlockY has to participate in grouping and keep the two X=0 blocks distinct.
         var svc = Service([
             new CellLocationSummary("c1:M.esp", "CellC", 1, 0, 0, 0, 40, 2),
             new CellLocationSummary("a1:M.esp", "CellA", 0, 0, 1, 1, 1, 1),
@@ -102,22 +95,18 @@ public class WorldspaceQueryServiceTests
 
         var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", "Data");
 
-        // Three distinct blocks, ascending by (X, Y): (0,0), (0,1), (1,0).
         Assert.Equal(
             [(0, 0), (0, 1), (1, 0)],
             result.Blocks.Select(b => (b.X, b.Y)).ToArray());
 
-        // Sub-blocks within block (0,0) ascending by (X, Y): (0,0), (0,2), (1,1).
         var block00 = result.Blocks[0];
         Assert.Equal(
             [(0, 0), (0, 2), (1, 1)],
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
     }
 
-    // The reads are what "no load order" means for this service: origin travels in from the
-    // caller, so RequireReads() is the one guard.
     [Fact]
-    public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException()
+    public void GetInteriorCells_NoReads_ThrowsNoLoadOrderException_ForOriginTravelsInFromTheCallerSoTheReadsAreTheOneGuard()
     {
         var svc = new WorldspaceQueryService(new StubIndex(reads: null));
         Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", "Data"));
@@ -140,10 +129,8 @@ public class WorldspaceQueryServiceTests
         Assert.Null(result[1].EditorId);
     }
 
-    // GetWorldspaces must forward the caller's origin into GetRecords untouched: the same class of
-    // bug as the other worldspace-tree reads, one hop further away.
     [Fact]
-    public void GetWorldspaces_PassesGivenOriginToSearch()
+    public void GetWorldspaces_PassesGivenOriginToSearch_UntouchedOneHopFurtherThanTheOtherWorldspaceTreeReads()
     {
         var reader = new StubReader([]);
         var svc = new WorldspaceQueryService(new StubIndex(reader));
@@ -203,10 +190,8 @@ public class WorldspaceQueryServiceTests
         Assert.Single(result.Blocks);
     }
 
-    // Picking the first block-less row as TopCell and building Blocks only from rows with block
-    // coordinates leaves a second block-less row in neither: real runtime data loss.
     [Fact]
-    public void GetWorldspaceBlocks_TwoBlocklessCellRows_SurfacesBoth()
+    public void GetWorldspaceBlocks_TwoBlocklessCellRows_SurfacesBoth_NotLosingTheSecondRow()
     {
         var svc = Service([
             new CellLocationSummary("first:M.esp", "FirstBlockless", null, null, null, null, 0, 0),
@@ -221,8 +206,6 @@ public class WorldspaceQueryServiceTests
         Assert.False(result.TopCells[1].IsPersistentWorldspaceCell);
     }
 
-    // The repository row carries a FULL name independently of grid coordinates and persistence, so this
-    // pins that GetWorldspaceBlocks forwards it into both CellSummary construction sites.
     [Fact]
     public void GetWorldspaceBlocks_ForwardsFullNameOntoCellSummary_ForTopCellsAndBlockCells()
     {
@@ -236,10 +219,9 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
         Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
     }
-    // The tree's "has a failure below it": a cell row's own flag reaches its sub-block and its
-    // block, so a collapsed node still shows the error beneath it.
+
     [Fact]
-    public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock()
+    public void GetWorldspaceBlocks_RollsACellsParseFailureUpItsSubBlockAndBlock_SoACollapsedNodeStillShowsTheErrorBeneathIt()
     {
         var svc = Service([
             new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, null, HasParseFailure: true),

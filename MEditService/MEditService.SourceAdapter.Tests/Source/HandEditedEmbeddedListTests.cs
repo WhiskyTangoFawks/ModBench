@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,8 +12,6 @@ using Noggog.WorkEngine;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>An embedded list is an array of its container's document, so a hand edit of it is
-/// ordinary: a removed element is a deletion and the array's order is the game's.</summary>
 public sealed class HandEditedEmbeddedListTests : IDisposable
 {
     private const string PluginName = "EmbeddedList.esp";
@@ -23,20 +22,20 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
 
     public static TheoryData<string> EmbeddedLists => [QuestTopics, TopicResponses];
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-hand-edited-list-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-hand-edited-list-");
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
     private readonly Quest _quest;
     private readonly string _questPath;
 
-    // Three of each, because a reversal of three or more cannot coincide with the original.
     public HandEditedEmbeddedListTests()
     {
+        const int enoughForAReversalToDifferFromTheOriginal = 3;
         _quest = new Quest(_mod) { EditorID = "Quest" };
-        foreach (var index in Enumerable.Range(1, 3))
+        foreach (var index in Enumerable.Range(1, enoughForAReversalToDifferFromTheOriginal))
         {
             var topic = new DialogTopic(_mod) { EditorID = $"Topic{index}" };
-            foreach (var response in Enumerable.Range(1, 3))
+            foreach (var response in Enumerable.Range(1, enoughForAReversalToDifferFromTheOriginal))
                 topic.Responses.Add(new DialogResponses(_mod) { EditorID = $"Topic{index}Response{response}" });
             _quest.DialogTopics.Add(topic);
         }
@@ -54,11 +53,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             ]);
     }
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private string SourceRoot => Path.Combine(_modFolder, SourceRepository.RootFor(PluginName));
 
@@ -71,7 +66,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         var children = ChildrenOf(list);
         var removed = children[^1];
 
-        Rewrite(list, children.Take(children.Count - 1).ToList());
+        ReorderOrDropElementsByIdentityLeavingEachElementsTextUntouched(list, children.Take(children.Count - 1).ToList());
 
         var readBack = await ReadBack(list);
         Assert.Equal(children.Take(children.Count - 1), readBack);
@@ -85,14 +80,12 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         var children = ChildrenOf(list);
         Assert.Equal(children, await ReadBack(list));
 
-        Rewrite(list, children.AsEnumerable().Reverse().ToList());
+        ReorderOrDropElementsByIdentityLeavingEachElementsTextUntouched(list, children.AsEnumerable().Reverse().ToList());
 
         Assert.Equal(children.AsEnumerable().Reverse(), await ReadBack(list));
     }
 
-    // The owner of the array under test: the quest itself for its topics, its first topic for that
-    // topic's responses.
-    private string Owner(string list) => list switch
+    private string OwnerOfTheArrayUnderTest(string list) => list switch
     {
         QuestTopics => _quest.FormKey.ToString(),
         TopicResponses => _quest.DialogTopics[0].FormKey.ToString(),
@@ -112,7 +105,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             ?? throw new InvalidOperationException("Expected the quest's document to carry DialogTopics.");
         if (list == QuestTopics) return topics;
 
-        var owner = Owner(list);
+        var owner = OwnerOfTheArrayUnderTest(list);
         return topics.OfType<JsonNode>().Select(topic => topic.AsObject())
                 .Single(topic => FormKeyOf(topic) == owner)[nameof(DialogTopic.Responses)] as JsonArray
             ?? throw new InvalidOperationException($"Expected topic '{owner}' to carry Responses.");
@@ -122,8 +115,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         (node[nameof(IMajorRecordGetter.FormKey)]
             ?? throw new InvalidOperationException("Expected node to have a FormKey member.")).GetValue<string>();
 
-    // Reorders and drops elements of the array by identity; every element's own text is untouched.
-    private void Rewrite(string list, IReadOnlyList<string> order)
+    private void ReorderOrDropElementsByIdentityLeavingEachElementsTextUntouched(string list, IReadOnlyList<string> order)
     {
         var root = (JsonNode.Parse(File.ReadAllText(QuestFile))
             ?? throw new InvalidOperationException("Expected the quest's document to parse as a JSON node.")).AsObject();
@@ -139,7 +131,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
         var mod = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
             SourceRoot, InlineWorkDropoff.Instance, CancellationToken.None);
         var quests = ((IFallout4ModGetter)mod).Quests;
-        var owner = Owner(list);
+        var owner = OwnerOfTheArrayUnderTest(list);
         return list == QuestTopics
             ? [.. quests.Single(q => q.FormKey.ToString() == owner).DialogTopics.Select(t => t.FormKey.ToString())]
             : [.. quests.SelectMany(q => q.DialogTopics).Single(t => t.FormKey.ToString() == owner).Responses.Select(r => r.FormKey.ToString())];

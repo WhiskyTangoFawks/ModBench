@@ -16,25 +16,18 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-repository-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-repository-");
 
-    public void Dispose()
-    {
-        try { Directory.Delete(_modFolder, recursive: true); }
-        catch (IOException) { /* scratch directory, best effort */ }
-    }
+    public void Dispose() => _modFolder.Dispose();
 
     private SourceRepository RequireOpened() =>
         SourceRepository.Open(_modFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
-    // Track rather than a hand-made .git: the repository the tests open is the one the product makes.
     private void Track(params TreeFile[] files) =>
         PluginBaselines.Track(
             _modFolder, SourcePreset.Edits, files);
 
-    // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
-    // and asking the repository for them would only echo its own rule back.
     private string NpcGroupFolder
     {
         get
@@ -45,8 +38,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         }
     }
 
-    // Tracks an empty tree, then puts the fixture's NPC through the repository — the same door a real
-    // edit uses — so its file lands wherever the repository's own placement decides.
     private SourceRepository Opened()
     {
         Track();
@@ -55,14 +46,12 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         return repository;
     }
 
-    // A pipe nothing writes to never returns from an open for reading, so a Put that read the document
-    // standing beside the new one would not return either.
     [Fact]
     public async Task Put_OfARecordNoDocumentHolds_ReadsNoOtherDocument()
     {
         Opened();
-        var pipe = Path.Combine(NpcGroupFolder, "Unnamed.json");
-        MakeFifo(pipe);
+        var pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt = Path.Combine(NpcGroupFolder, "Unnamed.json");
+        MakeFifo(pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt);
 
         var put = Task.Run(() => RequireOpened().Put(
             Plugin, new SourceDocument("000A00:Fixture.esp", "npc_", "Created", "{\"FormKey\": \"000A00:Fixture.esp\"}")));
@@ -73,27 +62,20 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         }
         catch (TimeoutException)
         {
-            await ReleaseEveryReaderOf(pipe, put);
+            await UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(
+                pipeWhoseOpenForReadingNeverReturnsUntilSomethingWritesToIt, put);
+            await put;
             Assert.Fail("Put opened another document to place a record no document holds.");
         }
     }
 
-    // Opened for both reading and writing, a pipe lets a waiting reader's open return, and closing it
-    // hands that reader an end of file.
-    private static async Task ReleaseEveryReaderOf(string pipe, Task until)
+    private static async Task UnblockEveryReaderByOpeningThePipeReadWriteAndClosingItToGiveEndOfFile(string pipe, Task until)
     {
         while (!until.IsCompleted)
         {
             await using (new FileStream(pipe, FileMode.Open, FileAccess.ReadWrite))
             {
-                try
-                {
-                    await until.WaitAsync(TimeSpan.FromMilliseconds(100));
-                }
-                catch (TimeoutException)
-                {
-                    // Still reading: this handle closes and the next one lets the next open return.
-                }
+                await Task.WhenAny(until, Task.Delay(TimeSpan.FromMilliseconds(100)));
             }
         }
     }
@@ -172,12 +154,10 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfARecordNoFileHolds_IsTheStateItAsksFor_NotAThrow()
+    public void Remove_OfARecordNoFileHolds_IsTheStateItAsksFor_NotAThrow_ThoughNotEvenItsGroupFolderExists()
     {
         var repository = Opened();
 
-        // A type this plugin has never held, so not even its group folder exists — the shape a hand
-        // delete or another tool leaves behind.
         repository.Remove(Plugin, new RecordIdentity("000900:Fixture.esp", "weap", "Absent"));
 
         Assert.NotNull(repository.Get(Plugin, Npc));
@@ -234,11 +214,9 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_AfterSomethingElseRenamedTheFile_StillFindsItByFormKey()
+    public void Get_AfterAnotherToolOrTheAuthorRenamedTheFile_StillFindsItByFormKey_ForTheIdentityNamesTheRecordInsideIt()
     {
         var repository = Opened();
-        // Never assume exclusive ownership: xEdit, MO2 or the author can rename the file at any time,
-        // and the identity the caller holds still names the record inside it.
         File.Move(
             Path.Combine(NpcGroupFolder, $"{NpcEditorId} - 000800_{PluginName}.json"),
             Path.Combine(NpcGroupFolder, $"RenamedOutside - 000800_{PluginName}.json"));
@@ -296,12 +274,11 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Get_WhenTwoFilesInTheGroupFolderClaimOneFormKey_Refuses()
+    public void Get_WhenTwoFilesInTheGroupFolderClaimOneFormKey_Refuses_ForAFormKeyIsUniqueInAModSoEitherAnswerIsAGuess()
     {
         var repository = Opened();
         File.WriteAllText(Path.Combine(NpcGroupFolder, $"AnImpostor - 000800_{PluginName}.json"), NpcBody);
 
-        // A FormKey is unique within a mod, so answering with either file would be a guess.
         var refusal = Assert.Throws<AmbiguousSourceUnitException>(
             () => repository.Get(Plugin, new RecordIdentity(NpcFormKey, "npc_", "NeitherName")));
 

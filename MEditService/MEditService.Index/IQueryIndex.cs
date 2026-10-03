@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0014: the Index as Queries, its only reader, sees it — the reads, the
+/// <summary>ADR-0014: the Index as Queries sees it — the reads, the
 /// status, the sequence and the filter, plus setting and clearing the filter and the rebuild
 /// (target-architecture.d2 medit_core.queries).</summary>
 public interface IQueryIndex

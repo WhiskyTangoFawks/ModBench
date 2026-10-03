@@ -65,7 +65,6 @@ public sealed class InactivePluginProjectionTests : IDisposable
         Assert.Equal(projected, _index.Sequence);
     }
 
-    // A plugin's facts are its row's in Plugins, and a disabled plugin is a row (plugins.md, A row).
     [Fact]
     public void ATrackedPluginThatIsNotActive_IsStillReadAsTracked()
     {

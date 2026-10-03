@@ -23,8 +23,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private const string TargetKeywordEditorId = "LinkTargetKeyword";
     private const string Dangling = "ABCDEF:LinkTarget.esp";
 
-    private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-compile-links-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-links-game-").FullName;
+    private readonly ScratchDirectory _instanceRoot = new("medit-compile-links-");
+    private readonly ScratchDirectory _gameDirectory = new("medit-compile-links-game-");
     private readonly string _hostFolder;
     private readonly string _targetFolder;
     private readonly LoadOrderSnapshot _loadOrder;
@@ -67,15 +67,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
     public void Dispose()
     {
-        TryDelete(_instanceRoot);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
+        _instanceRoot.Dispose();
+        _gameDirectory.Dispose();
     }
 
     private static SourceRepository Repository(string modFolder) =>
@@ -124,8 +117,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
-    // The target is tracked, so it has a working tree to disagree with its file. The file is what
-    // the game loads, and it is what answers the link.
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPlugin_ReadsThatPluginsFile_NotItsWorkingTree()
     {
@@ -139,8 +130,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
     }
 
-    // ADR-0019: a file that could not be read is a fact the author is told, not one the records are
-    // blamed for. Both halves: the file is named, and the link into it says why it is unchecked.
     [Fact]
     public async Task Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
     {
@@ -159,8 +148,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
         Assert.DoesNotContain("Could not be resolved", aboutTheLink.Message, StringComparison.Ordinal);
     }
 
-    // The plugin is written and parked before the links are read, so a fault in the check is the
-    // report's failure, never the compile's.
     [Fact]
     public async Task Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
     {
@@ -186,8 +173,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             throw new InvalidOperationException(Fault);
     }
 
-    // A record this compile's own source holds resolves through the file this compile just wrote,
-    // which is why the write comes first.
     [Fact]
     public async Task Compile_ForALinkToARecordTheCompiledPluginItselfHolds_ReportsNothingAboutIt()
     {

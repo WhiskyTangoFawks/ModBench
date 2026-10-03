@@ -44,9 +44,7 @@ describe('trackLoadOrderStatus', () => {
     expect(changed).toHaveBeenCalledTimes(2);
   });
 
-  // The rival: a dispose that forgets to unsubscribe, so a tick emitted after disposal still
-  // moves the tracker — exactly the leak that would keep a torn-down panel host live.
-  it('stops updating once disposed', () => {
+  it('stops updating once disposed, so a tick emitted after disposal does not move the tracker', () => {
     const client = new InMemoryMEditClient();
     const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true));
@@ -57,10 +55,7 @@ describe('trackLoadOrderStatus', () => {
     expect(tracker.current()).toBe(true);
   });
 
-  // ADR-0002: mEdit crashing and restarting starts a fresh reconcile, so a settled answer from the
-  // old process must not outlive it — reconcileNarrator's own detached() resets on the same two
-  // signals (toolbox.ts).
-  it('resets to false when the backend leaves running, so a re-indexing process answers unsettled', () => {
+  it('resets to false when the backend leaves running, since a restarted mEdit starts a fresh reconcile and the old process\'s settled answer must not outlive it', () => {
     const client = new InMemoryMEditClient();
     const tracker = trackLoadOrderStatus(client);
     client.emit(tick(true));

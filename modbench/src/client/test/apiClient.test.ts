@@ -2,13 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createApiClient, errorText, toLoadOrderStatus } from '../apiClient';
 
 describe('createApiClient', () => {
-  it('uses the supplied port in the base URL', () => {
-    const client = createApiClient(5172);
-    // openapi-fetch keeps baseUrl in internal config, so only construction is observable.
-    expect(client).toHaveProperty('GET');
-    expect(client).toHaveProperty('POST');
-  });
-
   it('constructs different clients for different ports', () => {
     const a = createApiClient(5172);
     const b = createApiClient(5173);
@@ -16,10 +9,7 @@ describe('createApiClient', () => {
   });
 });
 
-// The backend answers every failure as RFC 7807 ProblemDetails; the toast wants the sentence
-// written for the user, not the envelope around it ("open in another
-// Modbench window" would otherwise arrive inside a JSON blob).
-describe('errorText', () => {
+describe('errorText, the sentence written for the user rather than the RFC 7807 ProblemDetails envelope the backend answers every failure in', () => {
   it('passes a string body through', () => {
     expect(errorText('bad dir')).toBe('bad dir');
   });
@@ -39,12 +29,10 @@ describe('errorText', () => {
   });
 });
 
-// ADR-0013: the whole-set conflict sweep leaves a Ready load order with stale winners, so
-// anything rendering conflict information must read `conflictsComputed`, never the wire's `state`.
 describe('toLoadOrderStatus', () => {
-  it('keeps each indexed plugin as (origin, filename), so two of one filename stay two', () => {
+  it('keeps each indexed plugin as (origin, filename), so two of one filename stay two, and carries conflictsComputed false through a Ready wire state, as the whole-set conflict sweep leaves a Ready load order with stale winners', () => {
     const status = toLoadOrderStatus({
-      state: 'Reconciling',
+      state: 'Ready',
       totalPlugins: 3, activePlugins: 2, version: 1,
       indexedPlugins: [{ name: 'Shared.esp', origin: 'ModA' }, { name: 'Shared.esp', origin: 'ModB' }],
       conflictsComputed: false,
@@ -61,9 +49,7 @@ describe('toLoadOrderStatus', () => {
     expect(status.refusal).toBeUndefined();
   });
 
-  // A rebuild drops the index before it refills: the one state that says nothing is held, which
-  // no other field can tell apart from a reconcile that has indexed nothing yet.
-  it('says the index holds none for the None state, and only for it', () => {
+  it('says the index holds none for the None state, and only for it, as a rebuild drops the index before it refills and no other field tells it from a reconcile that has indexed nothing yet', () => {
     const tick = (state: 'None' | 'Reconciling') => toLoadOrderStatus({
       state, totalPlugins: 0, activePlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [],
     });

@@ -38,7 +38,9 @@ function record(workingTreeState: RecordSummary['workingTreeState']): RecordSumm
 
 const rowsChanged = () => ({ kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys: [FORM_KEY], sequence: 1 });
 
-describe('a write and the stream, together (ADR-0015)', () => {
+const asVsCodeReReadsAnExpandedGroupOnTreeChange = (tree: PluginTreeProvider, group: RecordTypeNode) => tree.getChildren(group);
+
+describe('a write and the stream, together: the write\'s own callback is silent and the stream is how the panel, the tree and the badge learn of it', () => {
   it('after a write, the panel re-reads exactly once, on rows-changed', async () => {
     const meditClient = new InMemoryMEditClient();
     meditClient.setCommandResult('editRecord', { applied: true });
@@ -81,7 +83,7 @@ describe('a write and the stream, together (ADR-0015)', () => {
 
     meditClient.setQueryAnswer('getRecords', { items: [record('Modified')], total: 1 });
     meditClient.emit(rowsChanged());
-    await tree.getChildren(group); // what VS Code does for an expanded group once the tree changes
+    await asVsCodeReReadsAnExpandedGroupOnTreeChange(tree, group);
 
     expect(treeChanges).toBe(1);
     expect(badgeChanges).toEqual([[uri]]);

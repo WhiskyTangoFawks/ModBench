@@ -23,8 +23,6 @@ function snapshot(name: string): LoadOrderSnapshot {
 
 const puts = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'putLoadOrder');
 
-// `putLoadOrder`'s own args[0] — a recorded call carries only `unknown[]`, so a test reading one
-// back narrows through this rather than trusting the method name alone.
 function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
 }
@@ -42,12 +40,9 @@ function attached(): InMemoryMEditClient {
   return client;
 }
 
-// ADR-0013: the Instance-to-mEdit arrow, with its whole sequencing on the client's own side of
-// the seam — connect before the first PUT, one PUT at a time, and the newest snapshot the one
-// that lands.
-describe('createLoadOrderSender — connect precedes the first put', () => {
+describe('createLoadOrderSender — connect precedes the first put, the sequencing of the Instance-to-mEdit arrow sitting on the client\'s own side of the seam', () => {
   it('holds a snapshot handed over before the backend attaches, and sends it on connect', async () => {
-    const client = new InMemoryMEditClient(); // 'starting' — never attached
+    const client = new InMemoryMEditClient();
     client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
 
@@ -112,7 +107,7 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
     await Promise.resolve();
     const second = sender.send(snapshot('B.esp'));
     const third = sender.send(snapshot('C.esp'));
-    expect(sentNames(client)).toEqual(['A.esp']); // still in flight — nothing concurrent
+    expect(sentNames(client)).toEqual(['A.esp']);
 
     releaseFirst();
     client.setCommandHandler('putLoadOrder', () => Promise.resolve(APPLIED));
@@ -138,8 +133,6 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
   });
 });
 
-// The in-flight send's abort handle and the sender's own lifecycle stay independent: abandoning
-// the send in flight must never disable a later one (launch → close → launch).
 describe('createLoadOrderSender — arm and abandon', () => {
   it('a freshly armed scope is not abandoned', () => {
     const sender = createLoadOrderSender(attached());
@@ -166,9 +159,7 @@ describe('createLoadOrderSender — arm and abandon', () => {
     expect(() => sender.abandon()).not.toThrow();
   });
 
-  // A superseded send does not need aborting — the backend answers it 409 — so arming again must
-  // not reach back and abort the scope it replaces.
-  it('arming again replaces the previous scope without aborting it', () => {
+  it('arming again replaces the previous scope without aborting it, a superseded send needing no abort as the backend answers it 409', () => {
     const sender = createLoadOrderSender(attached());
     const first = sender.arm();
     const second = sender.arm();
@@ -211,7 +202,7 @@ describe('createLoadOrderSender — arm and abandon', () => {
     expect(puts(client)).toEqual([]);
   });
 
-  it('serves a send made after an abandon — a relaunch finds the sender able', async () => {
+  it('serves a send made after an abandon — a relaunch (launch, close, launch) finds the sender able', async () => {
     const client = attached();
     const sender = createLoadOrderSender(client);
     sender.arm();
