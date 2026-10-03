@@ -35,8 +35,8 @@ interface RenderCellExtras {
   reading?: string;
 }
 
-// ADR-0007: leaves render read-only unless the caller supplies `onCommit` — the presence of
-// somewhere to write *is* the editability signal, so a call site that has no write path cannot
+// Leaves render read-only unless the caller supplies `onCommit`: the presence of somewhere to
+// write *is* the editability signal, so a call site that has no write path cannot
 // accidentally ask for an editor.
 function renderCell(
   value: unknown,
@@ -101,8 +101,8 @@ export interface RowContext {
   depth: number;
 }
 
-// ADR-0018: identifies the one focused cell panel-wide. ADR-0012: `plugin` is the column's
-// compound identity, so two columns sharing a filename never both read as focused. `null` is the
+// The one focused cell panel-wide (editor.md, The focused cell). `plugin` is the column's compound
+// identity (ADR-0012), so two columns sharing a filename never both read as focused. `null` is the
 // label column.
 export interface FocusedCell {
   rowKey: string;
@@ -207,9 +207,8 @@ export function DiffRow({
 
   return (
     <tr style={{ backgroundColor: rowBg, ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      {/* ADR-0018: double-clicking the label column expands/collapses the node, the same action
-          the toggle button performs. For a row with no children the flip lands in
-          expandedStructs, an entry nothing reads. */}
+      {/* Double-clicking the label expands or collapses the node (editor.md, Rows, story 4). For a
+          row with no children the flip lands in expandedStructs, an entry nothing reads. */}
       <DiskCell
         style={{ ...labelCell(columnStyle(LABEL_COLUMN)), paddingLeft: context.depth * INDENT_PER_LEVEL || undefined }}
         isFocused={isCellFocused(focusedCell, rowKey, null)}
@@ -226,13 +225,11 @@ export function DiffRow({
       </DiskCell>
       {columns.map(col => {
         const { key, override } = col;
-        // ADR-0018: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
-        // consumes the mousedown that would start a selection, so adding it would tell the next
-        // reader selection works here.
+        // No `userSelect: 'text'` (editor.md, The focused cell): the cell is `draggable` at rest,
+        // and `draggable` consumes the mousedown that would start a selection.
 
-        // ADR-0012: every per-column lookup below is keyed by `key` (this column's ColumnKey),
-        // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
-        // moment a non-Data-origin column exists.
+        // Every per-column lookup below is keyed by `key`, this column's ColumnKey (ADR-0012), as
+        // the backend keys its own dictionaries.
 
         // mEdit sends no state for the master's own cell, nor for any cell of a lone copy.
         const cellState = diff.cellStates[key] ?? masterOrOnlyOne(diff.values[key], key, columns);
@@ -252,7 +249,7 @@ export function DiffRow({
         const hasElement = rowIsStructural
           || ((ownerPresent?.(key) ?? true) && columnHasNode(cellMeta, diff.values[key]));
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
-        // ADR-0018: the string Ctrl+C copies for this cell, computed once so the
+        // The string Ctrl+C copies for this cell (editor-fields.md, By type), computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
         const copyText = copiedText(shown, cellMeta, diff.resolutions?.[key]);
         const cellTitle = [cellState && conflictStateName(cellState), cellMeta.readOnlyReason]

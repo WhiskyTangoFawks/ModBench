@@ -3,9 +3,8 @@ import * as net from 'node:net';
 import * as readline from 'node:readline';
 import type { BackendStatus } from './MEditClient';
 
-/** Which of the spawned process's two streams a line arrived on. Declared beside the spawn that
- *  produces it: the forwarder that levels it takes this type, never the client a VS Code one
- *  (ADR-0002). */
+/** Which of the spawned process's two streams a line arrived on. The forwarder that levels it
+ *  takes this type, so the client names no VS Code type (ADR-0019). */
 export type BackendStream = 'stdout' | 'stderr';
 
 /** Minimal view of a spawned backend process — injectable so spawn/teardown is
@@ -24,7 +23,7 @@ export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess
 
 export interface BackendLifecycleOptions {
   /** A developer-launched backend to attach to, spawning nothing and never falling back to a
-   *  spawn. Omitted, this window spawns its own on a free port (ADR-0009). */
+   *  spawn. Omitted, this window spawns its own (ADR-0009) on a free port. */
   attachPort?: number;
   /** Claims the port the spawned backend listens on; defaults to an OS-assigned free one. */
   freePort?: () => Promise<number>;
@@ -49,8 +48,7 @@ export interface BackendLifecycleOptions {
   checkHealth?: () => Promise<boolean>;
 }
 
-/** The backend process, as the HTTP adapter's own internals (ADR-0002). The only module that
- *  names a process, a port, a health poll or a spawn. */
+/** The backend process the client hides (ADR-0002). */
 export class BackendLifecycle {
   private readonly attachPort?: number;
   private readonly freePort: () => Promise<number>;

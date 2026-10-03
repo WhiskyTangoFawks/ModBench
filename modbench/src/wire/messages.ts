@@ -2,14 +2,13 @@ import type { components } from './generated/api';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
-  // ADR-0013: the winner sweep has landed, so a panel opened mid-reconcile stops rendering a
-  // settled-looking grid over unsettled data. Load-order-wide: no self-filter, every panel reacts.
+  // The winner sweep has landed (editor.md, States, story 3). Load-order-wide: no self-filter, every panel reacts.
   CONFLICTS_COMPUTED: 'conflictsComputed',
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
   // only for that request. `formKey: null` is a dismissal, leaving the field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
   // The host's answer to REQUEST_RECORD_LOAD: the comparison, the plugin list and whether the
-  // winner sweep has run, posted untransformed (ADR-0002 — the webview names no port).
+  // winner sweep has run, posted untransformed, so the webview names no port.
   RECORD_LOAD_ANSWERED: 'recordLoadAnswered',
   // Every record edit, broadcast as it is sent, and again if mEdit answers with a refusal: the
   // panel showing the record marks the edit until the disk confirms it (common.md, Unconfirmed
@@ -26,8 +25,8 @@ export const WEBVIEW_TO_EXTENSION = {
   // The webview has no route to the 'Modbench' channel of its own — this is
   // the bridge. The webview composes the full message text; the host does a level→method forward.
   LOG: 'log',
-  // ADR-0007: routed through the extension host because an edit can be refused and a refusal has
-  // to become a native notification (ADR-0019).
+  // Routed through the extension host because a refused edit becomes a native notification
+  // (editor.md, Reporting, story 1).
   EDIT_FIELD: 'editField',
   // A drop on an array, an entry point to the add its right-click menu fires, with the dropped value.
   ADD_ELEMENT: 'addElement',
@@ -50,8 +49,7 @@ export type WebviewToExtension =
   | {
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
-      // ADR-0012: the compound plugin identity, never a bare filename — a filename alone is
-      // ambiguous the moment the instance holds two plugins that share a filename.
+      // ADR-0012.
       plugin: string;
       origin: string;
       envelope: RecordEditEnvelope;
@@ -87,7 +85,7 @@ export interface ArrayParentContext {
 }
 
 // Resolving the commands this feeds never round-trips back through the webview: the mutation is
-// an ordinary host-side call (ADR-0007), so this context only says which record, plugin and
+// an ordinary host-side call, so this context only says which record, plugin and
 // origin was right-clicked.
 export interface ColumnHeaderContext {
   webviewSection: 'recordHeader';
@@ -148,7 +146,7 @@ export interface ReferenceContext {
   referenceTarget: string;
 }
 
-// ADR-0018: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
+// Right-click is the extended editor's only trigger (xedit.md, divergence 6). `value`/`readOnly` come from the
 // webview, not the host. Offered on immutable cells too: a read-only tab is the only way to read
 // a long value in full.
 export interface StringValueContext {

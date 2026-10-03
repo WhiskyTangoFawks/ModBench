@@ -1,8 +1,7 @@
 import type { PluginMetadata } from '../client';
 
 /** Each plugin's tracked folder, by `pluginAddressKey`; a plugin whose origin is not a tracked mod
- *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check
- *  (ADR-0007). */
+ *  has no entry. A lookup over the Instance value's own two facts, never a fresh disk check. */
 export function trackedFoldersOf(
   plugins: readonly Pick<PluginMetadata, 'name' | 'origin'>[],
   trackedMods: ReadonlySet<string>,
@@ -33,7 +32,7 @@ export async function registerTrackedRepositories<T>(
   return repositories;
 }
 
-/** ADR-0012: a plugin is `(origin, filename)` on every map key. */
+/** ADR-0012. */
 export function pluginAddressKey(name: string, origin: string): string {
   return `${origin.toLowerCase()}|${name.toLowerCase()}`;
 }

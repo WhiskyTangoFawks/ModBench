@@ -48,7 +48,8 @@ interface UnconfirmedShape {
 const sameAddress = (a: PluginAddress, b: PluginAddress): boolean => a.name === b.name && a.origin === b.origin;
 
 // One entry per plugins.txt line: the winning plugin of every listed name, in file order
-// (ADR-0013) — an overridden plugin of the same name carries the same slot and is excluded.
+// (plugins.md, The tree, stories 1 and 3). An overridden plugin carries the same slot and is
+// excluded.
 function listedPlugins(value: InstanceValue): (InstanceValue['plugins'][number] & { slot: number })[] {
   return value.plugins
     .filter((p): p is InstanceValue['plugins'][number] & { slot: number } => p.slot !== null && p.winning)
@@ -90,7 +91,7 @@ export interface PluginListSource {
  *  locked plugins askable. */
 export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses' | 'onStatusChanged' | 'subscribe' | 'getRecordHolders'>;
 
-/** The record browser a row's children are delegated to (ADR-0002). `PluginTreeProvider`
+/** The record browser a row's children are delegated to (ADR-0017). `PluginTreeProvider`
  *  satisfies it. */
 export type RecordBrowser = Pick<
   PluginTreeProvider,
@@ -108,7 +109,7 @@ export interface PluginMatch {
 export type PluginWarning = Pick<PluginDiagnosisReport, 'plugin' | 'origin' | 'text'>;
 
 export interface PluginsTreeProviderOptions {
-  /** Name, origin, slot, enabled and winning for every plugin — the row input (ADR-0015). */
+  /** Name, origin, slot, enabled and winning for every plugin: the row input. */
   instance: InstanceView;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
@@ -121,8 +122,8 @@ export interface PluginsTreeProviderOptions {
   /** The Changed outside Modbench status's other surface, the Problems panel: a warning for every
    *  such plugin. */
   publishChangedOutside?: (warnings: readonly PluginWarning[]) => void;
-  /** ADR-0019: this provider states the severity, so a background blip and a failed read do not
-   *  land on the same channel level. */
+  /** This provider states the severity (ADR-0019), so a background blip and a failed
+   *  read land on different channel levels. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporter?: Reporter;
   /** The Instance adapter's path of a file at the root of the Data folder, read fresh at each
@@ -143,13 +144,13 @@ function openHeaderCommand(plugin: string, origin: string): vscode.Command {
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
- *  setting one would silently change every row's icon. Overridden plugins are registered
- *  (ADR-0013), not displayed. */
+ *  setting one would silently change every row's icon. Overridden plugins are indexed,
+ *  not displayed (plugins.md, The tree, story 3). */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
     public readonly plugin: PluginEntry,
-    /** ADR-0012: which plugin of the name this row stands for — the join key for every fact. */
+    /** Which plugin of the name this row stands for (ADR-0012), the join key for every fact. */
     public readonly origin: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
@@ -165,9 +166,8 @@ export class PluginNode extends vscode.TreeItem {
   }
 }
 
-/** The reference tool's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState`
- *  has no non-interactive variant, so a rendered checkbox would invite a toggle the extension must
- *  revert. A lock substitutes (ADR-0017). */
+/** A lock stands in for the reference tool's checkbox (plugins.md, A plugin the game loads with
+ *  no line). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
   constructor(public readonly name: string, public readonly origin: string, path?: string) {
@@ -218,8 +218,7 @@ interface PluginFacts {
   order?: PluginOrderFacts;
 }
 
-// ADR-0012: plugin identity is origin plus filename, so every fact is filed and read
-// under both.
+// Every fact is filed and read under origin and filename (ADR-0012).
 class ByPluginAddress<T> {
   private readonly byAddress = new Map<string, T>();
 
@@ -259,8 +258,8 @@ interface PluginStatus {
   tooltipLine: string;
 }
 
-// The warning tier's icon (ADR-0019): a plugin changed outside Modbench or malformed still loads and
-// plays, unlike the other three statuses, which are all `failurePrefixIcon()`'s error tier.
+// The yellow status icon (plugins.md, A row). A plugin changed outside Modbench or malformed still
+// loads and plays, unlike the three red statuses.
 function warningIcon(): vscode.ThemeIcon {
   return new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
 }
@@ -564,7 +563,7 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The row's own file, by its (origin, filename) (ADR-0012), or the game folder's copy
+  /** The row's own file (ADR-0012), or the game folder's copy
    *  for a game-folder row the Instance value lists no file for. */
   resolvePluginPath(row: PluginNode | ImplicitMasterNode): Promise<string | undefined> {
     const name = pluginFileOf(row);
@@ -633,7 +632,7 @@ export class PluginsTreeProvider
     if (this.held?.has(file, element.origin) === true) {
       return this.records?.getPluginChildren(file, element.origin, this.conditionsOf(element, file)) ?? noRecordBrowser();
     }
-    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
+    // plugins.md, States, stories 2, 3 and 6.
     const failure = this.reachableFailureOf(element);
     if (failure !== undefined) return [new ErrorNode(failure)];
     if (this.expansionOverride?.scope === 'unheldRow') return [new ErrorNode(this.expansionOverride.message)];
@@ -667,8 +666,8 @@ export class PluginsTreeProvider
   }
 
   private buildRows(): PluginListNode[] {
-    // ADR-0013: Mod Management names the plugins the game loads with no line. While it
-    // cannot, a plugins.txt line for one renders as an ordinary row, which is what the file says.
+    // While Mod Management cannot name the plugins the game loads with no line (ADR-0013), a
+    // plugins.txt line for one renders as an ordinary row, which is what the file says.
     const loadedWithNoLine = this.instanceValue.pluginsLoadedWithNoLine ?? [];
     const implicitLower = new Set(loadedWithNoLine.map((p) => p.name.toLowerCase()));
 
@@ -852,8 +851,7 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** ADR-0009; plugins.md, States 4: the load order's own refusal. `heldElsewhere`
-   *  overrides every row; `failed` only a row this reload never reached. */
+  /** The load order's own refusal (ADR-0009; plugins.md, States, stories 4 and 6). */
   applyRefused(refusal: LoadOrderRefusal): void {
     this.generation++;
     this.indexFailure = refusal.kind === 'failed' ? refusal.message : undefined;
@@ -861,8 +859,8 @@ export class PluginsTreeProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** ADR-0002; plugins.md, States 3: mEdit confirmed unreachable — the status bar's
-   *  own Disconnected/Stopped, not Connecting. Named on a row not yet held; never downgrades an
+  /** mEdit confirmed unreachable (ADR-0002; plugins.md, States, story 3), as the status
+   *  bar's Disconnected or Stopped says. Named on a row not yet held; never downgrades an
    *  `everyRow` refusal already in force. */
   applyBackendUnreachable(reason: string): void {
     this.generation++;
@@ -887,8 +885,8 @@ export class PluginsTreeProvider
     // Diagnoses stay as the last scan left them (no blink) until `scanDiagnoses` below lands a
     // fresh answer; a failed scan leaves them alone too.
     this._onDidChangeTreeData.fire(undefined);
-    // Fire-and-forget (ADR-0019 background tier): the tree hand-off must not wait on a
-    // whole-load-order scan, and a blip retries at the next reconcile.
+    // Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan. A failed scan is
+    // ADR-0019's background tier, and retries at the next reconcile.
     void this.scanDiagnoses(generation);
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
@@ -1014,8 +1012,7 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0012: only the line's own plugin, by its origin; another plugin of the name
-  // is not it.
+  // Only the line's own plugin, by its origin (ADR-0012).
   private orderFacts(): PluginOrderFactsOf {
     const originOf = new Map(this.lastOrder.map((line) => [line.name, line.origin] as const));
     return (name) => {

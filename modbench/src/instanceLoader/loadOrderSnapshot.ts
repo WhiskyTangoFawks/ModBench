@@ -1,6 +1,4 @@
-// Every plugin file in the instance — every mod's, enabled or not, overwrite/'s, and the
-// Data-folder plugin of any plugins.txt line no mod provides — and which of them the game loads,
-// in load order (ADR-0013).
+// ADR-0013's snapshot. A plugins.txt line no mod provides names the Data folder's plugin.
 
 import { basename, dirname, join, sep } from 'node:path';
 import { foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
@@ -27,18 +25,17 @@ export interface LoadOrderPlugin {
   /** The name's plugins.txt line index, or null when no line names it. An overridden plugin of a
    *  listed name carries the same slot as the winning one. */
   slot: number | null;
-  /** The line's `*` prefix (ADR-0013); false when no line names the file. */
+  /** The line's `*` prefix; false when no line names the file. */
   enabled: boolean;
   /** This plugin is the one the Mod override order resolves the name to — overwrite/ first, then
    *  the winning enabled mod. */
   winning: boolean;
 }
 
-/** A plugin in the snapshot: the file, and the origin that provides it (ADR-0013). */
+/** ADR-0013. */
 export type SnapshotPlugin = Pick<LoadOrderPlugin, 'name' | 'path' | 'origin'>;
 
-/** ADR-0013's snapshot: every plugin in the instance, the active plugins in load order, and the
- *  plugins loaded with no line. */
+/** ADR-0013's snapshot. */
 export interface LoadOrderSnapshotValue {
   readonly dataFolder: string;
   readonly plugins: SnapshotPlugin[];
@@ -56,9 +53,9 @@ export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
  *  of its own. */
 export type OriginFolder = (origin: string) => string | undefined;
 
-/** The folder an origin's plugins sit in, read off the value's own rows: `overwrite` and
- *  `Data` are not folders under `mods/` (ADR-0012). `undefined` when no row for that origin
- *  has a plugin file on disk. */
+/** The folder an origin's plugins sit in, read off the value's own rows, since `overwrite` and
+ *  `Data` are not mods (ADR-0012). `undefined` when no row for that origin has a
+ *  plugin file on disk. */
 export function originFolder(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
 ): string | undefined {
@@ -101,10 +98,10 @@ export function providedPluginsOf(
   return provided;
 }
 
-/** A plugin as (origin, filename) (ADR-0012). */
+/** ADR-0012. */
 export type PluginAddress = Pick<LoadOrderPlugin, 'name' | 'origin'>;
 
-/** The plugins the game loads with no line, in load order (ADR-0013): its masters,
+/** The plugins the game loads with no line (ADR-0013), in load order: its masters,
  *  then its Creation Club plugins, each from the mod providing it, else the game folder. */
 export function pluginsLoadedWithNoLineOf(
   gameMasters: readonly string[], creationClub: readonly string[], inData: DataFolderPlugins,
@@ -145,9 +142,9 @@ function overwriteRootFiles(runtimeOutput: readonly OriginFile[]): Map<string, O
   return new Map(runtimeOutput.filter((file) => !file.relativePath.includes('/')).map((file) => [foldPath(file.relativePath), file]));
 }
 
-/** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name no mod or
- *  overwrite/ provides takes the Data folder's file of that name, or is line-only, `path`
- *  undefined, with no game folder found. */
+/** A disabled plugins.txt line is still sent (ADR-0013), `enabled: false`. A listed
+ *  name no mod or overwrite/ provides takes the Data folder's file, or is line-only with no game
+ *  folder found. */
 export function buildLoadOrderRows(
   pluginOrder: readonly PluginEntry[],
   index: FileConflictIndex,
@@ -205,8 +202,8 @@ export function buildLoadOrderRows(
   return [...listed, ...outside, ...strays];
 }
 
-/** ADR-0013's snapshot, read from the current value (ADR-0015); none without a listable game
- *  folder. Active: the plugins the game loads with no line, then each enabled line's winner. */
+/** ADR-0013's snapshot, none without a listable game folder. Active: the plugins the game loads
+ *  with no line, then each enabled line's winner. */
 export function loadOrderSnapshotOf(value: {
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   readonly gameFolder: GameFolder;

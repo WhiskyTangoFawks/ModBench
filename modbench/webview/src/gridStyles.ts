@@ -97,7 +97,7 @@ const STATE_NAME: Record<ConflictThis, string> = {
 
 export const conflictStateName = (cellState: ConflictThis): string => STATE_NAME[cellState];
 
-// ADR-0018's focus paints use inset box-shadow, not `outline`: in a collapsed-border table a
+// The focused cell's paints (editor.md, The focused cell) use inset box-shadow, not `outline`: in a collapsed-border table a
 // neighbour can overdraw an outline along the shared edge, and happy-dom drops
 // `outline-color: var(...)`.
 export const focusedRowStyle: React.CSSProperties = {

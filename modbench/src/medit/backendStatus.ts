@@ -36,8 +36,7 @@ export interface BackendStatusViews {
   setUnreachable: (reason: string) => void;
 }
 
-/** mEdit runs for the extension's whole lifetime, so a status change is news the views report,
- *  never a mode they switch into (ADR-0002). Returns the unsubscribe. */
+/** ADR-0002. Returns the unsubscribe. */
 export function wireBackendStatus(client: StatusSource, views: BackendStatusViews): () => void {
   return client.onStatusChanged((status) => {
     views.setStatusText(backendStatusText(status));

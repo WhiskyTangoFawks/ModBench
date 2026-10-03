@@ -1,5 +1,4 @@
-// The active-profile gesture (ADR-0015): it hands the Instance adapter the profile to
-// select and forgets, and the adapter's signal that the instance changed brings the switch back.
+// The switch profile gesture (ADR-0015).
 
 import { refuse } from '../ports/refuse';
 import type { InstanceAdapter } from '../instanceAdapter/instanceAdapter';

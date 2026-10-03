@@ -4,8 +4,8 @@ import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
 import { cellContext, combineVscodeContexts } from './recordUtils';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ExtensionToWebview } from './messages';
 
-// ADR-0018: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
-// not just painted state: the arrow keys' `keydown` lands on it, and the panel reads an open editor
+// `tabIndex` plus the effect below make the focused cell (editor.md, The focused cell) a really
+// focused DOM element, not just painted state: the arrow keys' `keydown` lands on it, and the panel reads an open editor
 // from where the focus goes.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
@@ -39,8 +39,8 @@ export function DiskCell({
   isFocused: boolean;
   onFocusCell: () => void;
   onDoubleClick?: () => void;
-  // ADR-0018: what Ctrl+C on the focused cell copies; absent when the cell copies nothing. The
-  // palette's copy value reads it off the cell too.
+  // What Ctrl+C on the focused cell copies (editor-fields.md, By type); absent when the cell
+  // copies nothing. The palette's copy value reads it off the cell too.
   copyText?: string;
   // What Ctrl+V's text writes here, parsed as this cell's field; absent where the cell takes none.
   paste?: (text: string) => void;

@@ -45,8 +45,8 @@ interface RowAt {
   cellMetas?: Partial<Record<string, FieldMetadata>>;
 }
 
-// ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
-// dictionaries, so every whole-grid column set is minted the same way.
+// One sweep over the response's own overrides, keyed as the backend keys its dictionaries
+// (ADR-0012), so every whole-grid column set is minted the same way.
 function columnKeysWhere(
   overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
 ): Set<ColumnKey> {
@@ -80,11 +80,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [result, setResult] = useState<CompareResult | null>(null);
   const [gone, setGone] = useState(false);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0007: null until /plugins answers, and null again when it fails — fail-closed, so a panel
-  // that has not heard from /plugins offers no editing, compile or track rather than gestures that
-  // cannot land.
+  // Null until /plugins answers, and null again when it fails: fail-closed, so a panel that has
+  // not heard from /plugins offers no editing, compile or track (commands.md, No dead entries).
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey> | null>(null);
-  // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
+  // Whether the winner sweep has run. Initial `true` only matters until the first load
   // lands, so it can never read as a false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [loadFailures, setLoadFailures] = useState<PluginLoadFailure[]>([]);
@@ -95,8 +94,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
     return next;
   });
-  // ADR-0018: one source of truth for "which value cell is focused," so at most one cell across
-  // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
+  // The one focused cell (editor.md, The focused cell). Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   const enteredCell = useRef(false);
@@ -146,7 +144,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   const [columnWidths, setColumnWidths] = useState<ReadonlyMap<ColumnKey | typeof LABEL_COLUMN, number>>(new Map());
   const resizeColumn = (key: ColumnKey | typeof LABEL_COLUMN, width: number) => setColumnWidths(prev => new Map(prev).set(key, width));
-  // ADR-0007: one definition of "this column can be written", computed for the whole grid at
+  // One definition of "this column can be written" (ADR-0007), computed for the whole grid at
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
@@ -164,7 +162,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     ...columnWidthStyle(key !== LABEL_COLUMN && collapsedColumns.has(key) ? COLLAPSED_COLUMN_WIDTH : columnWidths.get(key)),
   }), [partialFormColumns, collapsedColumns, columnWidths]);
 
-  // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
+  // The column key alone is a rendering key; the override carries the compound identity (ADR-0012)
   // the write path needs and the values a wire path resolves against.
   const overrideFor = useCallback(
     (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
@@ -234,7 +232,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result]);
 
-  // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
+  // One leaf, one set (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, hops: PathHop[], value: unknown) => {
     written(plugin, { op: 'set', path: hops, value }, Infinity);
     post(plugin, { op: 'set', path: hops, value });
@@ -266,9 +264,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
         void refresh(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
-        // ADR-0013: a panel already open when the sweep lands must reflect the settled data, not
-        // just clear its banner over stale content. Load-order-wide, not record-specific, so no
-        // self-filter — every open panel reacts.
+        // editor.md, States, story 3. Load-order-wide, not record-specific, so no self-filter:
+        // every open panel reacts.
         void refresh(prevFormKeyRef.current);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.EDIT_WRITTEN || msg.type === EXTENSION_TO_WEBVIEW.EDIT_REFUSED) {
         const { formKey: edited, plugin, origin, envelope } = msg;
@@ -475,8 +472,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         {`${result.recordTypeName} ${title}`}
       </div>
       {error && <div style={messageStyle}>Showing the last good read: {error}</div>}
-      {/* ADR-0017: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
-          has checked yet. Clears itself with no user action once refresh() next lands a settled
+      {/* An unmarked cell here paints a verdict nothing has checked yet (editor.md, States, story
+          3). Clears itself with no user action once refresh() next lands a settled
           `conflictsComputed`. */}
       {loadFailureMessage && <div style={messageStyle}>{loadFailureMessage}</div>}
       {recordPanelIncompleteMessage(conflictsComputed) && (
@@ -493,8 +490,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                 Field<ColumnEdge onResize={width => resizeColumn(LABEL_COLUMN, width)} />
               </th>
               {columns.map(col => {
-                // ADR-0012: keyed by col.key, never the bare file name, so two columns that share
-                // one collapse, resize and read-only apart.
+                // Keyed by col.key (ADR-0012), so two columns that share a file name collapse,
+                // resize and read-only apart.
                 const isImmutable = immutableSet.has(col.key);
                 const tracked = trackedSet?.has(col.key) === true;
                 return (

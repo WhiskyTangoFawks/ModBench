@@ -1,17 +1,16 @@
 import type { SelectionOutcome } from './selectionOutcome';
 
-/** ADR-0019's severity tiers, as the one type every caller names. */
+/** A failure's severity (target-architecture.d2, Ports), the one type every caller names. */
 export type Severity = 'error' | 'warning';
 
-/** ADR-0019 surfacing: injected so business logic stays free of vscode types. The
- *  composition root implements it over the window API. */
+/** ADR-0019. */
 export interface Reporter {
   // Arrow-typed properties, not methods, so a test holds a bare reference to one
   // (`vi.mocked(reporter.report)`) without an unbound-method warning.
   /** What failed, and `detail` for why: the notification and the Output line both carry it. */
   report: (severity: Severity, message: string, detail?: string) => void;
-  /** A gesture the user invoked landed: ADR-0019's success tier, an information toast and no log
-   *  line. Nothing went wrong, so there is no detail to go back and read. */
+  /** A gesture the user invoked landed: an information toast and no log line. Nothing went wrong,
+   *  so there is no detail to go back and read. */
   landed: (message: string) => void;
   /** A failure inside a dialog the user is answering: an Output line, what and why, and no
    *  notification, because the dialog already says it. */

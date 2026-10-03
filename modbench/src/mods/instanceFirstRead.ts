@@ -2,8 +2,7 @@ import type * as vscode from 'vscode';
 import type { Instance } from '../instanceLoader/instance';
 
 /** A tree's first-render gate: `settled` resolves on the first landed value or the first failed
- *  read — never "nothing here" before a read (ADR-0002), never an endless spinner (ADR-0019).
- *  `failure` holds until a value lands. */
+ *  read (common.md, States, stories 1 and 2). `failure` holds until a value lands. */
 export interface FirstRead extends vscode.Disposable {
   readonly settled: Promise<void>;
   readonly failure: string | undefined;

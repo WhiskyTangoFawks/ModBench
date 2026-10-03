@@ -50,7 +50,7 @@ function profileRow({ activeProfile }: InstanceValue, unconfirmed: UnconfirmedPr
   return row;
 }
 
-// ADR-0019: a failed first read is shown in place of the rows, never as an empty readout.
+// The error row (common.md, States, story 2).
 function failedReadRow(reason: string): vscode.TreeItem {
   const row = new vscode.TreeItem(`Failed to load: ${reason}`);
   row.tooltip = reason;

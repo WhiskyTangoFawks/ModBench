@@ -26,7 +26,7 @@ function isDraggedRows(value: unknown): value is DraggedRows {
 
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
-   *  overwrite/ file count — the tree's only data input (ADR-0015). */
+   *  overwrite/ file count. */
   instance: InstanceView;
   /** The instance the check box command writes to; never read by this provider. */
   access: ModlistAccess;
@@ -217,9 +217,8 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mods tree over the instance's active profile — rows, statuses and
- *  the overwrite count all read entirely from the Instance value (ADR-0015); this provider owns
- *  no cache or watcher over the instance's files itself. */
+/** Sidebar Mods tree over the instance's active profile: rows, statuses and the overwrite count
+ *  from the Instance value alone (ADR-0015). */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {

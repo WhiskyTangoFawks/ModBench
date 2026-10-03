@@ -30,9 +30,7 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
     : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
 }
 
-/** ADR-0018: xEdit's gesture, unchanged — a click *focuses* a cell, it does not edit it.
- *  ADR-0018: a VS Code tab relocates the user, so no left-click gesture may reach the extended
- *  editor. */
+/** ADR-0018; xedit.md, divergence 6. */
 export function ScalarCell({
   value, meta, editable = false, onCommit, ariaLabel, displayOverride,
 }: ScalarCellProps) {
@@ -54,9 +52,9 @@ export function ScalarCell({
   }
 
   if (!active) {
-    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. ADR-0018:
-    // no cursor override — a text caret would falsely imply editing is the only thing a click can
-    // start.
+    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. No
+    // cursor override (editor.md, Drag and drop, story 4): a text caret would falsely imply editing
+    // is the only thing a click can start.
     return (
       <span
         data-open-trigger

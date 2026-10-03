@@ -9,9 +9,8 @@ export function toStr(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// ADR-0012: `key` is this column's compound identity, minted once here rather than re-derived, so
-// two same-filename columns stop colliding. ADR-0007/ADR-0018: one column per override — the
-// record's full in-game resolution stack.
+// `key` is this column's compound identity (ADR-0012), minted once here rather than re-derived.
+// One column per override (editor.md, Columns, story 1).
 export type Column = { key: ColumnKey; override: CompareOverride };
 
 // xEdit's own layout: load order ascending, master leftmost, winner rightmost — the wire order
@@ -79,7 +78,7 @@ export function headerCellContext(
 }
 
 // Every cell suppresses VS Code's own Cut, Copy and Paste, which act on the text on the screen, and
-// offers copy value the text ADR-0018 says it copies.
+// offers copy value the text editor-fields.md says it copies.
 export function cellContext(copyText: string | undefined): { webviewSection: 'cell'; copyText?: string; preventDefaultContextMenuItems: true } {
   return { webviewSection: 'cell', ...(copyText === undefined ? {} : { copyText }), preventDefaultContextMenuItems: true };
 }
@@ -94,8 +93,8 @@ export function referenceContext(referenceTarget: string): ReferenceContext {
   return { webviewSection: 'reference', referenceTarget };
 }
 
-// ADR-0018: a `string` cell's right-click entry is the extended editor's only trigger, since no
-// left-click gesture may reach it. Offered on immutable cells too — `readOnly` is what the
+// A `string` cell's right-click entry is the extended editor's only trigger (xedit.md, divergence
+// 6). Offered on immutable cells too — `readOnly` is what the
 // command's `when` clause acts on.
 export function stringValueContext(
   formKey: string, plugin: string, origin: string, recordLabel: string, fieldName: string, value: string,

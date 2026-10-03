@@ -1,5 +1,4 @@
-// Every change to a profile's plugin order. Commands return applied-or-refusal, never throw
-// (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
+// Every change to a profile's plugin order (ADR-0014; ADR-0015).
 
 import { foldPath } from '../instanceLoader/fileConflictIndex';
 import type { DataFolderPlugins } from '../instanceLoader/loadOrderSnapshot';
@@ -124,8 +123,8 @@ export async function syncPlugins(
   if (inData.kind === 'unreadable') {
     return { applied: false, refusal: `the game's Data folder cannot be listed: ${inData.reason}` };
   }
-  // The tree gives a plugin the game loads with no line a row of its own, so a mod's plugin of
-  // that name must not earn a line (ADR-0013).
+  // The tree gives a plugin the game loads with no line a row of its own (plugins.md, The tree,
+  // story 2), so a mod's plugin of that name earns no line.
   const noLine = new Set((loadedWithNoLine ?? []).map(foldPath));
   const addable = new Map([...provided].filter(([folded]) => !noLine.has(folded)));
   const inDataNames = inData.names;
@@ -160,7 +159,7 @@ export function pluginSyncOver(access: PluginsAccess): PluginSyncRun {
 }
 
 /** `reorderPlugins` bound to one instance and the profile it names now; a refusal rejects, the
- *  shape ADR-0019's notify-and-log path is written against. */
+ *  shape its caller's notify-and-log path is written against. */
 export function reorderOver(
   access: PluginsAccess, profile: () => string,
 ): (pluginNames: string[], drop: Drop) => Promise<void> {

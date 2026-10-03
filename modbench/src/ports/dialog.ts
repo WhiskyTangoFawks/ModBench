@@ -1,4 +1,4 @@
-/** ADR-0019 surfacing: one modal question, answered by the pressed button's label or
+/** One modal question (target-architecture.d2, Ports), answered by the pressed button's label or
  *  `undefined` for the native cancel. Injected, so the asking module is testable without a VS
  *  Code host. */
 export type AskQuestion = (
