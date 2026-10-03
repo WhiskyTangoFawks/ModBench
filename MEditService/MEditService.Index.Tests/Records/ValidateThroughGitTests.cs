@@ -150,7 +150,7 @@ public sealed class ValidateThroughGitTests : IDisposable
     }
 
     [Fact]
-    public void ACommittedDocumentDeclaringNoRecord_FailsThePlugin_AndStillFailsItOnTheNextValidation()
+    public void ACommittedDocumentDeclaringNoRecord_FailsThePlugin_AndStillFailsItOnTheNextValidation_WhereGitNamesItOnlyOnce()
     {
         var stray = Path.Combine(Path.GetDirectoryName(NpcFile).Require(), "Stray - 000A00_Fixture.esp.json");
         File.WriteAllText(stray, "{\"EditorID\":\"Stray\"}");
@@ -203,7 +203,7 @@ public sealed class ValidateThroughGitTests : IDisposable
     }
 
     [Fact]
-    public void AStagedRename_KeepsTheRecordAtHead()
+    public void AStagedRename_KeepsTheRecordAtHead_BecauseAStagedMoveNamesThePathItLeftAsWellAsTheOneItMade()
     {
         var document = NpcFile;
         var renamed = Path.Combine(Path.GetDirectoryName(document).Require(), Path.GetFileName(document).Replace("FixtureNpc - ", "Renamed - ", StringComparison.Ordinal));
@@ -232,7 +232,9 @@ public sealed class ValidateThroughGitTests : IDisposable
     public void ACopyOfACommittedDocument_IsReportedWithBothDocuments()
     {
         var document = NpcFile;
-        var copy = Path.Combine(Path.GetDirectoryName(document).Require(), $"Twin - {Path.GetFileName(document).Split(" - ")[^1]}");
+        var copyNamedWithTheFormKeySuffixSoItReadsAsANewDocumentForARecordHeadAlreadyHolds =
+            $"Twin - {Path.GetFileName(document).Split(" - ")[^1]}";
+        var copy = Path.Combine(Path.GetDirectoryName(document).Require(), copyNamedWithTheFormKeySuffixSoItReadsAsANewDocumentForARecordHeadAlreadyHolds);
         File.Copy(document, copy);
 
         Validate();
@@ -271,8 +273,8 @@ public sealed class ValidateThroughGitTests : IDisposable
     [Fact]
     public void AnUnreadableCommittedTree_IsReportedAndChangesNothing()
     {
-        const string unbornBranchSoGitCannotListTheCommittedTreeAsItCouldNotMidRebaseOrWithACorruptObject = "refs/heads/no-such-branch";
-        _mod.Git("symbolic-ref", "HEAD", unbornBranchSoGitCannotListTheCommittedTreeAsItCouldNotMidRebaseOrWithACorruptObject);
+        const string unbornBranchSoGitAnswersAsItDoesWhenTheCommittedTreeCannotBeListed = "refs/heads/no-such-branch";
+        _mod.Git("symbolic-ref", "HEAD", unbornBranchSoGitAnswersAsItDoesWhenTheCommittedTreeCannotBeListed);
         var before = _index.Sequence;
 
         Validate();

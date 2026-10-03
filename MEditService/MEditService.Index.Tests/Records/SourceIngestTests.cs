@@ -73,19 +73,20 @@ public sealed class SourceIngestTests : IDisposable
     [Fact]
     public void ADocumentSortedByHandIntoAFolderBelowItsGroup_IsAtEffectiveAfterReload()
     {
+        const string editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName = "SortedByHandNpc";
         using (var live = LaunchedFreshOverTheSameTrackedTreeAndToldNothing())
         {
             var document = NpcSourceFile(live);
             var sorted = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(document).Require(), "SortedByHand"));
             File.WriteAllText(
                 Path.Combine(sorted.FullName, Path.GetFileName(document)),
-                File.ReadAllText(document).Replace(NpcEditorId, "SortedByHandNpc", StringComparison.Ordinal));
+                File.ReadAllText(document).Replace(NpcEditorId, editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, StringComparison.Ordinal));
             File.Delete(document);
         }
 
         using var reloaded = LaunchedFreshOverTheSameTrackedTreeAndToldNothing();
 
-        Assert.Equal("SortedByHandNpc", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
+        Assert.Equal(editOnlyAReadOfTheTreeCanAnswerBecauseTheBinaryHoldsNoSuchName, reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
 
     [Fact]

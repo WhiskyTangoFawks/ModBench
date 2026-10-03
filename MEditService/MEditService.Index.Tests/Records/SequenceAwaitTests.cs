@@ -57,7 +57,7 @@ public sealed class SequenceAwaitTests : IDisposable
     [Fact]
     public async Task AwaitSequence_LandingWhileWaiting_AnswersTrue_WithTheClockAdvancedOnlyToWakeThePoll()
     {
-        var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, TimeSpan.FromDays(1));
+        var pending = _index.AwaitSequenceAsync(_index.Sequence + 1, DayLongTimeoutSoAStopwatchAwaitWouldStillBePending);
 
         var path = _fixture.Plugins.Single().Path;
         PluginBinaries.Touch(path);

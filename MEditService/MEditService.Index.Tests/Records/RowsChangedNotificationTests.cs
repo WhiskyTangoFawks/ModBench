@@ -43,7 +43,8 @@ public sealed class RowsChangedNotificationTests
         var notifications = new InMemoryNotificationPublisher();
         using var index = Indexes.Reconciled(fixture, notifications: notifications);
         var formKey = npc.ToString();
-        File.Delete(entry.SourceFileOf(index.RequireReads().DocumentOf(formKey, entry.KeyOf())));
+        var documentDeletedByHandWhereGitCannotNameTheKey = entry.SourceFileOf(index.RequireReads().DocumentOf(formKey, entry.KeyOf()));
+        File.Delete(documentDeletedByHandWhereGitCannotNameTheKey);
 
         index.NextSnapshot();
 
@@ -75,7 +76,7 @@ public sealed class RowsChangedNotificationTests
     }
 
     [Fact]
-    public void ValidatingAPluginThatGainedADocument_PublishesRowsChangedNamingIt_NotPluginChanged()
+    public void ValidatingAPluginThatGainedADocumentNoCommitFiled_PublishesRowsChangedNamingIt_NotPluginChanged()
     {
         var (fixture, entry, notifications, index, moved, _) = TwoNpcs("rows-changed-validate-gained");
         using var __ = fixture;

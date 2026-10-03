@@ -19,7 +19,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
     private string EmbeddedNavmeshKeyReadFromTheLiveContainerChildRows =>
         Reads.GetContainerChildren(_mod.Plugin, _mod.EmbedCell).Single(c => c.SlotName == "NavigationMeshes").ChildFormKey;
 
-    private void ChangeFormIdWithATwoSidedPutAndRemove(string oldFormKey, string newFormKey, string newBody)
+    private void ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(string oldFormKey, string newFormKey, string newBody)
     {
         var repository = TrackedMods.RepositoryOf(_mod.Entry);
         var current = Reads.DocumentOf(oldFormKey, _mod.Plugin);
@@ -38,7 +38,7 @@ public sealed class FormIdChangeRederivationTests : IDisposable
         var newBody = before.Replace(oldCellKey, newCellKey, StringComparison.Ordinal);
         Assert.NotEqual(before, newBody);
 
-        ChangeFormIdWithATwoSidedPutAndRemove(oldCellKey, newCellKey, newBody);
+        ChangeFormIdWithATwoSidedPutAndRemoveThenNextSnapshot(oldCellKey, newCellKey, newBody);
 
         Assert.Contains(Reads.GetContainerChildren(_mod.Plugin, newCellKey), c => c.ChildFormKey == navmesh);
         var navmeshParent = Assert.NotNull(Reads.GetContainerParent(_mod.Plugin, navmesh));

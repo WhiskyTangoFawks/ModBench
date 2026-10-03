@@ -159,40 +159,38 @@ public class CompoundPluginIdentityTests
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_WhileModAWins() =>
-        AssertStructuralRowsPersistForOnlyTheWinningOrigin(winner: ModA, other: ModB);
-
-    [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_WhileModBWins() =>
-        AssertStructuralRowsPersistForOnlyTheWinningOrigin(winner: ModB, other: ModA);
-
-    private void AssertStructuralRowsPersistForOnlyTheWinningOrigin(PluginAddress winner, PluginAddress other)
+    public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesPersist_ThroughModAThenModBOnOneIndex()
     {
         using var fixture = StructuralFixture("identity-structural", out var cellKey, out var placedKey, out _, out var raceKey);
         using var index = Indexes.Open(_holder);
 
-        var reads = ReadsWithWinner(index, fixture, winner);
-        Assert.NotNull(reads.GetCellLocation(winner, cellKey.ToString()));
-        Assert.NotNull(reads.GetPlacement(placedKey.ToString(), winner));
-        Assert.Null(reads.GetCellLocation(other, cellKey.ToString()));
-        Assert.Null(reads.GetPlacement(placedKey.ToString(), other));
-        Assert.Single(reads.GetReferencedBy(raceKey.ToString()), r => r.FieldPath == "Race");
+        void AssertOnlyTheWinningOriginHoldsTheRows(PluginAddress winner, PluginAddress other)
+        {
+            var reads = ReadsWithWinner(index, fixture, winner);
+            Assert.NotNull(reads.GetCellLocation(winner, cellKey.ToString()));
+            Assert.NotNull(reads.GetPlacement(placedKey.ToString(), winner));
+            Assert.Null(reads.GetCellLocation(other, cellKey.ToString()));
+            Assert.Null(reads.GetPlacement(placedKey.ToString(), other));
+            Assert.Single(reads.GetReferencedBy(raceKey.ToString()), r => r.FieldPath == "Race");
+        }
+
+        AssertOnlyTheWinningOriginHoldsTheRows(winner: ModA, other: ModB);
+        AssertOnlyTheWinningOriginHoldsTheRows(winner: ModB, other: ModA);
     }
 
     [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow_WhileModAWins() =>
-        AssertTheReferenceCarriesTheWinningOrigin(ModA);
-
-    [Fact]
-    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow_WhileModBWins() =>
-        AssertTheReferenceCarriesTheWinningOrigin(ModB);
-
-    private void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
+    public void TwoOrigins_SameFilenameSameFormKeys_GetReferencedBy_SurfacesOriginPerRow_ThroughModAThenModBOnOneIndex()
     {
         using var fixture = StructuralFixture("identity-references", out _, out _, out _, out var raceKey);
         using var index = Indexes.Open(_holder);
 
-        var reference = Assert.Single(ReadsWithWinner(index, fixture, winner).GetReferencedBy(raceKey.ToString()));
-        Assert.Equal(winner.Origin, reference.Origin);
+        void AssertTheReferenceCarriesTheWinningOrigin(PluginAddress winner)
+        {
+            var reference = Assert.Single(ReadsWithWinner(index, fixture, winner).GetReferencedBy(raceKey.ToString()));
+            Assert.Equal(winner.Origin, reference.Origin);
+        }
+
+        AssertTheReferenceCarriesTheWinningOrigin(ModA);
+        AssertTheReferenceCarriesTheWinningOrigin(ModB);
     }
 }

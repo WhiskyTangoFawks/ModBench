@@ -247,7 +247,7 @@ public class RegistrationScopingTests
     }
 
     [Fact]
-    public async Task AFileThatWentAway_LosesItsRows_AndItsReturnIsAFreshRead()
+    public async Task AFileThatWentAway_LosesItsRows_AndItsReturnWithNewBytesIsOpenedOnce()
     {
         using var fx = Build("registration-unindex");
         var betaPath = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path;

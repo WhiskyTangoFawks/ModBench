@@ -43,6 +43,8 @@ public class ParallelPrepareParityTests
             record => record.FormKey.ToString(),
             record => Encoding.UTF8.GetString(codec.SerializeToBytes(record, GameRelease.Fallout4)));
 
-        Assert.Equal(expected, stored);
+        Assert.Equal(expected.Keys.Order(StringComparer.Ordinal), stored.Keys.Order(StringComparer.Ordinal));
+        var recordsWhoseStoredBodyDiffers = expected.Where(record => stored[record.Key] != record.Value).Select(record => record.Key).ToList();
+        Assert.Empty(recordsWhoseStoredBodyDiffers);
     }
 }

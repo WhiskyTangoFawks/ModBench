@@ -53,7 +53,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task Rebuild_DropsEveryRow_AndReadsThePluginAgain_AgainstTheLoadOrderHeld()
+    public async Task Rebuild_ReadsThePluginAgain_AgainstTheLoadOrderHeld()
     {
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(1, _opens.OpenedTotal);
@@ -146,7 +146,7 @@ public sealed class StoreRebuildTests : IDisposable
     }
 
     [Fact]
-    public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted()
+    public async Task ARefill_FillsTheLoadOrderHeldWhenItRuns_NotTheOneHeldWhenTheRebuildStarted_EvenWhenTheRefillCancelledThatArrivalsOwnReconcile()
     {
         using var data = new PluginFixtureBuilder("store-rebuild-race").WithPlugin("A.esp").WithPlugin("B.esp").Build();
         using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
@@ -207,6 +207,7 @@ public sealed class StoreRebuildTests : IDisposable
         Reconcile(_fixture.InstanceRoot);
         using var rebuilding = new CancellationTokenSource();
         var answered = 0;
+        var noStoreAnswers = 0;
         var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
         {
             while (!rebuilding.IsCancellationRequested)
@@ -217,6 +218,7 @@ public sealed class StoreRebuildTests : IDisposable
                 }
                 catch (Exception ex) when (ScopeClosedUnderTheReadSoTheAnswerIsNoStore(ex))
                 {
+                    Interlocked.Increment(ref noStoreAnswers);
                 }
             }
         })).ToArray();
