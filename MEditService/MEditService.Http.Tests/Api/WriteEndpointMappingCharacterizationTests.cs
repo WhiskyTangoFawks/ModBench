@@ -8,12 +8,13 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>Status code and body shape for the write handlers' error-mapping paths the endpoint
-/// suites do not reach, including the IO/UnauthorizedAccess to 500 mapping.</summary>
 public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
+
+    private const string ReadAndExecuteOnly = "500";
+    private const string OwnerFullAccess = "700";
 
     private const string Origin = "EditableMod";
     private const string Plugin = "Editable.esp";
@@ -61,8 +62,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
             ?? throw new InvalidOperationException($"Expected '{path}' to have a parent directory.");
     }
 
-    // --- DeleteRecord ---
-
     [Fact]
     public async Task DeleteRecord_WithNoRecords_Is400()
     {
@@ -82,8 +81,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // --- EditRecord, of the FormID (200 already pinned by FormIdEditApiTests) ---
-
     [Fact]
     public async Task EditingTheFormId_WhenTheSourceCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
@@ -93,7 +90,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin, Origin);
         var modFolder = ModFolderOf(fx, Origin);
 
-        OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(modFolder, ReadAndExecuteOnly);
         try
         {
             var response = await _client.Edit(formKey, Plugin, Origin, "FormKey", $"000F00:{Plugin}");
@@ -104,11 +101,9 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(modFolder, OwnerFullAccess);
         }
     }
-
-    // --- CopyRecord: a refusal is an item of the answer, never the status of the call ---
 
     [Theory]
     [InlineData("Override")]
@@ -121,7 +116,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin, Origin);
         var destModFolder = ModFolderOf(fx, DestOrigin);
 
-        OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(destModFolder, ReadAndExecuteOnly);
         try
         {
             var response = await _client.Copy(formKey, (Plugin, Origin), mode, (DestPlugin, DestOrigin));
@@ -133,7 +128,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            OtherTool.SetsThePermissions(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(destModFolder, OwnerFullAccess);
         }
     }
 
@@ -149,7 +144,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // A copy as new lands under a FormID of its own, so it replaces nothing.
     [Fact]
     public async Task CopyRecord_AsNewWithTheReplaceOption_Is400_AndCopiesNothing()
     {

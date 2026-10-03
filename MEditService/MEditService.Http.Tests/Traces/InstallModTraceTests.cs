@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Http.Tests.Traces;
 
-/// <summary>install-mod: the install renames a folder into mods/ and forgets it. mEdit watches
-/// nothing, so the folder arrives as the next snapshot: the tail is enable-a-mod's.</summary>
 public sealed class InstallModTraceTests : HostedTests
 {
     private const string Installed = "Installed.esp";
@@ -20,9 +18,7 @@ public sealed class InstallModTraceTests : HostedTests
 
     protected override void DisposeFixtures() => _instance.Dispose();
 
-    // The staged folder renamed into mods/, as the install writes it: a folder with a plugin in it,
-    // appearing while the service is up.
-    private LoadOrderEntry InstallTheFolder()
+    private LoadOrderEntry InstallTheFolderRenamedIntoModsWhileTheServiceIsUp()
     {
         var folder = Path.Combine(_instance.Root, "mod-installed");
         Directory.CreateDirectory(folder);
@@ -38,7 +34,7 @@ public sealed class InstallModTraceTests : HostedTests
     {
         (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
-        var installed = InstallTheFolder();
+        var installed = InstallTheFolderRenamedIntoModsWhileTheServiceIsUp();
         var adopted = await Client.PutLoadOrder(_instance, [.. _instance.Plugins, installed]);
 
         adopted.EnsureSuccessStatusCode();

@@ -11,8 +11,6 @@ public sealed class PluginResponseTests
             new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: isBlueprint, Masters: [], RecordCount: 1, IsMedium: false),
             MasterIssues: [], HasMatchingRecords: true, HasParseFailure: false, IsTracked: isTracked);
 
-    // ADR-0013 invariant 3: a plugin is in the load order exactly when the snapshot lists it as
-    // active, and its place there is its load index.
     [Fact]
     public void InLoadOrder_AndLoadOrderIndex_AreTheActivePluginsPlace()
     {

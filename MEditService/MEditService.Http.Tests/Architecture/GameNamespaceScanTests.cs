@@ -4,12 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>ADR-0005 invariant 2: the game-concrete namespaces are the codec's and the Plugin adapter's
-/// alone. The banned-API analyzer holds the live-object namespaces; this scan holds the per-game
-/// ones.</summary>
 public sealed class GameNamespaceScanTests
 {
-    // Read off the pinned assembly, so a game Mutagen adds is scanned for without an edit here.
     private static readonly string[] GameNames = [.. Enum.GetNames<GameCategory>().Order(StringComparer.Ordinal)];
 
     private static readonly string[] GameNamespaces = [.. GameNames.Select(game => $"Mutagen.Bethesda.{game}")];
@@ -19,7 +15,6 @@ public sealed class GameNamespaceScanTests
          "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
          "MEditService.Queries", "MEditService.SourceAdapter"];
 
-    // The codec and the Plugin adapter, the two boxes the game assemblies live in.
     private static readonly string[] ExemptFolders =
     [
         "MEditService.Codec/Serialization",
@@ -34,8 +29,6 @@ public sealed class GameNamespaceScanTests
     [Fact]
     public void TheStackOutsideTheCodecAndTheAdapter_NamesNoGameNamespace()
     {
-        // The names come from the assemblies, so a load order that resolved none would pass this
-        // over an empty set rather than over the surface it guards.
         Assert.Contains("Fallout4", GameNames);
         Assert.Contains("Fallout4Mod", GameTypeNames);
         Assert.Contains("IFallout4ModGetter", GameTypeNames);
@@ -64,7 +57,6 @@ public sealed class GameNamespaceScanTests
             File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "using Mutagen.Bethesda.Fallout4;");
             File.WriteAllText(Path.Combine(root, "Layer", "Rival.cs"), "using Mutagen.Bethesda.Fallout4;");
             File.WriteAllText(Path.Combine(root, "Layer", "Unqualified.cs"), "IFallout4ModGetter mod = Open(path);");
-            // GameRelease is identity, not a game-concrete type, and stays legible everywhere.
             File.WriteAllText(Path.Combine(root, "Layer", "Clean.cs"), "var release = GameRelease.Fallout4; // Fallout4.esm");
 
             var sites = Sites(root, ["Codec", "Layer"], ["Codec"]);
@@ -89,8 +81,6 @@ public sealed class GameNamespaceScanTests
                 .Select(line => $"{f.Relative}: {line.Trim()}"))
             .Order(StringComparer.Ordinal)];
 
-    // A game-concrete type whose own name names no game — Weapon, Npc — reaches no file without a
-    // qualified name or a using, so the namespace needle names that file anyway.
     private static bool IsGameSite(string line) =>
         GameNamespaces.Any(ns => line.Contains(ns, StringComparison.Ordinal))
         || Identifier.Matches(line).Any(m => GameTypeNames.Contains(m.Value));

@@ -7,8 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>A gesture over a selection with git missing from the PATH: a cause no item can escape, so
-/// the whole selection is refused once, before any item is written.</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class GitMissingApiTests : HostedTests
 {

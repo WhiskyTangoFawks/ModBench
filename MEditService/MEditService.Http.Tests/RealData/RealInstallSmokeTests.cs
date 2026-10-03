@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.RealData;
 
-/// <summary>Against whatever real game is installed, discovered rather than hardcoded. Gated behind
-/// <c>MEDIT_SMOKE=1</c>: loads full vanilla masters, so never in a normal run.</summary>
 public sealed class RealInstallSmokeTests
 {
     private static readonly GameRelease[] CandidateGames =
@@ -21,9 +19,7 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
-    // Which candidates are usable is decided here, never by editing the list: a release whose Mutagen
-    // assembly is not referenced is not offered, not loaded and not counted.
-    private static readonly SchemaReflector SchemaReflector = new SchemaReflector();
+    private static readonly SchemaReflector ReleaseSupportProbe = new SchemaReflector();
 
     [SmokeFact("run the real-install smoke test")]
     public async Task DiscoveredInstalls_LoadAndIndex()
@@ -33,9 +29,7 @@ public sealed class RealInstallSmokeTests
 
         foreach (var release in CandidateGames)
         {
-            // Skip gracefully: an unsupported release is not offered, never a crash — this
-            // is discovery's own guard, checked before even looking for an install of it.
-            if (!SchemaReflector.IsSupported(release))
+            if (!ReleaseSupportProbe.IsSupported(release))
                 continue;
 
             if (!locator.TryGetDataDirectory(release, out var dataDir))

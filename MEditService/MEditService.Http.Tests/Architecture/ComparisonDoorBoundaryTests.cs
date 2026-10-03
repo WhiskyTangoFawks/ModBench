@@ -1,11 +1,9 @@
 namespace MEditService.Http.Tests.Architecture;
 
-/// <summary>Record comparison goes through <c>ModelIdentity</c>, never Mutagen's generated equality: the
-/// generated comparers lie in both directions (upstream #685/#686) and the pin stays 0.53.1.</summary>
 public sealed class ComparisonDoorBoundaryTests
 {
     [Fact]
-    public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity()
+    public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity_BecauseMutagensGeneratedComparersLieInBothDirections()
     {
         var offenders = new[]
         {

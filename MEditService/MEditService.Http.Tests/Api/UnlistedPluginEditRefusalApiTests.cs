@@ -5,24 +5,17 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>A plugin with no plugins.txt line, or on a disabled one, is not active and so read-only
-/// (ADR-0012 invariant 5); Overwrite is refused earlier still, for having no mod folder
-/// (invariant 2).</summary>
-public sealed class UnlistedPluginRefusalApiTests : HostedTests
+public sealed class UnlistedPluginEditRefusalApiTests : HostedTests
 {
     private const string UnlistedPlugin = "Unlisted.esp";
     private const string UnlistedOrigin = "UnlistedMod";
     private const string DisabledPlugin = "Disabled.esp";
     private const string DisabledOrigin = "DisabledMod";
-    private const string StrayPlugin = "Stray.esp";
-    private const string StrayOrigin = "StrayMod";
-    private const string OverwriteStrayPlugin = "OverwriteStray.esp";
 
-    // No read sees a plugin the game does not load, so each NPC's FormKey is the builder's.
-    private readonly Dictionary<string, string> _npcOf = [];
+    private readonly Dictionary<string, string> _npcFormKeyFromBuilderOf = [];
 
     private Action<Mutagen.Bethesda.Fallout4.Fallout4Mod> Npc(string plugin, string editorId) =>
-        mod => _npcOf[plugin] = mod.Npcs.AddNew(editorId).FormKey.ToString();
+        mod => _npcFormKeyFromBuilderOf[plugin] = mod.Npcs.AddNew(editorId).FormKey.ToString();
 
     private async Task<ScatteredFixtureData> Loaded()
     {
@@ -48,7 +41,7 @@ public sealed class UnlistedPluginRefusalApiTests : HostedTests
     public async Task EditingAPluginWithNoLine_IsAConflict_NamingThePluginItsOriginAndTheWayOut()
     {
         using var fx = await Loaded();
-        var formKey = _npcOf[UnlistedPlugin];
+        var formKey = _npcFormKeyFromBuilderOf[UnlistedPlugin];
 
         var response = await Client.Edit(formKey, UnlistedPlugin, UnlistedOrigin, "HeightMax", 0.75);
 

@@ -9,17 +9,12 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Http.Tests.Api;
 
-// ADR-0012: a load order holding two physical files of one filename, so a route that resolved a
-// Quest's children through the wrong plugin shows in the assertion, not just in the row count.
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 
-    // Both plugins build in the same order from a fresh Fallout4Mod against the same ModKey, so
-    // they land on identical FormKeys: one captured FormKey addresses both plugins' children
-    // route, distinguished only by `origin`.
-    private static string ConfigurePlugin(Fallout4Mod mod, string tag)
+    private static string ConfigurePluginWithFormKeysIdenticalAcrossPlugins(Fallout4Mod mod, string tag)
     {
         var quest = new Quest(mod) { EditorID = $"Quest{tag}" };
         var topic = new DialogTopic(mod) { EditorID = $"Topic{tag}" };
@@ -32,20 +27,18 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         return quest.FormKey.ToString();
     }
 
-    private static (ScatteredFixtureData Fx, string QuestFk) BuildTwoPlugins()
+    private static (ScatteredFixtureData Fx, string QuestFk) BuildTwoPluginsUnderRealModFolderOrigins()
     {
         string? questFk = null;
         var fx = new PluginFixtureBuilder("api-container-child-origin")
-            .WithPlugin("Shared.esp", mod => ConfigurePlugin(mod, "ModB"), origin: "ModB")
-            .WithPlugin("Shared.esp", mod => questFk = ConfigurePlugin(mod, "ModA"), origin: "ModA")
+            .WithPlugin("Shared.esp", mod => ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => questFk = ConfigurePluginWithFormKeysIdenticalAcrossPlugins(mod, "ModA"), origin: "ModA")
             .BuildScattered();
-        return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePlugin to have captured the quest's FormKey."));
+        return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigurePluginWithFormKeysIdenticalAcrossPlugins to have captured the quest's FormKey."));
     }
 
     private async Task PutBothPlugins(ScatteredFixtureData fx, string winner = "ModA")
     {
-        // ADR-0013: both plugins travel in the one snapshot, the overridden one at the same slot;
-        // only the winning, enabled, listed one is active, and only it is read.
         var plugins = fx.Plugins.Select(p => p.Name == "Shared.esp" ? p with { Winning = p.Origin == winner } : p).ToList();
 
         var put = await _client.PutLoadOrderAndAwaitReady(new
@@ -63,7 +56,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     [Fact]
     public async Task GetContainerChildren_ExplicitOrigin_ReturnsThatPluginsOwnChildren()
     {
-        var (fx, questFk) = BuildTwoPlugins();
+        var (fx, questFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx, winner: "ModB");
         var encodedFk = Uri.EscapeDataString(questFk);
@@ -75,12 +68,10 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         Assert.Empty(modA.EnumerateArray());
     }
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that
-    // filename, so the route refuses rather than picking the load order's winner for it.
     [Fact]
     public async Task GetContainerChildren_OmittedOrigin_ReturnsBadRequest()
     {
-        var (fx, questFk) = BuildTwoPlugins();
+        var (fx, questFk) = BuildTwoPluginsUnderRealModFolderOrigins();
         using var _fx = fx;
         await PutBothPlugins(fx);
         var encodedFk = Uri.EscapeDataString(questFk);

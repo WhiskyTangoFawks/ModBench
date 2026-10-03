@@ -7,9 +7,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-/// <summary>ADR-0003 invariant 3 on the wire: each time the snapshot arrives, the stream names each
-/// tracked plugin whose bytes differ from what Modbench last wrote, and each untracked plugin of a
-/// tracked mod.</summary>
 public sealed class AnExternalChangeNoticeApiTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
