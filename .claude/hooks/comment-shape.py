@@ -82,7 +82,8 @@ def has_comment(line):
 
 def comments_in_test(path, text):
     """A string is matched within one line, so a marker inside a string that spans lines is
-    reported as a comment."""
+    reported as a comment, and a quote in a regex literal can pair with one in a trailing comment
+    and hide it."""
     if not TEST_FILE.search(path):
         return []
     return [f"{path}:{i}: a comment in a test; move it into the test's name or an assertion"
