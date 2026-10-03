@@ -22,7 +22,7 @@ internal sealed class Store : IDisposable
     private readonly ILogger _logger;
     private readonly string? _databasePath;
     private readonly TimeProvider _timeProvider;
-    // One per Store (ADR-0009).
+    // One per Store.
     private readonly PluginFileHashes _hashes;
 
     public DuckDBConnection Connection { get; private set; }
@@ -36,7 +36,7 @@ internal sealed class Store : IDisposable
         Connection = Open();
     }
 
-    // ADR-0009.
+    // ADR-0010.
     private DuckDBConnection Open()
     {
         if (_databasePath == null)
@@ -133,7 +133,7 @@ internal sealed class Store : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"INSERT INTO {IndexVersionRelation} (value) VALUES ($1)", indexVersion);
     }
 
-    // ADR-0009, with no in-place migration.
+    // ADR-0010, with no in-place migration.
     private void DiscardFileWrittenUnderAnotherVersion(string indexVersion)
     {
         if (_databasePath == null) return;
@@ -175,7 +175,7 @@ internal sealed class Store : IDisposable
     }
 
     // Only reachable once the file has already been opened, so it can never race the second-writer
-    // case IsAnotherWriter guards. Internal: ADR-0009's rebuild reuses this same
+    // case IsAnotherWriter guards. Internal: ADR-0010's rebuild reuses this same
     // delete-and-reopen.
     internal void RebuildFile()
     {
@@ -198,7 +198,7 @@ internal sealed class Store : IDisposable
         }
     }
 
-    /// <summary>ADR-0009: the indexed plugins whose file is gone or differs from its hash, for the
+    /// <summary>ADR-0003: the indexed plugins whose file is gone or differs from its hash, for the
     /// caller to unindex.</summary>
     public List<PluginAddress> ValidateAgainstDisk()
     {
@@ -308,7 +308,7 @@ internal sealed class Store : IDisposable
             key.Name, key.Origin);
     }
 
-    // ADR-0009: the plugin half of an Index() call, inside its transaction. A caller
+    // The plugin half of an Index() call, inside its transaction. A caller
     // naming no file (an in-memory mod) writes no file row, so nothing vouches for those rows and
     // the next load re-indexes.
     public void StampPluginFacts(string plugin, string origin, string? filePath, DerivedFrom derivedFrom)

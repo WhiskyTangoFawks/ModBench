@@ -109,7 +109,7 @@ The states every view shares are in [common.md](common.md#states). As a user, I 
 1. With no `plugins.txt` lines, and no plugin the game loads without one, a message saying so, in the view's message line.
 2. While mEdit starts and indexes, the view's progress bar under its title, and every plugin row already there. A row whose plugin is not indexed yet expands to "Still indexing…", never to an error. No notification.
 3. While mEdit is unreachable, the rows and their statuses to stay. A row expands to the error row with the reason, and the status bar says mEdit is down. The tree never changes shape. *ADR-0002*
-4. When another window holds the instance's index, every row to expand to the error row naming that, never to "Still indexing…" for ever. *ADR-0009*
+4. When another window holds the instance's index, every row to expand to the error row naming that, never to "Still indexing…" for ever. *Never silently wrong*
 5. When the record filter matches nothing, a message saying so, naming its source. *common, The name filter, story 6*
 6. When indexing the snapshot fails, the view's message line to name the failure, with one line in the Output. A row whose plugin was not reached expands to the error row naming the failure, never to "Still indexing…" for ever. The plugins read before the failure keep their records, and the next change to the instance tries again.
 
@@ -163,8 +163,8 @@ As a user, I want:
 As a user, I want:
 
 1. A pick of the preset, `Edits` first and pre-selected, then `Everything`, each with a line saying what it keeps. Esc tracks nothing. While it runs, the view's message line names the mod and the phase. *catalog `track`*
-2. `Edits` to track `plugin-source/` and `.gitignore`, and `Everything` every file except the plugin binaries. Neither tracks `meta.ini`. *ADR-0007*
-3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`, `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out. *ADR-0007*
+2. `Edits` to track `plugin-source/` and `.gitignore`, and `Everything` every file except the plugin binaries. Neither tracks `meta.ini`. *ADR-0006*
+3. The commit subjects `Track <mod>` and `Track Foo.esp 1.2.3`, and the baseline trailers `Plugin`, `Upstream-Version` and `Binary-SHA256`. A version the mod manager does not record is left out.
 4. Each file's line endings kept as written.
 5. A track that refuses every plugin to leave no repository. A plugin refused part way leaves the commits before it, and the rest go on. This is an exception to *A failed gesture writes nothing*.
 

@@ -3,7 +3,7 @@ using DuckDB.NET.Data;
 
 namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>The one store file a reconcile over an instance leaves on disk (ADR-0009), found rather
+/// <summary>The one store file a reconcile over an instance leaves on disk (ADR-0010), found rather
 /// than computed: where the Index keeps it is the Index's own.</summary>
 internal static class IndexFiles
 {

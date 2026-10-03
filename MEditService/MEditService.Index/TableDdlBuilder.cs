@@ -9,7 +9,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 
-    // ADR-0009: `mirror` holds every indexed plugin; `main` holds views of the active
+    // ADR-0012: `mirror` holds every indexed plugin; `main` holds views of the active
     // plugins. Every writer and every projection read names `mirror.`, and a write against a view
     // fails loudly.
     internal const string MirrorSchema = "mirror";
@@ -24,7 +24,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private readonly record struct PublicView(
         string Table, string PluginColumn, string OriginColumn, bool HoldsRecords, bool DerivesLoadOrder, bool DerivesWinner);
 
-    // ADR-0009: the views derive `load_order_idx` and `is_winner` by joining
+    // ADR-0012: the views derive `load_order_idx` and `is_winner` by joining
     // `registrations` and `winners`, at Effective. `records_head` joins at Head.
     private static readonly PublicView[] PublicViews =
     [
@@ -111,7 +111,6 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0011, header included.
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
@@ -120,7 +119,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         JOIN {RegistrationsRelation} p ON p.plugin = {alias}.{pluginColumn} AND p.origin = {alias}.{originColumn}
         """;
 
-    // ADR-0009, through this one predicate. A registration's load index is null when
+    // ADR-0012, through this one predicate. A registration's load index is null when
     // the plugin is not active (ADR-0013).
     private static string ActiveJoin(string alias, string pluginColumn, string originColumn) =>
         $"{RegisteredJoin(alias, pluginColumn, originColumn)} AND p.load_order_idx IS NOT NULL";
@@ -269,7 +268,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    /// <summary>ADR-0009: what the index believes is on disk. Apart from
+    /// <summary>ADR-0003: what the index believes is on disk. Apart from
     /// <c>registrations</c>, whose rows come and go with every reconcile, so the first unregister (a
     /// profile switch) keeps the hash.</summary>
     internal static void CreateFilesTable(DuckDBConnection connection) =>
@@ -325,7 +324,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // The form lookup ADR-0011 extracts at ingest: form_key -> (record type, EditorID). One row per
+    // The form lookup extracted at ingest: form_key -> (record type, EditorID). One row per
     // (form_key, plugin), so CheckErrorBuilder and the compare resolvers resolve a FormKey in O(1).
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
@@ -344,7 +343,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0011: side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
+    // Side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
     // lives here rather than in the record document, keeping placement read-only by construction.
     internal static void CreatePlacementTables(DuckDBConnection connection)
     {

@@ -136,7 +136,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   /** Refresh's first step (commands.md, Instance), which refills the index against the load order
-   *  mEdit holds. A 423 is `heldElsewhere` (ADR-0009), never a rejection. */
+   *  mEdit holds. A 423 is `heldElsewhere` (ADR-0010), never a rejection. */
   async rebuildIndex(instanceRoot: string, gameRelease: string): Promise<RebuildIndexOutcome> {
     try {
       const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
@@ -154,7 +154,7 @@ export class HttpMEditClient implements MEditClient {
     }
   }
 
-  /** `instanceRoot` scopes the backend's index (ADR-0009). */
+  /** `instanceRoot` scopes the backend's index (ADR-0010). */
   async putLoadOrder(
     plugins: LoadOrderPluginInput[],
     active: PluginAddress[],

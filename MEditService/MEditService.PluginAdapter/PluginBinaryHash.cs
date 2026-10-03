@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace MEditService.PluginAdapter;
 
-/// <summary>The content hash of a plugin binary (ADR-0009).
+/// <summary>The content hash of a plugin binary (ADR-0003).
 /// Sits in the one namespace both the index and the runtime watches may reference, so their two
 /// hashes cannot drift apart.</summary>
 public static class PluginBinaryHash

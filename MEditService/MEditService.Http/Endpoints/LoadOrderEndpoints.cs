@@ -37,7 +37,7 @@ public static class LoadOrderEndpoints
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
-        // No instance root, nowhere to keep the rows (ADR-0009).
+        // No instance root, nowhere to keep the rows (ADR-0010).
         if (!Directory.Exists(req.InstanceRoot))
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
 

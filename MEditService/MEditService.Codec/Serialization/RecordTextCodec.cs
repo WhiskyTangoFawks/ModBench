@@ -44,7 +44,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         Encoding.UTF8.GetString(SerializeToBytes(record, gameRelease));
 
     /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem
-    /// (ADR-0011): indexing produces millions, so a temp-file round trip is not an option.</summary>
+    /// (ADR-0005): indexing produces millions, so a temp-file round trip is not an option.</summary>
     public byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
     {
         // No directory: nothing here writes a file, so there is nothing to resolve against.

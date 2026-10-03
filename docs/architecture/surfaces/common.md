@@ -8,11 +8,11 @@ Each story cites its source. A story with no source is owned here.
 
 As a user, I want:
 
-1. Every list to be a native VS Code tree view, so selection, keyboard navigation, drag and the context menu behave as they do everywhere else in VS Code. *ADR-0017*
+1. Every list to be a native VS Code tree view, so selection, keyboard navigation, drag and the context menu behave as they do everywhere else in VS Code. *Mutagen's data, the reference's behaviour, VS Code's interaction*
 2. Every view to follow the disk: a change on disk, from Modbench, MO2 or any other tool, shows up with no action of mine. A view has no refresh of its own. *ADR-0015; Chrome*
 3. A row's icon, badge or colour to carry its status. The description repeats the status only when it is not the default, so an unmarked row reads as the ordinary case.
 4. View state (a sort, a toggle) to reset when the extension activates. It is a lens, not a setting.
-5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only while the tree has focus and no input box does, as VS Code's list keys do. Modbench adopts no key from xEdit or MO2. *ADR-0017; ADR-0018*
+5. Keys and mouse on a tree to do what VS Code's own trees do, as in the Explorer: Space toggles a check box, Delete destroys, F2 renames, Ctrl+C copies, Ctrl+Alt+F and F3 find. A key acts only while the tree has focus and no input box does, as VS Code's list keys do. Modbench adopts no key from xEdit or MO2. *Mutagen's data, the reference's behaviour, VS Code's interaction*
 6. Every list to let me select several rows, and a gesture to act on the whole selection unless it only makes sense for one row, which its Argument in the catalog says.
 7. Every list to reverse its order from its title bar. The direction never changes what the order means, such as which item wins. *CONTEXT.md, Sort direction*
 8. Ctrl+C, or the menu's copy value, to copy the selection as text, one item to a line, each as its surface says it copies. *catalog `copy value`*
@@ -38,7 +38,7 @@ As a user, I want:
 3. An empty list to render its own message. *commands.md, Where surfaces live*
 4. With no folder open, or a folder that is not an instance of a mod manager Modbench recognizes, to be told so. Every view that shows the instance says it in place of its rows. The message says how to open an instance. It waits for the check, so a folder not yet checked never reads as not an instance. The view's title-bar gestures that need an instance are absent. An instance whose files cannot be read is story 2. *commands.md, No dead entries*
 5. When the instance's game folder cannot be found, to be told once, the same way everywhere. The Toolbox's Game row says where Modbench looked ([toolbox.md](toolbox.md)). Every view whose rows need the game folder says so in its message line. One line in the Output. No notification; this is the background tier. Rows that do not need the game folder still show, and the records mEdit shows stay as they were until the folder is found. A configuration that names no game is story 2; no configuration is story 4. *ADR-0019*
-6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good read clears it. *ADR-0015; ADR-0019*
+6. When a later read fails, the rows I had to stay, and the view's message line to say "Showing the last good read:" and the reason, with one line in the Output. No notification. The next good read clears it. *ADR-0019*
 
 ## Unconfirmed writes
 

@@ -103,7 +103,7 @@ internal static class TrackedMods
     }
 
     /// <summary>Several working-tree changes made the Source repository's own way, then the next
-    /// snapshot's one validation (ADR-0009). A null body is the document taken out.</summary>
+    /// snapshot's one validation (ADR-0003). A null body is the document taken out.</summary>
     internal static void Project(
         this Indexer index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {

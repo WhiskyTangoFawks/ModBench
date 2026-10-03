@@ -35,24 +35,24 @@ internal interface IRecordIndex : IDisposable
     void Announce(Action publish);
 
     /// <summary>Indexes one plugin's documents, replacing whatever the key held. Stamps the file's
-    /// hash and diagnosis (ADR-0009); a null path claims no file backs the rows.</summary>
+    /// hash and diagnosis (ADR-0003); a null path claims no file backs the rows.</summary>
     void Index(IPluginDocuments documents, Registration registration, PluginAddress key, string? filePath, DerivedFrom derivedFrom);
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
     /// index holds no validated rows for it. Independent of registration, so a returning profile
-    /// switch is cheap (ADR-0009).</summary>
+    /// switch is cheap (ADR-0012).</summary>
     string? IndexedContentHash(PluginAddress key);
 
-    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0009). Null when the file
+    /// <summary>The hash of the file at <paramref name="path"/> now (ADR-0003). Null when the file
     /// cannot be read.</summary>
     string? FileContentHash(string path);
 
-    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0009's file-gone verb — never the meaning of a plugin leaving the load order, which is
+    /// <summary>Removes every trace of <paramref name="key"/>, rows and registration alike. ADR-0012's file-gone verb — never the meaning of a plugin leaving the load order, which is
     /// <see cref="Unregister"/>.</summary>
     void Unindex(PluginAddress key);
 
     /// <summary>Upserts <paramref name="key"/>'s <c>registrations</c> row: its indexed facts answer
-    /// with no re-index (ADR-0009), its records too when it is active. Winners stay stale until the
+    /// with no re-index (ADR-0012), its records too when it is active. Winners stay stale until the
     /// next sweep.</summary>
     void Register(PluginAddress key, Registration registration);
 
@@ -85,7 +85,7 @@ internal interface IRecordIndex : IDisposable
     void SeedCommittedOnly(PluginAddress key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>Materializes <paramref name="sql"/>'s matches and the records holding them (null
-    /// clears both), the one door SQL crosses this seam through (ADR-0011). Throws if
+    /// clears both), the one door SQL crosses this seam through. Throws if
     /// the SQL returns no <c>form_key</c> column.</summary>
     void SetFilter(string? sql);
 

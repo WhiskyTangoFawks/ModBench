@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 
 namespace MEditService.Index;
 
-/// <summary>One plugin's copy of one record. <see cref="Body"/> is the document ADR-0011 stores:
+/// <summary>One plugin's copy of one record. <see cref="Body"/> is the document the index stores (ADR-0005):
 /// for the header, the root <c>RecordData.json</c>.</summary>
 public record RecordDocument(
     string FormKey,

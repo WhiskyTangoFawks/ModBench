@@ -11,14 +11,14 @@ public record FilterResponse(string? Sql, string? Source);
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, so this names
 /// none.</summary>
 public record LoadOrderResponse(bool Applied, long Version = 0);
-// Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0009).
+// Mod Management's snapshot (ADR-0013). InstanceRoot: one index file per instance, inside the instance root (ADR-0010).
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, IReadOnlyList<PluginAddress> Active,
     IReadOnlyList<PluginAddress> LoadedWithNoLine, string GameDirectory, string InstanceRoot,
     string GameRelease = "Fallout4");
 public record LoadOrderPlugin(string Name, string Path, string Origin);
 
-// The Refresh rebuild's own request (ADR-0009), keyed on the instance as
+// The Refresh rebuild's own request (ADR-0010), keyed on the instance as
 // LoadOrderRequest is.
 public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
 

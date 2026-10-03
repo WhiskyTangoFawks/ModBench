@@ -78,7 +78,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _store = new Store(logger, databasePath, timeProvider);
     }
 
-    // ADR-0011.
     internal void CreateRecordTypeViews()
     {
         if (_recordTypeViewsCreated) return;
@@ -113,7 +112,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
-    // ADR-0009: the rebuild's whole job on an already-opened index — construction
+    // ADR-0010: the rebuild's whole job on an already-opened index — construction
     // already refused (IndexHeldElsewhereException) if another process held the file, so nothing
     // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
@@ -385,7 +384,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         RequireWorkingTreeOverlay().MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
-        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009).
+        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0012).
         UpdateWinnersCore();
         _store.BumpSequence();
         tx.Commit();
@@ -473,7 +472,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     private const string EffectiveRows = $"{TableDdlBuilder.MirrorSchema}.records";
 
-    // The projection reads the plugin's rows whether it is active or not (ADR-0009).
+    // The projection reads the plugin's rows whether it is active or not (ADR-0012).
     private (string RecordType, string? EditorId, string Body)? StoredRow(string relation, PluginAddress key, string formKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -573,7 +572,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void PublishRowsChanged(PluginAddress key, IReadOnlyList<string> formKeys) =>
         _store.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
-    // ADR-0009, asked of one plugin. A binary has no smaller unit, so a mismatch is a
+    // ADR-0003, asked of one plugin. A binary has no smaller unit, so a mismatch is a
     // rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(PluginAddress key)
     {
@@ -1106,7 +1105,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             using var connection = owner.OpenRead();
 
-            // ADR-0011: the placed ref's base form comes out of the document rather than a
+            // ADR-0005: the placed ref's base form comes out of the document rather than a
             // `base` column; json_extract_string unquotes the stored FormLink text, and a placed ref
             // with no base reads NULL.
             var typeList = string.Join(", ", cellChildTypes.Select(t => $"'{t}'"));

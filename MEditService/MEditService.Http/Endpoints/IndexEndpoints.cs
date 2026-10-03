@@ -53,7 +53,7 @@ public static class IndexEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
-        // Refresh's own first step (ADR-0009). The PUT /load-order that follows is then an
+        // Refresh's own first step (ADR-0010). The PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds the
         // file.
         app.MapPost("/index/rebuild", PostRebuildIndex)
@@ -170,7 +170,7 @@ public static class IndexEndpoints
         }
         catch (IndexHeldElsewhereException ex)
         {
-            // 423 Locked (ADR-0009), beside a failed reconcile's 500 and a superseded
+            // 423 Locked (ADR-0010), beside a failed reconcile's 500 and a superseded
             // snapshot's 409.
             logger.LogWarning(ex, "Refused to rebuild: the index at {Path} is held by another window", ex.IndexPath);
             return Results.Problem(ex.Message, statusCode: 423);

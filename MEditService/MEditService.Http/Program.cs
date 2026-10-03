@@ -69,7 +69,7 @@ try
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // One Index for the whole process (ADR-0014). Which file it opens comes from the
-    // load request (ADR-0009), not from here.
+    // load request (ADR-0010), not from here.
     builder.Services.AddSingleton(sp => new Indexer(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IPluginAdapter>(),

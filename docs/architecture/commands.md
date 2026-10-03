@@ -99,6 +99,8 @@ The xEdit Messages tab is not a surface. Failures go to the Output and the surfa
 | Editor, Referenced By | Panel (`modbenchReferencedBy`) | - | follows the active record |
 | Mods, the conflict table | an editor tab | - | opened by the user |
 
+No view defaults to the Secondary Side Bar: it is the home of chat. A user can still move any view there.
+
 Every view is always present. A view with nothing to show renders its own empty state, and no view hides itself. Referenced By is a Panel view because it follows the active record, and a sidebar view cannot sit beside an editor tab.
 
 ## Every view

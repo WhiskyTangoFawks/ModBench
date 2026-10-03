@@ -4,7 +4,7 @@ using DuckDB.NET.Data;
 namespace MEditService.Index;
 
 /// <summary>A filter is one SELECT over the public relations of <c>main</c>, which see only the
-/// active plugins (ADR-0009). DuckDB's own parse says what else it would read.</summary>
+/// active plugins (ADR-0012). DuckDB's own parse says what else it would read.</summary>
 internal static class SqlDoor
 {
     // Table functions that read no relation and run no string.

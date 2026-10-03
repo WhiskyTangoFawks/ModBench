@@ -13,7 +13,7 @@ Every other plugin editor writes the binary in place and leaves you with `.bak` 
 - **Compile** writes the binary from the source when you say so. The compiler refuses what it can't emit and reports the rest as Problems.
 - **The plugin stays what every tool sees.** The game, MO2 and xEdit load the plugin binary. Compile writes it from the source, which is the truth (ADR-0007). Modbench never assumes exclusive ownership of any file. When a tracked plugin changes outside Modbench, Modbench tells you, and you decide what to do next.
 
-The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md) and [ADR-0006](docs/adr/0006-decompilation-is-provably-faithful.md).
+The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md) and [ADR-0006](docs/adr/0006-a-tracked-plugins-truth-is-its-source.md).
 
 ## What works today
 
@@ -75,7 +75,7 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
 
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for an instance ([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)). The Mods, Downloads and Toolbox views never call the backend.
 
-The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every interaction uses the native VS Code surface that already does the job ([ADR-0017](docs/adr/0017-mo2-is-the-reference-for-mod-management.md)). Decisions live in [docs/adr/](docs/adr/); a decision that was reversed is deleted, and the story is in the *Alternatives rejected* section of whatever replaced it.
+The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit ([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every interaction uses the native VS Code surface that already does the job ([principles](docs/principles.md), *Mutagen's data, the reference's behaviour, VS Code's interaction*). Decisions live in [docs/adr/](docs/adr/); a decision that was reversed is deleted, and the story is in the *Alternatives rejected* section of whatever replaced it.
 
 ## Getting started
 

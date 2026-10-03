@@ -25,7 +25,7 @@ public sealed class CutDownPluginFixture : IDisposable
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
                 Slot: 0, Enabled: true, Winning: true)],
             InstanceRoot);
-        // The per-type views are made by the first filter (ADR-0011), and a test reads them.
+        // The per-type views are made by the first filter, and a test reads them.
         Index.Accepts("SELECT form_key FROM records");
     }
 

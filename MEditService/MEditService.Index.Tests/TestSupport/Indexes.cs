@@ -66,7 +66,7 @@ internal static class Indexes
     }
 
     /// <summary>The held load order arriving again (ADR-0013), which validates every
-    /// plugin (ADR-0009).</summary>
+    /// plugin (ADR-0003).</summary>
     internal static void NextSnapshot(this Indexer index)
     {
         if (!Holders.TryGetValue(index, out var holder))
@@ -82,7 +82,7 @@ internal static class Indexes
         return index.Sequence > before;
     }
 
-    /// <summary>The SQL door (ADR-0011): the filter is arbitrary SQL yielding form_key, so what it
+    /// <summary>The SQL door: the filter is arbitrary SQL yielding form_key, so what it
     /// matches is the relational schema's own answer. The filter is cleared after, the door being
     /// shared.</summary>
     internal static int Matching(this Indexer index, string sql)

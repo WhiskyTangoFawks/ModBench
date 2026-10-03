@@ -5,7 +5,7 @@ using MEditService.Codec.Schema;
 
 namespace MEditService.Index;
 
-/// <summary>ADR-0011.<see cref="ColumnSpec.IsViewable"/> decides a scalar leaf: no
+/// <summary><see cref="ColumnSpec.IsViewable"/> decides a scalar leaf: no
 /// column over one with broken semantics.</summary>
 internal static class RecordViewBuilder
 {

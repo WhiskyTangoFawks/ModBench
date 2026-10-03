@@ -2,11 +2,9 @@
 
 A recorded divergence from [ADR-0018](0018-xedit-is-the-reference-for-record-editing.md). xEdit offers Add, Sort and Clean Masters as user actions because it patches stored FormID bytes in place, so a master list can drift from the references in the file. Mutagen rebuilds a plugin's master list from its object graph on every write and re-derives every FormID's master index from it, so there is no drift to manage: sort and clean are what every compile does.
 
-## Strategic invariants
+## Consequences
 
-1. **A plugin's masters are wholly derived from its content and never directly editable.** Nothing, not a command and not a script, declares a master ahead of the content that requires it, and nothing removes, reorders or cleans one directly. A copy or edit that references another plugin's record makes that plugin a master at the next compile.
-2. **`masters` is read-only on the header record and shows the masters the working tree's content requires.** Compile writes exactly that set; deriving it is one of the two things the format forces compile to derive ([ADR-0007](0007-plugin-edits-are-git-working-tree-changes.md)).
-3. **An active plugin whose master is not active is flagged, never deactivated** ([xedit.md](../out-of-scope/xedit.md), divergence 28).
+- **Nothing edits a master list directly, not a gesture and not a script.** A reference to another plugin's record makes that plugin a master at the next compile, and a master nothing references leaves.
 
 ## Alternatives rejected
 

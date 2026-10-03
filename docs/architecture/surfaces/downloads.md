@@ -41,7 +41,7 @@ The status, first match wins:
 
 A mod in the instance decides Installed. The row stays right when I or another tool remove a mod. *ADR-0003*
 
-Install and uninstall keep MO2's own Downloads tab in agreement. *ADR-0017*
+Install and uninstall keep MO2's own Downloads tab in agreement. *Modbench owns nothing*
 
 ## Order and view state
 
@@ -57,7 +57,7 @@ As a user, I want:
 The states every view shares are in [common.md](common.md#states). As a user, I want:
 
 1. With no downloaded files, a message saying there are none yet, and that an installable file copied into the downloads folder shows up here.
-2. With files that are all excluded while show excluded is off, a message saying so, never "none yet". *ADR-0019*
+2. With files that are all excluded while show excluded is off, a message saying so, never "none yet". *Never silently wrong*
 
 ## Menus and keys
 

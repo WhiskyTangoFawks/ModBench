@@ -12,7 +12,7 @@ mEdit is the C# service in `MEditService/`; Modbench is the VS Code extension in
 
 ## The layers
 
-Both columns use the same six names. Drivers: who drives the process. Driving adapters: what turns a driver's gesture into a call. Core: the rules, one command per gesture. Kernel: read by every Core box and driven adapter. On Modbench it is pure. On mEdit it also holds the load order state (ADR-0013). A port lives here when its implementer sits above its callers. Both then reference the kernel, and no reference points up or across. Driven adapters: what the core calls to reach a system of record, and the only boxes that read or write one. Systems of record: the files that are the truth.
+Both columns use the same six names. Drivers: who drives the process. Driving adapters: what turns a driver's gesture into a call. Core: the rules, one command per gesture. Kernel: read by every Core box and driven adapter. On Modbench it is pure. On mEdit it also holds the load order state. A port lives here when its implementer sits above its callers. Both then reference the kernel, and no reference points up or across. Driven adapters: what the core calls to reach a system of record, and the only boxes that read or write one. Systems of record: the files that are the truth.
 
 ## The pictures are the reference lists
 
