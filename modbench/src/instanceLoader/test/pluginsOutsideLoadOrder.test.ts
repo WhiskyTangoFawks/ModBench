@@ -11,8 +11,8 @@ function toFileMap(byMod: Record<string, string[]>): Map<string, { relativePath:
   );
 }
 
-function indexOf(filesByMod: Record<string, string[]>, disabledModFiles: Record<string, string[]> = {}): FileConflictIndex {
-  return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod), disabledModFiles: toFileMap(disabledModFiles) };
+function indexOf(filesByMod: Record<string, string[]>): FileConflictIndex {
+  return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod) };
 }
 
 describe('findPluginsOutsideLoadOrder — the plugin files the effective load order does not point at: an overridden plugin, or a file plugins.txt never names', () => {
@@ -68,13 +68,5 @@ describe('findPluginsOutsideLoadOrder — the plugin files the effective load or
     const index = indexOf({ ModA: ['.esp'] });
 
     expect(findPluginsOutsideLoadOrder(index, [])).toEqual([]);
-  });
-
-  it('finds a plugin file in a disabled mod, still indexed though outside the load order', () => {
-    const index = indexOf({}, { DisabledMod: ['Off.esp'] });
-
-    expect(findPluginsOutsideLoadOrder(index, [])).toEqual([
-      { name: 'Off.esp', path: '/mods/DisabledMod/Off.esp', origin: 'DisabledMod' },
-    ]);
   });
 });
