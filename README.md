@@ -94,7 +94,7 @@ npm run build          # type-check + bundle extension and webview
 npm run test:unit
 ```
 
-You don't run the backend yourself — the extension spawns it at activation and hands it the snapshot: every plugin in the instance, and the active plugins in load order. For the API on its own: `dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
+You don't run the backend yourself — the extension spawns it at activation and hands it the snapshot: every plugin in the instance and what provides it, and the active plugins in load order. For the API on its own: `dotnet run --project MEditService.Http`, then `http://localhost:5172/swagger`.
 
 **Launch the extension** from the repo root (F5 is unreliable in this environment; use the CLI):
 
