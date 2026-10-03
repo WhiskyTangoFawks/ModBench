@@ -32,8 +32,7 @@ import {
 const ROOT = join('/tmp', 'instance');
 
 describe('MO2 layout', () => {
-  // Rival: an exact comparison, which misses the path a Windows picker hands back in another case.
-  it('names the downloaded file at a path as the platform matches paths', () => {
+  it('names the downloaded file at a path as the platform matches paths, not by exact comparison, which misses the path a Windows picker hands back in another case', () => {
     expect(downloadNameAt('C:\\MO2\\downloads', 'c:\\mo2\\Downloads\\Foo.7z', 'win32')).toBe('Foo.7z');
     expect(downloadNameAt('/mo2/downloads', '/mo2/downloads/Foo.7z', 'linux')).toBe('Foo.7z');
     expect(downloadNameAt('/mo2/downloads', '/mo2/Downloads/Foo.7z', 'linux')).toBeUndefined();
@@ -70,7 +69,7 @@ describe('MO2 layout', () => {
     expect([MODLIST_FILE_NAME, PLUGINS_FILE_NAME]).toEqual(['modlist.txt', 'plugins.txt']);
   });
 
-  it('names a mod folder’s git directory, which is what tracked means (ADR-0007)', () => {
+  it('names a mod folder’s git directory, which is what tracked means', () => {
     expect(modGitDir(modDir(ROOT, 'Some Mod'))).toBe(join(ROOT, 'mods', 'Some Mod', '.git'));
   });
 
@@ -81,29 +80,25 @@ describe('MO2 layout', () => {
   });
 
   it('names a download and its sidecar under the downloads folder it is given, not the instance root', () => {
-    const downloadsDir = join('/mnt', 'elsewhere', 'MyDownloads'); // outside any instance
-    expect(downloadFile(downloadsDir, 'Pack.7z')).toBe(join(downloadsDir, 'Pack.7z'));
-    expect(downloadSidecarFile(downloadsDir, 'Pack.7z')).toBe(join(downloadsDir, 'Pack.7z.meta'));
+    const downloadsDirOutsideAnyInstance = join('/mnt', 'elsewhere', 'MyDownloads');
+    expect(downloadFile(downloadsDirOutsideAnyInstance, 'Pack.7z')).toBe(join(downloadsDirOutsideAnyInstance, 'Pack.7z'));
+    expect(downloadSidecarFile(downloadsDirOutsideAnyInstance, 'Pack.7z')).toBe(join(downloadsDirOutsideAnyInstance, 'Pack.7z.meta'));
     expect(DOWNLOAD_SIDECAR_SUFFIX).toBe('.meta');
   });
 
-  it('names the overwrite directory as an origin value too (ADR-0012)', () => {
+  it('names the overwrite directory as an origin value too', () => {
     expect(OVERWRITE_DIR_NAME).toBe('overwrite');
     expect(overwriteDir(ROOT)).toBe(join(ROOT, OVERWRITE_DIR_NAME));
   });
 
-  // The watcher patterns are relative to the instance root and always POSIX-separated: VS Code's
-  // `RelativePattern` takes a glob, not a platform path.
-  it('names the watch patterns relative to the instance root', () => {
+  it('names the watch patterns relative to the instance root, always POSIX-separated as VS Code\'s `RelativePattern` takes a glob, not a platform path', () => {
     expect(MODS_GLOB).toBe('mods/**');
     expect(OVERWRITE_GLOB).toBe('overwrite/**');
     expect(MODLIST_GLOB).toBe('profiles/*/modlist.txt');
     expect(PLUGINS_GLOB).toBe('profiles/*/plugins.txt');
   });
 
-  // Downloads' own base is the resolved folder itself (instanceAdapter/downloadsDirectory.ts),
-  // never the instance root, so its glob is everything under that base rather than a segment.
-  it('names downloads\' own watch glob as everything under its base, not an instance-relative segment', () => {
+  it('names downloads\' own watch glob as everything under its base, not an instance-relative segment, the base being the resolved downloads folder itself and never the instance root', () => {
     expect(DOWNLOADS_WATCH_GLOB).toBe('**');
   });
 

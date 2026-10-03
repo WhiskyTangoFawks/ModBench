@@ -8,8 +8,6 @@ import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
 import { present } from '../../ports/present';
 
-// `Server.address()` types as `string | AddressInfo | null` for the pipe/unbound cases neither
-// test below hits, since both bind to 127.0.0.1 on an OS-assigned port.
 function addressInfo(address: ReturnType<Server['address']>): AddressInfo {
   if (address === null || typeof address === 'string') {
     throw new Error(`expected an AddressInfo, got ${String(address)}`);
@@ -23,16 +21,12 @@ function record(lifecycle: BackendLifecycle): BackendStatus[] {
   return statuses;
 }
 
-// A crash-restart reaches attached again with no event of its own, so a test that waits for the
-// fresh process waits for that second attach.
-function nextAttach(lifecycle: BackendLifecycle): Promise<void> {
+function nextRunningStatus(lifecycle: BackendLifecycle): Promise<void> {
   return new Promise<void>((resolve) => {
     const off = lifecycle.onStatusChanged((s) => { if (s === 'running') { off(); resolve(); } });
   });
 }
 
-// `checkHealth` (backendLifecycle.ts's own injectable) answers from this shared flag, toggled
-// by a test the same moment the real backend's own health would have flipped.
 function healthCheck(state: { healthy: boolean }): () => Promise<boolean> {
   return () => Promise.resolve(state.healthy);
 }
@@ -78,8 +72,6 @@ describe('BackendLifecycle', () => {
   });
 });
 
-// ── spawn / teardown / crash-restart ─────────────────────────────────────────
-
 function makeChild() {
   return Object.assign(new EventEmitter(), {
     kill: vi.fn(),
@@ -105,9 +97,7 @@ describe('BackendLifecycle.start', () => {
     expect(lifecycle.status).toBe('running');
   });
 
-  // Rival: the old attach-first start, which adopts whatever answers on a shared port, such as
-  // another window's backend.
-  it('spawns its own backend even when something already answers health', async () => {
+  it('spawns its own backend even when something already answers health, not adopting whatever answers on a shared port such as another window\'s backend', async () => {
     const spawn = vi.fn(() => makeChild());
 
     const lifecycle = new BackendLifecycle({
@@ -118,9 +108,7 @@ describe('BackendLifecycle.start', () => {
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:41000']);
   });
 
-  // Rival: polling /health on the claimed port without asking whether its own child is alive,
-  // which reports Running on whichever backend took the port in the gap.
-  it('is not running when its child exits at once while another backend answers its port', async () => {
+  it('is not running when its child exits at once while another backend answers its port, polling /health alone reporting Running on whichever backend took the port in the gap', async () => {
     const spawn = vi.fn(() => {
       const child = makeChild();
       queueMicrotask(() => child.emit('exit', 1));
@@ -138,8 +126,7 @@ describe('BackendLifecycle.start', () => {
     expect(statuses).not.toContain('running');
   });
 
-  // Rival: keeping the first claimed port across restarts, widening the gap while the backend is down.
-  it('claims a fresh port for each restart', async () => {
+  it('claims a fresh port for each restart, not keeping the first which would widen the gap while the backend is down', async () => {
     const state = { healthy: false };
     const children: ReturnType<typeof makeChild>[] = [];
     const urls: string[] = [];
@@ -150,7 +137,7 @@ describe('BackendLifecycle.start', () => {
       freePort: () => Promise.resolve(next++), pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
     });
     await lifecycle.start();
-    const restarted = nextAttach(lifecycle);
+    const restarted = nextRunningStatus(lifecycle);
     present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
@@ -170,8 +157,7 @@ describe('BackendLifecycle.start', () => {
     expect(ports[0]).not.toBe(ports[1]);
   });
 
-  // Rival: attach as a fallback, which spawns when the attach port does not answer.
-  it('attaches to the developer port and never spawns, even when nothing answers', async () => {
+  it('attaches to the developer port and never spawns, even when nothing answers, attach not being a fallback that spawns when the port does not answer', async () => {
     const spawn = vi.fn(() => makeChild());
 
     const lifecycle = new BackendLifecycle({
@@ -192,9 +178,7 @@ describe('BackendLifecycle.start', () => {
     expect(lifecycle.status).toBe('running');
   });
 
-  // The Output channel's level, translated by the caller into Serilog
-  // spawn args, rides along on the same argv as --urls.
-  it('appends the injected Serilog level args when spawning', async () => {
+  it('appends the injected Serilog level args when spawning, on the same argv as --urls', async () => {
     const state = { healthy: false };
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
@@ -224,8 +208,7 @@ describe('BackendLifecycle.start', () => {
   });
 });
 
-// Backend output arrives asynchronously through readline, so the count has to be polled.
-async function waitForLines(lines: string[], n: number) {
+async function pollForLines(lines: string[], n: number) {
   for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
 }
 
@@ -252,7 +235,7 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
     child.stderr.write('Unhandled exception. boom\n');
-    await waitForLines(lines, 2);
+    await pollForLines(lines, 2);
 
     expect(lines).toEqual([
       '[08:30:45 INF] Indexed 500 records stdout',
@@ -265,7 +248,7 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
-    await waitForLines(lines, 1);
+    await pollForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']);
   });
@@ -282,9 +265,8 @@ describe('BackendLifecycle output forwarding', () => {
 
     child.stdout.write('[08:30:45 INF] nobody is listening\n');
 
-    // readline.createInterface resumes its input stream synchronously on construction, so
-    // flowing mode is already set the moment start() returns — no wait buys anything here.
-    expect(child.stdout.readableFlowing).toBe(true);
+    const flowingSynchronouslyAsReadlineResumesItOnConstruction = child.stdout.readableFlowing;
+    expect(flowingSynchronouslyAsReadlineResumesItOnConstruction).toBe(true);
   });
 });
 
@@ -302,18 +284,16 @@ describe('BackendLifecycle crash-restart / stop', () => {
     });
     await lifecycle.start();
 
-    const restarted = nextAttach(lifecycle);
-    state.healthy = false;          // backend died
-    present(children[0], 'the first spawned child').emit('exit', 1);    // unexpected exit
+    const restarted = nextRunningStatus(lifecycle);
+    state.healthy = false;
+    present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
     expect(spawn).toHaveBeenCalledTimes(2);
     expect(lifecycle.status).toBe('running');
   });
 
-  // The crash is the news the views act on: the reconcile is abandoned and the status bar says
-  // so, rather than the tree silently holding a load order no process is behind.
-  it('reports disconnected the moment the backend dies, before the restart is attempted', async () => {
+  it('reports disconnected the moment the backend dies, before the restart is attempted, so the views abandon the reconcile rather than silently hold a load order no process is behind', async () => {
     const state = { healthy: false };
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
@@ -324,7 +304,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await lifecycle.start();
     const statuses = record(lifecycle);
 
-    const restarted = nextAttach(lifecycle);
+    const restarted = nextRunningStatus(lifecycle);
     state.healthy = false;
     present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
@@ -345,11 +325,11 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(lifecycle.status).toBe('running');
   });
 
-  it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order', async () => {
+  it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order, the generation stop() bumped being checked by every already-scheduled poll', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
     const children: ReturnType<typeof makeChild>[] = [];
-    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; }); // spawn does NOT make it healthy → connect keeps polling
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; });
 
     const lifecycle = new BackendLifecycle({
       freePort: () => Promise.resolve(5172), pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x', checkHealth: healthCheck(state),
@@ -357,14 +337,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
     const statuses = record(lifecycle);
 
     const startP = lifecycle.start();
-    await vi.advanceTimersByTimeAsync(0); // the first health check's microtask resolves and spawn happens
+    await vi.advanceTimersByTimeAsync(0);
     const stopP = lifecycle.stop();
-    present(children[0], 'the first spawned child').emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
-    state.healthy = true;                        // backend "comes up" after the user closed
+    present(children[0], 'the first spawned child').emit('exit', 0);
+    state.healthy = true;
     await vi.advanceTimersByTimeAsync(1000);
     await Promise.all([startP, stopP]);
-    // The generation stop() bumped is still checked by every already-scheduled poll, so this
-    // advance proves one landing late does not flip status — not merely that none happened to.
     await vi.advanceTimersByTimeAsync(50);
 
     expect(lifecycle.status).toBe('stopped');
@@ -375,7 +353,6 @@ describe('BackendLifecycle crash-restart / stop', () => {
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
-    // Every spawned child dies immediately and never becomes healthy.
     const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
 
     const lifecycle = new BackendLifecycle({
@@ -387,7 +364,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await vi.advanceTimersByTimeAsync(200);
     await startP;
 
-    expect(spawn.mock.calls.length).toBeLessThanOrEqual(5); // bounded, not infinite
+    expect(spawn.mock.calls.length).toBeLessThanOrEqual(5);
     expect(statuses).toContain('disconnected');
     expect(lifecycle.status).toBe('disconnected');
   });
@@ -404,20 +381,18 @@ describe('BackendLifecycle crash-restart / stop', () => {
     });
     await lifecycle.start();
 
-    const restarted = nextAttach(lifecycle);
+    const restarted = nextRunningStatus(lifecycle);
     state.healthy = false;
     present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
     present(children[1], 'the second (restarted) child').stdout.write('[08:30:50 INF] back up\n');
-    await waitForLines(lines, 1);
+    await pollForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
 
-  // deactivate() awaits this, so a reload cannot build a replacement client — which would hold no
-  // reference to this child — before the old child is gone.
-  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed', async () => {
+  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed, so deactivate() awaiting it keeps a reload from building a replacement client before the old child is gone', async () => {
     const state = { healthy: false };
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
@@ -432,7 +407,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     expect(statuses).not.toContain('stopped');
 
-    child.emit('exit', 0);          // deliberate stop → no respawn
+    child.emit('exit', 0);
     await stopped;
 
     expect(statuses).toEqual(['stopped']);
@@ -440,10 +415,10 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(lifecycle.status).toBe('stopped');
   });
 
-  it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit', async () => {
+  it('escalates to SIGKILL if the child never exits within the grace period, withholding stopped until exit is observed even after SIGKILL is sent', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
-    const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
+    const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
     const lifecycle = new BackendLifecycle({
@@ -456,22 +431,19 @@ describe('BackendLifecycle crash-restart / stop', () => {
     expect(child.kill).toHaveBeenCalledTimes(1);
     expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
 
-    await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
+    await vi.advanceTimersByTimeAsync(3000);
     expect(child.kill).toHaveBeenCalledTimes(2);
     expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
-    // Still withheld: exit has not been observed even after SIGKILL is sent.
     expect(statuses).not.toContain('stopped');
 
-    child.emit('exit', null); // the OS finally reaps it
+    child.emit('exit', null);
     await stopped;
 
     expect(statuses).toEqual(['stopped']);
   });
 });
 
-// Every other suite in this file injects `checkHealth`, so the real default adapter —
-// `checkHealthOverHttp`'s GET `/health` — needs its own coverage, over a real local server.
-describe('BackendLifecycle (no checkHealth injected — the real GET /health adapter)', () => {
+describe('BackendLifecycle with no health check injected, asking a real local server over GET /health as every other suite injects its check', () => {
   let server: Server | undefined;
 
   afterEach(async () => {
@@ -493,11 +465,8 @@ describe('BackendLifecycle (no checkHealth injected — the real GET /health ada
     expect(lifecycle.status).toBe('running');
   });
 
-  // The rival: inverting the status check (`!== 200`) would report attached for a refused
-  // connection and disconnected for a real 200 — this and the test above catch either flip.
-  it('reports disconnected when the connection is refused', async () => {
-    // Listens just long enough to claim a free port, then closes it — nothing answers next.
-    const port = await new Promise<number>((resolve) => {
+  it('reports disconnected when the connection is refused, the status check not inverted (`!== 200`), which would report attached for a refused connection', async () => {
+    const portNothingAnswersOn = await new Promise<number>((resolve) => {
       const probe = createServer();
       probe.listen(0, '127.0.0.1', () => {
         const claimed = addressInfo(probe.address()).port;
@@ -505,7 +474,7 @@ describe('BackendLifecycle (no checkHealth injected — the real GET /health ada
       });
     });
 
-    const lifecycle = new BackendLifecycle({ attachPort: port, pollIntervalMs: 5, pollTimeoutMs: 30 });
+    const lifecycle = new BackendLifecycle({ attachPort: portNothingAnswersOn, pollIntervalMs: 5, pollTimeoutMs: 30 });
     await lifecycle.start();
 
     expect(lifecycle.status).toBe('disconnected');

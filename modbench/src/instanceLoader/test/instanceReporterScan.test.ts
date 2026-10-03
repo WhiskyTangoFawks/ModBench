@@ -1,5 +1,3 @@
-// ADR-0015: the Instance keeps a read failure in its value for a subscriber to render, and
-// raises no notification: a failed read is its one Output line (ADR-0019's background tier).
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
@@ -30,15 +28,12 @@ function reporterImportsIn(path: string): string[] {
   return importSpecifiers(readFileSync(path, 'utf8'), path).filter((spec) => /\breporter$/.test(spec));
 }
 
-describe('the Instance imports no reporter', () => {
+describe('the Instance imports no reporter, leaving a read failure in its value for a subscriber to render rather than raising a notification', () => {
   it('instance.ts names no reporter module in its imports', () => {
     expect(reporterImportsIn(INSTANCE_PATH)).toEqual([]);
   });
 
-  // Rival this catches: a recompute failure reported straight from the Instance instead of
-  // being left in `readFailure` for a subscriber to render. Calls
-  // `reporterImportsIn` on a real file, so gutting that function cannot leave this test passing.
-  it('flags a reporter import planted in a real file', async () => {
+  it('flags a reporter import planted in a real file, so a scan that finds nothing in any file cannot leave the check passing', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-instance-reporter-scan-'));
     try {
       const planted = join(dir, 'planted.ts');

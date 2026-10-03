@@ -15,14 +15,10 @@ function commentFrame(): Uint8Array {
   return new TextEncoder().encode(': connected\n\n');
 }
 
-// A well-formed SSE frame around a JSON payload missing every field NotificationEvent requires
-// — parseNotificationEvent's own check, not JSON.parse's.
-function malformedFrame(): Uint8Array {
+function frameOfValidJsonMissingTheFieldsAnEventRequires(): Uint8Array {
   return new TextEncoder().encode('event: rows-changed\ndata: {"kind":"rows-changed"}\n\n');
 }
 
-// Enqueues every chunk up front, then closes — a stream whose whole life is scripted at
-// construction, standing in for one real fetch response.
 function scriptedStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
@@ -54,12 +50,10 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  it('reconnects after the stream ends, without a live backend', async () => {
-    // The rival this guards against: a `start()` that opens the stream once and never retries —
-    // a one-shot adapter that a hiccup would silently kill for the rest of the session.
+  it('reconnects after the stream ends, without a live backend, as a one-shot adapter would be silently killed by a hiccup for the rest of the session', async () => {
     const secondEvent = rowsChanged(['000002:Other.esp']);
     const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([])) // ends immediately — the drop
+      .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(streamResponse([sseFrame(secondEvent)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
     const received: NotificationEvent[] = [];
@@ -78,7 +72,7 @@ describe('SseNotificationSubscriber', () => {
   it('reconnects after a malformed frame, without dispatching it', async () => {
     const goodEvent = rowsChanged(['000002:Other.esp']);
     const openStream = vi.fn()
-      .mockResolvedValueOnce(streamResponse([malformedFrame()]))
+      .mockResolvedValueOnce(streamResponse([frameOfValidJsonMissingTheFieldsAnEventRequires()]))
       .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
     const received: NotificationEvent[] = [];
@@ -123,10 +117,8 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  // The rival: a stop()/start() pair that leaves the sleeping loop to wake on its own. The
-  // restart then opens nothing for a whole reconnect delay, and wakes a second loop beside it.
-  it('start() after a stop() taken between attempts opens one stream at once, not a delayed pair', async () => {
-    const openStream = vi.fn().mockResolvedValue(streamResponse([])); // ends at once — straight to the sleep
+  it('start() after a stop() taken between attempts opens one stream at once, not a delayed pair, the sleeping loop not waking on its own beside a second loop', async () => {
+    const openStream = vi.fn().mockResolvedValue(streamResponse([]));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 2000 });
 
     subscriber.start();
@@ -156,9 +148,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  // A backend that never answers must degrade the load, not stall it: the caller goes on without
-  // progress rather than waiting for a stream it will never get.
-  it('whenConnected() settles when the attempt fails', async () => {
+  it('whenConnected() settles when the attempt fails, so the caller goes on without progress rather than waiting for a stream it will never get', async () => {
     const openStream = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 100_000 });
     let connected = false;
@@ -170,9 +160,7 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
-  // A backend the client attached to without owning it can restart under a live status: the
-  // stream opening again is the one sign that the process behind it may be another.
-  it('announces a reopen after a drop, and not the first open', async () => {
+  it('announces a reopen after a drop, and not the first open, as a backend the client attached to without owning it can restart under a live status', async () => {
     const openStream = vi.fn()
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(streamResponse([]))
@@ -229,7 +217,7 @@ describe('SseNotificationSubscriber', () => {
     let sawSignal: AbortSignal | undefined;
     const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {
       sawSignal = signal;
-      return new Promise<Response>(() => {}); // never resolves — stop() must abort it directly
+      return new Promise<Response>(() => {});
     });
     const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
 

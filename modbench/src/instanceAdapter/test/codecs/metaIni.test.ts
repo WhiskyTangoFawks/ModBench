@@ -31,9 +31,7 @@ describe('parseMetaIni', () => {
     });
   });
 
-  it('does not let a line lacking "=" corrupt the parsed fields', () => {
-    // The decoy is chosen so that a slice(0, -1) off the missing "=" would land on
-    // exactly "installationFile".
+  it('does not let a line lacking "=" corrupt the parsed fields, as a slice(0, -1) off the missing "=" would land on exactly "installationFile"', () => {
     expect(parseMetaIni('[General]\r\ninstallationFilex\r\nversion=1.0\r\n')).toEqual({
       version: '1.0',
       nexusId: undefined,
@@ -61,9 +59,7 @@ describe('parseMetaIni — installedFiles', () => {
     expect(parseMetaIni('[General]\r\ngameName=Fallout4\r\n').installedFiles).toBeUndefined();
   });
 
-  // Mirrors houseCARL's Mo2ModMeta guard: a FOMOD/manual install has size=0 and no
-  // fileid, and a fileid living in another section must never leak in.
-  it('is undefined for size=0 with no pairs, and ignores a fileid outside the section', () => {
+  it('is undefined for size=0 with no pairs, and ignores a fileid outside the section, mirroring houseCARL\'s Mo2ModMeta guard for a FOMOD/manual install with size=0 and no fileid', () => {
     const text = [
       '[General]', 'modid=1',
       '[installedFiles]', 'size=0',
@@ -72,10 +68,7 @@ describe('parseMetaIni — installedFiles', () => {
     expect(parseMetaIni(text).installedFiles).toBeUndefined();
   });
 
-  // Real MO2 files interleave size= between entries and do not guarantee index order
-  // (AMON's live file puts size= between 1\modid and 1\fileid) — the parser is scoped
-  // to the section and keyed by index, not by line position.
-  it('tolerates out-of-order indices and an interleaved size key', () => {
+  it('tolerates out-of-order indices and an interleaved size key, as real MO2 files interleave size= between entries (AMON\'s puts it between 1\\modid and 1\\fileid) and the parser keys by index within the section, not by line position', () => {
     const text = [
       '[General]', 'modid=126608',
       '[installedFiles]',
@@ -229,9 +222,7 @@ describe('setOwnedKeysInText', () => {
     expect(result).toBe('[General]\r\ngameName=Fallout4\r\n[installedFiles]\r\n1\\modid=4598\r\n1\\fileid=17423\r\nsize=1\r\n');
   });
 
-  // Owned means fully owned: an owned key absent from the call is cleared from
-  // existing text, not left behind — the caller states the whole target state.
-  it('clears an owned key that the call omits, even if it was present before', () => {
+  it('clears an owned key that the call omits, even if it was present before, the caller stating the whole target state', () => {
     const text = '[General]\r\ngameName=Fallout4\r\nmodid=4598\r\n';
     const result = setOwnedKeysInText(text, { gameName: 'Fallout4' });
     expect(result).toBe('[General]\r\ngameName=Fallout4\r\n');

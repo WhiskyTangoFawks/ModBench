@@ -25,8 +25,7 @@ describe('spliceDownloadMeta', () => {
     expect(await readFile(metaPath('foo.7z'), 'utf8')).toBe('[General]\r\nmodID=123\r\nremoved=true\r\n');
   });
 
-  // MO2's QSettings creates the file on its first write, so a manual drop gets one too.
-  it('hands the edit empty text for a file with no .meta, and writes one', async () => {
+  it('hands the edit empty text for a file with no .meta, and writes one, as MO2\'s QSettings creates the file on its first write so a manual drop gets one too', async () => {
     const seen: string[] = [];
 
     await spliceDownloadMeta(downloadsDir, 'manual.7z', (text) => {
@@ -38,8 +37,7 @@ describe('spliceDownloadMeta', () => {
     expect(await readFile(metaPath('manual.7z'), 'utf8')).toBe('[General]\r\ninstalled=true\r\n');
   });
 
-  // Doing nothing is not an error, and an unwritten file fires no watcher.
-  it('writes nothing when the edit changes nothing', async () => {
+  it('writes nothing when the edit changes nothing, doing nothing not being an error and an unwritten file firing no watcher', async () => {
     await writeFile(metaPath('foo.7z'), '[General]\r\ninstalled=true\r\n');
     const before = (await stat(metaPath('foo.7z'))).mtimeMs;
 

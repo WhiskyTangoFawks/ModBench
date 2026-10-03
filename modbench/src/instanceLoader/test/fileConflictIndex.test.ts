@@ -19,8 +19,7 @@ const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled
 const separator = (name: string, enabled = true): Separator => ({ kind: 'separator', name, enabled });
 
 describe('buildFileConflictIndex', () => {
-  it('resolves the winner for an overridden file to the topmost (winning) mod', async () => {
-    // modlist.txt is winning-first, so ModA — the array's first enabled mod — wins over ModB.
+  it('resolves the winner for an overridden file to the first enabled mod, modlist.txt being winning-first', async () => {
     const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
     const index = await buildFileConflictIndex(entries, fixture, () => {});
 
@@ -43,9 +42,7 @@ describe('buildFileConflictIndex', () => {
     expect(index.filesByMod.has('ModA')).toBe(false);
   });
 
-  // ADR-0013, invariant 2: the snapshot names every plugin, disabled mods' included, so their
-  // files are still read — into their own map, apart from conflict resolution.
-  it('lists a disabled mod\'s own files under disabledModFiles', async () => {
+  it('lists a disabled mod\'s own files under disabledModFiles, apart from conflict resolution, so the snapshot can name its plugins', async () => {
     const index = await buildFileConflictIndex([mod('ModA', false), mod('ModB')], fixture, () => {});
     const modAFiles = index.disabledModFiles.get('ModA')?.map((f) => f.relativePath).sort();
     expect(modAFiles).toEqual(['textures/shared/foo.dds']);
@@ -59,10 +56,8 @@ describe('buildFileConflictIndex', () => {
     expect(entry?.winnerMod).toBe('ModB');
   });
 
-  it('resolves nested subdirectory relative paths correctly', async () => {
+  it('lists nested subdirectory relative paths through the index\'s iteration surface', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], fixture, () => {});
-    // Iteration surface: entries carry their own original-cased relativePath,
-    // not raw (possibly folded) Map keys.
     const paths = [...index.files].map((e) => e.relativePath);
     expect(paths).toContain('meshes/onlyB.nif');
     expect(paths).toContain('textures/shared/foo.dds');
@@ -81,14 +76,12 @@ describe('buildFileConflictIndex', () => {
   });
 });
 
-// Proton/Wine folds case over case-sensitive ext4, so case-variant paths must resolve to one
-// conflict entry with a deterministic winner.
-describe('buildFileConflictIndex — case-insensitive conflicts', () => {
+describe('buildFileConflictIndex — case-insensitive conflicts, as Proton/Wine folds case over case-sensitive ext4', () => {
   it('resolves case-variant paths from two mods to a single conflict entry with both providers', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], caseFixture, () => {});
 
     expect(index.files.size).toBe(1);
-    const entry = index.files.get('Textures/Foo.dds'); // look up via either casing
+    const entry = index.files.get('Textures/Foo.dds');
     expect(entry?.providers.sort()).toEqual(['ModA', 'ModB']);
     const entryOtherCasing = index.files.get('textures/foo.dds');
     expect(entryOtherCasing).toBe(entry);
@@ -105,8 +98,8 @@ describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   it('keeps the winner\'s own original casing in relativePath and winner, regardless of lookup casing', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], caseFixture, () => {});
 
-    const entry = index.files.get('TEXTURES/FOO.DDS'); // deliberately different casing again
-    expect(entry?.relativePath).toBe('Textures/Foo.dds'); // ModA's own casing (it won)
+    const entry = index.files.get('TEXTURES/FOO.DDS');
+    expect(entry?.relativePath).toBe('Textures/Foo.dds');
     expect(entry?.winner).toBe(join(caseFixtureRoot, 'mods', 'ModA', 'Textures', 'Foo.dds'));
   });
 
@@ -119,9 +112,7 @@ describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   });
 });
 
-// The walk is the adapter's: each enabled mod's files arrive with a note for every entry the
-// listing skipped, and a note is an Output line, never a silent skip.
-describe('buildFileConflictIndex — what the adapter answers', () => {
+describe('buildFileConflictIndex — what the adapter answers: the walk is the adapter\'s, and a note for a skipped entry is an Output line, never a silent skip', () => {
   const answering = (answer: Omit<OriginFiles, 'origin'>): Pick<InstanceAdapter, 'originFiles'> => ({
     originFiles: (origin) => Promise.resolve({ origin: origin.kind === 'mod' ? origin.name : 'overwrite', ...answer }),
   });
@@ -144,15 +135,14 @@ describe('buildFileConflictIndex — what the adapter answers', () => {
   });
 });
 
-// Proves the override-order direction against a REAL MO2 instance, not synthetic fixtures.
 const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
 const litrProfile = 'Life in the Ruins';
 
-describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR instance (opt-in)', () => {
-  // A real conflict in the live LitR modlist, not planted: a fix patch must override what it
-  // fixes, which is an oracle independent of this codebase's own logic.
+describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR instance (opt-in), proving the override-order direction against a real MO2 instance rather than synthetic fixtures', () => {
   const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';
   const baseName = "Graf's Assaultron Armor";
+  const ESL_ANOTHER_ENABLED_MOD_ALSO_SHIPS = 1;
+  const sameLineIgnoringCasing = (line: string, expected: string): boolean => foldPath(line) === foldPath(expected);
   const contested = [
     'meshes/graf/assaultronarmor/assaultronarmorarmlheavyf.nif',
     'meshes/graf/assaultronarmor/assaultronarmorarmlheavym.nif',
@@ -160,9 +150,7 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
     'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
   ];
 
-  // The badge consumes the index's winner with no logic of its own, so asserting both proves
-  // they agree rather than documenting the badge away.
-  it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index and badge agree', async () => {
+  it('a fix patch positioned above the mod it fixes wins the meshes they both ship, a real conflict that is an oracle independent of this codebase\'s own logic — index and badge agree', async () => {
     const litr = adapterOver(litrInstance);
     const entries = await litr.modOrder(litrProfile);
     const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
@@ -182,15 +170,12 @@ describe.skipIf(litrInstance === '')('buildFileConflictIndex — real LitR insta
 
     const statuses = computeModStatuses([fixEntry, baseEntry], index);
     expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
-    // baseName's real count is 5: it also ships an .esl another enabled mod happens to ship,
-    // a separate real collision that is part of its honest badge.
-    expect(statuses.get(baseName)?.status).toEqual({ kind: 'conflicts', count: contested.length + 1 });
+    expect(statuses.get(baseName)?.status).toEqual({ kind: 'conflicts', count: contested.length + ESL_ANOTHER_ENABLED_MOD_ALSO_SHIPS });
     for (const relativePath of contested) {
-      // conflictLines carry the base mod's own on-disk casing, so compare through foldPath.
       expect(
         statuses
           .get(baseName)
-          ?.conflictLines.some((line) => foldPath(line) === foldPath(`${relativePath} → winner: ${fixName}`)),
+          ?.conflictLines.some((line) => sameLineIgnoringCasing(line, `${relativePath} → winner: ${fixName}`)),
       ).toBe(true);
     }
   });

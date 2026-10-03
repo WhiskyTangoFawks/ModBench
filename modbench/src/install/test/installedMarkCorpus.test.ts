@@ -1,5 +1,3 @@
-// Runs against the committed corpus fixture, because the mark mutates MO2-owned state: the
-// `.meta` sidecar and nothing else in the instance.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
@@ -11,13 +9,11 @@ import { markDownloadInstalled } from '../installedMark';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import { adapterOver, readDownloadedFileMeta } from '../../test/mo2/adapterOver';
 
-// A metaless archive, as a manual drop into downloads/ is: a mark that creates a sidecar is the
-// one whose touch-set is easiest to read wrong.
 const MANUAL = 'Manually Dropped Archive.7z';
 const MANUAL_ARCHIVE = `downloads/${MANUAL}`;
 const MANUAL_META = `${MANUAL_ARCHIVE}.meta`;
 
-describe('installed mark corpus', () => {
+describe('installed mark on the committed corpus fixture, as the mark mutates MO2-owned state: the `.meta` sidecar and nothing else in the instance', () => {
   let dir: string;
 
   beforeEach(async () => {
@@ -28,9 +24,7 @@ describe('installed mark corpus', () => {
 
   const statusOf = async (name: string) => (await readDownloadedFileMeta(dir, name))?.status;
 
-  it('mark installed writes one sidecar and nothing else — never the mod folder', async () => {
-    // As MO2 left it after an uninstall: its tab resolves `uninstalled` first, so the mark has
-    // to clear that key too, exactly as MO2's own markInstalled does.
+  it('mark installed writes one sidecar and nothing else, clearing the `uninstalled` key MO2 left after an uninstall as its own markInstalled does — never the mod folder', async () => {
     await writeFile(join(dir, MANUAL_META), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from '../../test/vscodeMock';
 
-// The Toolbox renders the Instance's value and nothing else: no disk read, no backend state.
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { ToolboxProvider } from '../ToolboxProvider';
@@ -48,8 +47,7 @@ describe('the Toolbox view, given an instance value', () => {
     expect(present(profile.command, 'the Profile row\'s command').command).toBe('modbench.profile.switch');
   });
 
-  // The Profile menu's `viewItem` clause keys on this.
-  it('marks the Profile row as the profile, so its menu offers switch', () => {
+  it('marks the Profile row as the profile, which the Profile menu\'s `viewItem` clause keys on, so its menu offers switch', () => {
     expect(row(new FakeInstance(VALUE), 'Profile').contextValue).toBe('profile');
   });
 
@@ -135,8 +133,7 @@ describe('the Toolbox view\'s states', () => {
     expect(rowsOf(undefined)).toEqual([]);
   });
 
-  // Rival: a Profile row reading the pre-first-read value's empty profile as `—`.
-  it('shows no rows before the first read lands', () => {
+  it('shows no rows before the first read lands, rather than a Profile row reading the pre-read empty profile as `—`', () => {
     expect(rowsOf(new FakeInstance(instanceValueFixture({ activeProfile: '' }), 0))).toEqual([]);
   });
 
@@ -161,8 +158,7 @@ describe('the Toolbox view\'s states', () => {
     expect(provider.getChildren().map((r) => r.label)).toEqual(['Game', 'Profile']);
   });
 
-  // The last good value stands: a later failed read is not a first read.
-  it('keeps its rows when a read after the first fails', () => {
+  it('keeps its rows when a read after the first fails, the last good value standing', () => {
     const instance = new FakeInstance(VALUE);
 
     instance.fail('ModOrganizer.ini is torn');

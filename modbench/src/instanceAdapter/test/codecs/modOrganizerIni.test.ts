@@ -23,9 +23,7 @@ describe('readSelectedProfile', () => {
     );
   });
 
-  it('does not spuriously match a key-like line lacking "="', () => {
-    // The decoy is chosen so that a slice(0, -1) off the missing "=" would land on
-    // exactly "selected_profile", ahead of the real line.
+  it('does not spuriously match a key-like line lacking "=", as a slice(0, -1) off the missing "=" would land on exactly "selected_profile", ahead of the real line', () => {
     const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
     expect(readSelectedProfile(text)).toBe('Real Value');
   });
@@ -57,10 +55,8 @@ describe('readDownloadDirectory', () => {
     expect(readDownloadDirectory(ini())).toBeUndefined();
   });
 
-  // MO2 writes `download_directory` as a plain QString (settings.cpp:1683), never @ByteArray —
-  // unlike gamePath. Qt's INI writer escapes a plain string's own backslashes, doubling each one.
-  it('un-escapes the doubled backslashes MO2/Qt actually writes for a plain Windows path', () => {
-    const onDisk = String.raw`download_directory=C:\\Games\\MO2\\downloads`; // Qt's own escaping
+  it('un-escapes the doubled backslashes MO2/Qt actually writes for a plain Windows path, download_directory being a plain QString (settings.cpp:1683), never @ByteArray unlike gamePath', () => {
+    const onDisk = String.raw`download_directory=C:\\Games\\MO2\\downloads`;
     expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games\MO2\downloads`);
   });
 
@@ -75,7 +71,7 @@ describe('readDownloadDirectory', () => {
   });
 
   it('strips the quote wrapper and un-escapes a value Qt quoted for a special character', () => {
-    const onDisk = String.raw`download_directory="C:\\Games;New"`; // `;` forces Qt's quote wrap
+    const onDisk = String.raw`download_directory="C:\\Games;New"`;
     expect(readDownloadDirectory(`[Settings]\r\n${onDisk}\r\n`)).toBe(String.raw`C:\Games;New`);
   });
 
@@ -84,9 +80,7 @@ describe('readDownloadDirectory', () => {
       .toBe('%BASE_DIR%/downloads');
   });
 
-  // MO2's own settings dialog removes the key rather than write it empty (setConfigurablePath);
-  // a present-but-empty value is read the same way, as unset, not as an empty path.
-  it('reads an empty value as unset, as MO2\'s own default-path behaviour does', () => {
+  it('reads an empty value as unset, as MO2\'s own default-path behaviour does, its settings dialog removing the key rather than writing it empty (setConfigurablePath)', () => {
     expect(readDownloadDirectory('[Settings]\r\ndownload_directory=\r\n')).toBeUndefined();
   });
 });
@@ -97,8 +91,8 @@ describe('setSelectedProfileInText — surgical, byte-faithful', () => {
     const out = setSelectedProfileInText(input, 'Secondary');
     expect(out).toBe(input.replace('@ByteArray(Default)', '@ByteArray(Secondary)'));
     expect(readSelectedProfile(out)).toBe('Secondary');
-    expect(out).toContain('[Settings]\r\nlanguage=en\r\n'); // other section untouched
-    expect(out).toContain('gamePath=@ByteArray('); // gamePath untouched
+    expect(out).toContain('[Settings]\r\nlanguage=en\r\n');
+    expect(out).toContain('gamePath=@ByteArray(');
   });
 
   it('is a no-op (identical bytes) when setting the current profile', () => {
