@@ -993,7 +993,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
       const outcome = await createEmptyMod(accessTo(dir), 'Default', name);
 
-      expect(outcome).toMatchObject({ applied: true, wrote: false, lineRefusal: expect.stringMatching(/disk full/) });
+      expect(outcome).toEqual({ applied: true, wrote: false, lineRefusal: 'disk full' });
       expect((await stat(join(dir, 'mods', name))).isDirectory()).toBe(true);
       expect((await readModlist()).some((e) => e.name === name)).toBe(false);
     });
