@@ -9,8 +9,6 @@ const MODBENCH = join(__dirname, '..', '..');
 
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
-const DRIVING_LIB = 'drivingLib';
-
 const ROOT_SOLUTION = 'tsconfig.json';
 const ROOT_PROJECT = join('src', 'tsconfig.json');
 const TEST_PROJECT = 'tsconfig.test.json';
@@ -84,11 +82,19 @@ describe('one composite project per box', () => {
     expect(references).not.toContain(join('src', 'tables'));
   });
 
-  it('the driving lib references no view, and only a view references the lib', () => {
-    const lib = join('src', DRIVING_LIB);
-    const views = Object.keys(DRIVING_BOXES).filter((box) => box !== DRIVING_LIB).map((box) => join('src', box));
-    expect(referencePaths(boxProject(DRIVING_LIB)).filter((r) => views.includes(r))).toEqual([]);
-    expect(BOXES.filter((box) => !(box in DRIVING_BOXES) && referencePaths(boxProject(box)).includes(lib))).toEqual([]);
+  const BANDS = [DRIVEN_BOXES, CORE_BOXES, DRIVING_BOXES];
+  const LIBS = BANDS.flatMap((band) => Object.keys(band).filter((box) => box.endsWith('Lib')).map((lib) => ({ lib, band })));
+
+  it.each(LIBS)('$lib is used by two or more boxes of its band, and by no other box', ({ lib, band }) => {
+    const users = BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib)));
+    expect(users.length).toBeGreaterThanOrEqual(2);
+    expect(users.filter((box) => !(box in band))).toEqual([]);
+  });
+
+  it.each(LIBS)('$lib references only boxes every box using it references', ({ lib }) => {
+    const users = BOXES.filter((box) => referencePaths(boxProject(box)).includes(join('src', lib)));
+    const reachedByEveryUser = (reference: string) => users.every((box) => referencePaths(boxProject(box)).includes(reference));
+    expect(referencePaths(boxProject(lib)).filter((reference) => !reachedByEveryUser(reference))).toEqual([]);
   });
 
   it.each(Object.entries(REFERENCING_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
