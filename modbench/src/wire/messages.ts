@@ -146,7 +146,7 @@ export interface ReferenceContext {
   referenceTarget: string;
 }
 
-// Right-click is the extended editor's only trigger (xedit.md, divergence 6). `value`/`readOnly` come from the
+// The extended editor's only trigger (xedit.md, divergence 6). `value`/`readOnly` come from the
 // webview, not the host. Offered on immutable cells too: a read-only tab is the only way to read
 // a long value in full.
 export interface StringValueContext {

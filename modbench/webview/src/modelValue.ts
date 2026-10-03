@@ -3,7 +3,7 @@ import { formKeyLabel } from './FormKeyLink';
 import { isFieldType, type FieldMetadata, type FormKeyResolution } from './types';
 
 // One definition of a cell's edit value, so the readout and what Ctrl+C copies cannot drift from
-// the editor (editor-fields.md, Every field, story 4). Struct/array is JSON, not xEdit's prose summary, because an edit value
+// the editor (editor-fields.md, Every field, story 4). Struct/array is JSON, because an edit value
 // must round-trip.
 export function modelValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
   if (value == null) return '';

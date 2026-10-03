@@ -4,9 +4,9 @@ import { beginDrag, currentDrag, endDrag, type CellDrag } from './cellDrag';
 import { cellContext, combineVscodeContexts } from './recordUtils';
 import { EXTENSION_TO_WEBVIEW, parseExtensionToWebview, type ExtensionToWebview } from './messages';
 
-// `tabIndex` plus the effect below make the focused cell (editor.md, The focused cell) a really
-// focused DOM element, not just painted state: the arrow keys' `keydown` lands on it, and the panel reads an open editor
-// from where the focus goes.
+// `tabIndex` plus the effect below make the focused cell a really focused DOM element, not just
+// painted state: the arrow keys' `keydown` lands on it, and the panel reads an open editor from
+// where the focus goes.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
 
