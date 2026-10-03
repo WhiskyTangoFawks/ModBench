@@ -6,19 +6,17 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Rollback's own mechanics — reverse order, minted directories, third-party interference —
-/// proved at the seam every caller crosses: put, remove and move by identity, over one
-/// repository.</summary>
 public sealed class SourceTransactionTests : IDisposable
 {
     private const GameRelease Release = GameRelease.Fallout4;
     private const string PluginName = "Fixture.esp";
+    private const int ActsInTheSequence = 6;
     private static readonly PluginAddress Plugin = new(PluginName, "FixtureMod");
+
+    public static TheoryData<int> EveryActPosition => [.. Enumerable.Range(0, ActsInTheSequence)];
 
     private readonly ScratchDirectory _root = new("medit-swt-");
 
-    // Constructed fresh per call rather than held: several tests delete and recreate _root at the
-    // same path, and a held instance would answer from a listing cache the recreate invalidated.
     private SourceRepository Repo => SourceRepository.Over(_root, Release);
 
     public void Dispose() => _root.Dispose();
@@ -31,8 +29,6 @@ public sealed class SourceTransactionTests : IDisposable
     private void Seed(string formKey, string recordType, string editorId) =>
         Repo.Put(Plugin, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId)));
 
-    // Asked of the tree through the same door a caller uses (Locate), never computed: these records
-    // already exist by the time either helper runs.
     private static string FlatFile(string root, string formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(root, PluginName, recordType, formKey, editorId, Release);
 
@@ -46,9 +42,7 @@ public sealed class SourceTransactionTests : IDisposable
             ?? throw new InvalidOperationException($"Expected '{documentPath}' to have a parent directory.");
     }
 
-    // A directory at the destination's own ".tmp" name blocks the write-then-rename that lands
-    // there, before it ever reaches the real path.
-    private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
+    private static void BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
     public void Put_WithANewEditorId_IsRefusedBeforeTheTreeIsTouched()
@@ -69,9 +63,9 @@ public sealed class SourceTransactionTests : IDisposable
         Seed(Fk("000800"), "npc_", "ExistingNpc");
         Seed(Fk("000801"), "npc_", "DoomedNpc");
         Seed(Fk("000900"), "wrld", "Home");
-        // An empty directory inside the container from the start: it has to travel with the move
-        // and be there afterwards, and it is the one entry no git-based oracle would see either way.
-        Directory.CreateDirectory(Path.Combine(ContainerDirectory(Fk("000900"), "wrld", "Home"), "Empty"));
+        const string emptyDirectoryThatTravelsWithTheMoveAndNoGitBasedOracleWouldSee = "Empty";
+        Directory.CreateDirectory(Path.Combine(
+            ContainerDirectory(Fk("000900"), "wrld", "Home"), emptyDirectoryThatTravelsWithTheMoveAndNoGitBasedOracleWouldSee));
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceRepository.SourceTransaction();
@@ -88,10 +82,8 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_TakesBackEveryDirectoryTheBatchMinted_NotJustTheFile()
+    public void Rollback_TakesBackThePluginRootAndGroupFolderAndFileMintedInOnePut_NotJustTheFile()
     {
-        // Nothing under plugin-source/ yet: the plugin's own root, its group folder and the file are all
-        // minted in one put.
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceRepository.SourceTransaction();
@@ -132,10 +124,8 @@ public sealed class SourceTransactionTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(pluginRoot, "Npcs")));
     }
 
-    // The second move's destination is where the first vacated: undone out of order, the first
-    // move's restore would find the second still sitting there.
     [Fact]
-    public void Rollback_UndoesTwoDependentContainerMoves_SoNeitherLandsOnTheOther()
+    public void Rollback_UndoesTwoContainerMovesWhereTheSecondLandsWhereTheFirstVacated_InReverse_SoNeitherLandsOnTheOther()
     {
         Seed(Fk("000900"), "wrld", "Shared");
         Seed(Fk("000901"), "wrld", "Shared");
@@ -204,7 +194,7 @@ public sealed class SourceTransactionTests : IDisposable
     {
         Seed(Fk("000800"), "npc_", "Untouched");
         var file = FlatFile(Fk("000800"), "npc_", "Untouched");
-        Block(file);
+        BlockTheWriteThenRenameWithADirectoryAtTheDestinationsTmpName(file);
 
         var transaction = new SourceRepository.SourceTransaction();
         Assert.ThrowsAny<Exception>(() => transaction.Put(
@@ -224,45 +214,34 @@ public sealed class SourceTransactionTests : IDisposable
         transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "First", Body(Fk("000800"), "Ours")));
         transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000801"), "npc_", "Second"));
 
-        // A directory where the removed file stood: real, unwritable on every platform, and needing
-        // no permission bits a privileged test runner would sail through.
-        Directory.CreateDirectory(FlatFile(Fk("000801"), "npc_", "Second"));
+        var unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore = FlatFile(Fk("000801"), "npc_", "Second");
+        Directory.CreateDirectory(unwritableOnEveryPlatformWithNoPermissionBitsAPrivilegedRunnerWouldIgnore);
 
         var only = Assert.Single(transaction.Rollback());
         Assert.Equal(UnrestoredReason.RestoreFailed, only.Reason);
         Assert.NotNull(only.Error);
-
-        // The pass carried on past the failure: the earlier put, undone after it, went back.
         Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
     }
 
     [Fact]
-    public void FailingTheSequenceAtEachPositionInTurn_LeavesTheTreeUnchangedEveryTime()
+    public void TheSequenceHoldsExactlyTheActsTheFailAtAnActTheoryCovers()
     {
-        int positions;
-        {
-            SeedTree();
-            var probe = new SourceRepository.SourceTransaction();
-            positions = RunSequence(probe, failAt: int.MaxValue);
-            probe.Rollback();
-            Directory.Delete(_root, recursive: true);
-        }
+        SeedTree();
 
-        Assert.True(positions > 3, $"the sweep is only worth running over several acts; got {positions}");
+        Assert.Equal(ActsInTheSequence, RunSequence(new SourceRepository.SourceTransaction(), failAt: int.MaxValue));
+    }
 
-        for (var failAt = 0; failAt < positions; failAt++)
-        {
-            Directory.CreateDirectory(_root);
-            SeedTree();
-            var before = TreeSnapshot.Of(_root);
+    [Theory]
+    [MemberData(nameof(EveryActPosition))]
+    public void FailingTheSequenceAtAnAct_LeavesTheTreeUnchanged(int failAt)
+    {
+        SeedTree();
+        var before = TreeSnapshot.Of(_root);
 
-            var transaction = new SourceRepository.SourceTransaction();
-            Assert.ThrowsAny<Exception>(() => RunSequence(transaction, failAt));
-            Assert.Empty(transaction.Rollback());
-            Assert.Equal(before, TreeSnapshot.Of(_root));
-
-            Directory.Delete(_root, recursive: true);
-        }
+        var transaction = new SourceRepository.SourceTransaction();
+        Assert.ThrowsAny<Exception>(() => RunSequence(transaction, failAt));
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_root));
     }
 
     private void SeedTree()

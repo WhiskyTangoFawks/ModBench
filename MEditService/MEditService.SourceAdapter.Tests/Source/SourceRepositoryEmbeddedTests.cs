@@ -13,9 +13,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The repository's document verbs for the records no path names: a container's own
-/// directory, and a child inlined in another document. Turning an identity into a path is its work
-/// alone (ADR-0014 invariant 5).</summary>
 public sealed class SourceRepositoryEmbeddedTests : IDisposable
 {
     private const string PluginName = "Embedded.esp";
@@ -65,13 +62,12 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         _quest.DialogTopics.Add(_topic);
 
         PluginBaselines.Track(
-            _modFolder, SourcePreset.Edits, PristineFiles());
+            _modFolder, SourcePreset.Edits, TheFourDocumentsTheWholeModDoorWritesForThisGraph());
     }
 
     public void Dispose() => _modFolder.Dispose();
 
-    // The four documents the whole-mod door writes for this graph.
-    private TreeFile[] PristineFiles() =>
+    private TreeFile[] TheFourDocumentsTheWholeModDoorWritesForThisGraph() =>
     [
         new(InteriorCellPath, Serialize(_interiorCell)),
         new(WorldspacePath, Serialize(_worldspace)),
@@ -114,9 +110,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
     }
 
-    // The root FormKey tells a child's own text from its owner's document, which carries the child's
-    // key further down.
-    private static string? RootFormKeyOf(string body)
+    private static string? RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(string body)
     {
         using var document = JsonDocument.Parse(body);
         return document.RootElement.TryGetProperty("FormKey", out var formKey) ? formKey.GetString() : null;
@@ -128,7 +122,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_persistentRef, "refr"))?.Body;
 
         Assert.NotNull(body);
-        Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.Equal(_persistentRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
         Assert.Contains("\"PersistRef\"", body, StringComparison.Ordinal);
         Assert.DoesNotContain("WaterHeight", body, StringComparison.Ordinal);
     }
@@ -155,7 +149,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_exteriorRef, "refr"))?.Body;
 
         Assert.NotNull(body);
-        Assert.Equal(_exteriorRef.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.Equal(_exteriorRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
         Assert.DoesNotContain("WaterHeight", body, StringComparison.Ordinal);
     }
 
@@ -165,7 +159,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_topCellRef, "refr"))?.Body;
 
         Assert.NotNull(body);
-        Assert.Equal(_topCellRef.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.Equal(_topCellRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
     }
 
     [Fact]
@@ -174,7 +168,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_topic, "dial"))?.Body;
 
         Assert.NotNull(body);
-        Assert.Equal(_topic.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.Equal(_topic.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
         Assert.Contains("\"Response2\"", body, StringComparison.Ordinal);
     }
 
@@ -184,7 +178,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         var body = Repository.Get(Plugin, Identity(_response, "info"))?.Body;
 
         Assert.NotNull(body);
-        Assert.Equal(_response.FormKey.ToString(), RootFormKeyOf(body));
+        Assert.Equal(_response.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(body));
         Assert.DoesNotContain("\"Response2\"", body, StringComparison.Ordinal);
     }
 
@@ -193,20 +187,16 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             Plugin, record.FormKey.ToString(),
             SharedSchemaReflector.Instance.GetSchemas(Release));
 
-    // The child's type is written into its own text, since a placed reference's slot holds an
-    // abstract element type.
     [Fact]
-    public void IdentityOf_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId()
+    public void IdentityOf_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId_FromTheTypeWrittenIntoItsOwnTextForItsSlotHoldsAnAbstractElementType()
     {
         Assert.Equal(
             new RecordIdentity(_persistentRef.FormKey.ToString(), "refr", "PersistRef"),
             IdentityOf(_persistentRef));
     }
 
-    // The one its own text cannot answer: a topic's slot holds a concrete class, so the document
-    // carries no type of its own and only the slot says what it holds.
     [Fact]
-    public void IdentityOf_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds()
+    public void IdentityOf_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds_ForAConcreteSlotLeavesNoTypeInTheDocument()
     {
         Assert.Equal(
             new RecordIdentity(_response.FormKey.ToString(), "info", "Response"),
@@ -236,17 +226,16 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Get_AfterAHandEditMovedAChildToAnotherOwner_FindsItAtTheNewOwner()
+    public void Get_AfterAHandEditMovedAChildToAnotherOwner_FindsItAtTheNewOwner_NotFromTheMapBuiltBeforeTheMove()
     {
         var repository = Repository;
-        // Asked once first, so the answer below can only come from a map that noticed the move.
         Assert.NotNull(repository.Get(Plugin, Identity(_temporaryRef, "refr")));
 
         MoveTemporaryRef(_interiorCell, _exteriorCell);
 
         var found = repository.Get(Plugin, Identity(_temporaryRef, "refr"));
         Assert.NotNull(found);
-        Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyOf(found.Body));
+        Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyWhichTellsAChildsOwnTextFromItsOwnersDocument(found.Body));
         Assert.Equal(
             Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
             repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
@@ -266,10 +255,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument()
+    public void UnitHolding_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument_ThoughGlobalsMapsToFourTypesSoOnlyTheDocumentNamesItsOwn()
     {
-        // "Globals" maps to GlobalBool/Float/Int/Short, so no path can name the type; the document
-        // names its own, and the map still has to carry the children it holds.
         var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
             ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
         var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
@@ -333,10 +320,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void UnitHolding_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner()
+    public void UnitHolding_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner_ForAFormKeyAnywhereElseIsAReferenceNotAChild()
     {
-        // The codec writes a link as a bare string under its own field name and a child as an object
-        // inside the slot its container embeds; a FormKey anywhere else is a reference, not a child.
         var quest = File.ReadAllText(FullPath(QuestPath));
         File.WriteAllText(
             FullPath(QuestPath),
@@ -349,10 +334,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Remove_OfAKeyASlotNamesButTheRecordDoesNotCarry_SaysTheOwnersTextLacksIt()
+    public void Remove_OfAKeyASlotNamesButTheRecordDoesNotCarry_SaysTheOwnersTextLacksIt_ForOnlyTheCodecsObjectModelCanSayTheRecordHasNoSuchMember()
     {
-        // A slot the quest itself has no member for: the map reads the name and answers, and only the
-        // codec's own object model can say the record does not carry it.
         var quest = File.ReadAllText(FullPath(QuestPath));
         File.WriteAllText(
             FullPath(QuestPath),
@@ -375,10 +358,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.NotNull(repository.Get(Plugin, Identity(_worldspace, "wrld")));
     }
 
-    // The embed-slot names this answers off of come from ContainerSlots.For(Release) — a placed
-    // reference, a dialog topic and a response, three different owners' slots, all resolved.
     [Fact]
-    public void NativeFormKeysHeld_IncludesEveryEmbeddedChildsFormKey()
+    public void NativeFormKeysHeld_IncludesEveryEmbeddedChildsFormKey_InThreeDifferentOwnersSlots()
     {
         var held = Repository.NativeFormKeysHeld(Plugin);
 

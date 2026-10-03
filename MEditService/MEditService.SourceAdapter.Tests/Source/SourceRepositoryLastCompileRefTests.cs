@@ -2,8 +2,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The encoding only needs to be stable and injective, not reversible: nothing enumerates
-/// these refs.</summary>
 public sealed class SourceRepositoryLastCompileRefTests
 {
     [Fact]
@@ -17,11 +15,8 @@ public sealed class SourceRepositoryLastCompileRefTests
         AssertRefIsCheckRefFormatValid("[ARRETH] FGEP-DE.esp");
 
     [Fact]
-    public void LastCompileRef_IsInjective_ForNamesDifferingOnlyInAForbiddenCharacter()
+    public void LastCompileRef_IsInjective_ForASpaceNameAndTheUnderscoreNameAnUnderscoreReplacementWouldMergeItWith()
     {
-        // The rival this pins against: a naive scheme that replaces every forbidden character with
-        // "_" would map "A B.esp" and "A_B.esp" to the identical ref — silently merging two distinct
-        // plugins' parked baselines.
         Assert.NotEqual(SourceRepository.LastCompileRef("A B.esp"), SourceRepository.LastCompileRef("A_B.esp"));
     }
 
@@ -35,19 +30,12 @@ public sealed class SourceRepositoryLastCompileRefTests
 
     private static void AssertRefIsCheckRefFormatValid(string plugin)
     {
-        var gitDir = Path.Combine(Directory.CreateTempSubdirectory("medit-checkrefformat-").FullName, ".git");
-        var workTree = Path.GetDirectoryName(gitDir) ?? throw new InvalidOperationException($"Expected '{gitDir}' to have a parent directory.");
-        try
-        {
-            GitProbe.Run(gitDir, workTree, "init", "-q", "-b", "main");
+        using var workTree = new ScratchDirectory("medit-checkrefformat-");
+        var gitDir = Path.Combine(workTree, ".git");
+        GitProbe.Run(gitDir, workTree, "init", "-q", "-b", "main");
 
-            var refName = SourceRepository.LastCompileRef(plugin);
+        var refName = SourceRepository.LastCompileRef(plugin);
 
-            Assert.True(GitProbe.TryRun(gitDir, workTree, out _, "check-ref-format", "--normalize", refName));
-        }
-        finally
-        {
-            Directory.Delete(workTree, recursive: true);
-        }
+        Assert.True(GitProbe.TryRun(gitDir, workTree, out _, "check-ref-format", "--normalize", refName));
     }
 }
