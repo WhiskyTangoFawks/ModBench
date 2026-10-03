@@ -402,8 +402,8 @@ internal static class DocumentEdit
     // A colour holding no alpha lands as Mutagen's binary read spells it, so a value pasted back as its
     // cell copies it writes the document a fresh read gives (editor-fields.md, Every field, story 4).
     private static JsonNode? AsRead(JsonNode? value, FieldMetadata meta) =>
-        DocumentNodes.Rewrite(value, meta, (node, at) =>
-            node is JsonValue leaf && at.Type == ColorReading.ApiType && !at.HoldsAlpha && leaf.TryGetValue<string>(out var text)
+        DocumentNodes.Rewrite(value, meta, (node, shape) =>
+            node is JsonValue leaf && shape.Type == ColorReading.ApiType && !shape.HoldsAlpha && leaf.TryGetValue<string>(out var text)
                 ? JsonValue.Create(ColorReading.AsReadWithoutAlpha(text))
                 : node);
 

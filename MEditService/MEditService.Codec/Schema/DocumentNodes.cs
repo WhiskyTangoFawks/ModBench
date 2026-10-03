@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace MEditService.Codec.Schema;
 
-/// <summary>Reads of the stored document by the schema's own paths. A node is handed out cloned,
-/// so it outlives the <see cref="JsonDocument"/> it was parsed from.</summary>
+/// <summary>Reads and rewrites of the stored document by the schema's own paths. An element read is
+/// handed out cloned, so it outlives the <see cref="JsonDocument"/> it was parsed from.</summary>
 public static class DocumentNodes
 {
     /// <summary>The member at a dotted path from the root, or null where the document omits it — which
@@ -70,15 +70,15 @@ public static class DocumentNodes
             case JsonObject obj when meta.Fields is { } fields:
                 foreach (var field in fields)
                 {
-                    if (obj[field.Name] is { } child && Rewrite(child, VariantFor(field, obj), rewrite) is var read && read != child)
-                        obj[field.Name] = read;
+                    if (obj[field.Name] is { } child && Rewrite(child, VariantFor(field, obj), rewrite) is var rewritten && rewritten != child)
+                        obj[field.Name] = rewritten;
                 }
                 break;
             case JsonArray array when meta.ElementType is { } elementMeta:
                 for (var i = 0; i < array.Count; i++)
                 {
-                    if (array[i] is { } element && Rewrite(element, elementMeta, rewrite) is var read && read != element)
-                        array[i] = read;
+                    if (array[i] is { } element && Rewrite(element, elementMeta, rewrite) is var rewritten && rewritten != element)
+                        array[i] = rewritten;
                 }
                 break;
         }
