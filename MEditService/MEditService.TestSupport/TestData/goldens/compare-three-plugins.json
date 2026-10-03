@@ -455,33 +455,6 @@
     "diffs": [
       {
         "cellStates": {
-          "Mid.esp": "ConflictLoses",
-          "Top.esp": "ConflictWins"
-        },
-        "checkErrors": null,
-        "children": null,
-        "conflictAll": "Conflict",
-        "fieldName": "Name",
-        "indexes": null,
-        "resolutions": null,
-        "values": {
-          "Base.esm": {
-            "TargetLanguage": "English",
-            "Value": "Base name"
-          },
-          "Mid.esp": {
-            "TargetLanguage": "English",
-            "Value": "Mid name"
-          },
-          "Top.esp": {
-            "TargetLanguage": "English",
-            "Value": "Top name"
-          }
-        },
-        "winnerColumn": "Top.esp"
-      },
-      {
-        "cellStates": {
           "Mid.esp": "IdenticalToMaster",
           "Top.esp": "ConflictWins"
         },
@@ -515,6 +488,33 @@
           "Base.esm": "000900:Base.esm",
           "Mid.esp": "000900:Base.esm",
           "Top.esp": "000901:Base.esm"
+        },
+        "winnerColumn": "Top.esp"
+      },
+      {
+        "cellStates": {
+          "Mid.esp": "ConflictLoses",
+          "Top.esp": "ConflictWins"
+        },
+        "checkErrors": null,
+        "children": null,
+        "conflictAll": "Conflict",
+        "fieldName": "Name",
+        "indexes": null,
+        "resolutions": null,
+        "values": {
+          "Base.esm": {
+            "TargetLanguage": "English",
+            "Value": "Base name"
+          },
+          "Mid.esp": {
+            "TargetLanguage": "English",
+            "Value": "Mid name"
+          },
+          "Top.esp": {
+            "TargetLanguage": "English",
+            "Value": "Top name"
+          }
         },
         "winnerColumn": "Top.esp"
       },
