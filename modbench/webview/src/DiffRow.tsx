@@ -8,7 +8,7 @@ import { copiedText, modelValue, pastedValue, readsAsFlags } from './modelValue'
 import { WrittenValue } from './WrittenValue';
 import type { WriteAt } from './unconfirmedWrites';
 import { ExpandArrow } from './ExpandArrow';
-import { versionControlInfo1 } from './presentation';
+import { collapsedReading, versionControlInfo1 } from './presentation';
 import {
   baseCell, labelCell, getCellStyle, focusedRowStyle, conflictStateName, rowBackground,
 } from './gridStyles';
@@ -155,9 +155,9 @@ interface DiffRowProps {
   onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   writeAt: WriteAt;
   onAddElement?: (context: ArrayParentContext, value: unknown) => void;
-  // What each column's cell reads while this row is collapsed, when the presentation table has an
-  // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
-  collapsedSummary?: Record<string, string>;
+  // Per column, whether this row is the last element its array holds there. Absent for a row that
+  // is no array's element.
+  isLastElement?: (column: ColumnKey) => boolean;
   // Whether this column holds the object this row is a member of. A member of nothing reads as
   // nothing; a member its owner omits reads as its default (ADR-0005). Absent means every owner is
   // present.
@@ -172,7 +172,7 @@ export function DiffRow({
   collapsedColumns,
   recordLabel, context, isExpanded, onToggle,
   rowKey, parentRowKey, focusedCell, onFocusCell, editableColumns, onEditCell, writeAt,
-  onAddElement, collapsedSummary, ownerPresent, cellMetas,
+  onAddElement, isLastElement, ownerPresent, cellMetas,
 }: Readonly<DiffRowProps>) {
   // The children the diff node itself carries — the row and the panel can never disagree about
   // whether this node has any.
@@ -308,11 +308,7 @@ export function DiffRow({
             : undefined,
         ];
         if (hasChildren) {
-          const len = meta.type === 'array' && Array.isArray(shown) ? shown.length : '…';
-          // A summary is content, not a placeholder — it reads at full weight, where "[3]"/"{…}"
-          // stay dimmed to say only that something unexpanded is there.
-          const summary = collapsedSummary?.[key];
-          const collapsedLabel = summary ?? (meta.type === 'array' ? `[${len}]` : '{…}');
+          const reading = isExpanded ? undefined : collapsedReading(diff, cellMeta, key, isLastElement?.(key));
           return (
             <DiskCell
               key={key}
@@ -327,9 +323,9 @@ export function DiffRow({
               contexts={contexts}
             >
               <WrittenValue write={hops && writeAt(key, hops)} disk={shown}>
-                {() => !isExpanded && hasElement && (
-                  <span style={{ opacity: summary ? undefined : 0.5, display: 'inline-flex', alignItems: 'center' }}>
-                    {collapsedLabel}<CheckErrorIcon checkError={checkError} />
+                {() => reading && hasElement && (
+                  <span style={{ opacity: reading.isPlaceholder ? 0.5 : undefined, display: 'inline-flex', alignItems: 'center' }}>
+                    {reading.text}<CheckErrorIcon checkError={checkError} />
                   </span>
                 )}
               </WrittenValue>

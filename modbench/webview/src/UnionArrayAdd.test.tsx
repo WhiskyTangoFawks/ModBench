@@ -74,10 +74,8 @@ describe('RecordPanel — Add on an abstract-union array, whose default element 
     const aliasesRow = screen.getByText('aliases').closest('tr');
     if (!aliasesRow) throw new Error('the row of the aliases array');
     fireEvent.click(within(aliasesRow).getByText('▼'));
-    const cellText = screen.getAllByText('[1]')[0];
-    if (!cellText) throw new Error('the "[1]" index label RecordPanel renders for the array element');
-    const cell = cellText.closest('td');
-    if (!cell) throw new Error('the table cell containing the "[1]" index label');
+    const cell = aliasesRow.querySelectorAll('td')[1];
+    if (!cell) throw new Error("the aliases row's MyMod.esp cell");
 
     const context: unknown = JSON.parse(cell.getAttribute('data-vscode-context') ?? '{}');
     expect(context).toMatchObject({ webviewSection: 'cell arrayParent editableCell', path: [{ kind: 'member', name: 'aliases' }] });

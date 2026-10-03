@@ -397,6 +397,37 @@ describe('a collapsed condition reads as xEdit prose', () => {
     await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
   });
+
+  it('a list of one condition reads as that condition, the last of its list', async () => {
+    currentCompare = oneColumn([documentSpelledCondition({ Flags: ['OR'] }, { Function: 'IsSneaking' })]);
+    renderPanel();
+    await openConditions();
+    const conditions = required(rowLabelTdNotAValueCellOfTheSameText('Conditions')?.closest('tr'), 'the Conditions row');
+    fireEvent.click(required(conditions.querySelector('button'), 'the Conditions row toggle'));
+
+    expect(conditions.querySelectorAll('td')[1]?.textContent).toBe('Subject.IsSneaking = 1.000000');
+  });
+
+  it('a condition that is no list\'s element joins nothing', async () => {
+    const lone = documentSpelledCondition({ Flags: ['OR'] }, { Function: 'IsSneaking' });
+    currentCompare = compareResultFixture({
+      overrides: [compareOverride({
+        formKey: '000001:MyMod.esp', plugin: PLUGIN, isWinner: true, editorId: 'TestCobj',
+        fields: [{ metadata: { ...conditionsElementType, name: 'Condition' }, value: lone }],
+      })],
+      diffs: [diffNode({
+        fieldName: 'Condition',
+        values: { [PLUGIN]: lone },
+        children: Object.entries(lone).map(([name, value]) => diffNode({ fieldName: name, values: { [PLUGIN]: value } })),
+      })],
+    });
+    renderPanel();
+    await waitFor(() => screen.getByText('Condition'));
+    const condition = required(rowLabelTdNotAValueCellOfTheSameText('Condition')?.closest('tr'), 'the Condition row');
+    fireEvent.click(required(condition.querySelector('button'), 'the Condition row toggle'));
+
+    expect(condition.querySelectorAll('td')[1]?.textContent).toBe('Subject.IsSneaking = 1.000000');
+  });
 });
 
 describe('the table keys on the leaf type name: the discriminator\'s value where the leaf is a union, the schema\'s declared type name where it is not', () => {
