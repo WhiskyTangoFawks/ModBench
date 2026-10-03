@@ -22,7 +22,7 @@ public sealed class PluginFlagPredicatesTests
     [InlineData(false, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esl", true)]
     [InlineData(false, BlueprintBitOfStarfieldsTes4HeaderFlags, "Ships.esp", false)]
     [InlineData(true, 0, "Ships.esm", false)]
-    public void IsBlueprint_IsTheBlueprintBitOnAMasterFlaggedOrEsmOrEslNamedPlugin(bool masterFlagged, int headerFlags, string fileName, bool expected)
+    public void IsBlueprint_FollowsMo2sPluginListRule_BlueprintBitOnAMasterFlaggedOrEsmOrEslNamedPlugin(bool masterFlagged, int headerFlags, string fileName, bool expected)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(fileName), Fallout4Release.Fallout4);
         if (masterFlagged) mod.ModHeader.Flags |= Fallout4ModHeader.HeaderFlag.Master;

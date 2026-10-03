@@ -16,14 +16,14 @@ namespace MEditService.Commands.Tests.RealData;
 
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
-    public static TheoryData<string, uint, uint> RealFixturesBecauseMutagenWrittenOnesNeverComeOutStale => new()
+    public static TheoryData<string, uint, uint> RealFixturesBecauseMutagenWritesAFreshHeaderByDefault => new()
     {
         { "LitR - Settings Holotapes Sorting.esp", 2, 16 },
         { "RecruitSierra.esl", 17098, 148 },
         { "Hitech Trashcans to BOS.esp", 43, 150 },
     };
 
-    public static TheoryData<string> TrackAndCompileRealFixturesBecauseMutagenWrittenOnesNeverComeOutStale => new()
+    public static TheoryData<string> TrackAndCompileRealFixtures => new()
     {
         "LitR - Settings Holotapes Sorting.esp",
         "RecruitSierra.esl",
@@ -33,8 +33,8 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
     [Theory]
-    [MemberData(nameof(RealFixturesBecauseMutagenWrittenOnesNeverComeOutStale))]
-    public async Task Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecords(
+    [MemberData(nameof(RealFixturesBecauseMutagenWritesAFreshHeaderByDefault))]
+    public async Task Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecordsVerbatim_SinceNothingInGameReadsThemAndAuthoringToolsLeaveThemStale(
         string fileName, uint storedNextObjectId, uint storedNumRecords)
     {
         using var scratch = new TrackedScratch(fileName);
@@ -46,7 +46,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileRealFixturesBecauseMutagenWrittenOnesNeverComeOutStale))]
+    [MemberData(nameof(TrackAndCompileRealFixtures))]
     public async Task Track_OfARealPluginWithAStaleHeader_Succeeds(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
@@ -57,7 +57,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     [Theory]
-    [MemberData(nameof(TrackAndCompileRealFixturesBecauseMutagenWrittenOnesNeverComeOutStale))]
+    [MemberData(nameof(TrackAndCompileRealFixtures))]
     public async Task Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);

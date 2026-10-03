@@ -13,10 +13,10 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
     private static JsonNode RequireNode(JsonNode? node, string what) =>
         node ?? throw new InvalidOperationException($"Expected {what} to be present.");
 
-    private const string CellRecordPathByPatternNotByBlockNumber =
+    private const string CellRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix =
         @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$";
 
-    private const string WorldspaceRecordPathByPatternNotByBlockNumber =
+    private const string WorldspaceRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix =
         @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$";
 
     private static string FormKeyOf(JsonNode? recordNode) =>
@@ -32,8 +32,8 @@ public sealed class TrackRoundTripGateTests(TrackedCutDownFixture fixture)
             .ToList();
         Assert.NotEmpty(allFiles);
 
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, CellRecordPathByPatternNotByBlockNumber));
-        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, WorldspaceRecordPathByPatternNotByBlockNumber));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, CellRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix));
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(f, WorldspaceRecordPathByPatternAllowingTheLibrarysBlockIndexPrefix));
     }
 
     [Fact]
