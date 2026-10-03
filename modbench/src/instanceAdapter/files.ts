@@ -2,7 +2,8 @@
 // `instanceadapter` box). A command splices a file's text through its own codec and puts the
 // result through here.
 
-import { constants, type Dirent } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { constants, createReadStream, type Dirent } from 'node:fs';
 import {
   access, chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
 } from 'node:fs/promises';
@@ -12,6 +13,7 @@ import {
 } from './layout';
 import { errnoCode } from '../ports/errno';
 import { errorMessage } from '../ports/errorMessage';
+import type { FileStamp } from './instanceAdapter';
 
 /** ADR-0007, answered without the backend. */
 export function isTracked(modFolder: string): Promise<boolean> {
@@ -83,6 +85,20 @@ export async function factsOf(path: string): Promise<PathFacts> {
   const kind: PathFacts['kind'] = info.isDirectory() ? 'directory' : info.isFile() ? 'file' : 'other';
   const realPath = await realpath(path);
   return { size: info.size, mtimeMs: info.mtimeMs, kind, realPath };
+}
+
+/** `path`'s stamp, following symlinks. */
+export async function stampOf(path: string): Promise<FileStamp> {
+  const info = await stat(path, { bigint: true });
+  return { size: info.size, modifiedNs: info.mtimeNs, changedNs: info.ctimeNs };
+}
+
+/** The SHA-256 of `path`'s bytes, streamed: a texture or an archive runs to gigabytes. */
+export async function digestOf(path: string): Promise<string> {
+  const hash = createHash('sha256');
+  const bytes: AsyncIterable<Buffer> = createReadStream(path);
+  for await (const chunk of bytes) hash.update(chunk);
+  return hash.digest('hex');
 }
 
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
