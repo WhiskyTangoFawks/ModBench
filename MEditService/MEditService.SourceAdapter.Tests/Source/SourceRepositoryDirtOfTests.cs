@@ -131,12 +131,12 @@ public sealed class SourceRepositoryDirtOfTests : IDisposable
     }
 
     [Fact]
-    public void DirtOf_AnUntrackedDocumentNoRefHolds_NamesItWithNoCommittedText_AsAPutLeavesItForPutNeverRunsGitAdd()
+    public void DirtOf_AnUntrackedDocumentNoRefHolds_NamesItWithNoCommittedText()
     {
         var repository = Tracked();
-        var createdPath = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000900_{PluginName}.json");
+        var untrackedFileStandingInForAPutWhichNeverRunsGitAdd = Path.Combine("plugin-source", PluginName, "Npcs", $"Created - 000900_{PluginName}.json");
         File.WriteAllText(
-            Path.Combine(_modFolder, createdPath), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Created\"}}");
+            Path.Combine(_modFolder, untrackedFileStandingInForAPutWhichNeverRunsGitAdd), $"{{\"FormKey\":\"000900:{PluginName}\",\"EditorID\":\"Created\"}}");
 
         var dirt = repository.DirtOf(Plugin);
 

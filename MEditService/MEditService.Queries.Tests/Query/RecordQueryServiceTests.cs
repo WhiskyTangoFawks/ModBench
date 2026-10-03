@@ -550,7 +550,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_EscalateToConflict()
+    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingAnAdapter_EscalateToConflict()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -576,7 +576,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_UncontestedFieldOverrideWithVmadConflict_EscalatesOverrideAndConflictToConflict_NotOverride()
+    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_AgainstAMasterCarryingNoAdapter_EscalateToConflict_NotOverride()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
