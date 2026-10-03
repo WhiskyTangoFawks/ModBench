@@ -21,15 +21,25 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
 
     private static readonly HashSet<string> LoquiSkipProps = new(StringComparer.OrdinalIgnoreCase) { "Registration" };
 
-    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed =
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] MandatoryAbstractUnionsANpcLevelAndAQuestAlias =
     [
         ("INpcGetter", "Level"),
         ("IQuestGetter", "Aliases"),
+    ];
+
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect =
+    [
+        ("IPerkGetter", "Effects"),
+    ];
+
+    private static readonly (string SchemaRegisteredGetterInterfaceName, string Property)[] CoveredAbstractUnionsNamedSoAByproductTypeQuietlyChangingShapeIsNoticed =
+    [
+        .. MandatoryAbstractUnionsANpcLevelAndAQuestAlias,
+        .. TwoLevelChainAbstractUnionsAPerkEffectOverAPerkEntryPointEffect,
         ("IBookGetter", "Teaches"),
         ("IColorRecordGetter", "Data"),
         ("IHolotapeGetter", "Data"),
         ("ISoundDescriptorGetter", "Data"),
-        ("IPerkGetter", "Effects"),
         ("IMagicEffectGetter", "Archetype"),
         ("IAudioEffectChainGetter", "Effects"),
     ];
@@ -252,7 +262,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         type.IsInterface && !IsFormLink(type)
         && type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    private static readonly HashSet<Type> VectorStructTypesMirroringReflectedTypesEveryNoggogVectorStructReachableInFo4SoP2DoubleP3DoubleP3IntAndTheWrapperTypesHaveZeroUsages =
+    private static readonly HashSet<Type> VectorStructTypesMirroringSchemaAnnotationsVectorStructTypesInEveryGameOmittingP2DoubleP3DoubleP3IntAndTheWrapperTypesWhichHaveZeroUsagesInFo4 =
     [
         typeof(P3Int16), typeof(P3Float),
         typeof(P2Int), typeof(P2UInt8), typeof(P2Int16),
@@ -260,5 +270,5 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     ];
 
     private static bool IsVectorStructType(Type type) =>
-        VectorStructTypesMirroringReflectedTypesEveryNoggogVectorStructReachableInFo4SoP2DoubleP3DoubleP3IntAndTheWrapperTypesHaveZeroUsages.Contains(type);
+        VectorStructTypesMirroringSchemaAnnotationsVectorStructTypesInEveryGameOmittingP2DoubleP3DoubleP3IntAndTheWrapperTypesWhichHaveZeroUsagesInFo4.Contains(type);
 }

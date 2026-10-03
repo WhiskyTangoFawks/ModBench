@@ -69,7 +69,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile_BecauseTheCodecAdoptsSpriggitsEmbedCustomizationVerbatimSerializingTheFiveEmbeddedSlotsInline()
+    public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile_TheCodecAdoptingSpriggitsEmbedCustomizationVerbatim()
     {
         using var dir = new ScratchDirectory("medit-embed-cell-");
         var filePath = Path.Combine(dir.Path, "cell.json");

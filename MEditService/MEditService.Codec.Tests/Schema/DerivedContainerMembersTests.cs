@@ -60,7 +60,7 @@ public sealed class DerivedContainerMembersTests
     }
 
     [Fact]
-    public void ChildFieldsByType_IsKeyedByGameAsWellAsName()
+    public void ChildFieldsByType_IsKeyedByGameAsWellAsName_ShowingOnlyThatTheKeyCarriesACategoryAndALookupHonorsItWithOneGameReferencedNotThatTwoGamesSameNamedClassesStayApart()
     {
         var quest = RecordTypes().First(t => t.Name == "Quest");
 
@@ -71,7 +71,7 @@ public sealed class DerivedContainerMembersTests
     }
 
     [Fact]
-    public void EmbeddedSlotsAndElementTypeBySlot_AreKeyedByGameAsWellAsName_ByTheSameThreePartKeyAsChildFieldsByType()
+    public void EmbeddedSlotsAndElementTypeBySlot_AreKeyedByGameAsWellAsName_BothCarryingTheSameThreePartKey()
     {
         var quest = RecordTypes().First(t => t.Name == "Quest");
 

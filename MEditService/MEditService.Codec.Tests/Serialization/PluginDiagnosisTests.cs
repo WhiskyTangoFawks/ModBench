@@ -98,7 +98,7 @@ public sealed class PluginDiagnosisTests
     }
 
     [Fact]
-    public void Describe_AClassedDiagnosisWithATail_CarriesBoth_NeitherShadowingTheOtherInTheRefusalTextWhereAnUnknownClassShowsOnlyTheTail()
+    public void Describe_AClassedDiagnosisWithATail_CarriesBoth_NeitherShadowingTheOtherInTheRefusalText()
     {
         var diagnosis = new PluginDiagnosis(
             Anchor: "REGN 001D2AF4 (DowntownRegion)", DefectClass: "fixed-size-subrecord-short",

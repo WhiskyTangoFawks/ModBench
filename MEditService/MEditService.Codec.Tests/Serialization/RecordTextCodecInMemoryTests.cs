@@ -88,15 +88,14 @@ public class RecordTextCodecInMemoryTests
     }
 
     [Fact]
-    public void SerializeToBytes_ForAPopulatedContainer_TouchesNoFilesystem()
+    public void SerializeToBytes_ForAPopulatedContainer_TouchesNoFilesystem_ThroughTheWorkingDirectoryWhereChildPathsLandBecauseTheyAreRelativeToAnEmptyStreamPackageFolder()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
             GameRelease.Fallout4);
         var quest = ((IFallout4ModGetter)overlay).Quests.First(q => q.DialogTopics.Count > 0);
 
-        var workingDirectoryWhereAnythingTheSerializerCreatesLandsBecauseChildPathsAreRelativeToAnEmptyStreamPackageFolder = Directory.GetCurrentDirectory();
-        var workingDirectory = workingDirectoryWhereAnythingTheSerializerCreatesLandsBecauseChildPathsAreRelativeToAnEmptyStreamPackageFolder;
+        var workingDirectory = Directory.GetCurrentDirectory();
         var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);
 
         var bytes = Codec().SerializeToBytes(quest, GameRelease.Fallout4);

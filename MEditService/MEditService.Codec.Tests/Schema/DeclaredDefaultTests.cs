@@ -64,7 +64,7 @@ public sealed class DeclaredDefaultTests
     [InlineData("ligh", "Color", "#00000000")]
     [InlineData("mato", "ProjectionVector", "0, 0, 0")]
     [InlineData("race", "Unknown", "0x0000000000000000")]
-    public void AColorVectorOrHexMember_NamesTheCodecsSpellingOfItsZero_BecauseZeroIsNotHashZeroesAndAnEnumLikewiseNamesItsZeroMember(string table, string column, string zero)
+    public void AColorVectorOrHexMember_NamesTheCodecsSpellingOfItsZero_BecauseItHasNoWireZeroOfItsOwnAndPlainZeroIsNotItsSpelling(string table, string column, string zero)
     {
         Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
     }

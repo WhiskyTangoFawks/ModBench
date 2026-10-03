@@ -57,7 +57,7 @@ public sealed class DiscriminatorPolicyTests
     [InlineData("glob")]
     [InlineData("globalfloat")]
     [InlineData(null)]
-    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat_UnderBothSpellingsRecordTypeCarriesTheGrupSignatureIngestStoresAndTheLowercasedClrNameTracksSourcePathFallsBackTo(string? recordType)
+    public void DeserializeFromBytes_ForAGlobalFloatDocument_ReturnsGlobalFloat_UnderTheGrupSignatureIngestStoresTheLowercasedClrNameTracksSourcePathFallsBackToAndNoRecordType(string? recordType)
     {
         var codec = Codec();
         var bytes = codec.SerializeToBytes(MakeGlobalFloat(), GameRelease.Fallout4);

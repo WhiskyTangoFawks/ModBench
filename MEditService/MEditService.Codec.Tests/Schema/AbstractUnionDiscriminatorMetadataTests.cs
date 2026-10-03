@@ -6,7 +6,7 @@ namespace MEditService.Codec.Tests.Schema;
 
 public class AbstractUnionDiscriminatorMetadataTests
 {
-    private const int WalkDepthBeyondBuildSubSchemaDepth3PlusOneHopPerArrayLevel = 12;
+    private const int WalkDepthBeyondTheReflectedSchemasBoundedNestingOfDepth3PlusOneHopPerArrayLevel = 12;
 
     private static FieldMetadata Discriminator(string table, params string[] path)
     {
@@ -75,7 +75,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         string table, string path, FieldMetadata meta, int depth)
     {
         yield return (table, path, meta);
-        if (depth > WalkDepthBeyondBuildSubSchemaDepth3PlusOneHopPerArrayLevel) yield break;
+        if (depth > WalkDepthBeyondTheReflectedSchemasBoundedNestingOfDepth3PlusOneHopPerArrayLevel) yield break;
         if (meta.ElementType != null)
             foreach (var f in Walk(table, path + "[]", meta.ElementType, depth + 1)) yield return f;
         foreach (var sub in meta.Fields ?? [])

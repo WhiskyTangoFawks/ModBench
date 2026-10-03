@@ -268,7 +268,7 @@ public class FormReferenceCollectorTests
     }
 
     [Fact]
-    public void Collect_TheHeader_YieldsNoLinks_ItsMastersNamePluginsNotRecords_SoTheReferencesTableHasNeverHeldARowSourcedAtAHeader()
+    public void Collect_TheHeader_YieldsNoLinks_ItsMastersNamePluginsNotRecords()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Masters.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });

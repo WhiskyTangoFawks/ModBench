@@ -19,7 +19,7 @@ public sealed class SchemaReflectorAvailabilityTests
     }
 
     [Fact]
-    public void IsSupported_ReturnsFalseForReleaseWhoseAssemblyIsNotReferenced_SoGameDiscoverySkipsItLoggingAndNeverThrowing()
+    public void IsSupported_ReturnsFalseForReleaseWhoseAssemblyIsNotReferenced_SkyrimSEBeingUnreferencedByThisBuild()
     {
         var reflector = new SchemaReflector();
 

@@ -31,7 +31,7 @@ public sealed class OneLeafBuilderTests
     ];
 
     [Fact]
-    public void AFormLinkArray_IsReachedBothAsAColumnAndNestedInsideAStruct_SoTheOneKindConflictClassifierSortsAndTreatsAsSparseIsBuiltAtEveryDepth()
+    public void AFormLinkArray_IsReachedBothAsAColumnAndNestedInsideAStruct_ChosenBecauseConflictClassifierSortsAndTreatsThisKindAsSparse()
     {
         var arrays = FormLinkArrays();
 

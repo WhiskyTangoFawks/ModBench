@@ -22,7 +22,7 @@ public class SchemaReflectorAtomicValueTests
     }
 
     [Fact]
-    public void Color_NestedInsideAStruct_IsAColorLeaf_ReachedFromBuildSubSchemaDispatchNotOnlyTheTopLevelColumnDispatch()
+    public void Color_NestedInsideAStruct_IsAColorLeaf_ReachedBelowAColumnNotOnlyAtTheTopLevel()
     {
         var lighting = Column("cell", "Lighting");
         var subFields = lighting.Field.SubFields
