@@ -3,14 +3,9 @@ using MEditService.Index.Tests.TestSupport;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Existence/count assertions on purpose: the curated slice is regenerable, so pinning
-/// exact FormKeys would make it brittle. The script read is the exception, since "returns without
-/// throwing" would be vacuous.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
 {
-    // Deliberately concrete rather than a bare "the field is there": this NPC is known to carry two
-    // scripts, so a weakened assertion would pass even if the read dropped every script but one.
     [Fact]
     public void Index_RealScripts_ReadTheAdapterOffTheDocument()
     {
@@ -26,8 +21,6 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture)
         Assert.Contains(scripts.EnumerateArray(), s => s.GetProperty("Name").GetString() == "RadroachLegendaryScript");
     }
 
-    // Real records cross-reference other forms; breadth is asserted via the distinct record types
-    // that produced references, so a reader that only walked one type would fail.
     [Fact]
     public void Index_RealRecords_PopulateFormReferencesAcrossMultipleTypes()
     {

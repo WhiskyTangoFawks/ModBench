@@ -10,7 +10,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0009: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
     private static Indexer MakeIndexer(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
@@ -33,8 +32,6 @@ public sealed class WarmReconcileTests
     private static int Registered(List<LogEntry> entries, string plugin) =>
         entries.Count(e => e.Message.StartsWith($"Registering {plugin} ", StringComparison.Ordinal));
 
-    // A warm launch pays for no indexing at all, and still arrives at a fully
-    // loaded load order — Ready, winners swept, records answering.
     [Fact]
     public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
     {
@@ -60,8 +57,6 @@ public sealed class WarmReconcileTests
         Assert.NotEmpty(warm.RequireReads().GetDocuments(new PluginAddress("A.esp", PluginOrigin.DataDirectory)));
     }
 
-    // The "during" half of progress, observed from inside the load loop. A load publishing its count
-    // only at the end would satisfy the final-state assertion and still leave a warm launch at zero.
     [Fact]
     public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
     {
@@ -78,12 +73,9 @@ public sealed class WarmReconcileTests
 
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        // Each open saw the plugins that had already landed and no more.
         Assert.Equal([0, 1, 2], observed);
     }
 
-    // Every plugin's open, the step before its registration, is asked how much progress the load
-    // order was reporting at that moment.
     private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public Indexer? Index { get; set; }
@@ -98,8 +90,6 @@ public sealed class WarmReconcileTests
         }
     }
 
-    // The registered plugins are counted exactly as indexed ones are, so a warm launch's
-    // progress reaches the whole load order rather than only the plugins it had to index.
     [Fact]
     public void AWarmLoad_CountsEveryRegisteredPluginAsProgress()
     {
@@ -118,8 +108,6 @@ public sealed class WarmReconcileTests
             warm.Status.IndexedPlugins.Select(p => p.Name).ToArray());
     }
 
-    // Validity is by content: the one plugin whose bytes moved is re-indexed, and its
-    // neighbours are registered untouched.
     [Fact]
     public void APluginChangedBetweenLoads_IsTheOnlyOneReindexed()
     {
@@ -144,14 +132,11 @@ public sealed class WarmReconcileTests
         Assert.Equal(1, Indexed(entries, "B.esp"));
         Assert.Equal(0, Registered(entries, "B.esp"));
 
-        // And the re-index is what the load order serves: the edited record, not the stale one.
         var documents = warm.RequireReads().GetDocuments(new PluginAddress("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
 
-    // A plugin the index has never seen is indexed on the warm load beside the registered ones —
-    // "only what the file has never seen" read from the other side, and the profile-switch shape.
     [Fact]
     public void APluginTheIndexHasNeverSeen_IsIndexedBesideTheRegisteredOnes()
     {
@@ -162,7 +147,6 @@ public sealed class WarmReconcileTests
             .Build();
         using (var cold = MakeIndexer(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        // The profile switch: the same order plus one plugin the index has never been shown.
         var withB = data.Plugins.Append(new LoadOrderEntry("B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true)).ToList();
 
         var (loggerFactory, entries) = Capturing();
@@ -175,9 +159,6 @@ public sealed class WarmReconcileTests
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
-    // A tracked plugin's truth is its source tree (ADR-0007/0042), so persistence must never override
-    // the working tree. ADR-0015 invariant 4: the load validates by content, so an unmoved tree costs
-    // a register and a comparison.
     [Fact]
     public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
     {
@@ -189,8 +170,6 @@ public sealed class WarmReconcileTests
             .Tracked();
         var entry = fixture.Plugins.Single();
 
-        // Loaded twice after tracking, so both loads see a tracked plugin whose binary the index
-        // already holds a current hash for.
         string npcSourceFile;
         using (var second = MakeIndexer(holder))
         {
@@ -204,13 +183,10 @@ public sealed class WarmReconcileTests
         using var third = MakeIndexer(holder, loggerFactory);
         third.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4, fixture.InstanceRoot);
 
-        // An unmoved tree: registered and validated, never re-derived.
         Assert.Equal(1, Registered(entries, plugin));
         Assert.Equal(0, Indexed(entries, plugin));
         Assert.Empty(third.Status.Failures);
 
-        // And the working tree still wins: an edit made between loads is in the load order's
-        // answer, which is the whole point of validating rather than trusting the stored rows.
         var text = await File.ReadAllTextAsync(npcSourceFile);
         await File.WriteAllTextAsync(
             npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));

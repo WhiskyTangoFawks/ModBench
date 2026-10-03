@@ -6,9 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0013: the held set of plugins, opened one at a time from the plugins a snapshot
-// registers, and mutated in place as plugins arrive, leave, or move, as the reads and the status
-// report it.
 public sealed class HeldPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
@@ -18,10 +15,6 @@ public sealed class HeldPluginsTests
 
     private static PluginAddress Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
-    // ── Open ────────────────────────────────────────────────────────────────────
-
-    // ADR-0013 invariant 3: the game's master arrives in the snapshot, active and first, as Mod
-    // Management sends it.
     [Fact]
     public void Open_TheGamesMasterSentFirst_LoadsBeforeTheUserPlugin()
     {
@@ -127,8 +120,6 @@ public sealed class HeldPluginsTests
         Assert.Equal(isMaster, content.IsMaster);
     }
 
-    // The overwhelmingly common light/master plugin in the wild is a header-flagged .esp, not
-    // a distinct extension — engine-authoritative light/master must follow the header flag.
     [Fact]
     public void Open_HeaderFlaggedEsp_FollowsTheHeaderFlag()
     {
@@ -170,8 +161,6 @@ public sealed class HeldPluginsTests
         Assert.False(opened.ContainsKey(Key("Unknown.esp")));
         Assert.False(opened.ContainsKey(Key("CaseMod.esp", "SomeOtherOrigin")));
     }
-
-    // ── Mutation in place ───────────────────────────────────────────────────────
 
     [Fact]
     public void Update_MovesTheRegistration_AndTheDerivedFactsFollow()

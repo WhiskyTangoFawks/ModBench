@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Indexing;
 
-/// <summary>editor-referenced-by.md, The tree, story 5: a child record's references are its own,
-/// whichever record carries it inline.</summary>
 public sealed class ChildRecordReferenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;

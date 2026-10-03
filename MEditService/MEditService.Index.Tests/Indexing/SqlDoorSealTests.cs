@@ -2,8 +2,6 @@ using MEditService.Index.Tests.TestSupport;
 
 namespace MEditService.Index.Tests.Indexing;
 
-/// <summary>ADR-0009 invariant 1: the SQL door sees only the active plugins, so a filter reads the
-/// public relations of <c>main</c> and nothing that reaches past them (ADR-0011 invariant 1).</summary>
 public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<SqlDoorFixture>
 {
     [Theory]
@@ -19,8 +17,6 @@ public sealed class SqlDoorSealTests(SqlDoorFixture fixture) : IClassFixture<Sql
     public void AFilterThatReachesPastThePublicRelations_IsRefused(string sql) =>
         Assert.False(fixture.Index.Accepts(sql));
 
-    // The refusals above are this theory's positive control: a door that refused everything would
-    // pass them too.
     [Theory]
     [InlineData("SELECT form_key FROM records")]
     [InlineData("SELECT form_key FROM main.npc_")]

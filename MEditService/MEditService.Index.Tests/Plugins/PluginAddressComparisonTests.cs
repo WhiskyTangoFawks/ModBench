@@ -5,8 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0012 invariant 1: a key that differs only in case names the same plugin at every door, the
-// opened plugins and the store's rows alike.
 public sealed class PluginAddressComparisonTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("plugin-address-comparison")
@@ -25,7 +23,6 @@ public sealed class PluginAddressComparisonTests : IDisposable
 
     private static readonly PluginAddress OtherCase = new("CASED.ESP", "casedmod");
 
-    // The rival this pins: the record struct's own equality, which is case-sensitive.
     [Fact]
     public void TheOpenedPlugins_AnswerTheSamePlugin_WhateverTheCase()
     {

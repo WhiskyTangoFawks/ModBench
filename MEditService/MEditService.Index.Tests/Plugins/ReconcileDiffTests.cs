@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Plugins;
 
-// ADR-0013: PUT /load-order's one verb, at the Index seam. The adapter's opens tell a cheap SQL-only
-// move from a cold indexing one, and the sequence tells whether a sweep ran.
 public sealed class ReconcileDiffTests
 {
     private static (Indexer Index, GatedPluginAdapter Opens) MakeIndex(LoadOrderHolder holder)
@@ -19,8 +17,6 @@ public sealed class ReconcileDiffTests
         return (Indexes.Open(holder, opens), opens);
     }
 
-    // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack every winner assertion
-    // below reads.
     private static ScatteredFixtureData TwoProviders(string prefix) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin("A.esm", mod => mod.Npcs.AddNew("SharedNPC"))
@@ -66,7 +62,6 @@ public sealed class ReconcileDiffTests
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        // No sweep: a sweep is a projection, and a projection advances the sequence.
         Assert.Equal(sequenceAfterFirst, index.Sequence);
         Assert.Equal(openedAfterFirst, opens.OpenedTotal);
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
@@ -88,7 +83,6 @@ public sealed class ReconcileDiffTests
         var opened = opens.OpenedTotal;
         var sequence = index.Sequence;
 
-        // Swap the two slots: A now loads after B.
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
         index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
 
@@ -98,7 +92,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void Disable_IsSqlOnly_AndTheOtherProviderWins()
+    public void Disable_IsSqlOnly_TheDisabledPluginIsReadNowhere_AndTheOtherProviderWins()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-disable");
@@ -113,7 +107,6 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(opened, opens.OpenedTotal);
-        // Still registered, but a plugin that is not active is read nowhere and competes for nothing.
         Assert.Empty(ReadsOf(index).GetDocuments(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
@@ -122,10 +115,8 @@ public sealed class ReconcileDiffTests
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
-    // An overridden plugin and the winning plugin that share a filename are both held and both
-    // registered (ADR-0013: the snapshot is every plugin file); only the winning one is read.
     [Fact]
-    public void OverriddenPlugin_IsRegisteredBesideTheWinner_AndNeverWins()
+    public void OverriddenPlugin_IsRegisteredBesideTheWinner_NeverWins_AndReprioritisingFlipsTheWinnerSqlOnly()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-losing")
@@ -146,7 +137,6 @@ public sealed class ReconcileDiffTests
         Assert.True(only.IsWinner);
         Assert.Contains(index.RequireReads().OpenedPlugins.Keys, k => k.Equals(modB));
 
-        // Reprioritising the mods flips which plugin wins — SQL-only, like every other move.
         var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
@@ -156,7 +146,6 @@ public sealed class ReconcileDiffTests
         Assert.Equal(opened, opens.OpenedTotal);
     }
 
-    // Uninstall: a plugin absent from the snapshot is unregistered, its rows kept for its return.
     [Fact]
     public void PluginAbsentFromSnapshot_IsUnregistered_AndReturnsWithoutAReindex()
     {
@@ -185,8 +174,6 @@ public sealed class ReconcileDiffTests
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
-    // No clear-on-open: after a restart the file still carries its registrations, and the next
-    // snapshot corrects them rather than re-indexing.
     [Fact]
     public void AfterRestart_IdenticalSnapshot_ReindexesNothing_AndADifferentOne_CorrectsTheRegistrations()
     {
@@ -223,7 +210,7 @@ public sealed class ReconcileDiffTests
     }
 
     [Fact]
-    public void FailedPlugin_IsAFailureOnTheRow_AndRecoversOnceItsBytesChange()
+    public void FailedPlugin_IsAFailureOnTheRow_AnEqualSnapshotRunsNoSweep_AndRecoversOnceItsBytesChange()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("reconcile-failed").WithPlugin("Good.esp").BuildScattered();
@@ -240,7 +227,6 @@ public sealed class ReconcileDiffTests
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.DoesNotContain(ReadsOf(index).OpenedPlugins.Keys, k => k.Name == "Bad.esp");
 
-        // The same snapshot again is a no-op — the failed parse is not paid twice, and no sweep runs.
         var sequence = index.Sequence;
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
         Assert.Equal(sequence, index.Sequence);

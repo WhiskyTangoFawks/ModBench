@@ -6,9 +6,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Real records read through the index, where a union's document names the leaf each value
-/// turned out to be. Quest aliases are the real overlay proof: Mutagen materializes
-/// <c>Npc.Level</c> eagerly whatever the read mode.</summary>
 [Collection(CutDownPluginCollection.Name)]
 public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
 {
@@ -32,9 +29,6 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
             var npcDocument = reads.GetDocument(npc.FormKey, new PluginAddress(npc.Plugin, npc.Origin))
                 ?? throw new InvalidOperationException($"Expected {npc.FormKey} to resolve to a document.");
             var level = npcDocument.Fields.Single(f => f.Metadata.Name == "Level").Value;
-            // Every real fixture NPC is NpcLevel today (verified — none is PcLevelMult), so this
-            // pins the discriminator through a real binary-overlay-backed NPC without depending on
-            // the one shape the fixture happens not to have.
             var element = Assert.IsType<JsonElement>(level);
             Assert.Equal(nameof(NpcLevel), element.GetProperty(LoquiUnions.UnionTypeDiscriminator).GetString());
         }
@@ -51,7 +45,6 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture)
         Assert.Contains(nameof(QuestReferenceAlias), kinds);
         Assert.Contains(nameof(QuestLocationAlias), kinds);
 
-        // Every element's own discriminator names a real leaf — never empty.
         Assert.All(elements, e => Assert.False(string.IsNullOrEmpty(e.GetProperty(LoquiUnions.UnionTypeDiscriminator).GetString())));
     }
 }
