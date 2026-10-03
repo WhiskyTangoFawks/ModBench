@@ -4,12 +4,8 @@ using MEditService.Codec.Serialization;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>Per-row fixtures are synthetic reproductions of the surveyed defects, never the mod
-/// author's payload bytes: the repo commits no third-party plugin content (MEditService/CLAUDE.md).</summary>
 public sealed class MalformedPluginScanTests
 {
-    // ── R2: fixed-size subrecord short — real fixture (LitR - TrueStorms.esp) ────────────────
-
     [Fact]
     public void TrueStorms_ShortRegnRdat_IsDiagnosedByExactClassAndText()
     {
@@ -23,14 +19,10 @@ public sealed class MalformedPluginScanTests
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", d.Message);
     }
 
-    // ── R1/R3/R4: synthetic reproductions of the surveyed defects ────────────────────────────
-
     [Fact]
-    public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText()
+    public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText_TheCombinationsObtsPrecedingItsObtfAndFullLeavingThemUnclosed()
     {
-        // The shape observed in Lunar Arsenal's GaussRevolver.esp WEAP 03000860 (OBTE=1: OBTS OBTF FULL
-        // STOP): the combination's OBTS precedes its OBTF/FULL, leaving them unclosed.
-        var diagnoses = MalformedPluginScan.Scan(Record("WEAP", 0x03000860,
+        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x03000860,
             Sub("EDID", "GaussRevolver\0"u8.ToArray()),
             Sub("OBTE", Le(1)),
             Sub("OBTS", new byte[67]),
@@ -45,10 +37,8 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void Lunar_BothShortBipedNameLists_AreDiagnosedByExactClassAndText()
+    public void Lunar_BothShortBipedNameLists_31And30NamesWhereTheCkAlwaysWrites32_AreDiagnosedByExactClassAndText()
     {
-        // The two RACEs the survey observed in Lunar-UniqueCreatures.esp: 31 and 30 Biped
-        // Object Names where the CK always writes 32.
         var diagnoses = MalformedPluginScan.Scan(Concat(
             RaceWithNames(0x03014174, "DLC03_FogCrawlerRace", 31),
             RaceWithNames(0x0603637A, "DLC04_GatorclawRace", 30)));
@@ -63,11 +53,9 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void SouthOfTheSea_CounterDisagreeingWithEntries_IsDiagnosedByExactClassAndText()
+    public void SouthOfTheSea_CounterDisagreeingWithEntries_XwpgSaysOnePowerGridConnectionButTwoXwpnEntriesFollow_IsDiagnosedByExactClassAndText()
     {
-        // The shape observed in SouthOfTheSea.esm REFR 07431EDC: XWPG says one power-grid
-        // connection; two XWPN entries follow.
-        var diagnoses = MalformedPluginScan.Scan(Record("REFR", 0x07431EDC,
+        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x07431EDC,
             Sub("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
             Sub("XWPG", Le(1)),
             Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12])));
@@ -79,29 +67,22 @@ public sealed class MalformedPluginScanTests
         Assert.Equal("XWPG counts 1; 2 XWPN entries follow", d.Message);
     }
 
-    // ── R5/R6/R7: PERK entry-point parameter shape (real fixtures) ───────────────────────────
-
     [Fact]
-    public void PlasmaAutocannon_WrongEpftForFunction14_IsDiagnosedByExactClassAndText()
+    public void PlasmaAutocannon_WrongEpftForFunction14_IsDiagnosedByExactClassAndText_EntryZeroOfTheSamePerkIsCleanWhichPinsPerEntryIndexing()
     {
-        // Already committed whole (SKI_PlasmaAutocannon.esp) — entry 0 of the same PERK is clean,
-        // which is what pins the per-entry indexing.
         var diagnoses = ScanFixture("SKI_PlasmaAutocannon.esp");
 
         var d = Assert.Single(diagnoses, d => d.DefectClass == "entry-point-parameter-shape");
         Assert.Equal("PERK 040000EF (T6M_QuickReload_ReloadVATs)", d.Anchor);
-        // Diagnose only — no repair tail: retyping the parameter is a semantic mapping, not a byte
-        // operation.
-        Assert.Null(d.Tail);
+        var noRepairTailBecauseRetypingTheParameterIsASemanticMappingNotAByteOperation = d.Tail;
+        Assert.Null(noRepairTailBecauseRetypingTheParameterIsASemanticMappingNotAByteOperation);
         Assert.Equal("entry point 1 (function 14, Multiply 1 + Actor Value Mult) has EPFT 2; vanilla writes EPFT 8", d.Message);
     }
 
     [Fact]
-    public void FastTravelSigns_Function9MissingEpf3_IsDiagnosedByExactClassAndText()
+    public void FastTravelSigns_Function9MissingEpf3_AnAddActivateChoiceEntryCarryingEpft4EpfbAndEpf2_IsDiagnosedByExactClassAndText()
     {
-        // The shape observed in FTS_FastTravelSettlement.esp PERK 050008AB: an
-        // Add Activate Choice entry carrying EPFT 4, EPFB and EPF2 but no EPF3.
-        var diagnoses = MalformedPluginScan.Scan(Record("PERK", 0x050008AB,
+        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x050008AB,
             Sub("EDID", "FTS_CallMarkerPerk\0"u8.ToArray()),
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 9, 0]),
@@ -118,11 +99,9 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void Radfall_Function6WithParameters_IsDiagnosedLossyByExactClassAndText()
+    public void Radfall_Function6WithParameters_AnAbsoluteValueEntryCarryingAnEpftEpfbEpfdBlockItNeverTakes_IsDiagnosedLossyByExactClassAndText()
     {
-        // The shape observed in Radfall.esp PERK 0004C92C: an Absolute Value entry carrying
-        // a parameter block (EPFT 1, EPFB, EPFD) the function never takes.
-        var diagnoses = MalformedPluginScan.Scan(Record("PERK", 0x0004C92C,
+        var diagnoses = MalformedPluginScan.Scan(SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0004C92C,
             Sub("EDID", "Sniper03\0"u8.ToArray()),
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 6, 0]),
@@ -134,16 +113,15 @@ public sealed class MalformedPluginScanTests
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
         Assert.Equal("PERK 0004C92C (Sniper03)", d.Anchor);
-        // Repair here removes the whole parameter block the function never takes — EPFT, EPFB
-        // and EPFD, headers included — so the tail carries the byte cost.
-        Assert.Equal("repairable (drops 25 bytes)", d.Tail);
+        var tailCarryingTheByteCostBecauseRepairRemovesTheWholeParameterBlockEpftEpfbEpfdHeadersIncluded = d.Tail;
+        Assert.Equal("repairable (drops 25 bytes)", tailCarryingTheByteCostBecauseRepairRemovesTheWholeParameterBlockEpftEpfbEpfdHeadersIncluded);
         Assert.Equal("entry point 0 (function 6, Absolute Value) has EPFT 1; vanilla writes no parameters", d.Message);
     }
 
     [Fact]
     public void EntryPointShape_AVanillaShapedFunction14_ReportsNothing()
     {
-        var record = Record("PERK", 0x00000009,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x00000009,
             Sub("EDID", "CleanPerk\0"u8.ToArray()),
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 14, 0]),
@@ -155,11 +133,9 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void EntryPointShape_AFunctionVanillaNeverExercises_MakesNoClaim()
+    public void EntryPointShape_AFunctionVanillaNeverExercises_MakesNoClaim_Function4NeverOccursInTheShippedGameSoNoCanonicalShapeIsProvableAndTheTableStaysSilentRatherThanTrustingAReferencesComments()
     {
-        // fn 4 never occurs in the shipped game, so no canonical shape is provable for it —
-        // the table stays silent rather than trusting a reference's comments.
-        var record = Record("PERK", 0x0000000A,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("PERK", 0x0000000A,
             Sub("PRKE", [2, 0, 0]),
             Sub("DATA", [0, 4, 0]),
             Sub("EPFT", [1]),
@@ -172,12 +148,10 @@ public sealed class MalformedPluginScanTests
     private static List<PluginDiagnosis> ScanFixture(string fileName) =>
         MalformedPluginScan.Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
 
-    // ── Per-detector contracts on hand-built bytes ───────────────────────────────────────────
-
     [Fact]
     public void FixedSize_AnExactLengthSubrecord_ReportsNothing()
     {
-        var record = Record("REGN", 0x00000001, Sub("EDID", "CleanRegion\0"u8.ToArray()), Sub("RDAT", new byte[8]));
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REGN", 0x00000001, Sub("EDID", "CleanRegion\0"u8.ToArray()), Sub("RDAT", new byte[8]));
 
         Assert.Empty(MalformedPluginScan.Scan(record));
     }
@@ -186,7 +160,7 @@ public sealed class MalformedPluginScanTests
     public void FixedCount_ARaceWithThirtyOneNames_IsDiagnosed()
     {
         var names = Enumerable.Range(0, 31).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
-        var record = Record("RACE", 0x00000002, [Sub("EDID", "ShortRace\0"u8.ToArray()), .. names]);
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000002, [Sub("EDID", "ShortRace\0"u8.ToArray()), .. names]);
 
         var d = Assert.Single(MalformedPluginScan.Scan(record));
         Assert.Equal("fixed-count-list-wrong-count", d.DefectClass);
@@ -199,7 +173,7 @@ public sealed class MalformedPluginScanTests
     public void FixedCount_ARaceWithAllThirtyTwoNames_ReportsNothing()
     {
         var names = Enumerable.Range(0, 32).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())).ToArray();
-        var record = Record("RACE", 0x00000003, [Sub("EDID", "CleanRace\0"u8.ToArray()), .. names]);
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", 0x00000003, [Sub("EDID", "CleanRace\0"u8.ToArray()), .. names]);
 
         Assert.Empty(MalformedPluginScan.Scan(record));
     }
@@ -207,7 +181,7 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CounterEntries_AnXwpgDisagreeingWithItsXwpnEntries_IsDiagnosed()
     {
-        var record = Record("REFR", 0x00000004,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x00000004,
             Sub("EDID", "BadWorkshop\0"u8.ToArray()),
             Sub("XWPG", Le(1)),
             Sub("XWPN", new byte[12]),
@@ -223,18 +197,16 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void CounterEntries_AnAgreeingPair_ReportsNothing()
     {
-        var record = Record("REFR", 0x00000005,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("REFR", 0x00000005,
             Sub("XWPG", Le(2)), Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12]));
 
         Assert.Empty(MalformedPluginScan.Scan(record));
     }
 
     [Fact]
-    public void CkOrder_TrailingObtfFullWithNoClosingObts_IsDiagnosed()
+    public void CkOrder_TrailingObtfFullWithNoClosingObts_IsDiagnosed_BecauseTheCkClosesEveryObtfLedCombinationWithAnObts()
     {
-        // Lunar Arsenal's shape: the one combination's OBTS came first, leaving its OBTF/FULL
-        // unclosed at STOP — the CK closes every OBTF-led combination with an OBTS.
-        var record = Record("WEAP", 0x00000006,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x00000006,
             Sub("EDID", "BadWeap\0"u8.ToArray()),
             Sub("OBTE", Le(1)),
             Sub("OBTS", new byte[8]),
@@ -249,12 +221,9 @@ public sealed class MalformedPluginScanTests
     }
 
     [Fact]
-    public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing()
+    public void CkOrder_ALeadingBareObtsFollowedByClosedCombinations_ReportsNothing_BecauseItIsVanillaGaussRiflesShapeTheDefaultCombinationAndCanonicalCkOutputProvenByTheMeditSmokeVanillaScan()
     {
-        // Vanilla GaussRifle's own shape (OBTE=5: OBTS, then OBTF FULL OBTS x4): the leading bare
-        // OBTS is the default combination and canonical CK output, proven by the MEDIT_SMOKE vanilla
-        // scan.
-        var record = Record("WEAP", 0x00000007,
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("WEAP", 0x00000007,
             Sub("OBTE", Le(2)),
             Sub("OBTS", new byte[8]),
             Sub("OBTF", []), Sub("FULL", "A\0"u8.ToArray()), Sub("OBTS", new byte[8]),
@@ -266,12 +235,10 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Scan_ACleanRecordOfAnUntabledType_ReportsNothing()
     {
-        var record = Record("MISC", 0x00000008, Sub("EDID", "Junk\0"u8.ToArray()), Sub("DATA", new byte[8]));
+        var record = SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("MISC", 0x00000008, Sub("EDID", "Junk\0"u8.ToArray()), Sub("DATA", new byte[8]));
 
         Assert.Empty(MalformedPluginScan.Scan(record));
     }
-
-    // ── byte builders (same conventions as PluginBinaryWalkTests) ────────────────────────────
 
     private static byte[] Concat(params byte[][] records) => records.SelectMany(r => r).ToArray();
 
@@ -279,7 +246,7 @@ public sealed class MalformedPluginScanTests
     {
         var subs = new List<byte[]> { Sub("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };
         subs.AddRange(Enumerable.Range(0, nameCount).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())));
-        return Record("RACE", formId, [.. subs]);
+        return SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent("RACE", formId, [.. subs]);
     }
 
     private static byte[] Le(uint value)
@@ -298,13 +265,14 @@ public sealed class MalformedPluginScanTests
         return b;
     }
 
-    private static byte[] Record(string type, uint formId, params byte[][] subrecords)
+    private static byte[] SyntheticRecordNeverTheModAuthorsBytesSinceTheRepoCommitsNoThirdPartyPluginContent(string type, uint formId, params byte[][] subrecords)
     {
+        const uint UncompressedFlags = 0;
         var data = subrecords.SelectMany(s => s).ToArray();
         var b = new byte[24 + data.Length];
         Encoding.ASCII.GetBytes(type).CopyTo(b, 0);
         BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(4), (uint)data.Length);
-        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(8), 0); // flags: uncompressed
+        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(8), UncompressedFlags);
         BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(12), formId);
         data.CopyTo(b, 24);
         return b;

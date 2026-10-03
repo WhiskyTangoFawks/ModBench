@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>The codec mints the document of an empty instance, so nothing outside it constructs a
-/// container level to serialize one.</summary>
 public sealed class RecordTextCodecBlankDocumentTests
 {
     private static JsonObject ParseObject(string document) =>
@@ -26,7 +24,7 @@ public sealed class RecordTextCodecBlankDocumentTests
     }
 
     [Fact]
-    public void BlankDocument_IsSpelledByTheCodec_NotByTheIdentityGiven()
+    public void BlankDocument_IsSpelledByTheCodec_NotByTheIdentityGiven_BecauseTheCodecMintsTheDocumentOfAnEmptyInstanceSoNothingOutsideItConstructsAContainerLevel()
     {
         var document = RecordTextCodec.BlankDocument(
             typeof(WorldspaceBlock), GameRelease.Fallout4,

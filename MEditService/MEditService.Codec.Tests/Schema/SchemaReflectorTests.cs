@@ -17,8 +17,6 @@ public class SchemaReflectorTests
         Assert.False(schemas.ContainsKey("phzd"));
     }
 
-    // ── xEdit-parity display names ────────────────────────────────────────────
-
     [Fact]
     public void GetSchemas_Acti_DisplayName_MatchesXEdit()
     {
@@ -34,10 +32,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Omod_PropertiesColumn_CarriesEachRecordClassOwnPropertyDomain()
+    public void GetSchemas_Omod_PropertiesColumn_CarriesEachRecordClassOwnPropertyDomain_BecauseEachClassesPropertiesElementClosesOverItsOwnT()
     {
-        // Each record class's Properties element closes over its own T, so the column carries a
-        // variant per class, each Property sub-field its own enum domain.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
 
@@ -58,15 +54,9 @@ public class SchemaReflectorTests
         Assert.DoesNotContain("BodyPart", PropertyDomain(variants[nameof(NpcModification)]));
     }
 
-    // ── OMOD's Properties element must surface the property's actual Value ──
-    //
-    // IAObjectModPropertyGetter<T> declares only Property/Step; the payload lives on the seven generic
-    // leaves under it, named as the codec closes them.
-
     [Fact]
-    public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()
+    public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields_BecauseTheGetterInterfaceDeclaresOnlyPropertyAndStepAndThePayloadLivesOnTheSevenGenericLeavesNamedAsTheCodecClosesThem()
     {
-        // The seven leaves' members, as one element schema.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "Properties");
         var elementSpec = properties.Field.ElementSpec
@@ -80,48 +70,37 @@ public class SchemaReflectorTests
         var functionType = fields.Single(f => f.Name == "FunctionType");
         var enumIntValue = fields.Single(f => f.Name == "EnumIntValue");
 
-        // Value/Value2/FunctionType collide in CLR type across the seven leaves, so each carries a
-        // variant per leaf. Record and EnumIntValue are typed alike by the leaves declaring them,
-        // and the variant map names exactly those leaves.
-        var valueVariants = value.Variants
+        var valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves = value.Variants
             ?? throw new InvalidOperationException("Expected 'Value' to carry per-leaf variants.");
-        Assert.Equal("int", valueVariants["ObjectModIntProperty<Armor+Property>"].ApiType);
-        Assert.Equal("float", valueVariants["ObjectModFloatProperty<Armor+Property>"].ApiType);
-        Assert.Equal("bool", valueVariants["ObjectModBoolProperty<Armor+Property>"].ApiType);
+        Assert.Equal("int", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModIntProperty<Armor+Property>"].ApiType);
+        Assert.Equal("float", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModFloatProperty<Armor+Property>"].ApiType);
+        Assert.Equal("bool", valueVariantsBecauseValueValue2AndFunctionTypeCollideInClrTypeAcrossTheSevenLeaves["ObjectModBoolProperty<Armor+Property>"].ApiType);
         Assert.NotNull(value2.Variants);
         Assert.NotNull(functionType.Variants);
         Assert.Equal("formKey", record.ApiType);
-        var recordVariants = record.Variants
+        var recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike = record.Variants
             ?? throw new InvalidOperationException("Expected 'Record' to carry per-leaf variants.");
         Assert.Equal(
             ["ObjectModFormLinkFloatProperty<Armor+Property>", "ObjectModFormLinkIntProperty<Armor+Property>"],
-            recordVariants.Keys.Order(StringComparer.Ordinal));
-        Assert.All(recordVariants.Values, v => Assert.Equal("formKey", v.ApiType));
+            recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike.Keys.Order(StringComparer.Ordinal));
+        Assert.All(recordVariantsNamingExactlyTheLeavesDeclaringItBecauseTheyTypeItAlike.Values, v => Assert.Equal("formKey", v.ApiType));
         Assert.Equal("int", enumIntValue.ApiType);
         var enumIntValueVariants = enumIntValue.Variants
             ?? throw new InvalidOperationException("Expected 'EnumIntValue' to carry per-leaf variants.");
         Assert.Equal(["ObjectModEnumProperty<Armor+Property>"], enumIntValueVariants.Keys);
 
-        // Every one of these is sparse — declared by some leaves, not all — so every row of a
-        // non-declaring leaf's type legitimately reads null through it.
-        Assert.True(value.AllowsNull);
-        Assert.True(value2.AllowsNull);
-        Assert.True(record.AllowsNull);
-        Assert.True(functionType.AllowsNull);
-        Assert.True(enumIntValue.AllowsNull);
+        var sparseFieldsDeclaredBySomeLeavesNotAllSoANonDeclaringLeafsRowsLegitimatelyReadNull = new[] { value, value2, record, functionType, enumIntValue };
+        var sparseFieldsThatDisallowNull = sparseFieldsDeclaredBySomeLeavesNotAllSoANonDeclaringLeafsRowsLegitimatelyReadNull
+            .Where(f => !f.AllowsNull).Select(f => f.Name).ToList();
+        Assert.Empty(sparseFieldsThatDisallowNull);
 
-        // Unused is deliberately excluded: Mutagen's own name for it, and xEdit's
-        // wbUnused(3)/wbUnused(2), never rendered as a field at all, both agree it carries no
-        // product-visible data.
-        Assert.DoesNotContain(fields, f => f.Name == "Unused");
+        const string UnusedWhichMutagenNamesAndXEditsWbUnusedNeverRendersAsAFieldBothAgreeItCarriesNoProductVisibleData = "Unused";
+        Assert.DoesNotContain(fields, f => f.Name == UnusedWhichMutagenNamesAndXEditsWbUnusedNeverRendersAsAFieldBothAgreeItCarriesNoProductVisibleData);
     }
 
     [Fact]
-    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant()
+    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NamesThatOneClassAsItsVariant_TheNotPresentOnEverySiblingBranchOfTheFoldBeingRealToday()
     {
-        // The "not present on every sibling" branch of the fold is real today: the column belongs
-        // to GlobalFloat alone, so the variant map names that class and a write to a GlobalBool is
-        // refused by name.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "OutputChar");
 
@@ -134,11 +113,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName()
+    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName_DifferentFromItsKeyBecauseRecordDisplayNamesForFallsBackToTheRawSignatureOnALookupMiss()
     {
-        // Guards the hand-transcribed RecordDisplayNames table: every table Mutagen reflection
-        // currently surfaces must have a real xEdit-sourced name, not a silent fallback to the
-        // raw signature (which RecordDisplayNames.For only does for a lookup miss).
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var missing = schemas
             .Where(kv => string.IsNullOrEmpty(kv.Value.DisplayName) || kv.Value.DisplayName == kv.Key)
@@ -183,7 +159,6 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Npc_Race_IsNonNullableFormLink()
     {
-        // Race is IFormLink<IRaceGetter> — non-nullable; AllowsNull must be false.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Race");
         Assert.NotNull(col);
@@ -193,7 +168,6 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Npc_Voice_IsNullableFormLink()
     {
-        // Voice is IFormLinkNullable<IVoiceTypeGetter> — AllowsNull must be true.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Voice");
         Assert.NotNull(col);
@@ -203,7 +177,6 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Npc_Factions_Faction_SubField_IsNonNullableFormLink()
     {
-        // RankPlacement.Faction is IFormLink<IFactionGetter> — non-nullable sub-field.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Factions");
         Assert.NotNull(col);
@@ -215,17 +188,12 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Npc_TranslatedStringColumn_IsATranslatedStringLeaf()
     {
-        // EditorID is excluded from RecordColumns (it's a base column), but Name is a translated string.
-        // BleedoutOverride is a short/int type. Find a string or translated-string column on NPC.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        // The NPC Name is a TranslatedString, which the codec spells as an object.
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Name");
         Assert.NotNull(col);
         Assert.Equal("VARCHAR", col.DuckDbType);
         Assert.Equal("translatedString", col.ApiType);
     }
-
-    // ── Array and struct field types ─────────────────────────────────
 
     [Fact]
     public void GetSchemas_Npc_Keywords_IsReflectedAsArrayOfFormKeys()
@@ -254,8 +222,6 @@ public class SchemaReflectorTests
         Assert.Contains(fields, f => f.Name == "Rank" && f.ApiType == "int");
     }
 
-    // ── Float column ──────────────────────────────────────────────────────────
-
     [Fact]
     public void GetSchemas_Npc_FloatColumn_HasFloatDuckDbAndApiType()
     {
@@ -266,26 +232,18 @@ public class SchemaReflectorTests
         Assert.Equal("float", col.ApiType);
     }
 
-    // ── IsFormLink requires both IsInterface AND IsGenericType ─────────────────
-
     [Fact]
-    public void GetSchemas_Npc_Weight_IsStructNotFormkey()
+    public void GetSchemas_Npc_Weight_IsStructNotFormkey_BecauseINpcWeightGetterIsANonGenericInterfaceAndIsFormLinkRequiresBothInterfaceAndGeneric()
     {
-        // INpcWeightGetter is a non-generic interface. If IsFormLink required only IsInterface
-        // rather than IsInterface && IsGenericType, it would classify as a formkey column.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Weight");
         Assert.NotNull(col);
         Assert.Equal("struct", col.ApiType);
     }
 
-    // ── ulong column: TryMapPrimitive BIGINT path ────────────────────────────────
-
     [Fact]
     public void GetSchemas_ImageSpaceAdapter_UInt64Column_MapsToBigInt()
     {
-        // IImageSpaceAdapterGetter has a UInt64 Unknown field — exercises the ulong branch
-        // in TryMapPrimitive (maps to BIGINT / "int").
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["imad"].RecordColumns.FirstOrDefault(c => c.Name == "Unknown");
         Assert.NotNull(col);
@@ -293,16 +251,12 @@ public class SchemaReflectorTests
         Assert.Equal("int", col.ApiType);
     }
 
-    // ── Primitive type parity: GetColumnInfo and GetSubFieldInfo cover the same types ──
-    //
-    // A refactor dropping a type from one chain but not the other fails the sub-field assertion.
-
     [Theory]
     [InlineData("HeightMin", "float", "FLOAT", "Weight", false, "Thin")]
     [InlineData("XpValueOffset", "int", "INTEGER", "Factions", true, "Rank")]
     [InlineData("Race", "formKey", "VARCHAR", "Factions", true, "Faction")]
     [InlineData("Aggression", "enum", "VARCHAR", "FaceTintingLayers", true, "DataType")]
-    public void GetSchemas_PrimitiveType_ColumnAndSubFieldBothReflected(
+    public void GetSchemas_PrimitiveType_ColumnAndSubFieldBothReflected_ASubFieldOfEachPrimitiveTypeMapsAsItsTopLevelColumnDoes(
         string topLevelColumnName,
         string expectedApiType,
         string expectedDuckDbType,
@@ -330,8 +284,6 @@ public class SchemaReflectorTests
         Assert.NotNull(subField);
         Assert.Equal(expectedApiType, subField.ApiType);
     }
-
-    // ── Bitmask / [Flags] enum support ────────────────────────────
 
     [Fact]
     public void GetSchemas_Npc_FlagColumn_IsAFlagsLeaf_TheCodecSpellsAsNames()
@@ -362,10 +314,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_FlagColumn_EveryMemberCarriesAnAtomicBit()
+    public void GetSchemas_FlagColumn_EveryMemberCarriesAnAtomicBit_BecauseGetEnumMembersFiltersOutNoneZeroAndCompositeValues()
     {
-        // GetEnumMembers must filter out None=0 and composite values — only atomic power-of-two bits
-        // should appear.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
@@ -380,22 +330,18 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Race_FlagColumn_HighBitValues_SerializedAsStrings()
+    public void GetSchemas_Race_FlagColumn_UlongBackedBitsBeyondJsMaxSafeInteger_SerializedAsStringsSoTheFrontendParsesThemAsBigInt()
     {
-        // Race.Flag is ulong-backed with LowPriorityPushable = 2^53 and
-        // CannotUsePlayableItems = 2^54 — both beyond JS Number MAX_SAFE_INTEGER.
-        // A member's BitValue must be string so the frontend can parse it as BigInt.
+        const string LowPriorityPushable2Pow53 = "9007199254740992";
+        const string CannotUsePlayableItems2Pow54 = "18014398509481984";
+        const string PlayableLowBitSanityCheck = "1";
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["race"].RecordColumns.Single(c => c.Name == "Flags");
         var bits = col.Field.EnumMembers.Select(m => m.BitValue).ToList();
-        Assert.Contains("9007199254740992", bits);   // LowPriorityPushable = 2^53
-        Assert.Contains("18014398509481984", bits);  // CannotUsePlayableItems = 2^54
-        Assert.Contains("1", bits);                   // Playable (low-bit sanity check)
+        Assert.Contains(LowPriorityPushable2Pow53, bits);
+        Assert.Contains(CannotUsePlayableItems2Pow54, bits);
+        Assert.Contains(PlayableLowBitSanityCheck, bits);
     }
-
-    // ── Plugin header as a first-class record ─────────────────────────────────
-    // ModHeader is not a major record in Mutagen (no FormKey or EditorID), so it cannot be discovered
-    // by the major-record-getter scan and gets one hand-assembled schema entry instead.
 
     [Fact]
     public void GetSchemas_Header_AuthorColumn_IsStringType()
@@ -408,10 +354,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_FlagsColumn_CarriesMutagensNamesLabelledWithXEdits()
+    public void GetSchemas_Header_FlagsColumn_CarriesMutagensNamesLabelledWithXEdits_XEditsVocabularyIsTheLabelNeverTheValueSincePresentationNeverRewritesAValue()
     {
-        // The document spells the header's flags by Mutagen's member names; xEdit's vocabulary is
-        // the label, never the value (presentation never rewrites a value).
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "Flags");
         Assert.NotNull(col);
@@ -439,22 +383,16 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_RecordType_IsHeaderGetterInterface_NotAMajorRecordType()
+    public void GetSchemas_Header_RecordType_IsHeaderGetterInterface_NotAMajorRecordType_BecauseTheEnumerateMajorRecordsLoopAssumesAnIMajorRecordGetter()
     {
-        // Guards against the header schema ever being routed through the major-record
-        // indexing loop (EnumerateMajorRecords), which assumes an IMajorRecordGetter.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var schema = schemas["header"];
         Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
     }
 
-    // ── P3Int16/P3Float leaf coverage ──────────────────────────────────────────
-
     [Fact]
-    public void GetSchemas_Container_HasObjectBoundsColumn_WithFirstSecondVectorSubFields()
+    public void GetSchemas_Container_HasObjectBoundsColumn_WithFirstSecondVectorSubFields_BecauseNoggogP3Int16IsAVectorLeafTheCodecSpellsAsXYZTextNotDroppedAsUnclassified()
     {
-        // ObjectBounds.First/Second are Noggog.P3Int16, which the codec spells as "x, y, z" text: a
-        // vector leaf each, so the column keeps both rather than dropping them as unclassified.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cont"].RecordColumns.FirstOrDefault(c => c.Name == "ObjectBounds");
         Assert.NotNull(col);
@@ -464,14 +402,9 @@ public class SchemaReflectorTests
         Assert.Equal("vector", col.Field.SubFields?.FirstOrDefault(f => f.Name == "Second")?.ApiType);
     }
 
-    // ── Nested list inside a struct (Destructible.Resistances/Stages) ──────────
-
     [Fact]
-    public void GetSchemas_Container_Destructible_HasResistancesAndStagesArraySubFields()
+    public void GetSchemas_Container_Destructible_HasResistancesAndStagesArraySubFields_ListsNestedInsideAStructNotDropped()
     {
-        // Without GetSubFieldInfo's IsListType arm, both silently drop from
-        // Destructible's own sub-schema — "Data" (Destructible's other, already-mappable member)
-        // stays present regardless, which is why this can't just check the column exists.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "Destructible");
 
@@ -491,14 +424,9 @@ public class SchemaReflectorTests
         Assert.Contains(stagesSubFields, f => f.Name == "HealthPercent");
     }
 
-    // ── P3Float, both dispatch paths, on fixtures with no side-table row ──────────────────────
-
     [Fact]
-    public void GetSchemas_MaterialObject_HasProjectionVectorColumn_AsAVectorLeaf()
+    public void GetSchemas_MaterialObject_HasProjectionVectorColumn_AsAVectorLeaf_ChosenBecauseItHasNoSideTableRowUnlikePlacedPositionSoIsSafeToMakeWritableUnconditionally()
     {
-        // MaterialObject.ProjectionVector is a direct top-level P3Float column (GetColumnInfo path)
-        // with no side-table row — unlike Placed*.Position (see the edit gesture's companion
-        // refusal), safe to make writable unconditionally.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "ProjectionVector");
         Assert.NotNull(col);
@@ -507,10 +435,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_PlacedObject_TeleportDestination_HasPositionRotationVectorSubFields()
+    public void GetSchemas_PlacedObject_TeleportDestination_HasPositionRotationVectorSubFields_ChosenBecauseItIsNeverMirroredElsewhereSoIsSafeToMakeWritableUnconditionally()
     {
-        // PlacedObject.TeleportDestination.Position/Rotation — P3Float nested one level inside a
-        // struct (GetSubFieldInfo path), never mirrored anywhere else, so safe unconditionally too.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "TeleportDestination");
         Assert.NotNull(teleport);
@@ -519,13 +445,9 @@ public class SchemaReflectorTests
         Assert.Equal("vector", teleport.Field.SubFields?.FirstOrDefault(f => f.Name == "Rotation")?.ApiType);
     }
 
-    // ── Noggog's small value-vector struct family, beyond P3Int16/P3Float ──────────────────────
-
     [Fact]
-    public void GetSchemas_Cell_HasGridColumn_WithFlagsAndPointSubFields()
+    public void GetSchemas_Cell_HasGridColumn_WithFlagsAndPointSubFields_ChosenBecausePointIsANoggogP2IntBeyondP3Int16AndP3Float()
     {
-        // Cell.Grid.Point is a Noggog.P2Int, which a ClassifyLeaf limited to P3Int16/P3Float maps
-        // not at all.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "Grid");
         Assert.NotNull(col);
@@ -539,10 +461,8 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Location_WorldspaceCellsAdded_ElementHasCoordinatesListOfVectors()
+    public void GetSchemas_Location_WorldspaceCellsAdded_ElementHasCoordinatesListOfVectors_ComposingTheStructNestedListArmWithTheWidenedVectorStructSet()
     {
-        // LocationCoordinate.Coordinates is a list nested inside a struct that is itself a list
-        // element, composing the struct-nested-list arm with the widened vector-struct set.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["lctn"].RecordColumns.FirstOrDefault(c => c.Name == "WorldspaceCellsAdded");
         Assert.NotNull(col);

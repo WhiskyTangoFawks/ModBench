@@ -27,12 +27,11 @@ public sealed class PluginBinaryWalkTests
     [Fact]
     public void WalkSubrecords_AnXxxxMarkerSuppliesTheFollowingSubrecordsRealLength()
     {
-        // The declared 2-byte length on the real subrecord is deliberately wrong (3) — only the
-        // XXXX marker's own 4-byte value (10) is the real length, proving the walk reads that one.
+        const int DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength = 3;
         var payload = new byte[10];
         for (var i = 0; i < payload.Length; i++) payload[i] = (byte)(i + 1);
         var xxxxMarker = BuildSubrecordHeader("XXXX", declaredLen: 4).Concat(BitConvert(payload.Length)).ToArray();
-        var oversizedSubrecord = BuildSubrecordHeader("BIG ", declaredLen: 3).Concat(payload).ToArray();
+        var oversizedSubrecord = BuildSubrecordHeader("BIG ", declaredLen: DeliberatelyWrongDeclaredLengthSoOnlyTheXxxxMarkersOwnValueIsTheRealLength).Concat(payload).ToArray();
         var data = Concat(xxxxMarker, oversizedSubrecord);
 
         var subrecords = PluginBinaryWalk.WalkSubrecords(data);
@@ -97,10 +96,8 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
     }
 
-    // A rewrite from the tree carries no group order, so the lossy record can come back at another
-    // position; it is still the same record, paired by type and FormID.
     [Fact]
-    public void FindFirstSubrecordLoss_WhenTheRewriteOrdersRecordsDifferently_StillNamesTheLossyRecord()
+    public void FindFirstSubrecordLoss_WhenTheRewriteOrdersRecordsDifferently_StillNamesTheLossyRecord_PairedByTypeAndFormIdBecauseARewriteFromTheTreeCarriesNoGroupOrder()
     {
         var untouchedRecord = BuildRecordHeader("WEAP", 0x00000001, flags: 0,
             subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray())));
@@ -201,8 +198,6 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal("TES4", loss.Value.RecordType);
         Assert.Equal(["SNAM"], loss.Value.Signatures);
     }
-
-    // ---- byte builders --------------------------------------------------------------------
 
     private static byte[] BuildGrupHeader(string label, int groupSize)
     {
