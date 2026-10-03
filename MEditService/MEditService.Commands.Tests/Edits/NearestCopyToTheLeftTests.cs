@@ -6,6 +6,7 @@ using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 using static MEditService.Commands.Tests.TestSupport.Envelopes;
 using static MEditService.Commands.Tests.TestSupport.LoadOrderOfPlugins;
@@ -45,6 +46,13 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         };
         also?.Invoke(cell);
         mod.Cells.Records.Add(BlockOf(cell));
+    };
+
+    private static Action<Fallout4Mod> Mastering(string master, Action<Fallout4Mod> holds) => mod =>
+    {
+        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName(master) });
+        mod.Npcs.Add(new Npc(new FormKey(ModKey.FromFileName(master), 0x950), Fallout4Release.Fallout4) { EditorID = "Link" });
+        holds(mod);
     };
 
     private static Action<Cell> Placing(PlacedObject placed) => cell => cell.Temporary.Add(placed);
@@ -130,7 +138,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy")), false),
             (middle, true),
-            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
         _plugins.Respell(middle, TheNpc, "npc_", "\"FormVersion\": 120,", "");
         _plugins.Respell(Edited, TheNpc, "npc_", "\"IsDeleted\": true,", "\"IsDeleted\": true, \"FormVersion\": 140,");
         Assert.Contains("FormVersion", _plugins.Text(Edited, TheNpc));
@@ -187,11 +195,58 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (Plugin("Middle.esp", NpcCopy(0, "Guy", 0.9f)), false),
-            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
 
         var undeleted = Written(TheNpc, 0);
 
         Assert.Equal(0.9f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_TakesTheMastersCopy_OverANearerCopyOfAPluginThatIsNoMaster()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Stranger.esp", NpcCopy(0, "Guy", 0.9f)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.Equal(0.7f, undeleted["HeightMax"]?.GetValue<float>());
+    }
+
+    [Fact]
+    public void ClearingDeleted_LeavesTheFieldsEmpty_WhenTheOnlyCopyToItsLeftThatIsNotDeletedIsNoMasters()
+    {
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(Deleted)), false),
+            (Plugin("Stranger.esp", NpcCopy(0, "Guy", 0.9f)), false),
+            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+
+        var undeleted = Written(TheNpc, 0);
+
+        Assert.DoesNotContain(undeleted, p => p.Key == "EditorID");
+        Assert.DoesNotContain(undeleted, p => p.Key == "HeightMax" && p.Value?.GetValue<float>() != 0);
+    }
+
+    [Fact]
+    public void ClearingDeleted_WhenAnotherDocumentOfItsSourceTreeCannotBeRead_IsRefused_AndWritesNothing()
+    {
+        var other = new FormKey(ModKey.FromFileName("Override.esp"), 0x951);
+        Load(
+            (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
+            (Plugin("Override.esp", mod =>
+            {
+                NpcCopy(Deleted)(mod);
+                mod.Npcs.Add(new Npc(other, Fallout4Release.Fallout4) { EditorID = "Other" });
+            }), true));
+        var before = _plugins.Text(Edited, TheNpc);
+        _plugins.Respell(Edited, other, "npc_", "{", "[");
+
+        var result = WriteFlags(TheNpc, 0);
+
+        Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
+        Assert.Equal(before, _plugins.Text(Edited, TheNpc));
     }
 
     [Fact]
@@ -349,7 +404,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (middle, true),
-            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
         _plugins.Respell(middle, TheNpc, "npc_", "0.9", "\"tall\"");
         var before = _plugins.Text(Edited, TheNpc);
 
@@ -368,7 +423,7 @@ public sealed class NearestCopyToTheLeftTests : IDisposable
         Load(
             (Plugin("Fallout4.esm", NpcCopy(0, "Guy", 0.7f)), false),
             (middle, true),
-            (Plugin("Override.esp", NpcCopy(Deleted)), true));
+            (Plugin("Override.esp", Mastering("Middle.esp", NpcCopy(Deleted))), true));
         _plugins.Respell(middle, TheNpc, "npc_", "{", "[");
 
         var result = WriteFlags(TheNpc, 0);

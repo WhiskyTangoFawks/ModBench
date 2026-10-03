@@ -98,9 +98,24 @@ public sealed class EditRecordHandler
         if (RecordEmptying.CellToLookUp(text, prefix, envelope, schema, release) is { } partialFormCell)
             cellCopyOnTheLeft = _targets.NearestCopyToTheLeft(plugin, partialFormCell, PlacedCell.Says);
 
-        var refillCopyOnTheLeft = RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema)
-            ? _targets.NearestCopyToTheLeft(plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema))
-            : null;
+        LeftCopy? refillCopyOnTheLeft = null;
+        if (RecordEmptying.RefillsFromTheLeft(text, prefix, envelope, schema))
+        {
+            IReadOnlySet<string> masters;
+            try
+            {
+                masters = RequiredMasters.InTheTree(repository, plugin, schemas);
+            }
+            catch (UnreadableSourceDocumentException ex)
+            {
+                return RecordEditResult.RefusedAt(
+                    RecordEditRefusal.RecordParseFailed, spelled,
+                    $"'{spelled}': the copy {formKey} is refilled from comes only from a master of {plugin.Name}, " +
+                    $"which its source tree names, and that tree cannot be read: {ex.Message.TrimEnd('.')}. Nothing was written.");
+            }
+            refillCopyOnTheLeft = _targets.NearestCopyToTheLeft(
+                plugin, formKey, _ => true, RecordEmptying.EmptyingBits(schema), masters);
+        }
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
