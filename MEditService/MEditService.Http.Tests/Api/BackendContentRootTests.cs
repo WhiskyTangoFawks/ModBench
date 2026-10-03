@@ -141,7 +141,7 @@ public sealed class BackendContentRootTests
             Assert.True(started,
                 $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
 
-            Assert.NotEmpty(Directory.GetFiles(workingDirectory, "medit-*.log"));
+            Assert.NotEmpty(Directory.GetFiles(LogDirectory(workingDirectory), "medit-*.log"));
         }
         finally
         {
@@ -162,7 +162,7 @@ public sealed class BackendContentRootTests
         };
         psi.ArgumentList.Add(Path.Combine(ApiDirectory, "MEditService.Http.dll"));
         psi.ArgumentList.Add("--LogDirectory");
-        psi.ArgumentList.Add(workingDirectory);
+        psi.ArgumentList.Add(LogDirectory(workingDirectory));
         foreach (var arg in extraArgs) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi };
@@ -179,6 +179,8 @@ public sealed class BackendContentRootTests
         if (line is null) return;
         lock (capturedLines) capturedLines.Add(line);
     }
+
+    private static string LogDirectory(string workingDirectory) => Path.Combine(workingDirectory, "logs");
 
     private static List<string> Snapshot(List<string> lines)
     {
@@ -215,7 +217,7 @@ public sealed class BackendContentRootTests
         try
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
-            process.WaitForExit(2000);
+            process.WaitForExit();
         }
         catch (InvalidOperationException)
         {

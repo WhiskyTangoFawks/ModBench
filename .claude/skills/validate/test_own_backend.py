@@ -107,7 +107,7 @@ class OwnBackend(unittest.TestCase):
         for pid in self.pids("fails"):
             self.assertTrue(wait_gone(pid), f"pid {pid} outlived the caller")
 
-    def test_the_backend_logs_into_a_directory_removed_when_it_stops(self):
+    def test_the_backends_log_directory_is_removed_when_it_stops(self):
         run = self.run_with_backend("logs", 'curl -sf "$OWN_BACKEND_URL/health" >/dev/null')
         out, _ = run.communicate(timeout=30)
         self.assertEqual(run.returncode, 0, out)
