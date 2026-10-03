@@ -272,19 +272,26 @@ export interface Subscription {
 /** Where a file's contents come from: a mod, or the files the game wrote at run time. */
 export type FileOrigin = { readonly kind: 'mod'; readonly name: string } | { readonly kind: 'runtimeOutput' };
 
-/** One file of an origin, by the relative path the origin's own tree names it with, and where it
- *  is read from. */
-export interface OriginFile {
+/** A folder in an origin, by the relative path the origin's own tree names it with, and where it
+ *  sits. */
+export interface OriginFolder {
   readonly relativePath: string;
   readonly path: string;
 }
 
+/** A file in an origin, as a folder is, and where it is read from: a link's target. */
+export interface OriginFile extends OriginFolder {
+  readonly sourcePath: string;
+}
+
 /** An origin's files: the origin they take, the folder they are in (none for a name that gives
- *  it none), and each file. `notes` names each entry the listing skipped, one line apiece. */
+ *  it none), each file, and each folder below it. `notes` names each entry the listing skipped,
+ *  one line apiece. */
 export interface OriginFiles {
   readonly origin: string;
   readonly folder: string | undefined;
   readonly files: readonly OriginFile[];
+  readonly folders: readonly OriginFolder[];
   readonly notes: readonly string[];
 }
 

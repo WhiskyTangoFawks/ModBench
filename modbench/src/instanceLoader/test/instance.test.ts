@@ -308,6 +308,7 @@ describe('Instance — the value', () => {
     expect(entry?.providers).toEqual([{ kind: 'mod', name: NONO }, { kind: 'mod', name: 'Unofficial Fallout 4 Patch' }]);
     expect(instance.value.filesByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures/shared.dds']);
     expect(instance.value.filesByMod.get('Tracked Patch Mod')?.map((f) => f.relativePath)).toEqual(['Tracked Patch Mod.esp']);
+    expect(instance.value.foldersByMod.get('Harder VATS')?.map((f) => f.relativePath)).toEqual(['textures']);
   });
 
   it('carries every plugin — listed, unlisted and Data-folder — with origin, slot, enabled and winning', async () => {
@@ -1022,7 +1023,7 @@ async function minimalInstanceWithoutCorpusMasters(): Promise<{
 }
 
 describe('Instance — Overwrite\'s files', () => {
-  it('carries each file under the overwrite/ folder, recursive, by the path in it and where it is read from', async () => {
+  it('carries each file and folder under the overwrite/ folder, recursive, by the path in it and where it sits', async () => {
     const { root, instance } = await minimalInstanceWithoutCorpusMasters();
     await instance.refresh();
     expect(instance.value.overwriteFiles).toEqual([]);
@@ -1031,9 +1032,9 @@ describe('Instance — Overwrite\'s files', () => {
     await writeFile(join(root, 'overwrite', 'F4SE', 'plugin.log'), 'x');
     await instance.refresh();
 
-    expect(instance.value.overwriteFiles).toEqual([
-      { relativePath: 'F4SE/plugin.log', absolutePath: join(root, 'overwrite', 'F4SE', 'plugin.log') },
-    ]);
+    const log = join(root, 'overwrite', 'F4SE', 'plugin.log');
+    expect(instance.value.overwriteFiles).toEqual([{ relativePath: 'F4SE/plugin.log', path: log, sourcePath: log }]);
+    expect(instance.value.overwriteFolders).toEqual([{ relativePath: 'F4SE', path: join(root, 'overwrite', 'F4SE') }]);
   });
 });
 

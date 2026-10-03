@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
+import { FileConflictLookup, type FileConflictIndex, type ModFile } from '../fileConflictIndex';
 import { findPluginsOutsideLoadOrder } from '../pluginsOutsideLoadOrder';
 
-function toFileMap(byMod: Record<string, string[]>): Map<string, { relativePath: string; absolutePath: string }[]> {
+function toFileMap(byMod: Record<string, string[]>): Map<string, ModFile[]> {
   return new Map(
     Object.entries(byMod).map(([mod, paths]) => [
       mod,
-      paths.map((relativePath) => ({ relativePath, absolutePath: `/mods/${mod}/${relativePath}` })),
+      paths.map((relativePath) => ({ relativePath, path: `/mods/${mod}/${relativePath}`, sourcePath: `/mods/${mod}/${relativePath}` })),
     ]),
   );
 }
 
 function indexOf(filesByMod: Record<string, string[]>): FileConflictIndex {
-  return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod) };
+  return { files: new FileConflictLookup(), filesByMod: toFileMap(filesByMod), foldersByMod: new Map() };
 }
 
 describe('findPluginsOutsideLoadOrder — the plugin files the effective load order does not point at: an overridden plugin, or a file plugins.txt never names', () => {

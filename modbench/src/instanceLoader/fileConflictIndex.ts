@@ -1,18 +1,12 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 
-import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile } from '../instanceAdapter/instanceAdapter';
+import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile, OriginFolder } from '../instanceAdapter/instanceAdapter';
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
 const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
 
-/** One file of an origin: the path its own tree names it with, and where it is read from. */
-export interface ModFile {
-  readonly relativePath: string;
-  readonly absolutePath: string;
-}
-
-export const modFileOf = (file: OriginFile): ModFile => ({ relativePath: file.relativePath, absolutePath: file.path });
+export type ModFile = OriginFile;
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -70,7 +64,9 @@ export interface FileConflictIndex {
   files: FileConflictLookup;
   /** Each listed mod's own files, a disabled mod's too, so callers don't need a second
    *  filesystem walk. */
-  filesByMod: Map<string, ModFile[]>;
+  filesByMod: Map<string, readonly ModFile[]>;
+  /** Each listed mod's folders, as `filesByMod` holds its files. */
+  foldersByMod: Map<string, readonly OriginFolder[]>;
 }
 
 // Plugins live at a mod's root, so a nested file sharing a plugin's basename must not match.
@@ -92,13 +88,14 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
   return new Map(modWinners);
 }
 
-// A mod's own files as the adapter lists them; each entry the listing skipped is one Output line.
-async function modFiles(
+// A mod's own files and folders as the adapter lists them; each entry the listing skipped is one
+// Output line.
+async function modListing(
   adapter: Pick<InstanceAdapter, 'originFiles'>, modName: string, log: (msg: string) => void,
-): Promise<ModFile[]> {
-  const { files, notes } = await adapter.originFiles(modOrigin(modName));
+): Promise<{ files: readonly ModFile[]; folders: readonly OriginFolder[] }> {
+  const { files, folders, notes } = await adapter.originFiles(modOrigin(modName));
   for (const note of notes) log(`[fileConflictIndex] ${modName}: ${note}`);
-  return files.map(modFileOf);
+  return { files, folders };
 }
 
 export async function buildFileConflictIndex(
@@ -108,20 +105,22 @@ export async function buildFileConflictIndex(
   log: (msg: string) => void,
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
-  const filesByMod = new Map<string, ModFile[]>();
+  const filesByMod = new Map<string, readonly ModFile[]>();
+  const foldersByMod = new Map<string, readonly OriginFolder[]>();
 
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
 
   // Every mod's listing is independent, so run them concurrently; only the merge below needs the
   // override order, and only among enabled mods.
   const listed = await Promise.all(
-    mods.map(async (mod) => ({ mod, files: await modFiles(adapter, mod.name, log) })),
+    mods.map(async (mod) => ({ mod, ...await modListing(adapter, mod.name, log) })),
   );
 
   // Mod order is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
-  for (const { mod, files: ownFiles } of listed) {
+  for (const { mod, files: ownFiles, folders } of listed) {
     filesByMod.set(mod.name, ownFiles);
+    foldersByMod.set(mod.name, folders);
     if (!mod.enabled) continue;
 
     for (const file of ownFiles) {
@@ -131,7 +130,7 @@ export async function buildFileConflictIndex(
       } else {
         files.set({
           relativePath: file.relativePath,
-          winner: file.absolutePath,
+          winner: file.sourcePath,
           winnerOrigin: modOrigin(mod.name),
           providers: [modOrigin(mod.name)],
         });
@@ -144,11 +143,11 @@ export async function buildFileConflictIndex(
     const existing = files.get(file.relativePath);
     files.set({
       relativePath: file.relativePath,
-      winner: file.path,
+      winner: file.sourcePath,
       winnerOrigin: OVERWRITE,
       providers: [OVERWRITE, ...(existing?.providers ?? [])],
     });
   }
 
-  return { files, filesByMod };
+  return { files, filesByMod, foldersByMod };
 }

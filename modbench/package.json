@@ -1005,7 +1005,7 @@
         },
         {
           "command": "modbench.mod.openFolder",
-          "when": "view == modbench.modList && viewItem == file",
+          "when": "view == modbench.modList && (viewItem == file || viewItem == folder)",
           "group": "1_open@1"
         },
         {

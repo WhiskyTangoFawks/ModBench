@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, ModFile, ModlistEntry, Separator } from '../instanceLoader/instance';
+import type { FileOrigin, Mod, ModFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
 import { modOrigin } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
@@ -175,6 +175,7 @@ export class ModNode extends vscode.TreeItem {
   constructor(
     public readonly mod: Mod, status?: ModStatusResult, public readonly facts?: ModFacts,
     public readonly files: readonly ModFile[] = [],
+    public readonly folders: readonly OriginFolder[] = [],
   ) {
     super(mod.name, expanderOver(files));
     this.id = rowIdentity(this.kind, mod.name);
@@ -206,7 +207,7 @@ export function modOfRow(value: unknown): string | undefined {
  *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_NODE_KIND;
-  constructor(public readonly files: readonly ModFile[], manager: string) {
+  constructor(public readonly files: readonly ModFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
     super('Overwrite', expanderOver(files));
     this.id = this.kind;
     this.contextValue = OVERWRITE_NODE_KIND;
@@ -550,9 +551,11 @@ export class ModListProvider
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
-    if (element instanceof ModNode) return filesIn(element, modOrigin(element.mod.name), element.files);
-    if (element instanceof OverwriteNode) return filesIn(element, RUNTIME_OUTPUT, element.files);
-    if (element instanceof FolderNode) return filesIn(element, element.origin, element.files, element.pathInMod);
+    if (element instanceof ModNode) return filesIn(element, modOrigin(element.mod.name), element.files, element.folders);
+    if (element instanceof OverwriteNode) return filesIn(element, RUNTIME_OUTPUT, element.files, element.folders);
+    if (element instanceof FolderNode) {
+      return filesIn(element, element.origin, element.files, element.folders, element.folder.relativePath);
+    }
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
     if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
@@ -616,14 +619,15 @@ export class ModListProvider
   }
 
   private overwriteNode(): OverwriteNode {
-    return new OverwriteNode(this.instanceValue.overwriteFiles, this.instanceValue.managerNames.manager);
+    const { overwriteFiles, managerNames, overwriteFolders } = this.instanceValue;
+    return new OverwriteNode(overwriteFiles, managerNames.manager, overwriteFolders);
   }
 
   private toModNode = (m: Mod): ModNode => {
     const write = this.unconfirmed.get(m.name);
     const row = new ModNode({ ...m, enabled: write?.enabled ?? m.enabled }, this.instanceValue.modStatuses.get(m.name), {
       holdsPlugin: this.modsHoldingPlugin.has(m.name), tracked: this.instanceValue.trackedMods.has(m.name),
-    }, this.instanceValue.filesByMod.get(m.name));
+    }, this.instanceValue.filesByMod.get(m.name), this.instanceValue.foldersByMod.get(m.name));
     if (write?.marked || this.shapeMarked(m)) markRow(row);
     return row;
   };

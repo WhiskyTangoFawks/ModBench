@@ -581,10 +581,15 @@ describe('the MO2 Instance adapter', () => {
         expect(files.origin).toBe('Harder VATS');
         expect(files.folder).toBe(folder);
         expect(relativePaths(files.files)).toEqual(['Textures/Source/kept.psc', 'Textures/a.dds']);
-        expect(files.files.find((f) => f.relativePath === 'Textures/a.dds')?.path).toBe(join(folder, 'Textures', 'a.dds'));
+        expect(files.files.find((f) => f.relativePath === 'Textures/a.dds'))
+          .toMatchObject({ path: join(folder, 'Textures', 'a.dds'), sourcePath: join(folder, 'Textures', 'a.dds') });
+        expect(files.folders).toEqual([
+          { relativePath: 'Textures', path: join(folder, 'Textures') },
+          { relativePath: 'Textures/Source', path: join(folder, 'Textures', 'Source') },
+        ]);
       });
 
-      it('reads a linked file from where the link points, and notes a broken link rather than failing', async () => {
+      it('reads a linked file from where the link points, and places it where the link sits, and notes a broken link rather than failing', async () => {
         const folder = join(root, 'mods', 'Harder VATS');
         const target = join(root, 'elsewhere.esp');
         await writeFile(target, '');
@@ -593,7 +598,8 @@ describe('the MO2 Instance adapter', () => {
 
         const files = await adapter.originFiles(mod('Harder VATS'));
 
-        expect(files.files.find((f) => f.relativePath === 'Linked.esp')?.path).toBe(await realpath(target));
+        expect(files.files.find((f) => f.relativePath === 'Linked.esp'))
+          .toEqual({ relativePath: 'Linked.esp', path: join(folder, 'Linked.esp'), sourcePath: await realpath(target) });
         expect(relativePaths(files.files)).not.toContain('Broken.esp');
         expect(files.notes.join('\n')).toMatch(/Broken\.esp/);
       });
@@ -643,6 +649,7 @@ describe('the MO2 Instance adapter', () => {
         const files = await adapter.originFiles(mod('Harder VATS'));
 
         expect(files.files.find((f) => f.relativePath === 'linked/foo.dds')?.path).toBe(join(root, 'mods', 'Harder VATS', 'linked', 'foo.dds'));
+        expect(files.folders).toContainEqual({ relativePath: 'linked', path: join(root, 'mods', 'Harder VATS', 'linked') });
       });
 
       it('notes a link cycle and walks each file once', async () => {
@@ -685,7 +692,7 @@ describe('the MO2 Instance adapter', () => {
 
       it('answers no files for a mod with no folder, or a name that gives it none', async () => {
         expect((await adapter.originFiles(mod('No Such Mod'))).files).toEqual([]);
-        expect(await adapter.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], notes: [] });
+        expect(await adapter.originFiles(mod('../profiles'))).toEqual({ origin: '../profiles', folder: undefined, files: [], folders: [], notes: [] });
       });
 
       it('lists everything the game wrote at run time, under the reserved origin, without writes in flight', async () => {
@@ -700,6 +707,7 @@ describe('the MO2 Instance adapter', () => {
         expect(relativePaths(files.files)).toContain('Stray.esp');
         expect(relativePaths(files.files).some((path) => path.startsWith('F4SE/'))).toBe(true);
         expect(files.files.every((f) => !f.relativePath.endsWith('.tmp'))).toBe(true);
+        expect(files.folders).toContainEqual({ relativePath: 'F4SE', path: join(folder, 'F4SE') });
       });
 
       it.each([

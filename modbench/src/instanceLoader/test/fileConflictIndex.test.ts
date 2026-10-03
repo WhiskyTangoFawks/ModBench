@@ -80,7 +80,7 @@ describe('buildFileConflictIndex', () => {
 });
 
 describe('buildFileConflictIndex — Overwrite is the winning-most provider', () => {
-  const overwriteCopy = { relativePath: 'textures/shared/foo.dds', path: '/instance/overwrite/textures/shared/foo.dds' };
+  const overwriteCopy = { relativePath: 'textures/shared/foo.dds', path: '/instance/overwrite/textures/shared/foo.dds', sourcePath: '/instance/overwrite/textures/shared/foo.dds' };
 
   it('wins a path over every mod that provides it, and is listed as a provider', async () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], [overwriteCopy], fixture, () => {});
@@ -92,7 +92,7 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
   });
 
   it('is the sole provider of a path no mod ships', async () => {
-    const index = await buildFileConflictIndex([mod('ModA')], [{ relativePath: 'only.txt', path: '/o/only.txt' }], fixture, () => {});
+    const index = await buildFileConflictIndex([mod('ModA')], [{ relativePath: 'only.txt', path: '/o/only.txt', sourcePath: '/o/only.txt' }], fixture, () => {});
     expect(index.files.get('only.txt')).toMatchObject({ winnerOrigin: { kind: 'runtimeOutput' }, providers: [{ kind: 'runtimeOutput' }] });
   });
 
@@ -109,9 +109,9 @@ describe('buildFileConflictIndex — Overwrite is the winning-most provider', ()
 
   it('tells Overwrite from a mod folder named overwrite: that mod loses to Overwrite', async () => {
     const entries = [mod(OVERWRITE_ORIGIN)];
-    const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds' };
+    const sharing = { relativePath: 'a.dds', path: '/instance/overwrite/a.dds', sourcePath: '/instance/overwrite/a.dds' };
     const index = await buildFileConflictIndex(
-      entries, [sharing], answering({ folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds' }], notes: [] }), () => {},
+      entries, [sharing], answering({ folder: '/mods/overwrite', files: [{ relativePath: 'a.dds', path: '/mods/overwrite/a.dds', sourcePath: '/mods/overwrite/a.dds' }], folders: [], notes: [] }), () => {},
     );
     expect(index.files.get('a.dds')?.winner).toBe(sharing.path);
     expect(index.files.get('a.dds')?.winnerOrigin).toEqual({ kind: 'runtimeOutput' });
@@ -160,18 +160,21 @@ describe('buildFileConflictIndex — what the adapter answers: the walk is the a
   it('logs each entry the adapter skipped, naming its mod', async () => {
     const log = vi.fn();
 
-    await buildFileConflictIndex([mod('ModA')], [], answering({ folder: '/mods/ModA', files: [], notes: ['broken link "/mods/ModA/x.dds", skipped'] }), log);
+    await buildFileConflictIndex([mod('ModA')], [], answering({ folder: '/mods/ModA', files: [], folders: [], notes: ['broken link "/mods/ModA/x.dds", skipped'] }), log);
 
     expect(log).toHaveBeenCalledWith(expect.stringMatching(/ModA.*broken link "\/mods\/ModA\/x\.dds", skipped/));
   });
 
-  it('keeps each file where the adapter says it is read from', async () => {
+  it('keeps each file where the adapter says it sits and is read from, and each folder where it sits', async () => {
+    const linked = { relativePath: 'x/linked.dds', path: '/mods/ModA/x/linked.dds', sourcePath: '/shared/real.dds' };
+    const folder = { relativePath: 'x', path: '/mods/ModA/x', sourcePath: '/mods/ModA/x' };
     const index = await buildFileConflictIndex(
-      [mod('ModA')], [], answering({ folder: '/mods/ModA', files: [{ relativePath: 'linked.dds', path: '/shared/real.dds' }], notes: [] }), () => {},
+      [mod('ModA')], [], answering({ folder: '/mods/ModA', files: [linked], folders: [folder], notes: [] }), () => {},
     );
 
-    expect(index.files.get('linked.dds')?.winner).toBe('/shared/real.dds');
-    expect(index.filesByMod.get('ModA')).toEqual([{ relativePath: 'linked.dds', absolutePath: '/shared/real.dds' }]);
+    expect(index.files.get('x/linked.dds')?.winner).toBe('/shared/real.dds');
+    expect(index.filesByMod.get('ModA')).toEqual([linked]);
+    expect(index.foldersByMod.get('ModA')).toEqual([folder]);
   });
 });
 

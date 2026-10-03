@@ -296,14 +296,14 @@ export function registerCreateEmptyModCommand(
   });
 }
 
-/** A mod row opens the mod's folder, the Overwrite row the overwrite folder, and a file row shows
- *  the file. */
+/** A mod row opens the mod's folder, the Overwrite row the overwrite folder, and a file or folder
+ *  row shows itself where it sits. */
 export function registerOpenFolderCommand(
   instance: Pick<Instance, 'value'>, reporter: Reporter, viewSelection: () => readonly ModlistNode[],
 ): vscode.Disposable {
   return registerModsGesture('modbench.mod.openFolder', viewSelection, async (entry) => {
     const anchor = entry.clicked ?? entry.focused;
-    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode || anchor instanceof FileNode)) return;
+    if (!(anchor instanceof ModNode || anchor instanceof OverwriteNode || anchor instanceof FolderNode || anchor instanceof FileNode)) return;
     const target = folderOf(instance, anchor);
     await reportFailure(reporter, `Failed to open the folder of "${target.name}".`, async () => {
       if (target.folder === undefined) throw new Error('No folder holds it.');
@@ -323,14 +323,15 @@ export async function reportFailure(reporter: Reporter, failMessage: string, act
 // The value's own path for each row, never a path joined here: the Instance adapter owns every
 // path function, and the value carries its answer.
 function folderOf(
-  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode | FileNode,
+  instance: Pick<Instance, 'value'>, node: ModNode | OverwriteNode | FolderNode | FileNode,
 ): { name: string; folder: vscode.Uri | undefined } {
   const { overwriteDir, modDirs } = instance.value.paths;
   const uriOf = (path: string | undefined) => (path === undefined ? undefined : vscode.Uri.file(path));
   switch (node.kind) {
     case OVERWRITE_NODE_KIND: return { name: 'Overwrite', folder: uriOf(overwriteDir) };
     case 'mod': return { name: node.mod.name, folder: uriOf(modDirs.get(node.mod.name)) };
-    case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.absolutePath) };
+    case 'folder': return { name: node.folder.relativePath, folder: uriOf(node.folder.path) };
+    case 'file': return { name: node.file.relativePath, folder: uriOf(node.file.path) };
   }
 }
 
@@ -364,7 +365,7 @@ function copyValueOf(row: CopyRow): string {
   switch (row.kind) {
     case 'mod': return row.mod.name;
     case 'separator': return row.separator.name;
-    case 'folder': return row.pathInMod;
+    case 'folder': return row.folder.relativePath;
     case 'file': return row.file.relativePath;
   }
 }

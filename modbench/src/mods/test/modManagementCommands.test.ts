@@ -1044,7 +1044,7 @@ describe('modbench.mod.move: the selection of mods or of separators, to a picked
   });
 });
 
-describe('open folder: one command for a mod, the Overwrite row and a file', () => {
+describe('open folder: one command for a mod, the Overwrite row, a file and a folder', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const instance = {
@@ -1114,15 +1114,39 @@ describe('open folder: one command for a mod, the Overwrite row and a file', () 
     expect(revealed()).toEqual([]);
   });
 
-  const leaf = new FileNode(new ModNode({ kind: 'mod', name: 'My Mod', enabled: true }), { kind: 'mod', name: 'My Mod' },
-    { relativePath: 'textures/a.dds', absolutePath: '/instance/mods/My Mod/textures/a.dds' }, 'a.dds');
+  const myMod = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true });
+  const linked = { relativePath: 'textures/a.dds', path: '/instance/mods/My Mod/textures/a.dds', sourcePath: '/elsewhere/a.dds' };
+  const folder = new FolderNode(myMod, { kind: 'mod', name: 'My Mod' },
+    { relativePath: 'textures', path: '/instance/mods/My Mod/textures' }, [linked], [], 'textures');
+  const leaf = new FileNode(folder, folder.origin, linked, 'a.dds');
 
-  it('reveals a file at the path the value names for it, clicked or the one selected from the palette', async () => {
+  it('reveals a file where it sits in its mod, a link too, clicked or the one selected from the palette', async () => {
     registerOpenFolderCommand(instance, recordingReporter(), () => [leaf]);
     await invoke('modbench.mod.openFolder', leaf);
     await invoke('modbench.mod.openFolder');
 
     expect(revealed()).toEqual(['/instance/mods/My Mod/textures/a.dds', '/instance/mods/My Mod/textures/a.dds']);
+  });
+
+  it('reveals a folder where the value says it sits, clicked or the one selected from the palette', async () => {
+    registerOpenFolderCommand(instance, recordingReporter(), () => [folder]);
+    await invoke('modbench.mod.openFolder', folder);
+    await invoke('modbench.mod.openFolder');
+
+    expect(revealed()).toEqual(['/instance/mods/My Mod/textures', '/instance/mods/My Mod/textures']);
+  });
+
+  it('refuses a folder the value names no path for, naming it by its path in its mod', async () => {
+    const reporter = recordingReporter();
+    const unnamed = new FolderNode(myMod, folder.origin, { relativePath: 'textures', path: undefined }, [linked], [], 'textures');
+
+    registerOpenFolderCommand(instance, reporter, () => []);
+    await invoke('modbench.mod.openFolder', unnamed);
+
+    expect(revealed()).toEqual([]);
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Failed to open the folder of "textures".', detail: 'No folder holds it.' },
+    ]);
   });
 
   it('names the file by its path in its mod when its reveal fails', async () => {
@@ -1253,8 +1277,8 @@ describe('modsCopyValueText, one line for each selected row copy value takes', (
 
   it('copies each selected file\'s and folder\'s path in its mod beside the mods\' names, from a click and from the key', () => {
     const armour = new ModNode({ kind: 'mod', name: 'Armour', enabled: true });
-    const file = { relativePath: 'textures/armour/a.dds', absolutePath: '/instance/mods/Armour/textures/armour/a.dds' };
-    const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, 'textures', [file], 'textures');
+    const file = { relativePath: 'textures/armour/a.dds', path: '/instance/mods/Armour/textures/armour/a.dds', sourcePath: '/instance/mods/Armour/textures/armour/a.dds' };
+    const folder = new FolderNode(armour, { kind: 'mod', name: 'Armour' }, { relativePath: 'textures', path: '/instance/mods/Armour/textures' }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
     const selection = [alpha, folder, leaf];
 

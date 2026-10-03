@@ -36,7 +36,7 @@ export function findPluginsOutsideLoadOrder(
     for (const file of files) {
       if (!isRootLevelPlugin(file.relativePath)) continue;
       if (loaded.has(addressOf(mod, file.relativePath))) continue;
-      outside.push({ name: file.relativePath, path: file.absolutePath, origin: mod });
+      outside.push({ name: file.relativePath, path: file.sourcePath, origin: mod });
     }
   }
   return outside;

@@ -87,6 +87,8 @@ export interface ModsKeyContext {
   readonly holdsUntrackedModWithPlugin: boolean;
 }
 
+const OPEN_FOLDER_KINDS = new Set<ModlistNode['kind']>(['mod', OVERWRITE_NODE_KIND, 'folder', 'file']);
+
 export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (row: ModNode) => boolean): ModsKeyContext {
   const mods = selection.filter(isOf(['mod']));
   // No API names the focused row, and a file or folder in the selection may be it: the keys do
@@ -100,7 +102,7 @@ export function modsKeyContext(selection: readonly ModlistNode[], isEnabled: (ro
     selectionToggle: firstMod && toggleOf(isEnabled(firstMod)),
     selectionKind: kinds.size === 1 ? onlyKind : undefined,
     singleRow: onlyRow !== undefined,
-    singleOpenFolderRow: onlyRow?.kind === 'mod' || onlyRow?.kind === OVERWRITE_NODE_KIND || onlyRow?.kind === 'file',
+    singleOpenFolderRow: onlyRow !== undefined && OPEN_FOLDER_KINDS.has(onlyRow.kind),
     holdsEnabledMod: mods.some(isEnabled),
     holdsDisabledMod: mods.some((row) => !isEnabled(row)),
     holdsUntrackedModWithPlugin: mods.some((row) => row.facts?.holdsPlugin === true && !row.facts.tracked),

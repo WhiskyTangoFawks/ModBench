@@ -214,8 +214,8 @@ describe('what the Mods keys read off the selection', () => {
   });
 
   it('Space, Delete and F2 do nothing over a selection that holds a file or a folder, which may be the focused row', () => {
-    const file = { relativePath: 'textures/a.dds', absolutePath: '/instance/mods/On/textures/a.dds' };
-    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, 'textures', [file], 'textures');
+    const file = { relativePath: 'textures/a.dds', path: '/instance/mods/On/textures/a.dds', sourcePath: '/instance/mods/On/textures/a.dds' };
+    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'textures', path: '/instance/mods/On/textures' }, [file], [], 'textures');
     const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
 
     for (const selection of [[enabledMod, leaf], [disabledMod, folder], [group, leaf]]) {
@@ -229,9 +229,11 @@ describe('what the Mods keys read off the selection', () => {
     expect(modsKeyContext([], byRow).singleRow).toBe(false);
   });
 
-  it('open folder sees exactly one selected row it takes: a mod, Overwrite, or a file', () => {
-    const file = { relativePath: 'a.dds', absolutePath: '/instance/mods/On/a.dds' };
-    const leaf = new FileNode(enabledMod, { kind: 'mod', name: 'On' }, file, 'a.dds');
+  it('open folder sees exactly one selected row it takes: a mod, Overwrite, a file or a folder', () => {
+    const file = { relativePath: 'x/a.dds', path: '/instance/mods/On/x/a.dds', sourcePath: '/instance/mods/On/x/a.dds' };
+    const folder = new FolderNode(enabledMod, { kind: 'mod', name: 'On' }, { relativePath: 'x', path: '/instance/mods/On/x' }, [file], [], 'x');
+    const leaf = new FileNode(folder, folder.origin, file, 'a.dds');
+    expect(modsKeyContext([folder], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([enabledMod], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([new OverwriteNode([], 'MO2')], byRow).singleOpenFolderRow).toBe(true);
     expect(modsKeyContext([leaf], byRow).singleOpenFolderRow).toBe(true);

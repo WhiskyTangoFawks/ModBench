@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Mod, ModFile, ModlistEntry } from '../../instanceLoader/instance';
+import type { Mod, ModFile, ModlistEntry, OriginFolder } from '../../instanceLoader/instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from '../ModListProvider';
+import { FolderNode } from '../modFiles';
 import { FakeInstance } from '../../test/mo2/fakeInstance';
 import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 import { accessTo } from '../../test/mo2/adapterOver';
@@ -21,12 +22,16 @@ import { expectInstanceOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
-const file = (relativePath: string, absolutePath = `/elsewhere/${relativePath}`): ModFile => ({ relativePath, absolutePath });
+const file = (relativePath: string, path = `/instance/mods/${relativePath}`, sourcePath = path): ModFile => ({ relativePath, path, sourcePath });
 
 function providerOver(
   mods: ModlistEntry[], filesByMod: Record<string, ModFile[]>, overwriteFiles: ModFile[] = [],
+  folders: { byMod?: Record<string, OriginFolder[]>; overwrite?: OriginFolder[] } = {},
 ): ModListProvider {
-  const value = instanceValueFixture({ mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles });
+  const value = instanceValueFixture({
+    mods, filesByMod: new Map(Object.entries(filesByMod)), overwriteFiles,
+    foldersByMod: new Map(Object.entries(folders.byMod ?? {})), overwriteFolders: folders.overwrite ?? [],
+  });
   return new ModListProvider({ instance: new FakeInstance(value), access: accessTo('/instance'), log: () => undefined });
 }
 
@@ -133,7 +138,7 @@ describe('Overwrite opens into its files', () => {
 });
 
 describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () => {
-  const linked = file('textures/linked.dds', '/outside/the/mod/real-target.dds');
+  const linked = file('textures/linked.dds', '/instance/mods/Armour/textures/linked.dds', '/outside/the/mod/real-target.dds');
 
   async function rowsOf() {
     const provider = providerOver([mod('Armour')], { Armour: [linked] });
@@ -165,16 +170,37 @@ describe('a file or folder row\'s parts (mods.md, A row, File and folder)', () =
     for (const row of [folder, leaf]) expect(row.resourceUri?.scheme).toMatch(/^(?!file$)\w/);
   });
 
-  it('opens a clicked file as a preview editor at the path the value names, and a clicked folder or mod only selects', async () => {
-    const provider = providerOver([mod('Armour')], { Armour: [file('textures/a.dds', '/instance/mods/Armour/textures/a.dds')] });
+  it('opens a clicked file as a preview editor where it sits in its mod, a link too, and a clicked folder or mod only selects', async () => {
+    const provider = providerOver([mod('Armour')], { Armour: [linked] });
     const modRow = await rootOf(provider, ModNode, 'Armour');
     const folder = await childNamed(provider, modRow, 'textures');
-    const leaf = await childNamed(provider, folder, 'a.dds');
+    const leaf = await childNamed(provider, folder, 'linked.dds');
 
-    expect(leaf.command).toMatchObject({ command: 'vscode.open', arguments: [{ fsPath: '/instance/mods/Armour/textures/a.dds' }, { preview: true }] });
+    expect(leaf.command).toMatchObject({ command: 'vscode.open', arguments: [{ fsPath: '/instance/mods/Armour/textures/linked.dds' }, { preview: true }] });
     expect(folder.command).toBeUndefined();
     expect(modRow.command).toBeUndefined();
     expect((await rootOf(provider, OverwriteNode, 'Overwrite')).command).toBeUndefined();
+  });
+
+  it('carries where each folder sits as the value names it, by its whole path in its mod, in a mod and in Overwrite', async () => {
+    const provider = providerOver([mod('Armour')], { Armour: [file('meshes/textures/a.nif'), file('textures/armour/a.dds')] }, [file('F4SE/a.log')], {
+      byMod: { Armour: [
+        { relativePath: 'meshes', path: '/instance/mods/Armour/meshes' },
+        { relativePath: 'meshes/textures', path: '/instance/mods/Armour/meshes/textures' },
+        { relativePath: 'textures', path: '/linked/textures' },
+        { relativePath: 'textures/armour', path: '/linked/textures/armour' },
+      ] },
+      overwrite: [{ relativePath: 'F4SE', path: '/instance/overwrite/F4SE' }],
+    });
+    const textures = expectInstanceOf(await childNamed(provider, await rootOf(provider, ModNode, 'Armour'), 'textures'), FolderNode);
+    const armour = expectInstanceOf(await childNamed(provider, textures, 'armour'), FolderNode);
+    const f4se = expectInstanceOf(await childNamed(provider, await rootOf(provider, OverwriteNode, 'Overwrite'), 'F4SE'), FolderNode);
+
+    expect([textures.folder, armour.folder, f4se.folder]).toEqual([
+      { relativePath: 'textures', path: '/linked/textures' },
+      { relativePath: 'textures/armour', path: '/linked/textures/armour' },
+      { relativePath: 'F4SE', path: '/instance/overwrite/F4SE' },
+    ]);
   });
 
   it('shows the path in its mod as the tooltip', async () => {
