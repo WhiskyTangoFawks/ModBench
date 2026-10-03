@@ -28,8 +28,8 @@ port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
-instancecommands -> client: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
-client -> http: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
+instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
+client -> http: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
 http -> commands: put load order {class: loadorder}
 commands -> loadorder: snapshot {class: loadorder}
 commands -> http: "applied: the version" {class: loadorder}

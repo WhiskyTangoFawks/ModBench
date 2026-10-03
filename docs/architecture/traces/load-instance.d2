@@ -22,7 +22,7 @@ instanceadapter -> instanceloader: "parsed: the game, the profile, the mods and 
 instanceloader."the value, replaced whole"
 instanceloader -> views: "value · the last read's failure, if any" {class: loadorder}
 instanceloader -> instancecommands: "put load order: the snapshot" {class: loadorder}
-instancecommands -> client: "snapshot: the game release · every plugin · the active plugins" {class: loadorder}
+instancecommands -> client: "snapshot: the game release · every plugin and what provides it · the active plugins" {class: loadorder}
 
 refresh: "refresh, from the Toolbox" {
   toolbox -> instancecommands: refresh {class: loadorder}
