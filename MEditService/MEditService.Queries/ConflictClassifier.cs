@@ -219,7 +219,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var rows = new List<(string Text, Dictionary<string, (JsonElement, int)> Held)>();
         foreach (var (column, elements) in columns)
         {
-            var texts = elements.Select(e => DocumentNodes.KeyOrderedText(e, element)).ToList();
+            var texts = elements.Select(e => DocumentNodes.ComparedText(e, element)).ToList();
             var common = new int[rows.Count + 1, texts.Count + 1];
             for (var r = rows.Count - 1; r >= 0; r--)
             {

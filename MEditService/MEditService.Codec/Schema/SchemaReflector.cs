@@ -134,7 +134,8 @@ public sealed class SchemaReflector
                 .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
                 .ToDictionary(x => x.Type, x => x.Table),
             annotations,
-            new DeclaredDefaults(category.DefaultRelease(), logger));
+            new DeclaredDefaults(category.DefaultRelease(), logger),
+            new HeldAlpha(logger));
 
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)

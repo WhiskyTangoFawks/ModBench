@@ -37,6 +37,8 @@ public sealed record SubFieldSpec(
     bool IsVersionControlInfo1 = false,
     // See FieldMetadata.IsEditorId.
     bool IsEditorId = false,
+    // See FieldMetadata.HoldsAlpha.
+    bool HoldsAlpha = false,
     // See FieldMetadata.ExtendedKeyMembers.
     IReadOnlyList<string>? ExtendedKeyMembers = null)
 {
@@ -65,6 +67,7 @@ public sealed record SubFieldSpec(
             IgnoredInConflicts: IgnoredInConflicts,
             IsVersionControlInfo1: IsVersionControlInfo1,
             IsEditorId: IsEditorId,
+            HoldsAlpha: HoldsAlpha,
             ExtendedKeyMembers: ExtendedKeyMembers);
     }
 }

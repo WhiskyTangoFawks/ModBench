@@ -10,7 +10,9 @@ public sealed record LeafSpec(
     bool AllowsNull = false,
     string? ViewDefaultLiteral = null,
     // See FieldMetadata.Default.
-    object? Default = null)
+    object? Default = null,
+    // See FieldMetadata.HoldsAlpha.
+    bool HoldsAlpha = false)
 {
     /// <summary>A leaf that names no record type — every leaf but a form link; on a form link, any record type.</summary>
     public static readonly string[] NoFormKeyTypes = [];

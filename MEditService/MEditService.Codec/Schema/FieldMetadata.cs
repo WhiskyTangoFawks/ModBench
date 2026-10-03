@@ -78,6 +78,9 @@ public record FieldMetadata(
     // The record's EditorID, which a Partial Form copy keeps (editor-fields.md, Partial Form).
     bool IsEditorId = false,
 
+    // A colour whose binary form holds an alpha, which it reads with (editor-fields.md, By type).
+    bool HoldsAlpha = false,
+
     // xEdit's extended key: the members ordering the elements that share a key, so the nth of them
     // pairs with the nth in every other column. The compare reads it; the webview never does.
     [property: JsonIgnore] IReadOnlyList<string>? ExtendedKeyMembers = null);

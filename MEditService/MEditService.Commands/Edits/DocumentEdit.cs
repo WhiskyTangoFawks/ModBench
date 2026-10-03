@@ -353,6 +353,7 @@ internal static class DocumentEdit
 
         var node = value.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(value.GetRawText());
         if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
+        node = AsRead(node, cursor.Meta);
         Cascade(node, cursor.Meta, cursor.Node);
 
         if (cursor.OwnerArray != null)
@@ -396,6 +397,33 @@ internal static class DocumentEdit
         owner[memberName] = node;
         edited = node;
         return null;
+    }
+
+    // A colour holding no alpha lands as Mutagen's binary read spells it, so a value pasted back as its
+    // cell copies it writes the document a fresh read gives (editor-fields.md, Every field, story 4).
+    private static JsonNode? AsRead(JsonNode? value, FieldMetadata meta)
+    {
+        switch (value)
+        {
+            case JsonValue leaf when meta.Type == ColorReading.ApiType && !meta.HoldsAlpha && leaf.TryGetValue<string>(out var text):
+                return JsonValue.Create(ColorReading.AsReadWithoutAlpha(text));
+            case JsonObject obj when meta.Fields is { } fields:
+                foreach (var field in fields)
+                {
+                    if (obj[field.Name] is { } child && AsRead(child, DocumentNodes.VariantFor(field, obj)) is var read && read != child)
+                        obj[field.Name] = read;
+                }
+                return obj;
+            case JsonArray array when meta.ElementType is { } elementMeta:
+                for (var i = 0; i < array.Count; i++)
+                {
+                    if (array[i] is { } element && AsRead(element, elementMeta) is var read && read != element)
+                        array[i] = read;
+                }
+                return array;
+            default:
+                return value;
+        }
     }
 
     // The cascade over a whole value: wherever it changes a governing member from what the document
@@ -483,6 +511,7 @@ internal static class DocumentEdit
             ? JsonNode.Parse(given.GetRawText())
             : DefaultElement(elementMeta);
         if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
+        element = AsRead(element, elementMeta);
         Cascade(element, elementMeta, null);
         array.Add(element);
         edited = array;
@@ -547,7 +576,8 @@ internal static class DocumentEdit
     // ── the closed pre-check list ───────────────────────────────────────────
 
     // Discriminator first on a union element, a member a known-defect row marks read-only, hex
-    // length where the document establishes one; walked over the value with the metadata beside it.
+    // length where the document establishes one, no alpha where a colour holds none; walked over the
+    // value with the metadata beside it.
     private static RecordEditResult? PreCheck(JsonNode? value, FieldMetadata meta, JsonNode? current, string path)
     {
         switch (value)
@@ -588,6 +618,14 @@ internal static class DocumentEdit
                     return RecordEditResult.RefusedAt(
                         RecordEditRefusal.HexLengthMismatch, path,
                         $"'{path}' holds {heldBytes.Length} bytes; a value of {newBytes.Length} bytes would resize it, and nothing here knows which bytes a resize moves.");
+                }
+                return null;
+            case JsonValue text when meta.Type == ColorReading.ApiType && !meta.HoldsAlpha:
+                if (text.TryGetValue<string>(out var color) && ColorReading.SpellsAlpha(color))
+                {
+                    return RecordEditResult.RefusedAt(
+                        RecordEditRefusal.AlphaNotHeld, path,
+                        $"'{path}' holds no alpha; '{color}' gives one that compiling would drop, so nothing was written. Give it as #RRGGBB.");
                 }
                 return null;
             default:

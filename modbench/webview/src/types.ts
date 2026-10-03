@@ -12,7 +12,7 @@ export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
 /** The closed set this side switches on. Each names the codec's spelling: a translated string is
- *  an object, a color "#AARRGGBB", a vector "x, y, z", flags an array of names. */
+ *  an object, a color "#AARRGGBB" or "#RRGGBB" when opaque, a vector "x, y, z", flags an array of names. */
 export type FieldType =
   | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
   | 'struct' | 'array' | 'hex' | 'color' | 'vector';

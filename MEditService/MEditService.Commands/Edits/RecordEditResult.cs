@@ -113,6 +113,10 @@ public enum RecordEditRefusal
     /// bytes a resize would move.</summary>
     HexLengthMismatch,
 
+    /// <summary>A colour whose binary form holds no alpha takes none: compile would drop it in silence.
+    /// Its own document's alpha 00, which Mutagen's read gives it, is no alpha.</summary>
+    AlphaNotHeld,
+
     /// <summary>Mutagen's reader refused the patched document; the message is its own, verbatim.</summary>
     CodecRejected,
 

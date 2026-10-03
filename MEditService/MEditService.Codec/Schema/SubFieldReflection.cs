@@ -96,6 +96,7 @@ internal static class SubFieldReflection
             // the getter's own annotation, which is what tells an unset member from a defaulted one.
             AllowsNull: leaf.AllowsNull || ReflectedTypes.IsNullableMember(prop),
             SiblingsInUse: game.Annotations.SiblingsInUseFor(prop),
-            Default: nullable ? null : leaf.Default);
+            Default: nullable ? null : leaf.Default,
+            HoldsAlpha: leaf.HoldsAlpha);
     }
 }

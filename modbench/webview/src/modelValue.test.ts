@@ -121,6 +121,29 @@ describe('modelValue — formKey', () => {
   });
 });
 
+describe('modelValue — color, by whether its binary form holds an alpha', () => {
+  const withAlpha = fieldMeta({ name: 'Color', type: 'color', holdsAlpha: true });
+  const withoutAlpha = fieldMeta({ name: 'LightningColor', type: 'color', holdsAlpha: false });
+
+  it('a color holding no alpha reads #RRGGBB, whatever alpha its document carries', () => {
+    expect(modelValue('#00102030', withoutAlpha)).toBe('#102030');
+    expect(modelValue('#102030', withoutAlpha)).toBe('#102030');
+  });
+
+  it('a color holding an alpha reads #AARRGGBB, an opaque one included', () => {
+    expect(modelValue('#7F102030', withAlpha)).toBe('#7F102030');
+    expect(modelValue('#102030', withAlpha)).toBe('#FF102030');
+  });
+
+  it('copies as it reads', () => {
+    expect(copiedText('#00102030', withoutAlpha)).toBe('#102030');
+  });
+
+  it('text with no color reading reads as itself', () => {
+    expect(modelValue('#1020', withAlpha)).toBe('#1020');
+  });
+});
+
 describe('modelValue — struct/array summary rows (JSON, not a prose summary)', () => {
   it('struct: JSON-serializes the whole value, not the "{…}" placeholder', () => {
     const value = { Faction: '000123:Fallout4.esm', Rank: 2 };

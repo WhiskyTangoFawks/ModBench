@@ -549,6 +549,85 @@ public sealed class DocumentEditTests : IDisposable
     }
 
     [Fact]
+    public void AColorHoldingAlpha_TakesAnOpaqueAlpha_WhichTheCodecSpellsWithoutIt()
+    {
+        var formKey = _fixture.Seed(_keyword, "kywd");
+        var before = _fixture.Document(formKey);
+
+        var after = Applied(formKey, SetAt(Json("\"#FF102030\""), Member("Color")));
+
+        Assert.Equal(["Color: <absent> -> \"#102030\""], ConditionEditTests.DocumentDiff(before, after));
+    }
+
+    [Theory]
+    [InlineData("\"#7F102030\"")]
+    [InlineData("\"#FF102030\"")]
+    public void AColorHoldingNoAlpha_RefusesAnAlpha_NamingTheField(string color)
+    {
+        var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+        var before = _fixture.Document(formKey);
+
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json(color), Member("LightningColor")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
+        Assert.Equal("LightningColor", result.Path);
+        Assert.Contains("'LightningColor'", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _fixture.Document(formKey));
+    }
+
+    [Theory]
+    [InlineData("\"#102030\"")]
+    [InlineData("\"#00102030\"")]
+    public void AColorHoldingNoAlpha_TakesItsRgb_InMutagensOwnSpellingOfNoAlpha(string color)
+    {
+        var formKey = _fixture.Seed(_mod.Weather.AddNew("Wt"), "wthr");
+        var before = _fixture.Document(formKey);
+
+        var after = Applied(formKey, SetAt(Json(color), Member("LightningColor")));
+
+        Assert.Equal(["LightningColor: <absent> -> \"#00102030\""], ConditionEditTests.DocumentDiff(before, after));
+    }
+
+    [Fact]
+    public void AColorHoldingNoAlpha_PastedBackAsItsCellCopiesIt_ChangesNothing()
+    {
+        var weather = _mod.Weather.AddNew("Wt");
+        weather.LightningColor = System.Drawing.Color.FromArgb(0, 0x10, 0x20, 0x30);
+        var formKey = _fixture.Seed(weather, "wthr");
+        var before = _fixture.Document(formKey);
+        Assert.Equal("#00102030", Node(before, "LightningColor").GetValue<string>());
+
+        var after = Applied(formKey, SetAt(Json("\"#102030\""), Member("LightningColor")));
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void AnElementPasted_WithAnAlphaInAColorHoldingNone_IsRefusedNamingThatColor()
+    {
+        var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
+
+        var (result, _) = _fixture.Apply(formKey, AddAt(Json("""{"Data": {"Tint": "#7F102030"}}"""), Member("Sprites")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.AlphaNotHeld, result.Refusal);
+        Assert.Equal("Sprites[0].Data.Tint", result.Path);
+    }
+
+    [Theory]
+    [InlineData("#102030")]
+    [InlineData("#00102030")]
+    public void AnElementPasted_WithAColorHoldingNoAlpha_HoldsItInMutagensOwnSpellingOfNoAlpha(string tint)
+    {
+        var formKey = _fixture.Seed(_mod.LensFlares.AddNew("Lf"), "lens");
+
+        var after = Applied(formKey, AddAt(Json($$$"""{"Data": {"Tint": "{{{tint}}}"}}"""), Member("Sprites")));
+
+        Assert.Equal("#00102030", Node(after, "Sprites").AsArray()[0].Require()["Data"].Require()["Tint"].Require().GetValue<string>());
+    }
+
+    [Fact]
     public void ValueTheCodecDrops_IsRefusedNamingIt_NeverReportedAsSuccess()
     {
         var formKey = SeedNpc();
