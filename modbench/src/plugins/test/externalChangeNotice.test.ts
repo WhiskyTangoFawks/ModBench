@@ -21,7 +21,6 @@ function noticing() {
   return { client, reporter, unsubscribe };
 }
 
-// plugins.md, Reporting, story 4.
 describe('noticeExternalChanges — a plugin changed outside Modbench', () => {
   it('warns once for the mod, naming it and the plugins, and offers nothing', () => {
     const { client, reporter } = noticing();
@@ -72,7 +71,6 @@ describe('noticeExternalChanges — a plugin changed outside Modbench', () => {
     expect(reporter.reports).toHaveLength(2);
   });
 
-  // ADR-0012 invariant 1: the same file name in another mod is another plugin.
   it('tells each mod apart, the same file name included', () => {
     const { client, reporter } = noticing();
     client.emit(settled('ModA', ['A.esp', 'aa']));
@@ -86,7 +84,6 @@ describe('noticeExternalChanges — a plugin changed outside Modbench', () => {
   });
 });
 
-// plugins.md, Reporting, story 5.
 describe('noticeExternalChanges — an untracked plugin in a tracked mod', () => {
   it('warns once for each, naming it and pointing at the gesture that decompiles it', () => {
     const { client, reporter } = noticing();
