@@ -19,8 +19,10 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void VendorLocationTarget_NamedInPayload_RoundTrips()
+    public void VendorLocationTarget_NamedInPayload_RoundTripsAndSwitchesTheLeafFromTheTrackedLocationTargetToLocationFallback()
     {
+        Assert.Contains("\"MutagenObjectType\": \"LocationTarget\"", _fixture.Body(), StringComparison.Ordinal);
+
         var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
             Json("""
             {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
@@ -28,6 +30,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var body = _fixture.Body();
+        Assert.Contains("\"MutagenObjectType\": \"LocationFallback\"", body, StringComparison.Ordinal);
         Assert.Contains("\"Radius\": 99", body, StringComparison.Ordinal);
         Assert.Contains("\"Data\": 3", body, StringComparison.Ordinal);
     }

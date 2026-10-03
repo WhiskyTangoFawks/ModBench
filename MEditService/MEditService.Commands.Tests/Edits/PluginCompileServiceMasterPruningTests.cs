@@ -15,8 +15,8 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     private const string FixtureFileName = "SpaDia_AMR.esp";
     private const string Origin = "SpaDiaAMRCompileMod";
 
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-520-compile-game-").FullName;
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-520-compile-mod-").FullName;
+    private readonly ScratchDirectory _gameDirectory = new("medit-520-compile-game-");
+    private readonly ScratchDirectory _modFolder = new("medit-520-compile-mod-");
     private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginAddress _plugin = new(FixtureFileName, Origin);
 
@@ -64,7 +64,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
-        try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
+        _modFolder.Dispose();
+        _gameDirectory.Dispose();
     }
 }

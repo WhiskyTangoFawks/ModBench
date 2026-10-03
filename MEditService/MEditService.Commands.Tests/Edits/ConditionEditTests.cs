@@ -253,10 +253,10 @@ public sealed class ConditionEditTests : IDisposable
             var quest = mod.Quests.AddNew("Cond692Quest");
             Quest = quest.FormKey;
 
-            var functionData = new FunctionConditionData { Function = Condition.Function.GetStageDone };
-            functionData.ParameterOneRecord.SetTo(quest.FormKey);
-            var secondFunctionData = new FunctionConditionData { Function = Condition.Function.GetIsSex };
-            var useGlobal = new ConditionGlobal { CompareOperator = CompareOperator.NotEqualTo, Data = secondFunctionData };
+            var functionDataAvoidingGetEventData = new FunctionConditionData { Function = Condition.Function.GetStageDone };
+            functionDataAvoidingGetEventData.ParameterOneRecord.SetTo(quest.FormKey);
+            var secondFunctionDataAvoidingGetEventData = new FunctionConditionData { Function = Condition.Function.GetIsSex };
+            var useGlobal = new ConditionGlobal { CompareOperator = CompareOperator.NotEqualTo, Data = secondFunctionDataAvoidingGetEventData };
             useGlobal.ComparisonValue.SetTo(glob.FormKey);
 
             var cobj = mod.ConstructibleObjects.AddNew("Cond692Recipe");
@@ -265,7 +265,7 @@ public sealed class ConditionEditTests : IDisposable
                 CompareOperator = CompareOperator.GreaterThan,
                 ComparisonValue = 2.5f,
                 Flags = Condition.Flag.OR,
-                Data = functionData,
+                Data = functionDataAvoidingGetEventData,
             });
             cobj.Conditions.Add(useGlobal);
             Cobj = cobj.FormKey;
