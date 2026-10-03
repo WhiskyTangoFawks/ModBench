@@ -3,7 +3,7 @@
 // Status, which `uninstalled=true` carries.
 
 import type { DownloadMeta, DownloadStatus } from '../instanceAdapter';
-import { lineRanges } from './lineScan';
+import { lineRanges } from '../../loadOrderFileCodec/lineScan';
 
 /** Appended to a download's filename to name its sidecar. */
 export const DOWNLOAD_SIDECAR_SUFFIX = '.meta';
