@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>The search descends every embedded slot at every level, verified through
-/// RecordDocumentEdits' FormKey change of an embedded child, since the search itself is Codec's internal.</summary>
 public sealed class EmbeddedChildSearchTests
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -21,7 +19,7 @@ public sealed class EmbeddedChildSearchTests
     private static Fallout4Mod NewMod() =>
         new(ModKey.FromFileName("EmbedSearch.esp"), Fallout4Release.Fallout4);
 
-    private static string? Rekeyed(IMajorRecordGetter owner, string formKey) =>
+    private static string? RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(IMajorRecordGetter owner, string formKey) =>
         RecordDocumentEdits.WithEmbeddedChildFormKey(
             Codec, Codec.SerializeToText(owner, GameRelease.Fallout4), GameRelease.Fallout4,
             RecordTableName.Of(owner, Schemas), formKey, NewFormKey);
@@ -41,14 +39,12 @@ public sealed class EmbeddedChildSearchTests
         var placed = new PlacedObject(mod) { EditorID = "Ref" };
         cell.Temporary.Add(placed);
 
-        AssertRekeyed(Rekeyed(cell, placed.FormKey.ToString()), placed.FormKey.ToString());
+        AssertRekeyed(RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(cell, placed.FormKey.ToString()), placed.FormKey.ToString());
     }
 
     [Fact]
-    public void FindsAChildTwoEmbedLevelsDown_ThroughAWorldspacesTopCell()
+    public void FindsAChildTwoEmbedLevelsDown_ThroughAWorldspacesTopCell_TheShapeTheOneLevelSearchCouldNotReach()
     {
-        // The shape the one-level search could not reach: the worldspace's document embeds TopCell,
-        // which embeds this reference.
         var mod = NewMod();
         var worldspace = new Worldspace(mod) { EditorID = "World" };
         var topCell = new Cell(mod) { EditorID = "TopCell" };
@@ -56,7 +52,7 @@ public sealed class EmbeddedChildSearchTests
         topCell.Temporary.Add(placed);
         worldspace.TopCell = topCell;
 
-        AssertRekeyed(Rekeyed(worldspace, placed.FormKey.ToString()), placed.FormKey.ToString());
+        AssertRekeyed(RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(worldspace, placed.FormKey.ToString()), placed.FormKey.ToString());
     }
 
     [Fact]
@@ -69,7 +65,7 @@ public sealed class EmbeddedChildSearchTests
         topic.Responses.Add(response);
         quest.DialogTopics.Add(topic);
 
-        AssertRekeyed(Rekeyed(quest, response.FormKey.ToString()), response.FormKey.ToString());
+        AssertRekeyed(RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(quest, response.FormKey.ToString()), response.FormKey.ToString());
     }
 
     [Fact]
@@ -79,6 +75,6 @@ public sealed class EmbeddedChildSearchTests
         var cell = new Cell(mod) { EditorID = "Cell" };
         var stranger = new PlacedObject(mod) { EditorID = "Elsewhere" };
 
-        Assert.Null(Rekeyed(cell, stranger.FormKey.ToString()));
+        Assert.Null(RekeyedViaRecordDocumentEditsBecauseTheSearchIsCodecInternal(cell, stranger.FormKey.ToString()));
     }
 }

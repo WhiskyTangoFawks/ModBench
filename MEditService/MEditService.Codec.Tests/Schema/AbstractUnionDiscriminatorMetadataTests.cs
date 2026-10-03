@@ -4,10 +4,10 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>The user is never shown a Mutagen class name, so labels are the wire contract: a
-/// frontend humanizer cannot know the union's base type.</summary>
 public class AbstractUnionDiscriminatorMetadataTests
 {
+    private const int WalkDepthBeyondBuildSubSchemaDepth3PlusOneHopPerArrayLevel = 12;
+
     private static FieldMetadata Discriminator(string table, params string[] path)
     {
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
@@ -33,7 +33,7 @@ public class AbstractUnionDiscriminatorMetadataTests
     }
 
     [Fact]
-    public void EveryDiscriminatorInTheGame_CarriesOneDistinctNonEmptyLabelPerLeaf()
+    public void EveryDiscriminatorInTheGame_CarriesOneDistinctNonEmptyLabelPerLeaf_BecauseTheUserIsNeverShownAMutagenClassNameAndAFrontendHumanizerCannotKnowTheUnionsBaseType()
     {
         var offenders = new List<string>();
         foreach (var (table, path, meta) in AllFields())
@@ -75,9 +75,7 @@ public class AbstractUnionDiscriminatorMetadataTests
         string table, string path, FieldMetadata meta, int depth)
     {
         yield return (table, path, meta);
-        // The reflected schema's own nesting is bounded (BuildSubSchema stops at depth 3, and an
-        // array element adds one hop per level); this only stops a walk if that ever changes.
-        if (depth > 12) yield break;
+        if (depth > WalkDepthBeyondBuildSubSchemaDepth3PlusOneHopPerArrayLevel) yield break;
         if (meta.ElementType != null)
             foreach (var f in Walk(table, path + "[]", meta.ElementType, depth + 1)) yield return f;
         foreach (var sub in meta.Fields ?? [])

@@ -5,8 +5,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>Two per-game facts reflection cannot read off a property: which parameter members each
-/// function uses, and that Run On's Reference target is live under only one Run On value.</summary>
 public sealed class ConditionSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -20,8 +18,6 @@ public sealed class ConditionSchemaTests
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
         (owner.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))
             .Single(f => f.Name == name);
-
-    // ── the two unions ───────────────────────────────────────────────────────
 
     [Fact]
     public void ConditionElement_CarriesADiscriminatorOverBothConcreteConditionClasses()
@@ -45,10 +41,8 @@ public sealed class ConditionSchemaTests
             discriminator.EnumMembers.Select(m => m.Value));
     }
 
-    // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
-    // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
     [Fact]
-    public void ComparisonValuesGlobalLink_NamesNoRecordType()
+    public void ComparisonValuesGlobalLink_NamesNoRecordTypeMeaningAny_BecauseTheLinkClosesOverAbstractIGlobalGetterAndGlobSchemaIsKeyedByItsFourConcreteGetters()
     {
         var variants = Member(ConditionElement(), "ComparisonValue").Variants
             ?? throw new InvalidOperationException("Expected 'ComparisonValue' to carry per-leaf variants.");
@@ -56,15 +50,13 @@ public sealed class ConditionSchemaTests
         Assert.Empty(variants[nameof(ConditionGlobal)].ValidFormKeyTypes);
     }
 
-    // ── the two per-game facts ───────────────────────────────────────────────
-
     [Theory]
-    [InlineData("IsSneaking")]                                                              // no slot
-    [InlineData("HasKeyword", "ParameterOneRecord")]                                      // Form
-    [InlineData("GetVATSValue", "ParameterOneNumber", "ParameterTwoNumber")]            // Number, Number
-    [InlineData("GetStageDone", "ParameterOneRecord", "ParameterTwoNumber")]            // Form, Number
-    [InlineData("GetVMQuestVariable", "ParameterOneRecord", "ParameterTwoString")]      // Form, String
-    [InlineData("GetGraphVariableFloat", "ParameterOneString")]                           // String
+    [InlineData("IsSneaking")]
+    [InlineData("HasKeyword", "ParameterOneRecord")]
+    [InlineData("GetVATSValue", "ParameterOneNumber", "ParameterTwoNumber")]
+    [InlineData("GetStageDone", "ParameterOneRecord", "ParameterTwoNumber")]
+    [InlineData("GetVMQuestVariable", "ParameterOneRecord", "ParameterTwoString")]
+    [InlineData("GetGraphVariableFloat", "ParameterOneString")]
     public void ConditionFunction_NamesTheParameterMembersThatFunctionUses(string function, params string[] expected)
     {
         var slots = Member(Member(ConditionElement(), "Data"), "Function").SiblingsInUse;

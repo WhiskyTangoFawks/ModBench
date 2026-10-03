@@ -5,8 +5,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>The name a refusal prints for a document comes from here, and a refusal naming nothing
-/// documents nothing.</summary>
 public sealed class ContainerDocumentTypeNameTests
 {
     private static readonly ContainerDocuments Documents = new(
@@ -33,7 +31,7 @@ public sealed class ContainerDocumentTypeNameTests
     [InlineData("NotARecordClass", """{"MutagenObjectType": "NotARecordClass"}""", "NotARecordClass")]
     [InlineData("NotARecordClass", """{"FormKey": "000801:Test.esp"}""", "NotARecordClass")]
     [InlineData("NotARecordClass", "not json at all", "NotARecordClass")]
-    public void ADocumentNoSchemaIndexes_IsStillNamed(string pathRecordType, string body, string expected)
+    public void ADocumentNoSchemaIndexes_IsStillNamed_BecauseARefusalNamingNothingDocumentsNothing(string pathRecordType, string body, string expected)
     {
         Assert.Equal(expected, TypeNameOf(pathRecordType, body));
     }

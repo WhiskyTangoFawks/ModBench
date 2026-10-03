@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -10,8 +11,6 @@ using Noggog;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>The codec adopts Spriggit's embed customization verbatim (ADR-0007): the five embedded
-/// slots serialize inline in the container's own document.</summary>
 public sealed class RecordTextCodecEmbedTests
 {
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Embed.esp"), Fallout4Release.Fallout4);
@@ -52,7 +51,7 @@ public sealed class RecordTextCodecEmbedTests
     }
 
     [Fact]
-    public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful()
+    public void RoundTrip_OfAnEmbeddedCell_IsChildFaithful_WithTheParentsOwnFieldsUntouchedSoEmbedsChildrenNeverReadsAsSerializesChildrenInsteadOfItself()
     {
         var codec = Codec();
         var bytes = codec.SerializeToBytes(MakePopulatedCell(), GameRelease.Fallout4);
@@ -64,28 +63,19 @@ public sealed class RecordTextCodecEmbedTests
         Assert.Equal(["CellNavmesh"], roundTripped.NavigationMeshes.Select(RequireEditorID).ToArray());
         Assert.Equal("CellLandscape", roundTripped.Landscape?.EditorID);
 
-        // The parent's own fields are untouched by the embed — "embeds children" must not read as
-        // "serializes children instead of itself".
         Assert.Equal("EmbedCell", roundTripped.EditorID);
         var grid = roundTripped.Grid ?? throw new InvalidOperationException("Expected the round-tripped cell to keep its grid.");
         Assert.Equal(new P2Int(1, 2), grid.Point);
     }
 
     [Fact]
-    public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile()
+    public async Task SerializeAsync_ForAPopulatedCell_WritesExactlyOneFile_BecauseTheCodecAdoptsSpriggitsEmbedCustomizationVerbatimSerializingTheFiveEmbeddedSlotsInline()
     {
-        var dir = Directory.CreateTempSubdirectory("medit-embed-cell-");
-        try
-        {
-            var filePath = Path.Combine(dir.FullName, "cell.json");
-            await Codec().SerializeAsync(MakePopulatedCell(), filePath, GameRelease.Fallout4);
+        using var dir = new ScratchDirectory("medit-embed-cell-");
+        var filePath = Path.Combine(dir.Path, "cell.json");
+        await Codec().SerializeAsync(MakePopulatedCell(), filePath, GameRelease.Fallout4);
 
-            Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        Assert.Equal([filePath], Directory.GetFiles(dir.Path, "*", SearchOption.AllDirectories));
     }
 
     [Fact]

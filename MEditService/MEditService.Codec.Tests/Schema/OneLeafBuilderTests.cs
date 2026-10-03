@@ -4,8 +4,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Codec.Tests.Schema;
 
-/// <summary>A leaf kind is built once, so its facts do not depend on where the walk reached it: a
-/// top-level column, a member nested inside a struct and an array element all read alike (ADR-0005).</summary>
 public sealed class OneLeafBuilderTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -32,10 +30,8 @@ public sealed class OneLeafBuilderTests
             .Where(x => x.Meta is { Type: "array", ElementType.Type: "formKey" }),
     ];
 
-    // The array-of-form-links kind, which ConflictClassifier sorts and treats as sparse, is reached
-    // both as a record's own column and several hops down inside a struct.
     [Fact]
-    public void AFormLinkArray_IsReachedBothAsAColumnAndNestedInsideAStruct()
+    public void AFormLinkArray_IsReachedBothAsAColumnAndNestedInsideAStruct_SoTheOneKindConflictClassifierSortsAndTreatsAsSparseIsBuiltAtEveryDepth()
     {
         var arrays = FormLinkArrays();
 
@@ -49,21 +45,18 @@ public sealed class OneLeafBuilderTests
             .Select(x => x.Path)
             .Distinct(StringComparer.Ordinal));
 
-    // Absence is a value or it is a default, and only the getter's own annotation says which: the
-    // CLR type is a reference type either way for a struct, and carries no default for a string.
     [Theory]
     [InlineData("cont", "Destructible", true)]
     [InlineData("cont", "ObjectBounds", false)]
     [InlineData("npc_", "Name", true)]
     [InlineData("npc_", "HeightMin", false)]
-    public void AMember_SaysWhetherAbsenceIsAValue(string table, string column, bool allowsNull)
+    public void AMember_SaysWhetherAbsenceIsAValue_BecauseOnlyTheGettersOwnAnnotationSaysSinceTheClrTypeIsAReferenceTypeEitherWayForAStructAndCarriesNoDefaultForAString(string table, string column, bool allowsNull)
     {
         Assert.Equal(allowsNull, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.AllowsNull);
     }
 
-    // A "Null" slot is a tolerated placeholder in any form-link array, not a dangling reference.
     [Fact]
-    public void EveryFormLinkArrayElement_AllowsNull_HoweverDeepTheWalkReachedIt()
+    public void EveryFormLinkArrayElement_AllowsNull_HoweverDeepTheWalkReachedIt_BecauseANullSlotIsAToleratedPlaceholderNotADanglingReference()
     {
         var strict = ArraysWhoseElement(e => !e.AllowsNull);
 

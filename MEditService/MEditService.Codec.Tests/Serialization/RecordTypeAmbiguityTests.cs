@@ -8,14 +8,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Codec.Tests.Serialization;
 
-/// <summary>Derived is only better than tabulated if the derivation is swept: a rule read off
-/// reflection can be quietly wrong for a whole class of types and look right for two.</summary>
 public sealed class RecordTypeAmbiguityTests
 {
     private static readonly RecordTypeDispatch Dispatch = RecordTypeDispatch.For(GameRelease.Fallout4);
 
     [Fact]
-    public void ConcreteFor_ResolvesEveryConcreteMajorRecordTypeByItsClrName()
+    public void ConcreteFor_ResolvesEveryConcreteMajorRecordTypeByItsClrName_SweptBecauseARuleReadOffReflectionCanBeQuietlyWrongForAWholeClassOfTypesAndLookRightForTwo()
     {
         var unresolved = ConcreteMajorRecordTypes()
             .Where(t => Dispatch.ConcreteFor(t.Name) != t)
@@ -29,11 +27,9 @@ public sealed class RecordTypeAmbiguityTests
     [Fact]
     public void ConcreteFor_ResolvesEverySchemaTableName()
     {
-        // "Header" is the one table with no document to reconstitute: a ModHeader never reaches this codec
-        // and its Body is null. Excluded by name rather than by predicate, so a second unresolvable name
-        // cannot hide behind a rule that grew.
+        const string HeaderTheOneTableWithNoDocumentToReconstituteExcludedByNameNotPredicateSoASecondUnresolvableNameCannotHideBehindARuleThatGrew = "header";
         var tableNames = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
-            .Where(n => n != "header")
+            .Where(n => n != HeaderTheOneTableWithNoDocumentToReconstituteExcludedByNameNotPredicateSoASecondUnresolvableNameCannotHideBehindARuleThatGrew)
             .ToList();
 
         var unresolved = tableNames.Where(n => Dispatch.ConcreteFor(n) is null).ToList();
