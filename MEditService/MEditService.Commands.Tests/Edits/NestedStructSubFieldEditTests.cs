@@ -12,6 +12,8 @@ namespace MEditService.Commands.Tests.Edits;
 
 public sealed class NestedStructSubFieldEditTests : IDisposable
 {
+    private const string NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue = "NearSelf";
+
     private readonly FactionFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
@@ -24,8 +26,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         Assert.Contains("\"MutagenObjectType\": \"LocationTarget\"", _fixture.Body(), StringComparison.Ordinal);
 
         var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
+            Json($$$"""
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}
             """));
 
         Assert.True(result.Applied, result.Message);
@@ -40,7 +42,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
     {
         var service = _fixture.Service();
         var first = service.Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""{"Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}"""));
+            Json($$$"""{"Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}"""));
         Assert.True(first.Applied, first.Message);
 
         var second = service.Edit(_fixture.Plugin, _fixture.Faction.ToString(),
@@ -58,8 +60,8 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         var before = _fixture.Body();
 
         var result = _fixture.Service().Set(_fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": "not-a-number"}}
+            Json($$$"""
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": "not-a-number"}}
             """));
 
         Assert.False(result.Applied);

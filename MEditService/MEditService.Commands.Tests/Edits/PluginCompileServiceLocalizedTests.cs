@@ -16,8 +16,8 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
     private const string PluginName = "Fixture.esp";
     private const string Origin = "FixtureMod";
 
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-compile-localized-").FullName;
-    private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-compile-localized-game-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-compile-localized-");
+    private readonly ScratchDirectory _gameDir = new("medit-compile-localized-game-");
     private readonly LoadOrderSnapshot _loadOrder;
 
     public PluginCompileServiceLocalizedTests()
@@ -40,8 +40,15 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_modFolder, recursive: true);
-        Directory.Delete(_gameDir, recursive: true);
+        _modFolder.Dispose();
+        _gameDir.Dispose();
+    }
+
+    private static void RemoveStringsMutagenLeftAtTheTempWritePathSoTheByteCompareCannotPassVacuously(
+        string stringsDir, IEnumerable<string> fileNames)
+    {
+        foreach (var fileName in fileNames)
+            File.Delete(Path.Combine(stringsDir, fileName));
     }
 
     [Fact]
@@ -53,8 +60,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             .ToDictionary(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."), File.ReadAllBytes);
         Assert.NotEmpty(originalStringsFiles);
 
-        foreach (var fileName in originalStringsFiles.Keys)
-            File.Delete(Path.Combine(stringsDir, fileName));
+        RemoveStringsMutagenLeftAtTheTempWritePathSoTheByteCompareCannotPassVacuously(stringsDir, originalStringsFiles.Keys);
 
         var plugin = new PluginAddress(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);

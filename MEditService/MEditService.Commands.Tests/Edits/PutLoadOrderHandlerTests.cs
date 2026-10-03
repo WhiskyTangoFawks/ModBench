@@ -1,5 +1,6 @@
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
@@ -8,7 +9,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
 {
     private const string InstanceRoot = "C:\\Instance";
 
-    private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-put-load-order-").FullName;
+    private readonly ScratchDirectory _dataFolder = new("medit-put-load-order-");
     private readonly LoadOrderHolder _holder = new();
 
     private PutLoadOrderHandler Handler => TestEditService.PutLoadOrderHandler(_holder);
@@ -18,7 +19,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
     private PutLoadOrderResult Put(GameRelease release, RegisteredPlugin[] plugins, params RegisteredPlugin[] active) =>
         Handler.Put(_dataFolder, InstanceRoot, release, plugins, [.. active.Select(p => p.Key)], []);
 
-    public void Dispose() => Directory.Delete(_dataFolder, recursive: true);
+    public void Dispose() => _dataFolder.Dispose();
 
     [Fact]
     public void Put_WithASupportedRelease_AppliesTheSnapshotToLoadOrderState()
@@ -29,7 +30,7 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         var result = Put(GameRelease.Fallout4, [a, b], b);
 
         Assert.True(result.Applied);
-        Assert.Equal(_dataFolder, _holder.Current.DataFolderPath);
+        Assert.Equal(_dataFolder.Path, _holder.Current.DataFolderPath);
         Assert.Equal(InstanceRoot, _holder.Current.InstanceRoot);
         Assert.Equal(GameRelease.Fallout4, _holder.Current.GameRelease);
         Assert.Equal([a, b], _holder.Current.Plugins);

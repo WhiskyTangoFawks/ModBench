@@ -50,12 +50,12 @@ public sealed class EditRecordHandlerTests : IDisposable
 
         var git = Path.Combine(_mod.ModFolder, ".git");
         GitProbe.Run(git, _mod.ModFolder, "add", "-A");
-        var staged = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
+        var stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
 
-        var rename = Assert.Single(staged, l => l.StartsWith('R'));
+        var rename = Assert.Single(stagedMinimalNpcRenameNeedsGitsFiftyPercentSimilarityFloor, l => l.StartsWith('R'));
         Assert.Contains(oldRelative, rename, StringComparison.Ordinal);
         Assert.Contains(newRelative, rename, StringComparison.Ordinal);
     }

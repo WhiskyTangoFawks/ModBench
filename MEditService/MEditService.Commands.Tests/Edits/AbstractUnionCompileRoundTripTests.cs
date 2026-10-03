@@ -31,6 +31,11 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
             new ModPath(ModKey.FromFileName(AbstractUnionCompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
     }
 
+    private const string TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor = "ValueModifier";
+    private const string NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue = "NearSelf";
+
+    private static T AsGetterBecauseBinaryOverlayLeavesAreLazy<T>(object? leaf) => Assert.IsAssignableFrom<T>(leaf);
+
     [Fact]
     public async Task Level_EditingWithinSameConcreteType_CompilesAndReparsesTheNewValue()
     {
@@ -67,7 +72,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
         var quest = (await CompileAndReparse()).Quests.Single(q => q.FormKey == _fixture.Quest);
         var alias = Assert.Single(quest.Aliases.Require());
-        var refAlias = Assert.IsAssignableFrom<IQuestReferenceAliasGetter>(alias);
+        var refAlias = AsGetterBecauseBinaryOverlayLeavesAreLazy<IQuestReferenceAliasGetter>(alias);
         Assert.Equal("NewRef", refAlias.Name);
         Assert.Equal(4, refAlias.ClosestToAlias);
     }
@@ -221,14 +226,14 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         var result = EditService().Set(
             _fixture.Plugin, _fixture.MagicEffect.ToString(), "Archetype",
             Json($$"""
-            {"MutagenObjectType": "MagicEffectArchetype", "Type": "ValueModifier",
+            {"MutagenObjectType": "MagicEffectArchetype", "Type": "{{TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor}}",
              "Association": "{{_fixture.ActorValueInformation}}"}
             """));
         Assert.True(result.Applied, result.Message);
 
         var mgef = (await CompileAndReparse()).MagicEffects.Single(m => m.FormKey == _fixture.MagicEffect);
         var archetype = Assert.IsType<MagicEffectArchetype>(mgef.Archetype);
-        Assert.Equal(MagicEffectArchetype.TypeEnum.ValueModifier, archetype.Type);
+        Assert.Equal(Enum.Parse<MagicEffectArchetype.TypeEnum>(TheOnlyArchetypeTypeReadArchetypeHasNoNamedCaseFor), archetype.Type);
     }
 
     [Fact]
@@ -244,7 +249,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
         var aech = (await CompileAndReparse()).AudioEffectChains.Single(a => a.FormKey == _fixture.AudioEffectChain);
         var effect = Assert.Single(aech.Effects);
-        var filter = Assert.IsAssignableFrom<IStateVariableFilterAudioEffectGetter>(effect);
+        var filter = AsGetterBecauseBinaryOverlayLeavesAreLazy<IStateVariableFilterAudioEffectGetter>(effect);
         Assert.True(filter.Enabled);
         Assert.Equal(440.0f, filter.CenterFrequency);
         Assert.Equal(0.75f, filter.QValue);
@@ -255,8 +260,8 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
     {
         var result = EditService().Set(
             _fixture.Plugin, _fixture.Faction.ToString(), "VendorLocation",
-            Json("""
-            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "NearSelf", "Data": 3}}
+            Json($$$"""
+            {"Radius": 99, "Target": {"MutagenObjectType": "LocationFallback", "Type": "{{{NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue}}}", "Data": 3}}
             """));
         Assert.True(result.Applied, result.Message);
 
@@ -264,7 +269,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         var vendorLocation = faction.VendorLocation.Require();
         Assert.Equal(99u, vendorLocation.Radius);
         var target = Assert.IsAssignableFrom<ILocationFallbackGetter>(vendorLocation.Target);
-        Assert.Equal(LocationTargetRadius.LocationType.NearSelf, target.Type);
+        Assert.Equal(Enum.Parse<LocationTargetRadius.LocationType>(NearSelfBecausePlvdBinaryDiscriminatorIsTheTypeValue), target.Type);
         Assert.Equal(3, target.Data);
     }
 

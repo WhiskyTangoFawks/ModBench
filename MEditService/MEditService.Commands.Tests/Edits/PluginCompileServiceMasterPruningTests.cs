@@ -49,7 +49,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     }
 
     [Fact]
-    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_RefusesNamingTheQuestAndThePrunedMaster_LeavingNoTempDirectory()
+    public async Task Compile_OfTheRealSpaDiaAMRFixtureTrackedWithoutTheRoundTripGate_RefusesNamingTheQuestAndThePrunedMaster_LeavingNoTempDirectory()
     {
         var compileService = CompileServices.Over(_loadOrder);
 

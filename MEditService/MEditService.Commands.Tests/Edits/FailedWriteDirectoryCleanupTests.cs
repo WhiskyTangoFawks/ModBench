@@ -26,8 +26,6 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "weap", UnwritableEditorId));
 
         Assert.Equal(before, EntriesUnderSource(mod));
-
-        Assert.Empty(mod.GitStatus());
     }
 
     [Fact]

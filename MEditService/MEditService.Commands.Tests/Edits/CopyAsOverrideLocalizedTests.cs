@@ -19,9 +19,9 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
     private const string DestinationOrigin = "DestinationMod";
     private const string DoorName = "The Big Door";
 
-    private readonly string _sourceModFolder = Directory.CreateTempSubdirectory("medit-copy-localized-source-").FullName;
-    private readonly string _destinationModFolder = Directory.CreateTempSubdirectory("medit-copy-localized-dest-").FullName;
-    private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-copy-localized-game-").FullName;
+    private readonly ScratchDirectory _sourceModFolder = new("medit-copy-localized-source-");
+    private readonly ScratchDirectory _destinationModFolder = new("medit-copy-localized-dest-");
+    private readonly ScratchDirectory _gameDir = new("medit-copy-localized-game-");
     private readonly FormKey _door;
     private readonly CopyRecordHandler _handler;
 
@@ -56,9 +56,9 @@ public sealed class CopyAsOverrideLocalizedTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_sourceModFolder, recursive: true);
-        Directory.Delete(_destinationModFolder, recursive: true);
-        Directory.Delete(_gameDir, recursive: true);
+        _sourceModFolder.Dispose();
+        _destinationModFolder.Dispose();
+        _gameDir.Dispose();
     }
 
     [Fact]

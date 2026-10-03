@@ -142,7 +142,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
         var (shortKey, floatKey) = (FormKey.Null, FormKey.Null);
         var fixture = SourceModFixture.Tracked("Glob532.esp", "Glob532Mod", mod =>
         {
-            var shortGlob = new GlobalShort(mod.GetNextFormKey("GlobShort532"), Fallout4Release.Fallout4)
+            var shortGlobBecauseMutagenWritesGlobalBoolFltvAsOneByteAndReadsFour = new GlobalShort(mod.GetNextFormKey("GlobShort532"), Fallout4Release.Fallout4)
             {
                 EditorID = "GlobShort532",
                 Data = 5,
@@ -152,9 +152,9 @@ public sealed class ScalarValueRefusalTests : IDisposable
                 EditorID = "GlobFloat532",
                 Data = 1.25f,
             };
-            mod.Globals.Add(shortGlob);
+            mod.Globals.Add(shortGlobBecauseMutagenWritesGlobalBoolFltvAsOneByteAndReadsFour);
             mod.Globals.Add(floatGlob);
-            (shortKey, floatKey) = (shortGlob.FormKey, floatGlob.FormKey);
+            (shortKey, floatKey) = (shortGlobBecauseMutagenWritesGlobalBoolFltvAsOneByteAndReadsFour.FormKey, floatGlob.FormKey);
         });
         (globalShort, globalFloat) = (shortKey, floatKey);
         return fixture;

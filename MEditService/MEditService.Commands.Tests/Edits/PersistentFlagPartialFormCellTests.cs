@@ -20,7 +20,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
     private const int Persistent = 0x0400, PartialForm = 0x4000;
     private const string OverrideOrigin = "OverrideMod";
 
-    private readonly string _root = Directory.CreateTempSubdirectory("medit-persistent-partial-").FullName;
+    private readonly ScratchDirectory _root = new("medit-persistent-partial-");
     private readonly PluginAddress _override = new("Override.esp", OverrideOrigin);
     private readonly FormKey _cell, _temporary, _persistent;
     private readonly EditRecordHandler _handler;
@@ -62,7 +62,7 @@ public sealed class PersistentFlagPartialFormCellTests : IDisposable
         _handler = TestEditService.EditHandler(holder);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() => _root.Dispose();
 
     private static CellBlock InteriorBlockHolding(Cell cell)
     {
