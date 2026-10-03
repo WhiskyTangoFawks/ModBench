@@ -6,9 +6,6 @@ import { vscode } from './vscode';
 import { focusedCellContext, pickFormKey, requestRecordLoad } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
-// pickFormKey exercises the shared requestReply plumbing once, as the exemplar for the
-// near-identical bridges; further bridges extend this file rather than re-prove it.
-
 function postedRequestId(): string {
   const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
   if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
@@ -53,8 +50,6 @@ describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey
   });
 
   it('ignores a reply for the right requestId but the wrong reply type', async () => {
-    // The shared listener must not resolve on requestId alone; LOAD_RECORD stands in for
-    // another reply type carrying the same requestId shape.
     const resultPromise = pickFormKey('', []);
     const requestId = postedRequestId();
 
@@ -92,9 +87,7 @@ describe('pickFormKey', () => {
   });
 });
 
-// A second bridge, extending the shared mechanism (proven above) rather than re-proving it: only
-// its own request shape and reply unwrapping are this suite's to check.
-describe('requestRecordLoad', () => {
+describe('requestRecordLoad, whose request shape and reply unwrapping are its own',() => {
   function postedFormKeyRequestId(): string {
     const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
     if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.REQUEST_RECORD_LOAD) {

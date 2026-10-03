@@ -6,8 +6,6 @@ import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
 import { fieldMeta } from './test/fixtures';
 
-// ADR-0018: a click focuses, it does not edit, and a column that cannot be written stays inert
-// under every open trigger — nothing opens that has nowhere to write.
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
 
@@ -20,9 +18,7 @@ describe('ScalarCell — the xEdit open gesture', () => {
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
 
-  it('exposes the F2 trigger DiskCell clicks, and only while the cell is writable', () => {
-    // F2 is dispatched by the containing cell at `[data-open-trigger]` — its presence *is* the
-    // contract, so this asserts the attribute rather than simulating a key on the wrong element.
+  it('exposes the F2 trigger DiskCell clicks, the containing cell dispatching F2 at `[data-open-trigger]`, and only while the cell is writable', () => {
     const { container, rerender } = render(
       <ScalarCell value="before" meta={meta()} editable onCommit={vi.fn()} />);
     expect(container.querySelector('[data-open-trigger]')).toBeTruthy();
@@ -65,13 +61,10 @@ describe('ScalarCell — a column with nowhere to write', () => {
     fireEvent.click(screen.getByText('before'));
 
     expect(screen.queryByRole('textbox')).toBeNull();
-    // No F2 target either — the key is inert here by construction, not by a second rule.
     expect(container.querySelector('[data-open-trigger]')).toBeNull();
   });
 
-  it('renders as plain text when no commit target was supplied at all', () => {
-    // The ordinary state for every caller outside the field grid: `editable` says yes but there is
-    // nowhere to write, so the cell must not open an editor whose commit would go nowhere.
+  it('renders as plain text when no commit target was supplied at all, the ordinary state for every caller outside the field grid', () => {
     render(<ScalarCell value="before" meta={meta()} editable />);
 
     fireEvent.click(screen.getByText('before'));
@@ -115,9 +108,7 @@ describe('ScalarCell — committing', () => {
     expect(onCommit).toHaveBeenCalledWith(0.75);
   });
 
-  it('does not commit a value equal to the one already there', () => {
-    // A commit writes a source file. Re-typing the same value would produce a diff of nothing and
-    // show the record as dirty in the Source Control panel for a keystroke the user never made.
+  it('does not commit a value equal to the one already there, which would show the record as dirty in Source Control for a keystroke the user never made', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value="before" meta={meta()} editable onCommit={onCommit} />);
     fireEvent.click(screen.getByText('before'));
@@ -129,9 +120,7 @@ describe('ScalarCell — committing', () => {
   });
 });
 
-// ADR-0018: a genuine mouse click on an already-focused string cell opens the inline editor
-// synchronously — no left click may cost latency waiting to see whether a second is coming.
-describe('ScalarCell — string cell has no debounce (ADR-0018)', () => {
+describe('ScalarCell — string cell has no debounce: no left click waits to see whether a second is coming',() => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
@@ -145,9 +134,7 @@ describe('ScalarCell — string cell has no debounce (ADR-0018)', () => {
   });
 });
 
-// ADR-0018: an immutable string cell is unaffected by any left-click gesture; its only read
-// path for a long value is the right-click menu.
-describe('ScalarCell — immutable string cell (ADR-0018)', () => {
+describe('ScalarCell — immutable string cell is unaffected by any left-click gesture, its only read path for a long value being the right-click menu',() => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));
@@ -160,9 +147,7 @@ describe('ScalarCell — immutable string cell (ADR-0018)', () => {
   });
 });
 
-// A hex row edits as text because the schema says the field is hex, never because the value
-// looks like hex; the wrong-length and non-hex refusals are the writer's.
-describe('ScalarCell — a hex row', () => {
+describe('ScalarCell — a hex row edits as text because the schema says the field is hex, never because the value looks like hex',() => {
   const hexMeta = meta({ name: 'unknown3', type: 'hex' });
 
   it('edits as text and commits the typed hex verbatim', () => {
@@ -192,9 +177,7 @@ describe('ScalarCell — a hex row', () => {
   });
 });
 
-// An abstract union's `MutagenObjectType` holds Mutagen class names, not words: the schema labels
-// each member, and the cell shows the label but commits the value behind it.
-describe('ScalarCell — an enum whose values are wire tokens', () => {
+describe('ScalarCell — an enum whose values are wire tokens, as an abstract union\'s `MutagenObjectType` holds Mutagen class names, not words',() => {
   const kind = meta({
     name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'NpcLevel', label: 'Npc Level' },
@@ -230,9 +213,7 @@ describe('ScalarCell — an enum whose values are wire tokens', () => {
   });
 });
 
-// The codec spells a translated string as an object whose `Value` is the text; the cell reads
-// and edits that text, and commits the object back so nothing beside `Value` is re-encoded.
-describe('ScalarCell — a translated string', () => {
+describe('ScalarCell — a translated string, which the codec spells as an object whose `Value` is the text',() => {
   const nameMeta = meta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
 

@@ -10,10 +10,6 @@ import { vscode } from './vscode';
 import { compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient } from './test/fixtures';
 import type { CompareResult } from './types';
 
-// Add on an abstract-union array: the webview contributes no element and no default. A
-// reflected array's default element belongs to the backend's DocumentEdit, the only place that can
-// name a leaf the codec will accept.
-
 const aliasesMeta = fieldMeta({
   name: 'aliases', type: 'array', isArray: true,
   elementType: fieldMeta({
@@ -58,7 +54,7 @@ const aliasesCompareResult: CompareResult = compareResultFixture({
   })],
 });
 
-describe('RecordPanel — Add on an abstract-union array', () => {
+describe('RecordPanel — Add on an abstract-union array, whose default element only the backend\'s DocumentEdit can name',() => {
   function renderPanel() {
     const client = panelClient(() => aliasesCompareResult, {
       plugins: [{ name: 'MyMod.esp', isTracked: true }],

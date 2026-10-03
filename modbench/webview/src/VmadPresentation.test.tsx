@@ -14,11 +14,7 @@ import {
   lastToldElement,
 } from './test/fixtures';
 
-// The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
-// name; the keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
-
-// LeafLabel.For('ScriptProperty', leaf) — the base's own words dropped from head and tail.
-const PROPERTY_LEAVES: Record<string, string> = {
+const SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS: Record<string, string> = {
   ScriptBoolProperty: 'Bool',
   ScriptFloatProperty: 'Float',
   ScriptIntProperty: 'Int',
@@ -37,9 +33,7 @@ const objectBindingMeta = (name: string, extra: Partial<FieldMetadata> = {}): Fi
   ...extra,
 });
 
-// Data is one member whose type the leaf decides: the backend's schema carries a variant per
-// leaf, and the field's own shape is the first leaf's.
-const dataMeta: FieldMetadata = field('Data', 'bool', {
+const leafTypedDataMeta: FieldMetadata = field('Data', 'bool', {
   variants: {
     ScriptBoolProperty: field('Data', 'bool'),
     ScriptFloatProperty: field('Data', 'float'),
@@ -55,13 +49,13 @@ const propertyMeta = fieldMeta({
   fields: [
     field('Name', 'string'),
     field('Flags', 'flags', { enumMembers: [{ value: 'Edited', bitValue: '1', label: null }] }),
-    dataMeta,
+    leafTypedDataMeta,
     field('Object', 'formKey'),
     field('Alias', 'int'),
     field('Objects', 'array', { isArray: true, elementType: objectBindingMeta('') }),
     field('MutagenObjectType', 'enum', {
       displayLabel: 'Kind', isDiscriminator: true,
-      enumMembers: Object.entries(PROPERTY_LEAVES).map(([value, label]) => ({ value, bitValue: null, label })),
+      enumMembers: Object.entries(SCRIPT_PROPERTY_LEAF_LABELS_DROPPING_THE_BASES_WORDS).map(([value, label]) => ({ value, bitValue: null, label })),
     }),
   ],
 });
@@ -92,13 +86,10 @@ const aliasesMeta = fieldMeta({
 
 type Obj = Record<string, unknown>;
 
-// Every field/element/property lookup below walks a plain JS structure this file itself built —
-// `Reflect.get` on the guarded `object` reads a member without narrowing away from `unknown`.
-function propertyOf(value: unknown, name: string): unknown {
+function reflectedPropertyOf(value: unknown, name: string): unknown {
   return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
 }
 
-// Array.isArray's own type guard narrows to `any[]`; this narrows to `unknown[]` instead.
 function isUnknownArray(value: unknown): value is unknown[] {
   return Array.isArray(value);
 }
@@ -108,8 +99,7 @@ function stringValueAt(record: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-// The document's own spelling: the discriminator first, then only the members the leaf carries.
-const property = (name: string, concreteType: string, over: Obj = {}): Obj => ({
+const documentSpelledProperty = (name: string, concreteType: string, over: Obj = {}): Obj => ({
   MutagenObjectType: concreteType, Name: name, Flags: ['Edited'],
   ...over,
 });
@@ -118,14 +108,9 @@ const script = (name: string, properties: Obj[] = []): Obj => ({ Name: name, Fla
 
 const PLUGIN = 'MyMod.esp';
 
-// Driven by the metadata rather than by the values, so a member a column leaves null still has
-// its row and its per-column values — the union-aligned tree the backend sends.
-
-// Joined the way the backend joins them; a key member may be dotted, so each one is a path.
-const keyTextOf = (keyMembers: string[], element: unknown): string =>
+const backendJoinedKeyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
-    .map(m => m.split('.').reduce<unknown>((v, name) => propertyOf(v, name), element))
-    // Every key member this file's fixtures use (Name, Property.Alias) is a string or a number.
+    .map(m => m.split('.').reduce<unknown>((v, name) => reflectedPropertyOf(v, name), element))
     .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
     .join(' / ');
 
@@ -135,7 +120,7 @@ function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { la
   for (const [column, list] of Object.entries(values)) {
     const turns = new Map<string, number>();
     (isUnknownArray(list) ? list : []).forEach((element, index) => {
-      const label = keyMembers ? keyTextOf(keyMembers, element) : `[${index}]`;
+      const label = keyMembers ? backendJoinedKeyTextOf(keyMembers, element) : `[${index}]`;
       const turn = (turns.get(label) ?? 0) + 1;
       turns.set(label, turn);
       const row = rows.get(`${label}#${turn}`) ?? { label, turn, indexes: {} };
@@ -148,17 +133,17 @@ function elementRows(meta: FieldMetadata, values: Record<string, unknown>): { la
   return all;
 }
 
-function buildDiff(
+function metadataDrivenUnionAlignedDiff(
   fieldName: string, meta: FieldMetadata, values: Record<string, unknown>,
   editorIds: Record<string, string>,
 ): FieldDiff {
   const columns = Object.keys(values);
   const resolved = columns.filter(c => typeof values[c] === 'string' && editorIds[values[c]]);
   const each = (children: [string, FieldMetadata, (column: string) => unknown][]): FieldDiff[] =>
-    children.map(([name, childMeta, pick]) => buildDiff(
+    children.map(([name, childMeta, pick]) => metadataDrivenUnionAlignedDiff(
       name, childMeta, Object.fromEntries(columns.map(c => [c, pick(c) ?? null])), editorIds));
   const elementOf = (column: string, index: number | undefined): unknown =>
-    index === undefined ? null : propertyOf(values[column], String(index));
+    index === undefined ? null : reflectedPropertyOf(values[column], String(index));
   const { elementType } = meta;
 
   return diffNode({
@@ -171,12 +156,12 @@ function buildDiff(
     children:
       meta.type === 'array' && elementType
         ? elementRows(meta, values).map(row => ({
-          ...buildDiff(row.label, elementType,
+          ...metadataDrivenUnionAlignedDiff(row.label, elementType,
             Object.fromEntries(columns.map(c => [c, elementOf(c, row.indexes[c]) ?? null])), editorIds),
           indexes: row.indexes,
         }))
         : meta.type === 'struct'
-          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => propertyOf(values[c], f.name)]))
+          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => reflectedPropertyOf(values[c], f.name)]))
           : undefined,
   });
 }
@@ -192,7 +177,7 @@ function compareResult(
       isWinner: i === 0, editorId: 'TestNpc',
       fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
-    diffs: [buildDiff(meta.name, meta, byColumn, editorIds)],
+    diffs: [metadataDrivenUnionAlignedDiff(meta.name, meta, byColumn, editorIds)],
   });
 }
 
@@ -255,8 +240,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe('a collapsed script reads as xEdit prose', () => {
   it('a script reads under its own name with every property passed through, not counted', async () => {
     currentCompare = oneColumn([script('Guard', [
-      property('Awake', 'ScriptBoolProperty', { Data: true }),
-      property('Radius', 'ScriptIntProperty', { Data: 10 }),
+      documentSpelledProperty('Awake', 'ScriptBoolProperty', { Data: true }),
+      documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 }),
     ])]);
     renderPanel();
     await openScripts();
@@ -278,9 +263,9 @@ describe('a collapsed script reads as xEdit prose', () => {
 
   it('a property reads name, kind and value, the kind coming from the schema’s own leaf label', async () => {
     currentCompare = oneColumn([script('Guard', [
-      property('Radius', 'ScriptIntProperty', { Data: 10 }),
-      property('Rate', 'ScriptFloatProperty', { Data: 2.5 }),
-      property('Tag', 'ScriptStringProperty', { Data: 'alpha' }),
+      documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 }),
+      documentSpelledProperty('Rate', 'ScriptFloatProperty', { Data: 2.5 }),
+      documentSpelledProperty('Tag', 'ScriptStringProperty', { Data: 'alpha' }),
     ])]);
     renderPanel();
     await openScripts();
@@ -296,7 +281,7 @@ describe('a collapsed script reads as xEdit prose', () => {
 
   it('an object binding reads as the bound record’s own cell text and its alias slot', async () => {
     currentCompare = oneColumn(
-      [script('Guard', [property('Owner', 'ScriptObjectListProperty', {
+      [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectListProperty', {
         Objects: [{ Object: '00000014:Fallout4.esm', Alias: -1 }],
       })])],
       { '00000014:Fallout4.esm': 'PlayerRef' },
@@ -311,7 +296,7 @@ describe('a collapsed script reads as xEdit prose', () => {
 
   it('the same binding read as a property of its own takes the property’s shape around it', async () => {
     currentCompare = oneColumn(
-      [script('Guard', [property('Owner', 'ScriptObjectProperty', {
+      [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', {
         Object: '00000014:Fallout4.esm', Alias: -1,
       })])],
       { '00000014:Fallout4.esm': 'PlayerRef' },
@@ -325,11 +310,9 @@ describe('a collapsed script reads as xEdit prose', () => {
       .toBe('Guard(Owner: Object = PlayerRef [00000014:Fallout4.esm], Alias[None])');
   });
 
-  it('a property whose value is a list reads by name and kind alone', async () => {
-    // xEdit passes a property's own value through one level only
-    // (wbScriptProperties.SetSummaryPassthroughMaxDepth(1)); the elements have their own rows.
+  it('a property whose value is a list reads by name and kind alone, as xEdit passes a property\'s own value through one level only and the elements have their own rows', async () => {
     currentCompare = oneColumn([script('Guard', [
-      property('Names', 'ScriptStringListProperty', { Data: ['a', 'b'] }),
+      documentSpelledProperty('Names', 'ScriptStringListProperty', { Data: ['a', 'b'] }),
     ])]);
     renderPanel();
     await openScripts();
@@ -340,9 +323,7 @@ describe('a collapsed script reads as xEdit prose', () => {
   });
 
   it('a leaf the table has no reading of its own for reads by its declared base’s', async () => {
-    // The rule that keeps fifteen leaves to one entry. ScriptVariableProperty has no entry and no
-    // value member; it still reads as a property, because ScriptProperty is what it is.
-    currentCompare = oneColumn([script('Guard', [property('V', 'ScriptVariableProperty')])]);
+    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('V', 'ScriptVariableProperty')])]);
     renderPanel();
     await openScripts();
     await waitFor(() => fieldCell('Guard'));
@@ -351,9 +332,7 @@ describe('a collapsed script reads as xEdit prose', () => {
     expect(summaryOf('Guard')).toBe('Guard(V: Variable)');
   });
 
-  it('an element of a passed-through list whose leaf has no reading at all still occupies its place', async () => {
-    // Nothing may vanish from a passthrough: a dropped element would make a script with two
-    // properties read exactly like a script with one.
+  it('an element of a passed-through list whose leaf has no reading at all still occupies its place, so a script with two properties does not read like one with one', async () => {
     const { elementType: scriptElementType } = scriptsMeta;
     if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
     const { fields: scriptElementFields } = scriptElementType;
@@ -369,7 +348,7 @@ describe('a collapsed script reads as xEdit prose', () => {
         })),
       },
     };
-    const unnamed = property('Radius', 'ScriptIntProperty', { Data: 10 });
+    const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
     delete unnamed.MutagenObjectType;
     currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
     renderPanel();
@@ -381,7 +360,7 @@ describe('a collapsed script reads as xEdit prose', () => {
   });
 
   it('the concrete base is a leaf like any other and reads with no value', async () => {
-    currentCompare = oneColumn([script('Guard', [property('Nothing', 'ScriptProperty')])]);
+    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Nothing', 'ScriptProperty')])]);
     renderPanel();
     await openScripts();
     await waitFor(() => fieldCell('Guard'));
@@ -393,7 +372,7 @@ describe('a collapsed script reads as xEdit prose', () => {
 
 describe('the alias slot of an object binding', () => {
   const withAlias = (alias: number) => oneColumn(
-    [script('Guard', [property('Owner', 'ScriptObjectProperty', {
+    [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', {
       Object: '00000014:Fallout4.esm', Alias: alias,
     })])],
     { '00000014:Fallout4.esm': 'PlayerRef' });
@@ -414,8 +393,8 @@ describe('the alias slot of an object binding', () => {
 describe('a row of a keyed array is identified by its key', () => {
   it('collapsing one script and then losing it leaves the later script expanded', async () => {
     currentCompare = oneColumn([
-      script('Ambush', [property('Radius', 'ScriptIntProperty', { Data: 10 })]),
-      script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 20 })]),
+      script('Ambush', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })]),
+      script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 20 })]),
     ]);
     renderPanel();
     await openScripts();
@@ -423,9 +402,7 @@ describe('a row of a keyed array is identified by its key', () => {
     toggleRow('Ambush');
     toggleRow('Radius');
 
-    // The compare the panel re-reads after a remove of the earlier sibling. Guard now sits where
-    // Ambush did: identity by key survives that, identity by position does not.
-    reloadWith(oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 20 })])]));
+    reloadWith(oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 20 })])]));
     await waitFor(() => expect(screen.queryByText('Ambush')).not.toBeInTheDocument());
 
     expect(screen.getByText('Properties')).toBeInTheDocument();
@@ -450,8 +427,8 @@ describe('a row of a keyed array is identified by its key', () => {
 
   it('two scripts sharing a property name keep their own rows apart', async () => {
     currentCompare = oneColumn([
-      script('Ambush', [property('Radius', 'ScriptIntProperty', { Data: 10 })]),
-      script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 20 })]),
+      script('Ambush', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })]),
+      script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 20 })]),
     ]);
     renderPanel();
     await openScripts();
@@ -462,7 +439,6 @@ describe('a row of a keyed array is identified by its key', () => {
     expect(summaryOf('Ambush')).toBe('Ambush(Radius: Int = 10)');
     expect(summaryOf('Guard')).toBe('Guard(Radius: Int = 20)');
 
-    // Re-expanding one leaves the other collapsed — a row is its own key's, not its position's.
     toggleRow('Ambush');
     await waitFor(() => screen.getAllByText('Properties'));
     expect(screen.getAllByText('Properties')).toHaveLength(1);
@@ -470,13 +446,11 @@ describe('a row of a keyed array is identified by its key', () => {
   });
 });
 
-// Data's shape varies by leaf, and a leaf the variants do not name has no Data at all: that
-// column's cell is nothing, not the base shape's default.
-describe('a member the column\'s own leaf does not declare', () => {
+describe('a member the column\'s own leaf does not declare, as Data\'s shape varies by leaf and a leaf the variants do not name has no Data at all, not the base shape\'s default',() => {
   it('renders nothing in that column, beside the value the other column\'s leaf holds', async () => {
     currentCompare = compareResult({
-      [PLUGIN]: [script('Guard', [property('Owner', 'ScriptIntProperty', { Data: 3 })])],
-      'Other.esp': [script('Guard', [property('Owner', 'ScriptObjectProperty', { Object: '00000014:Fallout4.esm', Alias: -1 })])],
+      [PLUGIN]: [script('Guard', [documentSpelledProperty('Owner', 'ScriptIntProperty', { Data: 3 })])],
+      'Other.esp': [script('Guard', [documentSpelledProperty('Owner', 'ScriptObjectProperty', { Object: '00000014:Fallout4.esm', Alias: -1 })])],
     });
     renderPanel();
     await openScripts();
@@ -500,7 +474,6 @@ describe('Add Script is the generic array gesture', () => {
 
     const added = document.querySelectorAll('tbody tr')[2];
     if (!added) throw new Error('no second script row after the reload');
-    // Its Field column holds nothing but the disclosure control: the key is still empty.
     expect(cellAt(added, 0).textContent).toBe('▼');
     const beneath = added.nextElementSibling;
     if (!beneath) throw new Error('no row beneath the added script');
@@ -525,7 +498,7 @@ describe('Add Script is the generic array gesture', () => {
   });
 
   it('an edit under a nested keyed array carries the index hop at each level', async () => {
-    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
     await waitFor(() => screen.getByText('Data'));
@@ -551,7 +524,7 @@ describe('Add Script is the generic array gesture', () => {
   });
 
   it('a property under a keyed script tells the host both index hops', async () => {
-    currentCompare = oneColumn([script('Guard', [property('Radius', 'ScriptIntProperty', { Data: 10 })])]);
+    currentCompare = oneColumn([script('Guard', [documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
     await openScripts();
     await waitFor(() => fieldCell('Radius'));

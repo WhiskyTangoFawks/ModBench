@@ -13,8 +13,6 @@ function checkboxAt(index: number): HTMLElement {
   return box;
 }
 
-// The codec spells a flags member as the array of the names that are set; the metadata lists the
-// members, in its own order.
 const flagMeta = fieldMeta({
   name: 'Flags',
   type: 'flags',
@@ -22,17 +20,12 @@ const flagMeta = fieldMeta({
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 });
 
-// A deliberate ADR-0018 divergence, recorded there: the checkbox list is the cell — always
-// visible, one checkbox per flag, no gesture to reveal it.
-describe('FlagCell — always-visible checkbox list', () => {
+describe('FlagCell — the checkbox list is the cell: always visible, one checkbox per flag, no gesture to reveal it', () => {
   it('renders one checkbox per member, checked where the document names it', () => {
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={vi.fn()} />);
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(4);
-    expect(boxes[0]).toBeChecked();      // A
-    expect(boxes[1]).not.toBeChecked();  // B
-    expect(boxes[2]).toBeChecked();      // C
-    expect(boxes[3]).not.toBeChecked();  // D
+    expect(boxes.map((box) => box.matches(':checked'))).toEqual([true, false, true, false]);
   });
 
   it('labels every checkbox with its member name', () => {
@@ -40,8 +33,7 @@ describe('FlagCell — always-visible checkbox list', () => {
     for (const m of flagMeta.enumMembers) expect(screen.getByText(m.value)).toBeInTheDocument();
   });
 
-  // Absent means default: no names set, so the list renders all unchecked, never a placeholder.
-  it('an absent value renders the full list all-unchecked', () => {
+  it('an absent value, which means default with no names set, renders the full list all-unchecked, never a placeholder',() => {
     render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
     for (const box of screen.getAllByRole('checkbox')) expect(box).not.toBeChecked();
@@ -64,8 +56,7 @@ describe('FlagCell — collapsed row', () => {
 });
 
 describe('FlagCell — read-only column', () => {
-  // editor.md, Columns, story 4: nothing marks its cells ahead of time.
-  it('renders the same checkbox list, not disabled', () => {
+  it('renders the same checkbox list, not disabled, as nothing marks a read-only column\'s cells ahead of time',() => {
     const { container } = render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getAllByRole('checkbox')).toHaveLength(4);
     expect(container.querySelectorAll('input:disabled')).toHaveLength(0);
@@ -81,8 +72,7 @@ describe('FlagCell — read-only column', () => {
   });
 });
 
-// The commit is the document's own spelling: the names now set, as an array.
-describe('FlagCell — editing', () => {
+describe('FlagCell — editing commits the document\'s own spelling: the names now set, as an array',() => {
   it('unchecking a name commits the array without it', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
@@ -104,9 +94,7 @@ describe('FlagCell — editing', () => {
     expect(onCommit).toHaveBeenCalledWith(['A']);
   });
 
-  // A name the metadata does not list (a composite the enum declares) is the document's; a
-  // toggle of another name leaves it exactly where it was.
-  it('keeps a name the metadata does not list when another is toggled', () => {
+  it('keeps a name the metadata does not list (a composite the enum declares) exactly where it was when another is toggled',() => {
     const onCommit = vi.fn();
     render(<FlagCell value={['AB', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
     fireEvent.click(checkboxAt(3));

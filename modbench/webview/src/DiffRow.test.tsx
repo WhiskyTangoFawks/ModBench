@@ -3,10 +3,9 @@ import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// FormKeyCell's pickFormKey import touches vscode.ts's acquireVsCodeApi() at module load.
-const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
+const pickFormKeyBehindAcquireVsCodeApi = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
-  pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
+  pickFormKey: (seed: string, validTypes: string[]) => pickFormKeyBehindAcquireVsCodeApi(seed, validTypes),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -18,8 +17,7 @@ import { diffNode, fieldMeta, parseJsonRecord, required } from './test/fixtures'
 
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });
 const intMeta = fieldMeta({ name: 'Level', type: 'int' });
-// A row offers its expand toggle when its own diff node carries children.
-const CHILDREN: FieldDiff[] = [diffNode({ fieldName: 'child' })];
+const CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE: FieldDiff[] = [diffNode({ fieldName: 'child' })];
 
 function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -46,20 +44,16 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
 function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
   const master = override('Fallout4.esm');
   const mod = override('MyMod.esp');
-  // Derived from whichever `diff` this call uses, so a test overriding only `diff` still gets a
-  // consistent default `context`.
-  const effectiveDiff = overrides.diff ?? diff();
+  const diffOfThisCallBehindTheDefaultContext = overrides.diff ?? diff();
   return {
-    diff: effectiveDiff,
+    diff: diffOfThisCallBehindTheDefaultContext,
     meta: strMeta,
     columns: [diskColumn(master), diskColumn(mod)],
     columnStyle: () => ({}),
     collapsedColumns: new Set(),
-    // Empty by default — editability is opt-in per fixture, never something a test inherits
-    // without saying so.
     editableColumns: new Set(),
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
-    context: { path: [], rootField: effectiveDiff.fieldName, depth: 0 },
+    context: { path: [], rootField: diffOfThisCallBehindTheDefaultContext.fieldName, depth: 0 },
     rowKey: 'Name',
     parentRowKey: null,
     focusedCell: null,
@@ -87,19 +81,18 @@ describe('DiffRow — top-level scalar row', () => {
 
   it('renders the expand toggle when hasChildren is set, and calls onToggle', () => {
     const onToggle = vi.fn();
-    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: false, onToggle });
+    renderRow({ diff: diff({ children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }), isExpanded: false, onToggle });
     const btn = screen.getByText('▶');
     fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalled();
   });
 
   it('shows ▼ when expanded', () => {
-    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: true });
+    renderRow({ diff: diff({ children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }), isExpanded: true });
     expect(screen.getByText('▼')).toBeInTheDocument();
   });
 
-  // ADR-0007: with no editable columns wired, no cell opens an editor on any gesture.
-  it('a value cell opens no editor on click, second click or double click', () => {
+  it('with no editable columns wired, a value cell opens no editor on click, second click or double click',() => {
     renderRow({ meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
     const cell = required(screen.getAllByText('5')[1], "the second '5' match (MyMod.esp)");
     fireEvent.click(cell);
@@ -111,13 +104,13 @@ describe('DiffRow — top-level scalar row', () => {
 
   it('double click on an immutable disk cell opens nothing', () => {
     renderRow({ focusedCell: null, meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
-    fireEvent.doubleClick(required(screen.getAllByText('5')[0], "the first '5' match (Fallout4.esm)")); // immutable
+    fireEvent.doubleClick(required(screen.getAllByText('5')[0], "the first '5' match (Fallout4.esm)"));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('double click on the label column toggles expand/collapse without breaking the existing button', () => {
     const onToggle = vi.fn();
-    renderRow({ diff: diff({ children: CHILDREN }), isExpanded: false, onToggle });
+    renderRow({ diff: diff({ children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }), isExpanded: false, onToggle });
     const labelCell = required(screen.getByText('▶').closest('td'), "the '▶' cell's td ancestor");
     fireEvent.doubleClick(labelCell);
     expect(onToggle).toHaveBeenCalledTimes(1);
@@ -132,9 +125,7 @@ describe('DiffRow — top-level scalar row', () => {
   });
 });
 
-// The panel decides each column's look and hands it down; the row applies it to every cell of that
-// column and asks nothing else.
-describe('DiffRow — dimmed columns', () => {
+describe('DiffRow — dimmed columns, the panel deciding each column\'s look and the row applying it to every cell of that column and asking nothing else',() => {
   it('dims a cell whose column the panel named dimmed', () => {
     const dimmed = columnKey('MyMod.esp', null);
     renderRow({ columnStyle: column => (column === dimmed ? { opacity: DIMMED_OPACITY } : {}) });
@@ -150,20 +141,14 @@ describe('DiffRow — dimmed columns', () => {
 });
 
 describe('DiffRow — drag affordance on leaf cells', () => {
-
-  // ADR-0018: no `grab` on any value cell — the grid rests on the
-  // default arrow, and drag is simply unadvertised (as in xEdit) rather than shown by the cursor.
-  it('shows no grab cursor at rest on a leaf cell', () => {
+  it('shows no grab cursor at rest on a leaf cell, the grid resting on the default arrow with drag unadvertised as in xEdit',() => {
     renderRow();
     const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(cell.style.cursor).not.toBe('grab');
   });
 });
 
-
-// ADR-0018: focus identity lives above DiffRow, which reports the clicked row and plugin and
-// reflects back the `focusedCell` it was given.
-describe('DiffRow — cell focus', () => {
+describe('DiffRow — cell focus, whose identity lives above DiffRow: it reports the clicked row and plugin and reflects back the `focusedCell` it was given',() => {
   it('clicking a value cell reports its row and plugin to onFocusCell', () => {
     const onFocusCell = vi.fn();
     renderRow({ onFocusCell });
@@ -180,7 +165,7 @@ describe('DiffRow — cell focus', () => {
 
   it('a cell not matching focusedCell does not carry DOM focus', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor"); // Fallout4.esm, not the match
+    const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(cell).not.toHaveFocus();
   });
 
@@ -201,8 +186,6 @@ describe('DiffRow — cell focus', () => {
     const focusedTd = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     const otherTd = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(focusedTd.style.boxShadow).toContain('var(--vscode-focusBorder');
-    // Different from the row's own highlight, not merely present — the cell's own ring must
-    // stand out from the row ring around it, not be indistinguishable from it.
     const row = required(focusedTd.closest('tr'), "the focused cell's tr ancestor");
     expect(focusedTd.style.boxShadow).not.toBe(row.style.boxShadow);
     expect(otherTd.style.boxShadow).toBe('');
@@ -213,9 +196,7 @@ describe('DiffRow — cell focus', () => {
     expect(document.body).toHaveFocus();
   });
 
-  // ADR-0012: two columns sharing a filename but differing in origin must focus independently.
-  // A bare-string FocusedCell.plugin would read both as focused.
-  it('focusing one of two same-filename, different-origin columns does not focus the other (AC5)', () => {
+  it('focusing one of two same-filename, different-origin columns does not focus the other, as a bare-string FocusedCell.plugin would read both as focused',() => {
     const colA = override('Shared.esp', { origin: 'ModA' });
     const colB = override('Shared.esp', { origin: 'ModB' });
     renderRow({
@@ -232,16 +213,13 @@ describe('DiffRow — cell focus', () => {
   });
 });
 
-// ADR-0005: go to record keys off the leaf's own `diff.resolutions` entry, not the parent
-// field's aggregate `checkError` — a dangling sibling must not hide a live reference beside it.
-describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
+describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate: go to record keys off the leaf\'s own `diff.resolutions` entry, so a dangling sibling does not hide a live reference beside it',() => {
   const fkMeta = fieldMeta({ name: '', type: 'formKey' });
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SomeKeyword' };
   const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-  // The parent field carries a checkError because a different sibling element is dangling.
-  function leafProps(
+  function leafPropsUnderParentWithDanglingSiblingCheckError(
     kind: 'array-element' | 'struct-child',
     resolution: FormKeyResolution,
     value = '000019:Fallout4.esm',
@@ -277,20 +255,18 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     ['a struct-child', 'struct-child', validType, '000019:Fallout4.esm', 'SomeKeyword [000019:Fallout4.esm]'],
     ['a struct-child wrong-type', 'struct-child', wrongType, '00001A:Fallout4.esm', 'SomeNpc [00001A:Fallout4.esm]'],
   ] as const)('%s leaf that resolves offers go to record despite the parent field checkError', (_what, kind, resolution, value, label) => {
-    renderRow(leafProps(kind, resolution, value));
+    renderRow(leafPropsUnderParentWithDanglingSiblingCheckError(kind, resolution, value));
     const menu = menuOf(label);
     expect(menu.webviewSection).toEqual(expect.stringContaining('reference'));
     expect(menu.referenceTarget).toBe(value);
   });
 
   it.each(['array-element', 'struct-child'] as const)('%s leaf that is unresolved offers no go to record', (kind) => {
-    renderRow(leafProps(kind, unresolved, 'FFFFFF:Dangling.esm'));
+    renderRow(leafPropsUnderParentWithDanglingSiblingCheckError(kind, unresolved, 'FFFFFF:Dangling.esm'));
     expect(menuOf('FFFFFF:Dangling.esm').webviewSection).not.toEqual(expect.stringContaining('reference'));
   });
 });
 
-// Every `checkError` on the override document below is a decoy, so a lookup back into it — the
-// row's own root field or the column's first field alike — fails.
 describe('DiffRow — the check error is the diff node\'s own, per column', () => {
   const locationMeta = fieldMeta({ name: 'Location', type: 'struct', fields: [fieldMeta({ name: 'aliasId', type: 'int' })] });
   const fkMeta = fieldMeta({ name: 'Reference', type: 'formKey', validFormKeyTypes: ['REFR'] });
@@ -332,7 +308,6 @@ describe('DiffRow — the check error is the diff node\'s own, per column', () =
     expect(within(required(cells[1], "the second '{…}' cell")).getByTitle('Location: its reference is dangling')).toBeInTheDocument();
   });
 
-  // A nested row is a diff node like any other, so its error is its own, not its root field's.
   const nested = {
     meta: fkMeta,
     columns: [diskColumn(decoyed('Fallout4.esm'))],
@@ -358,8 +333,7 @@ describe('DiffRow — the check error is the diff node\'s own, per column', () =
     expect(screen.queryByText('⚠')).not.toBeInTheDocument();
   });
 
-  // An array element's error is the element's own, so an element hop does not suppress it.
-  it('an array-element row shows its own error', () => {
+  it('an array-element row shows its own error, so an element hop does not suppress it',() => {
     renderRow({
       diff: diff({
         fieldName: '[1]', values: { 'Fallout4.esm': 'FFFFFF:Dangling.esm' },
@@ -387,7 +361,6 @@ describe('DiffRow — flags cell wiring', () => {
     });
   }
 
-  // A flags row starts collapsed, so the expanded-state cases pass isExpanded explicitly.
   it('a click on a flag in a non-editable column writes nothing', () => {
     const onEditCell = vi.fn();
     flagsRow({ isExpanded: true, editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell });
@@ -395,20 +368,17 @@ describe('DiffRow — flags cell wiring', () => {
     expect(onEditCell).not.toHaveBeenCalled();
   });
 
-  // Flags rows get the collapse toggle despite having no child rows — the "children" are the
-  // checkbox lines inside the cell.
-  it('a flags row starts collapsed: chevron closed, compact summary, no checkboxes', () => {
+  it('a flags row, which has the collapse toggle though its children are the checkbox lines inside the cell rather than child rows, starts collapsed: chevron closed, compact summary, no checkboxes',() => {
     const onToggle = vi.fn();
     flagsRow({ onToggle });
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.getAllByText('A')).toHaveLength(2); // value 1 → summary "A" in both columns
+    expect(screen.getAllByText('A')).toHaveLength(2);
     const btn = screen.getByRole('button', { name: '▶' });
     fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalled();
   });
 
-  // Where the value goes is the row builder's to decide, not something a row states with it.
-  it('toggling a checkbox calls onEditCell with the column and the names now set', () => {
+  it('toggling a checkbox calls onEditCell with the column and the names now set, where the value goes being the row builder\'s to decide',() => {
     const onEditCell = vi.fn();
     flagsRow({
       isExpanded: true,
@@ -431,12 +401,12 @@ describe('DiffRow — formKey cell wiring', () => {
     });
   }
 
-  afterEach(() => { pickFormKey.mockClear(); });
+  afterEach(() => { pickFormKeyBehindAcquireVsCodeApi.mockClear(); });
 
   it('a formKey cell in a non-editable column does not open the picker when clicked', () => {
     fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
-    expect(pickFormKey).not.toHaveBeenCalled();
+    expect(pickFormKeyBehindAcquireVsCodeApi).not.toHaveBeenCalled();
   });
 
   it('a formKey cell in an editable, focused column opens the picker with the field’s valid types', () => {
@@ -446,12 +416,12 @@ describe('DiffRow — formKey cell wiring', () => {
       focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
     fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
-    expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
+    expect(pickFormKeyBehindAcquireVsCodeApi).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
   });
 
   it('committing a picked FormKey calls onEditCell with the column and the picked value', async () => {
     const onEditCell = vi.fn();
-    pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
+    pickFormKeyBehindAcquireVsCodeApi.mockResolvedValueOnce('00001A:Fallout4.esm');
     fkRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell,
@@ -463,9 +433,7 @@ describe('DiffRow — formKey cell wiring', () => {
   });
 });
 
-// ADR-0018: the extended editor's only trigger is the string cell's right-click menu, driven by
-// the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it.
-describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
+describe('DiffRow — string cell right-click menu, the extended editor\'s only trigger, driven by the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it',() => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
     const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
     const td = textEl.closest('td');
@@ -474,7 +442,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
     return parseJsonRecord(required(attr, "the cell's data-vscode-context attribute"));
   }
 
-  it('a mutable string cell carries a stringValue context with readOnly: false and its current value', () => {
+  it('a mutable string cell carries a stringValue context with readOnly: false, its current value, and for a top-level row a wire path of the record\'s own member alone',() => {
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
@@ -490,7 +458,6 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
       fieldName: 'Name',
       value: 'disk-value',
       readOnly: false,
-      // A top-level row's wire path is the record's own member, and nothing else.
       path: [{ kind: 'member', name: 'Name' }],
       preventDefaultContextMenuItems: true,
     });
@@ -503,9 +470,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
     expect(ctx.readOnly).toBe(true);
   });
 
-  // Without every hop, a nested leaf's context reads identically to a top-level field's, and its
-  // save would land on the root.
-  it('a nested string cell carries its whole wire path, and is titled by its own label', () => {
+  it('a nested string cell carries its whole wire path, so its save does not land on the root, and is titled by its own label',() => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
@@ -514,7 +479,6 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
     });
     const ctx = stringContext('disk-value', 1);
     expect(ctx.path).toEqual([{ kind: 'member', name: 'Struct' }, { kind: 'member', name: 'Sub' }]);
-    // The tab is named for the leaf the menu was opened on, not for the member it sits under.
     expect(ctx.fieldName).toBe('Name');
   });
 
@@ -525,9 +489,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
   });
 });
 
-// A nested array's element is more than one hop from its subtree root, which the subtree root
-// plus a bare scalar index could never express.
-describe('DiffRow — array parent/element right-click context', () => {
+describe('DiffRow — array parent/element right-click context, a nested array\'s element being more than one hop from its subtree root, which the subtree root plus a bare scalar index could never express',() => {
   function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
     const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
     const td = textEl.closest('td');
@@ -547,7 +509,7 @@ describe('DiffRow — array parent/element right-click context', () => {
       fieldName: 'Items',
       values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1, 2] },
       winnerColumn: 'Fallout4.esm',
-      children: CHILDREN,
+      children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE,
       ...partial,
     });
   }
@@ -568,9 +530,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     expect(ctx.fieldName).toBeUndefined();
   });
 
-  // A nested array's "Add" must address the array itself: "the root field is the array" is
-  // false here.
-  it('a nested array-parent row\'s context carries the row\'s own path from the subtree root', () => {
+  it('a nested array-parent row\'s context carries the row\'s own path from the subtree root, as its "Add" must address the array itself and "the root field is the array" is false here',() => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Items' }];
     renderRow({
       diff: arrayDiff(),
@@ -599,8 +559,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     expect(ctx.index).toBeUndefined();
   });
 
-  // A payload carrying only the trailing index truncates every hop before it.
-  it('a nested array-element row\'s context carries every hop of its own path', () => {
+  it('a nested array-element row\'s context carries every hop of its own path, not only the trailing index',() => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }];
     renderRow({
       diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
@@ -615,9 +574,7 @@ describe('DiffRow — array parent/element right-click context', () => {
 });
 
 describe('DiffRow — label indentation', () => {
-  // `depth` is the ancestor-hop count, tracked independently of `path`: a row whose `path` is
-  // empty is not necessarily top-level, so only `depth` tells the two apart.
-  it('indents a row whose path is empty but whose depth is nonzero', () => {
+  it('indents a row whose path is empty but whose depth is nonzero, `depth` being the ancestor-hop count tracked independently of `path`',() => {
     renderRow({ context: { path: [], rootField: 'Health', depth: 2 } });
     expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: '48px' });
   });
@@ -627,18 +584,13 @@ describe('DiffRow — label indentation', () => {
     expect(screen.getByText('Name').closest('td')).not.toHaveStyle({ paddingLeft: '24px' });
   });
 
-  it('indents each level by one further step', () => {
-    for (const [depth, padding] of [[1, '24px'], [2, '48px'], [3, '72px']] as const) {
-      const { unmount } = renderRow({ context: { path: [], rootField: 'Name', depth } });
-      expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: padding });
-      unmount();
-    }
+  it.each([[1, '24px'], [2, '48px'], [3, '72px']] as const)('indents a row at depth %i by %s, one further step per level', (depth, padding) => {
+    renderRow({ context: { path: [], rootField: 'Name', depth } });
+    expect(screen.getByText('Name').closest('td')).toHaveStyle({ paddingLeft: padding });
   });
 });
 
-// `{…}`/`[n]` states that something is present but collapsed. A column with nothing there — an
-// unset nullable struct, an owner it does not carry — has nothing to collapse.
-describe('DiffRow — a collapsed container row, per column', () => {
+describe('DiffRow — a collapsed container row, per column: `{…}`/`[n]` states that something is present but collapsed, so a column with nothing there (an unset nullable struct, an owner it does not carry) has nothing to collapse',() => {
   const structMeta = fieldMeta({
     name: 'Location', type: 'struct', allowsNull: true,
     fields: [fieldMeta({ name: 'aliasId', type: 'int' })],
@@ -650,7 +602,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
 
   function renderContainer(values: Record<string, unknown>, meta: FieldMetadata = structMeta) {
     return renderRow({
-      diff: diff({ fieldName: meta.name, values, children: CHILDREN }),
+      diff: diff({ fieldName: meta.name, values, children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }),
       meta,
       context: { path: [], rootField: meta.name, depth: 0 },
       isExpanded: false,
@@ -668,8 +620,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cellText(1)).toBe('');
   });
 
-  // ADR-0005: a non-nullable struct has no unset, so the column omitting it holds its default.
-  it('shows the placeholder in every column for a non-nullable struct one column omits', () => {
+  it('shows the placeholder in every column for a non-nullable struct one column omits, as it has no unset so the omitting column holds its default',() => {
     renderContainer(
       { 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null },
       fieldMeta({ ...structMeta, allowsNull: false }));
@@ -683,10 +634,9 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cellText(1)).toBe('{…}');
   });
 
-  // The document omits an empty list, so a column with no array there has an empty one.
-  it('shows the element count in every column whose owner is there, an absent array as [0]', () => {
+  it('shows the element count in every column whose owner is there, an absent array as [0] because the document omits an empty list',() => {
     renderRow({
-      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN }),
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }),
       meta: arrayMeta,
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
@@ -699,7 +649,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
 
   it('shows nothing for an array whose owner the column does not carry', () => {
     renderRow({
-      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN }),
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': null }, children: CHILDREN_THAT_OFFER_THE_EXPAND_TOGGLE }),
       meta: arrayMeta,
       context: { path: [{ kind: 'member', name: 'Items' }], rootField: 'Owner', depth: 1 },
       isExpanded: false,
@@ -711,18 +661,14 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(required(cells[2], "the 'Items' row's third cell").textContent).toBe('');
   });
 
-  // A structural container no plugin carries a value for is present in every column. There is
-  // nothing there for a column to lack, so every column keeps its placeholder.
-  it('keeps the placeholder in every column for a container no plugin carries a value for', () => {
+  it('keeps the placeholder in every column for a container no plugin carries a value for, there being nothing there for a column to lack',() => {
     renderContainer({});
     expect(cellText(0)).toBe('{…}');
     expect(cellText(1)).toBe('{…}');
   });
 });
 
-// A labelled enum's values are Mutagen class names, so the cell speaks its label everywhere —
-// including Ctrl+C, which ADR-0018 binds to the one string the cell displays.
-describe('DiffRow — an enum whose values are wire tokens', () => {
+describe('DiffRow — an enum whose values are wire tokens, Mutagen class names, so the cell speaks its label everywhere, including Ctrl+C, which copies the one string the cell displays',() => {
   const kindMeta = fieldMeta({
     name: 'MutagenObjectType', type: 'enum',
     enumMembers: [{ value: 'QuestReferenceAlias', label: 'Reference' },
@@ -756,9 +702,7 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
   });
 });
 
-// editor.md, Menus and keys: only the spec's items show, so VS Code's own Cut, Copy and Paste items
-// are suppressed on every cell, and copy value is offered where a cell has text to copy.
-describe('DiffRow — every cell\'s right-click menu', () => {
+describe('DiffRow — every cell\'s right-click menu shows only the spec\'s items: VS Code\'s own Cut, Copy and Paste items are suppressed on every cell, and copy value is offered where a cell has text to copy',() => {
   function cellContext(text: string, index: number): Record<string, unknown> {
     const td = required(screen.getAllByText(text)[index]?.closest('td'), 'the cell');
     return parseJsonRecord(required(td.getAttribute('data-vscode-context'), "the cell's data-vscode-context attribute"));

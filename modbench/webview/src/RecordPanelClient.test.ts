@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The webview's vscode bridge is acquired at module load, so it must be stubbed before import.
-vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
+const vscodeBridgeAcquiredAtModuleLoad = vi.hoisted(() => ({ postMessage: vi.fn() }));
+vi.mock('./vscode', () => ({ vscode: vscodeBridgeAcquiredAtModuleLoad }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
 import { columnKey } from './columnKey';
@@ -40,7 +40,7 @@ describe('RecordPanelClient.load', () => {
     expect(await promise).toMatchObject({ ok: true, result: null });
   });
 
-  it('returns a composite view on success', async () => {
+  it('returns a composite view on success, with immutableSet keyed by compound column identity, an origin-less entry being the elided Data origin',async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer(lastRequestId(), {
       ok: true, compare: { overrides: [], diffs: [], conflictAll: 'OnlyOne' },
@@ -51,14 +51,10 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result?.conflictAll).toBe('OnlyOne');
-    // Keyed by compound column identity, not the bare plugin name; this fixture has no
-    // `origin`, which columnKey() treats as the elided Data origin.
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
     expect(r.conflictsComputed).toBe(true);
   });
 
-  // ADR-0012: two entries sharing a filename but differing in origin must produce two distinct
-  // Set members, or one origin's mutability silently applies to both columns.
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
     const promise = createRecordPanelClient().load('000001:A.esm');
     answer(lastRequestId(), {
@@ -118,8 +114,6 @@ describe('RecordPanelClient.load', () => {
     expect(r.conflictsComputed).toBe(false);
   });
 
-  // The rival: a client that resolves on the first RECORD_LOAD_ANSWERED it sees, so a stale
-  // reply to an earlier load() call would settle a newer one with the wrong record.
   it('ignores an answer whose requestId does not match this load\'s own request', async () => {
     const promise = createRecordPanelClient().load('000001:A.esp');
     answer('some-other-requestId', {

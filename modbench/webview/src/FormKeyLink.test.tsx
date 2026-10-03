@@ -9,27 +9,24 @@ import type { FormKeyResolution } from './types';
 const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// ADR-0005: the label is the composite "EditorID [FormKey]", never the EditorID alone — the
-// format a reference is chosen in and the format it is read back in must agree.
-describe('FormKeyLink — label', () => {
+describe('FormKeyLink — label is the composite "EditorID [FormKey]", never the EditorID alone, so the format a reference is chosen in and read back in agree',() => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
-  // The <td>'s own ellipsis clips at the boundary of an atomic inline box, never inside a
-  // <button>'s text, so the link carries the ellipsis itself. happy-dom has no layout: this
-  // proves only the declaration is present.
-  it('declares its own ellipsis truncation rather than relying on the cell to clip it', () => {
+  it('declares its own ellipsis truncation rather than relying on the cell to clip it, as a td\'s ellipsis never clips inside a button\'s text (happy-dom has no layout: only the declaration is checked)',() => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
     const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');
     expect(link.style.overflow).toBe('hidden');
     expect(link.style.textOverflow).toBe('ellipsis');
     expect(link.style.whiteSpace).toBe('nowrap');
     expect(link.style.maxWidth).toBe('100%');
-    // FormKeyCell wraps this in an `inline-flex` span, and a flex item's default
-    // `min-width: auto` refuses to shrink below its content, cancelling the ellipsis above.
-    expect(link.style.minWidth).toBe('0');
+  });
+
+  it('declares min-width 0 so it can shrink inside FormKeyCell\'s inline-flex span, whose flex item default min-width: auto would cancel the ellipsis', () => {
+    render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} />);
+    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.minWidth).toBe('0');
   });
 
   it('renders the plain FormKey string when unresolved', () => {
@@ -43,8 +40,7 @@ describe('FormKeyLink — label', () => {
   });
 });
 
-// Go to record is the context menu's: the link carries no gesture of its own for Ctrl.
-describe('FormKeyLink — clicks', () => {
+describe('FormKeyLink — clicks, where go to record is the context menu\'s and the link carries no gesture of its own for Ctrl',() => {
   it('a plain click is the caller\'s', () => {
     const onClick = vi.fn();
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onClick={onClick} />);

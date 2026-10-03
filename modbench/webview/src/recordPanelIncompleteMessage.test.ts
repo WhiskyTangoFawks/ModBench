@@ -1,12 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 
-// ADR-0013: an absent conflict badge is indistinguishable from "no conflict", so the statement
-// names both facts. Gated on `conflictsComputed` alone — the whole-set sweep leaves a Ready
-// load order with stale winners until it re-runs.
-describe('recordPanelIncompleteMessage', () => {
-  // An exact-string test, not just a substring/vocabulary check, so a future
-  // reword is a deliberate, reviewed choice rather than a silent drift.
+describe('recordPanelIncompleteMessage, gated on `conflictsComputed` alone, as the whole-set sweep leaves a Ready load order with stale winners until it re-runs', () => {
   it('is exactly the reviewed wording', () => {
     expect(recordPanelIncompleteMessage(false)).toBe(
       'This record\'s comparison is not complete: the colours are not final.',
@@ -17,9 +12,7 @@ describe('recordPanelIncompleteMessage', () => {
     expect(recordPanelIncompleteMessage(true)).toBeUndefined();
   });
 
-  // Never Mod Management's vocabulary ("mod") as a common noun: the Editor speaks of records,
-  // FormKeys and plugins.
-  it('never uses "mod" as a common noun', () => {
+  it('never uses "mod" as a common noun, as the Editor speaks of records, FormKeys and plugins',() => {
     expect(recordPanelIncompleteMessage(false)).not.toMatch(/\bmod\b/i);
   });
 });
