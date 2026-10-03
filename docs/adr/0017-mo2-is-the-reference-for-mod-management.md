@@ -10,10 +10,6 @@ Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventio
 4. **The auxiliary bar is never a default target for any Modbench view.** It is the conventional home for agentic chat, an assumed-present part of the UX this product is built around, so defaulting a view there would compete with chat for screen space. Views stay user-relocatable through VS Code's own Move View, so a user who wants MO2's literal side-by-side layout can build it. Modbench never assumes that choice, and nothing reserves or locks the bar.
 5. **MO2 decides the behaviour, VS Code decides the interaction.** This is the principle *Mutagen's data, the reference's behaviour, VS Code's interaction* ([principles](../principles.md)), applied to Mod Management. Every departure from MO2's behaviour is a row on [the register](../out-of-scope/mo2.md). A divergence changes the behaviour. Its reason is a platform limitation, a principle ranked above this one, or a maintainer ruling. An omission leaves the behaviour out. Its reason is a row of the register's *Omissions by reason* table.
 
-## Permitted divergences
-
-[mo2.md](../out-of-scope/mo2.md) lists every divergence and every omission, with the reason for each.
-
 ## Alternatives rejected
 
 - **A native `modlist.json` with an MO2 importer.** A one-way importer makes MO2 second-class by construction and lets the two lists diverge.
@@ -21,4 +17,4 @@ Modbench reconstructs Mod Organizer 2's workflow with VS Code's own UI conventio
 - **Two containers by default, Downloads in the aux bar, for literal MO2 parity.** Claims the space reserved for chat.
 - **A custom webview tab-switcher mimicking MO2's three-tab panel.** Reinvents widgets VS Code provides natively; the point is leaning on the platform, not rebuilding MO2's chrome.
 - **Downloads as an editor-tab webview.** The richer per-item meta a tab's width could show turned out to be four columns behind a native context menu, nothing a tree cannot show.
-- **Two Plugins trees, one per bounded context.** Kept the load order apart from the record browser to avoid conflating the contexts. Both objections are answered structurally: the tree works with no backend, and a plugin's identity, `(origin, filename)` ([ADR-0012](0012-every-plugin-in-the-instance-is-indexed.md)), keeps the contexts apart.
+- **Two Plugins trees, one per bounded context.** Kept the load order apart from the record browser to avoid conflating the contexts. Both objections are answered structurally: the tree works with no backend, and a plugin's identity, `(origin, filename)` ([ADR-0012](0012-index-every-plugin-filter-to-the-active-ones.md)), keeps the contexts apart.
