@@ -80,11 +80,27 @@ public sealed class RecordHeaderSchemaTests
         Assert.Contains(new EnumMember("MultiBound", "2147483648"), members);
     }
 
+    [Fact]
+    public void APlacedObject_NamesTheGamesFlagsEveryXEditListNames()
+    {
+        var members = RecordFlags("refr").Field.EnumMembers;
+
+        Assert.Contains(new EnumMember("Deleted", "32"), members);
+        Assert.Contains(new EnumMember("InitiallyDisabled", "2048"), members);
+        Assert.Contains(new EnumMember("Ignored", "4096"), members);
+    }
+
     [Theory]
+    [InlineData("1")]
+    [InlineData("4")]
     [InlineData("16")]
     [InlineData("256")]
+    [InlineData("32768")]
+    [InlineData("131072")]
+    [InlineData("262144")]
+    [InlineData("524288")]
     [InlineData("1073741824")]
-    public void APlacedObjectsBitNoGameFlagNames_AndNotEveryBaseTypeNamesAlike_IsUnnamed(string bit)
+    public void APlacedObjectsBitNotEveryBaseTypeNamesAlike_IsUnnamed(string bit)
     {
         Assert.DoesNotContain(RecordFlags("refr").Field.EnumMembers, m => m.BitValue == bit);
     }
@@ -95,6 +111,12 @@ public sealed class RecordHeaderSchemaTests
         var bit15 = RecordFlags("stat").Field.EnumMembers.Where(m => m.BitValue == "32768").ToList();
 
         Assert.Equal([new EnumMember("HasDistantLod", "32768")], bit15);
+    }
+
+    [Fact]
+    public void AStatic_KeepsTheGamesNames_ForTheBitsItsTypesFlagsLeave()
+    {
+        Assert.Contains(new EnumMember("Compressed", "262144"), RecordFlags("stat").Field.EnumMembers);
     }
 
     [Fact]
