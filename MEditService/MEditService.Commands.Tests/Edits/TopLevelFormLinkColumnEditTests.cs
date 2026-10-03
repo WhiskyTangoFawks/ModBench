@@ -15,8 +15,6 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // OtherNpc's own "Race" field is at the CLR default, so pointing it at _mod.Race is a real value
-    // change, not a same-value no-op that could pass by producing byte-identical output.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange()
     {
@@ -27,13 +25,10 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());
 
-        // The tree is the answer: OtherNpc's own document now carries the new race.
         Assert.Contains(
             _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
-    // Where the target is, and whether it is a RACE, is not a fact this document carries: the value
-    // is well-shaped, so it lands and the read side reports what it points at.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_LandsADanglingTarget()
     {

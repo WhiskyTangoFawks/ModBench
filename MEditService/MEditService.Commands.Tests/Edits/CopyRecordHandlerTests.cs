@@ -4,8 +4,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>commands.md, A selection is one gesture: copy takes every record and every destination
-/// at once, and each record lands in each destination or is refused on its own.</summary>
 public sealed class CopyRecordHandlerTests
 {
     [Theory]
@@ -28,8 +26,6 @@ public sealed class CopyRecordHandlerTests
         Assert.All(result.Refused, refused => Assert.Equal(RecordEditRefusal.PluginNotTracked, refused.Refusal));
     }
 
-    // commands.md, Doing nothing is not an error: a record's own plugin already is that copy, so
-    // an override into it writes nothing, with or without the replace Option.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -28,7 +28,6 @@ describe('the game folder not found, in the Output', () => {
     expect(lines).toEqual([LINE]);
   });
 
-  // Rival: a line per landed value, which every watched file change would repeat.
   it('stays one line over every later value that still has no game folder', () => {
     const instance = new FakeInstance(FOUND);
     const lines = logged(instance);
@@ -49,7 +48,6 @@ describe('the game folder not found, in the Output', () => {
     expect(lines).toEqual([]);
   });
 
-  // Rival: a flag set once and never cleared, which would hide the second failure.
   it('is a new line when the game folder is lost again after being found', () => {
     const instance = new FakeInstance(FOUND);
     const lines = logged(instance);

@@ -5,8 +5,6 @@ using MEditService.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>plugins.md, Copy, story 1, `copy` as override: a destination that already holds the
-/// record takes it only with the replace Option, flat records and containers alike.</summary>
 public sealed class CopyReplaceTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -63,8 +61,6 @@ public sealed class CopyReplaceTests : IDisposable
         Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
     }
 
-    // The replace is own-fields-only: children the destination's override accumulated (a copied-in
-    // placed ref, embedded inline in the cell's document) survive it.
     [Fact]
     public void CopyAsOverride_OnACellTheDestinationHolds_WithReplace_ReplacesOwnFields_KeepingItsChildren()
     {
@@ -98,7 +94,6 @@ public sealed class CopyReplaceTests : IDisposable
         Assert.Equal(RecordEditRefusal.DestinationHoldsRecord, result.Refusal);
     }
 
-    // Replaced at its existing slot in the destination's cell, never duplicated.
     [Fact]
     public void CopyAsOverride_OnAPlacedReferenceTheDestinationHolds_WithReplace_ReplacesItInPlace()
     {
@@ -130,8 +125,6 @@ public sealed class CopyReplaceTests : IDisposable
             underrideFixture.DestinationPlugin, underrideFixture.FlatNpc.ToString()));
     }
 
-    // The topic has no document of its own, and the response already appended into it survives the
-    // topic's own replacement.
     [Fact]
     public void CopyAsOverride_OnATopicTheDestinationHoldsEmbedded_WithReplace_ReplacesOwnFields_KeepingItsResponse()
     {

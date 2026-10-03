@@ -1,5 +1,3 @@
-// Composition, against the committed mo2-instance-corpus fixture: proving these writers touch
-// only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from './fakeVscodeWatcher';
 
@@ -14,9 +12,7 @@ import {
 import { accessTo, providedPluginsIn, readPluginLines } from './adapterOver';
 
 const PROFILE = 'Default';
-// The fixture has no game folder, so its Creation Club plugin stands in the game's Data folder,
-// case-folded as the Instance lists it.
-const GAME_DATA: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
+const GAME_DATA_FOLDER: DataFolderPlugins = { kind: 'listed', names: new Set(['ccsbjfo4003-grenade.esl']) };
 
 const pluginOrder = async (dir: string): Promise<string[]> =>
   (await readPluginLines(dir)).map((p) => p.name);
@@ -31,10 +27,9 @@ describe('plugins.txt corpus', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // commands.md, "A selection is one gesture": several plugins flip in the one splice this
-  // touches, not one write per plugin.
   it('setPluginsEnabled(false) flips several lines in one write, touching only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
+    const orderBefore = await pluginOrder(dir);
     const result = await setPluginsEnabled(accessTo(dir), PROFILE, ['Tracked Patch Mod.esp', 'Unofficial Fallout 4 Patch.esp'], false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
@@ -46,13 +41,9 @@ describe('plugins.txt corpus', () => {
     const enabled = await enabledPlugins(dir);
     expect(enabled).not.toContain('Tracked Patch Mod.esp');
     expect(enabled).not.toContain('Unofficial Fallout 4 Patch.esp');
-    // Order is preserved — only the markers changed.
-    const order = await pluginOrder(dir);
-    expect(order).toContain('Tracked Patch Mod.esp');
-    expect(order).toContain('Unofficial Fallout 4 Patch.esp');
+    expect(await pluginOrder(dir)).toEqual(orderBefore);
   });
 
-  // The check box's own shape: several rows, each its own target state, still one splice.
   it('setPluginsParticipation flips a mixed selection in one write, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await setPluginsParticipation(accessTo(dir), PROFILE, [
@@ -74,12 +65,10 @@ describe('plugins.txt corpus', () => {
   it('syncPlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
     const result = await syncPlugins(
-      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA, []);
+      accessTo(dir), PROFILE, await providedPluginsIn(dir), GAME_DATA_FOLDER, []);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    // The fixture ships the add-on on disk with no plugins.txt line, and lists the patch that no
-    // enabled mod provides. The Creation Club line is the game's own, so it stays.
     expect(result).toEqual({
       applied: true, wrote: true, added: ['NonAsciiRetexture - Addon.esl'], dropped: ['Unofficial Fallout 4 Patch.esp'],
     });

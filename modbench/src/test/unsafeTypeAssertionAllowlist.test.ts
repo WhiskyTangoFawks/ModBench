@@ -1,6 +1,3 @@
-// Two folder-scoped exemptions from `no-unsafe-type-assertion`, the way BannedApiScopeTests pins
-// RS0030's exemptions in the service: single-function helper modules, and the record document's
-// traversal folder, which a helper can't reduce to one function.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,8 +21,6 @@ function stringLiterals(node: ts.ArrayLiteralExpression): string[] {
   return node.elements.filter(ts.isStringLiteralLike).map((e) => e.text);
 }
 
-// One config-array entry, `{ files: [...], rules: { ... } }`, that sets `RULE` — every shape
-// this file's other blocks use it in.
 function ruleBlocksFor(source: ts.SourceFile, rule: string): RuleBlock[] {
   const blocks: RuleBlock[] = [];
   function visit(node: ts.Node): void {

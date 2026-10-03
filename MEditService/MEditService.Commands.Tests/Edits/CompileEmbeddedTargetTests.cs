@@ -13,8 +13,6 @@ using Noggog;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A link to a record embedded in another plugin's container: a container's child is a
-/// record of the binary, so the link cache names it and compile must not call the link broken.</summary>
 public sealed class CompileEmbeddedTargetTests : IDisposable
 {
     private const string TargetName = "EmbeddedTarget.esp";
@@ -94,8 +92,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         _gameDirectory.Dispose();
     }
 
-    // The target's own file carries the record and the link cache names it from there, so a
-    // "could not be resolved" diagnostic would be false.
     [Fact]
     public async Task Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
@@ -106,8 +102,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0013: a registered plugin the game does not load is not where the link points, so its file
-    // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
     public async Task Compile_ForALinkIntoATrackedPluginTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
@@ -122,8 +116,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
-    // The same load order, asked the way compile asks: the silence above is the link resolving, not
-    // a record nothing can name.
     [Fact]
     public void TheTargetsFile_CarriesTheEmbeddedRecord_AndTheLinkCacheNamesIt()
     {

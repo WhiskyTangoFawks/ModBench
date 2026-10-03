@@ -3,8 +3,6 @@ using MEditService.Commands.Tests.TestSupport;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A file a user renamed by hand, content unchanged, is still the record's file: the write
-/// path resolves it by the repository's fallback scan rather than a stale computed path.</summary>
 public sealed class RenamedSourceFileEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -16,10 +14,8 @@ public sealed class RenamedSourceFileEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditable()
+    public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditedInPlace_NotRecreatedAtTheStalePath()
     {
-        // NpcSourceFile resolves the record's real current file live off disk, so it must be captured
-        // before the hand-rename below, or every later read would just re-find the file at its new spot.
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
             Path.GetDirectoryName(originalPath) ?? throw new InvalidOperationException($"Expected '{originalPath}' to have a parent directory."),
@@ -29,9 +25,6 @@ public sealed class RenamedSourceFileEditTests : IDisposable
         var result = EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.6"));
 
         Assert.True(result.Applied, result.Message);
-        // Written into the file that actually holds the record, not recreated at the stale computed
-        // path — two files claiming one FormKey is the corruption AmbiguousSourceUnitException exists
-        // for.
         Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
         Assert.NotNull(_mod.Document(_mod.Npc.ToString()));

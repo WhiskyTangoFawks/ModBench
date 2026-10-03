@@ -133,7 +133,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Empty(adapter.Asked);
     }
 
-    // The rival refuses by the release alone: a release with no light plugins still takes a full one.
     [Theory]
     [InlineData("Plain.esp")]
     [InlineData("Master.esm")]
@@ -147,8 +146,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Equal([(name, GameRelease.Oblivion)], adapter.Asked);
     }
 
-    // Rival: a default arm that reports Applied for whatever the adapter answers, so an outcome
-    // neither Written nor a named refusal would be told to the user as a success.
     [Fact]
     public async Task CreatePlugin_WhoseAdapterAnswersAnUnnamedOutcome_ThrowsRatherThanReportingApplied()
     {
@@ -165,8 +162,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         return TestEditService.PluginCreateHandler(holder, adapter);
     }
 
-    // Answers written without writing, so a release this build carries no Mutagen game module for
-    // still reaches the adapter.
     private sealed class RecordingAdapter : ReadOnlyPluginAdapter
     {
         public List<(string Name, GameRelease Release)> Asked { get; } = [];

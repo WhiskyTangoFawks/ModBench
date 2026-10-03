@@ -1,5 +1,3 @@
-// A box's tests compile in the one test project, which references every box, so `tsc -b` never
-// refuses a test that reaches past its own box's reference list. This scan does.
 import { describe, it, expect } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,10 +7,8 @@ import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
 
-// Shared doubles and fixtures every box's tests may use: compiled only in the test project.
 const SHARED_TEST_SUPPORT = 'test';
 
-// The composition root's own files sit in src/ itself, outside every box directory.
 const ROOT_BOX = '(composition root)';
 
 const VI_MODULE_CALLS = new Set(['mock', 'doMock', 'unmock', 'doUnmock', 'importActual', 'importMock']);
@@ -22,7 +18,6 @@ interface Box {
   references: Set<string>;
 }
 
-// A box is a directory of src/ holding its own tsconfig.json; its references are that file's.
 function boxesIn(src: string): Box[] {
   return readdirSync(src, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(join(src, entry.name, 'tsconfig.json')))
@@ -43,8 +38,6 @@ function referencePaths(config: unknown): string[] {
       ? [reference.path] : []));
 }
 
-// Every module a test names: imports and re-exports, `import()` in code and in types, and the
-// module paths vitest's own mock and import helpers take.
 function moduleSpecifiers(sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
   const found: string[] = [];
@@ -72,8 +65,6 @@ function isModuleCall(call: ts.CallExpression): boolean {
     && callee.expression.text === 'vi' && VI_MODULE_CALLS.has(callee.name.text);
 }
 
-// The box a path inside src/ belongs to: its top directory when that is a box, the shared test
-// support, or the composition root for everything else under src/.
 function ownerOf(src: string, path: string, boxes: readonly Box[]): string | undefined {
   const rel = relative(src, path);
   if (rel.startsWith('..')) return undefined;
@@ -85,7 +76,6 @@ function ownerOf(src: string, path: string, boxes: readonly Box[]): string | und
 const isTestFile = (src: string, path: string): boolean =>
   path.endsWith('.test.ts') || relative(src, path).split(sep).includes('test');
 
-// Each box's own tests, with the box that owns them; the shared support is no box's.
 function boxTests(src: string, boxes: readonly Box[]): { file: string; box: Box }[] {
   const testedBoxes: Box[] = [...boxes, { name: ROOT_BOX, references: new Set(boxes.map((box) => box.name)) }];
   return tsFiles(src).filter((file) => isTestFile(src, file)).flatMap((file) => {
@@ -94,7 +84,6 @@ function boxTests(src: string, boxes: readonly Box[]): { file: string; box: Box 
   });
 }
 
-// `file: specifier (box)` for each module a test names in a box its own box does not reference.
 function unreferencedImports(src: string): string[] {
   const boxes = boxesIn(src);
   const offenders: string[] = [];

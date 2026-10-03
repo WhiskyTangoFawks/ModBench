@@ -1,5 +1,3 @@
-// Planted against a real temporary tree, so no rival walker implementation collapses this to a
-// vacuous pass.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

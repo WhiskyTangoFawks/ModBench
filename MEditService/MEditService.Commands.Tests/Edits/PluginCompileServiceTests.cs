@@ -8,12 +8,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The flat half only: <see cref="CompileFixture"/>'s records are all non-container
-/// types; containers are <c>PluginCompileServiceContainerTests</c>' job.</summary>
 public sealed class PluginCompileServiceTests : IDisposable
 {
-    // Past the fixture's own records, and past its header's NextFormID: what a FormID edit or a create
-    // allocates, and what an ObjectID below $800 could never be (engine-hardcoded range).
     private const uint MovedNpcId = 0x000900;
     private const uint CreatedNpcId = 0x000910;
 
@@ -75,9 +71,6 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(overlay.Keywords, k => k.FormKey == _mod.Keyword);
     }
 
-    // Semantic breakage compiles successfully with diagnostics, never a refusal. The fixture's Race
-    // carries genuinely unset FormLink fields, which CheckErrorBuilder already flags for the editor;
-    // compile surfaces the same diagnostics rather than re-deriving a second definition of "broken".
     [Fact]
     public async Task Compile_WithASemanticallyBrokenRecord_SucceedsWithDiagnostics()
     {
@@ -87,8 +80,6 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
-    // The Problems panel puts a diagnostic on the file it names, so the path is the record's own
-    // document, relative to the mod folder.
     [Fact]
     public async Task Compile_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
@@ -111,7 +102,6 @@ public sealed class PluginCompileServiceTests : IDisposable
 
         _mod.Remove(_mod.Npc, CompileFixture.NpcRecordType, CompileFixture.NpcEditorId);
 
-        // The survivor's file was not renamed for its sibling's departure.
         Assert.Equal([survivorNameBefore], NpcFiles());
 
         var (mod, handle) = await CompileAndReimport();

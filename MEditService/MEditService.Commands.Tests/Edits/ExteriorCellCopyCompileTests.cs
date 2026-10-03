@@ -8,9 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A source-tree-shape check only proves the writer believes its path; only decoding the
-/// compiled binary and finding the REFR under the block/sub-block matching the source's own numbers
-/// catches a writer/reader naming mismatch.</summary>
 public sealed class ExteriorCellCopyCompileTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
@@ -58,9 +55,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
     }
 
-    // Shape 1: the destination overrides the WRLD but neither the target block nor sub-block.
-    // The second copy lands its new block/sub-block inside the one existing worldspace directory,
-    // never a sibling dir for the same WRLD.
     [Fact]
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
     {
@@ -73,8 +67,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // One worldspace directory total — the defect this ticket exists for is a bare-named sibling
-        // — and the new block/sub-block folders exist on disk inside it.
         var worldspacesDir = Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces");
         var worldspaceDir = Assert.Single(Directory.EnumerateDirectories(worldspacesDir));
         var newBlockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
@@ -91,7 +83,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var otherSub = otherBlock.Items.Single(
             sb => sb.BlockNumberX == ContainerCopyFixture.OtherSubX && sb.BlockNumberY == ContainerCopyFixture.OtherSubY);
         Assert.Contains(otherSub.Items, c => c.FormKey == _fixture.OtherBlockCell);
-        // The first-copied cell survives the second mint, in its own block.
         Assert.Contains(
             worldspace.SubCells
                 .Single(b => b.BlockNumberX == ContainerCopyFixture.ExteriorBlockX && b.BlockNumberY == ContainerCopyFixture.ExteriorBlockY)
@@ -99,8 +90,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // Shape 2: only the sub-block and the cell are new. The compiled block is one block carrying
-    // both sub-blocks; a sibling block directory would compile into two, or fail the round-trip gate.
     [Fact]
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
     {
@@ -113,7 +102,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
 
-        // On disk: still one directory for the shared block, now holding both sub-block folders.
         var worldspaceDir = Assert.Single(
             Directory.EnumerateDirectories(Path.Combine(_fixture.DestinationSourceRoot, "Worldspaces")));
         var blockDir = Assert.Single(Directory.EnumerateDirectories(worldspaceDir), d =>
@@ -131,8 +119,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(newSub.Items, c => c.FormKey == _fixture.SameBlockCell);
     }
 
-    // Shape 3: WRLD, block and sub-block all exist, so the copy adds exactly one cell directory
-    // inside the existing sub-block and every pre-existing file keeps its exact bytes.
     [Fact]
     public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
     {
@@ -171,8 +157,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(subBlock.Items, c => c.FormKey == _fixture.ExteriorCell);
     }
 
-    // A confirmed replacement of a cell the destination already holds replaces it in place: no second
-    // cell directory, and the compiled worldspace still carries exactly one copy.
     [Fact]
     public async Task CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
     {
@@ -204,7 +188,6 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     private readonly List<IDisposable> _overlays = [];
 
-    // The Temporary half of "REFR in the same Persistent/Temporary slot as the source", at the wire.
     [Fact]
     public async Task CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
     {

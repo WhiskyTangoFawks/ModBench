@@ -6,8 +6,6 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>The friction is deliberate (ADR-0007), which is why the refusal must name the way
-/// out.</summary>
 public sealed class UntrackedReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
@@ -16,21 +14,14 @@ public sealed class UntrackedReadOnlyTests
     public void EditingAPluginInAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
     {
         using var mod = SourceEditFixture.Untracked();
-        Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
-
+        Assert.False(SourceRepository.IsTracked(mod.ModFolder));
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        // The exact palette entry: a signpost naming a command that does not exist verbatim is the dead
-        // end this refusal prevents. Asserted against the literal so the test disagrees with a bad rename
-        // instead of moving with it.
         Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
     }
 
-    // ResolveEditTarget's step order: the write-path gate must fire before the existence check, or an
-    // untracked plugin reports RecordNotFound and sends the user chasing a FormKey typo when the real
-    // problem is that the whole plugin is read-only.
     [Fact]
     public void EditingANonexistentFormKey_OnAnUntrackedPlugin_StillRefusesAsUntracked_NotAsRecordNotFound()
     {
@@ -49,8 +40,6 @@ public sealed class UntrackedReadOnlyTests
 
         mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
-        // did not quietly create the source tree on its way out.
         Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName))));
         Assert.False(File.Exists(mod.NpcSourceFile));
     }
@@ -68,8 +57,6 @@ public sealed class UntrackedReadOnlyTests
         Assert.Contains("patch", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ADR-0012 invariant 2: Overwrite is an origin, not a mod, so it has no mod folder either — the
-    // same refusal as a Data-directory master, but "author a patch" is not this one's way out.
     [Fact]
     public void EditingAPluginInOverwrite_IsRefused_NamingOverwriteAsAnOriginNotAMod()
     {
@@ -95,9 +82,6 @@ public sealed class UntrackedReadOnlyTests
         var notTrackable = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
-        // Collapsing these into one refusal would leave half the users following advice that cannot work:
-        // Track does not apply to a Data-directory master, and authoring a patch is not the answer for an
-        // untracked mod folder.
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Track", notTrackable.Message, StringComparison.Ordinal);
@@ -107,8 +91,6 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
-        // The positive control for every refusal above, and the product claim: the escape
-        // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
         using var mod = SourceEditFixture.Tracked();
 
         var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));

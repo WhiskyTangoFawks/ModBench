@@ -1,5 +1,3 @@
-// commands.md: "An entry point fires a gesture. A gesture does not fire another." Exercised
-// through the real ESLint Linter, not by re-deriving the rule's predicate logic.
 import { describe, it, expect } from 'vitest';
 import { Linter } from 'eslint';
 import { noGestureResultUse } from '../../eslint-rules/noGestureResultUse.mjs';

@@ -7,9 +7,6 @@ const { registerCommand, writeText } = vi.hoisted(() => ({
   writeText: vi.fn<(value: string) => unknown>(),
 }));
 
-// `../toolbox` (this file's own module under test) wires every MO2-side view, so its own vscode
-// surface is wide — `fakeVscodeModule()` covers the rest, as `toolboxPluginsNameFilter.test.ts`
-// already establishes for the same module.
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, ThemeIcon,
@@ -157,8 +154,6 @@ describe('registerCopyValueCommand with Mods\' real adapter', () => {
     expect(writeText).toHaveBeenCalledWith('Alpha');
   });
 
-  // commands.md, The surface supplies the Argument: a palette call has none, so the focused view
-  // stands for the key its own Ctrl+C would have passed.
   it('a palette call copies the focused view\'s selection, even with a Mods row selected', async () => {
     const viewSelection = (): ModlistNode[] => [new ModNode({ kind: 'mod', name: 'Alpha', enabled: true })];
     const modsAdapter: CopyValueAdapter = { text: modsCopyValueText(viewSelection), reporterTag: 'mod.copyValue' };

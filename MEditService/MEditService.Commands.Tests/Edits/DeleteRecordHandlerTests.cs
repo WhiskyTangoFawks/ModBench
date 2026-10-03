@@ -52,8 +52,6 @@ public sealed class DeleteRecordHandlerTests
         Assert.Empty(result.Refused);
     }
 
-    // Another tool renamed the NPC's document and left a copy under a second name: the tree is
-    // ambiguous about which one to remove, and the records either side of it still land.
     [Fact]
     public void DeleteRecords_WhenAnotherToolLeftTwoDocumentsClaimingOneRecord_RefusesThatRecord_AndLandsTheRest()
     {
@@ -99,7 +97,6 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(before, FilesUnder(worldDirectory));
     }
 
-    // ADR-0003: a document still standing may hold another tool's write since the pre-image was read.
     [Fact]
     public void DeleteRecords_WhenAContainersRemovalFailsPartway_NeverWritesTheDocumentsItDidNotRemove()
     {
@@ -113,7 +110,6 @@ public sealed class DeleteRecordHandlerTests
         Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(standing));
     }
 
-    // A link dangles once the removal takes its target, and nothing can be made at its path again.
     [Fact]
     public void DeleteRecords_WhenAPathCannotBePutBack_PutsBackTheRest_AndRefusesWithTheCauseAndThatPath()
     {
@@ -153,7 +149,6 @@ public sealed class DeleteRecordHandlerTests
         return mod;
     }
 
-    // A directory nothing may write to stops a recursive delete partway through the tree above it.
     private static PerRecordResult DeleteWhileLocked(SourceModFixture mod, string directory, IReadOnlyList<RecordAt> records)
     {
         FileModes.Set(directory, "500");
@@ -217,12 +212,10 @@ public sealed class DeleteRecordHandlerTests
         Assert.Empty(result.Refused);
         Assert.False(File.Exists(mod.NpcSourceFile));
         Assert.Null(mod.Document(mod.Npc.ToString()));
-        // Still served by the last commit until a compile: a working-tree deletion is not a compile.
         Assert.NotNull(
             mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
     }
 
-    // ADR-0015 invariant 2: the next snapshot is how the deletion reaches the views.
     [Fact]
     public void DeleteRecords_PublishesNothing()
     {

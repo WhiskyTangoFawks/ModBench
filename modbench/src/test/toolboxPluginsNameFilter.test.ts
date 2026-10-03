@@ -13,8 +13,6 @@ import {
 import type { InstanceValue } from '../instanceLoader/instance';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../instanceLoader/loadOrderSnapshot';
 
-// `vi.mock`'s factory runs before this file's own top-level code (`../toolbox` reaches `vscode`
-// first), so the state it closes over is built from literals here and handed to the harness.
 const h = vi.hoisted(() => ({
   state: { commands: new Map<string, (...args: unknown[]) => unknown>(), boxes: [] },
 }));
@@ -54,8 +52,6 @@ const GAME_FOLDER_MESSAGE =
 
 const currentBox = currentBoxOf(h.state);
 
-// `setImmediate` runs after the whole microtask queue drains, however many `await`s a real
-// `PluginsTreeProvider` recompute chains — an order the event loop guarantees, not a duration.
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 beforeEach(() => {
@@ -157,7 +153,6 @@ describe('the Plugins view, given the game folder not found', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // Rival: reading the empty value before the first read as a game folder not found.
   it('says nothing before the first read lands', async () => {
     const instance = new FakeInstance(notFoundValueOf([]), 0);
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
@@ -199,9 +194,7 @@ describe('the Plugins view, given the game folder not found', () => {
   });
 });
 
-// plugins.md, States, story 1.
 describe('the Plugins view, given no lines and no locked plugins', () => {
-  // VS Code asks for the rows once the view is registered.
   async function emptyView(instance: FakeInstance) {
     const provider = new PluginsTreeProvider({ instance, source: new FakeSource() });
     const view: { description?: string; message?: string } = {};
@@ -246,7 +239,6 @@ describe('the Plugins view, given no lines and no locked plugins', () => {
   });
 });
 
-// plugins.md, States, story 5.
 function held(name: string, hasMatchingRecords: boolean): PluginMetadata {
   return {
     name, path: `/fixture/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false, isBlueprint: false, masters: [], recordCount: 0,
@@ -270,12 +262,10 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
     return { client, provider, view, pluginSync, filter };
   }
 
-  // The line once every render before it has landed: the sync's own message is composed after the
-  // view's, so the line reads the sentinel alone only when the view has nothing to say.
-  const SENTINEL = 'sentinel.';
-  async function settledLine(view: { message?: string }, pluginSync: ReturnType<typeof syncMessageDouble>) {
-    pluginSync.say(SENTINEL);
-    await waitForMessage(view, (m) => m?.endsWith(SENTINEL) === true, 'the sentinel reaching the line');
+  const LAST_SYNC_MESSAGE = 'sentinel.';
+  async function lineOnceRendersHaveLanded(view: { message?: string }, pluginSync: ReturnType<typeof syncMessageDouble>) {
+    pluginSync.say(LAST_SYNC_MESSAGE);
+    await waitForMessage(view, (m) => m?.endsWith(LAST_SYNC_MESSAGE) === true, 'the sync message reaching the line');
     return view.message;
   }
 
@@ -289,14 +279,13 @@ describe('the Plugins view, given a record filter that matches nothing', () => {
   it('says nothing while the filter matches a record in any plugin', async () => {
     const { view, pluginSync } = await filteredView(true);
 
-    expect(await settledLine(view, pluginSync)).toBe(SENTINEL);
+    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(LAST_SYNC_MESSAGE);
   });
 
-  // Rival: the message read off the facts alone, which name no source to say.
   it('says nothing while no record filter is in force, whatever the facts say', async () => {
     const { view, pluginSync } = await filteredView(false, null);
 
-    expect(await settledLine(view, pluginSync)).toBe(SENTINEL);
+    expect(await lineOnceRendersHaveLanded(view, pluginSync)).toBe(LAST_SYNC_MESSAGE);
   });
 
   it('takes the message back once the filter clears', async () => {
@@ -331,7 +320,6 @@ describe('the Plugins view, given a plugin sync that refused', () => {
     return { view, pluginSync, filter };
   }
 
-  // Rival: the sync's line replacing the view's own, or never reaching the line at all.
   it('says it beside the view\'s own message, and drops only its own once the sync lands', async () => {
     const { view, pluginSync } = await refusedView('armor.sql');
 

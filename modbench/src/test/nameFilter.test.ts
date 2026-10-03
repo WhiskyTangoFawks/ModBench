@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// One behaviour shared by every Modbench list view, tested once, here, in neither bounded
-// context's vocabulary: a "row" is whatever the wired provider hands out. The fakes stand in
-// for an InputBox and a TreeView, nothing else.
-
 const h = vi.hoisted(() => {
   class FakeInputBox {
     value = '';
@@ -14,13 +10,12 @@ const h = vi.hoisted(() => {
     private changeHandlers: ((v: string) => void)[] = [];
     private hideHandlers: (() => void)[] = [];
     private buttonHandlers: ((b: unknown) => void)[] = [];
-    onDidChangeValue(cb: (v: string) => void) { this.changeHandlers.push(cb); return { dispose() { /* no-op */ } }; }
-    onDidHide(cb: () => void) { this.hideHandlers.push(cb); return { dispose() { /* no-op */ } }; }
-    onDidTriggerButton(cb: (b: unknown) => void) { this.buttonHandlers.push(cb); return { dispose() { /* no-op */ } }; }
+    onDidChangeValue(cb: (v: string) => void) { this.changeHandlers.push(cb); return { dispose: () => undefined }; }
+    onDidHide(cb: () => void) { this.hideHandlers.push(cb); return { dispose: () => undefined }; }
+    onDidTriggerButton(cb: (b: unknown) => void) { this.buttonHandlers.push(cb); return { dispose: () => undefined }; }
     show() { this.shown = true; }
     dispose() { this.disposed = true; }
     type(text: string) { this.value = text; this.changeHandlers.forEach((cb) => cb(text)); }
-    // Enter, Escape, or clicking away — indistinguishable at this API.
     hide() { this.hideHandlers.forEach((cb) => cb()); }
     pressButton() { this.buttonHandlers.forEach((cb) => cb(this.buttons[0])); }
   }
@@ -84,8 +79,6 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
 const open = () => { current.open(); };
 const clear = () => { current.clear(); };
 
-// A minimal `vscode.Event<unknown>` double: a view's own row-change signal, fired by the test in
-// place of a real provider's `onDidChangeTreeData`.
 function fakeRowsChangedEvent() {
   const handlers: ((e: unknown) => void)[] = [];
   return {
@@ -149,8 +142,7 @@ describe('the name filter is durable', () => {
     expect(h.state.contextKeys.get(KEY)).toBe(false);
   });
 
-  // A context key outlives an extension host restart; the filter it describes does not.
-  it('lowers the filter-active context key as it registers', () => {
+  it('lowers a filter-active context key left over from an earlier extension host as it registers', () => {
     h.state.contextKeys.set(KEY, true);
     setup();
     expect(h.state.contextKeys.get(KEY)).toBe(false);
@@ -200,9 +192,6 @@ describe('the active term reads out in the view description', () => {
     expect(view.description).toBe('Default');
   });
 
-  // The merged Plugins tree carries two independent narrowing axes (plugins.md, Toolbar):
-  // this name filter and the SQL record filter. Both show, and clearing either leaves the
-  // other's half of the readout standing.
   it('puts the term after the base where the view reads its base first', () => {
     const { view, filter } = setup({ termPlacement: 'afterBase' });
     filter.setBaseDescription('12 / 30');
@@ -211,7 +200,7 @@ describe('the active term reads out in the view description', () => {
     expect(view.description).toBe('12 / 30 · "arm"');
   });
 
-  it('recomposes when the other axis changes under a live filter', () => {
+  it('recomposes when the record filter\'s base changes under a live name filter, leaving the name half standing', () => {
     const { view, filter } = setup();
     open();
     currentBox().type('arm');
@@ -249,9 +238,6 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // ADR-0019: the message is decided by what survived the filter, not by whether the term matched.
-  // A view whose rows are an error row still has rows; "no matches" sends that user
-  // debugging the filter instead of the data.
   it('stays silent when what survived the filter is an error row', async () => {
     const { view } = setup({ hasRows: () => Promise.resolve(true) });
     open();
@@ -260,8 +246,6 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // The Plugins view has one message surface and two claimants: the load's own statement and
-  // this. The load hands the line back blank before `refresh` restates the filter's own.
   it('restates its message on refresh, once the caller has handed the blanked line back', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
     open();
@@ -332,8 +316,6 @@ describe('the view\'s own message', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // Rival: the view's message read only while no filter is active, so a filter that matches
-  // leaves the line empty over a view that still has something to say.
   it('keeps it standing while a filter matches rows', async () => {
     const rows = fakeRowsChangedEvent();
     const { view } = setup({ onRowsChanged: rows.event, viewMessage: () => 'Something is missing.' });
