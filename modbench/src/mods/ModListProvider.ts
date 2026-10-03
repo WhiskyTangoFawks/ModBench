@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { FileOrigin, Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
-import { modOrigin } from '../instanceLoader/fileConflictIndex';
+import type { Mod, OriginFile, ModlistEntry, OriginFolder, Separator } from '../instanceLoader/instance';
+import { modOrigin, RUNTIME_OUTPUT } from '../instanceLoader/fileConflictIndex';
 import { OVERWRITE_ORIGIN } from '../instanceLoader/loadOrderSnapshot';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from '../instanceLoader/statusChecker';
@@ -19,8 +19,6 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 /** The pinned Overwrite row's kind and `contextValue`, which package.json's `when` clauses match
  *  on: the row stands for the mod manager's folder, so it is named as the value names it. */
 export const OVERWRITE_NODE_KIND = OVERWRITE_ORIGIN;
-
-const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
 
 // `DataTransferItem.value` is `any` — handleDrag, below, is this provider's only writer of it.
 function isDraggedRows(value: unknown): value is DraggedRows {

@@ -51,6 +51,11 @@
           "default": "",
           "scope": "resource",
           "description": "The game directory (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
+        },
+        "modbench.mods.greyInactiveFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Grey a file the game does not get, in the Mods view and the Explorer: another copy wins its path, it is excluded, or its mod is disabled."
         }
       }
     },

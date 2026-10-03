@@ -20,10 +20,17 @@ const byName = ([a]: readonly [string, unknown], [b]: readonly [string, unknown]
 export const expanderOver = (files: readonly OriginFile[]): vscode.TreeItemCollapsibleState =>
   (files.length === 0 ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
 
-function fileRow(row: vscode.TreeItem, parent: ModlistNode, name: string, path: string): void {
+/** The URI of a file's or folder's row: its origin, and the path in it. A mod's name holds no
+ *  slash, so no two rows share one. */
+export function fileRowUri(origin: FileOrigin, relativePath: string): vscode.Uri {
+  const originPart = origin.kind === 'mod' ? `mod/${origin.name}` : origin.kind;
+  return vscode.Uri.from({ scheme: FILE_ROW_SCHEME, path: `/${originPart}/${relativePath}` });
+}
+
+function fileRow(row: vscode.TreeItem, parent: ModlistNode, origin: FileOrigin, name: string, relativePath: string): void {
   row.id = `${parent.id}/${name}`;
-  row.resourceUri = vscode.Uri.from({ scheme: FILE_ROW_SCHEME, path: `/${row.id}` });
-  row.tooltip = path;
+  row.resourceUri = fileRowUri(origin, relativePath);
+  row.tooltip = relativePath;
 }
 
 /** A folder in a mod or Overwrite, and the files and folders under it. */
@@ -38,7 +45,7 @@ export class FolderNode extends vscode.TreeItem {
     name: string,
   ) {
     super(name, expanderOver(files));
-    fileRow(this, parent, name, folder.relativePath);
+    fileRow(this, parent, origin, name, folder.relativePath);
     this.contextValue = 'folder';
   }
 }
@@ -52,7 +59,7 @@ export class FileNode extends vscode.TreeItem {
     name: string,
   ) {
     super(name, vscode.TreeItemCollapsibleState.None);
-    fileRow(this, parent, name, file.relativePath);
+    fileRow(this, parent, origin, name, file.relativePath);
     this.contextValue = 'file';
     this.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(file.path), { preview: true }] };
   }

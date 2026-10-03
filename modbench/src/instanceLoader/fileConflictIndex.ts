@@ -4,7 +4,7 @@ import type { FileOrigin, InstanceAdapter, ModlistEntry, OriginFile, OriginFolde
 
 export const modOrigin = (name: string): FileOrigin => ({ kind: 'mod', name });
 
-const OVERWRITE: FileOrigin = { kind: 'runtimeOutput' };
+export const RUNTIME_OUTPUT: FileOrigin = { kind: 'runtimeOutput' };
 
 export interface ConflictEntry {
   /** The winner's own on-disk casing: Proton/Wine folds case over case-sensitive ext4, so
@@ -142,8 +142,8 @@ export async function buildFileConflictIndex(
     files.set({
       relativePath: file.relativePath,
       winner: file.sourcePath,
-      winnerOrigin: OVERWRITE,
-      providers: [OVERWRITE, ...(existing?.providers ?? [])],
+      winnerOrigin: RUNTIME_OUTPUT,
+      providers: [RUNTIME_OUTPUT, ...(existing?.providers ?? [])],
     });
   }
 
