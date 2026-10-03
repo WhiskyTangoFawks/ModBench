@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural comment checks Vale cannot express because it sees neither the comment markers nor
-the code beneath: a doc block over three lines, a doc comment on a test method or a private member.
-Exit 1 on any hit. comments_in_test is the write hook's alone.
+the code beneath: a doc block over three lines, a doc comment on a test method or a private member,
+any comment in a test file. Exit 1 on any hit.
 
 Usage: comment-shape.py FILE...            check files
        comment-shape.py --as PATH < text   check a fragment as if it were PATH"""
@@ -73,26 +73,35 @@ def check(path, text):
     return hits
 
 
-COMMENT = re.compile(r"(?:^|\s)(?://|/\*)")
+STRING_OR_COMMENT = re.compile(r'''(?P<string>("{3,}).*?\2|\$?@\$?"(?:""|[^"])*"|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|(?<!\S)(?://|/\*)''')
+
+
+def has_comment(line):
+    return any(not m.group("string") for m in STRING_OR_COMMENT.finditer(line))
 
 
 def comments_in_test(path, text):
-    """Called by the write hook alone: Gate 1 lints every tracked file, and most test files still
-    hold comments."""
+    """A string is matched within one line, so a marker inside a string that spans lines is
+    reported as a comment, and a quote in a regex literal can pair with one in a trailing comment
+    and hide it."""
     if not TEST_FILE.search(path):
         return []
     return [f"{path}:{i}: a comment in a test; move it into the test's name or an assertion"
-            for i, line in enumerate(text.splitlines(), 1) if COMMENT.search(line)]
+            for i, line in enumerate(text.splitlines(), 1) if has_comment(line)]
+
+
+def hits_in(path, text):
+    return check(path, text) + comments_in_test(path, text)
 
 
 def main(argv):
     hits = []
     if argv[:1] == ["--as"]:
-        hits = check(argv[1], sys.stdin.read())
+        hits = hits_in(argv[1], sys.stdin.read())
     else:
         for path in argv:
             with open(path, encoding="utf-8", errors="replace") as f:
-                hits.extend(check(path, f.read()))
+                hits.extend(hits_in(path, f.read()))
     for h in hits:
         print(h)
     return 1 if hits else 0
