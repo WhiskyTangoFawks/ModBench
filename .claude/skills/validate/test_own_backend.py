@@ -16,6 +16,10 @@ FAKE_BACKEND = textwrap.dedent("""
     host, port = sys.argv[sys.argv.index("--urls") + 1].rsplit("/", 1)[1].rsplit(":", 1)
     child = subprocess.Popen(["sleep", "600"])
     pathlib.Path(pid_file).write_text(f"{os.getpid()} {child.pid}")
+    if "--LogDirectory" in sys.argv:
+        log_dir = pathlib.Path(sys.argv[sys.argv.index("--LogDirectory") + 1])
+        (log_dir / "medit-.log").write_text("logged")
+        pathlib.Path(pid_file + ".logdir").write_text(str(log_dir))
     if "--silent-listener-first" in sys.argv:
         silent = socket.create_server((host, 0))
         time.sleep(1)
@@ -102,6 +106,13 @@ class OwnBackend(unittest.TestCase):
         self.assertEqual(run.returncode, 3)
         for pid in self.pids("fails"):
             self.assertTrue(wait_gone(pid), f"pid {pid} outlived the caller")
+
+    def test_the_backend_logs_into_a_directory_removed_when_it_stops(self):
+        run = self.run_with_backend("logs", 'curl -sf "$OWN_BACKEND_URL/health" >/dev/null')
+        out, _ = run.communicate(timeout=30)
+        self.assertEqual(run.returncode, 0, out)
+        log_dir = pathlib.Path(pathlib.Path(f"{self.pid_file('logs')}.logdir").read_text())
+        self.assertFalse(log_dir.exists(), f"{log_dir} outlived the backend")
 
     def test_stops_the_backend_when_the_caller_is_terminated(self):
         run = self.run_with_backend("terminated", 'sleep 600')

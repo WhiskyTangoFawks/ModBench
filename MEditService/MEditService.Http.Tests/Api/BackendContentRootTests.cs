@@ -127,6 +127,28 @@ public sealed class BackendContentRootTests
         }
     }
 
+    [Fact]
+    public async Task SpawnedWithLogDirectory_WritesItsLogFileThere()
+    {
+        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        var lines = new List<string>();
+        using var process = Spawn(["--urls", "http://127.0.0.1:0"], workingDirectory, lines);
+        try
+        {
+            var started = await WaitForLineAsync(lines,
+                l => l.Contains("Application started", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(15));
+            Assert.True(started,
+                $"backend never reported starting; captured output:\n{string.Join('\n', Snapshot(lines))}");
+
+            Assert.NotEmpty(Directory.GetFiles(workingDirectory, "medit-*.log"));
+        }
+        finally
+        {
+            Cleanup(process, workingDirectory);
+        }
+    }
+
     // Faithful to the extension's published native executable even through the dotnet muxer:
     // AppContext.BaseDirectory, which the content root anchors to, resolves identically either way.
     private static Process Spawn(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
@@ -139,6 +161,8 @@ public sealed class BackendContentRootTests
             UseShellExecute = false,
         };
         psi.ArgumentList.Add(Path.Combine(ApiDirectory, "MEditService.Http.dll"));
+        psi.ArgumentList.Add("--LogDirectory");
+        psi.ArgumentList.Add(workingDirectory);
         foreach (var arg in extraArgs) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi };
