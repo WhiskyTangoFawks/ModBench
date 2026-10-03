@@ -24,9 +24,7 @@ async function writeMod(instanceRoot: string, name: string, files: Record<string
 describe('computeModStatuses', () => {
   let instanceRoot: string;
 
-  // "High" and "Low" conflict on meshes/shared.nif, and High is listed first — the winning end
-  // of the Mod override order.
-  const entries: ModlistEntry[] = [
+  const entriesHighWinningOverLowOnSharedNif: ModlistEntry[] = [
     mod('Disabled', false),
     mod('High'),
     mod('Low'),
@@ -46,8 +44,8 @@ describe('computeModStatuses', () => {
   });
 
   async function statuses() {
-    const index = await buildFileConflictIndex(entries, adapterOver(instanceRoot), () => {});
-    return computeModStatuses(entries, index);
+    const index = await buildFileConflictIndex(entriesHighWinningOverLowOnSharedNif, adapterOver(instanceRoot), () => {});
+    return computeModStatuses(entriesHighWinningOverLowOnSharedNif, index);
   }
 
   it('is ok for a disabled mod, whose files are not deployed', async () => {
@@ -70,17 +68,14 @@ describe('computeModStatuses', () => {
   });
 
   it('skips separator entries entirely — no status map entry', async () => {
-    const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
+    const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entriesHighWinningOverLowOnSharedNif];
     const index = await buildFileConflictIndex(withSeparator, adapterOver(instanceRoot), () => {});
     const result = computeModStatuses(withSeparator, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
 });
 
-describe('computeModStatuses — case-insensitive conflicts', () => {
-  // Proton/Wine resolves paths case-insensitively over ext4, so Textures/Foo.dds and
-  // textures/foo.dds are one file. The fold belongs in the index, since statusChecker looks
-  // paths up exactly as the walk wrote them.
+describe('computeModStatuses — case-insensitive conflicts, Proton/Wine resolving Textures/Foo.dds and textures/foo.dds as one file over ext4, folded in the index since statusChecker looks paths up exactly as the walk wrote them', () => {
   const caseFixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'case-conflict-instance');
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 

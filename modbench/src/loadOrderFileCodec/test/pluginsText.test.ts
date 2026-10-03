@@ -38,9 +38,7 @@ describe('parsePlugins', () => {
     expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
   });
 
-  // PluginEntry.name is a matching key downstream, so padding leaking into it
-  // makes a real, enabled plugin unreachable by name and reported as disabled.
-  it('leading whitespace before the marker does not hide it, and does not leak into the name', () => {
+  it('leading whitespace before the marker does not hide it, and does not leak into the name, which is a matching key downstream', () => {
     expect(parsePlugins(' *Foo.esp\r\n')).toEqual([{ name: 'Foo.esp', enabled: true }] satisfies PluginEntry[]);
   });
 
@@ -79,9 +77,7 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     expect(out.length).toBe(input.length + 1);
   });
 
-  // The tree is a pure read of plugins.txt, so a row with no entry line cannot
-  // exist and a toggle for such a name has nothing to flip.
-  it('toggling a plugin name with no entry line is a no-op in both directions, byte-identical', () => {
+  it('toggling a plugin name with no entry line, which the tree as a pure read of plugins.txt never shows, is a no-op in both directions, byte-identical', () => {
     const input = defaultPlugins();
     expect(setPluginEnabledInText(input, 'No Such.esp', false)).toBe(input);
     expect(setPluginEnabledInText(input, 'No Such.esp', true)).toBe(input);
@@ -93,8 +89,6 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 
   it('locates a hand-padded line by its trimmed name and flips only the marker byte, leaving the padding and every other line untouched', () => {
-    // Splicing at the line's own start index would corrupt the padding instead of
-    // the marker, or read the padding as the marker and no-op.
     const input = '*A.esp\r\n *Foo.esp\r\nB.esp\r\n';
     const out = setPluginEnabledInText(input, 'Foo.esp', false);
     expect(out).toBe('*A.esp\r\n Foo.esp\r\nB.esp\r\n');
@@ -126,9 +120,7 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 });
 
-// Plugin sync appends a disk-discovered plugin disabled, at the bottom, which is the winning end
-// of the plugin override order: discovery is not user intent to enable.
-describe('appendPluginInText — byte-faithful append at the winning end', () => {
+describe('appendPluginInText — byte-faithful append of a disk-discovered plugin, disabled as discovery is not user intent to enable, at the bottom, the winning end of the plugin override order', () => {
   it('appends a disabled entry line after the last existing entry, preserving everything before it', () => {
     const input = defaultPlugins();
     const out = appendPluginInText(input, 'NewPlugin.esp');
@@ -198,14 +190,11 @@ describe('movePluginsInText — byte-faithful reorder', () => {
 
   it('moves a contiguous multi-selection as a block, preserving relative order', () => {
     const out = movePluginsInText(sample, ['B.esp', 'C.esp'], 3);
-    // remove B,C → [A, D]; index 3 clamps to end → A, D, B, C
     expect(names(out)).toEqual(['A.esp', 'D.esp', 'B.esp', 'C.esp']);
   });
 
   it('moves a non-contiguous selection, ordering by source position not argument order', () => {
-    // pass D before A; A precedes D in the file, so the moved block is A, D
     const out = movePluginsInText(sample, ['D.esp', 'A.esp'], 1);
-    // remaining after removal: [B, C]; insert block before entry-index 1 (before C)
     expect(names(out)).toEqual(['B.esp', 'A.esp', 'D.esp', 'C.esp']);
   });
 
@@ -227,7 +216,6 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     const text = '# top\r\n*A.esp\r\n\r\n# mid\r\nB.esp\r\nC.esp\r\n';
     const out = movePluginsInText(text, ['C.esp'], 0);
     expect(names(out)).toEqual(['C.esp', 'A.esp', 'B.esp']);
-    // non-entry lines stay put: header still line 1, blank + "# mid" still bracket the middle
     expect(out.startsWith('# top\r\n')).toBe(true);
     expect(out).toContain('\r\n\r\n# mid\r\n');
   });

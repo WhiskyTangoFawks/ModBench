@@ -1,5 +1,3 @@
-// ADR-0015 invariant 7: the Instance adapter owns the watch. A view or command wiring its own watcher
-// would duplicate the recompute trigger instead of reading the Instance's value.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -14,9 +12,7 @@ const WATCHER_FACTORY = /^create\w*Watcher$/;
 
 const PRODUCTION_FILES: Parameters<typeof tsFiles>[1] = { exclude: ['generated'], tsx: false, includeTests: false };
 
-// The trailing name of a call target: `vscode.workspace.createFileSystemWatcher` reads as
-// `createFileSystemWatcher`, `createModsWatcher(...)` as `createModsWatcher`.
-function calleeName(node: ts.CallExpression): string | undefined {
+function trailingNameOfCallTarget(node: ts.CallExpression): string | undefined {
   const target = node.expression;
   if (ts.isIdentifier(target)) return target.text;
   if (ts.isPropertyAccessExpression(target)) return target.name.text;
@@ -28,7 +24,7 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      const name = calleeName(node);
+      const name = trailingNameOfCallTarget(node);
       if (name !== undefined && WATCHER_FACTORY.test(name)) found.push(name);
     }
     ts.forEachChild(node, visit);
@@ -37,7 +33,7 @@ function watcherFactoryCalls(sourceText: string, fileName: string): string[] {
   return found;
 }
 
-describe('every watcher on the instance is created inside the Instance adapter\'s watch', () => {
+describe('every watcher on the instance is created inside the Instance adapter\'s watch, as a view or command wiring its own would duplicate the recompute trigger', () => {
   it('scans a real body of files', () => {
     expect(tsFiles(SRC, PRODUCTION_FILES).length).toBeGreaterThan(100);
   });
@@ -53,8 +49,6 @@ describe('every watcher on the instance is created inside the Instance adapter\'
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: a view or command registering its own watcher instead of reading the
-  // Instance's value or subscribing to it.
   it('flags a watcher factory call planted outside the allowed files', () => {
     const planted = "createOverwriteWatcher(instanceRoot, () => provider.invalidate());\n";
     expect(watcherFactoryCalls(planted, 'planted.ts')).toEqual(['createOverwriteWatcher']);
