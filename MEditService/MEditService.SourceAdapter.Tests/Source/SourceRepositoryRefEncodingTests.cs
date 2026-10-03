@@ -4,49 +4,31 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Git ref names forbid spaces and brackets, which almost every real Fallout 4 plugin
-/// filename contains; the Track/Compile suites' fixtures happen to use ref-safe names.</summary>
 public sealed class SourceRepositoryRefEncodingTests
 {
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-refencoding-").FullName;
-
     [Fact]
-    public void Track_Succeeds_ForASpaceNamedPlugin()
+    public void Track_Succeeds_ForAPluginNameWithSpacesWhichGitRefNamesForbid()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            const string plugin = "LitR - Settings Holotapes Sorting.esp";
-            PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+        using var modFolder = new ScratchDirectory("medit-refencoding-");
+        const string plugin = "LitR - Settings Holotapes Sorting.esp";
+        PluginBaselines.Track(
+            modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-            Assert.Equal("Track " + plugin, GitProbeSubject(modFolder));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal("Track " + plugin, GitProbeSubject(modFolder));
     }
 
     [Theory]
     [InlineData("LitR - Settings Holotapes Sorting.esp")]
     [InlineData("[ARRETH] FGEP-DE.esp")]
-    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256s_RoundTrips_ForARefUnsafeName(string plugin)
+    public void ParkCompileSnapshot_ThenParkedCompileBinarySha256s_RoundTrips_ForANameWithSpacesOrBracketsWhichGitRefNamesForbid(string plugin)
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
+        using var modFolder = new ScratchDirectory("medit-refencoding-");
+        PluginBaselines.Track(
+            modFolder, SourcePreset.Edits, [new TreeFile($"plugin-source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray())]);
 
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
+        SourceRepository.ParkCompileSnapshot(modFolder, plugin, binarySha256: "DEADBEEF");
 
-            Assert.Equal(["DEADBEEF"], SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(["DEADBEEF"], SourceRepository.ParkedCompileBinarySha256s(modFolder, plugin));
     }
 
     private static string GitProbeSubject(string modFolder) =>

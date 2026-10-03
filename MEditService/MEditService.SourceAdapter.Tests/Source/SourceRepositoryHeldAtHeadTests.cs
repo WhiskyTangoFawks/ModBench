@@ -12,8 +12,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Which records HEAD holds, asked of HEAD's text: a document's own, or a child another
-/// document embeds, never a record another document only refers to.</summary>
 public sealed class SourceRepositoryHeldAtHeadTests : IDisposable
 {
     private const string PluginName = "Held.esp";
@@ -76,10 +74,8 @@ public sealed class SourceRepositoryHeldAtHeadTests : IDisposable
         Assert.Empty(_repository.HeldAtHead(Plugin, [NpcFormKey, HeaderFormKey]).Require());
     }
 
-    // JSON reads an escaped character as the character, so no text search for the FormKey finds the
-    // document that declares it this way.
     [Fact]
-    public void ADocumentDeclaringItsFormKeyThroughAJsonEscape_IsHeld()
+    public void ADocumentDeclaringItsFormKeyThroughAJsonEscape_IsHeld_ThoughNoTextSearchForTheFormKeyFindsIt()
     {
         const string escaped = "000A00:Held.esp";
         var relativePath = Path.Combine("plugin-source", PluginName, "Npcs", $"EscapedNpc - 000A00_{PluginName}.json");

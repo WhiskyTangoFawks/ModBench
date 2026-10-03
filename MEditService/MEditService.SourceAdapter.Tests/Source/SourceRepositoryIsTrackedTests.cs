@@ -2,13 +2,11 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Tracked is a repository in the mod folder whose <c>main</c> exists, and nothing broader
-/// (ADR-0007): a folder that merely exists, or a <c>.git</c> a failed Track left, is not tracked.</summary>
 public sealed class SourceRepositoryIsTrackedTests : IDisposable
 {
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-istracked-").FullName;
+    private readonly ScratchDirectory _modFolder = new("medit-istracked-");
 
-    public void Dispose() => Directory.Delete(_modFolder, recursive: true);
+    public void Dispose() => _modFolder.Dispose();
 
     [Fact]
     public void IsTracked_FolderWithNoGitDirectory_IsFalse()
@@ -43,10 +41,8 @@ public sealed class SourceRepositoryIsTrackedTests : IDisposable
     }
 
     [Fact]
-    public void IsTracked_FolderThatDoesNotExistAtAll_IsFalseNotAThrow()
+    public void IsTracked_FolderGoneSinceTheLoadedModsWereListed_IsFalseNotAThrow()
     {
-        // Never-assume-exclusive-ownership: the folder can vanish between "which mods are
-        // loaded" and "which are tracked" — a missing folder reads as untracked, never a throw.
         Assert.False(SourceRepository.IsTracked(Path.Combine(_modFolder, "Gone")));
     }
 

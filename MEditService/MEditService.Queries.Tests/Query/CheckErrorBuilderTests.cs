@@ -74,9 +74,8 @@ public class CheckErrorBuilderTests
         Assert.Equal("[0].Faction: Found a NULL reference, expected: fact", err);
     }
 
-    // A stored document omits an unset non-nullable link, which is a NULL reference worth flagging.
     [Fact]
-    public void Build_AbsentNonNullableMember_IsANullReference()
+    public void Build_AbsentNonNullableMember_IsANullReference_ForAStoredDocumentOmitsAnUnsetLink()
     {
         var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false);
         var meta = new FieldMetadata("Factions", "array", true, [], [],
@@ -87,7 +86,6 @@ public class CheckErrorBuilderTests
             CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4));
     }
 
-    // An absent member with a declared default is checked as that default, not as nothing.
     [Fact]
     public void Build_AbsentMemberWithADeclaredDefault_IsCheckedAsThatDefault()
     {
@@ -103,7 +101,6 @@ public class CheckErrorBuilderTests
     [Fact]
     public void Build_EmptyValidTypes_AnyResolvedTypeAccepted()
     {
-        // validTypes.Count > 0 guard: when validTypes is empty, no type_mismatch check runs.
         var meta = new FieldMetadata("Link", "formKey", false, [], [], AllowsNull: false);
         var err = CheckErrorBuilder.Build(meta, J("\"000001:Test.esp\""), _ => Entry("npc_"), GameRelease.Fallout4);
         Assert.Null(err);
@@ -131,11 +128,8 @@ public class CheckErrorBuilderTests
         Assert.Equal("[0].inner.Target: Found a NULL reference, expected: kywd", err);
     }
 
-    // The Player and friends, in the game's implicitly-always-loaded master, never carry a
-    // CheckError: a lookup miss cannot mean a broken link, since form_lookup was never going to
-    // contain them.
     [Fact]
-    public void Build_HardcodedFormKeyMissingFromLookup_ReturnsNull()
+    public void Build_HardcodedFormKeyMissingFromLookup_ReturnsNull_ForTheImplicitlyAlwaysLoadedMastersRecordsWereNeverInFormLookup()
     {
         var err = CheckErrorBuilder.Build(FormKeyMeta, J("\"000007:Fallout4.esm\""), _ => null, GameRelease.Fallout4);
         Assert.Null(err);

@@ -1,22 +1,19 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceAdapter.Tests.TestSupport;
+using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Git missing from PATH is one typed failure, checked once, early, never a raw
-/// <c>Win32Exception</c> from the first <c>Process.Start</c> (ADR-0019).</summary>
 [Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryTrackGitUnavailableTests
 {
     [Fact]
     public void Track_WithGitNotOnPath_ThrowsGitUnavailableException_NotARawProcessException()
     {
-        var modFolder = Directory.CreateTempSubdirectory("medit-track-nogit-").FullName;
+        using var modFolder = new ScratchDirectory("medit-track-nogit-");
         var previousPath = Environment.GetEnvironmentVariable("PATH");
         try
         {
-            // Scrub PATH for this process (and the child processes it spawns) so "git" genuinely
-            // cannot be found — a real repro of the missing-git-on-PATH environment, not a mock.
             Environment.SetEnvironmentVariable("PATH", string.Empty);
 
             var files = new[] { new TreeFile("plugin-source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
@@ -29,7 +26,6 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
         finally
         {
             Environment.SetEnvironmentVariable("PATH", previousPath);
-            Directory.Delete(modFolder, recursive: true);
         }
     }
 }

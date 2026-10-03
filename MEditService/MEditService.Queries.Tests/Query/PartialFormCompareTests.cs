@@ -8,16 +8,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Queries.Tests.Query;
 
-/// <summary>A Partial Form override's own fields, even ones that genuinely differ from the master,
-/// must not register as a conflict (CONTEXT.md: "its own fields are ignored... full stop").</summary>
 public sealed class PartialFormCompareTests
 {
     private const int PartialFormBit = 0x0000_4000;
     private const float MasterWaterHeight = 100f;
-    // Deliberately different from the master's own value — proves the override's field is excluded
-    // from conflict detection because it is Partial Form, not merely because the values happen to
-    // agree.
-    private const float OverrideOwnWaterHeight = 999f;
+    private const float OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement = 999f;
     private static readonly GameRelease Release = GameRelease.Fallout4;
     private static readonly PluginAddress BasePlugin = new("Base.esm", "Data");
     private static readonly PluginAddress OverridePlugin = new("Partial.esp", "Data");
@@ -35,7 +30,7 @@ public sealed class PartialFormCompareTests
         var overrideMod = new Fallout4Mod(ModKey.FromFileName("Partial.esp"), Fallout4Release.Fallout4);
         var overrideCell = baseCell.DeepCopy();
         overrideCell.MajorRecordFlagsRaw |= PartialFormBit;
-        overrideCell.WaterHeight = OverrideOwnWaterHeight;
+        overrideCell.WaterHeight = OverrideOwnWaterHeightDifferingSoTheExclusionIsPartialFormsNotAgreement;
         var refr = new PlacedObject(overrideMod) { EditorID = "TestRef", Scale = 1f };
         overrideCell.Temporary.Add(refr);
         _refKey = refr.FormKey;
@@ -60,8 +55,6 @@ public sealed class PartialFormCompareTests
         _service = new RecordQueryService(new FakeIndex(new FakeReads(opened, rows)), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
     }
 
-    // ── IsPartialForm threads through the read model ────────────────────────────────────────
-
     [Fact]
     public void GetCompare_MasterOverride_IsPartialFormFalse()
     {
@@ -81,8 +74,6 @@ public sealed class PartialFormCompareTests
 
         Assert.True(partial.IsPartialForm);
     }
-
-    // ── Cell shows no conflict; REFR shows normally ─────────────────────────────────────────
 
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_ShowsNoConflict()
@@ -104,14 +95,9 @@ public sealed class PartialFormCompareTests
         Assert.DoesNotContain("Partial.esp", waterHeight.CellStates.Keys);
     }
 
-    // ── Per-field WinnerColumn falls through past a Partial Form override ────────────────────
-
     [Fact]
-    public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster()
+    public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster_NotTheExcludedRecordWideWinnerPartialEsp()
     {
-        // The record-wide winner is Partial.esp, but its own water_height is excluded: the field's
-        // effective value is the master's, and WinnerColumn must say so rather than name an excluded
-        // column.
         var compare = _service.GetCompare(_cellKey.ToString());
         Assert.NotNull(compare);
         var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");

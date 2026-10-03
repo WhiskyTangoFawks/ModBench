@@ -9,27 +9,18 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The content hash is the name git gives the same bytes, so real git is the only honest
-/// oracle: a SHA-1 computed the same way would pass with the header format wrong.</summary>
 public class SourceRepositoryContentHashTests
 {
-    private static string GitHashObject(byte[] content)
+    private static string TheNameRealGitGives(byte[] content)
     {
-        var dir = Directory.CreateTempSubdirectory("medit-blobhash-");
-        try
-        {
-            var file = Path.Combine(dir.FullName, "content.bin");
-            File.WriteAllBytes(file, content);
-            return GitProbe.Run(Path.Combine(dir.FullName, "no-such-gitdir"), dir.FullName, "hash-object", file).Trim();
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        using var dir = new ScratchDirectory("medit-blobhash-");
+        var file = Path.Combine(dir, "content.bin");
+        File.WriteAllBytes(file, content);
+        return GitProbe.Run(Path.Combine(dir, "no-such-gitdir"), dir, "hash-object", file).Trim();
     }
 
     [Fact]
-    public void ContentHash_ForARealRecordsSourceText_MatchesGitHashObject()
+    public void ContentHash_ForARealRecordsSourceText_MatchesTheNameRealGitGives()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -39,7 +30,7 @@ public class SourceRepositoryContentHashTests
             .SerializeToBytes(record, GameRelease.Fallout4);
 
         Assert.NotEmpty(body);
-        Assert.Equal(GitHashObject(body), SourceRepository.ContentHash(body));
+        Assert.Equal(TheNameRealGitGives(body), SourceRepository.ContentHash(body));
     }
 
     [Theory]
@@ -47,10 +38,10 @@ public class SourceRepositoryContentHashTests
     [InlineData("{}\n")]
     [InlineData("{\n  \"EditorID\": \"Réservé\"\n}\n")]
     [InlineData("{\n  \"Name\": \"日本語テキスト\"\n}\n")]
-    public void ContentHash_ForBodiesGitCanAlsoHash_MatchesGitHashObject(string text)
+    public void ContentHash_ForBodiesGitCanAlsoHash_MatchesTheNameRealGitGives(string text)
     {
         var content = Encoding.UTF8.GetBytes(text);
-        Assert.Equal(GitHashObject(content), SourceRepository.ContentHash(content));
+        Assert.Equal(TheNameRealGitGives(content), SourceRepository.ContentHash(content));
     }
 
     [Fact]

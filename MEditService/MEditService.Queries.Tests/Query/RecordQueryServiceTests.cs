@@ -28,7 +28,8 @@ public sealed class RecordQueryServiceTests
             .WithPlugin(PluginName, mod =>
             {
                 var npc01 = mod.Npcs.AddNew("TestNPC01");
-                npc01.Aggression = Npc.AggressionType.Aggressive; // non-default, so the column isn't skipped as absent
+                const Npc.AggressionType nonDefaultSoTheColumnIsNotSkippedAsAbsent = Npc.AggressionType.Aggressive;
+                npc01.Aggression = nonDefaultSoTheColumnIsNotSkippedAsAbsent;
                 npc01Key = npc01.FormKey;
                 mod.Npcs.AddNew("TestNPC02");
             })
@@ -45,8 +46,6 @@ public sealed class RecordQueryServiceTests
         return (manager, new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier()));
     }
 
-    // --- GET /plugins ---
-
     [Fact]
     public void GetPlugins_ReturnsLoadedPlugin()
     {
@@ -57,8 +56,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(RecordCount, plugins[0].Content.RecordCount);
     }
 
-    // The plugin row's "has a failure below it" comes from the Index's own set of plugins holding an
-    // unreadable record, so one plugin carries the flag and its neighbour does not.
     [Fact]
     public void GetPlugins_MarksOnlyThePluginHoldingAnUnreadableRecord()
     {
@@ -80,8 +77,6 @@ public sealed class RecordQueryServiceTests
         Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).HasParseFailure);
     }
 
-    // ADR-0007 invariant 3: a tracked plugin loads from its source, so which truth the rows came
-    // from is the Index's answer. Keyed by plugin, never by filename.
     [Fact]
     public void GetPlugins_MarksOnlyThePluginsTheIndexDerivedFromASourceTree()
     {
@@ -101,8 +96,28 @@ public sealed class RecordQueryServiceTests
         Assert.False(plugins.Single(p => p.Plugin.Name == otherPlugin).IsTracked);
     }
 
-    // ADR-0012: a plugin declaring a master absent from the whole load order is flagged on the
-    // wire, not just detected in-memory — this is what lets the tree render it.
+    [Fact]
+    public void GetPlugins_MarksTrackedPerPlugin_NotPerFilename()
+    {
+        var tracked = new PluginAddress(PluginName, "TrackedMod");
+        var untracked = new PluginAddress(PluginName, "UntrackedMod");
+        var content = new PluginContent(IsLight: false, IsMaster: false, IsBlueprint: false, Masters: [], RecordCount: 0, IsMedium: false);
+        var reads = new FakeReads(new Dictionary<PluginAddress, PluginContent> { [tracked] = content, [untracked] = content }, [])
+        {
+            Tracked = new HashSet<PluginAddress>([tracked], PluginAddress.Comparer),
+        };
+        var holder = FakeLoadOrder.Of(
+            Release,
+            new LoadOrderEntry(PluginName, PluginName, tracked.Origin, 0, Enabled: true, Winning: true),
+            new LoadOrderEntry(PluginName, PluginName, untracked.Origin, 1, Enabled: true, Winning: false));
+        var svc = new RecordQueryService(new FakeIndex(reads), holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var plugins = svc.GetPlugins();
+
+        Assert.True(plugins.Single(p => p.Plugin.Origin == tracked.Origin).IsTracked);
+        Assert.False(plugins.Single(p => p.Plugin.Origin == untracked.Origin).IsTracked);
+    }
+
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsAMasterIssue()
     {
@@ -118,8 +133,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(["Ghost.esm"], patch.MasterIssues);
     }
 
-    // ADR-0012 end to end: a whole load order built via the real codec's own reference resolution,
-    // where the referenced master is not part of the load order at all.
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
@@ -151,10 +164,6 @@ public sealed class RecordQueryServiceTests
 
         Assert.Equal([], plugins[0].MasterIssues);
     }
-
-    // Matching, sorting and paging are the real Index's own behaviour, covered at
-    // Index.Tests/Query/RecordReadsTests.cs. This service's own job is building the RecordQuery,
-    // resolving type, guarding plugin/origin together, and returning reads.Search's answer untouched.
 
     [Fact]
     public void GetRecords_KnownType_ForwardsSearchLimitOffsetUntouchedIntoTheQuery()
@@ -269,27 +278,22 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(expected, recordTypes.OrderBy(t => t, StringComparer.Ordinal));
     }
 
-    // ADR-0012 invariant 1: a plugin filter with no origin would match every plugin sharing that filename.
     [Fact]
-    public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException()
+    public void GetRecords_PluginGivenWithoutOrigin_ThrowsArgumentException_ForAPluginFilterWithNoOriginWouldMatchEveryPluginSharingTheFilename()
     {
         Assert.Throws<ArgumentException>(
             () => _svc.GetRecords(type: "npc_", plugin: PluginName, search: null, limit: 10, offset: 0));
     }
 
-    // The other half of the same invariant: an origin names half an identity just as much as a
-    // bare plugin filename does.
     [Fact]
-    public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException()
+    public void GetRecords_OriginGivenWithoutPlugin_ThrowsArgumentException_ForAnOriginNamesHalfAnIdentityAsMuchAsABareFilenameDoes()
     {
         Assert.Throws<ArgumentException>(
             () => _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 10, offset: 0, origin: "Data"));
     }
 
-    // A blank plugin must not reach the guard's throw: the endpoint's own check already treats a
-    // blank plugin the same as an absent one, so the service has to agree.
     [Fact]
-    public void GetRecords_EmptyPluginAndNoOrigin_BrowsesEveryPluginRatherThanThrowing()
+    public void GetRecords_EmptyPluginAndNoOrigin_BrowsesEveryPluginRatherThanThrowing_ForTheEndpointTreatsABlankPluginAsAbsent()
     {
         _svc.GetRecords(type: "npc_", plugin: "", search: null, limit: 10, offset: 0);
 
@@ -320,11 +324,6 @@ public sealed class RecordQueryServiceTests
         Assert.Same(_reads.SearchResult, result);
     }
 
-    // --- GET /records/{formKey} ---
-
-    // GetRecord_FieldsHaveMetadata needs the record's full derived column set to mean anything;
-    // that lives at Index.Tests/Query/RecordReadsTests.cs (same name), over a real Index.
-
     [Fact]
     public void GetRecord_ReturnsWinnerWithFields()
     {
@@ -336,18 +335,14 @@ public sealed class RecordQueryServiceTests
         Assert.NotEmpty(detail.Fields);
     }
 
-    // "Copy as New Record" needs the record's schema table name up front (CreateRecord
-    // validates RecordType before it even reads TemplateFormKey), so RecordDetail must carry it.
     [Fact]
-    public void GetRecord_ReturnsRecordType()
+    public void GetRecord_ReturnsRecordType_ForCopyAsNewRecordNeedsTheSchemaTableNameUpFront()
     {
         var detail = _svc.GetRecord(_npc01Key.ToString());
 
         Assert.NotNull(detail);
         Assert.Equal("npc_", detail.RecordType);
     }
-
-    // --- GET /records/{formKey}/compare ---
 
     [Fact]
     public void GetCompare_SingleOverride_ReturnsDiffs()
@@ -360,10 +355,8 @@ public sealed class RecordQueryServiceTests
         Assert.NotEmpty(compare.Diffs);
     }
 
-    // editor.md, A column's header, the Label row: xEdit's load index, in hex. A light plugin counts
-    // among the light plugins, after FE; a full plugin among the full ones.
     [Fact]
-    public void GetCompare_EachColumnCarriesItsLoadIndex()
+    public void GetCompare_EachColumnCarriesXEditsHexLoadIndex_ALightPluginCountingAmongTheLightOnesAfterFE()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -382,10 +375,8 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(["00", "FE 000", "01"], compare?.Overrides.Select(o => o.LoadIndex) ?? []);
     }
 
-    // The record editor renders the column read-only from this member alone, so the compare wire
-    // has to carry the diagnosis the Index put on the document rather than only the tree's listings.
     [Fact]
-    public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith()
+    public void GetCompare_CarriesTheDiagnosisTheDocumentArrivedWith_ForTheRecordEditorRendersTheColumnReadOnlyFromItAlone()
     {
         const string diagnosis = "could not be read";
         FormKey npcKey = default;
@@ -412,7 +403,6 @@ public sealed class RecordQueryServiceTests
         Assert.All(compare.Overrides, o => Assert.Null(o.ParseDiagnosis));
     }
 
-    // editor.md, The header: the record type as xEdit names it.
     [Fact]
     public void GetCompare_NamesTheRecordTypeAsXEditDoes()
     {
@@ -421,7 +411,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("Non-Player Character", compare?.RecordTypeName);
     }
 
-    // editor-referenced-by.md, A row, Referrer: the record type as xEdit names it.
     [Fact]
     public void GetReferences_NameTheRecordTypeAsXEditDoes()
     {
@@ -436,7 +425,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("npc_", reference.RecordType);
     }
 
-    // editor-referenced-by.md, The tree, story 2: one plugin's copy per row, in plugin order.
     [Fact]
     public void GetReferences_ListThePluginsInLoadOrder()
     {
@@ -468,12 +456,11 @@ public sealed class RecordQueryServiceTests
         Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
     }
 
-    // ADR-0012 invariant 2: Overwrite is a reserved origin, not a mod, compared ignoring case.
     [Theory]
     [InlineData("overwrite")]
     [InlineData("Overwrite")]
     [InlineData("OVERWRITE")]
-    public void GetCompare_OverwriteOriginColumn_CarriesIsInOverwriteTrue(string origin)
+    public void GetCompare_OverwriteOriginColumn_CarriesIsInOverwriteTrue_IgnoringCase_ForOverwriteIsAReservedOriginNotAMod(string origin)
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -512,8 +499,6 @@ public sealed class RecordQueryServiceTests
         var compare = svc.GetCompare(npcKey.ToString());
 
         Assert.NotNull(compare);
-        // Non-VMAD fields are identical overrides, so only the adapter differs — yet the record
-        // is conflicted, and the diff reaches the one property that disagrees.
         Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
         Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
     }
@@ -532,7 +517,7 @@ public sealed class RecordQueryServiceTests
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
-            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey) // no VMAD
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey)
             .WithPlugin("Over.esp", (mod, prev) =>
                 mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5))
             .Build(VmadField);
@@ -540,7 +525,6 @@ public sealed class RecordQueryServiceTests
 
         var compare = svc.GetCompare(npcKey.ToString());
         Assert.NotNull(compare);
-        // The master carries no adapter and the override adds one → still a diff row.
         Assert.Contains(compare.Diffs, d => d.FieldName == VmadField);
         Assert.Equal(ConflictAll.Override, compare.ConflictAll);
     }
@@ -554,8 +538,8 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Over.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied; // generic field override
-                o.VirtualMachineAdapter = ScriptVmad(20); // VMAD override (2 plugins)
+                o.Aggression = Npc.AggressionType.Frenzied;
+                o.VirtualMachineAdapter = ScriptVmad(20);
             })
             .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
@@ -566,7 +550,7 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_FieldOverrideAndVmadConflict_EscalatesToConflict()
+    public void GetCompare_NonMastersAgreeingOnTheFieldButDifferingOnVmad_EscalateToConflict()
     {
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -574,14 +558,14 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Mid.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied; // non-masters agree on the field → generic Override
+                o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(20);
             })
             .WithPlugin("Top.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
                 o.Aggression = Npc.AggressionType.Frenzied;
-                o.VirtualMachineAdapter = ScriptVmad(30); // VMAD differs among non-masters → Conflict
+                o.VirtualMachineAdapter = ScriptVmad(30);
             })
             .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
@@ -592,12 +576,8 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetCompare_UncontestedFieldOverrideWithVmadConflict_EscalatesToConflict()
+    public void GetCompare_UncontestedFieldOverrideWithVmadConflict_EscalatesOverrideAndConflictToConflict_NotOverride()
     {
-        // Verifies EscalateConflict(Override, Conflict) = Conflict (not Override).
-        // Both Mid and Top set aggression to the same non-master value → generic = Override (not Conflict).
-        // But their VMAD values differ → vmad = Conflict.
-        // So EscalateConflict(Override, Conflict) must return Conflict.
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
@@ -609,14 +589,14 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Mid.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied; // both non-masters agree on Frenzied → Override
+                o.Aggression = Npc.AggressionType.Frenzied;
                 o.VirtualMachineAdapter = ScriptVmad(10);
             })
             .WithPlugin("Top.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied; // same as Mid → no generic conflict
-                o.VirtualMachineAdapter = ScriptVmad(20); // differs from Mid → VMAD Conflict
+                o.Aggression = Npc.AggressionType.Frenzied;
+                o.VirtualMachineAdapter = ScriptVmad(20);
             })
             .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
@@ -629,8 +609,6 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCompare_ConflictedFieldWithUncontestedVmad_DoesNotDowngradeFromConflict()
     {
-        // Escalation must take the more severe axis even when the generic side is the severe one and VMAD
-        // is milder: Mid and Top disagree on aggression, and their VMAD is identical.
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
@@ -643,12 +621,12 @@ public sealed class RecordQueryServiceTests
             .WithPlugin("Mid.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Frenzied; // differs from Top below → generic Conflict
+                o.Aggression = Npc.AggressionType.Frenzied;
             })
             .WithPlugin("Top.esp", (mod, prev) =>
             {
                 var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
-                o.Aggression = Npc.AggressionType.Aggressive; // differs from Mid → generic Conflict
+                o.Aggression = Npc.AggressionType.Aggressive;
             })
             .Build("Aggression", VmadField);
         var (_, svc) = Build(fixture);
@@ -661,8 +639,6 @@ public sealed class RecordQueryServiceTests
     [Fact]
     public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ClassifyToSameConflictThis()
     {
-        // ADR-0018: a generic field and a VMAD property in the same conflict shape (Mid overridden
-        // by Top) must classify to the same ConflictThis per plugin — pins parity across the two classifiers.
         FormKey npcKey = default;
         var fixture = new FakeFixtureBuilder(Release)
             .WithPlugin("Base.esp", mod =>
@@ -698,10 +674,8 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(fieldStates["Top.esp"], vmadStates["Top.esp"]);
     }
 
-    // A condition list is an ordinary reflected array column, so it reaches the compare grid through
-    // the one ConflictClassifier: one FieldDiff per condition, its members as that diff's children.
     [Fact]
-    public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren()
+    public void GetCompare_RecordHasConditions_ClassifiesThemAsFieldDiffChildren_ThroughTheOneConflictClassifierForAConditionListIsAnOrdinaryReflectedArrayColumn()
     {
         FormKey cobjKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -730,11 +704,8 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("Base.esp", conditions.WinnerColumn);
     }
 
-    // GetCompare's memoized resolveFormKey (ADR-0005) reaches a condition's Form parameter through
-    // the same nested-leaf path every other reflected formKey leaf uses — this proves the wiring at
-    // the actual call site.
     [Fact]
-    public void GetCompare_ConditionFormParameter_ResolvesEditorId()
+    public void GetCompare_ConditionFormParameter_ResolvesEditorId_ThroughTheSameNestedLeafPathAsEveryOtherReflectedFormKeyLeaf()
     {
         FormKey cobjKey = default;
         var fixture = new FakeFixtureBuilder(Release)
@@ -808,8 +779,6 @@ public sealed class RecordQueryServiceTests
         Assert.Null(compare);
     }
 
-    // --- GET /plugins/{plugin}/record-types ---
-
     private static readonly PluginAddress PluginKey = new(PluginName, "Data");
 
     [Fact]
@@ -827,8 +796,6 @@ public sealed class RecordQueryServiceTests
         Assert.All(result, r => Assert.True(r.Count > 0));
     }
 
-    // The record-type node's "has a failure below it" is the count row's own flag, so the type
-    // holding the unreadable record carries it and its sibling does not.
     [Fact]
     public void GetPluginRecordTypes_MarksOnlyTheTypeWhoseCountCarriesAFailure()
     {
@@ -848,10 +815,8 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetPluginRecordTypes_DisplayName_MatchesXEdit()
+    public void GetPluginRecordTypes_DisplayName_MatchesXEdit_WhileTheSignatureStaysTheKey()
     {
-        // The signature ("npc_") stays the key; DisplayName is additive, sourced
-        // from the same xEdit-parity lookup SchemaReflector uses.
         _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] = [new RecordTypeCount("npc_", 1, HasParseFailure: false)],
@@ -863,10 +828,8 @@ public sealed class RecordQueryServiceTests
         Assert.Equal("Non-Player Character", npc.DisplayName);
     }
 
-    // The group menu's create entry reads this instead of a second, package.json-side list
-    // (plugins.md, Menus and keys: no create on a group of container records).
     [Fact]
-    public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint()
+    public void GetPluginRecordTypes_IsCreatable_AgreesWithTheCreatableEndpoint_ForTheGroupMenuReadsItInsteadOfASecondPackageJsonSideList()
     {
         _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
@@ -886,10 +849,8 @@ public sealed class RecordQueryServiceTests
     }
 
     [Fact]
-    public void GetPluginRecordTypes_ExcludesHeader()
+    public void GetPluginRecordTypes_ExcludesHeader_ForItIsReachedOnlyViaOpenHeaderOnThePluginNode()
     {
-        // Every plugin indexes exactly one header row, so without the exclusion "header" would appear as a
-        // browsable record-type node. The header is reached only via "Open Header" on the plugin node.
         _reads.RecordTypeCountsByPlugin = new Dictionary<PluginAddress, IReadOnlyList<RecordTypeCount>>
         {
             [PluginKey] =
@@ -911,8 +872,6 @@ public sealed class RecordQueryServiceTests
 
         Assert.Empty(result);
     }
-
-    // --- GET /record-types/creatable ---
 
     [Fact]
     public void GetCreatableRecordTypes_NamesAFlatTypeAsXEditDoes()
@@ -953,8 +912,6 @@ public sealed class RecordQueryServiceTests
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetCreatableRecordTypes());
     }
 
-    // --- GET /plugins/light-plugins-supported ---
-
     private static RecordQueryService ServiceIn(GameRelease release) => new(
         new FakeIndex(new FakeReads(new Dictionary<PluginAddress, PluginContent>(), [])),
         FakeLoadOrder.Of(release), SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -981,8 +938,6 @@ public sealed class RecordQueryServiceTests
         Assert.Throws<NoLoadOrderException>(() => unloaded.GetLightPluginsSupported());
     }
 
-    // --- GET /records?type=unknown ---
-
     [Fact]
     public void GetRecords_UnknownType_ReturnsEmptyPagedResult()
     {
@@ -991,8 +946,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
-
-    // --- No-load order guard clauses ---
 
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsNoLoadOrderException()
@@ -1010,11 +963,6 @@ public sealed class RecordQueryServiceTests
         Assert.Contains("No load order", ex.Message);
     }
 
-    // GetRecords_AllTypes_ReturnsSortedByEditorId dropped: the sort is the real Index's own
-    // behaviour, covered at Index.Tests/Query/RecordReadsTests.GetRecords_ReturnsSortedByEditorIdAscending.
-
-    // --- GetPlugins: HasMatchingRecords, never row pruning (plugins.md) ---
-
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
     {
@@ -1027,10 +975,8 @@ public sealed class RecordQueryServiceTests
         Assert.True(plugin.HasMatchingRecords);
     }
 
-    // plugins.md: a record filter prunes records and record types, never a plugin row, because this tree
-    // is also the load order and hiding a plugin mid-filter would make it unreorderable.
     [Fact]
-    public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
+    public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch_ForTheTreeIsAlsoTheLoadOrderAndAHiddenPluginWouldBeUnreorderable()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key", "nothing.sql");
         _reads.MatchingPlugins = new HashSet<PluginAddress>(PluginAddress.Comparer);
@@ -1051,8 +997,6 @@ public sealed class RecordQueryServiceTests
         Assert.Equal(PluginName, plugin.Plugin.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
-
-    // --- Queries owns the filter and the rebuild (target-architecture.d2 medit_core.queries) ---
 
     [Fact]
     public void SetFilter_ForwardsSqlAndSourceToTheIndex()
@@ -1088,8 +1032,6 @@ public sealed class RecordQueryServiceTests
 
         Assert.Throws<NoLoadOrderException>(() => svc.GetFilter());
     }
-
-    // --- the load order's status and the projection's sequence (ADR-0013, ADR-0015 invariant 3) ---
 
     [Fact]
     public void GetStatus_IsTheIndexsStatus()

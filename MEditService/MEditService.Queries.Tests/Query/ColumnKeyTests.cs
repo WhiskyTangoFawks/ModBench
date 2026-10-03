@@ -18,10 +18,8 @@ public class ColumnKeyTests
     }
 
     [Fact]
-    public void Of_DataDirectoryOrigin_ProducesPlainFilename()
+    public void Of_DataDirectoryOrigin_ProducesPlainFilename_ForTheOnlyDataDirectoryAlreadyIdentifiesThePlugin()
     {
-        // A Data-directory-resolved plugin is already uniquely identified by its filename, there
-        // being only one Data/, so the reserved origin is elided rather than appended.
         Assert.Equal("Shared.esp", ColumnKey.Of("Shared.esp", PluginOrigin.DataDirectory));
     }
 }

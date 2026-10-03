@@ -6,68 +6,48 @@ using Mutagen.Bethesda;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The user's own git runs in the same repository at any moment (ADR-0003): a commit or
-/// rebase in Source Control takes <c>.git/index.lock</c>, so Modbench never holds it and never
-/// needs it free.</summary>
 public sealed class SourceRepositoryBesideTheUsersGitTests
 {
     private const string Plugin = "Test.esp";
     private const string Document = "plugin-source/Test.esp/npc_/Test.esp/000001.json";
 
-    private static string TrackedMod()
+    private static ScratchDirectory TrackedMod()
     {
-        var modFolder = Directory.CreateTempSubdirectory("medit-users-git-").FullName;
-        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+        var modFolder = new ScratchDirectory("medit-users-git-");
         PluginBaselines.Track(modFolder, SourcePreset.Everything, [new TreeFile(Document, "{\"a\":1}"u8.ToArray())]);
         return modFolder;
     }
 
     private static string IndexOf(string modFolder) => Path.Combine(modFolder, ".git", "index");
 
-    // Same bytes, a stat the index does not hold: a plain `git status` refreshes that entry and
-    // writes the index back under index.lock.
     [Fact]
-    public void ReadingTheDirt_LeavesAStatDirtyIndexUnwritten()
+    public void ReadingTheDirt_LeavesAStatDirtyIndexUnwritten_WhichAPlainGitStatusWouldRewriteUnderIndexLock()
     {
-        var modFolder = TrackedMod();
-        try
-        {
-            File.SetLastWriteTimeUtc(Path.Combine(modFolder, "texture.dds"), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-            var before = File.ReadAllBytes(IndexOf(modFolder));
+        using var modFolder = TrackedMod();
+        File.SetLastWriteTimeUtc(Path.Combine(modFolder, Document), new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var before = File.ReadAllBytes(IndexOf(modFolder));
 
-            var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
-                ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
-            Assert.Empty(repository.DirtOf(new PluginAddress(Plugin, "TestMod")).Documents);
+        var repository = SourceRepository.Open(modFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to be tracked.");
+        Assert.Empty(repository.DirtOf(new PluginAddress(Plugin, "TestMod")).Documents);
 
-            Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(before, File.ReadAllBytes(IndexOf(modFolder)));
     }
 
     [Fact]
     public void ParkingTheWorkingTree_WhileTheUsersCommitHoldsTheIndexLock_ParksTheEditedDocument()
     {
-        var modFolder = TrackedMod();
-        try
-        {
-            File.WriteAllText(Path.Combine(modFolder, Document), "{\"a\":2}");
-            var usersLock = IndexOf(modFolder) + ".lock";
-            File.WriteAllText(usersLock, "");
+        using var modFolder = TrackedMod();
+        File.WriteAllText(Path.Combine(modFolder, Document), "{\"a\":2}");
+        var usersLock = IndexOf(modFolder) + ".lock";
+        File.WriteAllText(usersLock, "");
 
-            SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF");
+        SourceRepository.ParkCompileSnapshot(modFolder, Plugin, binarySha256: "DEADBEEF");
 
-            var parked = GitProbe.Run(
-                Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",
-                $"{SourceRepository.LastCompileRef(Plugin)}:{Document}");
-            Assert.Equal("{\"a\":2}", parked);
-            Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        var parked = GitProbe.Run(
+            Path.Combine(modFolder, ".git"), modFolder, "cat-file", "-p",
+            $"{SourceRepository.LastCompileRef(Plugin)}:{Document}");
+        Assert.Equal("{\"a\":2}", parked);
+        Assert.True(File.Exists(usersLock), "the user's own lock is theirs to release");
     }
 }

@@ -6,8 +6,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Queries.Tests.Query;
 
-// ADR-0012 invariant 4: an active plugin is flagged for each master in its header that is not
-// active, as MO2's PluginList::testMasters flags it. Driven through GetPlugins, the one public door.
 public class MasterResolutionTests
 {
     private static (LoadOrderEntry Registered, PluginContent? Content) Plugin(string name, params string[] masters) =>
@@ -47,43 +45,39 @@ public class MasterResolutionTests
             .ToDictionary(row => row.Name, row => row.Issues, StringComparer.OrdinalIgnoreCase);
 
     [Fact]
-    public void MasterAbsentFromTheLoadOrder_IsAMasterIssue()
+    public void MasterAbsentFromTheLoadOrder_IsAMasterIssue_AsMO2sTestMastersFlagsIt()
     {
         var result = Classify(Plugin("Patch.esp", "Ghost.esm"));
 
         Assert.Equal(["Ghost.esm"], result["Patch.esp"]);
     }
 
-    // MO2's testMasters: a master counts only while it is enabled itself.
     [Fact]
-    public void MasterIndexedButDisabled_IsAMasterIssue()
+    public void MasterIndexedButDisabled_IsAMasterIssue_ForMO2sTestMastersCountsAMasterOnlyWhileItIsEnabledItself()
     {
         var result = Classify(Disabled("Base.esm"), Plugin("Patch.esp", "Base.esm"));
 
         Assert.Equal(["Base.esm"], result["Patch.esp"]);
     }
 
-    // The game loads what mEdit cannot read, so the master is there for it.
     [Fact]
-    public void ActiveMasterMEditCouldNotRead_IsNoIssue()
+    public void ActiveMasterMEditCouldNotRead_IsNoIssue_ForTheGameLoadsWhatMEditCannotRead()
     {
         var result = Classify(Unread("Broken.esm"), Plugin("Patch.esp", "Broken.esm"));
 
         Assert.Empty(result);
     }
 
-    // MO2's testMasters: a plugin the game does not load gets no flag.
     [Fact]
-    public void DisabledPluginWithAMasterAbsent_IsNoIssue()
+    public void DisabledPluginWithAMasterAbsent_IsNoIssue_ForMO2sTestMastersFlagsNoPluginTheGameDoesNotLoad()
     {
         var result = Classify(Disabled("Patch.esp", "Ghost.esm"));
 
         Assert.Empty(result);
     }
 
-    // ADR-0012 invariant 1: a filename is not an identity — each plugin answers for its own masters.
     [Fact]
-    public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues()
+    public void GetPlugins_TwoPluginsOfOneName_EachCarriesItsOwnMasterIssues_ForAFilenameIsNotAnIdentity()
     {
         var (winning, missingAMaster) = Plugin("Patch.esp", "Ghost.esm");
         var (losing, complete) = Plugin("Patch.esp");
@@ -113,14 +107,13 @@ public class MasterResolutionTests
         Assert.False(result.ContainsKey("Patch.esp"));
     }
 
-    // No transitive cascade. B masters A, which is active; A itself masters missing C.
-    // B's own declared-masters list is just [A] — B must not be flagged over C.
     [Fact]
     public void Classify_MastersMasterIsMissing_DoesNotCascadeToDependent()
     {
-        var result = Classify(
-            Plugin("A.esm", "C.esm"), // A itself has a missing master C
-            Plugin("B.esp", "A.esm")); // B masters A only, which is active
+        var aWhoseOwnMasterCIsMissing = Plugin("A.esm", "C.esm");
+        var bMasteringOnlyActiveA = Plugin("B.esp", "A.esm");
+
+        var result = Classify(aWhoseOwnMasterCIsMissing, bMasteringOnlyActiveA);
 
         Assert.True(result.ContainsKey("A.esm"));
         Assert.False(result.ContainsKey("B.esp"));
@@ -134,12 +127,10 @@ public class MasterResolutionTests
         Assert.Empty(result);
     }
 
-    // plugins.md: before the snapshot is indexed, master issues are not yet checked, which is not
-    // no issues.
     [Theory]
     [InlineData(LoadOrderState.Reconciling)]
     [InlineData(LoadOrderState.Failed)]
-    public void SnapshotNotIndexed_MasterIssuesAreNotYetChecked(LoadOrderState state)
+    public void SnapshotNotIndexed_MasterIssuesAreNotYetCheckedNull_NotAnEmptyListMeaningNoIssues(LoadOrderState state)
     {
         var rows = GetPlugins([Plugin("A.esp", "Ghost.esm")], state);
 

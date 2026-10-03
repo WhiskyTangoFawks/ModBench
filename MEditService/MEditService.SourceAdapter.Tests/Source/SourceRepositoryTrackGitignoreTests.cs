@@ -4,162 +4,107 @@ using MEditService.TestSupport;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>Plugin binaries are ignored in both presets (compiled artifacts); <c>meta.ini</c> too
-/// (ADR-0007: never track a file that changes for non-content reasons).</summary>
 public sealed class SourceRepositoryTrackGitignoreTests
 {
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;
-
     private static TreeFile SourceFile() =>
         new(Path.Combine("plugin-source", "Test.esp", "npc_", "Test.esp", "000001.json"), "{}"u8.ToArray());
 
-    private static void WriteMetaIniBesideTheSource(string modFolder) =>
+    private static void WriteMetaIniWhichChangesForNonContentReasonsBesideTheSource(string modFolder) =>
         File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "[General]\nversion=1.0\n");
 
     private static void WritePluginBinaryBesideTheSource(string modFolder) =>
         File.WriteAllBytes(Path.Combine(modFolder, "Test.esp"), [0x01, 0x02]);
 
+    private static string CommittedPaths(string modFolder) =>
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "ls-tree", "-r", "--name-only", "main");
+
     [Theory]
     [InlineData(SourcePreset.Edits)]
     [InlineData(SourcePreset.Everything)]
-    public void Track_ExcludesMetaIniAndPluginBinaryFromTheCommit_RegardlessOfPreset(SourcePreset preset)
+    public void Track_ExcludesMetaIniAndTheCompiledPluginBinaryFromTheCommit_RegardlessOfPreset(SourcePreset preset)
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            WriteMetaIniBesideTheSource(modFolder);
-            WritePluginBinaryBesideTheSource(modFolder);
+        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
+        WriteMetaIniWhichChangesForNonContentReasonsBesideTheSource(modFolder);
+        WritePluginBinaryBesideTheSource(modFolder);
 
-            PluginBaselines.Track(modFolder, preset, [SourceFile()]);
+        PluginBaselines.Track(modFolder, preset, [SourceFile()]);
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-
-            // Positive control: the sibling source file the same commit really carries, checked
-            // through the identical `ls-tree` query — proves absence below means "excluded", not
-            // "the commit is empty" or "the query is wrong".
-            Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
-
-            Assert.DoesNotContain("meta.ini", committedPaths);
-            Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
-
-            // Belt and braces: git itself agrees these paths are ignored, not merely never staged.
-            Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "meta.ini"));
-            Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "Test.esp"));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        var gitDir = Path.Combine(modFolder, ".git");
+        var committedPaths = CommittedPaths(modFolder);
+        Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
+        Assert.DoesNotContain("meta.ini", committedPaths);
+        Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
+        Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "meta.ini"));
+        Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "Test.esp"));
     }
 
     [Fact]
     public void Track_EditsPreset_IgnoresEverythingExceptTheSource()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
 
-            PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
+        PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
-            Assert.DoesNotContain("texture.dds", committedPaths);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        var committedPaths = CommittedPaths(modFolder);
+        Assert.Contains("plugin-source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
+        Assert.DoesNotContain("texture.dds", committedPaths);
     }
 
-    // The Edits pattern is root-anchored to the exact literal "plugin-source", not "*source*" — an
-    // ordinary top-level folder that merely happens to end with "plugin-source" must stay ignored (the
-    // over-match hazard a suffix pattern would reintroduce).
     [Fact]
-    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource()
+    public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithPluginSource_ForThePatternIsRootAnchoredToTheLiteralPluginSource()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
-            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
+        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
+        Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+        File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
-            PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
+        PluginBaselines.Track(modFolder, SourcePreset.Edits, [SourceFile()]);
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.DoesNotContain("My-plugin-source", committedPaths);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.DoesNotContain("My-plugin-source", CommittedPaths(modFolder));
     }
 
-    // The whole committed set, exactly: the probing style above would pass even if an extra file leaked
-    // in beside a correct probe pair. The fixture mixes every kind of thing the Edits preset rejects,
-    // so "exactly" is a representative check.
     [Fact]
     public void Track_EditsPreset_TracksExactlyGitignorePlusTheWholeSourceTree_NothingElse()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            WriteMetaIniBesideTheSource(modFolder);
-            WritePluginBinaryBesideTheSource(modFolder);
-            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
-            Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
-            File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
+        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
+        WriteMetaIniWhichChangesForNonContentReasonsBesideTheSource(modFolder);
+        WritePluginBinaryBesideTheSource(modFolder);
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+        Directory.CreateDirectory(Path.Combine(modFolder, "My-plugin-source"));
+        File.WriteAllText(Path.Combine(modFolder, "My-plugin-source", "notes.txt"), "Notes");
 
-            var otherPluginFile = new TreeFile(
-                Path.Combine("plugin-source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
+        var otherPluginFile = new TreeFile(
+            Path.Combine("plugin-source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
 
-            PluginBaselines.Track(
-                modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile]);
+        PluginBaselines.Track(
+            modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile]);
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitProbe
-                .Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main")
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .OrderBy(p => p, StringComparer.Ordinal)
-                .ToArray();
+        var committedPaths = CommittedPaths(modFolder)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToArray();
 
-            Assert.Equal(
-                new[]
-                {
-                    ".gitignore",
-                    "plugin-source/Other.esp/npc_/Other.esp/000002.json",
-                    "plugin-source/Test.esp/npc_/Test.esp/000001.json",
-                }.OrderBy(p => p, StringComparer.Ordinal),
-                committedPaths);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        Assert.Equal(
+            new[]
+            {
+                ".gitignore",
+                "plugin-source/Other.esp/npc_/Other.esp/000002.json",
+                "plugin-source/Test.esp/npc_/Test.esp/000001.json",
+            }.OrderBy(p => p, StringComparer.Ordinal),
+            committedPaths);
     }
 
     [Fact]
     public void Track_EverythingPreset_TracksAssetsButStillIgnoresThePluginBinary()
     {
-        var modFolder = NewModFolder();
-        try
-        {
-            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
-            WritePluginBinaryBesideTheSource(modFolder);
+        using var modFolder = new ScratchDirectory("medit-track-gitignore-");
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+        WritePluginBinaryBesideTheSource(modFolder);
 
-            PluginBaselines.Track(modFolder, SourcePreset.Everything, [SourceFile()]);
+        PluginBaselines.Track(modFolder, SourcePreset.Everything, [SourceFile()]);
 
-            var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
-            Assert.Contains("texture.dds", committedPaths);
-            Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
+        var committedPaths = CommittedPaths(modFolder);
+        Assert.Contains("texture.dds", committedPaths);
+        Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
     }
 }

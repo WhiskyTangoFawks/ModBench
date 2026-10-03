@@ -11,8 +11,6 @@ using Noggog;
 
 namespace MEditService.SourceAdapter.Tests.Source;
 
-/// <summary>The reader hands the index the documents the tree already holds. A child embedded in
-/// its owner's document has no file of its own, so its text is cut back out of the owner's.</summary>
 public sealed class SourceTreeDocumentsTests : IDisposable
 {
     private const string PluginName = "TreeDocuments.esp";
