@@ -226,6 +226,8 @@ function diffAt(diff: FieldDiff, path: readonly string[]): FieldDiff | undefined
   return cur;
 }
 
+const NO_REFERENCE = '—';
+
 /** What a collapsed row reads in one column. A placeholder says only that something is there. */
 export interface Reading {
   text: string;
@@ -264,7 +266,6 @@ export function collapsedReading(
   return placeholder('{…}');
 }
 
-// A key member's name may be dotted to reach one struct member down.
 function keyReading(
   diff: FieldDiff, meta: FieldMetadata | undefined, column: string, keyMembers: readonly string[] | null | undefined,
 ): string | undefined {
@@ -273,7 +274,10 @@ function keyReading(
   const readings = keyMembers.map(name => {
     const path = name.split('.');
     const memberMeta = metaAtPath(meta, memberPath(path), value);
-    return memberMeta && displayValue(getAtPath(value, memberPath(path)), memberMeta, diffAt(diff, path)?.resolutions?.[column]);
+    if (!memberMeta) return undefined;
+    const held = getAtPath(value, memberPath(path)) ?? defaultOf(memberMeta);
+    const reading = displayValue(held, memberMeta, diffAt(diff, path)?.resolutions?.[column]);
+    return reading === '' && memberMeta.type === 'formKey' ? NO_REFERENCE : reading;
   });
   return readings.every(r => r != null) ? readings.join(', ') : undefined;
 }

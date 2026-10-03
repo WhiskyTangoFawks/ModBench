@@ -366,6 +366,33 @@ describe('a collapsed script reads as xEdit prose', () => {
     expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
   });
 
+  it('a keyed element of a passed-through list whose leaf has no reading reads as its key', async () => {
+    const { elementType: scriptElementType } = scriptsMeta;
+    if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
+    const { fields: scriptElementFields } = scriptElementType;
+    if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
+    const { fields: propertyFields } = propertyMeta;
+    if (!propertyFields) throw new Error('propertyMeta has no fields');
+    const unknownBase: FieldMetadata = {
+      ...scriptsMeta,
+      elementType: {
+        ...scriptElementType,
+        fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
+          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
+        })),
+      },
+    };
+    const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
+    delete unnamed.MutagenObjectType;
+    currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
+    renderPanel();
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
+
+    expect(summaryOf('Guard')).toBe('Guard(Radius, Speed)');
+  });
+
   it('a null slot of a passed-through list holds its place, so the count stays true', async () => {
     currentCompare = oneColumn([script('Guard', [null, documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 })])]);
     renderPanel();
