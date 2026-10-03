@@ -351,7 +351,7 @@ describe('a collapsed script reads as xEdit prose', () => {
       elementType: {
         ...scriptElementType,
         fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
-          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
+          ...f, keyMembers: null, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
         })),
       },
     };
@@ -364,6 +364,33 @@ describe('a collapsed script reads as xEdit prose', () => {
     toggleRow('Guard');
 
     expect(summaryOf('Guard')).toBe('Guard({…}, {…})');
+  });
+
+  it('a keyed element of a passed-through list whose leaf has no reading reads as its key', async () => {
+    const { elementType: scriptElementType } = scriptsMeta;
+    if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
+    const { fields: scriptElementFields } = scriptElementType;
+    if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
+    const { fields: propertyFields } = propertyMeta;
+    if (!propertyFields) throw new Error('propertyMeta has no fields');
+    const unknownBase: FieldMetadata = {
+      ...scriptsMeta,
+      elementType: {
+        ...scriptElementType,
+        fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
+          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
+        })),
+      },
+    };
+    const unnamed = documentSpelledProperty('Radius', 'ScriptIntProperty', { Data: 10 });
+    delete unnamed.MutagenObjectType;
+    currentCompare = oneColumn([script('Guard', [unnamed, { ...unnamed, Name: 'Speed' }])], {}, unknownBase);
+    renderPanel();
+    await openScripts();
+    await waitFor(() => fieldCell('Guard'));
+    toggleRow('Guard');
+
+    expect(summaryOf('Guard')).toBe('Guard(Radius, Speed)');
   });
 
   it('a null slot of a passed-through list holds its place, so the count stays true', async () => {
@@ -412,12 +439,21 @@ describe('a collapsed array reads by its elements', () => {
   });
 
   it('an array whose one element has no reading reads as that element does', async () => {
-    currentCompare = oneColumn([{ Property: { Alias: 0 }, Scripts: [] }], {}, aliasesMeta);
+    currentCompare = oneColumn([{ Property: { Alias: 0 }, Scripts: [] }], {}, { ...aliasesMeta, keyMembers: null });
     renderPanel();
     await waitFor(() => screen.getByText('Aliases'));
     toggleRow('Aliases');
 
     expect(summaryOf('Aliases')).toBe('{…}');
+  });
+
+  it('an array whose one element has a dotted key reads as that key, one struct member down', async () => {
+    currentCompare = oneColumn([{ Property: { Alias: 7 }, Scripts: [] }], {}, aliasesMeta);
+    renderPanel();
+    await waitFor(() => screen.getByText('Aliases'));
+    toggleRow('Aliases');
+
+    expect(summaryOf('Aliases')).toBe('7');
   });
 
   it('an array whose one element is a plain value reads as that value, each column by its own leaf\'s shape', async () => {
