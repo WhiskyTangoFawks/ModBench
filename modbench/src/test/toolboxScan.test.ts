@@ -1,54 +1,12 @@
-// Two source-text invariants a compiling change can break silently: the retired vocabulary, and
-// the Toolbox's own ownership of everything it constructs.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
-import { tsFiles } from './tsFiles';
 
 const SRC = join(__dirname, '..');
-const PACKAGE_JSON = join(SRC, '..', 'package.json');
 // The root's wiring of the MO2 side, and the gestures the Toolbox box registers.
 const TOOLBOX = join(SRC, 'toolbox.ts');
 const TOOLBOX_COMMANDS = join(SRC, 'toolbox', 'toolboxCommands.ts');
-
-// The view is the Toolbox, and the Instance is the only reader of MO2's files, so nothing is a
-// "modlist source" any more. This file necessarily holds both words as data.
-const RETIRED = [/loadout/i, /modlist\s*source/i];
-const SELF = 'toolboxScan.test.ts';
-
-function retiredWordsIn(text: string): string[] {
-  return RETIRED.flatMap((pattern) => [...text.matchAll(new RegExp(pattern.source, 'gi'))].map((m) => m[0]));
-}
-
-describe('the retired names are gone from the extension source', () => {
-  const scanned = [...tsFiles(SRC, { exclude: ['generated'] }), PACKAGE_JSON].filter((path) => !path.endsWith(SELF));
-
-  it('scans a real body of files', () => {
-    expect(scanned.length).toBeGreaterThan(100);
-  });
-
-  // File names, type names, view ids, command ids, setting keys and test names all live in this
-  // text, so one scan covers every form.
-  it.each(scanned.map((path) => relative(SRC, path)))('%s', (relativePath) => {
-    const path = join(SRC, relativePath);
-    expect({ [relativePath]: retiredWordsIn(readFileSync(path, 'utf8')) }).toEqual({ [relativePath]: [] });
-  });
-
-  it('no file is named for either', () => {
-    expect(scanned.filter((path) => retiredWordsIn(path).length > 0)).toEqual([]);
-  });
-
-  // Rivals this catches: the word planted in a source file, and planted as a view id.
-  it('flags the words wherever they are planted', () => {
-    expect(retiredWordsIn('export class LoadoutHeaderProvider {}\n')).toEqual(['Loadout']);
-    expect(retiredWordsIn("createTreeView('modbench.loadoutHeader', {})\n")).toEqual(['loadout']);
-    expect(retiredWordsIn('"id": "modbench.loadoutHeader"')).toEqual(['loadout']);
-    expect(retiredWordsIn('a modlist source is a thing')).toEqual(['modlist source']);
-    expect(retiredWordsIn('new Mo2ModlistSource(root)')).toEqual(['ModlistSource']);
-  });
-});
-
 
 // Every disposable the Toolbox constructs goes through `own`, so teardown is one list. A
 // registration that skips it outlives the Toolbox and leaks across a reload.

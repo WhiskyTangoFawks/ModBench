@@ -1,3 +1,0 @@
-# Every write-side test suite that builds an Index, as file, symbol and count. ADR-0015 invariant 2:
-# a write reaches the Index through the Indexer, so a write-side test asserts the files it wrote,
-# never rows.

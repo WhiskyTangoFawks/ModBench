@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Codec.Tests.Serialization;
 
 /// <summary>Tested directly, not only through <c>TrackService</c>, so a regression in the mask
-/// reflection or the exclusion list fails at its own boundary (ADR-0006 decision 2).</summary>
+/// reflection or the encoding normalization fails at its own boundary (ADR-0006 decision 2).</summary>
 public sealed class ModelIdentityTests
 {
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
@@ -187,6 +187,20 @@ public sealed class ModelIdentityTests
     }
 
     [Fact]
+    public async Task FindFirst_WhenTheWriterDropsAQuestsNestedTopicsEmptyChildrenGroupAndItsHeaderValues_ReturnsNull()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        var quest = original.Quests.AddNew("TestQuest");
+        quest.DialogTopics.Add(new DialogTopic(original) { Quest = quest.ToLink(), Timestamp = 140636, Unknown = 467 });
+
+        var recompiled = await WriteAndReparse(original);
+
+        var recompiledTopic = recompiled.Quests.Single().DialogTopics.Single();
+        Assert.Equal((0, 0), (recompiledTopic.Timestamp, recompiledTopic.Unknown));
+        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
+    }
+
+    [Fact]
     public void FindFirstHeaderFieldDivergence_WithMatchingOpaqueFields_ReturnsNull()
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
@@ -287,6 +301,7 @@ public sealed class ModelIdentityTests
 
         Assert.NotNull(divergence);
         Assert.Equal(package.FormKey, divergence.FormKey);
+        Assert.Contains("field 'Data[0].Data' changed", divergence.Description, StringComparison.Ordinal);
     }
 
     // The dictionary tolerance's boundary: NpcMorph's elements are exactly {Key, Value} but Npc.Morphs
@@ -357,6 +372,21 @@ public sealed class ModelIdentityTests
         var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
         block.SubBlocks.Add(subBlock);
         mod.Cells.Records.Add(block);
+    }
+
+    private static async Task<Fallout4Mod> WriteAndReparse(Fallout4Mod mod)
+    {
+        var scratch = Directory.CreateTempSubdirectory("medit-modelidentity-").FullName;
+        try
+        {
+            var path = Path.Combine(scratch, mod.ModKey.FileName);
+            await mod.BeginWrite.ToPath(path).WithNoLoadOrder().WriteAsync();
+            return Fallout4Mod.CreateFromBinary(new ModPath(mod.ModKey, path), Fallout4Release.Fallout4);
+        }
+        finally
+        {
+            Directory.Delete(scratch, recursive: true);
+        }
     }
 
     internal static async Task<(Fallout4Mod Original, Fallout4Mod Recompiled, byte[] OriginalBytes, byte[] RewrittenBytes)>

@@ -35,7 +35,7 @@ public sealed class RefreshByKeysTests : IDisposable
 
     private IRecordReads Reads => _index.RequireReads();
 
-    private void Refresh() => _index.ValidateIndex(_mod.KeyOf());
+    private void Refresh() => _index.NextSnapshot();
 
     [Fact]
     public void ACommitMadeOutsideModbench_MovesTheCommittedRef_OnTheNextRefresh()

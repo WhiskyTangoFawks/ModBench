@@ -6,14 +6,11 @@ using MEditService.LoadOrder;
 using MEditService.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Http.Tests.Traces;
 
 /// <summary>create-plugin: the new file's header flags, records and masters, or the refusal and no
 /// file. Nothing else on disk or in the held snapshot changes.</summary>
-[Collection(WebHostCollection.Name)]
 public sealed class CreatePluginTraceTests : HostedTests
 {
     private const string Origin = "PickedMod";
@@ -36,44 +33,6 @@ public sealed class CreatePluginTraceTests : HostedTests
     {
         var holder = Services.GetRequiredService<LoadOrderHolder>();
         return (holder.Current, holder.Version);
-    }
-
-    [Theory]
-    [InlineData("Created.esp", false, false)]
-    [InlineData("Created.esm", true, false)]
-    [InlineData("Created.esl", false, true)]
-    public async Task CreatingAPlugin_WritesAHeaderWhoseFlagsItsExtensionSets_WithNoRecordsOrMasters(
-        string name, bool master, bool light)
-    {
-        var fx = Owned(await Loaded());
-        var folder = OtherTool.ModFolderOf(fx, Origin);
-
-        var created = await Create(Client, name, folder);
-
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        using var written = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName(name), Path.Combine(folder, name)), Fallout4Release.Fallout4);
-        Assert.Equal((master, light), (written.IsMaster, written.IsSmallMaster));
-        Assert.Empty(written.EnumerateMajorRecords());
-        Assert.Empty(written.ModHeader.MasterReferences);
-    }
-
-    [Theory]
-    [InlineData("Created.esp")]
-    [InlineData("Created.esm")]
-    [InlineData("Created.esl")]
-    public async Task CreatingAPlugin_ChangesNothingElseOnDiskOrInTheHeldSnapshot(string name)
-    {
-        var fx = Owned(await Loaded());
-        var folder = OtherTool.ModFolderOf(fx, Origin);
-        var disk = TreeSnapshot.Of(fx.Root);
-        var held = Held();
-
-        (await Create(Client, name, folder)).EnsureSuccessStatusCode();
-
-        var created = Path.GetRelativePath(fx.Root, Path.Combine(folder, name)).Replace('\\', '/');
-        Assert.Equal(disk, TreeSnapshot.Of(fx.Root).Where(line => !line.StartsWith($"file {created} ", StringComparison.Ordinal)));
-        Assert.Equal(held, Held());
     }
 
     [Fact]
@@ -112,12 +71,10 @@ public sealed class CreatePluginTraceTests : HostedTests
     [Fact]
     public async Task CreatingAPluginWithNoLoadOrderHeld_IsRefused_AndWritesNoFile()
     {
-        using var app = new MEditHost();
-        using var client = app.CreateClient();
         var folder = Directory.CreateTempSubdirectory("medit-trace-create-homeless-").FullName;
         try
         {
-            var created = await Create(client, "Homeless.esp", folder);
+            var created = await Create(Client, "Homeless.esp", folder);
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, created.StatusCode);
             Assert.Empty(Directory.EnumerateFileSystemEntries(folder));

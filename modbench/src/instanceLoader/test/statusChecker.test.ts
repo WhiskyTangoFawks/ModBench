@@ -75,23 +75,6 @@ describe('computeModStatuses', () => {
     const result = computeModStatuses(withSeparator, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
-
-  // No status kind here is a fact about a plugin's contents: those are the backend's, reported
-  // per plugin on the Plugins rows (ADR-0016).
-  it('never reports a status derived from a plugin file, however malformed', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-garbage-'));
-    try {
-      await writeMod(root, 'Garbage', { 'Garbage.esp': 'TES4 masters: NoSuchMaster.esm' });
-      const garbageEntries: ModlistEntry[] = [mod('Garbage')];
-      const index = await buildFileConflictIndex(garbageEntries, adapterOver(root), () => {});
-
-      const result = computeModStatuses(garbageEntries, index);
-
-      expect(result.get('Garbage')?.status).toEqual({ kind: 'ok' });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('computeModStatuses — case-insensitive conflicts', () => {

@@ -1,9 +1,7 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -53,15 +51,12 @@ public sealed class SourceContainerFixture : IDisposable
         topCell.Temporary.Add(topCellRef);
         worldspace.TopCell = topCell;
         mod.Worldspaces.Add(worldspace);
-        mod.WriteToBinary(pluginPath);
+        TrackedTemplates.WriteTracked(ModFolder, mod);
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
         LoadOrder = SnapshotPlugins.Snapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, Entries);
 
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(LoadOrder, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
 
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);

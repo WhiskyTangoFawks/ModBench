@@ -97,7 +97,7 @@ public sealed class ProjectionSequenceTests : IDisposable
             formKey2, document2.RecordType, document2.EditorId, document2.BodyOf().Replace("Second", "SecondEdited", StringComparison.Ordinal)));
 
         var before = _index.Sequence;
-        _index.ValidateIndex(_baseKey);
+        _index.NextSnapshot();
 
         Assert.Equal(before + 1, _index.Sequence);
         Assert.Equal("FirstEdited", reads.DocumentOf(formKey1, _baseKey).EditorId);
@@ -110,7 +110,7 @@ public sealed class ProjectionSequenceTests : IDisposable
         Reconcile(_fixture.Plugins);
         var before = _index.Sequence;
 
-        _index.ValidateIndex(_baseKey);
+        _index.NextSnapshot();
 
         Assert.Equal(before, _index.Sequence);
     }

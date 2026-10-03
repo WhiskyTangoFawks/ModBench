@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
@@ -8,7 +9,6 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Xunit.Abstractions;
@@ -16,8 +16,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.RealData;
 
-/// <summary>Whole-document equality per gesture over a stride sample of the real plugin's records,
-/// through the real <see cref="EditRecordHandler"/> over a real tracked tree.</summary>
 public sealed class DocumentEditRealDataTests : IDisposable
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
@@ -32,16 +30,11 @@ public sealed class DocumentEditRealDataTests : IDisposable
     public DocumentEditRealDataTests(ITestOutputHelper output)
     {
         _output = output;
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
-        File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
+        CutDownPluginFixture.TrackedInto(_modFolder);
         _plugin = new PluginAddress(CutDownPluginFixture.PluginFileName, "DocEditRealMod");
 
         var loadOrder = SnapshotPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
-        new TrackService(NullLogger<TrackService>.Instance, TestAdapters.Mutagen())
-            .TrackModAsync(loadOrder, _plugin.Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
-
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName), _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]);
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _editHandler = TestEditService.EditHandler(holder);
@@ -53,79 +46,90 @@ public sealed class DocumentEditRealDataTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
     }
 
-    // A tracked tree rescans itself whole on every write (ADR-0003), so every Nth record — not
-    // every one of 3900+ — keeps a real handler pass a minute rather than an hour.
-    private const int Stride = 12;
+    public static TheoryData<string> RecordTypesOfferingGestures()
+    {
+        var recordTypes = new TheoryData<string>();
+        foreach (var recordType in EveryGesture.Value.Select(g => g.Record.RecordType).Distinct().Order(StringComparer.Ordinal))
+            recordTypes.Add(recordType);
+        return recordTypes;
+    }
 
     [Fact]
-    public void EveryStrideRecord_SetOfOneMember_ChangesExactlyThatPath() => RunSweep(Stride, minIdentities: 300, minGestures: 150);
+    public void TheSmallestRecordOfEachShape_OffersOverAHundredGestures() =>
+        Assert.True(OnTheSmallestRecordOfEachShape().Count() > 100,
+            $"the plugin should offer plenty of gestures; it offered {OnTheSmallestRecordOfEachShape().Count()}");
 
-    // The whole corpus, opt-in: MEDIT_SMOKE=1 keeps the every-Nth sample above as the default gate
-    // and this as the pass a release checks before it ships.
-    [SmokeFact("sweep every record of the cut-down plugin, not a stride sample")]
-    public void EveryRecord_SetOfOneMember_ChangesExactlyThatPath() => RunSweep(stride: 1, minIdentities: 3900, minGestures: 1000);
+    [Theory]
+    [MemberData(nameof(RecordTypesOfferingGestures))]
+    public void EveryGestureARecordTypeOffers_OnItsSmallestRecord_ChangesExactlyItsPath(string recordType) =>
+        RunSweep([.. OnTheSmallestRecordOfEachShape().Where(g => g.Record.RecordType == recordType)]);
 
-    private void RunSweep(int stride, int minIdentities, int minGestures)
+    [SmokeFact("sweep every record of the cut-down plugin, not one per gesture shape")]
+    public void EveryGestureOfEveryRecord_ChangesExactlyItsPath()
+    {
+        Assert.True(EveryGesture.Value.Count > 4900, $"the plugin should offer plenty of gestures; it offered {EveryGesture.Value.Count}");
+        RunSweep(EveryGesture.Value);
+    }
+
+    private static IEnumerable<Gesture> OnTheSmallestRecordOfEachShape() => EveryGesture.Value
+        .OrderBy(g => g.Record.Text.Length)
+        .DistinctBy(g => (g.Record.RecordType, g.Envelope.Op, g.Path));
+
+    private readonly record struct Gesture(PluginDocument Record, RecordEditEnvelope Envelope, string Path);
+
+    private static readonly Lazy<IReadOnlyList<Gesture>> EveryGesture = new(() =>
     {
         var modPath = new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
         var strings = PluginStrings.In(Path.GetDirectoryName(CutDownPluginFixture.PluginPath)
             ?? throw new InvalidOperationException("Expected the cut-down plugin's path to sit in a directory."));
         using var documents = TestAdapters.Mutagen().OpenDocuments(modPath, GameRelease.Fallout4, Schemas, strings);
-        var identities = documents.Records
-            .Where((_, index) => index % stride == 0)
-            .Select(d => TreeAsTheHandlerLeftIt().IdentityOf(_plugin, d.FormKey, Schemas)
-                ?? throw new InvalidOperationException($"Expected the tracked tree to hold {d.FormKey}."))
-            .ToList();
-        Assert.True(identities.Count > minIdentities, $"Expected a substantial sample of the cut-down plugin; got {identities.Count} documents.");
+        return [.. documents.Records.Prepend(documents.Header).SelectMany(GesturesOn)];
+    });
+
+    private static IEnumerable<Gesture> GesturesOn(PluginDocument record)
+    {
+        var schema = Schemas[record.RecordType];
+        if (schema.IsHeader)
+        {
+            yield return new(record, SetAt(Json("true"), Member("IsSmallMaster")), "ModHeader.Flags");
+            yield break;
+        }
+        yield return new(record, SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
+        foreach (var (envelope, path) in Gestures(schema, JsonDocument.Parse(record.Text).RootElement))
+            yield return new(record, envelope, path);
+    }
+
+    private void RunSweep(IReadOnlyList<Gesture> gestures)
+    {
+
+        var trackedTree = TrackedTree();
+        var befores = gestures.Select(g => g.Record.FormKey).Distinct().ToDictionary(formKey => formKey, formKey =>
+        {
+            var identity = trackedTree.IdentityOf(_plugin, formKey, Schemas)
+                ?? throw new InvalidOperationException($"Expected the tracked tree to hold {formKey}.");
+            return (Identity: identity, Body: trackedTree.Get(_plugin, identity)?.Body
+                ?? throw new InvalidOperationException($"Expected the tracked tree to hold a document for {formKey}."));
+        });
 
         var failures = new List<string>();
-        var gestures = 0;
-        foreach (var identity in identities)
+        foreach (var gesture in gestures)
         {
-            var schema = Schemas[identity.RecordType];
-            var before = TreeAsTheHandlerLeftIt().Get(_plugin, identity)?.Body
-                ?? throw new InvalidOperationException($"Expected the tracked tree to hold a document for {identity.FormKey}.");
-            var (envelope, path) = schema.IsHeader
-                ? (SetAt(Json("true"), Member("IsSmallMaster")), "ModHeader.Flags")
-                : (SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
-
-            var (result, after) = Apply(identity, envelope);
-            if (!result.Applied) { failures.Add($"{identity.RecordType} {identity.FormKey}: {result.Refusal} {result.Message}"); continue; }
-            failures.AddRange(Strays(identity, before, RequireAfter(after, identity), path));
-            Reset(identity, before);
-
-            if (schema.IsHeader) continue;
-            var root = JsonDocument.Parse(before).RootElement;
-            foreach (var (gesture, edited) in Gestures(schema, root))
-            {
-                gestures++;
-                var (gestureResult, landed) = Apply(identity, gesture);
-                if (!gestureResult.Applied) { failures.Add($"{identity.RecordType} {identity.FormKey} {gesture.Op} {edited}: {gestureResult.Refusal} {gestureResult.Message}"); continue; }
-                failures.AddRange(Strays(identity, before, RequireAfter(landed, identity), edited));
-                Reset(identity, before);
-            }
+            var (identity, before) = befores[gesture.Record.FormKey];
+            var named = $"{identity.RecordType} {identity.FormKey} {gesture.Envelope.Op} {gesture.Path}";
+            var result = _editHandler.Edit(_plugin, identity.FormKey, gesture.Envelope);
+            if (!result.Applied) { failures.Add($"{named}: {result.Refusal} {result.Message}"); continue; }
+            var treeAsTheEditLeftIt = TrackedTree();
+            var after = treeAsTheEditLeftIt.Get(_plugin, identity)?.Body
+                ?? throw new InvalidOperationException($"Expected an applied edit on {identity.FormKey} to read back a document.");
+            failures.AddRange(Strays(named, before, after, gesture.Path));
+            treeAsTheEditLeftIt.Put(_plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, before));
         }
 
-        _output.WriteLine($"{identities.Count} records set, {gestures} further gestures.");
-        Assert.True(gestures > minGestures, $"the sample should offer plenty of array and union gestures; it offered {gestures}");
+        _output.WriteLine($"{gestures.Count} gestures on {befores.Count} records.");
         Assert.True(failures.Count == 0, $"{failures.Count} gestures did not land as exactly their path:\n{string.Join("\n", failures.Take(20))}");
     }
 
-    private static string RequireAfter(string? after, RecordIdentity identity) =>
-        after ?? throw new InvalidOperationException($"Expected an applied edit on {identity.FormKey} to read back a document.");
-
-    private (RecordEditResult Result, string? After) Apply(RecordIdentity identity, RecordEditEnvelope envelope)
-    {
-        var result = _editHandler.Edit(_plugin, identity.FormKey, envelope);
-        var after = result.Applied ? TreeAsTheHandlerLeftIt().Get(_plugin, identity)?.Body : null;
-        return (result, after);
-    }
-
-    // Every case reads and writes independently against the same starting text, never chained.
-    private void Reset(RecordIdentity identity, string body) =>
-        TreeAsTheHandlerLeftIt().Put(_plugin, new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body));
-
-    private SourceRepository TreeAsTheHandlerLeftIt() => SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+    private SourceRepository TrackedTree() => SourceRepository.Open(_modFolder, GameRelease.Fallout4)
         ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     // Every gesture the record's shape offers, named by the path it may change: a remove, an add,
@@ -133,15 +137,10 @@ public sealed class DocumentEditRealDataTests : IDisposable
     // change (the cascade).
     private static IEnumerable<(RecordEditEnvelope Gesture, string Path)> Gestures(RecordTableSchema schema, JsonElement root)
     {
-        // A container's child slots are structural gestures the edit service refuses up front, not
-        // fields, so they offer nothing here.
-        var childSlots = RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(schema.TableName) is { } concrete
-            ? ContainerChildFields.EnumerateChildFieldsFor(concrete) ?? []
-            : [];
-        foreach (var column in schema.RecordColumns.Where(c => c.Field.IsArray && c.Synthetic == null && c.ReadOnlyReason == null && !childSlots.Contains(c.Name)))
+        foreach (var (column, columnMeta) in GesturableColumns.GetOrAdd(schema.TableName, _ => GesturableColumnsOf(schema)))
         {
             if (DocumentNodes.At(root, column.PropertyName) is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() == 0) continue;
-            var meta = DocumentNodes.VariantFor(column.ToFieldMetadata(), root);
+            var meta = DocumentNodes.VariantFor(columnMeta, root);
             var first = array[0];
             yield return (RemoveAt(Member(column.Name), At(0)), column.Name);
             yield return (AddAt(Member(column.Name)), column.Name);
@@ -167,12 +166,24 @@ public sealed class DocumentEditRealDataTests : IDisposable
         }
     }
 
-    private static IEnumerable<string> Strays(RecordIdentity identity, string before, string after, string path)
+    private static readonly ConcurrentDictionary<string, (ColumnSpec Column, FieldMetadata Meta)[]> GesturableColumns = new();
+
+    private static (ColumnSpec Column, FieldMetadata Meta)[] GesturableColumnsOf(RecordTableSchema schema)
+    {
+        var childSlotsTheEditServiceRefuses = RecordTypeDispatch.For(GameRelease.Fallout4).ConcreteFor(schema.TableName) is { } concrete
+            ? ContainerChildFields.EnumerateChildFieldsFor(concrete) ?? []
+            : [];
+        return [.. schema.RecordColumns
+            .Where(c => c.Field.IsArray && c.Synthetic == null && c.ReadOnlyReason == null && !childSlotsTheEditServiceRefuses.Contains(c.Name))
+            .Select(c => (c, c.ToFieldMetadata()))];
+    }
+
+    private static IEnumerable<string> Strays(string gesture, string before, string after, string path)
     {
         var diffs = ConditionEditTests.DocumentDiff(before, after);
-        if (diffs.Count == 0) yield return $"{identity.RecordType} {identity.FormKey}: nothing changed at {path}";
+        if (diffs.Count == 0) yield return $"{gesture}: nothing changed";
         foreach (var stray in diffs.Where(d => !d.StartsWith(path, StringComparison.Ordinal)))
-            yield return $"{identity.RecordType} {identity.FormKey}: {stray}";
+            yield return $"{gesture}: {stray}";
     }
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;

@@ -9,7 +9,6 @@ namespace MEditService.Http.Tests.Api;
 
 // ADR-0012: "every key contains the delimiter" is no safety net, since ColumnKey.Of elides the
 // Data-directory origin. Driven at the wire, where GetCompare's own JSON reaches a client.
-[Collection(WebHostCollection.Name)]
 public sealed class CompareColumnKeyIntegrityApiTests : HostedTests
 {
     // The wire's own column-keyed dictionaries on a FieldDiff node, wherever one appears: nothing

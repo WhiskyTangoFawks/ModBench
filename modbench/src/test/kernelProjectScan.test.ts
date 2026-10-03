@@ -6,42 +6,9 @@ import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { tsFiles } from './tsFiles';
+import { CORE_BOXES, DRIVEN_BOXES, KERNEL_BOXES, REFERENCING_BOXES, VIEW_BOXES } from './boxes';
 
 const MODBENCH = join(__dirname, '..', '..');
-
-const KERNEL_BOXES = ['loadOrderFileCodec', 'tables', 'wire', 'ports'];
-
-// The driven column, each with the reference list target-architecture-references.d2 draws for it:
-// the arrows that leave the box, plus its column's kernel by the band's rule.
-const DRIVEN_BOXES: Record<string, string[]> = {
-  instanceAdapter: ['loadOrderFileCodec', 'ports', 'tables'],
-  instanceLoader: ['instanceAdapter', 'ports', 'tables'],
-};
-
-// The core column, same rule. An arrow the diagram draws that the code has no use for is left
-// out here and reported, never referenced to make the picture symmetric.
-const CORE_BOXES: Record<string, string[]> = {
-  modlist: ['instanceAdapter', 'ports'],
-  pluginsCommands: ['instanceLoader', 'loadOrderFileCodec', 'instanceAdapter', 'ports'],
-  instanceCommands: ['client', 'instanceLoader', 'instanceAdapter', 'ports', 'tables'],
-  downloadsCommands: ['instanceAdapter', 'ports'],
-  install: ['instanceAdapter', 'ports'],
-  client: ['ports', 'wire'],
-};
-
-
-// The driving band: each view reads a value and fires a command, with the reference list
-// target-architecture-references.d2 draws for it. No Toolbox file uses its drawn deploy commands
-// or tables, so both are left out.
-const VIEW_BOXES: Record<string, string[]> = {
-  toolbox: ['instanceCommands', 'instanceLoader', 'ports'],
-  mods: ['install', 'instanceLoader', 'modlist', 'ports'],
-  downloads: ['downloadsCommands', 'install', 'instanceLoader', 'ports'],
-  plugins: ['client', 'instanceLoader', 'pluginsCommands', 'ports'],
-  editor: ['client', 'ports', 'wire'],
-};
-
-const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 

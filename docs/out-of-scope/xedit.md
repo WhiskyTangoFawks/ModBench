@@ -14,7 +14,7 @@ What xEdit does: [the surface audit](../research/xedit-surface-audit.md) and [th
 | Platform | The gesture relies on something Modbench lacks, such as dragging from a tree into a webview. | 1 | Drag a record onto a reference field |
 | Game-specific | It serves one or two games, or one engine. Modbench generalizes across Bethesda games. | 6 | Set the game-link mode (Pluggy); Create SEQ file (Skyrim); Set VWD on all REFRs with a VWD mesh (Oblivion) |
 | Scripts, tasks or the agent | The operation is multi-step. A Python script, a task or the agent delivers it. It is not a gesture. | 19 | Compact FormIDs for ESL; BOSS / LOOT cleaning report; Batch change referencing records |
-| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 13 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
+| Maintainer ruling | The maintainer decided the gesture is unnecessary. The gesture name says why. | 15 | Hide a plugin in the navigator (filters hide a class of things); Hide or unhide one record; unhide all overrides (filters hide a class of things); Stick to (a view preference) |
 | Dead in xEdit | xEdit documents or ships it, and no working handler exists. | 3 | Temporary and Persistent nav items; Element detail form; Bookmarks (Ctrl+1 to 5, Alt+1 to 5), F5, Ctrl+F3, Alt+F3, Ctrl+W |
 
 ## Divergences
@@ -48,6 +48,8 @@ Gestures Modbench does differently.
 | 23 | A deleted reference | Keeps only its record header | Keeps its base record from FO4 on | Mutagen decides the data: Mutagen writes a deleted record as its header alone. |
 | 24 | Persistent on a deleted record | Refused, naming the reason | Reverts the change in silence | Principle: Never silently wrong. |
 | 25 | Two flag changes in one write | Clearing Partial Form and setting Deleted on a Partial Form copy leaves it Deleted | Reverts it to Partial Form, by the order it applies the two changes | Ruling: a write ends as it asks. |
+| 26 | Deep copy as override into a plugin that holds some of the child records | One confirmation for the selection | Two items: one keeps each record the destination holds; one, with overwriting, asks for each | Principle, Minimal by default: one gesture asks once. |
+| 27 | Create a cell at a grid position the worldspace already has | Refused, naming the cell. The refusal for a master's cell points at copy as override. | Returns the plugin's cell, or makes an override of the master's | Ruling: create never turns into an override (commands.md, Principles). |
 
 ## Omissions by object
 
@@ -121,6 +123,8 @@ Gestures Modbench does not offer. A gesture ruled out is not in [commands.md](..
 | Copy a field's path or full path (nothing in Modbench takes a path) | View grid: Clipboard > Copy path, Copy full path | Maintainer ruling |
 | Choose a column-width mode (a column fits, and its edge drags) | View grid: Column widths | Maintainer ruling |
 | Jump to the record in the navigator (Plugins shows it, and Go Back returns) | View header: Jump to | Maintainer ruling |
+| Create on a cell's persistent or temporary group (create on the cell; Persistent moves it) | Navigator: Add | Maintainer ruling |
+| Create a worldspace's persistent cell (setting Persistent on a reference creates it) | Navigator: Add, CELL [P] | Maintainer ruling |
 
 ### No object
 

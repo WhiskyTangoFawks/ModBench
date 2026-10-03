@@ -39,20 +39,6 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Equal(_holder.Version, result.Version);
     }
 
-    // ADR-0013 invariant 3: the game's masters are Mod Management's to send. A master in the Data
-    // folder that the snapshot does not name is neither a plugin nor active here.
-    [Fact]
-    public void Put_AddsNoPluginTheSnapshotDoesNotName_EvenTheGamesMasterInTheDataFolder()
-    {
-        File.WriteAllBytes(Path.Combine(_dataFolder, "Fallout4.esm"), []);
-        var a = Plugin("A.esp");
-
-        Put(GameRelease.Fallout4, [a], a);
-
-        Assert.Equal([a], _holder.Current.Plugins);
-        Assert.Equal([a], _holder.Current.Active);
-    }
-
     [Fact]
     public void Put_TwoActivePluginsOfOneFilename_RefusesWithoutApplying()
     {

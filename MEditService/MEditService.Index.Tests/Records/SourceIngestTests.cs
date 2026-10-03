@@ -212,7 +212,7 @@ public sealed class SourceIngestTests : IDisposable
         _entry.HandEdit(before, NpcEditorId, "ExternallyRenamed");
 
         PluginBinaries.Touch(_entry.Path);
-        Assert.True(index.Revalidate(Plugin));
+        Assert.True(index.Revalidate());
 
         Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
     }
@@ -246,7 +246,7 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        index.ValidateIndex(Plugin);
+        index.NextSnapshot();
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
@@ -298,7 +298,7 @@ public sealed class SourceIngestTests : IDisposable
         using var index = Opened();
         Assert.Contains(index.Status.Failures, f => f.Name == PluginName);
 
-        index.ValidateIndex(Plugin);
+        index.NextSnapshot();
     }
 
     [Fact]

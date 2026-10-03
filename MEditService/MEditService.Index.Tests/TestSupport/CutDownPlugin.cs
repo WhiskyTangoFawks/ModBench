@@ -25,6 +25,8 @@ public sealed class CutDownPluginFixture : IDisposable
                 RealDataPlugin.PluginFileName, RealDataPlugin.PluginPath, PluginOrigin.DataDirectory,
                 Slot: 0, Enabled: true, Winning: true)],
             InstanceRoot);
+        // The per-type views are made by the first filter (ADR-0011), and a test reads them.
+        Index.Accepts("SELECT form_key FROM records");
     }
 
     public void Dispose()
@@ -32,4 +34,12 @@ public sealed class CutDownPluginFixture : IDisposable
         Index.Dispose();
         try { Directory.Delete(InstanceRoot, recursive: true); } catch (IOException) { /* scratch, best effort */ }
     }
+}
+
+/// <summary>One index over the cut-down plugin for the assembly, because indexing it costs seconds.
+/// A member class only reads it: a test that sets the filter or changes rows builds its own.</summary>
+[CollectionDefinition(Name)]
+public sealed class CutDownPluginCollection : ICollectionFixture<CutDownPluginFixture>
+{
+    public const string Name = "Cut-down plugin";
 }

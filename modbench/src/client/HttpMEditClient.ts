@@ -32,6 +32,7 @@ export interface HttpMEditClientDeps {
   fetch?: (input: Request) => Promise<Response>;
   log?: (msg: string) => void;
   timeoutMs?: number;
+  reconnectDelayMs?: number;
 }
 
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
@@ -50,6 +51,7 @@ export class HttpMEditClient implements MEditClient {
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
+      reconnectDelayMs: deps.reconnectDelayMs,
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no

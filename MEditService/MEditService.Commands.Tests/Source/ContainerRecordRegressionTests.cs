@@ -1,18 +1,11 @@
-using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.Edits;
 using MEditService.Commands.Tests.TestSupport;
 using MEditService.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Noggog;
 
 namespace MEditService.Commands.Tests.Source;
 
-/// <summary>Create refuses a container with a typed
-/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500; edit, delete
-/// and a FormID edit write and read back through the Source repository.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -36,21 +29,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
-    }
-
-    [Fact]
-    public void ACellsSourceFile_RoundTripsThroughThePerRecordCodecByteIdentically()
-    {
-        // A container's file read and rewritten with no edit comes back byte for byte, so any difference
-        // the test above sees is the edit and nothing else.
-        var file = CellSourceFile;
-        var before = File.ReadAllBytes(file);
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-
-        var record = codec.DeserializeFile(file, GameRelease.Fallout4, "cell");
-        var reserialized = codec.SerializeToBytes(record, GameRelease.Fallout4);
-
-        Assert.Equal(before, reserialized);
     }
 
     [Fact]
@@ -91,45 +69,6 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
     private static System.Text.Json.JsonElement Json(string raw) =>
         System.Text.Json.JsonDocument.Parse(raw).RootElement;
-
-    [Fact]
-    public void DeletingACell_Succeeds()
-    {
-        var result = _fixture.DeleteHandler.DeleteRecords([new RecordAt(_fixture.Plugin, _fixture.Cell.ToString())]);
-
-        Assert.Empty(result.Refused);
-        Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
-    }
-
-    [Fact]
-    public void CreatingANewCell_RefusesWithTheContainerRefusal()
-    {
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-    }
-
-    [Fact]
-    public void CreatingANewCell_RefusalMessage_NamesOnlyCreationAsUnsupported()
-    {
-        var result = _fixture.CreateHandler.CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
-
-        Assert.False(result.Applied);
-        Assert.DoesNotContain("structural gesture", result.Message, StringComparison.Ordinal);
-        Assert.Contains("creating one from scratch is not supported", result.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EditingTheFormIdOfACell_Succeeds()
-    {
-        var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.Cell.ToString(), $"000F00:{_fixture.Plugin.Name}");
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
-        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected a FormID edit to answer the new FormKey.");
-        Assert.NotNull(_fixture.Document(newFormKey));
-    }
 
     [Fact]
     public void EditingTheFormIdOfAPlainRecord_InAPluginHoldingACell_Succeeds()

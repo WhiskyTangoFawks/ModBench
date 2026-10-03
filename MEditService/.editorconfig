@@ -118,7 +118,7 @@ dotnet_diagnostic.CA2225.severity = none
 
 # Complexity / maintainability rules — kept at `suggestion` (info). They never surface in normal build
 # output; the code-quality Stop hook (.claude/hooks/code-quality.py) reads them from a SARIF error log and
-# reports them per-turn, scoped to the files just changed, for per-instance triage. See /validate Step 3.
+# reports them per-turn, scoped to the files just changed, for per-instance triage.
 dotnet_diagnostic.S3776.severity = suggestion  # Cognitive Complexity of methods should not be too high
 dotnet_diagnostic.S1541.severity = suggestion  # Cyclomatic Complexity of methods should not be too high
 dotnet_diagnostic.S138.severity = suggestion   # Functions should not have too many lines of code

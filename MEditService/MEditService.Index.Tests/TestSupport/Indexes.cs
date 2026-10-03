@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
@@ -11,12 +12,21 @@ namespace MEditService.Index.Tests.TestSupport;
 /// adapter, reconciled over a fixture's plugins.</summary>
 internal static class Indexes
 {
+    // The Indexer keeps its holder to itself, and the next arrival is the holder's.
+    private static readonly ConditionalWeakTable<Indexer, LoadOrderHolder> Holders = [];
+
     internal static Indexer Open(
         LoadOrderHolder holder,
         IPluginAdapter? adapter = null,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null) =>
-        new(holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications);
+        INotificationPublisher? notifications = null,
+        TimeProvider? timeProvider = null)
+    {
+        var index = new Indexer(
+            holder, adapter ?? TestAdapters.Mutagen(), SharedSchemaReflector.Instance, loggerFactory, notifications, timeProvider);
+        Holders.Add(index, holder);
+        return index;
+    }
 
     internal static Indexer Reconciled(
         PluginFixtureData fixture,
@@ -55,12 +65,20 @@ internal static class Indexes
         return index;
     }
 
-    /// <summary>The next snapshot's validation of one plugin (ADR-0009 invariant 4): true when it
-    /// landed a change.</summary>
-    internal static bool Revalidate(this Indexer index, PluginAddress plugin)
+    /// <summary>The held load order arriving again (ADR-0013 invariant 1), which validates every
+    /// plugin (ADR-0009 invariant 4).</summary>
+    internal static void NextSnapshot(this Indexer index)
+    {
+        if (!Holders.TryGetValue(index, out var holder))
+            throw new InvalidOperationException("Only an Indexer from Indexes.Open has a holder to deliver an arrival through.");
+        index.Reconcile(holder.Current, holder.Apply(holder.Current));
+    }
+
+    /// <summary>The next snapshot: true when it landed a change.</summary>
+    internal static bool Revalidate(this Indexer index)
     {
         var before = index.Sequence;
-        index.ValidateIndex(plugin);
+        index.NextSnapshot();
         return index.Sequence > before;
     }
 

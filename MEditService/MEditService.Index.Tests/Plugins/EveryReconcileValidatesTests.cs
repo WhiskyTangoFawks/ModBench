@@ -1,6 +1,7 @@
 using DuckDB.NET.Data;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceAdapter;
 using MEditService.TestSupport;
@@ -148,6 +149,20 @@ public sealed class EveryReconcileValidatesTests : IDisposable
         Reconcile();
 
         Assert.Contains(_index.RequireReads().GetDocuments(_untracked.KeyOf()), d => d.EditorId == "UntrackedNpc");
+    }
+
+    // A handle that denies sharing makes a read fail, so a clean answer while it is open came from
+    // the hash the stamp kept.
+    [Fact]
+    public void AnEqualSnapshot_OfABinaryWhoseStampHolds_ReadsNothing()
+    {
+        Reconcile();
+
+        using var held = new FileStream(_untracked.Path, FileMode.Open, FileAccess.Read, FileShare.None);
+        Assert.Null(PluginBinaryHash.OfFile(_untracked.Path));
+
+        Assert.Empty(PublishedDuring(Reconcile));
+        Assert.Empty(_index.Status.Failures);
     }
 
     // Held with a failure, the plugin is read again only once its bytes change: a re-read of bytes

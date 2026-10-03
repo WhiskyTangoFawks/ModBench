@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   insertModAtWinningEnd,
@@ -543,13 +542,11 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
   });
 });
 
-// Opt-in at-scale backstop: byte-faithful round-trip against the real full LitR
-// modlist.txt. Skipped when the install is absent (CI, Windows, other machines).
-const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games', 'FO4', 'LitR');
+// At-scale backstop: byte-faithful round-trip against the real full LitR modlist.txt.
+const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? '';
 const litrModlist = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
-const hasLitr = existsSync(litrModlist);
 
-describe.skipIf(!hasLitr)('full LitR round-trip (opt-in)', () => {
+describe.skipIf(litrInstance === '')('full LitR round-trip (opt-in)', () => {
   it('toggling a real mod off then on reproduces the original bytes exactly', () => {
     const input = readFileSync(litrModlist, 'utf8');
     // Don't assume any particular mod's live enabled/disabled state — read

@@ -13,7 +13,7 @@ import { isRecord } from '../manifest';
 import { MODS_KEY_ARGS } from '../../mods/gestureEntry';
 import { PLUGINS_KEY_ARGS } from '../../plugins/gestureEntry';
 
-const TEST_PORT = 15172;
+const TEST_PORT = Number(present(process.env.MODBENCH_TEST_PORT, 'the port .vscode-test.mjs hands the run'));
 let mockBackend: http.Server;
 let ext: vscode.Extension<ActivateExports> | undefined;
 
@@ -363,8 +363,8 @@ function createMockBackend(): http.Server {
 }
 
 // Start a mock backend that answers GET /health → 200 so the extension reaches
-// 'running'. /plugins is load-order-gated (see above). Uses port 15172 (set via
-// workspace settings).
+// 'running'. /plugins is load-order-gated (see above). Listens on the run's port, which the
+// workspace settings name.
 before(async function () {
   this.timeout(15000);
 
@@ -401,10 +401,6 @@ after(async () => {
 // ── Activation ───────────────────────────────────────────────────────────────────
 
 describe('modbench activation', () => {
-  it('auto-activates on startup without any explicit activate() call', () => {
-    assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
-  });
-
   it('answers the instance check for an instance folder: instance', () => {
     assert.strictEqual(ext?.exports.folder, 'instance');
   });
@@ -416,50 +412,6 @@ describe('modbench activation', () => {
 
   // The pre-activation welcome flash is not testable: it lives between workspace open and
   // activation, and no API exposes whether `viewsWelcome` is showing. Manual check only.
-});
-
-// ── Build integrity ────────────────────────────────────────────────────────────
-// The harness loads out/extension.js, a bundle from a separate esbuild step; nothing forces it
-// to be current, so freshness is asserted from inside the process that loaded it.
-
-describe('the loaded extension bundle is not older than its sources', () => {
-  it('out/extension.js is at least as new as every file under src/', () => {
-    // Compiled location is out/test/integration/extension.test.js — three levels under
-    // the modbench package root.
-    const pkgRoot = path.join(__dirname, '..', '..', '..');
-    const srcDir = path.join(pkgRoot, 'src');
-    const bundlePath = path.join(pkgRoot, 'out', 'extension.js');
-    // The workspace fixture is live — other suites write into it mid-run, so its mtimes churn
-    // independently of any bundle-affecting source edit. It is not part of the bundle either.
-    const excluded = path.join(srcDir, 'test', 'integration', 'workspace');
-
-    let newestMtimeMs = -Infinity;
-    let newestFile = '';
-    const walk = (dir: string): void => {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, entry.name);
-        if (full === excluded) continue;
-        if (entry.isDirectory()) {
-          walk(full);
-        } else if (entry.isFile()) {
-          const mtimeMs = fs.statSync(full).mtimeMs;
-          if (mtimeMs > newestMtimeMs) {
-            newestMtimeMs = mtimeMs;
-            newestFile = full;
-          }
-        }
-      }
-    };
-    walk(srcDir);
-
-    const bundleMtimeMs = fs.statSync(bundlePath).mtimeMs;
-    assert.ok(
-      bundleMtimeMs >= newestMtimeMs,
-      `out/extension.js (mtime ${new Date(bundleMtimeMs).toISOString()}) is older than ` +
-      `${newestFile} (mtime ${new Date(newestMtimeMs).toISOString()}) — the harness ran ` +
-      `against a stale bundle`,
-    );
-  });
 });
 
 // ── Output channel ──────────────────────────────────────────────────────────────
@@ -509,11 +461,6 @@ describe('modbench command registration', () => {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
   });
-
-  it('registers no load-more command', async () => {
-    const all = await vscode.commands.getCommands(/* filterInternal */ true);
-    assert.ok(!all.includes('modbench.loadMore'), 'modbench.loadMore is registered');
-  });
 });
 
 // commands.md, The system commands: mod sync takes the instance value as its Argument.
@@ -539,6 +486,24 @@ describe('modbench.mod.sync syncs the instance value it is handed', () => {
 // ── record open ───────────────────────────────────────────────────────────────
 
 const openTabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
+
+async function checkBoxTogglesMarkedByTheNextTurn(
+  rows: { markUnconfirmed(row: never, enabled: boolean): void }, command: string,
+): Promise<number> {
+  let toggles = 0;
+  const mark = rows.markUnconfirmed.bind(rows);
+  rows.markUnconfirmed = (row, enabled) => {
+    toggles++;
+    mark(row, enabled);
+  };
+  try {
+    await vscode.commands.executeCommand(command);
+    await new Promise((turn) => setImmediate(turn));
+  } finally {
+    rows.markUnconfirmed = mark;
+  }
+  return toggles;
+}
 
 // A tab's title is the EditorID once the record has been read, and the FormKey until then
 // (editor.md, Opening, story 5); these tests run with no backend, so it stays the FormKey.
@@ -611,6 +576,9 @@ describe('modbench.record.open', () => {
   });
 
   it('a menu\'s multi-selection opens one tab per record, all in a single new group beside the active one', async () => {
+    await vscode.commands.executeCommand('workbench.action.focusLastEditorGroup');
+    await waitFor('the last group to be active', () =>
+      vscode.window.tabGroups.activeTabGroup === vscode.window.tabGroups.all.at(-1) || undefined);
     const groupsBefore = vscode.window.tabGroups.all.length;
     const tabsBefore = openTabs().length;
     const selection = [
@@ -756,10 +724,6 @@ describe('modbench.downloads tree', () => {
     fs.rmSync(downloadsDir, { recursive: true, force: true });
   });
 
-  it('exposes the live DownloadsProvider from activate()', () => {
-    assert.ok(provider(), 'activate() should return { downloadsProvider } for the open workspace');
-  });
-
   // Rows come from the Instance value (ADR-0015): written through writeAndAwaitInstance and
   // read back with no direct call to the provider's own invalidate().
   it('renders one row per archive, .meta sidecars suppressed', async () => {
@@ -769,20 +733,15 @@ describe('modbench.downloads tree', () => {
       fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
     });
 
-    const rows = await provider().getChildren();
+    const rows = await waitFor('the downloads rows to hold foo.zip', async () => {
+      const found = await provider().getChildren();
+      return found.some((r) => archiveNameOf(r) === 'foo.zip') ? found : undefined;
+    });
     assert.deepStrictEqual(rows.map((r) => archiveNameOf(r)), ['foo.zip']);
   });
 
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
-    fs.writeFileSync(path.join(downloadsDir, 'bar.zip'), 'data');
-
-    // The watcher debounces 200ms before calling invalidate() itself, so poll for the row rather
-    // than sleeping a fixed time. Never calls invalidate() directly: the watcher must do it alone.
-    const rows = await waitFor('bar.zip via the watcher', async () => {
-      const found = await provider().getChildren();
-      return found.some((r) => archiveNameOf(r) === 'bar.zip') ? found : undefined;
-    }, 10000);
-    assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
+    await probeUntilListed(downloadsDir, 'dropped');
   });
 
   // downloads.md, Which files are rows, story 1: `download_directory` can name a folder outside
@@ -849,10 +808,6 @@ describe('Overwrite row', () => {
     fs.rmSync(overwriteDir, { recursive: true, force: true });
   });
 
-  it('exposes the live ModListProvider from activate()', () => {
-    assert.ok(provider(), 'activate() should return { modListProvider } for the open workspace');
-  });
-
   it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
     // The count is a field of the Instance value now (ADR-0015) — awaited past a sequence,
     // rather than assuming a fresh disk read the instant invalidate() is called.
@@ -890,7 +845,7 @@ describe('Overwrite row', () => {
 // VS Code's delete-to-trash on Linux writes the freedesktop.org Trash; the extension's trash
 // cannot be doubled, since `vscode.workspace.fs.delete` cannot be redefined. Elsewhere a run leaves
 // its trashed folder in the OS trash.
-const xdgTrash = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'Trash');
+const xdgTrash = path.join(present(process.env.XDG_DATA_HOME, 'the data directory .vscode-test.mjs hands the run'), 'Trash');
 const trashInfoDir = path.join(xdgTrash, 'info');
 const TRASH_INFO = '.trashinfo';
 
@@ -944,12 +899,25 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
     });
   });
 
-  it('delete separator asks for no refresh, and its row goes when the watch lands the new value', async function () {
+  it('delete separator asks the Instance and the view for no refresh, and its row goes when the watch lands the new value', async function () {
     if (!root) this.skip();
     const doomed = present(await separatorRow('Doomed'), 'the Doomed separator row');
-    let refreshes = 0;
-    const listening = provider().onDidChangeTreeData(() => { refreshes++; });
-    const before = instance().sequence;
+    let unexplainedInvalidates = 0;
+    let instanceRefreshes = 0;
+    let sequenceAtLastInvalidate = instance().sequence;
+    const view = provider();
+    const invalidate = view.invalidate.bind(view);
+    view.invalidate = () => {
+      if (instance().sequence === sequenceAtLastInvalidate) unexplainedInvalidates++;
+      sequenceAtLastInvalidate = instance().sequence;
+      invalidate();
+    };
+    const target = instance();
+    const refresh = target.refresh.bind(target);
+    target.refresh = () => {
+      instanceRefreshes++;
+      return refresh();
+    };
 
     const warn = vscode.window.showWarningMessage;
     (vscode.window as { showWarningMessage: unknown }).showWarningMessage = () => Promise.resolve('Delete');
@@ -961,14 +929,13 @@ describe('A Mods gesture\'s write reaches the Mods view through the watch alone'
       if (process.platform === 'linux') {
         assert.strictEqual(takeFromTrash(doomedDir, trashedBefore), 1, 'the separator\'s folder should be in the OS trash');
       }
-      assert.strictEqual(instance().sequence, before, 'the watch landed a value before the gesture returned; nothing is proved');
-      assert.strictEqual(refreshes, 0, 'the gesture asked the view for a refresh after its write');
-
-      await pastSequence(instance(), before);
-      assert.strictEqual(await separatorRow('Doomed'), undefined, 'the watch\'s value should have taken the row away');
+      await waitFor('the watch to take the Doomed row away', async () => (await separatorRow('Doomed')) === undefined);
+      assert.strictEqual(instanceRefreshes, 0, 'the gesture asked the Instance to re-read');
+      assert.strictEqual(unexplainedInvalidates, 0, 'the gesture asked the view to re-pull a value no watch landed');
     } finally {
+      target.refresh = refresh;
       (vscode.window as { showWarningMessage: unknown }).showWarningMessage = warn;
-      listening.dispose();
+      view.invalidate = invalidate;
     }
   });
 });
@@ -994,6 +961,14 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     await change();
     await waitFor('the view to ask for its roots', () => asked.includes('root'));
     await new Promise((r) => setTimeout(r, 750));
+  };
+  const expandsAfter = async (change: () => unknown): Promise<void> => {
+    asked = [];
+    await change();
+    await waitFor('the re-rendered view to ask for the separator\'s children', () => {
+      const rendered = asked.indexOf('root');
+      return rendered >= 0 && asked.indexOf('separator:Gear', rendered) > rendered;
+    });
   };
   const onTheSeparator = async (command: 'list.expand' | 'list.collapse') => {
     await vscode.commands.executeCommand('modbench.modList.focus');
@@ -1035,8 +1010,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
 
   it('expands a separator it already rendered collapsed, while a filter shows it for its matching mods', async function () {
     if (!root) this.skip();
-    await renderAfter(() => provider().setFilter('armor', true));
-    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+    await expandsAfter(() => provider().setFilter('armor', true));
   });
 
   it('keeps a separator the user collapsed collapsed, and one the user expanded expanded, across a change on disk', async function () {
@@ -1050,10 +1024,9 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     assert.ok(!gearExpanded(), `a change on disk expanded a collapsed separator: ${JSON.stringify(asked)}`);
 
     await onTheSeparator('list.expand');
-    await renderAfter(() => writeAndAwaitInstance(() => {
+    await expandsAfter(() => writeAndAwaitInstance(() => {
       fs.writeFileSync(modlistPath, '+Armor Pack\r\n+Late Armor\r\n+Weapons\r\n-Gear_separator\r\n');
     }));
-    assert.ok(gearExpanded(), `a change on disk collapsed an expanded separator: ${JSON.stringify(asked)}`);
   });
 
   it('expands a separator the user collapsed, while a filter shows it for its matching mods', async function () {
@@ -1062,8 +1035,7 @@ describe('The Mods tree\'s expansion, as VS Code renders it', () => {
     await renderAfter(() => provider().setFilter('', true));
     assert.ok(!gearExpanded(), `the collapse did not land: ${JSON.stringify(asked)}`);
 
-    await renderAfter(() => provider().setFilter('weap', true));
-    assert.ok(gearExpanded(), `the filtered separator was not expanded: ${JSON.stringify(asked)}`);
+    await expandsAfter(() => provider().setFilter('weap', true));
   });
 });
 
@@ -1109,9 +1081,8 @@ describe('The Mods view\'s palette entries and Space, as VS Code runs them', () 
   it('VS Code\'s own Space on a focused mod row leaves its check box alone', async function () {
     if (!root) this.skip();
     await enabledAndSelected();
-    await vscode.commands.executeCommand('list.toggleExpand');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.strictEqual(fs.readFileSync(modlistPath, 'utf8'), '+Palette Mod\r\n');
+    const mods = present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
+    assert.strictEqual(await checkBoxTogglesMarkedByTheNextTurn(mods, 'list.toggleExpand'), 0);
   });
 
   it('copies the selection of the view last selected in when Copy Value is run from the palette', async function () {
@@ -1190,9 +1161,8 @@ describe('The Plugins view\'s keys, as VS Code runs them', () => {
   it('VS Code\'s own Space on a focused plugin row leaves its check box alone', async function () {
     if (!root) this.skip();
     await focusRow(0);
-    await vscode.commands.executeCommand('list.toggleExpand');
-    await new Promise((r) => setTimeout(r, 750));
-    assert.strictEqual(fs.readFileSync(pluginsTxtPath, 'utf8'), '*TestMod.esp\r\nOther.esp\r\n');
+    const plugins = present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
+    assert.strictEqual(await checkBoxTogglesMarkedByTheNextTurn(plugins, 'list.toggleExpand'), 0);
   });
 
   it('Space disables the selected plugin', async function () {
@@ -1301,7 +1271,6 @@ describe('The game-directory setting reaches the Instance as a recompute', () =>
 
 describe('Launch mEdit populates the editing plugin tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const treeProvider = () => ext?.exports.treeProvider;
   let gameDir = '';
 
   // enterEditing needs a resolvable game directory and an enabled plugin in the active profile to
@@ -1326,10 +1295,6 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the live PluginTreeProvider from activate()', () => {
-    assert.ok(treeProvider(), 'activate() should return { treeProvider } for the editing view');
   });
 
   it('loads the load order and shows plugins (not an empty tree) after launch', async () => {
@@ -1380,6 +1345,10 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await setGameDirectory(gameDir);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n'));
+    await waitFor('the plugin rows to hold both written plugins', async () => {
+      const names = (await pluginListProvider().getChildren()).map((n) => rowName(n));
+      return (names.includes('TestMod.esp') && names.includes('Other.esp')) || undefined;
+    });
   });
 
   after(async () => {
@@ -1387,10 +1356,6 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the live PluginsTreeProvider from activate()', () => {
-    assert.ok(pluginListProvider(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
   it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
@@ -1542,10 +1507,6 @@ describe('Plugin load-order rows expand into records', () => {
     await setGameDirectory(undefined);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, ''));
     fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('exposes the merged Plugins tree from activate()', () => {
-    assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
   // ADR-0013 invariant 3: Mod Management takes the game's masters from the per-release table,

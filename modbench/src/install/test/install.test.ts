@@ -127,7 +127,7 @@ describe('install commands', () => {
   }
 
   beforeEach(async () => {
-    root = await cloneCorpusFixture();
+    root = cloneCorpusFixture();
     access = accessTo(root);
     sourceFolder = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
     await writePayload(sourceFolder);

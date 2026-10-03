@@ -19,7 +19,7 @@ const iniText = (root: string): Promise<string> => readFile(join(root, INI), 'ut
 describe('switchProfile', () => {
   let root: string;
 
-  beforeEach(async () => { root = await cloneCorpusFixture(); });
+  beforeEach(() => { root = cloneCorpusFixture(); });
   afterEach(() => rm(root, { recursive: true, force: true }));
 
   it('repoints ModOrganizer.ini and nothing else', async () => {

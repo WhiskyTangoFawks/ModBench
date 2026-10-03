@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.TestSupport;
@@ -11,12 +10,13 @@ namespace MEditService.Index.Tests.Records;
 /// genuinely holds 412.</summary>
 public sealed class IndexVisibilityTests
 {
-    // Ingest reads no live object per column any more, so the window a read can land in is the
-    // codec serialize alone; enough records keep it long enough to sample.
-    private const int NpcCount = 4000;
+    private const int RecordsPerIngestBatch = 2048;
+    private const int NpcCount = RecordsPerIngestBatch + 1;
+    private static readonly TimeSpan ReadBound = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PauseBound = TimeSpan.FromSeconds(30);
 
     [Fact]
-    public async Task AReadDuringIndexing_NeverSeesAPartiallyIndexedPlugin()
+    public async Task AReadDuringIndexing_IsServed_AndNeverSeesAPartiallyIndexedPlugin()
     {
         using var fixture = new PluginFixtureBuilder("idx-vis")
             .WithPlugin("Big.esp", mod =>
@@ -26,53 +26,28 @@ public sealed class IndexVisibilityTests
             .Build();
         var key = new PluginAddress("Big.esp", PluginOrigin.DataDirectory);
         var holder = new LoadOrderHolder();
-        using var index = Indexes.Open(holder);
-
-        var counts = new ConcurrentBag<int>();
-        var sequences = new ConcurrentQueue<long>();
-        using var indexing = new CancellationTokenSource();
-
-        // Several readers, because production is several concurrent HTTP requests, not one.
-        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        using var ingestPaused = new SemaphoreSlim(0, 1);
+        using var ingestResumed = new SemaphoreSlim(0, 1);
+        using var index = Indexes.Open(holder, new PartwayAdapter(afterRecords: RecordsPerIngestBatch, () =>
         {
-            while (!indexing.IsCancellationRequested)
-            {
-                counts.Add(CountOrNone(index, key));
-                sequences.Enqueue(index.Sequence);
-            }
-        })).ToArray();
+            ingestPaused.Release();
+            _ = ingestResumed.Wait(PauseBound);
+        }));
 
-        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        await indexing.CancelAsync();
-        await Task.WhenAll(readers);
+        var reconcile = Task.Run(() => index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4));
+        Assert.True(await ingestPaused.WaitAsync(PauseBound), "the ingest never reached the plugin's last record");
+        var readMidIngest = Task.Run(() => (Npcs: index.RequireReads().CountOf(key, "npc_"), index.Sequence));
+        var servedMidIngest = await Waits.CompletesWithin(readMidIngest, ReadBound);
+        ingestResumed.Release();
+        await reconcile;
 
-        // If reads ever block behind the Indexer's transaction the sample count collapses and the assertion
-        // below starts passing for the wrong reason. It also is the "reads are served throughout the load"
-        // property, measured where it originates.
-        Assert.True(counts.Count > 50, $"only {counts.Count} reads completed during indexing — reads are being blocked by it");
-
-        // Sound in one direction only: an intermediate count can be missed, but one that is seen is always
-        // a real defect. This can fail to catch a regression; it cannot report one that is not there.
-        Assert.All(counts, count => Assert.True(
-            count is 0 or NpcCount,
-            $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
+        Assert.True(servedMidIngest,
+            $"a read made while the plugin was being indexed did not complete within {ReadBound.TotalSeconds} s: reads are blocked by the ingest");
+        var (npcsMidIngest, sequenceMidIngest) = await readMidIngest;
+        Assert.True(npcsMidIngest == 0,
+            $"a read made while the plugin was being indexed saw {npcsMidIngest} of its {NpcCount} NPCs");
         Assert.Equal(NpcCount, index.RequireReads().CountOf(key, "npc_"));
-
-        // The sequence answers from the committed index too: before or after the ingest, never a
-        // value of its own.
-        Assert.All(sequences, sequence => Assert.True(sequence <= index.Sequence));
-    }
-
-    // No store yet is a count of nothing, which is what a reader before the reconcile sees.
-    private static int CountOrNone(Indexer index, PluginAddress key)
-    {
-        try
-        {
-            return index.RequireReads().CountOf(key, "npc_");
-        }
-        catch (NoLoadOrderException)
-        {
-            return 0;
-        }
+        Assert.True(sequenceMidIngest == 0,
+            $"a read made while the plugin was being indexed saw sequence {sequenceMidIngest}, though nothing had landed");
     }
 }

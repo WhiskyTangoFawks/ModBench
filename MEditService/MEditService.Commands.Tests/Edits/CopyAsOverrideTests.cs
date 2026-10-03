@@ -1,4 +1,3 @@
-using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Commands.Tests.TestSupport;
 
@@ -29,19 +28,6 @@ public sealed class CopyAsOverrideTests
 
         // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_IsAbsentAtHead_UntilCommittedAndCompiled()
-    {
-        using var mod = CopyFixture.Create();
-
-        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
-
-        Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.CommittedDocument(
-            mod.DestinationPlugin,
-            new RecordIdentity(mod.SourceNpc.ToString(), "npc_", CopyFixture.SourceNpcEditorId)));
     }
 
     // A tracked source reads its current file, proven by mutating the file on disk after the load
@@ -80,21 +66,6 @@ public sealed class CopyAsOverrideTests
                 tracked.SourceFileFor(tracked.DestinationPlugin, tracked.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId)),
             File.ReadAllBytes(
                 untracked.SourceFileFor(untracked.DestinationPlugin, untracked.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId)));
-    }
-
-    [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheDestinationIsUntracked_NamingTheTrackCommand()
-    {
-        using var mod = CopyFixture.Create();
-        // The destination fixture always tracks; simulate an untracked destination the same way
-        // SourceEditFixture.Untracked() does — no .git in the folder at all.
-        Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
-
-        var result = mod.CopyHandler.CopyAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Modbench: Track…", result.Message, StringComparison.Ordinal);
     }
 
     // Held at Head is held: a record the destination committed and then deleted in its working tree

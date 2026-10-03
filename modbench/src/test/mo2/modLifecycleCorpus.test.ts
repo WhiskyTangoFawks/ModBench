@@ -21,8 +21,8 @@ const trash = async (path: string): Promise<void> => { await rm(path, { recursiv
 describe('mod lifecycle corpus (uninstall)', () => {
   let dir: string;
 
-  beforeEach(async () => {
-    dir = await cloneCorpusFixture();
+  beforeEach(() => {
+    dir = cloneCorpusFixture();
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 

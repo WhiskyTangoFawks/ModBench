@@ -40,8 +40,9 @@ try
             .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
             .WriteTo.File(
                 Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "mEdit", "logs", "medit-.log"),
+                    ctx.Configuration["LogDirectory"] ?? Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "mEdit", "logs"),
+                    "medit-.log"),
                 formatProvider: CultureInfo.InvariantCulture,
                 rollingInterval: RollingInterval.Day));
 
