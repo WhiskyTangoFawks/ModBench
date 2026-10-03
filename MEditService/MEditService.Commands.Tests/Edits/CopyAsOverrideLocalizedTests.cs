@@ -11,9 +11,6 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Its own fixture rather than <see cref="CopyFixture"/>: the source must be localized, the
-/// shape of the game's own masters, and none of that fixture's records carry a translated string.
-/// </summary>
 public sealed class CopyAsOverrideLocalizedTests : IDisposable
 {
     private const string SourcePluginName = "Localized.esm";

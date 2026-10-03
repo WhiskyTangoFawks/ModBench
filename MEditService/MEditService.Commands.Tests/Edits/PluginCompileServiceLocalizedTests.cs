@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Its own small fixture rather than <see cref="CompileFixture"/>: none of that fixture's
-/// records carry a translated string.</summary>
 public sealed class PluginCompileServiceLocalizedTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";
@@ -46,9 +44,6 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         Directory.Delete(_gameDir, recursive: true);
     }
 
-    // The destination Strings files are deleted first because Mutagen auto-attaches a StringsWriter
-    // rooted at the temp write path when none is supplied, which Commit never moves: a byte-compare
-    // against files compile never touched would otherwise pass vacuously.
     [Fact]
     public async Task Compile_ALocalizedPlugin_WritesStringsBesideItByteIdenticalToTheInput()
     {
@@ -56,12 +51,8 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         var stringsDir = Path.Combine(_modFolder, "Strings");
         var originalStringsFiles = Directory.GetFiles(stringsDir)
             .ToDictionary(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."), File.ReadAllBytes);
-        // Sanity: Track's own fixture setup actually produced strings files to compare against —
-        // otherwise every assertion below would vacuously pass over an empty set.
         Assert.NotEmpty(originalStringsFiles);
 
-        // Gone before compile runs, so "byte-identical afterward" can only mean compile itself wrote
-        // them — not that nothing ever touched the pre-existing files.
         foreach (var fileName in originalStringsFiles.Keys)
             File.Delete(Path.Combine(stringsDir, fileName));
 
@@ -71,16 +62,12 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        // The recompiled binary keeps the Localized flag.
         using (var recompiled = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), Fallout4Release.Fallout4))
         {
             Assert.True(recompiled.ModHeader.Flags.HasFlag(Fallout4ModHeader.HeaderFlag.Localized));
         }
 
-        // Every strings file compile rewrote is byte-identical to what Track captured. A real change
-        // (StringsWriter re-assigns sequential keys in registration order) would show up here even though
-        // the .esp's own bytes already round-trip.
         foreach (var (fileName, originalBytes) in originalStringsFiles)
         {
             var recompiledPath = Path.Combine(stringsDir, fileName);

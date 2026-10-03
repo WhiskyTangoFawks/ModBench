@@ -24,7 +24,6 @@ public sealed class CopyAsNewTests
         Assert.NotNull(document);
         Assert.Equal(CopyFixture.SourceNpcEditorId + "DUPLICATE001", document.EditorId);
 
-        // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
     }
 
@@ -113,9 +112,6 @@ public sealed class CopyAsNewTests
         Assert.Null(document.EditorId);
     }
 
-    // "Internal self-references follow the duplicate, not the
-    // original" — RemapLinks fired right after Duplicate, on a record whose own FormLink field can
-    // validly target its own record type (a Faction related to itself).
     [Fact]
     public void CopyRecordAsNewRecord_RemapsASelfReference_OntoTheNewFormKey_NotTheOriginal()
     {
@@ -148,8 +144,6 @@ public sealed class CopyAsNewTests
         Assert.Contains("change a record's FormID", result.Message, StringComparison.Ordinal);
     }
 
-    // A Cell is on xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —
-    // refused forever, not "not yet built" — distinct from the Quest/DialogTopic/INFO family below.
     [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACell_PermanentlyDisallowed()
     {
@@ -174,8 +168,6 @@ public sealed class CopyAsNewTests
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
     }
 
-    // A Quest is not on xEdit's permanent blacklist: DIAL/INFO/QUST copy as new. From a tracked
-    // source, so the record's text comes out of a working tree rather than a plugin file.
     [Fact]
     public void CopyRecordAsNewRecord_OnAQuestFromATrackedSource_Succeeds()
     {

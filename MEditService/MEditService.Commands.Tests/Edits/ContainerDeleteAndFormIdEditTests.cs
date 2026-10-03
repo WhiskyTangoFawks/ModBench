@@ -8,9 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Delete and a FormID edit resolve containers through the repository's own Locate (internal), as
-/// EditField does. A container moves or removes its directory whole; an embedded child is spliced
-/// inside its owner's document, no file move.</summary>
 public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
@@ -18,8 +15,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
-
-    // ---- a container's own record ----
 
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
@@ -34,14 +29,12 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Empty(result.Refused);
         Assert.False(Directory.Exists(directory));
 
-        // The container itself, and every embedded child — all four of EmbedCell's slots.
         Assert.Null(_fixture.Document(_fixture.EmbedCell.ToString()));
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
         Assert.Null(_fixture.Document(_fixture.PersistentRef.ToString()));
         Assert.Null(_fixture.Document(_fixture.Navmesh.ToString()));
         Assert.Null(_fixture.Document(_fixture.Landscape.ToString()));
 
-        // Still at Head — this is a working-tree delete, not a hard erase.
         Assert.NotNull(_fixture.CommittedDocument(
             _fixture.EmbedCell.ToString(), "cell", ContainerModPlugin.EmbedCellEditorId));
         Assert.NotNull(_fixture.CommittedDocument(
@@ -59,8 +52,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
     }
 
-    // ---- an embedded child ----
-
     [Fact]
     public void DeletingAnEmbeddedListChild_RemovesItFromTheOwnersInlineList_AndRewritesTheOwnersDocument_LeavingSiblingsIntact()
     {
@@ -73,7 +64,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Empty(result.Refused);
         var after = File.ReadAllText(file);
         Assert.DoesNotContain(ContainerModPlugin.TemporaryRefEditorId, after, StringComparison.Ordinal);
-        // Untouched siblings in the same document.
         Assert.Contains(ContainerModPlugin.PersistentRefEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.NavmeshEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModPlugin.LandscapeEditorId, after, StringComparison.Ordinal);
@@ -81,7 +71,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
         Assert.NotNull(_fixture.CommittedDocument(
             _fixture.TemporaryRef.ToString(), "refr", ContainerModPlugin.TemporaryRefEditorId));
-        // The owner's own document picked up the rewrite.
         Assert.DoesNotContain(
             ContainerModPlugin.TemporaryRefEditorId,
             _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body,
@@ -132,15 +121,11 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.DoesNotContain(ContainerModPlugin.TopCellRefEditorId, after, StringComparison.Ordinal);
 
         Assert.Null(_fixture.Document(_fixture.TopCell.ToString()));
-        // TopCellRef was itself embedded inside TopCell — cascaded, not orphaned.
         Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
         Assert.NotNull(_fixture.CommittedDocument(
             _fixture.TopCell.ToString(), "cell", ContainerModPlugin.TopCellEditorId));
-        // The Worldspace itself is untouched — only its TopCell slot emptied.
         Assert.NotNull(_fixture.Document(_fixture.Worldspace.ToString()));
     }
-
-    // ---- the FormID of a container's own record ----
 
     [Fact]
     public void EditingTheFormIdOfAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
@@ -164,8 +149,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
     }
 
-    // ---- the FormID of an embedded child ----
-
     [Fact]
     public void EditingTheFormIdOfAnEmbeddedChild_ChangesOnlyItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
     {
@@ -177,7 +160,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         var result = _fixture.EditHandler.SetFormId(_fixture.Plugin, _fixture.TemporaryRef.ToString(), $"000F00:{_fixture.Plugin.Name}");
 
         Assert.True(result.Applied, result.Message);
-        // Same file — an embedded record has no leaf of its own to move.
         Assert.Equal(file, _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId));
         Assert.Equal(
             before.Replace(formKeyLine, $"\"FormKey\": \"{result.NewFormKey.Require()}\"", StringComparison.Ordinal),
@@ -189,14 +171,9 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
         Assert.NotNull(_fixture.Document(result.NewFormKey.Require()));
     }
 
-    // ---- the FormID of a record a container references ----
-
     [Fact]
     public void EditingTheFormIdOfARecordReferencedByAContainer_LeavesTheContainersFileAsItWas()
     {
-        // A self-contained mod rather than the shared fixture: none of ContainerModFixture's embedded refs
-        // point anywhere, and giving one a real Base is a riskier change to a fixture four other suites
-        // depend on than a small local one.
         const string pluginName = "ContainerReferencer.esp";
         var referenced = FormKey.Null;
         using var referencer = SourceModFixture.Tracked(pluginName, "ContainerReferencerMod", mod =>
@@ -268,8 +245,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             File.ReadAllText(file));
     }
 
-    // ---- order preservation ----
-
     [Fact]
     public async Task DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
     {
@@ -280,7 +255,6 @@ public sealed class ContainerDeleteAndFormIdEditTests : IDisposable
             Assert.Empty(deleted.Refused);
         }
 
-        // The codec writes nothing for an emptied list, so the slot itself is gone from the document.
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
 

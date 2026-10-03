@@ -10,8 +10,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Each gesture is diffed member by member (<see cref="DocumentDiff"/>): a document
-/// comparison is the only thing that can make the "round-trips losslessly" claim.</summary>
 public sealed class ConditionEditTests : IDisposable
 {
     private readonly ConditionFixture _fixture = new();
@@ -19,8 +17,6 @@ public sealed class ConditionEditTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
-
-    // ── one cell ─────────────────────────────────────────────────────────────
 
     [Fact]
     public void EditingOneConditionMember_ChangesThatMemberAndNothingElse()
@@ -70,8 +66,6 @@ public sealed class ConditionEditTests : IDisposable
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
 
-    // ── Use Global, through the discriminator ────────────────────────────────
-
     [Fact]
     public void SwitchingToUseGlobal_KeepsEveryAgreeingMemberAndReplacesTheComparisonValue()
     {
@@ -92,8 +86,6 @@ public sealed class ConditionEditTests : IDisposable
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
 
-    // ── the function cascade is the writer's ─────────────────────────
-
     [Fact]
     public void ChangingTheFunction_ClearsTheSlotsTheNewFunctionDoesNotUse()
     {
@@ -106,7 +98,6 @@ public sealed class ConditionEditTests : IDisposable
             JsonNode.Parse(_fixture.Body(_fixture.Cobj)).Require()["Conditions"].Require()[0].Require()["Data"].Require()["ParameterOneString"].Require().GetValue<string>());
         var before = _fixture.Body(_fixture.Cobj);
 
-        // HasKeyword uses ParameterOneRecord alone, so the string slot is idled by the one-leaf change.
         var result = _fixture.Service().Edit(
             _fixture.Plugin, _fixture.Cobj.ToString(),
             SetAt(Json($"\"{nameof(Condition.Function.HasKeyword)}\""), Member("Conditions"), At(0), Member("Data"), Member("Function")));
@@ -115,8 +106,6 @@ public sealed class ConditionEditTests : IDisposable
         var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj)).Require()["Conditions"].Require()[0].Require()["Data"].Require();
         Assert.Null(after["ParameterOneString"]);
         Assert.Equal(nameof(Condition.Function.HasKeyword), after["Function"].Require().GetValue<string>());
-        // Mutagen spells one parameter slot through every typed view, so the Number view of the
-        // quest link is idled alongside the stale string; the Record view HasKeyword reads stays.
         Assert.Equal(
             [
                 "Conditions[0].Data.Function: \"GetStageDone\" -> \"HasKeyword\"",
@@ -125,8 +114,6 @@ public sealed class ConditionEditTests : IDisposable
             ],
             DocumentDiff(before, _fixture.Body(_fixture.Cobj)));
     }
-
-    // ── array arity and order ────────────────────────────────────────────────
 
     [Fact]
     public void ArrayAdd_AppendsOneDefaultConditionAndLeavesTheExistingOnesAlone()
@@ -138,7 +125,6 @@ public sealed class ConditionEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Cobj);
-        // Nothing outside the appended element moved.
         Assert.All(DocumentDiff(before, after), d => Assert.StartsWith("Conditions[2]", d, StringComparison.Ordinal));
         var appended = JsonNode.Parse(after).Require()["Conditions"].Require().AsArray()[2].Require();
         Assert.Equal(leaf, appended["MutagenObjectType"].Require().GetValue<string>());
@@ -174,8 +160,6 @@ public sealed class ConditionEditTests : IDisposable
         Assert.Equal([elements[1], elements[0]], after);
     }
 
-    // ── nested conditions ────────────────────────────────────────────────────
-
     [Fact]
     public void EditingAConditionNestedInsideAPerkEffect_ChangesThatMemberAndNothingElse()
     {
@@ -207,8 +191,6 @@ public sealed class ConditionEditTests : IDisposable
             ["MenuButtons[0].Conditions[0].Data.RunOnType: <absent> -> \"Target\""],
             DocumentDiff(before, _fixture.Body(_fixture.Message)));
     }
-
-    // ── document comparison ──────────────────────────────────────────────────
 
     internal static List<string> DocumentDiff(string before, string after)
     {
@@ -271,9 +253,6 @@ public sealed class ConditionEditTests : IDisposable
             var quest = mod.Quests.AddNew("Cond692Quest");
             Quest = quest.FormKey;
 
-            // Both leaves of the Condition union, so a whole-list resend carries both shapes of
-            // ComparisonValue. Deliberately not a GetEventData: Mutagen 0.53.1's GetEventDataBinaryOverlay
-            // inherits FunctionConditionData offsets, so reading Unknown3 off one runs past the subrecord.
             var functionData = new FunctionConditionData { Function = Condition.Function.GetStageDone };
             functionData.ParameterOneRecord.SetTo(quest.FormKey);
             var secondFunctionData = new FunctionConditionData { Function = Condition.Function.GetIsSex };

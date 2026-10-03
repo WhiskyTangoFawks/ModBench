@@ -9,18 +9,12 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A FormID edit that fails part-way leaves the working tree as it was. The faults are real
-/// I/O: its write touches files and nothing else.</summary>
 public sealed class FormIdEditRollbackTests
 {
-    // Free at both refs in the flat fixture's plugin, and named so the moved file's leaf name is nameable
-    // before the write.
     private static readonly FormKey NewNpcFormKey = FormKey.Factory("000F00:Fixture.esp");
 
-    // The same, in the container fixture's plugin.
     private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
 
-    // A directory where the atomic write's scratch file belongs: that write fails.
     private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
@@ -29,8 +23,6 @@ public sealed class FormIdEditRollbackTests
         using var mod = SourceEditFixture.Tracked();
         Block(mod.SourceFileFor(NewNpcFormKey, "npc_", SourceEditFixture.NpcEditorId));
 
-        // Taken after the block, so the restoration is measured against the tree the edit
-        // actually started from.
         var before = TreeSnapshot.Of(mod.ModFolder);
         var statusBefore = mod.GitStatus();
 
@@ -42,8 +34,6 @@ public sealed class FormIdEditRollbackTests
         Assert.Contains("back as it was — nothing to review or revert", thrown.Message, StringComparison.Ordinal);
     }
 
-    // Two units claiming one container is the tree's state, not a write fault: a refusal names it,
-    // and a 500 "write failure" would send the author to check a disk that is fine.
     [Fact]
     public void AFormIdEditWhoseContainerHasTwoSourceUnits_RefusesAsAmbiguous_WithTheTreeAsItWas()
     {
@@ -81,8 +71,6 @@ public sealed class FormIdEditRollbackTests
         Assert.Equal(before, TreeSnapshot.Of(mod.ModFolder));
     }
 
-    // A fault neither the tree nor the filesystem owns is a bug, and a bug is disclosed as itself:
-    // a container whose EditorID carries a NUL has no path a rename can land on.
     [Fact]
     public void AFormIdEditThatFaultsUnexpectedly_RollsBack_AndRethrowsTheFaultAsItself()
     {
@@ -99,8 +87,6 @@ public sealed class FormIdEditRollbackTests
 
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
     }
-
-    // ---- ordering and containers ----
 
     [Fact]
     public void TheGroupFolder_ReturnsToItsPreActionEntries()
@@ -125,8 +111,6 @@ public sealed class FormIdEditRollbackTests
     public void AContainersFormIdEditOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
     {
         using var fixture = new SourceContainerFixture();
-        // A worldspace is the one directory-per-record container: its cells and their placed
-        // references travel with the directory the edit moves.
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
 
         var before = TreeSnapshot.Of(fixture.ModFolder);
@@ -135,8 +119,6 @@ public sealed class FormIdEditRollbackTests
         var thrown = Assert.Throws<IOException>(() =>
             fixture.EditHandler.SetFormId(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
-        // The occupied check's own words, not a message the filesystem happened to produce: the
-        // check is what this test is watching, not whatever Directory.Move would have said instead.
         Assert.Contains("nowhere to move to", thrown.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
         Assert.Equal(statusBefore, fixture.GitStatus());
@@ -148,8 +130,6 @@ public sealed class FormIdEditRollbackTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
-    // Put a placeholder at the edit's own target and read back where the repository landed it, so
-    // the collision this plants sits at the tree's own answer, not a name recomputed here.
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
@@ -163,8 +143,6 @@ public sealed class FormIdEditRollbackTests
         repository.Remove(fixture.Plugin, identity);
         return directory;
     }
-
-    // ---- the oracle ----
 
     [Fact]
     public void TheDirectFilesystemOracleSeesAnEmptyDirectory_WhichGitStatusCallsClean()

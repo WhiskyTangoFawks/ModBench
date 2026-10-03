@@ -7,8 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>A value the column's own converter declines is refused before anything is written: the
-/// edit door is a shape gate, and a scalar of the wrong shape never reaches the tree.</summary>
 public sealed class ScalarValueRefusalTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -20,8 +18,6 @@ public sealed class ScalarValueRefusalTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
-
-    // ── converter-declined scalar values ───────────────────────────────────────
 
     [Fact]
     public void HeightMaxFloatColumn_NonNumericString_IsRefusedAndWritesNothing()
@@ -84,8 +80,6 @@ public sealed class ScalarValueRefusalTests : IDisposable
         Assert.Contains("0.75", NpcBody(), StringComparison.Ordinal);
     }
 
-    // ── missing property on this record's own runtime type ────────────────────
-
     [Fact]
     public void OutputCharColumn_OnGlobalShortInstance_IsRefusedAsFieldNotFound()
     {
@@ -109,10 +103,6 @@ public sealed class ScalarValueRefusalTests : IDisposable
         Assert.True(result.Applied, result.Message);
     }
 
-    // ── FormLink column: malformed / wrongly-shaped value ──────────────────────
-
-    // Shape, not resolution: a string that is not a FormKey is not a FormLink at all, and the codec
-    // is what says so.
     [Fact]
     public void RaceFormLinkColumn_MalformedString_IsRefusedByTheCodec()
     {
@@ -132,8 +122,6 @@ public sealed class ScalarValueRefusalTests : IDisposable
         Assert.Contains("Voice", result.Message, StringComparison.Ordinal);
     }
 
-    // ── An OMOD carrying one property, for the sub-field-decline slice below ──
-
     [Fact]
     public void OmodPropertiesArray_ValueItsLeafCannotHold_RefusesTheWholeArrayWrite()
     {
@@ -149,9 +137,6 @@ public sealed class ScalarValueRefusalTests : IDisposable
         Assert.Equal(before, omod.Body(armorMod));
     }
 
-    // The record-level union's "column on the schema, not on this class" shape, which no NPC has.
-    // GlobalShort rather than GlobalBool: Mutagen's GlobalBool writes FLTV as one byte and reads
-    // back expecting four.
     private static SourceModFixture GlobMod(out FormKey globalShort, out FormKey globalFloat)
     {
         var (shortKey, floatKey) = (FormKey.Null, FormKey.Null);

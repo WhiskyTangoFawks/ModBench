@@ -4,8 +4,6 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Commands.Tests.Edits;
 
-// ADR-0013: the handler that turns a validated snapshot into Load order state's one arrival —
-// what a reconcile does with that arrival is the Index's subscription, not this handler's.
 public sealed class PutLoadOrderHandlerTests : IDisposable
 {
     private const string InstanceRoot = "C:\\Instance";
@@ -51,8 +49,6 @@ public sealed class PutLoadOrderHandlerTests : IDisposable
         Assert.Equal(LoadOrderSnapshot.Empty, _holder.Current);
     }
 
-    // A release this build has no Mutagen assembly for is discovered here, synchronously, never
-    // inside a reconcile the caller cannot see.
     [Fact]
     public void Put_UnsupportedGameRelease_RefusesWithoutApplying()
     {

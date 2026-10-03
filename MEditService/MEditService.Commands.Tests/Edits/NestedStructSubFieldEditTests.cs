@@ -10,8 +10,6 @@ using static MEditService.Commands.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary><c>Faction.VendorLocation.Target</c> as the subject: its <c>LocationFallback</c> leaf
-/// has no FormLink members, so this fixture needs no supporting cast of linked records.</summary>
 public sealed class NestedStructSubFieldEditTests : IDisposable
 {
     private readonly FactionFixture _fixture = new();
@@ -20,8 +18,6 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // PLVD's binary discriminator is its Type value, so the seeded LocationFallback reparses as a
-    // LocationTarget through Track: this write switches the concrete leaf as well as the value.
     [Fact]
     public void VendorLocationTarget_NamedInPayload_RoundTrips()
     {
@@ -36,7 +32,6 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         Assert.Contains("\"Data\": 3", body, StringComparison.Ordinal);
     }
 
-    // One leaf, one change: the siblings the gesture never named stay as they were.
     [Fact]
     public void VendorLocationTarget_SecondEditOfOneLeaf_KeepsUnnamedMembers()
     {

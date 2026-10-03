@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Commands.Tests.Edits;
 
-/// <summary>Compile, not document text: read coverage does not imply write correctness, so each fact
-/// reparses the written binary through Mutagen's reader.</summary>
 public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 {
     private readonly AbstractUnionCompileFixture _fixture = new();
@@ -32,8 +30,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         return (IFallout4ModGetter)ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(AbstractUnionCompileFixture.PluginName), pluginPath), GameRelease.Fallout4);
     }
-
-    // ── Npc.Level (ANpcLevel) — a mandatory type, closing its compile-round-trip gap ──
 
     [Fact]
     public async Task Level_EditingWithinSameConcreteType_CompilesAndReparsesTheNewValue()
@@ -61,8 +57,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(1.5f, mult.LevelMult);
     }
 
-    // ── Quest.Aliases (AQuestAlias) — a mandatory type, closing its compile-round-trip gap ──
-
     [Fact]
     public async Task Aliases_WholeArrayWrite_QuestReferenceAliasElement_CompilesAndReparsesTheNewElement()
     {
@@ -73,15 +67,10 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
         var quest = (await CompileAndReparse()).Quests.Single(q => q.FormKey == _fixture.Quest);
         var alias = Assert.Single(quest.Aliases.Require());
-        // Quest alias elements stay lazy `...BinaryOverlay` instances until touched (confirmed by
-        // AbstractUnionRealDataTests' own doc comment) — asserted through the getter interface, not
-        // the concrete eager class, the same reason that file's own real-fixture read test does.
         var refAlias = Assert.IsAssignableFrom<IQuestReferenceAliasGetter>(alias);
         Assert.Equal("NewRef", refAlias.Name);
         Assert.Equal(4, refAlias.ClosestToAlias);
     }
-
-    // ── Book.Teaches (BookTeachTarget) ──────────────────────────────────────────
 
     [Fact]
     public async Task Teaches_SwitchingConcreteType_SpellToPerk_CompilesAndReparsesAsTheNewConcreteType()
@@ -95,8 +84,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         var teaches = Assert.IsType<BookPerk>(book.Teaches);
         Assert.Equal(_fixture.Perk, teaches.Perk.FormKey);
     }
-
-    // ── ColorRecord.Data (AColorRecordData) ─────────────────────────────────────
 
     [Fact]
     public async Task Data_EditingWithinSameConcreteType_IndexEdit_CompilesAndReparsesTheNewIndex()
@@ -124,8 +111,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal((17, 34, 51), (colorData.Color.R, colorData.Color.G, colorData.Color.B));
     }
 
-    // ── Holotape.Data (AHolotapeData) ───────────────────────────────────────────
-
     [Fact]
     public async Task Data_SwitchingConcreteType_ProgramToSound_CompilesAndReparsesAsTheNewConcreteType()
     {
@@ -138,8 +123,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         var sound = Assert.IsType<HolotapeSound>(holotape.Data);
         Assert.Equal(_fixture.SoundDescriptor, sound.Sound.FormKey);
     }
-
-    // ── SoundDescriptor.Data (ASoundDescriptor) ─────────────────────────────────
 
     [Fact]
     public async Task Data_EditingWithinSameConcreteType_StandardDataFields_CompileAndReparse()
@@ -174,8 +157,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.IsType<SoundDescriptorCompoundData>(sd.Data);
     }
 
-    // ── Perk.Effects (APerkEffect / APerkEntryPointEffect) ──────────────────────
-
     [Fact]
     public async Task Effects_WholeArrayWrite_QuestEffectToAbilityEffect_CompilesAndReparsesAsTheNewConcreteType()
     {
@@ -204,8 +185,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(1.5f, entryPoint.From);
         Assert.Equal(9.5f, entryPoint.To);
     }
-
-    // ── MagicEffect.Archetype (AMagicEffectArchetype) ───────────────────────────
 
     [Fact]
     public async Task Archetype_SwitchingConcreteType_LightToPeakValueMod_CompilesAndReparsesTheNewAssociation()
@@ -236,8 +215,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(_fixture.ActorValueInformation, archetype.ActorValue.FormKey);
     }
 
-    // ValueModifier deliberately: every other Type has a named case in ReadArchetype and would
-    // reparse as a more specific leaf, so only the default case rebuilds the literal base.
     [Fact]
     public async Task Archetype_SwitchingToTheBaseLeaf_ItsOwnRealTypeFieldCompilesAndReparses()
     {
@@ -254,8 +231,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.Equal(MagicEffectArchetype.TypeEnum.ValueModifier, archetype.Type);
     }
 
-    // ── AudioEffectChain.Effects (AAudioEffect) ─────────────────────────────────
-
     [Fact]
     public async Task Effects_WholeArrayWrite_OverdriveToStateVariableFilter_CompilesAndReparsesAsTheNewConcreteType()
     {
@@ -269,19 +244,11 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
         var aech = (await CompileAndReparse()).AudioEffectChains.Single(a => a.FormKey == _fixture.AudioEffectChain);
         var effect = Assert.Single(aech.Effects);
-        // AAudioEffect leaves stay lazy `...BinaryOverlay` instances the same way Quest's aliases do
-        // (no `binaryOverlay="NoGeneration"` on this type, unlike MagicEffect's own archetypes) —
-        // asserted through the getter interface, not the concrete eager class.
         var filter = Assert.IsAssignableFrom<IStateVariableFilterAudioEffectGetter>(effect);
         Assert.True(filter.Enabled);
         Assert.Equal(440.0f, filter.CenterFrequency);
         Assert.Equal(0.75f, filter.QValue);
     }
-
-    // ── The two nested abstract unions — reached one level inside another struct column ──
-    //
-    // NearSelf, not NearReference: PLVD's binary discriminator is the Type value, so a
-    // LocationFallback holding a known kind cannot survive a binary round trip as a fallback.
 
     [Fact]
     public async Task VendorLocationTarget_NestedStructEdit_CompilesAndReparsesTheNewValue()
