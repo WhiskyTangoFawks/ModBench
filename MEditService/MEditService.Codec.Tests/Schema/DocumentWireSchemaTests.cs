@@ -50,6 +50,25 @@ public sealed class DocumentWireSchemaTests
         meta.Variants ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have variants.");
 
     [Fact]
+    public void ALinkTypedByALinkInterface_NamesEveryTableWhoseGetterImplementsIt()
+    {
+        var types = Column("refr", "Base").ValidFormKeyTypes;
+
+        Assert.Contains("stat", types);
+        Assert.Contains("furn", types);
+        Assert.DoesNotContain("race", types);
+    }
+
+    [Fact]
+    public void NoLinkNamesEveryTable_BecauseNoTypesAlreadyMeansAny()
+    {
+        var tables = Schemas.Values.Count(s => !s.IsHeader);
+        var offenders = AllFields().Where(f => f.Meta.ValidFormKeyTypes.Count >= tables).Select(f => f.Path).ToList();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void EveryFieldName_IsAMutagenPropertyName()
     {
         var offenders = AllFields()

@@ -42,12 +42,12 @@ public sealed class ConditionSchemaTests
     }
 
     [Fact]
-    public void ComparisonValuesGlobalLink_NamesNoRecordTypeMeaningAny_BecauseTheLinkClosesOverAbstractIGlobalGetterAndGlobSchemaIsKeyedByItsFourConcreteGetters()
+    public void ComparisonValuesGlobalLink_NamesTheGlobTable()
     {
         var variants = Member(ConditionElement(), "ComparisonValue").Variants
             ?? throw new InvalidOperationException("Expected 'ComparisonValue' to carry per-leaf variants.");
 
-        Assert.Empty(variants[nameof(ConditionGlobal)].ValidFormKeyTypes);
+        Assert.Equal(["glob"], variants[nameof(ConditionGlobal)].ValidFormKeyTypes);
     }
 
     [Theory]
