@@ -12,11 +12,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // resolveFormKey (ADR-0005): the O(1) lookup, batched once per Classify so every formKey leaf's
-    // Resolutions is populated in this pass; null leaves Resolutions empty.
+    // Resolutions is populated in this pass; null leaves Resolutions empty. loadOrderFormIds orders
+    // a keyed array's FormKeys; null orders them by their text.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         GameRelease release,
-        Func<string, RecordLookupEntry?>? resolveFormKey = null)
+        Func<string, RecordLookupEntry?>? resolveFormKey = null,
+        Func<string, uint?>? loadOrderFormIds = null)
     {
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
@@ -37,6 +39,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             FormKey: conflictingRecords[0].FormKey,
             Logger: _logger,
             ResolveFormKey: resolveFormKey,
+            LoadOrderFormIds: loadOrderFormIds,
             Release: release);
         var diffs = RecordChildren(conflictingRecords, ctx);
 
@@ -75,6 +78,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         string FormKey,
         ILogger Logger,
         Func<string, RecordLookupEntry?>? ResolveFormKey,
+        Func<string, uint?>? LoadOrderFormIds,
         GameRelease Release);
 
     // One node of the diff tree, at whatever depth the walk reached it. absentMeansDefault is false
@@ -164,7 +168,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         List<ElementRow>? rows = null;
         if (columns.TrueForAll(c => c.Elements.Count <= MaxArrayChildCount))
-            rows = array.KeyMembers is { } keyMembers ? KeyedRows(array, keyMembers, element, columns) : SequenceRows(element, columns);
+            rows = array.KeyMembers is { } keyMembers ? KeyedRows(array, keyMembers, element, columns, ctx.LoadOrderFormIds) : SequenceRows(element, columns);
         if (rows == null || rows.Count > MaxArrayChildCount)
         {
             ctx.Logger.LogWarning(
@@ -185,7 +189,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     }
 
     private static List<ElementRow> KeyedRows(
-        FieldMetadata array, IReadOnlyList<string> keyMembers, FieldMetadata element, List<(string Column, List<JsonElement> Elements)> columns)
+        FieldMetadata array, IReadOnlyList<string> keyMembers, FieldMetadata element,
+        List<(string Column, List<JsonElement> Elements)> columns, Func<string, uint?>? loadOrderFormIds)
     {
         // Elements sharing a key each take a row, the nth at a key in extended-key order aligning
         // with the nth in every other column, as xEdit's TfrmMain.InitChildren counts them.
@@ -193,9 +198,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         foreach (var (column, elements) in columns)
         {
             var turns = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var index in Enumerable.Range(0, elements.Count).OrderBy(i => ElementKey.SortKeyOf(elements[i], array), ElementKey.Order))
+            foreach (var index in Enumerable.Range(0, elements.Count).OrderBy(i => ElementKey.SortKeyOf(elements[i], array, loadOrderFormIds), ElementKey.Order))
             {
-                var key = ElementKey.Of(elements[index], keyMembers, element);
+                var key = ElementKey.Of(elements[index], keyMembers, element, loadOrderFormIds);
                 var turn = turns[key.Text] = turns.GetValueOrDefault(key.Text) + 1;
                 if (!rows.TryGetValue((key.Text, turn), out var row)) rows[(key.Text, turn)] = row = (key, turn, []);
                 row.Held[column] = (elements[index], index);

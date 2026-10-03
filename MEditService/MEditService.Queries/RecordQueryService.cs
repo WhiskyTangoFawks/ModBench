@@ -94,10 +94,11 @@ public sealed class RecordQueryService(
 
         var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
 
-        var (classification, conflictAll) = ClassifyStack(committedOverrides, resolveFormKey);
+        var snapshot = _loadOrder.Require();
+        var (classification, conflictAll) = ClassifyStack(
+            committedOverrides, resolveFormKey, LoadIndex.FormIdsOf(snapshot, reads.OpenedPlugins));
         // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
         // any non-Data-origin column and silently drop its ConflictThis.
-        var snapshot = _loadOrder.Require();
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
@@ -113,10 +114,11 @@ public sealed class RecordQueryService(
 
     private (ClassifyResult Classification, ConflictAll ConflictAll) ClassifyStack(
         IReadOnlyList<RecordDetail> committedOverrides,
-        Func<string, RecordLookupEntry?> resolveFormKey)
+        Func<string, RecordLookupEntry?> resolveFormKey,
+        Func<string, uint?> loadOrderFormIds)
     {
         var classification = _conflictClassifier.Classify(
-            committedOverrides, _loadOrder.Require().GameRelease, resolveFormKey);
+            committedOverrides, _loadOrder.Require().GameRelease, resolveFormKey, loadOrderFormIds);
         return (classification, classification.ConflictAll);
     }
 
