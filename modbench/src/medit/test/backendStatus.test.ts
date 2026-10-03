@@ -7,7 +7,6 @@ function makeViews() {
   return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn(), setUnreachable: vi.fn() };
 }
 
-// common.md, The status bar, names these four verbatim; Ready is the reconcile's own.
 describe('backendStatusText', () => {
   it('names each backend state the way the status bar shows it', () => {
     expect(backendStatusText('starting')).toBe('$(loading~spin) mEdit: Starting…');
@@ -28,9 +27,7 @@ describe('wireBackendStatus', () => {
     expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Running');
   });
 
-  // The badges the tree holds describe a backend that is gone, so it re-reads; the read fails,
-  // its rows stay, and they expand into the error node.
-  it('refreshes the tree when the backend goes', () => {
+  it('refreshes the tree when the backend goes, since the badges it holds describe a backend that is gone', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -60,9 +57,7 @@ describe('wireBackendStatus', () => {
     expect(views.abandonReconcile).toHaveBeenCalled();
   });
 
-  // A launch arms its reconcile and only then asks the client to start, so the 'starting' that
-  // start() emits must not abandon the launch that caused it.
-  it('leaves the armed reconcile alone while the backend is starting', () => {
+  it('leaves the armed reconcile alone while the backend is starting, since a launch arms its reconcile before the start that emits starting', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -73,9 +68,7 @@ describe('wireBackendStatus', () => {
     expect(views.refreshTree).not.toHaveBeenCalled();
   });
 
-  // The reconcile that follows an attach is what hands the tree its load order; reading the
-  // plugin list before that PUT asks a backend that holds none.
-  it('an attached backend is left to the reconcile', () => {
+  it('an attached backend is left to the reconcile, since the tree reading the plugin list before that PUT would ask a backend that holds no load order', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -98,9 +91,7 @@ describe('wireBackendStatus', () => {
     expect(views.abandonReconcile).not.toHaveBeenCalled();
   });
 
-  // plugins.md, States 3: the Plugins tree's own unreachable signal, wired from the same status
-  // the bar reads — not inferred from a read a caller happens to attempt.
-  it('names the tree unreachable when the backend disconnects', () => {
+  it('names the tree unreachable when the backend disconnects, from the same status the bar reads', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -141,16 +132,12 @@ describe('wireBackendStatus', () => {
   });
 });
 
-// The whole point of the abandon: the user hears "abandoned", not a network failure they cannot
-// act on, when the backend they were talking to went away mid-send.
 describe('a backend that disconnects mid-send', () => {
-  it('leaves the send reporting abandoned, not failed', async () => {
+  it('leaves the send reporting abandoned, not a network failure the user cannot act on, as a deliberate abort answers abandoned where a refused connection would answer failed', async () => {
     const client = new InMemoryMEditClient();
     client.setStatus('running');
     let putStarted!: () => void;
     const started = new Promise<void>((resolve) => { putStarted = resolve; });
-    // What the backend answers on each ending: a deliberate abort is 'abandoned', and a refused
-    // connection would be 'failed'.
     client.setCommandHandler('putLoadOrder', (...args) => new Promise((resolve) => {
       putStarted();
       const options = present(args[6], 'the options the sender always passes to putLoadOrder');
@@ -186,8 +173,7 @@ describe('enterEditingAcrossRestarts', () => {
     expect(enterEditing).toHaveBeenCalledTimes(1);
   });
 
-  // The launch itself is what brings the backend up, so the attach it causes must not launch again.
-  it('does not re-enter on the first attach', async () => {
+  it('does not re-enter on the first attach, which the launch itself causes', async () => {
     const client = new InMemoryMEditClient();
     const enterEditing = vi.fn().mockResolvedValue(undefined);
     const { enter } = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
@@ -200,9 +186,7 @@ describe('enterEditingAcrossRestarts', () => {
     expect(enterEditing).toHaveBeenCalledTimes(1);
   });
 
-  // A deliberate relaunch after a failed one is not a restart: its own enterEditing is the entry,
-  // and the attach it causes must not stack a second one on top.
-  it('does not re-enter when a deliberate relaunch follows a disconnect', async () => {
+  it('does not re-enter when a deliberate relaunch follows a disconnect, since the relaunch\'s own enterEditing is the entry', async () => {
     const client = new InMemoryMEditClient();
     const enterEditing = vi.fn().mockResolvedValue(undefined);
     const { enter } = enterEditingAcrossRestarts(client, enterEditing, vi.fn());

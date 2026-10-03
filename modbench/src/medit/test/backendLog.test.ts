@@ -63,14 +63,14 @@ describe('makeBackendLogForwarder', () => {
     expect(channel.error).toHaveBeenCalledWith('[backend] Unhandled exception. System.InvalidOperationException: boom');
   });
 
-  it('tracks the carried level per stream, so stdout and stderr cannot bleed into each other', () => {
+  it('tracks the carried level per stream, so a stdout continuation does not pick up stderr\'s error and a stderr continuation stays at error', () => {
     const channel = fakeChannel();
     const forward = makeBackendLogForwarder(channel);
 
     forward('[08:30:45 INF] Indexing', 'stdout');
     forward('Unhandled exception. boom', 'stderr');
-    forward('continues the INF line', 'stdout'); // must not pick up stderr's error
-    forward('   at Program.<Main>()', 'stderr'); // must stay at error
+    forward('continues the INF line', 'stdout');
+    forward('   at Program.<Main>()', 'stderr');
 
     expect(channel.info).toHaveBeenLastCalledWith('[backend] continues the INF line');
     expect(channel.error).toHaveBeenLastCalledWith('[backend]    at Program.<Main>()');
@@ -90,10 +90,7 @@ describe('makeBackendLogForwarder', () => {
   });
 });
 
-// backendLogLevelArgs maps the Output channel's level (vscode.LogLevel's
-// numeric ordinals — Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a
-// Serilog minimum-level override for the backend's spawn argv.
-describe('backendLogLevelArgs', () => {
+describe('backendLogLevelArgs, mapping the Output channel\'s vscode.LogLevel ordinal (Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a Serilog minimum-level override for the spawn argv', () => {
   it.each([
     [1, 'Verbose'],
     [2, 'Debug'],

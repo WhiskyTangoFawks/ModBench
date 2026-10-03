@@ -23,10 +23,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-// Every member `vscode.TextDocument` declares — `provideCodeLenses` reads only `.uri` and
-// `.getText()`, but it implements `vscode.CodeLensProvider`, so the double has to satisfy the
-// real (large) interface, not a narrowed one.
-function makeDocument(text: string, fsPath: string, isUntitled = false): vscode.TextDocument {
+function makeDocumentDeclaringEveryTextDocumentMember(text: string, fsPath: string, isUntitled = false): vscode.TextDocument {
   const uri = fakeUri(fsPath);
   const notImplemented = (): never => { throw new Error('not implemented in this fixture'); };
   return {
@@ -43,7 +40,6 @@ function makeDocument(text: string, fsPath: string, isUntitled = false): vscode.
   };
 }
 
-// The command and its arguments off the sole lens a `provideCodeLenses` call returned.
 function soleLens(lenses: readonly vscode.CodeLens[]): vscode.Command {
   const lens = present(lenses[0], 'the sole code lens returned');
   expect(lenses).toHaveLength(1);
@@ -53,9 +49,8 @@ function soleLens(lenses: readonly vscode.CodeLens[]): vscode.Command {
 describe('FilterCodeLensProvider', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  // plugins.md, Pickers, Record filter: "on any SQL document".
   it('offers to apply an untitled SQL document as the filter, naming the document', () => {
-    const doc = makeDocument(ARMOR_SQL, 'Untitled-1', true);
+    const doc = makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1', true);
 
     const lens = soleLens(new FilterCodeLensProvider().provideCodeLenses(doc));
 
@@ -64,7 +59,7 @@ describe('FilterCodeLensProvider', () => {
   });
 
   it('offers to apply a SQL document outside the scripts folder', () => {
-    const doc = makeDocument(ARMOR_SQL, '/elsewhere/queries/armor.sql');
+    const doc = makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/elsewhere/queries/armor.sql');
 
     const lens = soleLens(new FilterCodeLensProvider().provideCodeLenses(doc));
 
@@ -76,7 +71,7 @@ describe('FilterCodeLensProvider', () => {
     const provider = new FilterCodeLensProvider();
     provider.setActiveSql(ARMOR_SQL);
 
-    const lens = soleLens(provider.provideCodeLenses(makeDocument(ARMOR_SQL, 'Untitled-1', true)));
+    const lens = soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, 'Untitled-1', true)));
 
     expect(lens.command).toBe('modbench.record.clearFilter');
     expect(lens.title).toContain('Active');
@@ -86,7 +81,7 @@ describe('FilterCodeLensProvider', () => {
     const provider = new FilterCodeLensProvider();
     provider.setActiveSql('SELECT form_key FROM "weap"');
 
-    expect(soleLens(provider.provideCodeLenses(makeDocument(ARMOR_SQL, '/scripts/armor.sql'))).command)
+    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/scripts/armor.sql'))).command)
       .toBe('modbench.record.filter');
   });
 
@@ -94,7 +89,7 @@ describe('FilterCodeLensProvider', () => {
     const provider = new FilterCodeLensProvider();
     provider.setActiveSql(`  ${ARMOR_SQL}  `);
 
-    expect(soleLens(provider.provideCodeLenses(makeDocument(`\n${ARMOR_SQL}\n`, '/scripts/armor.sql'))).command)
+    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(`\n${ARMOR_SQL}\n`, '/scripts/armor.sql'))).command)
       .toBe('modbench.record.clearFilter');
   });
 
@@ -103,7 +98,7 @@ describe('FilterCodeLensProvider', () => {
     provider.setActiveSql(ARMOR_SQL);
     provider.setActiveSql(null);
 
-    expect(soleLens(provider.provideCodeLenses(makeDocument(ARMOR_SQL, '/scripts/armor.sql'))).command)
+    expect(soleLens(provider.provideCodeLenses(makeDocumentDeclaringEveryTextDocumentMember(ARMOR_SQL, '/scripts/armor.sql'))).command)
       .toBe('modbench.record.filter');
   });
 });
