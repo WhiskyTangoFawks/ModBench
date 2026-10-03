@@ -9,8 +9,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>The Index's scope — the store it opens, the plugins it holds open in it, and the filter
-/// materialized over it — across a reconcile, a replacement, a close and a dispose.</summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public class IndexScopeTests(TestPluginFixture fixture)
 {
@@ -18,8 +16,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
     private static Indexer MakeIndexer(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    // An explicit request for a release this build has no Mutagen assembly for must refuse with a
-    // typed, actionable message rather than a FileNotFoundException's from inside Initialize.
     [Fact]
     public void Load_ForUnsupportedGameRelease_FailsNamingTheRelease()
     {
@@ -92,11 +88,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        // ADR-0013: a snapshot for the same instance reconciles in place — nothing is replaced.
         Assert.Same(firstRepo, manager.RequireReads());
     }
-
-    // --- SetFilter / ClearFilter ---
 
     [Fact]
     public void SetFilter_NoLoadOrder_ThrowsNoLoadOrderException()
@@ -107,7 +100,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Contains("No load order", ex.Message);
     }
 
-    // plugins.md, Order and view state, story 3: the filter clears on purpose, whatever is held.
     [Fact]
     public void ClearFilter_NoLoadOrder_LeavesNoFilter()
     {
@@ -183,11 +175,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.Null(manager.ActiveFilter);
     }
 
-    // --- Filter re-materialization ---
-    //
-    // _filter is a one-shot snapshot of whatever matched the filter SQL when it ran, so every mutation
-    // path that can change which records match has to re-run it.
-
     [Fact]
     public void Validate_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
     {
@@ -241,8 +228,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         }
     }
 
-    // A filter valid over the rows it was set on and not over the rows a re-index lands: the one
-    // way a re-materialization can fail after the write it follows is already durable.
     [Fact]
     public void Validate_WhenReapplyingTheFilterFaults_LogsAWarningNamingTheException()
     {
@@ -284,8 +269,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         onDisk.WriteToBinary(pluginPath);
     }
 
-    // --- Disposal actually releases resources ---
-
     [Fact]
     public void Reconcile_ForADifferentInstance_OldRepositoryBecomesUnusable()
     {
@@ -294,8 +277,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var oldRepo = manager.RequireReads();
 
-        // ADR-0013: only a snapshot for another instance replaces what is held; the same instance
-        // reconciles in place (Reconcile_SameInstance_KeepsTheStore).
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 

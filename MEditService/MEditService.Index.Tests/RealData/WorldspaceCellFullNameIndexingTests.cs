@@ -9,9 +9,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Indexes a real Cell through the real <see cref="DuckDbRecordIndex"/> pipeline rather
-/// than stubbing the DTO layer: the JSON-path guess driving <c>json_extract_string</c> is unproven
-/// until it runs against a document the codec really serialized.</summary>
 public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 {
     private const string PluginName = "CellFullName.esp";
@@ -66,8 +63,8 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private static void TryDelete(string path)
     {
         try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     [Fact]

@@ -19,8 +19,6 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
         return m;
     }
 
-    // --- Dispose idempotency ---
-
     [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
@@ -28,7 +26,6 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
         var manager = MakeLoadedManager(holder);
         manager.Dispose();
 
-        // Should not throw a LockRecursionException or ObjectDisposedException
         var ex = Record.Exception(() => manager.Dispose());
         Assert.Null(ex);
     }

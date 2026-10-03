@@ -23,7 +23,6 @@ public sealed class DiagnosedContainerTests : IDisposable
     private const string Topic = "000806:Diagnosed.esp";
     private static readonly PluginAddress Key = new(Plugin, PluginOrigin.DataDirectory);
 
-    // Any real binary: the adapter double below answers the documents, the binary only the open.
     private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("diagnosed-cell").WithPlugin(Plugin).Build();
 
     public void Dispose() => _fixture.Dispose();
@@ -97,8 +96,6 @@ public sealed class DiagnosedContainerTests : IDisposable
         Assert.Null(cell.ParseDiagnosis);
     }
 
-    // The same fixture with the cell readable, so what the diagnosis costs is legible: the grid and
-    // the positions, and nothing else.
     [Fact]
     public void TheSameCellReadable_LandsTheSameRows_WithItsGridAndPositions()
     {
@@ -116,7 +113,6 @@ public sealed class DiagnosedContainerTests : IDisposable
         Assert.Equal(30f, persistent.Value.PosZ);
     }
 
-    // A temporary ref whose document spells no position: the row carries none rather than the origin.
     [Fact]
     public void ARefWhoseDocumentSpellsNoPosition_LandsWithNullCoordinates()
     {
@@ -130,8 +126,6 @@ public sealed class DiagnosedContainerTests : IDisposable
         Assert.Null(row.Value.PosZ);
     }
 
-    // Hand-built rather than serialized from a mod: no fixture plugin holds a cell the codec refuses,
-    // and what is under test is what the ingest does with a diagnosis, not how one arises.
     private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(TestAdapters.Mutagen())
     {
         public override IPluginDocuments OpenDocuments(

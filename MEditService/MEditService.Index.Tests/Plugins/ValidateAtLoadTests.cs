@@ -7,9 +7,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>ADR-0015 invariant 4: the Indexer validates at load, before the load order answers. A
-/// tracked plugin whose documents moved while nothing ran is corrected there, not on the next
-/// read.</summary>
 public sealed class ValidateAtLoadTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";

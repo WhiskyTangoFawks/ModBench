@@ -10,8 +10,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.Plugins;
 
-/// <summary>ADR-0019: an arrival's validation runs on a thread no caller waits on, so what stops it
-/// reaches the log, and a fault reaches the status, rather than vanishing.</summary>
 public sealed class ValidationFaultTests : IDisposable
 {
     private const string PluginName = "Untracked.esp";
@@ -34,7 +32,6 @@ public sealed class ValidationFaultTests : IDisposable
 
     private LoadOrderEntry Plugin => _fixture.Plugins.Single();
 
-    // Subscribed after the first reconcile, so the arrival under test is the only one on a thread.
     private Indexer Subscribed(INotificationPublisher? notifications = null, IndexWriteGate? writeGate = null)
     {
         var clock = new FakeTimeProvider(TimeProvider.System.GetUtcNow() + TimeSpan.FromHours(1));
@@ -94,7 +91,6 @@ public sealed class ValidationFaultTests : IDisposable
         Assert.Contains(PluginChangedFaults.Reason, index.Status.Message, StringComparison.Ordinal);
     }
 
-    // A notification port that fails on the push a validation's re-derivation announces.
     private sealed class PluginChangedFaults : INotificationPublisher
     {
         public const string Reason = "the stream could not take the push";
@@ -105,7 +101,6 @@ public sealed class ValidationFaultTests : IDisposable
         }
     }
 
-    // IndexWriteGate is reentrant, so the gate is held on a thread of its own.
     private sealed class GateHeld : IDisposable
     {
         private readonly ManualResetEventSlim _release = new();

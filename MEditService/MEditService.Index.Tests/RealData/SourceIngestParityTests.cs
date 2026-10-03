@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Index.Tests.RealData;
 
-/// <summary>Both ingest paths land the same rows over the same mod shape, so there is no second
-/// extraction to drift; this checks it on 3,940 authentic records.</summary>
 public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClassFixture<SourceParityFixture>
 {
     [Fact]
@@ -19,7 +17,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.True(SourceRepository.HoldsTreeFor(fixture.ModFolder, RealDataPlugin.PluginFileName));
     }
 
-    // A synthetic fixture holds no containers, no worldspace and no embedded children.
     [Fact]
     public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
     {
@@ -33,8 +30,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var binary = AllFormKeys(fixture.FromBinary).ToHashSet(StringComparer.Ordinal);
         var source = AllFormKeys(fixture.FromSource).ToHashSet(StringComparer.Ordinal);
 
-        // The fixture is real data with real containers; an empty or tiny set here would make every
-        // other assertion in this file vacuous.
         Assert.True(binary.Count > 2000, $"fixture looks wrong: only {binary.Count} records");
         Assert.Equal(binary.Count, source.Count);
         Assert.Empty(binary.Except(source, StringComparer.Ordinal));
@@ -52,8 +47,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             Assert.Equal(binary, CountOf(fixture.FromSource, type));
         }
 
-        // Positive control: the fixture must really hold embedded children, or the loop above is a
-        // walk over an empty set that would pass for a plugin with no containers at all.
         Assert.True(CountOf(fixture.FromBinary, "refr") > 0, "fixture holds no placed references");
         Assert.True(CountOf(fixture.FromBinary, "cell") > 0, "fixture holds no cells");
     }
@@ -75,12 +68,9 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         var byTypeText = string.Join(", ", byType.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}={kv.Value}"));
 
-        // Pinned count and type. The fixture is hermetic and checked in, so any drift here is signal.
         Assert.True(mismatched.Count == 1, $"expected exactly the one known divergence; got {mismatched.Count} ({byTypeText})");
         Assert.Equal("cell=1", byTypeText);
 
-        // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind
-        // the same count.
         var binaryBody = binaryDocuments[mismatched[0]].Body;
         var sourceBody = sourceDocuments[mismatched[0]].Body;
         Assert.Contains("\"Break2\"", binaryBody, StringComparison.Ordinal);
@@ -101,16 +91,12 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Equal(PluginHeader.RecordType, binary.RecordType);
         Assert.Equal(PluginHeader.RecordType, source.RecordType);
 
-        // Positive controls: an empty or absent body would satisfy plain equality below and prove
-        // nothing at all. These pin that the body really is the root document.
         Assert.NotNull(binary.Body);
         Assert.Contains("\"ModHeader\"", binary.Body, StringComparison.Ordinal);
         Assert.Contains("\"MasterReferences\"", binary.Body, StringComparison.Ordinal);
 
         Assert.Equal(binary.Body, source.Body);
 
-        // The third arm: against the tracked plugin's own file on disk, as raw bytes. A document's
-        // body is text, so this is the only comparison here that is genuinely about bytes.
         var headerFile = Path.Combine(fixture.ModFolder, "plugin-source", RealDataPlugin.PluginFileName, "RecordData.json");
         Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.BodyOf()));
@@ -127,7 +113,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         var binary = RowsOf(fixture.BinaryInstanceRoot, relation);
         var source = RowsOf(fixture.SourceInstanceRoot, relation);
 
-        // Positive control: two empty relations are trivially equal.
         Assert.True(binary.Count > 0, $"the fixture produced no {relation} rows");
         var onlyBinary = binary.Except(source, StringComparer.Ordinal).ToList();
         var onlySource = source.Except(binary, StringComparer.Ordinal).ToList();
@@ -137,8 +122,6 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
             $"\nOnly untracked:\n{string.Join('\n', onlyBinary.Take(20))}\nOnly tracked:\n{string.Join('\n', onlySource.Take(20))}");
     }
 
-    // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
-    // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
     private List<string> AllFormKeys(Indexer index) =>
         [.. index.RequireReads()
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))

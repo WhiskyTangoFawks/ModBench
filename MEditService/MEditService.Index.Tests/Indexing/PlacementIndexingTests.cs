@@ -8,8 +8,6 @@ using Noggog;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// The fixture deliberately mixes present and absent optional values, so the reader paths are
-// exercised on both null and non-null columns.
 public class PlacementIndexingTests
 {
     private static readonly PluginAddress Key = new("TestWorld.esp", "Data");
@@ -25,11 +23,9 @@ public class PlacementIndexingTests
                 {
                     var w = mod.Worldspaces.AddNew("CommonwealthTest");
 
-                    // Worldspace TopCell — no block/sub coordinates, no grid (null columns).
                     var topCell = new Cell(mod) { EditorID = "TopCell" };
                     w.TopCell = topCell;
 
-                    // Fully-populated exterior cell with a persistent + temporary ref.
                     var extCell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new P2Int(12, -5) } };
                     var barrelRef = new PlacedObject(mod)
                     {
@@ -37,13 +33,12 @@ public class PlacementIndexingTests
                         Position = new P3Float(10f, 20f, 30f),
                         Base = new FormLinkNullable<IPlaceableObjectGetter>(FormKey.Factory("000ABC:TestWorld.esp")),
                     };
-                    var bareRef = new PlacedObject(mod);   // no EditorID, no Base — null label columns
+                    var bareRef = new PlacedObject(mod);
                     var raiderRef = new PlacedObject(mod) { EditorID = "raiderRef" };
                     extCell.Persistent.Add(barrelRef);
                     extCell.Persistent.Add(bareRef);
                     extCell.Temporary.Add(raiderRef);
 
-                    // Exterior cell with no EditorID and no grid — null editor_id / grid columns.
                     var bareCell = new Cell(mod);
 
                     var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
@@ -60,7 +55,7 @@ public class PlacementIndexingTests
                     w.SubCells.Add(block2);
 
                     var interior = new Cell(mod) { EditorID = "IntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-                    var bareInterior = new Cell(mod);   // no EditorID, no grid
+                    var bareInterior = new Cell(mod);
                     var intSub = new CellSubBlock { BlockNumber = 0 };
                     intSub.Cells.Add(interior);
                     intSub.Cells.Add(bareInterior);
@@ -139,8 +134,6 @@ public class PlacementIndexingTests
         Assert.Equal(wrld.ToString(), location.Value.ParentWorldspace);
     }
 
-    // A re-index must replace a plugin's prior placement and cell-location rows the way every other
-    // indexed table does; otherwise re-scanning after an external edit duplicates rather than replaces.
     [Fact]
     public async Task Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
     {
@@ -209,12 +202,9 @@ public class PlacementIndexingTests
     public void Index_PlacedObjects_AreAlsoIndexedAsRefrRecords()
     {
         using var b = new Built();
-        // refr is a normal record table; the placed objects appear there too.
         var result = b.Reads.Search(new RecordQuery(RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
         Assert.Equal(3, result.Total);
     }
-
-    // ── reads that back the worldspace tree ─────────────────────
 
     [Fact]
     public void GetCellChildRecords_SplitsPersistentAndTemporary()
@@ -229,10 +219,10 @@ public class PlacementIndexingTests
         var barrel = refs.Persistent.Single(p => p.FormKey == b.BarrelFk);
         Assert.Equal("barrelRef", barrel.EditorId);
         Assert.Equal("refr", barrel.RecordType);
-        Assert.NotNull(barrel.BaseFormKey);            // Base present → base column non-null
+        Assert.NotNull(barrel.BaseFormKey);
 
         var nullRef = refs.Persistent.Single(p => p.FormKey == b.NullRefFk);
-        Assert.Null(nullRef.EditorId);                 // no EditorID → editor_id column null
+        Assert.Null(nullRef.EditorId);
         Assert.Null(nullRef.BaseFormKey);
     }
 
@@ -241,7 +231,7 @@ public class PlacementIndexingTests
     {
         using var b = new Built();
         var cells = b.Reads.GetWorldspaceCells(Key, b.WorldspaceFk);
-        Assert.Equal(3, cells.Count);  // TopCell + ExtCell + BareCell
+        Assert.Equal(3, cells.Count);
 
         var ext = cells.Single(c => c.FormKey == b.ExtCellFk);
         Assert.Equal("ExtCell", ext.EditorId);
@@ -252,19 +242,17 @@ public class PlacementIndexingTests
         Assert.Equal(-5, ext.CellY);
 
         var top = cells.Single(c => c.FormKey == b.TopCellFk);
-        Assert.Null(top.BlockX);   // TopCell has no block coordinates
-        Assert.Null(top.CellX);    // and no grid
+        Assert.Null(top.BlockX);
+        Assert.Null(top.CellX);
         Assert.Null(top.CellY);
 
         var bare = cells.Single(c => c.FormKey == b.BareCellFk);
-        Assert.Null(bare.EditorId);  // no EditorID
+        Assert.Null(bare.EditorId);
         Assert.Equal(1, bare.BlockX);
         Assert.Equal(1, bare.SubY);
-        Assert.Null(bare.CellX);     // no grid
+        Assert.Null(bare.CellX);
         Assert.Null(bare.CellY);
     }
-
-    // ── GetPlacement (placed-path lookup) ───────────
 
     [Fact]
     public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()
@@ -294,8 +282,6 @@ public class PlacementIndexingTests
         Assert.Null(b.Reads.GetPlacement("FFFFFF:TestWorld.esp", Key));
     }
 
-    // ADR-0012: two origins holding the same filename — the placement read scopes by origin, not
-    // by filename alone.
     [Fact]
     public void GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
@@ -326,8 +312,6 @@ public class PlacementIndexingTests
         }
     }
 
-    // ADR-0012: one plugin held twice under the same filename at two real origins. A worldspace tree
-    // read filtering by plugin filename alone answers an origin-scoped query with both origins merged.
     private sealed class TwoOriginWorldspace : IDisposable
     {
         public TwoOriginWorldspace()

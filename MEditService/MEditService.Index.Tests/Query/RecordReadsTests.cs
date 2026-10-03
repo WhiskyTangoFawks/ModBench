@@ -18,8 +18,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
 
     private Indexer LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
-    // --- Search ---
-
     [Fact]
     public void GetRecords_ByTable_ReturnsAllRecords()
     {
@@ -82,9 +80,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(TestPluginFixture.RecordCount, page1.Total);
     }
 
-    // The FormKey picker seeds its QuickPick with the record's own FormKey, which is only coherent
-    // if searching by that FormKey resolves it — a search that matches `search` against EditorID
-    // only makes a seeded (or pasted) FormKey match nothing.
     [Fact]
     public void GetRecords_SearchByFormKey_ResolvesExactRecord()
     {
@@ -97,9 +92,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(formKey, result.Items[0].FormKey);
     }
 
-    // A FormKey-shaped query is matched case-insensitively against the canonical stored form — the
-    // picker seeds from whatever casing a resolved link displays, and the paste-a-FormKey path
-    // can't assume the user typed the exact stored case.
     [Fact]
     public void GetRecords_SearchByFormKey_IsCaseInsensitive()
     {
@@ -112,9 +104,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(formKey, result.Items[0].FormKey);
     }
 
-    // A search string that merely looks close to a FormKey but doesn't fully parse (too short, bad
-    // delimiter, non-hex id) must fall back to the EditorID path, not throw or silently match
-    // everything.
     [Fact]
     public void GetRecords_SearchByMalformedFormKeyLikeString_FallsBackToEditorIdMatch_NoResults()
     {
@@ -175,8 +164,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(["Apple", "Zebra"], result.Items.Select(r => r.EditorId));
     }
 
-    // --- GetDocument ---
-
     [Fact]
     public void GetRecord_WinnerOnly_ReturnsWinner()
     {
@@ -229,8 +216,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
-    // ADR-0012: two origins holding the same file name under different origin values. The game loads
-    // one, and the stack is the one it loads.
     [Fact]
     public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsTheWinningOrigin()
     {
@@ -266,8 +251,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     [Fact]
     public void GetRecord_BitmaskField_AboveSafeInteger_SerializesAsDecimalString()
     {
-        // 2^53 + 1 — not exactly representable as an IEEE 754 float64.
-        // Race.Flag is a [Flags] ulong split across two 32-bit DATA fields, so bit 53 survives binary round-trip.
         const long combined = 9007199254740993;
         FormKey raceFormKey = default;
         using var fixture = new PluginFixtureBuilder("medit-bitmask")
@@ -285,7 +268,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.NotNull(record);
         var flags = record.Fields.Single(f => f.Metadata.Name == "Flags");
         Assert.Equal("flags", flags.Metadata.Type);
-        // The document's own spelling: the contained members by name, whatever their bit.
         var names = Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()).ToList();
         Assert.Equal([nameof(Race.Flag.Playable), nameof(Race.Flag.LowPriorityPushable)], names);
     }
@@ -328,8 +310,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal("PluginB.esp", record.Plugin.Name);
     }
 
-    // --- GetOverrideStack ---
-
     [Fact]
     public void GetAllOverrides_TwoPlugins_OrderedByLoadOrderIndex_WinnerIsHigher()
     {
@@ -347,8 +327,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.True(overrides[1].IsWinner);
     }
 
-    // --- GetRecordTypeCounts ---
-
     [Fact]
     public void CountRecordsForPlugin_ReturnsCorrectCount()
     {
@@ -365,8 +343,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(0, count);
     }
 
-    // --- Type resolution: GetDocument resolves a FormKey's type itself ---
-
     [Fact]
     public void GetDocument_KnownFormKey_ResolvesRecordType()
     {
@@ -382,8 +358,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var document = index.RequireReads().GetDocument("FFFFFF:Unknown.esp");
         Assert.Null(document);
     }
-
-    // --- Resolve (ADR-0005) ---
 
     [Fact]
     public void ResolveFormKey_KnownFormKey_ReturnsRecordTypeAndEditorId()
@@ -403,8 +377,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Null(entry);
     }
 
-    // --- Winners ---
-
     [Fact]
     public void UpdateWinners_SinglePlugin_AllRecordsAreWinners()
     {
@@ -412,8 +384,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
     }
-
-    // --- Array field deserialization ---
 
     [Fact]
     public void GetRecord_ArrayField_ValueIsJsonArrayNotString()
@@ -443,13 +413,10 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(2, element.GetArrayLength());
     }
 
-    // --- Combined filter ---
-
     [Fact]
     public void GetRecords_WithPluginAndSearchFilter_AndFiltersApply()
     {
         using var index = LoadedIndex();
-        // Non-existent plugin + matching search = 0 results (not "all matching search").
         var result = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
     }
@@ -468,8 +435,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Equal(1, result.Total);
         Assert.All(result.Items, r => Assert.Equal("SearchA.esm", r.Plugin));
     }
-
-    // --- Null EditorID round-trip ---
 
     [Fact]
     public void GetRecord_NullEditorId_ReturnsNullEditorId()
@@ -493,8 +458,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Null(detail.EditorId);
     }
 
-    // --- Reads before any reconcile ---
-
     [Fact]
     public void RequireReads_BeforeAnyReconcile_ThrowsNoLoadOrder()
     {
@@ -502,18 +465,13 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
     }
 
-    // --- SQL injection (parameterized query contract) ---
-
     [Fact]
     public void GetDocument_SqlInjectionAttempt_ReturnsNull()
     {
-        // Without parameterization "' OR '1'='1" would match every row.
         using var index = LoadedIndex();
         var result = index.RequireReads().GetDocument("' OR '1'='1");
         Assert.Null(result);
     }
-
-    // --- Null scalar field returns C# null, not DBNull ---
 
     [Fact]
     public void GetRecord_UnsetFormLinkField_ReturnsNull()
@@ -523,10 +481,8 @@ public class RecordReadsTests(TestPluginFixture fixture)
         var record = index.RequireReads().GetDocument(formKey);
         Assert.NotNull(record);
         var linkField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "formKey" && f.Value == null);
-        Assert.NotNull(linkField); // NPC has unset FormLink fields → null in DuckDB
+        Assert.NotNull(linkField);
     }
-
-    // --- CheckError ---
 
     [Fact]
     public void GetRecord_DanglingKeywordReference_CheckErrorOnKeywordsField()
@@ -604,9 +560,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
         Assert.Null(patchKw.CheckError);
     }
 
-    // editor_id alone is not a unique ordering: several NPCs share "Dup" and two share a blank
-    // EditorID, ordinary in real plugin data, so an ORDER BY with no tiebreak lets DuckDB place tied
-    // rows either side of a LIMIT boundary.
     [Fact]
     public void Search_PagesRecordsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
     {
@@ -616,8 +569,8 @@ public class RecordReadsTests(TestPluginFixture fixture)
                 mod.Npcs.AddNew("Dup");
                 mod.Npcs.AddNew("Dup");
                 mod.Npcs.AddNew("Dup");
-                mod.Npcs.AddNew(); // blank EditorID
-                mod.Npcs.AddNew(); // blank EditorID
+                mod.Npcs.AddNew();
+                mod.Npcs.AddNew();
                 mod.Npcs.AddNew("UniqueA");
                 mod.Npcs.AddNew("UniqueB");
             })

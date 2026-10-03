@@ -38,15 +38,11 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IReadOnlyList<LoadOrderEntry> OrderIn(string instanceRoot) =>
         [new(Plugin, Path.Combine(instanceRoot, "mods", Origin, Plugin), Origin, Slot: 0, Enabled: true, Winning: true)];
 
-    // Records only: the plugin header is a document too, and its EditorID is null by definition, so
-    // including it would put a meaningless null in front of every expectation here.
     private static IReadOnlyList<string?> EditorIdsIn(Indexer manager) =>
         [.. manager.RequireReads().GetDocuments(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
 
-    // Warm on both sides: the second load of each instance is the one that would register the other's
-    // file_path if the store were shared.
     [Fact]
     public void TwoInstancesOverOneGameDirectory_WithSameNamedModFolders_NeverSeeEachOthersRows()
     {
@@ -67,8 +63,6 @@ public sealed class InstanceScopedIndexTests : IDisposable
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
     }
 
-    // The instance is where the file lives, so a second launch on the same instance finds it —
-    // what makes warm launches and profile switches within one instance cheap.
     [Fact]
     public void TheSameInstanceLoadedTwice_KeepsItsIndexBetweenLaunches()
     {

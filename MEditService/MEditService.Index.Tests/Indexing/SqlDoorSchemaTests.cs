@@ -8,8 +8,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// ADR-0011: the relational schema is a contract for the SQL door only, and the filter is that
-// door. What a filter may name is what these pin.
 public sealed class SqlDoorSchemaTests : IDisposable
 {
     private static readonly PluginAddress BaseKey = new("Base.esm", "Data");
@@ -43,8 +41,6 @@ public sealed class SqlDoorSchemaTests : IDisposable
     private IReadOnlyList<RecordSummary> Listing() =>
         _index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items;
 
-    // ADR-0009: load order lives only on the registrations, and the record-type view derives
-    // load_order_idx and is_winner by joining them, so a filter can name both.
     [Fact]
     public void ARecordTypeView_ExposesTheIdentityColumns_AndTheDerivedWinnerAndLoadOrder()
     {
@@ -58,8 +54,6 @@ public sealed class SqlDoorSchemaTests : IDisposable
         Assert.Contains(Listing(), i => i.Plugin == BaseKey.Name);
     }
 
-    // records and form_lookup answer is_winner and load_order_idx the same derived way; the
-    // committed relation carries no winner of its own.
     [Theory]
     [InlineData("records", true)]
     [InlineData("form_lookup", true)]
@@ -80,8 +74,6 @@ public sealed class SqlDoorSchemaTests : IDisposable
         }
     }
 
-    // records_committed holds only the committed snapshots of records the working tree has moved,
-    // so on a clean plugin the column is provable by acceptance alone.
     [Theory]
     [InlineData("records", true)]
     [InlineData("records_committed", false)]

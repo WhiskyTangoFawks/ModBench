@@ -11,8 +11,6 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Index.Tests.Indexing;
 
-// The plugin header is an ordinary document at the synthetic FormKey `000000:<plugin>`, whose
-// body is the whole-mod door's root RecordData.json.
 public class HeaderIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -20,8 +18,6 @@ public class HeaderIndexingTests
     private static object? FieldValueOf(RecordDocument doc, string name) =>
         doc.Fields.Single(f => f.Metadata.Name == name).Value;
 
-    // Declared masters are kept as declared: the default write recomputes them from the links the
-    // records carry, and a header-only plugin carries none.
     private static PluginFixtureData OnePlugin(string prefix, string name, Action<Fallout4Mod>? configure = null) =>
         new PluginFixtureBuilder(prefix)
             .WithPlugin(name, configure, writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, MastersListOrdering = MastersListOrderingOption.NoCheck })
@@ -40,7 +36,6 @@ public class HeaderIndexingTests
 
         Assert.Equal("000000:HeaderTest.esp", header.FormKey);
         Assert.Equal("header", header.RecordType);
-        // Headers have no EditorID concept — the one identity column that stays null.
         Assert.Null(header.EditorId);
         var entry = index.RequireReads().StackEntry(header.FormKey, header.Plugin);
         Assert.NotNull(entry);
@@ -55,17 +50,12 @@ public class HeaderIndexingTests
 
         var body = Header(index, "BodyTest.esp").BodyOf();
 
-        // The root document's own shape, spelled out: the header nests one level inside a wrapper
-        // carrying the mod's identity. This is what makes the header's column paths
-        // "$.ModHeader.Author" rather than "$.Author".
         Assert.Contains("\"ModKey\": \"BodyTest.esp\"", body, StringComparison.Ordinal);
         Assert.Contains("\"GameRelease\": \"Fallout4\"", body, StringComparison.Ordinal);
         Assert.Contains("\"ModHeader\"", body, StringComparison.Ordinal);
         Assert.Contains("\"Author\": \"Vault Dweller\"", body, StringComparison.Ordinal);
     }
 
-    // The three fields the record editor renders for a header, read back through the ordinary document
-    // path: each is the root document's own node at the column's path.
     [Fact]
     public void GetDocument_Header_AuthorField_MatchesModHeaderAuthor()
     {
@@ -83,7 +73,6 @@ public class HeaderIndexingTests
         using var index = Indexes.Reconciled(fixture);
 
         var doc = Header(index, "EslTest.esp");
-        // The document spells the flags by Mutagen's member names.
         Assert.Equal(
             [nameof(Fallout4ModHeader.HeaderFlag.Small)],
             Assert.IsType<JsonElement>(FieldValueOf(doc, "Flags")).EnumerateArray().Select(e => e.GetString()));
@@ -100,7 +89,6 @@ public class HeaderIndexingTests
         using var index = Indexes.Reconciled(fixture);
 
         var doc = Header(index, "MastersTest.esp");
-        // The document's own shape: one object per master, naming it.
         var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, "MasterReferences"));
         Assert.Equal(
             ["Fallout4.esm", "DLCRobot.esm"],
@@ -153,8 +141,6 @@ public class HeaderIndexingTests
         var key = new PluginAddress("LookupHeader.esp", "Data");
 
         var documents = reads.GetDocuments(key);
-        // Positive control: more than just the header, or the sweep below is a 1==1 that would
-        // hold even if records stopped resolving entirely.
         Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");
         Assert.All(documents, d => Assert.NotNull(reads.Resolve(d.FormKey)));
 
@@ -185,8 +171,6 @@ public class HeaderIndexingTests
         Assert.Equal("PluginB.esp", overrideStackB.Entries[0].Plugin.Name);
     }
 
-    // ADR-0012: two origins holding the same filename — a filename-only delete step would make
-    // indexing ModB's plugin silently delete ModA's header document before inserting ModB's.
     [Fact]
     public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
     {
@@ -197,8 +181,6 @@ public class HeaderIndexingTests
         var holder = new LoadOrderHolder();
         using var index = Indexes.Open(holder);
 
-        // Each origin's header answers, with its own author, once it is the copy the game loads: the
-        // fact a filename-scoped delete would destroy.
         foreach (var (origin, author) in new[] { ("ModA", "Author A"), ("ModB", "Author B") })
         {
             var header = Assert.Single(index.ReadsWithWinner(holder, fixture.GameDirectory, fixture.Plugins, origin)

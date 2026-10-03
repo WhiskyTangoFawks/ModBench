@@ -8,8 +8,6 @@ namespace MEditService.Index.Tests.Indexing;
 
 public class FormReferencesTests
 {
-    // Every reference aimed at the target, as (source, field path, record type). Each test asserts
-    // the full set: another walk seeing that FormKey would push the count past one and fail.
     private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(IRecordReads reads, FormKey target) =>
         [.. reads.GetReferencedBy(target.ToString()).Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
@@ -148,7 +146,7 @@ public class FormReferencesTests
         var row = TheReferenceTo(index.RequireReads(), targetFormKey);
         Assert.Equal(npcFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Object", row.FieldPath);
-        Assert.Equal("npc_", row.RecordType);  // the source record's own table
+        Assert.Equal("npc_", row.RecordType);
     }
 
     [Fact]
@@ -166,9 +164,6 @@ public class FormReferencesTests
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
 
-                // Config = Struct { Inner = Struct { TargetRef = Object } } — a shape Papyrus
-                // itself cannot author (a struct member is never another struct), built here only
-                // to pin where the walk stops.
                 var outer = new ScriptStructProperty { Name = "Config" };
                 var outerWrapper = new ScriptEntry();
                 var inner = new ScriptStructProperty { Name = "Inner" };
@@ -186,9 +181,6 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        // The walk stops at the re-entry, by SchemaAnnotations.CycleTruncations' ruling: a Fallout 4
-        // Papyrus struct member is never itself a struct, so the shape built above is unreachable from
-        // real data and the schema does not model it.
         Assert.Empty(ReferencesTo(index.RequireReads(), targetFormKey));
     }
 
@@ -243,8 +235,6 @@ public class FormReferencesTests
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
 
-                // Parts = ArrayOfStruct [ {PartRef=Object}, {PartRef=Object} ] — the shape the
-                // KnownDefects RemapLinks row names.
                 var parts = new ScriptStructListProperty { Name = "Parts" };
 
                 var inst0 = new ScriptEntryStructs();
@@ -270,8 +260,6 @@ public class FormReferencesTests
         Assert.Contains(ReferencesTo(reads, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object");
         Assert.Contains(ReferencesTo(reads, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object");
     }
-
-    // ── Scripts reachable only through an adapter sub-structure ──
 
     private static ScriptEntry ScriptWithObjectProperty(string scriptName, string propName, FormKey target)
     {
@@ -411,14 +399,11 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        // The scene's own row: it is inline in its quest's document, and its links are its own.
         var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == sceneFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
     }
 
-    // editor-referenced-by.md, The tree, story 5: the scene's link is the scene's, though the quest's
-    // document carries the scene inline.
     [Fact]
     public void Index_AQuest_DoesNotListItsInlineScenesScriptReference()
     {
@@ -470,15 +455,11 @@ public class FormReferencesTests
             .Build();
         using var index = Indexes.Reconciled(fixture);
 
-        // The response's own row: it is inline in its topic's document, and its links are its own.
         var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == responseFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }
 
-    // AC4: an adapter-reachable script's properties are walked to the same depth top-level scripts
-    // are. One test covers both shapes on one alias script, so a partial walk fails here rather than
-    // passing three-quarters of a suite.
     [Fact]
     public void Index_QuestAliasScriptNestedStructMembers_AreWalkedToFullDepth()
     {
@@ -493,7 +474,6 @@ public class FormReferencesTests
 
                 var script = new ScriptEntry { Name = "AliasScript", Flags = ScriptEntry.Flag.Local };
 
-                // Struct → Object
                 var outer = new ScriptStructProperty { Name = "Config" };
                 var outerWrapper = new ScriptEntry();
                 var innerObj = new ScriptObjectProperty { Name = "DeepRef", Alias = -1 };
@@ -502,7 +482,6 @@ public class FormReferencesTests
                 outer.Members.Add(outerWrapper);
                 script.Properties.Add(outer);
 
-                // ArrayOfStruct → Object
                 var structList = new ScriptStructListProperty { Name = "Parts" };
                 var instance = new ScriptEntryStructs();
                 var listObj = new ScriptObjectProperty { Name = "PartRef", Alias = -1 };
