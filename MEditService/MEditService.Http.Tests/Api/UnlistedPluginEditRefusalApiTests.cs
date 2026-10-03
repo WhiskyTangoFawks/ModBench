@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class UnlistedPluginRefusalApiTests : HostedTests
+public sealed class UnlistedPluginEditRefusalApiTests : HostedTests
 {
     private const string UnlistedPlugin = "Unlisted.esp";
     private const string UnlistedOrigin = "UnlistedMod";

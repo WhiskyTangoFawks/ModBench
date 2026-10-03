@@ -4,11 +4,8 @@ using MEditService.Http.Tests.TestSupport;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class IndexRebuildApiTests : HostedTests
+public sealed class IndexRebuildInstanceRootApiTests : HostedTests
 {
-    private const string Plugin = "Rebuild.esp";
-    private const string Origin = "RebuildMod";
-
     private Task<HttpResponseMessage> Rebuild(string instanceRoot) =>
         Client.PostAsJsonAsync("/index/rebuild", new { instanceRoot, gameRelease = "Fallout4" });
 

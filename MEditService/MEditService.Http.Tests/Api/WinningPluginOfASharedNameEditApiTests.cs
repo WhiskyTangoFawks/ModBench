@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Http.Tests.Api;
 
-public sealed class OverriddenPluginRefusalApiTests : HostedTests
+public sealed class WinningPluginOfASharedNameEditApiTests : HostedTests
 {
     private const string PluginName = "Shared.esp";
     private const string WinningOrigin = "WinningMod";

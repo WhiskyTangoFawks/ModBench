@@ -9,6 +9,21 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
 {
     private HttpClient Client => fixture.Client;
 
+    private static object PluginWithoutItsPerRunTempPath(JsonElement p) => new
+    {
+        name = p.GetProperty("name"),
+        loadOrderIndex = p.GetProperty("loadOrderIndex"),
+        isLight = p.GetProperty("isLight"),
+        isMaster = p.GetProperty("isMaster"),
+        masters = p.GetProperty("masters"),
+        recordCount = p.GetProperty("recordCount"),
+        isImmutable = p.GetProperty("isImmutable"),
+        origin = p.GetProperty("origin"),
+        masterIssues = p.GetProperty("masterIssues"),
+        inLoadOrder = p.GetProperty("inLoadOrder"),
+        hasMatchingRecords = p.GetProperty("hasMatchingRecords"),
+    };
+
     private static object Project(JsonElement compare) => new
     {
         conflictAll = compare.GetProperty("conflictAll"),
@@ -88,20 +103,7 @@ public sealed class CompareGoldenApiTests(CompareGoldenApiFixture fixture) : ICl
 
         var captured = new
         {
-            plugins = plugins.Select(p => new
-            {
-                name = p.GetProperty("name"),
-                loadOrderIndex = p.GetProperty("loadOrderIndex"),
-                isLight = p.GetProperty("isLight"),
-                isMaster = p.GetProperty("isMaster"),
-                masters = p.GetProperty("masters"),
-                recordCount = p.GetProperty("recordCount"),
-                isImmutable = p.GetProperty("isImmutable"),
-                origin = p.GetProperty("origin"),
-                masterIssues = p.GetProperty("masterIssues"),
-                inLoadOrder = p.GetProperty("inLoadOrder"),
-                hasMatchingRecords = p.GetProperty("hasMatchingRecords"),
-            }).ToList(),
+            plugins = plugins.Select(PluginWithoutItsPerRunTempPath).ToList(),
             perPluginTypes,
             winningRecords,
             allNpcs = allNpcs.GetProperty("items").EnumerateArray()

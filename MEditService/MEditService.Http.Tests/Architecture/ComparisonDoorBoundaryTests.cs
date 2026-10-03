@@ -3,7 +3,7 @@ namespace MEditService.Http.Tests.Architecture;
 public sealed class ComparisonDoorBoundaryTests
 {
     [Fact]
-    public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity()
+    public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity_BecauseMutagensGeneratedComparersLieInBothDirections()
     {
         var offenders = new[]
         {
