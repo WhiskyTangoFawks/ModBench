@@ -195,9 +195,7 @@ export function modOfRow(value: unknown): string | undefined {
 }
 
 /** Pinned row over the instance's `overwrite/` folder. Not a modlist.txt entry, so it has no
- *  check box and no drag, and no resourceUri, which would let a file decoration tint its label.
- *  Its kind and `contextValue`, which package.json's `when` clauses match on, are the name the
- *  value gives the folder. */
+ *  check box and no drag, and no resourceUri, which would let a file decoration tint its label. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_ORIGIN;
   constructor(public readonly files: readonly OriginFile[], manager: string, public readonly folders: readonly OriginFolder[] = []) {
