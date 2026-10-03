@@ -12,12 +12,6 @@ import {
   filterBoxWindowMock, filterBoxCommandsMock, commandInvoker, currentBoxOf, waitForMessage,
 } from './nameFilterViewHarness';
 
-// A mod or a download landing on disk is a row change with no keystroke; Show excluded changes
-// rows with no new Instance value either. Real Instance and provider over the corpus fixture.
-
-// `../treeViews` reaches `vscode` before this file's own top-level code runs, so the state
-// `vi.mock` closes over is built from literals here. `trees` is this file's own tracking of the
-// one view `registerDownloadsView` does not return.
 const h = vi.hoisted(() => ({
   state: {
     commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -44,12 +38,12 @@ vi.mock('vscode', () => ({
         ...options, description: undefined, message: undefined, selection: [] as readonly unknown[],
         onDidChangeSelection: (listener: (e: { selection: readonly unknown[] }) => void) => {
           h.selectionListeners.push(listener);
-          return { dispose() { /* no-op */ } };
+          return { dispose: () => undefined };
         },
         get visible() { return h.visible.value; },
         onDidChangeVisibility: (listener: (e: { visible: boolean }) => void) => {
           h.visibilityListeners.push(listener);
-          return { dispose() { /* no-op */ } };
+          return { dispose: () => undefined };
         },
         reveal: (element: { label: unknown }, revealOptions: unknown) => {
           if (h.revealRefusal.value) return Promise.reject(h.revealRefusal.value);
@@ -62,7 +56,7 @@ vi.mock('vscode', () => ({
     },
     registerFileDecorationProvider: (provider: vscode.FileDecorationProvider) => {
       h.decorationProviders.push(provider);
-      return { dispose() { /* no-op */ } };
+      return { dispose: () => undefined };
     },
   },
   commands: {
@@ -93,20 +87,18 @@ const own = <T extends { dispose: () => void }>(d: T): T => d;
 const downloadsViewDeps = (instanceRoot: string, instance: Instance): DownloadsViewDeps => ({
   own, access: accessTo(instanceRoot), instance, reporter: recordingReporter(),
   ask: () => Promise.resolve(undefined), trash: () => Promise.resolve(),
-  install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => { /* no-op */ }, log: () => { /* no-op */ } },
+  install: { nameNewMod: () => Promise.resolve(undefined), warnIfFomod: () => undefined, log: () => undefined },
 });
 const command = commandInvoker(h.state);
 const currentBox = currentBoxOf(h.state);
 
-async function makeInstance(root: string): Promise<Instance> {
+async function makeSettledInstance(root: string): Promise<Instance> {
   const instance = new Instance({
     window: STEADY_WINDOW,
     adapter: adapterOver(root, { gameFolder: GAME_FOLDER_NOT_FOUND }),
-    log: () => { /* no-op */ },
-    logReadFailure: () => { /* no-op */ },
+    log: () => undefined,
+    logReadFailure: () => undefined,
   });
-  // The first read binds the downloads watcher and schedules one more read; a refresh runs that
-  // read now, so no value lands later to re-render a test's rows behind its back.
   await instance.refresh();
   await instance.refresh();
   return instance;
@@ -127,11 +119,11 @@ beforeEach(() => {
 describe('the Mods filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     await provider.getChildren();
 
-    const { modListView, modListFilter } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
     modListFilter.open();
     currentBox().type('zzznomatch');
     await waitForMessage(modListView, (m) => m === 'No matches for "zzznomatch".', 'the message after the keystroke');
@@ -154,9 +146,9 @@ describe('the Mods filter follows a row change with no keystroke', () => {
 describe('the Mods view\'s description counts the mods', () => {
   it('reads the enabled mods over the listed mods, then the term, counting the whole list', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
-    const { modListView, modListFilter } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+    const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
     expect(modListView.description).toBe('7 / 8');
 
     modListFilter.open();
@@ -166,9 +158,9 @@ describe('the Mods view\'s description counts the mods', () => {
 
   it('follows a new instance value, with nothing pushed', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
-    const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
 
     const modlistPath = join(root, DEFAULT_MODLIST);
     await writeFile(modlistPath, `${await readFile(modlistPath, 'utf8')}-Parked Mod\r\n`);
@@ -178,8 +170,7 @@ describe('the Mods view\'s description counts the mods', () => {
   });
 });
 
-// mods.md, Menus and keys: a key is handed no row, so its `when` clause reads the selection.
-describe('the Mods view tells its keys what the selection holds', () => {
+describe('the Mods view tells its keys, which are handed no row, what the selection holds', () => {
   const select = (view: { selection: readonly unknown[] }, rows: readonly unknown[]) => {
     view.selection = rows;
     for (const listener of h.selectionListeners) listener({ selection: rows });
@@ -187,9 +178,9 @@ describe('the Mods view tells its keys what the selection holds', () => {
 
   it('sets the Space direction and the Delete and F2 kind off the selection', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
-    const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
 
     const SELECTION_KEYS = ['selectionToggle', 'selectionKind', 'singleRow', 'holdsEnabledMod', 'holdsDisabledMod']
       .map((name) => `modbench.mod.${name}`);
@@ -212,9 +203,9 @@ describe('the Mods view tells its keys what the selection holds', () => {
 
   it('follows a mod enabled on disk while the selection still holds the row built before', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
-    const { modListView } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+    const { modListView } = createModListView(own, provider, () => undefined, syncMessageDouble());
     select(modListView, [new ModNode({ kind: 'mod', name: 'Harder VATS', enabled: false })]);
 
     const modlistPath = join(root, DEFAULT_MODLIST);
@@ -225,12 +216,10 @@ describe('the Mods view tells its keys what the selection holds', () => {
   });
 });
 
-// VS Code keeps the expansion it remembers for a known row identity over the provider's
-// collapsible state, so the filter's expansion is a reveal.
-describe('the Mods view expands a separator a filter shows for its matching mods', () => {
-  const mountFiltered = async (term: string, log: (line: string) => void = () => { /* no-op */ }) => {
+describe('the Mods view expands by reveal a separator a filter shows for its matching mods', () => {
+  const mountFiltered = async (term: string, log: (line: string) => void = () => undefined) => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
     createModListView(own, provider, log, syncMessageDouble()).modListFilter.open();
     currentBox().type(term);
@@ -261,7 +250,6 @@ describe('the Mods view expands a separator a filter shows for its matching mods
     ]);
   });
 
-  // A reveal opens a hidden view.
   it('reveals nothing while the view is hidden, and reveals it once the view is shown', async () => {
     h.visible.value = false;
     await mountFiltered('tracked');
@@ -281,7 +269,7 @@ describe('the Mods view says when the list is empty', () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
       const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
-      const { modListView, modListFilter } = createModListView(own, provider, () => { /* no-op */ }, syncMessageDouble());
+      const { modListView, modListFilter } = createModListView(own, provider, () => undefined, syncMessageDouble());
       expect(modListView.message).toBeUndefined();
       expect(modListView.description).toBeUndefined();
 
@@ -298,15 +286,12 @@ describe('the Mods view says when the list is empty', () => {
     });
   });
 
-  // Rival: mod sync's refusal replacing the empty-list message, or never reaching the line.
   it('says mod sync\'s refusal beside it, and drops only that once the sync lands', async () => {
     await withUnreadCorpusInstance(async (instance, root) => {
       await writeFile(join(root, DEFAULT_MODLIST), '# This file was automatically generated by Mod Organizer.\r\n');
       const provider = new ModListProvider({ instance, access: accessTo(root), log: () => undefined });
       const modSync = syncMessageDouble();
-      const { modListView } = createModListView(own, provider, () => { /* no-op */ }, modSync);
-      // The first read binds the downloads watcher and schedules one more read; a refresh runs
-      // that read now, so no later value can re-render the line behind the test's back.
+      const { modListView } = createModListView(own, provider, () => undefined, modSync);
       await instance.refresh();
       await instance.refresh();
       await waitForMessage(modListView, (m) => m === NO_MODS, 'the empty-list message');
@@ -325,7 +310,7 @@ describe('the Mods view says when the list is empty', () => {
 describe('the Downloads filter follows a row change with no keystroke', () => {
   it('recomputes the no-match message off a new instance value, in both directions', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
 
     const { downloadsFilter } = registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
@@ -354,7 +339,7 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
     const archivePath = join(root, 'downloads', 'zzznomatch.7z');
     await writeFile(archivePath, '');
     await writeFile(`${archivePath}.meta`, '[General]\r\nremoved=true\r\n');
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
 
     const { downloadsFilter } = registerDownloadsView(downloadsViewDeps(root, instance));
     const downloadsView = present(h.trees.get('modbench.downloads'), 'the registered Downloads TreeView');
@@ -374,8 +359,6 @@ describe('the Downloads filter follows a toggle with no new instance value', () 
   });
 });
 
-// downloads.md, States, story 2: distinct from "no downloads yet" — package.json's viewsWelcome
-// gates on this key.
 describe('the Downloads view sets the all-excluded context key', () => {
   const KEY = 'modbench.downloadedFile.allExcluded';
   const contextValue = () => h.state.contextKeys.get(KEY);
@@ -384,7 +367,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
     const root = cloneCorpusFixture();
     const metaPath = join(root, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
     await writeFile(metaPath, '[General]\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\nremoved=true\r\n');
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
 
     registerDownloadsView(downloadsViewDeps(root, instance));
 
@@ -399,7 +382,7 @@ describe('the Downloads view sets the all-excluded context key', () => {
 
   it('stays false while at least one download is not excluded', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
 
     registerDownloadsView(downloadsViewDeps(root, instance));
 
@@ -408,12 +391,10 @@ describe('the Downloads view sets the all-excluded context key', () => {
   });
 });
 
-// downloads.md, A row, "Excluded": the dim follows exclude and include at once — VS Code never
-// re-queries a FileDecorationProvider on its own.
 describe('the Downloads decoration provider follows a rows change', () => {
   it('fires onDidChangeFileDecorations once the Instance value carries a new download', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
 
     registerDownloadsView(downloadsViewDeps(root, instance));
     const [provider] = h.decorationProviders;
@@ -427,9 +408,7 @@ describe('the Downloads decoration provider follows a rows change', () => {
   });
 });
 
-// commands.md, view on Nexus: the palette hands the command no row, so the Downloads view says
-// whether its selection is one the gesture takes.
-describe('the Downloads view tells its palette entries what the selection holds', () => {
+describe('the Downloads view tells its palette entries, which are handed no row, what the selection holds', () => {
   const KEYS = ['singleFile', 'singleFileWithMeta', 'holdsFile', 'holdsIncluded', 'holdsExcluded']
     .map((name) => `modbench.downloadedFile.${name}`);
   const keys = () => Object.fromEntries(KEYS.map((key) => [key, h.state.contextKeys.get(key)]));
@@ -440,7 +419,7 @@ describe('the Downloads view tells its palette entries what the selection holds'
 
   it('sets each key off the selection as it changes', async () => {
     const root = cloneCorpusFixture();
-    const instance = await makeInstance(root);
+    const instance = await makeSettledInstance(root);
     const { downloadsView } = registerDownloadsView(downloadsViewDeps(root, instance));
 
     select(downloadsView, [new DownloadNode(downloadRowFixture('a.7z', { hasMeta: true }))]);
@@ -472,14 +451,12 @@ function fakeView(): { selection: readonly unknown[]; select(rows: readonly unkn
     },
     onDidChangeSelection: (listener: (e: SelectionChange) => void) => {
       listeners.push(listener);
-      return { dispose() { /* no-op */ } };
+      return { dispose: () => undefined };
     },
   };
   return view;
 }
 
-// commands.md, No dead entries: a gesture is absent, not refused, where its condition is false, so
-// the palette offers view on Nexus exactly on the view whose row it opens.
 describe('view on Nexus from the palette: the row it opens and the view the palette offers it on', () => {
   const KEY = 'modbench.mod.nexusRowIn';
 
@@ -504,8 +481,6 @@ describe('view on Nexus from the palette: the row it opens and the view the pale
   });
 });
 
-// commands.md, Principles: a palette entry takes the focused view's selection. No stable API names
-// the focused view, so the entry is offered only on the view last selected in, which the key names.
 describe('a palette gesture two views offer: the selection of the view last selected in', () => {
   const KEY = 'modbench.mod.trackRowsIn';
 
@@ -524,8 +499,6 @@ describe('a palette gesture two views offer: the selection of the view last sele
   });
 });
 
-// commands.md, Every view: copy value and filter act on the focused view. No stable API names it,
-// so it is the view last selected in, or the one a surface outside the trees says it entered.
 describe('the focused view', () => {
   it('is none until a view is selected in or entered', () => {
     expect(createFocusedView().id()).toBeUndefined();

@@ -1,5 +1,3 @@
-// Each test drives the real write path and asserts over the WHOLE instance tree that only the
-// files it names changed — the composition-level guarantee a per-format test cannot give.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fakeVscodeModule } from './fakeVscodeWatcher';
 
@@ -38,10 +36,6 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // Rival this catches: a handler that unconditionally re-renders the line (e.g.
-  // normalizes casing/whitespace) instead of a minimal-diff flip — re-asserting an
-  // already-true state must reproduce byte-identical content, not merely "the same
-  // meaning".
   it('setModsEnabled on a selection already in that state is a byte-identical no-op over the whole instance', async () => {
     const before = await snapshotTree(dir);
     const outcome = await setModsEnabled(accessTo(dir), PROFILE, ['Unofficial Fallout 4 Patch'], true);
@@ -50,9 +44,7 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(outcome).toEqual({ applied: true, outcome: { landed: ['Unofficial Fallout 4 Patch'], refused: [] } });
   });
 
-  // modbench.mod.enable / modbench.mod.disable over a mixed selection, in one write, and a gone
-  // mod refused by name while the other lands.
-  it('setModsEnabled flips only the mods asked for that are not already in that state, touching only modlist.txt, in one write', async () => {
+  it('setModsEnabled flips only the mods asked for that are not already in that state, refuses a mod not in the modlist by name, and touches only modlist.txt, in one write', async () => {
     const before = await snapshotTree(dir);
     const outcome = await setModsEnabled(accessTo(dir), PROFILE, ["Ñoño's Retexture", 'Unofficial Fallout 4 Patch', 'No Such Mod'], false);
     const after = await snapshotTree(dir);
@@ -84,7 +76,6 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const before = await snapshotTree(dir);
     await insertSeparator(accessTo(dir), PROFILE, 'QA Corpus Marker', { kind: 'mod', name: 'Cracked and Smudged Pip-Boy Screen' });
     const after = await snapshotTree(dir);
-    // An empty directory holds no files, so the folder is asserted on its own below.
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     expect(await separatorNames(dir)).toContain('QA Corpus Marker');
@@ -104,8 +95,6 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     expect(after.get(NEW_META)).toEqual(before.get(OLD_META));
   });
 
-  // "Radfall - All-In-One Survival Overhaul_separator" has NO folder on disk in the fixture (a
-  // real MO2 shape: a separator can outlive the folder MO2 once made for it).
   it('renameSeparator of a separator with no folder renames its line alone, and makes no folder', async () => {
     const before = await snapshotTree(dir);
     await renameSeparator(accessTo(dir), PROFILE, 'Radfall - All-In-One Survival Overhaul', 'Renamed QA Group');
@@ -174,15 +163,12 @@ describe('modlist.txt corpus — every entry mutation touches the files it names
     const before = await snapshotTree(dir);
     await createEmptyMod(accessTo(dir), PROFILE, 'QA Empty Mod');
     const after = await snapshotTree(dir);
-    // An empty directory holds no files, so the whole change is visible in modlist.txt.
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     const entry = (await readModlistEntries(dir)).find(isMod('QA Empty Mod'));
     expect(entry?.enabled).toBe(false);
   });
 
-  // The fixture ships one unlisted folder, one folderless mod line and one folderless separator
-  // line. Rival: a sync that also writes into the folder it lists, or rewrites the entries it keeps.
   it('syncMods adds and drops lines against the folders it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
     const outcome = await syncMods(accessTo(dir), PROFILE, (await adapterOver(dir).modFolders())?.all ?? []);
